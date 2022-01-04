@@ -778,22 +778,22 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func txnFieldImm(name string, expectArray bool, ops *OpStream) (txnFieldSpec, error) {
-	fs, ok := txnFieldSpecByName[name]
+func txnFieldImm(name string, expectArray bool, ops *OpStream) (*txnFieldSpec, error) {
+	fs, ok := TxnFieldSpecByName[name]
 	if !ok {
-		return fs, fmt.Errorf("unknown field: %#v", name)
+		return nil, fmt.Errorf("unknown field: %#v", name)
 	}
 	if expectArray != fs.array {
 		if expectArray {
-			return txnFieldSpec{}, fmt.Errorf("found scalar field %#v while expecting array", name)
+			return nil, fmt.Errorf("found scalar field %#v while expecting array", name)
 		}
-		return txnFieldSpec{}, fmt.Errorf("found array field %#v while expecting scalar", name)
+		return nil, fmt.Errorf("found array field %#v while expecting scalar", name)
 	}
 	if fs.version > ops.Version {
-		return txnFieldSpec{},
+		return nil,
 			fmt.Errorf("field %#v available in version %d. Missed #pragma version?", name, fs.version)
 	}
-	return fs, nil
+	return &fs, nil
 }
 
 func simpleImm(value string, label string) (uint64, error) {
@@ -1105,7 +1105,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := globalFieldSpecByName[args[0]]
+	fs, ok := GlobalFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1126,7 +1126,7 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := assetHoldingFieldSpecByName[args[0]]
+	fs, ok := AssetHoldingFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1147,7 +1147,7 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := assetParamsFieldSpecByName[args[0]]
+	fs, ok := AssetParamsFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1168,7 +1168,7 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := appParamsFieldSpecByName[args[0]]
+	fs, ok := AppParamsFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1189,7 +1189,7 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := txnFieldSpecByName[args[0]]
+	fs, ok := TxnFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1209,7 +1209,7 @@ func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
 
-	cs, ok := ecdsaCurveSpecByName[args[0]]
+	cs, ok := EcdsaCurveSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1411,7 +1411,7 @@ func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	if len(args) != 1 {
 		return oneAny, nil
 	}
-	fs, ok := txnFieldSpecByName[args[0]]
+	fs, ok := TxnFieldSpecByName[args[0]]
 	if !ok {
 		return oneAny, nil
 	}

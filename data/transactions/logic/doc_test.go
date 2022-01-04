@@ -43,7 +43,7 @@ func TestOpDocs(t *testing.T) {
 	require.Len(t, txnFieldDocs, len(TxnFieldNames))
 	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
 	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
-	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
+	require.Len(t, assetHoldingFieldDocs, len(AssetHoldingFieldNames))
 	require.Len(t, assetParamsFieldDocs, len(AssetParamsFieldNames))
 	require.Len(t, appParamsFieldDocs, len(AppParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
@@ -153,21 +153,4 @@ func TestOnCompletionDescription(t *testing.T) {
 
 	desc = OnCompletionDescription(100)
 	require.Equal(t, "invalid constant value", desc)
-}
-
-func TestFieldDocs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	txnFields := TxnFieldDocs()
-	require.Greater(t, len(txnFields), 0)
-
-	globalFields := GlobalFieldDocs()
-	require.Greater(t, len(globalFields), 0)
-
-	doc := globalFields["MinTxnFee"]
-	require.NotContains(t, doc, "LogicSigVersion >= 2")
-
-	doc = globalFields["Round"]
-	require.Contains(t, doc, "LogicSigVersion >= 2")
-
 }

@@ -867,13 +867,13 @@ func TestAssets(t *testing.T) {
 
 func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
 	for _, field := range AssetHoldingFieldNames {
-		fs := assetHoldingFieldSpecByName[field]
+		fs := AssetHoldingFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
 	for _, field := range AssetParamsFieldNames {
-		fs := assetParamsFieldSpecByName[field]
+		fs := AssetParamsFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}

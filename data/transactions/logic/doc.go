@@ -17,21 +17,19 @@
 package logic
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // short description of every op
 var opDocByName = map[string]string{
-	"err":                 "Error. Fail immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs.",
-	"sha256":              "SHA256 hash of value X, yields [32]byte",
-	"keccak256":           "Keccak256 hash of value X, yields [32]byte",
-	"sha512_256":          "SHA512_256 hash of value X, yields [32]byte",
+	"err":                 "Fail immediately.",
+	"sha256":              "SHA256 hash of value A, yields [32]byte",
+	"keccak256":           "Keccak256 hash of value A, yields [32]byte",
+	"sha512_256":          "SHA512_256 hash of value A, yields [32]byte",
 	"ed25519verify":       "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
-	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y => [*... stack*, X, Y]",
-	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key => [*... stack*, X, Y]",
+	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y",
+	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key",
 
 	"+":       "A plus B. Fail on overflow.",
 	"-":       "A minus B. Fail if B > A.",
@@ -45,24 +43,24 @@ var opDocByName = map[string]string{
 	"||":      "A is not zero or B is not zero => {0 or 1}",
 	"==":      "A is equal to B => {0 or 1}",
 	"!=":      "A is not equal to B => {0 or 1}",
-	"!":       "X == 0 yields 1; else 0",
-	"len":     "yields length of byte value X",
-	"itob":    "converts uint64 X to big endian bytes",
-	"btoi":    "converts bytes X as big endian to uint64",
+	"!":       "A == 0 yields 1; else 0",
+	"len":     "yields length of byte value A",
+	"itob":    "converts uint64 A to big endian bytes",
+	"btoi":    "converts bytes A as big endian to uint64",
 	"%":       "A modulo B. Fail if B == 0.",
 	"|":       "A bitwise-or B",
 	"&":       "A bitwise-and B",
 	"^":       "A bitwise-xor B",
-	"~":       "bitwise invert value X",
+	"~":       "bitwise invert value A",
 	"shl":     "A times 2^B, modulo 2^64",
 	"shr":     "A divided by 2^B",
-	"sqrt":    "The largest integer B such that B^2 <= X",
-	"bitlen":  "The highest set bit in X. If X is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4",
+	"sqrt":    "The largest integer B such that B^2 <= A",
+	"bitlen":  "The highest set bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4",
 	"exp":     "A raised to the Bth power. Fail if A == B == 0 and on overflow",
-	"expw":    "A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Fail if A == B == 0 or if the results exceeds 2^128-1",
-	"mulw":    "A times B out to 128-bit long result as low (top) and high uint64 values on the stack",
-	"addw":    "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack",
-	"divmodw": "Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.",
+	"expw":    "A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1",
+	"mulw":    "A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low",
+	"addw":    "A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.",
+	"divmodw": "Pop four uint64 values.  A and B are interpreted as a uint128 dividend (A is the high word), C and D are interpreted as a uint128 divisor (C is the high word).  Four uint64 values are pushed to the stack. The W and X are the quotient (W is the high uint64). Y and Z are the remainder, Y is the high bits.",
 
 	"intcblock":  "prepare block of uint64 constants for use by intc",
 	"intc":       "push Ith constant from intcblock to stack",
@@ -79,50 +77,50 @@ var opDocByName = map[string]string{
 	"bytec_3":    "push constant 3 from bytecblock to stack",
 	"pushbytes":  "push the following program bytes to the stack",
 
-	"bzero":   "push a byte-array of length X, containing all zero bytes",
+	"bzero":   "push a byte-array of length A, containing all zero bytes",
 	"arg":     "push Nth LogicSig argument to stack",
 	"arg_0":   "push LogicSig argument 0 to stack",
 	"arg_1":   "push LogicSig argument 1 to stack",
 	"arg_2":   "push LogicSig argument 2 to stack",
 	"arg_3":   "push LogicSig argument 3 to stack",
-	"args":    "push Xth LogicSig argument to stack",
+	"args":    "push Ath LogicSig argument to stack",
 	"txn":     "push field F of current transaction to stack",
 	"gtxn":    "push field F of the Tth transaction in the current group",
-	"gtxns":   "push field F of the Xth transaction in the current group",
+	"gtxns":   "push field F of the Ath transaction in the current group",
 	"txna":    "push Ith value of the array field F of the current transaction",
 	"gtxna":   "push Ith value of the array field F from the Tth transaction in the current group",
-	"gtxnsa":  "push Ith value of the array field F from the Xth transaction in the current group",
-	"txnas":   "push Xth value of the array field F of the current transaction",
-	"gtxnas":  "push Xth value of the array field F from the Tth transaction in the current group",
+	"gtxnsa":  "push Ith value of the array field F from the Ath transaction in the current group",
+	"txnas":   "push Ath value of the array field F of the current transaction",
+	"gtxnas":  "push Ath value of the array field F from the Tth transaction in the current group",
 	"gtxnsas": "pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group",
 	"itxn":    "push field F of the last inner transaction",
 	"itxna":   "push Ith value of the array field F of the last inner transaction",
-	"gitxn":   "push field F of the Tth transaction in the last inner group",
-	"gitxna":  "push Ith value of the array field F from the Tth transaction in the last inner group",
+	"gitxn":   "push field F of the Tth transaction in the last inner group submitted",
+	"gitxna":  "push Ith value of the array field F from the Tth transaction in the last inner group submitted",
 
 	"global":  "push value from globals to stack",
 	"load":    "copy a value from scratch space to the stack. All scratch spaces are 0 at program start.",
-	"store":   "pop value X. store X to the Ith scratch space",
-	"loads":   "copy a value from the Xth scratch space to the stack.  All scratch spaces are 0 at program start.",
+	"store":   "pop value A. store A to the Ith scratch space",
+	"loads":   "copy a value from the Ath scratch space to the stack.  All scratch spaces are 0 at program start.",
 	"stores":  "pop indexes A and B. store B to the Ath scratch space",
 	"gload":   "push Ith scratch space index of the Tth transaction in the current group",
-	"gloads":  "push Ith scratch space index of the Xth transaction in the current group",
+	"gloads":  "push Ith scratch space index of the Ath transaction in the current group",
 	"gloadss": "push Bth scratch space index of the Ath transaction in the current group",
 	"gaid":    "push the ID of the asset or application created in the Tth transaction of the current group",
-	"gaids":   "push the ID of the asset or application created in the Xth transaction of the current group",
+	"gaids":   "push the ID of the asset or application created in the Ath transaction of the current group",
 
-	"bnz":     "branch to TARGET if value X is not zero",
-	"bz":      "branch to TARGET if value X is zero",
+	"bnz":     "branch to TARGET if value A is not zero",
+	"bz":      "branch to TARGET if value A is zero",
 	"b":       "branch unconditionally to TARGET",
 	"return":  "use last value on stack as success value; end",
-	"pop":     "discard value X from stack",
+	"pop":     "discard value A from stack",
 	"dup":     "duplicate last value on stack",
-	"dup2":    "duplicate two last values on stack: A, B -> A, B, A, B",
+	"dup2":    "duplicate two last values on stack",
 	"dig":     "push the Nth value from the top of the stack. dig 0 is equivalent to dup",
 	"cover":   "remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.",
 	"uncover": "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.",
-	"swap":    "swaps two last values on stack: A, B -> B, A",
-	"select":  "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)",
+	"swap":    "swaps two last values on stack",
+	"select":  "selects one of two values based on top-of-stack: B if C != 0, else A",
 
 	"concat":         "pop two byte-arrays A and B and join them, push the result",
 	"substring":      "pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails",
@@ -136,7 +134,7 @@ var opDocByName = map[string]string{
 	"extract_uint16": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails",
 	"extract_uint32": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails",
 	"extract_uint64": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails",
-	"base64_decode":  "decode X which was base64-encoded using _encoding alphabet_ E. Fail if X is not base64 encoded with alphabet E",
+	"base64_decode":  "decode A which was base64-encoded using _encoding alphabet_ E. Fail if A is not base64 encoded with alphabet E",
 
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
 	"min_balance":       "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
@@ -170,12 +168,12 @@ var opDocByName = map[string]string{
 	"b|":  "A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b&":  "A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b^":  "A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
-	"b~":  "X with all bits inverted",
+	"b~":  "A with all bits inverted",
 
 	"log":         "write bytes to log state of the current application",
 	"itxn_begin":  "begin preparation of a new inner transaction in a new transaction group",
 	"itxn_next":   "begin preparation of a new inner transaction in the same transaction group",
-	"itxn_field":  "set field F of the current inner transaction to X",
+	"itxn_field":  "set field F of the current inner transaction to A",
 	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
 }
 
@@ -244,6 +242,21 @@ func OpImmediateNote(opName string) string {
 	return opcodeImmediateNotes[opName]
 }
 
+var opcodeSpecialStackEffects = map[string]string{
+	"dup":     "..., A &rarr; ..., A, A",
+	"dup2":    "..., A, B &rarr; ..., A, B, A, B",
+	"dig":     "..., A, [N items] &rarr; ..., A, [N items], A",
+	"swap":    "..., A, B &rarr; ..., B, A",
+	"select":  "..., A, B, C &rarr; ..., A or B",
+	"cover":   "..., [N items], A &rarr; ..., A, [N items]",
+	"uncover": "..., A, [N items] &rarr; ..., [N items], A",
+}
+
+// OpStackEffects returns a "stack pattern" for opcodes that do not have a derivable effect
+func OpStackEffects(opName string) string {
+	return opcodeSpecialStackEffects[opName]
+}
+
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
 	"ed25519verify":       "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
@@ -265,34 +278,34 @@ var opDocExtras = map[string]string{
 	"gtxn":                "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":               "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
 	"gload":               "`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.",
-	"gloads":              "`gloads` fails unless the requested transaction is an ApplicationCall and X < GroupIndex.",
+	"gloads":              "`gloads` fails unless the requested transaction is an ApplicationCall and A < GroupIndex.",
 	"gaid":                "`gaid` fails unless the requested transaction created an asset or application and T < GroupIndex.",
-	"gaids":               "`gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.",
+	"gaids":               "`gaids` fails unless the requested transaction created an asset or application and A < GroupIndex.",
 	"btoi":                "`btoi` fails if the input is longer than 8 bytes.",
 	"concat":              "`concat` fails if the result would be greater than 4096 bytes.",
 	"pushbytes":           "pushbytes args are not added to the bytecblock during assembly processes",
 	"pushint":             "pushint args are not added to the intcblock during assembly processes",
 	"getbit":              "see explanation of bit ordering in setbit",
 	"setbit":              "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
-	"balance":             "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
-	"min_balance":         "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
-	"app_opted_in":        "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
-	"app_local_get":       "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
-	"app_local_get_ex":    "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
-	"app_global_get_ex":   "params: Txn.ForeignApps offset (or, since v4, an application id that appears in Txn.ForeignApps or is the CurrentApplicationID), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+	"balance":             "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+	"min_balance":         "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+	"app_opted_in":        "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
+	"app_local_get":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
+	"app_local_get_ex":    "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+	"app_global_get_ex":   "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
 	"app_global_get":      "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
-	"app_local_put":       "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key, value.",
-	"app_local_del":       "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
+	"app_local_put":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
+	"app_local_del":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
 	"app_global_del":      "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
-	"asset_holding_get":   "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
-	"asset_params_get":    "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
-	"app_params_get":      "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
+	"asset_holding_get":   "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
+	"asset_params_get":    "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
+	"app_params_get":      "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
 	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
-	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero values.",
+	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.",
 	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
-	"itxn_field":          "`itxn_field` fails if X is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if X is an account, asset, or app that does not appear in `txn.Accounts`, `txn.ForeignAssets`, or `txn.ForeignApplications` of the invoking transaction. (Setting addresses in asset creation are exempted from this requirement.)",
+	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_. (Setting addresses in asset creation transactions need not be _available_.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
-	"base64_decode":       "decodes X using the base64 encoding alphabet E. Specify the alphabet with an immediate arg either as URL and Filename Safe (`URLAlph`) or Standard (`StdAlph`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5)",
+	"base64_decode":       "decodes A using the base64 encoding alphabet E. Specify the alphabet with an immediate arg either as URL and Filename Safe (`URLAlph`) or Standard (`StdAlph`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5)",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -451,59 +464,53 @@ var txnFieldDocs = map[string]string{
 	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (`itxn` only until v6)",
 }
 
-// TxnFieldDocs are notes on fields available by `txn` and `gtxn` with extra versioning info if any
-func TxnFieldDocs() map[string]string {
-	return fieldsDocWithExtra(txnFieldDocs, txnFieldSpecByName)
-}
-
 var globalFieldDocs = map[string]string{
 	"MinTxnFee":                 "micro Algos",
 	"MinBalance":                "micro Algos",
 	"MaxTxnLife":                "rounds",
 	"ZeroAddress":               "32 byte address of all zero bytes",
 	"GroupSize":                 "Number of transactions in this atomic transaction group. At least 1",
-	"LogicSigVersion":           "Maximum supported TEAL version",
+	"LogicSigVersion":           "Maximum supported version",
 	"Round":                     "Current round number",
 	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative",
-	"CurrentApplicationID":      "ID of current application executing. Fails in LogicSigs",
-	"CreatorAddress":            "Address of the creator of the current application. Fails if no such application is executing",
-	"CurrentApplicationAddress": "Address that the current application controls. Fails in LogicSigs",
+	"CurrentApplicationID":      "ID of current application executing",
+	"CreatorAddress":            "Address of the creator of the current application",
+	"CurrentApplicationAddress": "Address that the current application controls",
 	"GroupID":                   "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
 	"OpcodeBudget":              "The remaining cost that can be spent by opcodes in this program.",
 	"CallerApplicationID":       "The application ID of the application that called this application. 0 if this application is at the top-level.",
 	"CallerApplicationAddress":  "The application address of the application that called this application. ZeroAddress if this application is at the top-level.",
 }
 
-// GlobalFieldDocs are notes on fields available in `global` with extra versioning info if any
-func GlobalFieldDocs() map[string]string {
-	return fieldsDocWithExtra(globalFieldDocs, globalFieldSpecByName)
-}
-
 type extractor interface {
 	getExtraFor(string) string
+}
+
+func addExtra(original string, extra string) string {
+	if len(original) == 0 {
+		return extra
+	}
+	if len(extra) == 0 {
+		return original
+	}
+	sep := ". "
+	if original[len(original)-1] == '.' {
+		sep = " "
+	}
+	return original + sep + extra
 }
 
 func fieldsDocWithExtra(source map[string]string, ex extractor) map[string]string {
 	result := make(map[string]string, len(source))
 	for name, doc := range source {
-		if extra := ex.getExtraFor(name); len(extra) > 0 {
-			if len(doc) == 0 {
-				doc = extra
-			} else {
-				sep := ". "
-				if doc[len(doc)-1] == '.' {
-					sep = " "
-				}
-				doc = fmt.Sprintf("%s%s%s", doc, sep, extra)
-			}
-		}
-		result[name] = doc
+		extra := ex.getExtraFor(name)
+		result[name] = addExtra(doc, extra)
 	}
 	return result
 }
 
 // AssetHoldingFieldDocs are notes on fields available in `asset_holding_get`
-var AssetHoldingFieldDocs = map[string]string{
+var assetHoldingFieldDocs = map[string]string{
 	"AssetBalance": "Amount of the asset unit held by this account",
 	"AssetFrozen":  "Is the asset frozen or not",
 }
@@ -524,11 +531,6 @@ var assetParamsFieldDocs = map[string]string{
 	"AssetCreator":       "Creator address",
 }
 
-// AssetParamsFieldDocs are notes on fields available in `asset_params_get` with extra versioning info if any
-func AssetParamsFieldDocs() map[string]string {
-	return fieldsDocWithExtra(assetParamsFieldDocs, assetParamsFieldSpecByName)
-}
-
 // appParamsFieldDocs are notes on fields available in `app_params_get`
 var appParamsFieldDocs = map[string]string{
 	"AppApprovalProgram":    "Bytecode of Approval Program",
@@ -540,11 +542,6 @@ var appParamsFieldDocs = map[string]string{
 	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
 	"AppCreator":            "Creator address",
 	"AppAddress":            "Address for which this application has authority",
-}
-
-// AppParamsFieldDocs are notes on fields available in `app_params_get` with extra versioning info if any
-func AppParamsFieldDocs() map[string]string {
-	return fieldsDocWithExtra(appParamsFieldDocs, appParamsFieldSpecByName)
 }
 
 // EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes

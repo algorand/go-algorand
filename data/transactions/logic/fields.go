@@ -164,6 +164,13 @@ const (
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
+type FieldSpec interface {
+	Type() StackType
+	OpVersion() uint64
+	Note() string
+	Version() uint64
+}
+
 // TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames []string
 
@@ -171,19 +178,14 @@ var TxnFieldNames []string
 var TxnFieldTypes []StackType
 
 var txnFieldSpecByField map[TxnField]txnFieldSpec
-var txnFieldSpecByName tfNameSpecMap
+var TxnFieldSpecByName tfNameSpecMap
 
 // simple interface used by doc generator for fields versioning
 type tfNameSpecMap map[string]txnFieldSpec
 
-func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
-	if s[name].version > 1 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	if s[name].effects {
-		extra += " Application mode only"
-	}
-	return
+func (s tfNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
 }
 
 type txnFieldSpec struct {
@@ -193,6 +195,26 @@ type txnFieldSpec struct {
 	version    uint64 // When this field become available to txn/gtxn. 0=always
 	itxVersion uint64 // When this field become available to itxn_field. 0=never
 	effects    bool   // Is this a field on the "effects"? That is, something in ApplyData
+}
+
+func (fs *txnFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *txnFieldSpec) OpVersion() uint64 {
+	return 0
+}
+
+func (fs *txnFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *txnFieldSpec) Note() string {
+	note := txnFieldDocs[fs.field.String()]
+	if fs.effects {
+		note = addExtra(note, "Application mode only")
+	}
+	return note
 }
 
 var txnFieldSpecs = []txnFieldSpec{
@@ -401,6 +423,26 @@ type globalFieldSpec struct {
 	version uint64
 }
 
+func (fs *globalFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *globalFieldSpec) OpVersion() uint64 {
+	return 0
+}
+
+func (fs *globalFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs *globalFieldSpec) Note() string {
+	note := globalFieldDocs[fs.field.String()]
+	if fs.mode == runModeApplication {
+		note = addExtra(note, "Application mode only.")
+	}
+	// There are no Signature mode only globals
+	return note
+}
+
 var globalFieldSpecs = []globalFieldSpec{
 	{MinTxnFee, StackUint64, modeAny, 0}, // version 0 is the same as TEAL v1 (initial TEAL release)
 	{MinBalance, StackUint64, modeAny, 0},
@@ -419,22 +461,14 @@ var globalFieldSpecs = []globalFieldSpec{
 	{CallerApplicationAddress, StackBytes, runModeApplication, 6},
 }
 
-// GlobalFieldSpecByField maps GlobalField to spec
 var globalFieldSpecByField map[GlobalField]globalFieldSpec
-var globalFieldSpecByName gfNameSpecMap
+var GlobalFieldSpecByName gfNameSpecMap
 
-// simple interface used by doc generator for fields versioning
 type gfNameSpecMap map[string]globalFieldSpec
 
-func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
-	if s[name].version > 1 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	if s[name].mode == runModeApplication {
-		extra += " Application mode only."
-	}
-	// There are no Signature mode only fields
-	return
+func (s gfNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
 }
 
 // EcdsaCurve is an enum for `ecdsa_` opcodes
@@ -454,22 +488,36 @@ type ecdsaCurveSpec struct {
 	version uint64
 }
 
+func (fs *ecdsaCurveSpec) Type() StackType {
+	return StackNone // Will not show, since all are the same
+}
+
+func (fs *ecdsaCurveSpec) OpVersion() uint64 {
+	return 5
+}
+
+func (fs *ecdsaCurveSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *ecdsaCurveSpec) Note() string {
+	note := EcdsaCurveDocs[fs.field.String()]
+	return note
+}
+
 var ecdsaCurveSpecs = []ecdsaCurveSpec{
 	{Secp256k1, 5},
 }
 
 var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
-var ecdsaCurveSpecByName ecDsaCurveNameSpecMap
+var EcdsaCurveSpecByName ecDsaCurveNameSpecMap
 
 // simple interface used by doc generator for fields versioning
 type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
 
-func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 5 here because ecdsa fields were introduced in 5
-	if s[name].version > 5 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s ecDsaCurveNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
 }
 
 // Base64Alphabet is an enum for the `base64decode` opcode
@@ -505,7 +553,7 @@ type base64AlphabetSpecMap map[string]base64AlphabetSpec
 func (s base64AlphabetSpecMap) getExtraFor(name string) (extra string) {
 	// Uses 6 here because base64_decode fields were introduced in 6
 	if s[name].version > 6 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+		extra = fmt.Sprintf("Introduced v%d.", s[name].version)
 	}
 	return
 }
@@ -533,23 +581,36 @@ type assetHoldingFieldSpec struct {
 	version uint64
 }
 
+func (fs *assetHoldingFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *assetHoldingFieldSpec) OpVersion() uint64 {
+	return 2
+}
+
+func (fs *assetHoldingFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *assetHoldingFieldSpec) Note() string {
+	note := assetHoldingFieldDocs[fs.field.String()]
+	return note
+}
+
 var assetHoldingFieldSpecs = []assetHoldingFieldSpec{
 	{AssetBalance, StackUint64, 2},
 	{AssetFrozen, StackUint64, 2},
 }
 
 var assetHoldingFieldSpecByField map[AssetHoldingField]assetHoldingFieldSpec
-var assetHoldingFieldSpecByName ahfNameSpecMap
+var AssetHoldingFieldSpecByName ahfNameSpecMap
 
-// simple interface used by doc generator for fields versioning
 type ahfNameSpecMap map[string]assetHoldingFieldSpec
 
-func (s ahfNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because asset fields were introduced in 2
-	if s[name].version > 2 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s ahfNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
 }
 
 // AssetParamsField is an enum for `asset_params_get` opcode
@@ -597,6 +658,23 @@ type assetParamsFieldSpec struct {
 	version uint64
 }
 
+func (fs *assetParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *assetParamsFieldSpec) OpVersion() uint64 {
+	return 2
+}
+
+func (fs *assetParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *assetParamsFieldSpec) Note() string {
+	note := assetParamsFieldDocs[fs.field.String()]
+	return note
+}
+
 var assetParamsFieldSpecs = []assetParamsFieldSpec{
 	{AssetTotal, StackUint64, 2},
 	{AssetDecimals, StackUint64, 2},
@@ -613,17 +691,13 @@ var assetParamsFieldSpecs = []assetParamsFieldSpec{
 }
 
 var assetParamsFieldSpecByField map[AssetParamsField]assetParamsFieldSpec
-var assetParamsFieldSpecByName apfNameSpecMap
+var AssetParamsFieldSpecByName apfNameSpecMap
 
-// simple interface used by doc generator for fields versioning
 type apfNameSpecMap map[string]assetParamsFieldSpec
 
-func (s apfNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 2 here because asset fields were introduced in 2
-	if s[name].version > 2 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s apfNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
 }
 
 // AppParamsField is an enum for `app_params_get` opcode
@@ -666,6 +740,23 @@ type appParamsFieldSpec struct {
 	version uint64
 }
 
+func (fs *appParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *appParamsFieldSpec) OpVersion() uint64 {
+	return 5
+}
+
+func (fs *appParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *appParamsFieldSpec) Note() string {
+	note := appParamsFieldDocs[fs.field.String()]
+	return note
+}
+
 var appParamsFieldSpecs = []appParamsFieldSpec{
 	{AppApprovalProgram, StackBytes, 5},
 	{AppClearStateProgram, StackBytes, 5},
@@ -679,17 +770,14 @@ var appParamsFieldSpecs = []appParamsFieldSpec{
 }
 
 var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec
-var appParamsFieldSpecByName appNameSpecMap
+var AppParamsFieldSpecByName appNameSpecMap
 
 // simple interface used by doc generator for fields versioning
 type appNameSpecMap map[string]appParamsFieldSpec
 
-func (s appNameSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 5 here because app fields were introduced in 5
-	if s[name].version > 5 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
+func (s appNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
 }
 
 func init() {
@@ -706,9 +794,9 @@ func init() {
 		TxnFieldTypes[i] = s.ftype
 		txnFieldSpecByField[s.field] = s
 	}
-	txnFieldSpecByName = make(tfNameSpecMap, len(TxnFieldNames))
+	TxnFieldSpecByName = make(map[string]txnFieldSpec, len(TxnFieldNames))
 	for i, tfn := range TxnFieldNames {
-		txnFieldSpecByName[tfn] = txnFieldSpecByField[TxnField(i)]
+		TxnFieldSpecByName[tfn] = txnFieldSpecByField[TxnField(i)]
 	}
 
 	GlobalFieldNames = make([]string, int(invalidGlobalField))
@@ -724,9 +812,9 @@ func init() {
 		GlobalFieldTypes[i] = s.ftype
 		globalFieldSpecByField[s.field] = s
 	}
-	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
+	GlobalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 	for i, gfn := range GlobalFieldNames {
-		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
+		GlobalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
 	}
 
 	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
@@ -738,9 +826,9 @@ func init() {
 		ecdsaCurveSpecByField[s.field] = s
 	}
 
-	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
+	EcdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
 	for i, ahfn := range EcdsaCurveNames {
-		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
+		EcdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
 	}
 
 	base64AlphabetSpecByField = make(map[Base64Alphabet]base64AlphabetSpec, len(base64AlphabetNames))
@@ -763,9 +851,9 @@ func init() {
 		AssetHoldingFieldTypes[int(s.field)] = s.ftype
 		assetHoldingFieldSpecByField[s.field] = s
 	}
-	assetHoldingFieldSpecByName = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
+	AssetHoldingFieldSpecByName = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
 	for i, ahfn := range AssetHoldingFieldNames {
-		assetHoldingFieldSpecByName[ahfn] = assetHoldingFieldSpecByField[AssetHoldingField(i)]
+		AssetHoldingFieldSpecByName[ahfn] = assetHoldingFieldSpecByField[AssetHoldingField(i)]
 	}
 
 	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
@@ -778,9 +866,9 @@ func init() {
 		AssetParamsFieldTypes[int(s.field)] = s.ftype
 		assetParamsFieldSpecByField[s.field] = s
 	}
-	assetParamsFieldSpecByName = make(apfNameSpecMap, len(AssetParamsFieldNames))
+	AssetParamsFieldSpecByName = make(apfNameSpecMap, len(AssetParamsFieldNames))
 	for i, apfn := range AssetParamsFieldNames {
-		assetParamsFieldSpecByName[apfn] = assetParamsFieldSpecByField[AssetParamsField(i)]
+		AssetParamsFieldSpecByName[apfn] = assetParamsFieldSpecByField[AssetParamsField(i)]
 	}
 
 	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
@@ -793,9 +881,9 @@ func init() {
 		AppParamsFieldTypes[int(s.field)] = s.ftype
 		appParamsFieldSpecByField[s.field] = s
 	}
-	appParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
+	AppParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
 	for i, apfn := range AppParamsFieldNames {
-		appParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
+		AppParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
 	}
 
 	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))

@@ -1,15 +1,18 @@
-# Transaction Execution Approval Language (TEAL)
+# The Algorand Virtual Machine (AVM) and TEAL.
 
-The AVM is a bytecode based stack interpreter that executes inside
-Algorand transactions. TEAL is an assembly language syntax for
-specifying a program that is ultimately AVM bytecode. These programs
-can be used to check the parameters of the transaction and approve the
-transaction as if by a signature. This use is called a
-_LogicSig_. Starting with v2, these programs may also execute as
-_Applications_ which are invoked with explicit application call
-transactions. Programs have read-only access to the transaction they
-are attached to, transactions in their atomic transaction group, and a
-few global values. In addition, _Application_ programs have access to
+The AVM is a bytecode based stack interpreter that executes programs
+asscoiated with Algorand transactions. TEAL is an assembly language
+syntax for specifying a program that is ultimately converted to AVM
+bytecode. These programs can be used to check the parameters of the
+transaction and approve the transaction as if by a signature. This use
+is called a _Smart Signature_. Starting with v2, these programs may
+also execute as _Smart Contracts_, which are often called
+_Applications_. Contract executions are invoked with explicit
+application call transactions.
+
+Programs have read-only access to the transaction they are attached
+to, the other transactions in their atomic transaction group, and a
+few global values. In addition, _Smart Contracts_ have access to
 limited state that is global to the application and per-account local
 state for each account that has opted-in to the application. For both
 types of program, approval is signaled by finishing with the stack
@@ -17,59 +20,125 @@ containing a single non-zero uint64 value.
 
 ## The Stack
 
-The stack starts empty and contains values of either uint64 or byte-arrays
+The stack starts empty and can contain values of either uint64 or byte-arrays
 (byte-arrays may not exceed
 4096 bytes in length). Most operations act on the stack, popping
 arguments from it and pushing results to it. Some operations have
-_immediate_ arguments that encoded directly into the instruction,
+_immediate_ arguments that are encoded directly into the instruction,
 rather than coming from the stack.
 
-The maximum stack depth is currently 1000. If the stack depth is
-exceed or if a byte-array element exceed 4096 bytes, the program fails.
+The maximum stack depth is 1000. If the stack depth is
+exceeded or if a byte-array element exceed 4096 bytes, the program fails.
 
 ## Scratch Space
 
-In addition to the stack there are 256 positions of scratch space,
-also uint64-bytes union values, each initialized as uint64
-zero. Scratch space is acccesed by the `load(s)` and `store(s)` ops
-moving data from or to scratch space, respectively.
+In addition to the stack there are 256 positions of scratch
+space. Like stack values, scratch locations may be uint64s or
+byte-arrays. Scratch locations are intialized as uint64 zero. Scratch
+space is acccsed by the `load(s)` and `store(s)` opcodes which move
+data from or to scratch space, respectively.
+
+## Versions
+
+In order to maintain existing semantics for previously written
+programs, AVM code is versioned.  When new opcodes are introduced, or
+behavior is changed, a new version is introduced.  Programs carrying
+old versions are executed with their original semantics. In the AVM
+bytecode, the version is an incrementing integer, currently 6, and
+denoted vX throughout this document. User friendly version numbers
+that correspond to programmer expectations, such as `AVM 1.0` map to
+these integers.  AVM 0.9 is v4. AVM 1.0 is v5. AVM 1.1 is v6.
 
 ## Execution Modes
 
-Starting from version 2, the AVM can run programs in two modes:
-1. LogicSig (stateless)
-2. Application (stateful)
+Starting from v2, the AVM can run programs in two modes:
+1. LogicSig or _stateless_ mode, used to execute Smart Signatures
+2. Application or _stateful_ mode, used to execute Smart Contracts
 
 Differences between modes include:
 1. Max program length (consensus parameters LogicSigMaxSize, MaxAppTotalProgramLen & MaxExtraAppProgramPages)
 2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
-3. Opcode availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+3. Opcode availability. Refer to [opcodes document](TEAL_opcodes.md) for details.
 4. Some global values, such as LatestTimestamp, are only available in stateful mode.
 5. Only Applications can observe transaction effects, such as Logs or IDs allocated to ASAs or new Applications.
 
-## Execution Environment for LogicSigs
+## Execution Environment for Smart Signatures
 
-LogicSigs run in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block.
+Smart Signatures execute as part of testing a proposed transaction to
+see if it is valid and authorized to be committed into a block. If an
+authorized program executes and finishes with a single non-zero uint64
+value on the stack then that program has validated the transaction it
+is attached to.
 
-If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
-
-The program has access to data from the transaction it is attached to (`txn` op), any transactions in a transaction group it is part of (`gtxn` op), and a few global values like consensus parameters (`global` op). Some "Args" may be attached to a transaction being validated by a program. Args are an array of byte strings. A common pattern would be to have the key to unlock some contract as an Arg. Args are recorded on the blockchain and publicly visible when the transaction is submitted to the network. These LogicSig Args are _not_ part of the transaction ID nor of the TxGroup hash. They also cannot be read from other programs in the group of transactions.
+The program has access to data from the transaction it is attached to
+(`txn` op), any transactions in a transaction group it is part of
+(`gtxn` op), and a few global values like consensus parameters
+(`global` op). Some "Args" may be attached to a transaction being
+validated by a program. Args are an array of byte strings. A common
+pattern would be to have the key to unlock some contract as an Arg. Be
+aware that Smart Signature Args are recorded on the blockchain and
+publicly visible when the transaction is submitted to the network,
+even before the transaction has been included in a block. These Args
+are _not_ part of the transaction ID nor of the TxGroup hash. They
+also cannot be read from other programs in the group of transactions.
 
 A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
 
-* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytecode) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program. Note that LogicSig Args are _not_ signed.
+* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytecode) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program. Note that Smart Signature Args are _not_ signed.
 
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
 The bytecode plus the length of all Args must add up to no more than 1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an associated cost and the program cost must total no more than 20,000 (consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1, but a few slow cryptographic operations are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
 
+## Execution Environment for Smart Contracts (Applications)
+
+Smart Contracts are executed in ApplicationCall transactions. Like
+Smart Signatures, contracts indicate success by leaving a single
+non-zero integer on the stack.  A failed smart contract call is not a
+valid transaction, thus not written to the blockchain. Nodes maintain
+a list of transactions that would succeed, given the current state of
+the blockchain, called the transaction pool. Nodes draw from the pool
+if they are called upon to propose a block.
+
+Smart Contracts have access to everything a Smart Signature may access
+(see previous section), as well as the ability to examine blockchain
+state such as balances and contract state (their own state and the
+state of other contracts).  They also have access to some global
+values that are not visible to Smart Signatures because the values
+change over time.  Since smart contracts access changing state, nodes
+must rerun their code to determine if the ApplicationCall transactions
+in their pool would still succeed each time a block is added to the
+blockchain.
+
+### Resource availability
+
+Smart contracts have limits on their execution budget (700, consensus
+paramter MaxAppProgramCost), and the amount of blockchain state they
+may examine.  Opcodes may only access blockchain resources such as
+Accounts, Assets, and contract state if the given resource is
+_available_. 
+
+ * A resource in the "foreign array" fields of the ApplicationCall
+   transaction (`txn.Accounts`, `txn.ForeignAssets`, and
+   `txn.ForeignApplications`) is _available_.
+
+ * The `global CurrentApplicationID` and `txn.Sender` are _available_.
+
+ * Prior to v4, all assets were considered _available_ to the
+   `asset_holding_get` opcode.
+
+ * Since v6, any asset or contract that was created earlier in the
+   same transaction group is _available_. In addition, any account
+   that is the contract account of a contract that was created earlier
+   in the group is _available_.
+
 ## Constants
 
-Constants are loaded into the environment into storage separate from the stack. They can then be pushed onto the stack by referring to the type and index. This makes for efficient re-use of byte constants used for account addresses, etc. Constants that are not reused can be pushed with `pushint` or `pushbytes`.
+Constants are loaded into storage separate from the stack and scratch space. They can then be pushed onto the stack by referring to the type and index. This makes for efficient re-use of byte constants used for account addresses, etc. Constants that are not reused can be pushed with `pushint` or `pushbytes`.
 
 The assembler will hide most of this, allowing simple use of `int 1234` and `byte 0xcafed00d`. These constants will automatically get assembled into int and byte pages of constants, de-duplicated, and operations to load them from constant storage space inserted.
 
-Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings.
+Constants are prepared by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings.
 
 Constants are pushed onto the stack by `intc`, `intc_[0123]`, `pushint`, `bytec`, `bytec_[0123]`, and `pushbytes`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
 
@@ -79,23 +148,29 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `pushint`, `bytec`
 
 ## Operations
 
-Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
+Most operations work with only one type of argument, uint64 or bytes, and fail if the wrong type value is on the stack.
 
-Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with TEAL v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before TEAL v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with TEAL v4, those IDs are required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
-Some operations 'panic' and immediately fail the program.
-A transaction checked by a program that panics is not valid.
-A account governed by a buggy program might not have a way to get assets back out of it. Code carefully.
+Some operations immediately fail the program.
+A transaction checked by a program that fails is not valid.
+An account governed by a buggy program might not have a way to get assets back out of it. Code carefully.
+
+In the documentation for each opcode, the stack arguments that are
+popped are referred to alphabetically, beginning with the deepest
+argument as `A`.  These arguments are shown in the opcode description,
+and if the opcode must be of a specific type, it is noted there.  All
+opcodes fail if a specified type is incorrect.
+
+If an opcode pushes more than one result, the values are named for
+ease of exposition and clarity concerning their stack positions.  When
+an opcode manipulates the stack in such a way that a value changes
+position but is otherwise unchanged, the name of the output on the
+return stack matches the name of the input value.
 
 ### Arithmetic, Logic, and Cryptographic Operations
-
-For one-argument ops, `X` is the last element on the stack, which is typically replaced by a new value.
-
-For two-argument ops, `A` is the penultimate element on the stack and `B` is the top of the stack. These typically result in popping A and B from the stack and pushing the result.
-
-For three-argument ops, `A` is the element two below the top, `B` is the penultimate stack element and `C` is the top of the stack. These operations typically pop A, B, and C from the stack and push the result.
 
 @@ Arithmetic.md @@
 
@@ -103,14 +178,14 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 
 @@ Byte_Array_Slicing.md @@
 
-These opcodes take byte-array values that are interpreted as
+The following opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
 returned values are the shortest byte-array that can represent the
 returned value.  For example, the zero value is the empty
 byte-array. For comparison operators, the returned value is a uint64.
 
-Input lengths are limited to a maximum length of 64 bytes, which
-represents a 512 bit unsigned integer. Output lengths are not
+Input lengths are limited to a maximum length of 64 bytes,
+representing a 512 bit unsigned integer. Output lengths are not
 explicitly restricted, though only `b*` and `b+` can produce a larger
 output than their inputs, so there is an implicit length limit of 128
 bytes on outputs.
@@ -199,8 +274,8 @@ Fields may be set multiple times, but may not be read. The most recent
 setting is used when `itxn_submit` executes. For this purpose `Type`
 and `TypeEnum` are considered to be the same field. When using
 `itxn_field` to set an array field (`ApplicationArgs` `Accounts`,
-`Assets`, or `Applications`) each use adds an element to end of the
-the array, rather than setting the entire array at once.
+`Assets`, or `Applications`) each use adds an element to the end of
+the the array, rather than setting the entire array at once.
 
 `itxn_field` fails immediately for unsupported fields, unsupported
 transaction types, or improperly typed values for a particular
@@ -226,7 +301,13 @@ Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-spe
 
 ## Constants and Pseudo-Ops
 
-A few pseudo-ops simplify writing code. `int` and `byte` and `addr` followed by a constant record the constant to a `intcblock` or `bytecblock` at the beginning of code and insert an `intc` or `bytec` reference where the instruction appears to load that value. `addr` parses an Algorand account address base32 and converts it to a regular bytes constant.
+A few pseudo-ops simplify writing code. `int`, `byte`, `addr`, and
+`method` followed by a constant record the constant to a `intcblock`
+or `bytecblock` at the beginning of code and insert an `intc` or
+`bytec` reference where the instruction appears to load that
+value. `addr` parses an Algorand account address base32 and converts
+it to a regular byte-array constant. `method` calculates an ARC4
+method selector, and stores a regular uint64 constant.
 
 `byte` constants are:
 ```
@@ -243,7 +324,8 @@ byte "\x01\x02"
 byte "string literal"
 ```
 
-`int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
+`int` constants may be `0x` prefixed for hex, `0o` or `0` prefixed for
+octal, `0b` for binary, or decimal numbers.
 
 `intcblock` may be explicitly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used if code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
@@ -251,7 +333,7 @@ byte "string literal"
 
 ## Labels and Branches
 
-A label is defined by any string not some other op or keyword and ending in ':'. A label can be an argument (without the trailing ':') to a branch instruction.
+A label is defined by any string not some other opcode or keyword and ending in ':'. A label can be an argument (without the trailing ':') to a branching instruction.
 
 Example:
 ```
@@ -279,7 +361,9 @@ program itself.
 
 This requirement is enforced as follows:
 
-* For every transaction, compute the earliest version that supports all the fields and and values in this transaction. For example, a transaction with a nonzero RekeyTo field will have version (at least) 2.
+* For every transaction, compute the earliest version that supports
+  all the fields and values in this transaction. For example, a
+  transaction with a nonzero RekeyTo field will be (at least) v2.
 
 * Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that TEAL program will fail.
 
@@ -295,15 +379,15 @@ A '[proto-buf style variable length unsigned int](https://developers.google.com/
 Design and implementation limitations to be aware of with various versions.
 
 * Stateless programs cannot lookup balances of Algos or other
-  assets. (Standard transaction accounting will apply after the
-  LogicSig has run and authorized a transaction. A LogicSig-approved
-  transaction could still be invalid by other accounting rules just as
-  a standard signed transaction could be invalid. e.g. I can't give
-  away money I don't have.)
+  assets. (Standard transaction accounting will apply after the Smart
+  Signature has authorized a transaction. A transaction could still be
+  invalid by other accounting rules just as a standard signed
+  transaction could be invalid. e.g. I can't give away money I don't
+  have.)
 * Programs cannot access information in previous blocks. Programs
   cannot access information in other transactions in the current
   block, unless they are a part of the same atomic transaction group.
-* LogicSigs cannot know exactly what round the current transaction
+* Smart Signatures cannot know exactly what round the current transaction
   will commit in (but it is somewhere in FirstValid through
   LastValid).
 * Programs cannot know exactly what time its transaction is committed.
