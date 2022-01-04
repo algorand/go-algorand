@@ -263,26 +263,34 @@ func (ad NewAccountDeltas) ModifiedAccounts() []basics.Address {
 		result[i] = ad.accts[i].Addr
 	}
 
-	// consistency check: ensure all addresses in params/holdings/states are also in base account
-	// TODO: remove after the schema switch
-	for aapp := range ad.appParamsCache {
-		if _, ok := ad.acctsCache[aapp.Address]; !ok {
-			panic(fmt.Sprintf("account app param delta: addr %s not in base account", aapp.Address))
+	// consistency check: ensure all addresses for deleted params/holdings/states are also in base accounts
+	// it is nice to check created params/holdings/states but we lack of such info here
+	for aapp, idx := range ad.appParamsCache {
+		if ad.appParams[idx].Params == nil {
+			if _, ok := ad.acctsCache[aapp.Address]; !ok {
+				panic(fmt.Sprintf("account app param delta: addr %s not in base account", aapp.Address))
+			}
 		}
 	}
-	for aapp := range ad.appLocalStatesCache {
-		if _, ok := ad.acctsCache[aapp.Address]; !ok {
-			panic(fmt.Sprintf("account app state delta: addr %s not in base account", aapp.Address))
+	for aapp, idx := range ad.appLocalStatesCache {
+		if ad.appLocalStates[idx].State == nil {
+			if _, ok := ad.acctsCache[aapp.Address]; !ok {
+				panic(fmt.Sprintf("account app state delta: addr %s not in base account", aapp.Address))
+			}
 		}
 	}
-	for aapp := range ad.assetParamsCache {
-		if _, ok := ad.acctsCache[aapp.Address]; !ok {
-			panic(fmt.Sprintf("account asset param delta: addr %s not in base account", aapp.Address))
+	for aapp, idx := range ad.assetParamsCache {
+		if ad.assetParams[idx].Params == nil {
+			if _, ok := ad.acctsCache[aapp.Address]; !ok {
+				panic(fmt.Sprintf("account asset param delta: addr %s not in base account", aapp.Address))
+			}
 		}
 	}
-	for aapp := range ad.assetHoldingsCache {
-		if _, ok := ad.acctsCache[aapp.Address]; !ok {
-			panic(fmt.Sprintf("account asset holding delta: addr %s not in base account", aapp.Address))
+	for aapp, idx := range ad.assetHoldingsCache {
+		if ad.assetHoldings[idx].Holding == nil {
+			if _, ok := ad.acctsCache[aapp.Address]; !ok {
+				panic(fmt.Sprintf("account asset holding delta: addr %s not in base account", aapp.Address))
+			}
 		}
 	}
 
