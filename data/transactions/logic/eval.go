@@ -513,6 +513,7 @@ func (st StackType) String() string {
 	return "internal error, unknown type"
 }
 
+// Typed tells whether the StackType is a specific concrete type.
 func (st StackType) Typed() bool {
 	switch st {
 	case StackUint64, StackBytes:

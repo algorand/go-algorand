@@ -164,6 +164,7 @@ const (
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
+// FieldSpec unifies the various specs for presentation
 type FieldSpec interface {
 	Type() StackType
 	OpVersion() uint64
@@ -178,6 +179,8 @@ var TxnFieldNames []string
 var TxnFieldTypes []StackType
 
 var txnFieldSpecByField map[TxnField]txnFieldSpec
+
+// TxnFieldSpecByName gives access to the field specs by field name
 var TxnFieldSpecByName tfNameSpecMap
 
 // simple interface used by doc generator for fields versioning
@@ -462,6 +465,8 @@ var globalFieldSpecs = []globalFieldSpec{
 }
 
 var globalFieldSpecByField map[GlobalField]globalFieldSpec
+
+// GlobalFieldSpecByName gives access to the field specs by field name
 var GlobalFieldSpecByName gfNameSpecMap
 
 type gfNameSpecMap map[string]globalFieldSpec
@@ -510,6 +515,8 @@ var ecdsaCurveSpecs = []ecdsaCurveSpec{
 }
 
 var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
+
+// EcdsaCurveSpecByName gives access to the field specs by field name
 var EcdsaCurveSpecByName ecDsaCurveNameSpecMap
 
 // simple interface used by doc generator for fields versioning
@@ -604,6 +611,8 @@ var assetHoldingFieldSpecs = []assetHoldingFieldSpec{
 }
 
 var assetHoldingFieldSpecByField map[AssetHoldingField]assetHoldingFieldSpec
+
+// AssetHoldingFieldSpecByName gives access to the field specs by field name
 var AssetHoldingFieldSpecByName ahfNameSpecMap
 
 type ahfNameSpecMap map[string]assetHoldingFieldSpec
@@ -691,6 +700,8 @@ var assetParamsFieldSpecs = []assetParamsFieldSpec{
 }
 
 var assetParamsFieldSpecByField map[AssetParamsField]assetParamsFieldSpec
+
+// AssetParamsFieldSpecByName gives access to the field specs by field name
 var AssetParamsFieldSpecByName apfNameSpecMap
 
 type apfNameSpecMap map[string]assetParamsFieldSpec
@@ -770,6 +781,8 @@ var appParamsFieldSpecs = []appParamsFieldSpec{
 }
 
 var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec
+
+// AppParamsFieldSpecByName gives access to the field specs by field name
 var AppParamsFieldSpecByName appNameSpecMap
 
 // simple interface used by doc generator for fields versioning
