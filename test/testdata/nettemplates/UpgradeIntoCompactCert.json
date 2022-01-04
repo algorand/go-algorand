@@ -2,6 +2,7 @@
   "Genesis": {
     "NetworkName": "tbd",
     "ConsensusProtocol": "test-fast-upgrade-https://github.com/algorandfoundation/specs/tree/abc54f79f9ad679d2d22f0fb9909fb005c16f8a1",
+    "LastPartKeyRound": 3000,
     "Wallets": [
       {
         "Name": "Wallet1",

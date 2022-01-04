@@ -32,8 +32,7 @@ var outDir = flag.String("d", "", "The directory containing the generated ledger
 var netName = flag.String("n", "", "The name of the network for this ledger (will override config file).")
 var configFile = flag.String("c", "", "The config file containing the genesis ledger and wallets")
 var quiet = flag.Bool("q", false, "Skip verbose informational messages")
-var firstPartKeyRound = flag.Uint64("f", 0, "The first round in which the participation keys are valid")
-var lastPartKeyRound = flag.Uint64("l", 0, "The last round in which the participation keys are valid")
+var short = flag.Bool("s", false, "Cap the last participation key round to 1500")
 
 func init() {
 	flag.Parse()
@@ -54,14 +53,6 @@ func main() {
 		reportErrorf("error loading configuration file: %v\n", err)
 	}
 
-	if *firstPartKeyRound != 0 {
-		genesisData.FirstPartKeyRound = *firstPartKeyRound
-	}
-
-	if *lastPartKeyRound != 0 {
-		genesisData.LastPartKeyRound = *lastPartKeyRound
-	}
-
 	if *netName != "" {
 		genesisData.NetworkName = *netName
 	}
@@ -70,6 +61,13 @@ func main() {
 	if !*quiet {
 		verboseOut = os.Stdout
 	}
+
+	if *short {
+		if genesisData.LastPartKeyRound > 1500 {
+			genesisData.LastPartKeyRound = 1500
+		}
+	}
+
 	err = gen.GenerateGenesisFiles(genesisData, config.Consensus, *outDir, verboseOut)
 	if err != nil {
 		reportErrorf("Cannot write genesis files: %s", err)
