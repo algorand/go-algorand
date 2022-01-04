@@ -1961,3 +1961,20 @@ func TestConsecutiveVersion(t *testing.T) {
 		protocol.ConsensusV21,
 	}
 }
+
+func TestAcctUpdatesLookupLatest(t *testing.T) {
+	accts := ledgertesting.RandomAccounts(10, false)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	err := au.loadFromDisk(ml, 0)
+	defer au.close()
+	require.NoError(t, err)
+	for addr, acct := range accts {
+		acctData, _, err := au.lookupLatest(addr)
+		require.NoError(t, err)
+		require.Equal(t, acct, acctData)
+	}
+}

@@ -323,7 +323,7 @@ func TestResourceCaching(t *testing.T) {
 	{
 		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)
 		require.NoError(t, err)
-		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
+		assert.Equal(t, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 5}}}, accountData)
 		assert.Equal(t, basics.Round(0), rnd)
 	}
 	{
