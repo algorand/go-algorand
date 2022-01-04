@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,6 +97,9 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	case cfg.DeadlockDetection == 0:
 		// Default setting - host app should configure this
 		// If host doesn't, the default is Disable = false (so, enabled)
+	}
+	if !deadlock.Opts.Disable {
+		deadlock.Opts.DeadlockTimeout = time.Second * time.Duration(cfg.DeadlockDetectionThreshold)
 	}
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the

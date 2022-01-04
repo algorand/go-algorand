@@ -461,16 +461,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "properties": {
-                "participationKey": {
-                  "description": "Detailed description of a participation key",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "participationKey"
-              ],
-              "type": "object"
+              "$ref": "#/components/schemas/ParticipationKey"
             }
           }
         },
@@ -735,6 +726,10 @@
             },
             "type": "array"
           },
+          "min-balance": {
+            "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
+            "type": "integer"
+          },
           "participation": {
             "$ref": "#/components/schemas/AccountParticipation"
           },
@@ -772,6 +767,7 @@
           "address",
           "amount",
           "amount-without-pending-rewards",
+          "min-balance",
           "pending-rewards",
           "rewards",
           "round",
@@ -2771,16 +2767,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "participationKey": {
-                      "description": "Detailed description of a participation key",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "participationKey"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/ParticipationKey"
                 }
               }
             },

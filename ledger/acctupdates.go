@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1239,6 +1239,9 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		var details struct{}
 		au.log.Metrics(telemetryspec.Accounts, dcc.stats, details)
 	}
+}
+
+func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 // compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single

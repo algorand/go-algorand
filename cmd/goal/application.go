@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
@@ -45,8 +46,9 @@ var (
 	approvalProgFile string
 	clearProgFile    string
 
-	method     string
-	methodArgs []string
+	method           string
+	methodArgs       []string
+	methodCreatesApp bool
 
 	approvalProgRawFile string
 	clearProgRawFile    string
@@ -121,6 +123,12 @@ func init() {
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
+	methodAppCmd.Flags().BoolVar(&methodCreatesApp, "create", false, "Create an application in this method call")
+	methodAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
+	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
+	methodAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
+	methodAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
+	methodAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger TEAL assembly program. A maximum of 3 extra pages is allowed. A page is 1024 bytes. Only valid when passed with --create.")
 
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
@@ -178,7 +186,6 @@ func init() {
 	infoAppCmd.MarkFlagRequired("app-id")
 
 	methodAppCmd.MarkFlagRequired("method")    // nolint:errcheck // follow previous required flag format
-	methodAppCmd.MarkFlagRequired("app-id")    // nolint:errcheck
 	methodAppCmd.MarkFlagRequired("from")      // nolint:errcheck
 	methodAppCmd.Flags().MarkHidden("app-arg") // nolint:errcheck
 }
@@ -1074,7 +1081,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 		}
 
 		expectedType := types[i]
-		if expectedType != "txn" && txn.Txn.Type != protocol.TxType(expectedType) {
+		if expectedType != abi.AnyTransactionType && txn.Txn.Type != protocol.TxType(expectedType) {
 			return nil, fmt.Errorf("Transaction from %s does not match method argument type. Expected %s, got %s", txFilename, expectedType, txn.Txn.Type)
 		}
 
@@ -1084,10 +1091,86 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 	return loadedTxns, nil
 }
 
+// populateMethodCallReferenceArgs parses reference argument types and resolves them to an index
+// into the appropriate foreign array. Their placement will be as compact as possible, which means
+// values will be deduplicated and any value that is the sender or the current app will not be added
+// to the foreign array.
+func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []string, values []string, accounts *[]string, apps *[]uint64, assets *[]uint64) ([]int, error) {
+	resolvedIndexes := make([]int, len(types))
+
+	for i, value := range values {
+		var resolved int
+
+		switch types[i] {
+		case abi.AccountReferenceType:
+			if value == sender {
+				resolved = 0
+			} else {
+				duplicate := false
+				for j, account := range *accounts {
+					if value == account {
+						resolved = j + 1 // + 1 because 0 is the sender
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					resolved = len(*accounts) + 1
+					*accounts = append(*accounts, value)
+				}
+			}
+		case abi.ApplicationReferenceType:
+			appID, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to parse application ID '%s': %s", value, err)
+			}
+			if appID == currentApp {
+				resolved = 0
+			} else {
+				duplicate := false
+				for j, app := range *apps {
+					if appID == app {
+						resolved = j + 1 // + 1 because 0 is the current app
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					resolved = len(*apps) + 1
+					*apps = append(*apps, appID)
+				}
+			}
+		case abi.AssetReferenceType:
+			assetID, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to parse asset ID '%s': %s", value, err)
+			}
+			duplicate := false
+			for j, asset := range *assets {
+				if assetID == asset {
+					resolved = j
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				resolved = len(*assets)
+				*assets = append(*assets, assetID)
+			}
+		default:
+			return nil, fmt.Errorf("Unknown reference type: %s", types[i])
+		}
+
+		resolvedIndexes[i] = resolved
+	}
+
+	return resolvedIndexes, nil
+}
+
 var methodAppCmd = &cobra.Command{
 	Use:   "method",
-	Short: "Invoke a method",
-	Long:  `Invoke a method in an App (stateful contract) with an application call transaction`,
+	Short: "Invoke an ABI method",
+	Long:  `Invoke an ARC-4 ABI method on an App (stateful contract) with an application call transaction`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir, client := getDataDirAndClient()
@@ -1095,17 +1178,47 @@ var methodAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgsParsed, appAccounts, foreignApps, foreignAssets := getAppInputs()
 		if len(appArgsParsed) > 0 {
-			reportErrorf("in goal app method: --arg and --app-arg are mutually exclusive, do not use --app-arg")
+			reportErrorf("--arg and --app-arg are mutually exclusive, do not use --app-arg")
+		}
+
+		// Construct schemas from args
+		localSchema := basics.StateSchema{
+			NumUint:      localSchemaUints,
+			NumByteSlice: localSchemaByteSlices,
+		}
+
+		globalSchema := basics.StateSchema{
+			NumUint:      globalSchemaUints,
+			NumByteSlice: globalSchemaByteSlices,
 		}
 
 		onCompletionEnum := mustParseOnCompletion(onCompletion)
 
-		if appIdx == 0 {
-			reportErrorf("app id == 0, goal app create not supported in goal app method")
+		if methodCreatesApp {
+			if appIdx != 0 {
+				reportErrorf("--app-id and --create are mutually exclusive, only provide one")
+			}
+
+			switch onCompletionEnum {
+			case transactions.CloseOutOC, transactions.ClearStateOC:
+				reportWarnf("'--on-completion %s' may be ill-formed for use with --create", onCompletion)
+			}
+		} else {
+			if appIdx == 0 {
+				reportErrorf("one of --app-id or --create must be provided")
+			}
+
+			if localSchema != (basics.StateSchema{}) || globalSchema != (basics.StateSchema{}) {
+				reportErrorf("--global-ints, --global-byteslices, --local-ints, and --local-byteslices must only be provided with --create")
+			}
+
+			if extraPages != 0 {
+				reportErrorf("--extra-pages must only be provided with --create")
+			}
 		}
 
 		var approvalProg, clearProg []byte
-		if onCompletionEnum == transactions.UpdateApplicationOC {
+		if methodCreatesApp || onCompletionEnum == transactions.UpdateApplicationOC {
 			approvalProg, clearProg = mustParseProgArgs()
 		}
 
@@ -1138,15 +1251,35 @@ var methodAppCmd = &cobra.Command{
 		var txnArgValues []string
 		var basicArgTypes []string
 		var basicArgValues []string
+		var refArgTypes []string
+		var refArgValues []string
+		refArgIndexToBasicArgIndex := make(map[int]int)
 		for i, argType := range argTypes {
 			argValue := methodArgs[i]
 			if abi.IsTransactionType(argType) {
 				txnArgTypes = append(txnArgTypes, argType)
 				txnArgValues = append(txnArgValues, argValue)
 			} else {
+				if abi.IsReferenceType(argType) {
+					refArgIndexToBasicArgIndex[len(refArgTypes)] = len(basicArgTypes)
+					refArgTypes = append(refArgTypes, argType)
+					refArgValues = append(refArgValues, argValue)
+					// treat the reference as a uint8 for encoding purposes
+					argType = "uint8"
+				}
 				basicArgTypes = append(basicArgTypes, argType)
 				basicArgValues = append(basicArgValues, argValue)
 			}
+		}
+
+		refArgsResolved, err := populateMethodCallReferenceArgs(account, appIdx, refArgTypes, refArgValues, &appAccounts, &foreignApps, &foreignAssets)
+		if err != nil {
+			reportErrorf("error populating reference arguments: %v", err)
+		}
+		for i, resolved := range refArgsResolved {
+			basicArgIndex := refArgIndexToBasicArgIndex[i]
+			// use the foreign array index as the encoded argument value
+			basicArgValues[basicArgIndex] = strconv.Itoa(resolved)
 		}
 
 		err = abi.ParseArgJSONtoByteSlice(basicArgTypes, basicArgValues, &applicationArgs)
@@ -1161,7 +1294,7 @@ var methodAppCmd = &cobra.Command{
 
 		appCallTxn, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets,
-			onCompletionEnum, approvalProg, clearProg, basics.StateSchema{}, basics.StateSchema{}, 0)
+			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
@@ -1249,12 +1382,19 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Report tx details to user
+		if methodCreatesApp {
+			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+		} else if onCompletionEnum == transactions.UpdateApplicationOC {
+			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+		}
+
 		reportInfof("Issued %d transaction(s):", len(signedTxnGroup))
+
 		// remember the final txid in this variable
 		var txid string
 		for _, stxn := range signedTxnGroup {
 			txid = stxn.Txn.ID().String()
-			reportInfof("\tIssued transaction from account %s, txid %s (fee %d)", stxn.Txn.Sender, txid, stxn.Txn.Fee.Raw)
+			reportInfof("Issued transaction from account %s, txid %s (fee %d)", stxn.Txn.Sender, txid, stxn.Txn.Fee.Raw)
 		}
 
 		if !noWaitAfterSend {
@@ -1268,42 +1408,39 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf(err.Error())
 			}
 
+			if methodCreatesApp && resp.ApplicationIndex != nil && *resp.ApplicationIndex != 0 {
+				reportInfof("Created app with app index %d", *resp.ApplicationIndex)
+			}
+
 			if retType == nil {
-				fmt.Printf("method %s succeeded\n", method)
+				reportInfof("method %s succeeded", method)
 				return
 			}
 
-			// specify the return hash prefix
-			hashRet := sha512.Sum512_256([]byte("return"))
-			hashRetPrefix := hashRet[:4]
+			// the 4-byte prefix for logged return values, from https://github.com/algorandfoundation/ARCs/blob/main/ARCs/arc-0004.md#standard-format
+			var abiReturnHash = []byte{0x15, 0x1f, 0x7c, 0x75}
 
-			var abiEncodedRet []byte
-			foundRet := false
-			if resp.Logs != nil {
-				for i := len(*resp.Logs) - 1; i >= 0; i-- {
-					retLog := (*resp.Logs)[i]
-					if bytes.HasPrefix(retLog, hashRetPrefix) {
-						abiEncodedRet = retLog[4:]
-						foundRet = true
-						break
-					}
-				}
+			if resp.Logs == nil || len(*resp.Logs) == 0 {
+				reportErrorf("method %s succeed but did not log a return value", method)
 			}
 
-			if !foundRet {
-				reportErrorf("cannot find return log for abi type %s", retTypeStr)
+			lastLog := (*resp.Logs)[len(*resp.Logs)-1]
+			if !bytes.HasPrefix(lastLog, abiReturnHash) {
+				reportErrorf("method %s succeed but did not log a return value", method)
 			}
 
-			decoded, err := retType.Decode(abiEncodedRet)
+			rawReturnValue := lastLog[len(abiReturnHash):]
+			decoded, err := retType.Decode(rawReturnValue)
 			if err != nil {
-				reportErrorf("cannot decode return value %v: %v", abiEncodedRet, err)
+				reportErrorf("method %s succeed but its return value could not be decoded.\nThe raw return value in hex is:%s\nThe error is: %s", method, hex.EncodeToString(rawReturnValue), err)
 			}
 
 			decodedJSON, err := retType.MarshalToJSON(decoded)
 			if err != nil {
-				reportErrorf("cannot marshal returned bytes %v to JSON: %v", decoded, err)
+				reportErrorf("method %s succeed but its return value could not be converted to JSON.\nThe raw return value in hex is:%s\nThe error is: %s", method, hex.EncodeToString(rawReturnValue), err)
 			}
-			fmt.Printf("method %s succeeded with output: %s\n", method, string(decodedJSON))
+
+			reportInfof("method %s succeeded with output: %s", method, string(decodedJSON))
 		}
 	},
 }
