@@ -19,6 +19,7 @@
 package util
 
 import (
+	"fmt"
 	"syscall"
 )
 
@@ -29,13 +30,13 @@ func SetFdSoftLimit(newLimit uint64) error {
 	var rLimit syscall.Rlimit
 	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
-		return err
+		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
 	}
 
 	rLimit.Cur = newLimit
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
-		return err
+		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
 	}
 	return nil
 }

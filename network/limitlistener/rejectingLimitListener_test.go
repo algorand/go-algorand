@@ -11,8 +11,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,8 +24,8 @@ const timeout = 5 * time.Second
 func TestRejectingLimitListener(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	const max = 5
-	attempts := (maxOpenFiles() - max) / 2
+	const limit = 5
+	attempts := (maxOpenFiles() - limit) / 2
 	if attempts > 256 { // maximum length of accept queue is 128 by default
 		attempts = 256
 	}
@@ -37,42 +35,52 @@ func TestRejectingLimitListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Close()
-	l = limitlistener.RejectingLimitListener(l, max)
+	l = limitlistener.RejectingLimitListener(l, limit)
 
-	var open int32
-	go http.Serve(l, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if n := atomic.AddInt32(&open, 1); n > max {
-			t.Errorf("%d open connections, want <= %d", n, max)
-		}
-		defer atomic.AddInt32(&open, -1)
-		time.Sleep(500 * time.Millisecond)
+	server := http.Server{}
+	handlerCh := make(chan struct{})
+	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-handlerCh
 		fmt.Fprint(w, "some body")
-	}))
+	})
+	go server.Serve(l)
+	defer server.Close()
 
-	var wg sync.WaitGroup
-	var numSuccessful int32
-	for i := 0; i < attempts; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			c := http.Client{Timeout: 1000 * time.Millisecond}
-			r, err := c.Get("http://" + l.Addr().String())
-			if err != nil {
-				return
+	for i := 0; i < 3; i++ {
+		queryCh := make(chan error)
+		for j := 0; j < attempts; j++ {
+			go func() {
+				c := http.Client{}
+				r, err := c.Get("http://" + l.Addr().String())
+				if err != nil {
+					queryCh <- err
+					return
+				}
+
+				io.Copy(ioutil.Discard, r.Body)
+				r.Body.Close()
+
+				queryCh <- nil
+			}()
+		}
+
+		for j := 0; j < attempts - limit; j++ {
+			err := <-queryCh
+			if err == nil {
+				t.Errorf("this connection should have failed")
 			}
-			atomic.AddInt32(&numSuccessful, 1)
-			defer r.Body.Close()
-			io.Copy(ioutil.Discard, r.Body)
-		}()
-	}
-	wg.Wait()
+		}
 
-	// We expect some Gets to fail as the kernel's accept queue is filled,
-	// but most should succeed.
-	if int(numSuccessful) != max {
-		t.Errorf(
-			"num of successful connections %d is not equal to the limit %d",
-			numSuccessful, max)
+		for j := 0; j < limit; j++ {
+			handlerCh <- struct{}{}
+			err := <-queryCh
+			if err != nil {
+				t.Errorf("this connection should have been successful, err: %v", err)
+			}
+		}
+
+		// Give the rejecting limit listener time to update its semaphor.
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -123,45 +131,14 @@ func TestRejectingLimitListenerClose(t *testing.T) {
 	defer ln.Close()
 	ln = limitlistener.RejectingLimitListener(ln, 1)
 
-	errCh := make(chan error)
-	go func() {
-		defer close(errCh)
-		c, err := net.DialTimeout("tcp", ln.Addr().String(), timeout)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		c.Close()
-	}()
+	err = ln.Close()
+	if err != nil {
+		t.Errorf("unsuccessful ln.Close()")
+	}
 
 	c, err := ln.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-
-	err = <-errCh
-	if err != nil {
-		t.Fatalf("DialTimeout: %v", err)
-	}
-
-	acceptDone := make(chan struct{})
-	go func() {
-		c, err := ln.Accept()
-		if err == nil {
-			c.Close()
-			t.Errorf("Unexpected successful Accept()")
-		}
-		close(acceptDone)
-	}()
-
-	// Wait a tiny bit to ensure the Accept() is blocking.
-	time.Sleep(10 * time.Millisecond)
-	ln.Close()
-
-	select {
-	case <-acceptDone:
-	case <-time.After(timeout):
-		t.Fatalf("Accept() still blocking")
+	if err == nil {
+		c.Close()
+		t.Errorf("unexpected successful Accept()")
 	}
 }

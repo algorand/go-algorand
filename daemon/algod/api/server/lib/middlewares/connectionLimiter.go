@@ -39,8 +39,7 @@ func MakeConnectionLimiter(limit uint64) echo.MiddlewareFunc {
 					default:
 					}
 				}()
-				err := next(ctx)
-				return err
+				return next(ctx)
 			default:
 				return ctx.NoContent(http.StatusTooManyRequests)
 			}
