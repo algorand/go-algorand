@@ -35,7 +35,7 @@ func TestRejectingLimitListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Close()
-	l = limitlistener.RejectingLimitListener(l, limit,  nil)
+	l = limitlistener.RejectingLimitListener(l, limit, nil)
 
 	server := http.Server{}
 	handlerCh := make(chan struct{})
@@ -64,7 +64,7 @@ func TestRejectingLimitListener(t *testing.T) {
 			}()
 		}
 
-		for j := 0; j < attempts - limit; j++ {
+		for j := 0; j < attempts-limit; j++ {
 			err := <-queryCh
 			if err == nil {
 				t.Errorf("this connection should have failed")
