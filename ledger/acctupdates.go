@@ -1508,10 +1508,14 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 
+	// once the consensus upgrade to resource separation is complete, all resources/accounts are also tagged with
+	// their corresponding update round.
+	setUpdateRound := config.Consensus[au.versions[1]].EnableAccountDataResourceSeparation
+
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, au.baseAccounts)
-	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, au.baseAccounts, au.baseResources)
+	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts)
+	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
 	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	au.accountsMu.RUnlock()
@@ -1610,20 +1614,20 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
 	for i := 0; i < dcc.compactAccountDeltas.len(); i++ {
-		addr, acctUpdate := dcc.compactAccountDeltas.getByIdx(i)
+		acctUpdate := dcc.compactAccountDeltas.getByIdx(i)
 		cnt := acctUpdate.nAcctDeltas
-		macct, ok := au.accounts[addr]
+		macct, ok := au.accounts[acctUpdate.address]
 		if !ok {
-			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
+			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, acctUpdate.address)
 		}
 
 		if cnt > macct.ndeltas {
-			au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, addr, macct.ndeltas)
+			au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, acctUpdate.address, macct.ndeltas)
 		} else if cnt == macct.ndeltas {
-			delete(au.accounts, addr)
+			delete(au.accounts, acctUpdate.address)
 		} else {
 			macct.ndeltas -= cnt
-			au.accounts[addr] = macct
+			au.accounts[acctUpdate.address] = macct
 		}
 		// todo : tsachi -
 		// remove the entries from au.resources as needed.
