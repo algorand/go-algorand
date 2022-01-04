@@ -35,7 +35,7 @@ func TestRejectingLimitListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Close()
-	l = limitlistener.RejectingLimitListener(l, limit)
+	l = limitlistener.RejectingLimitListener(l, limit,  nil)
 
 	server := http.Server{}
 	handlerCh := make(chan struct{})
@@ -101,7 +101,7 @@ func TestRejectingLimitListenerError(t *testing.T) {
 	go func() {
 		defer close(errCh)
 		const n = 2
-		ll := limitlistener.RejectingLimitListener(errorListener{}, n)
+		ll := limitlistener.RejectingLimitListener(errorListener{}, n, nil)
 		for i := 0; i < n+1; i++ {
 			_, err := ll.Accept()
 			if !errors.Is(err, errFake) {
@@ -129,7 +129,7 @@ func TestRejectingLimitListenerClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	ln = limitlistener.RejectingLimitListener(ln, 1)
+	ln = limitlistener.RejectingLimitListener(ln, 1, nil)
 
 	err = ln.Close()
 	if err != nil {

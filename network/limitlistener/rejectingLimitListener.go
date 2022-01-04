@@ -14,13 +14,16 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
 // RejectingLimitListener returns a Listener that accepts at most n simultaneous
-// connections from the provided Listener.
-func RejectingLimitListener(l net.Listener, n uint64) net.Listener {
+// connections from the provided Listener. `log` can be nil.
+func RejectingLimitListener(l net.Listener, n uint64, log logging.Logger) net.Listener {
 	return &rejectingLimitListener{
 		Listener: l,
+		log:      log,
 		sem:      make(chan struct{}, n),
 		done:     make(chan struct{}),
 	}
@@ -28,6 +31,7 @@ func RejectingLimitListener(l net.Listener, n uint64) net.Listener {
 
 type rejectingLimitListener struct {
 	net.Listener
+	log       logging.Logger
 	sem       chan struct{}
 	closeOnce sync.Once     // ensures the done chan is only closed once
 	done      chan struct{} // no values sent; closed when Close is called
@@ -53,8 +57,9 @@ func (l *rejectingLimitListener) Accept() (net.Conn, error) {
 			default:
 				// Close connection immediately.
 				err = c.Close()
-				if err != nil {
-					return nil, fmt.Errorf("Accept() close err: %w", err)
+				if (err != nil) && (l.log != nil) {
+					l.log.Debugf(
+						"rejectingLimitListener.Accept() failed to close connection, err %v", err)
 				}
 			}
 		}

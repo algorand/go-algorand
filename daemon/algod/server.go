@@ -228,7 +228,8 @@ func (s *Server) Start() {
 		fmt.Printf("Could not start node: %v\n", err)
 		os.Exit(1)
 	}
-	listener = limitlistener.RejectingLimitListener(listener, cfg.RestConnectionsHardLimit)
+	listener = limitlistener.RejectingLimitListener(
+		listener, cfg.RestConnectionsHardLimit, s.log)
 
 	addr = listener.Addr().String()
 	server = http.Server{
