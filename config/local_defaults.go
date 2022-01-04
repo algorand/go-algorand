@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,6 +44,7 @@ var defaultLocal = Local{
 	DNSBootstrapID:                             "<network>.algorand.network",
 	DNSSecurityFlags:                           1,
 	DeadlockDetection:                          0,
+	DeadlockDetectionThreshold:                 30,
 	DisableLocalhostConnectionRateLimit:        true,
 	DisableNetworking:                          false,
 	DisableOutgoingConnectionThrottling:        false,
@@ -93,7 +94,7 @@ var defaultLocal = Local{
 	OutgoingMessageFilterBucketSize:            128,
 	ParticipationKeysRefreshInterval:           60000000000,
 	PeerConnectionsUpdateInterval:              3600,
-	PeerPingPeriodSeconds:                      10,
+	PeerPingPeriodSeconds:                      0,
 	PriorityPeers:                              map[string]bool{},
 	ProposalAssemblyTime:                       250000000,
 	PublicAddress:                              "",

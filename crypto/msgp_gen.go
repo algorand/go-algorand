@@ -379,8 +379,8 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
-			if zb0004 > MaxMultisig {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxMultisig))
+			if zb0004 > maxMultisig {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxMultisig))
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
@@ -442,8 +442,8 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
-				if zb0006 > MaxMultisig {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxMultisig))
+				if zb0006 > maxMultisig {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxMultisig))
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
@@ -613,7 +613,7 @@ func (_ *MultisigSubsig) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MultisigSubsig) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize))
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -792,7 +792,7 @@ func (_ *OneTimeSignature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignature) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize))
+	s = 1 + 2 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -1114,7 +1114,7 @@ func (_ *OneTimeSignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
-	s = 1 + 25 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize
+	s = 1 + 25 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
 		s += (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].Msgsize()
 	}
@@ -1122,7 +1122,7 @@ func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
 	for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
 		s += (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].Msgsize()
 	}
-	s += 7 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize))
+	s += 7 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -1444,7 +1444,7 @@ func (_ *OneTimeSignatureSecretsPersistent) CanUnmarshalMsg(z interface{}) bool 
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureSecretsPersistent) Msgsize() (s int) {
-	s = 1 + 25 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize
+	s = 1 + 25 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize
 	for zb0002 := range (*z).Batches {
 		s += (*z).Batches[zb0002].Msgsize()
 	}
@@ -1452,7 +1452,7 @@ func (z *OneTimeSignatureSecretsPersistent) Msgsize() (s int) {
 	for zb0003 := range (*z).Offsets {
 		s += (*z).Offsets[zb0003].Msgsize()
 	}
-	s += 7 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize))
+	s += 7 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -1563,7 +1563,7 @@ func (_ *OneTimeSignatureSubkeyBatchID) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureSubkeyBatchID) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 6 + msgp.Uint64Size
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + msgp.Uint64Size
 	return
 }
 
@@ -1691,7 +1691,7 @@ func (_ *OneTimeSignatureSubkeyOffsetID) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureSubkeyOffsetID) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
 
@@ -1730,7 +1730,7 @@ func (_ *OneTimeSignatureVerifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *OneTimeSignatureVerifier) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
 	return
 }
 
@@ -1769,7 +1769,7 @@ func (_ *PrivateKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *PrivateKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (PrivateKeyByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -1808,7 +1808,7 @@ func (_ *PublicKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *PublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
 	return
 }
 
@@ -1886,7 +1886,7 @@ func (_ *Signature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Signature) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -1997,7 +1997,7 @@ func (_ *SignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignatureSecrets) Msgsize() (s int) {
-	s = 1 + 18 + (*z).SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (PrivateKeyByteLength * (msgp.ByteSize))
+	s = 1 + 18 + (*z).SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -2108,7 +2108,7 @@ func (_ *VRFSecrets) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *VRFSecrets) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (VrfPubkeyByteLength * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -2264,7 +2264,7 @@ func (_ *VrfPubkey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *VrfPubkey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (VrfPubkeyByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
 	return
 }
 
@@ -2303,7 +2303,7 @@ func (_ *ed25519PrivateKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ed25519PrivateKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (PrivateKeyByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -2342,7 +2342,7 @@ func (_ *ed25519PublicKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ed25519PublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
 	return
 }
 
@@ -2420,7 +2420,7 @@ func (_ *ed25519Signature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ed25519Signature) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
@@ -2565,7 +2565,7 @@ func (_ *ephemeralSubkey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ephemeralSubkey) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (PublicKeyByteLength * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (PrivateKeyByteLength * (msgp.ByteSize)) + 6 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize)) + 5 + msgp.ArrayHeaderSize + (SignatureByteLength * (msgp.ByteSize))
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize)) + 6 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize)) + 5 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 

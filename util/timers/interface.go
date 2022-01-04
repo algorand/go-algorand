@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,25 +40,4 @@ type Clock interface {
 	// A Clock which has been Decoded from an Encoded Clock should produce
 	// the same timeouts as the original Clock.
 	Decode([]byte) (Clock, error)
-}
-
-// WallClock extends the Clock interface by providing a referencial timing, allowing to create
-// timed events that are differential.
-type WallClock interface {
-	Clock
-
-	// Since returns the time spent between the last time the clock was zeroed out and the current
-	// wall clock time.
-	Since() time.Duration
-
-	// DeadlineMonitorAt returns a DeadlineMonitor that expires after the provided delta time from zero has passed.
-	//
-	// DeadlineMonitorAt must be called after Zero; otherwise, the context's behavior is undefined.
-	DeadlineMonitorAt(at time.Duration) DeadlineMonitor
-}
-
-// DeadlineMonitor test to see if the deadline it was created for has been reached yet or not.
-type DeadlineMonitor interface {
-	// Expired return true if the deadline has passed, or false otherwise.
-	Expired() bool
 }

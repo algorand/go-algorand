@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -113,5 +113,5 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 }
 
 func (p Params) numReveals(signedWeight uint64) (uint64, error) {
-	return numReveals(signedWeight, p.ProvenWeight, p.SecKQ, MaxReveals)
+	return numReveals(signedWeight, p.ProvenWeight, p.SecKQ, maxReveals)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -297,7 +297,7 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	var s Seed
 	var secrets []*SecretKey
 	var pks []PublicKey
-	multiSigLen := MaxMultisig + 1
+	multiSigLen := maxMultisig + 1
 	txid := TestingHashable{[]byte("test: txid 1000")}
 	version := uint8(1)
 	threshold := uint8(1)

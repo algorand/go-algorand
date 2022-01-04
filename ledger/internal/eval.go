@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -394,14 +394,15 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block               bookkeeping.Block
-	blockTxBytes        int
-	specials            transactions.SpecialAddresses
-	maxTxnBytesPerBlock int
+	block        bookkeeping.Block
+	blockTxBytes int
+	specials     transactions.SpecialAddresses
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
 	l LedgerForEvaluator
+
+	maxTxnBytesPerBlock int
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.

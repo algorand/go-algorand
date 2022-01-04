@@ -49,6 +49,11 @@ type Account struct {
 	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
+	// MicroAlgo balance required by the account.
+	//
+	// The requirement grows based on asset and application usage.
+	MinBalance uint64 `json:"min-balance"`
+
 	// AccountParticipation describes the parameters used by this account in consensus protocol.
 	Participation *AccountParticipation `json:"participation,omitempty"`
 
@@ -617,11 +622,7 @@ type NodeStatusResponse struct {
 }
 
 // ParticipationKeyResponse defines model for ParticipationKeyResponse.
-type ParticipationKeyResponse struct {
-
-	// Detailed description of a participation key
-	ParticipationKey string `json:"participationKey"`
-}
+type ParticipationKeyResponse ParticipationKey
 
 // ParticipationKeysResponse defines model for ParticipationKeysResponse.
 type ParticipationKeysResponse []ParticipationKey
