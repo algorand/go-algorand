@@ -274,13 +274,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.accountManager = data.MakeAccountManager(log, registry)
 
-	registry, err := ensureParticipationDB(genesisDir, node.log)
-	if err != nil {
-		log.Errorf("unable to initialize the participation registry database: %v", err)
-		return nil, err
-	}
-	node.accountManager = data.MakeAccountManager(log, registry)
-
 	err = node.loadParticipationKeys()
 	if err != nil {
 		log.Errorf("Cannot load participation keys: %v", err)
@@ -777,16 +770,6 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 		txnGroups[i] = poolGroups[i].Transactions
 	}
 	return bookkeeping.SignedTxnGroupsFlatten(txnGroups), nil
-}
-
-// ensureParticipationDB opens or creates a participation DB.
-func ensureParticipationDB(genesisDir string, log logging.Logger) (account.ParticipationRegistry, error) {
-	accessorFile := filepath.Join(genesisDir, config.ParticipationRegistryFilename)
-	accessor, err := db.OpenPair(accessorFile, false)
-	if err != nil {
-		return nil, err
-	}
-	return account.MakeParticipationRegistry(accessor, log)
 }
 
 // ensureParticipationDB opens or creates a participation DB.
