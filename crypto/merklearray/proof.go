@@ -30,9 +30,12 @@ type Proof struct {
 }
 
 // GetSerializedProof serializes the proof into a sequence of bytes.
-// This function returns  MaxTreeDepth digest. If the proof is smaller, the function pads
-// the path to MaxTreeDepth.
-// more details could be found in the Algorand's spec
+// it basically concatenates all the verification path one after another.
+// The function returns a fixed length array for each hash function. which is 1 + MaxTreeDepth * digestsize
+//
+// the path is guaranteed to be less than MaxTreeDepth and if the path length is less
+// than MaxTreeDepth, array is padded with zeros.
+// more details could be found in the Algorand's spec.
 func (p *Proof) GetSerializedProof() []byte {
 	hash := p.HashFactory.NewHash()
 

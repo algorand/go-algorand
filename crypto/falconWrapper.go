@@ -17,7 +17,6 @@
 package crypto
 
 import (
-	"errors"
 	cfalcon "github.com/algoidan/falcon"
 )
 
@@ -27,10 +26,6 @@ const (
 
 	// MaxFalconSignatureSize Represents the max possible size in bytes of a falcon signature
 	MaxFalconSignatureSize = cfalcon.CTSignatureSize
-)
-
-var (
-	errFalconWrongSaltVersion = errors.New("Unexpected salt version")
 )
 
 type (

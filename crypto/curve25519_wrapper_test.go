@@ -65,3 +65,15 @@ func TestCurve25519RawSignatureBytes(t *testing.T) {
 	a.NoError(err)
 	a.Equal([]byte(sig), rawFormat)
 }
+
+func TestEd25519CanHandleNilSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed Seed
+	SystemRNG.RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+
+	err := key.GetVerifyingKey().GetVerifier().VerifyBytes([]byte("Test"), nil)
+	a.Error(err)
+}

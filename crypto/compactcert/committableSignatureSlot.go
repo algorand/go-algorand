@@ -24,16 +24,20 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// committableSignatureSlot represents a signature in the merkle signature scheme that will get hashed.
-// the function buildCommittableSignature should be used in order to create this struct
 type committableSignatureSlot struct {
 	sigCommit           sigslotCommit
 	serializedSignature []byte
 	isEmptySlot         bool
 }
 
-// committableSignatureSlotArray is used to create a binary representation of signature in the merkle
-// signature scheme. It implements the merkle.Array interface and abstract the hashing of the leaves
+const (
+	// ErrIndexOutOfBound returned when an index is out of the array's bound
+	ErrIndexOutOfBound = "pos %d past end %d"
+)
+
+// committableSignatureSlotArray is used to create a merkle tree on the compact cert's
+// signature array. it serializes the MSS signatures using a specific format
+// compact cert signature array.
 //msgp:ignore committableSignatureSlotArray
 type committableSignatureSlotArray []sigslot
 
@@ -43,7 +47,7 @@ func (sc committableSignatureSlotArray) Length() uint64 {
 
 func (sc committableSignatureSlotArray) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(sc)) {
-		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
+		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(sc))
 	}
 
 	signatureSlot, err := buildCommittableSignature(sc[pos].sigslotCommit)

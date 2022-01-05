@@ -41,6 +41,19 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 	a.NoError(err)
 }
 
+func TestFalconCanHandleNilSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	err = key.GetVerifyingKey().GetVerifier().VerifyBytes([]byte("Test"), nil)
+	a.Error(err)
+}
+
 func TestVerificationBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

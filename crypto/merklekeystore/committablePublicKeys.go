@@ -18,6 +18,7 @@ package merklekeystore
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -38,6 +39,11 @@ type (
 	}
 )
 
+const (
+	// ErrIndexOutOfBound returned when an index is out of the array's bound
+	ErrIndexOutOfBound = "pos %d past end %d"
+)
+
 // Length returns the number of elements in the key array
 func (k *CommittablePublicKeyArray) Length() uint64 {
 	return uint64(len(k.keys))
@@ -46,6 +52,10 @@ func (k *CommittablePublicKeyArray) Length() uint64 {
 // Marshal Gets []byte to represent a GenericVerifyingKey tied to the signatureAlgorithm in a pos.
 // used to implement the merklearray.Array interface needed to build a tree.
 func (k *CommittablePublicKeyArray) Marshal(pos uint64) ([]byte, error) {
+	if pos >= uint64(len(k.keys)) {
+		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(k.keys))
+	}
+
 	signer := k.keys[pos].GetSigner()
 	ephPK := CommittablePublicKey{
 		VerifyingKey: *signer.GetVerifyingKey(),

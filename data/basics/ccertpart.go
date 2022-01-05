@@ -24,6 +24,11 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+const (
+	// ErrIndexOutOfBound returned when an index is out of the array's bound
+	ErrIndexOutOfBound = "pos %d past end %d"
+)
+
 // A Participant corresponds to an account whose AccountData.Status
 // is Online, and for which the expected sigRound satisfies
 // AccountData.VoteFirstValid <= sigRound <= AccountData.VoteLastValid.
@@ -74,7 +79,7 @@ func (p ParticipantsArray) Length() uint64 {
 // Marshal Returns the hash for the given position.
 func (p ParticipantsArray) Marshal(pos uint64) ([]byte, error) {
 	if pos >= uint64(len(p)) {
-		return crypto.GenericDigest{}, fmt.Errorf("array ParticipantsArray.Get(%d) out of bounds %d", pos, len(p))
+		return crypto.GenericDigest{}, fmt.Errorf(ErrIndexOutOfBound, pos, len(p))
 	}
 
 	return crypto.HashRep(p[pos]), nil
