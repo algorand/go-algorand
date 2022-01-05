@@ -118,7 +118,7 @@ func (p *messageOrderingHeap) compact() {
 	if err != nil {
 		return
 	}
-	expectedSeqNum := compressedEntry.sequenceNumber + 1
+	expectedSeqNum := compressedEntry.nextSequenceNumber
 	for len(p.messages) != 0 {
 		nextEntry, _, err := p.popSequenceUnsafe(expectedSeqNum)
 		// compress only consecutive messages
@@ -134,7 +134,7 @@ func (p *messageOrderingHeap) compact() {
 		}
 		nextEntry.sequenceNumber = compressedEntry.sequenceNumber
 		compressedEntry = nextEntry
-		expectedSeqNum++
+		expectedSeqNum = compressedEntry.nextSequenceNumber
 	}
 	// return compressed message to heap
 	heap.Push(p, messageHeapItem(compressedEntry))
