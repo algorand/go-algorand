@@ -195,53 +195,6 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	return hashValue
 }
 
-func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue uint64) []byte {
-
-	var sigCommitment []byte
-	sigCommitment = append(sigCommitment, protocol.CompactCertSig...)
-
-	binaryL := make([]byte, 8)
-	binary.LittleEndian.PutUint64(binaryL, lValue)
-
-	sigCommitment = append(sigCommitment, binaryL...)
-
-	//build the expected binary representation of the merkle signature
-	pK := sig.VerifyingKey.GetVerifier()
-	serializedSig, err := pK.GetSerializedSignature(sig.ByteSignature)
-	require.NoError(t, err)
-
-	schemeType := make([]byte, 2)
-	binary.LittleEndian.PutUint16(schemeType, uint16(sig.VerifyingKey.Type))
-
-	sigCommitment = append(sigCommitment, schemeType...)
-	sigCommitment = append(sigCommitment, serializedSig...)
-	sigCommitment = append(sigCommitment, pK.GetVerificationBytes()...)
-
-	treeIdxBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(treeIdxBytes, sig.MerkleArrayIndex)
-	sigCommitment = append(sigCommitment, treeIdxBytes...)
-
-	//build the expected binary representation of the merkle signature proof
-
-	proofLenByte := byte(len(sig.Proof.Path))
-
-	sigCommitment = append(sigCommitment, proofLenByte)
-
-	i := byte(0)
-	for ; i < proofLenByte; i++ {
-		sigCommitment = append(sigCommitment, sig.Proof.Path[i]...)
-	}
-
-	hash := crypto.HashFactory{HashType: HashType}.NewHash()
-	zeroDigest := make([]byte, hash.BlockSize())
-	for ; i < merklearray.MaxTreeDepth; i++ {
-		sigCommitment = append(sigCommitment, zeroDigest...)
-	}
-
-	hashValue := crypto.HashBytes(hash, sigCommitment)
-	return hashValue
-}
-
 func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	buf := make([]byte, len(leftNode)+len(rightNode)+len(protocol.MerkleArrayNode))
 	copy(buf[:], protocol.MerkleArrayNode)
@@ -253,10 +206,7 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	return hashValue
 }
 
-// This test makes sure that cert's signature commitment is according to spec and stays sync with the
-// SNARK verifier. This test enforces a specific binary representation of the merkle's tree leaves.
-// in case this test breaks, the SNARK verifier should be updated accordingly
-func TestParticipationCommitment(t *testing.T) {
+func TestParticipationCommitmentBinaryFormat(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -286,10 +236,7 @@ func TestParticipationCommitment(t *testing.T) {
 
 }
 
-// This test makes sure that cert's signature commitment is according to spec and stays sync with the
-// SNARK verifier. This test enforces the usage of a specific binary representation  of the merkle's tree leaves.
-// in case this test breaks, the SNARK verifier should be updated accordingly
-func TestSignatureCommitment(t *testing.T) {
+func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -381,6 +328,7 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
+	// we create one ephemeral key so the signature's proof should be with len 0
 	signer, dbaccess := generateTestSigner(t.Name()+"_2.db", 1, 128, 128, a)
 	defer dbaccess.Close()
 

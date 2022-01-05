@@ -29,6 +29,7 @@ import (
 type committableSignatureSlot struct {
 	sigCommit           sigslotCommit
 	serializedSignature []byte
+	isEmptySlot         bool
 }
 
 // committableSignatureSlotArray is used to create a binary representation of signature in the merkle
@@ -51,20 +52,17 @@ func (sc committableSignatureSlotArray) Marshal(pos uint64) ([]byte, error) {
 	}
 
 	return crypto.HashRep(signatureSlot), nil
-
 }
 
 func buildCommittableSignature(sigCommit sigslotCommit) (*committableSignatureSlot, error) {
 	if sigCommit.Sig.Signature.ByteSignature == nil {
-		// TODO we get here if we don't have a signature in a particular slot.
-		// advise on what to do here. + create a TEST
-		return &committableSignatureSlot{sigCommit: sigCommit, serializedSignature: []byte{}}, nil
+		return &committableSignatureSlot{isEmptySlot: true}, nil
 	}
 	sigBytes, err := sigCommit.Sig.GetSerializedSignature()
 	if err != nil {
 		return nil, err
 	}
-	return &committableSignatureSlot{sigCommit: sigCommit, serializedSignature: sigBytes}, nil
+	return &committableSignatureSlot{sigCommit: sigCommit, serializedSignature: sigBytes, isEmptySlot: false}, nil
 }
 
 // ToBeHashed returns the sequence of bytes that would be used as an input for the hash function when creating a merkle tree.
@@ -72,6 +70,9 @@ func buildCommittableSignature(sigCommit sigslotCommit) (*committableSignatureSl
 // msgpack creates a compressed representation of the struct which might be varied in length, this will
 // be bad for creating SNARK
 func (cs *committableSignatureSlot) ToBeHashed() (protocol.HashID, []byte) {
+	if cs.isEmptySlot {
+		return protocol.CompactCertSig, []byte{}
+	}
 	binaryLValue := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryLValue, cs.sigCommit.L)
 

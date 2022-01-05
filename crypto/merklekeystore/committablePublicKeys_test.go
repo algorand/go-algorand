@@ -58,9 +58,7 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	return hashValue
 }
 
-// This test makes sure that publickey commitment is according to spec and stays sync with the
-// SNARK verifier. we manually build the merkle tree given an expected binary representation of the keys.
-func TestKeyStoreCommitment(t *testing.T) {
+func TestEphemeralPublicKeysCommitmentBinaryFormat(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
