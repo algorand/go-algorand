@@ -407,6 +407,7 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 
 const (
 	addressByteSize      = 32
+	checksumByteSize     = 4
 	singleByteSize       = 1
 	singleBoolSize       = 1
 	lengthEncodeByteSize = 2
