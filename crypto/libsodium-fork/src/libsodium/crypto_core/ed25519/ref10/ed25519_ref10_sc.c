@@ -324,11 +324,11 @@ int lte256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
 
 /* is a == 0 */
 int iszero256_modm_batch(const sc25519 a) {
-	sc25519_element_t result = a[0] | 0;
-	result |= a[1] | 0;
-	result |= a[2] | 0;
-	result |= a[3] | 0;
-	result |= a[4] | 0;
+	sc25519_element_t result = a[0];
+	result |= a[1];
+	result |= a[2];
+	result |= a[3];
+	result |= a[4];
 
 	return (result == 0);
 }
@@ -336,10 +336,10 @@ int iszero256_modm_batch(const sc25519 a) {
 /* is a == 1 */
 int isone256_modm_batch(const sc25519 a) {
 	sc25519_element_t result = a[0] ^ 1;
-	result |= a[1] | 0;
-	result |= a[2] | 0;
-	result |= a[3] | 0;
-	result |= a[4] | 0;
+	result |= a[1];
+	result |= a[2];
+	result |= a[3];
+	result |= a[4];
 
 	return (result == 0);
 }
