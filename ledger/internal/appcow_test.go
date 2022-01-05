@@ -838,6 +838,13 @@ func TestApplyStorageDelta(t *testing.T) {
 		cow := makeRoundCowState(
 			nil, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
 			0, ledgercore.AccountTotals{}, 0)
+		cow.mods.NewAccts.Upsert(
+			addr,
+			ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+				TotalAppParams:      2,
+				TotalAppLocalStates: 2,
+			}},
+		)
 
 		params1 := basics.AppParams{GlobalState: make(basics.TealKeyValue)}
 		cow.mods.NewAccts.UpsertAppParams(addr, 1, &params1)
@@ -957,6 +964,13 @@ func TestApplyStorageDelta(t *testing.T) {
 	cow = makeRoundCowState(
 		nil, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
 		0, ledgercore.AccountTotals{}, 0)
+	cow.mods.NewAccts.Upsert(
+		addr,
+		ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+			TotalAppParams:      1,
+			TotalAppLocalStates: 1,
+		}},
+	)
 
 	err := applyStorageDelta(cow, addr, storagePtr{1, true}, &sd)
 	a.NoError(err)

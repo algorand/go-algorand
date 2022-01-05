@@ -118,24 +118,8 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 	}
 
 	// Apply storage deltas to account deltas
-	// 1. Ensure all addresses from sdeltas have entries in accts because
-	//    SetKey/DelKey work only with sdeltas, so need to pull missing accounts
-	// 2. Call applyStorageDelta for every delta per account
 	for addr, smap := range cb.sdeltas {
 		for aapp, storeDelta := range smap {
-			// app params and app local states might be accessed without touching base account record
-			// from TEAL by writing/deleting KV store
-			// so store the base account to deltas here
-			// TODO: remove after the schema switch
-			acct, err := cb.lookup(addr)
-			if err != nil {
-				panic(fmt.Sprintf("delta lookup failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
-			}
-			err = cb.Put(addr, acct)
-			if err != nil {
-				panic(fmt.Sprintf("delta saving failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
-			}
-
 			if err := applyStorageDelta(cb, addr, aapp, storeDelta); err != nil {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}

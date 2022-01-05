@@ -246,7 +246,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 
 	for offset := uint64(0); offset < offsetLimit; offset++ {
 		deltas := au.deltas[offset]
-		bals = applyPartialDeltas(bals, deltas)
+		bals = ledgercore.AccumulateDeltas(bals, deltas)
 	}
 	return
 }
@@ -262,6 +262,42 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	require.NoError(tb, err)
 
 	return au
+}
+
+// checkEqualAcctMaps is a low-memory version of map[basics.Address]basics.AccountData comparator.
+// It is slow (10s on TestAcctUpdates ) than require.Equal -> reflect.DeepEqual
+// but uses much less memory (0.9GB vs 4GB on TestAcctUpdates)
+func checkEqualAcctMaps(t *testing.T, all, bll map[basics.Address]basics.AccountData) {
+	require.Equal(t, len(all), len(bll))
+	for addr, ad := range all {
+		bd := bll[addr]
+		require.Equal(t, len(ad.AppParams), len(bd.AppParams))
+		require.Equal(t, len(ad.AppLocalStates), len(bd.AppLocalStates))
+		require.Equal(t, len(ad.AssetParams), len(bd.AssetParams))
+		require.Equal(t, len(ad.Assets), len(bd.Assets))
+		for aidx, a := range ad.AppParams {
+			require.Equal(t, a, bd.AppParams[aidx])
+		}
+		for aidx, a := range ad.AppLocalStates {
+			require.Equal(t, a, bd.AppLocalStates[aidx])
+		}
+		for aidx, a := range ad.AssetParams {
+			require.Equal(t, a, bd.AssetParams[aidx])
+		}
+		for aidx, a := range ad.Assets {
+			require.Equal(t, a, bd.Assets[aidx])
+		}
+		ad.AppParams = nil
+		ad.AppLocalStates = nil
+		ad.AssetParams = nil
+		ad.Assets = nil
+		bd.AppParams = nil
+		bd.AppLocalStates = nil
+		bd.AssetParams = nil
+		bd.Assets = nil
+
+		require.Equal(t, ad, bd)
+	}
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
@@ -329,7 +365,8 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 
 			all, err := au.allBalances(rnd)
 			require.NoError(t, err)
-			require.Equal(t, all, accts[rnd])
+			bll := accts[rnd]
+			require.Equal(t, all, bll)
 
 			totals, err := au.Totals(rnd)
 			require.NoError(t, err)
@@ -350,6 +387,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 
 func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Round) {
 	accounts := make(map[basics.Address]modifiedAccount)
+	resources := make(resourcesUpdates)
 
 	for _, rdelta := range au.deltas {
 		for i := 0; i < rdelta.Len(); i++ {
@@ -359,21 +397,59 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			macct.ndeltas++
 			accounts[addr] = macct
 		}
+
+		for _, rec := range rdelta.GetAllAppLocalStates() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AppLocalState = rec.State
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AppCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAppParams() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AppParams = rec.Params
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AppCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAssetsHoldings() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AssetHolding = rec.Holding
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AssetCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAssetParams() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AssetParam = rec.Params
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AssetCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
 	}
 
 	require.Equal(t, au.accounts, accounts)
+	require.Equal(t, au.resources, resources)
 
-	// TODO: restore after lookup full implementation
-	// latest := au.deltas[len(au.deltas)-1]
-	// for i := 0; i < latest.Len(); i++ {
-	// 	addr, acct := latest.GetByIdx(i)
-	// 	d, _, err := au.LookupWithoutRewards(rnd, addr)
-	// 	require.NoError(t, err)
-	// 	require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
-	// 	require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
-	// 	require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
-	// 	require.Equal(t, int(acct.TotalAssets), len(d.Assets))
-	// }
+	latest := au.deltas[len(au.deltas)-1]
+	for i := 0; i < latest.Len(); i++ {
+		addr, acct := latest.GetByIdx(i)
+		d, r, err := au.lookupLatest(addr)
+		require.NoError(t, err)
+		require.Equal(t, rnd, r)
+		require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
+		require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
+		require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
+		require.Equal(t, int(acct.TotalAssets), len(d.Assets))
+	}
 }
 
 func TestAcctUpdates(t *testing.T) {
@@ -1159,6 +1235,18 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		}
 
 		ad := data.GetAccountData()
+		if data.TotalAppParams > 0 {
+			ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		}
+		if data.TotalAppLocalStates > 0 {
+			ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		}
+		if data.TotalAssetParams > 0 {
+			ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+		}
+		if data.TotalAssets > 0 {
+			ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		}
 
 		err = func() (err error) {
 			// make a scope to use defer
@@ -1187,15 +1275,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 				}
 				if resData.IsApp() {
 					if resData.IsOwning() {
-						if ad.AppParams == nil {
-							ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
-						}
 						ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
 					}
 					if resData.IsHolding() {
-						if ad.AppLocalStates == nil {
-							ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-						}
 						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
 					}
 					if basics.CreatableType(rtype) != basics.AppCreatable {
@@ -1203,15 +1285,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 					}
 				} else if resData.IsAsset() {
 					if resData.IsOwning() {
-						if ad.AssetParams == nil {
-							ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-						}
 						ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
 					}
 					if resData.IsHolding() {
-						if ad.Assets == nil {
-							ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-						}
 						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
 					}
 					if basics.CreatableType(rtype) != basics.AssetCreatable {
@@ -1930,6 +2006,123 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	ml.trackers.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
 	ml.trackers.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
+}
+
+// TestAcctUpdatesResources checks that created, deleted, and created resource keep
+// acct updates' compact deltas in a correct state
+func TestAcctUpdatesResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesResources")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	var addr basics.Address
+	for addr = range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			break
+		}
+	}
+
+	aidx := basics.AssetIndex(1)
+
+	rewardLevel := uint64(0)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	// the test requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		var updates ledgercore.NewAccountDeltas
+		base := accts[i-1]
+
+		// modify state as needed for the tests: create, delete, create
+		if i == 1 {
+			updates.UpsertAssetHolding(addr, aidx, &basics.AssetHolding{Amount: 100})
+		}
+		if i == 2 {
+			updates.UpsertAssetHolding(addr, aidx, nil)
+		}
+		if i == 3 {
+			updates.UpsertAssetHolding(addr, aidx, &basics.AssetHolding{Amount: 200})
+		}
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newAccts := applyPartialDeltas(base, updates)
+
+		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.NewAccts.MergeAccounts(updates)
+		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+		delta.Totals = newTotals
+
+		au.newBlock(blk, delta)
+
+		// commit changes synchroniously
+		_, maxLookback := au.committedUpTo(i)
+		dcc := &deferredCommitContext{
+			deferredCommitRange: deferredCommitRange{
+				lookback: maxLookback,
+			},
+		}
+		cdr := &dcc.deferredCommitRange
+		cdr = au.produceCommittingTask(i, ml.trackers.dbRound, cdr)
+		if cdr != nil {
+			func() {
+				dcc.deferredCommitRange = *cdr
+				ml.trackers.accountsWriting.Add(1)
+				defer ml.trackers.accountsWriting.Done()
+
+				// do not take any locks since all operations are synchronous
+				newBase := basics.Round(dcc.offset) + dcc.oldBase
+				dcc.newBase = newBase
+
+				err := au.prepareCommit(dcc)
+				require.NoError(t, err)
+				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+					return au.commitRound(ctx, tx, dcc)
+				})
+				require.NoError(t, err)
+				ml.trackers.dbRound = newBase
+				au.postCommit(ml.trackers.ctx, dcc)
+				au.postCommitUnlocked(ml.trackers.ctx, dcc)
+			}()
+
+		}
+		accts = append(accts, newAccts)
+	}
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.

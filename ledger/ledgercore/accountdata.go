@@ -61,7 +61,7 @@ type VotingData struct {
 	// MicroAlgosWithReward basics.MicroAlgos
 }
 
-// ToAccountData returns apply.AccountData from basics.AccountData
+// ToAccountData returns ledgercore.AccountData from basics.AccountData
 func ToAccountData(acct basics.AccountData) AccountData {
 	return AccountData{
 		AccountBaseData: AccountBaseData{
