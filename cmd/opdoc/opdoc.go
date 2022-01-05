@@ -103,7 +103,7 @@ func fieldSpecsMarkdown(out io.Writer, names []string, specs speccer) {
 	}
 	headers += " Notes |\n"
 	widths += " --------- |\n"
-	out.Write([]byte(headers + widths))
+	fmt.Fprint(out, headers, widths)
 	for i, name := range names {
 		spec := specs.SpecByName(name)
 		str := fmt.Sprintf("| %d | %s", i, markdownTableEscape(name))
@@ -119,7 +119,7 @@ func fieldSpecsMarkdown(out io.Writer, names []string, specs speccer) {
 		}
 		fmt.Fprintf(out, "%s | %s |\n", str, spec.Note())
 	}
-	out.Write([]byte("\n"))
+	fmt.Fprint(out, "\n")
 }
 
 func transactionFieldsMarkdown(out io.Writer) {
