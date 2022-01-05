@@ -252,7 +252,7 @@ return stack matches the name of the input value.
 | `extract_uint16` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails |
 | `extract_uint32` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails |
-| `base64_decode e` | decode A which was base64-encoded using _encoding alphabet_ E. Fail if A is not base64 encoded with alphabet E |
+| `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if X is not base64 encoded with encoding E |
 
 The following opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -587,13 +587,7 @@ Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-spe
 
 ## Constants and Pseudo-Ops
 
-A few pseudo-ops simplify writing code. `int`, `byte`, `addr`, and
-`method` followed by a constant record the constant to a `intcblock`
-or `bytecblock` at the beginning of code and insert an `intc` or
-`bytec` reference where the instruction appears to load that
-value. `addr` parses an Algorand account address base32 and converts
-it to a regular byte-array constant. `method` calculates an ARC4
-method selector, and stores a regular uint64 constant.
+A few pseudo-ops simplify writing code. `int` and `byte` and `addr` and `method` followed by a constant record the constant to a `intcblock` or `bytecblock` at the beginning of code and insert an `intc` or `bytec` reference where the instruction appears to load that value. `addr` parses an Algorand account address base32 and converts it to a regular bytes constant. `method` is passed a method signature and takes the first four bytes of the hash to convert it to the standard method selector defined in [ARC4](https://github.com/algorandfoundation/ARCs/blob/main/ARCs/arc-0004.md)
 
 `byte` constants are:
 ```

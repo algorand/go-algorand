@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -412,6 +412,8 @@ func TestAcctUpdates(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -424,7 +426,7 @@ func TestAcctUpdates(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = curTotals
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -515,6 +517,8 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -526,6 +530,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = curTotals
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -602,6 +607,8 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(b, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(b, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -613,6 +620,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = curTotals
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -729,6 +737,8 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -740,6 +750,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = curTotals
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -1288,8 +1299,8 @@ func TestCompactDeltas(t *testing.T) {
 
 }
 
-// TestCachesInitialization test the functionality of the initializeCaches cache.
-func TestCachesInitialization(t *testing.T) {
+// TestAcctUpdatesCachesInitialization test the functionality of the initializeCaches cache.
+func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	protocolVersion := protocol.ConsensusCurrentVersion
@@ -1340,6 +1351,8 @@ func TestCachesInitialization(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1351,7 +1364,7 @@ func TestCachesInitialization(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = curTotals
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		ml.trackers.committedUpTo(basics.Round(i))
@@ -1382,8 +1395,8 @@ func TestCachesInitialization(t *testing.T) {
 	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.cachedDBRound)
 }
 
-// TestSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
-func TestSplittingConsensusVersionCommits(t *testing.T) {
+// TestAcctUpdatesSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
+func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	initProtocolVersion := protocol.ConsensusV20
@@ -1439,6 +1452,8 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1450,7 +1465,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = curTotals
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1474,6 +1489,8 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1485,7 +1502,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = curTotals
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1498,9 +1515,9 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 
 }
 
-// TestSplittingConsensusVersionCommitsBoundry tests the a sequence of commits that spans over multiple consensus versions works correctly, and
-// in particular, complements TestSplittingConsensusVersionCommits by testing the commit boundary.
-func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
+// TestAcctUpdatesSplittingConsensusVersionCommitsBoundry tests the a sequence of commits that spans over multiple consensus versions works correctly, and
+// in particular, complements TestAcctUpdatesSplittingConsensusVersionCommits by testing the commit boundary.
+func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	initProtocolVersion := protocol.ConsensusV20
@@ -1556,6 +1573,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1567,7 +1586,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = curTotals
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1590,6 +1609,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1601,7 +1622,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = curTotals
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -1626,6 +1647,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		require.Equal(t, prevTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1637,7 +1660,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = curTotals
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)

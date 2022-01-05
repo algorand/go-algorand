@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1229,20 +1229,20 @@ func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
 
-	alph, ok := base64AlphabetSpecByName[args[0]]
+	encoding, ok := base64EncodingSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown alphabet: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown encoding: %#v", spec.Name, args[0])
 	}
-	if alph.version > ops.Version {
+	if encoding.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], alph.version)
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], encoding.version)
 	}
 
-	val := alph.field
+	val := encoding.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.trace("%s (%s)", alph.field, alph.ftype)
-	ops.returns(alph.ftype)
+	ops.trace("%s (%s)", encoding.field, encoding.ftype)
+	ops.returns(encoding.ftype)
 	return nil
 }
 
@@ -2676,10 +2676,10 @@ func disBase64Decode(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	dis.nextpc = dis.pc + 2
 	b64dArg := dis.program[dis.pc+1]
-	if int(b64dArg) >= len(base64AlphabetNames) {
+	if int(b64dArg) >= len(base64EncodingNames) {
 		return "", fmt.Errorf("invalid base64_decode arg index %d at pc=%d", b64dArg, dis.pc)
 	}
-	return fmt.Sprintf("%s %s", spec.Name, base64AlphabetNames[b64dArg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, base64EncodingNames[b64dArg]), nil
 }
 
 type disInfo struct {
