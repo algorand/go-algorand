@@ -179,7 +179,7 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 		}
 		if prd.data.IsOwning() {
 			assetParams := prd.data.GetAssetParams()
-			ret.AssetParam = &assetParams
+			ret.AssetParams = &assetParams
 		}
 	}
 	if prd.data.IsApp() {

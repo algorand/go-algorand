@@ -816,7 +816,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 			index:   basics.CreatableIndex(params.Aidx),
 		}
 		mres := au.resources[key]
-		mres.resource.AssetParam = params.Params
+		mres.resource.AssetParams = params.Params
 		mres.ndeltas++
 		au.resources[key] = mres
 	}

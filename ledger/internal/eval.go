@@ -184,10 +184,10 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 
 func (x *roundCowBase) updateAssetResourceCache(aa ledgercore.AccountAsset, r ledgercore.AccountResource) {
 	// cache AssetParams and AssetHolding returned by LookupResource
-	if r.AssetParam == nil {
+	if r.AssetParams == nil {
 		x.assetParams[aa] = cachedAssetParams{exists: false}
 	} else {
-		x.assetParams[aa] = cachedAssetParams{value: *r.AssetParam, exists: true}
+		x.assetParams[aa] = cachedAssetParams{value: *r.AssetParams, exists: true}
 	}
 	if r.AssetHolding == nil {
 		x.assets[aa] = cachedAssetHolding{exists: false}
@@ -242,10 +242,10 @@ func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetI
 
 	x.updateAssetResourceCache(aa, resourceData)
 
-	if resourceData.AssetParam == nil {
+	if resourceData.AssetParams == nil {
 		return basics.AssetParams{}, false, nil
 	}
-	return *resourceData.AssetParam, true, nil
+	return *resourceData.AssetParams, true, nil
 }
 
 func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {

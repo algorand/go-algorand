@@ -127,7 +127,7 @@ func toAccountResource(ad basics.AccountData, aidx basics.CreatableIndex, ctype 
 			ret.AssetHolding = &a
 		}
 		if a, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-			ret.AssetParam = &a
+			ret.AssetParams = &a
 		}
 	}
 	return ret
