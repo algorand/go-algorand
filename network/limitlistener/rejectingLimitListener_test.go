@@ -21,7 +21,7 @@ import (
 const defaultMaxOpenFiles = 256
 const timeout = 5 * time.Second
 
-func TestRejectingLimitListener(t *testing.T) {
+func TestRejectingLimitListenerBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const limit = 5
@@ -94,7 +94,7 @@ func (errorListener) Accept() (net.Conn, error) {
 
 var errFake = errors.New("fake error from errorListener")
 
-func TestRejectingLimitListenerError(t *testing.T) {
+func TestRejectingLimitListenerBaseListenerError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	errCh := make(chan error, 1)
