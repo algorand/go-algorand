@@ -2486,6 +2486,7 @@
           "proof",
           "stibhash",
           "idx",
+          "treeDepth",
           "hashtype"
         ],
         "properties": {
@@ -2499,12 +2500,12 @@
             "type": "string",
             "format": "byte"
           },
-          "idx": {
-            "description": "Index of the transaction in the block's payset.",
-            "type": "integer"
-          },
           "treeDepth": {
             "description": "represents the depth of the tree that is being proven. the root level is not included.",
+            "type": "integer"
+          },
+          "idx": {
+            "description": "Index of the transaction in the block's payset.",
             "type": "integer"
           },
           "hashtype": {
