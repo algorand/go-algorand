@@ -120,7 +120,7 @@ func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.ParticipationRec
 			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
 			partRecordForRound := account.ParticipationRecordForRound{
 				ParticipationRecord: partRecord,
-				StateProof:          signerInRound,
+				StateProofSecrets:   signerInRound,
 			}
 			out = append(out, partRecordForRound)
 		}

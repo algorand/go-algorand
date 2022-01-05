@@ -717,7 +717,6 @@ func TestFlushDeadlock(t *testing.T) {
 	wg.Wait()
 }
 
-// TODO: use FillDB to generated actual keys so the comparison will make sense
 func TestAddStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
@@ -758,7 +757,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	for i := uint64(1); i < max; i++ {
 		r, err := registry.GetForRound(id, basics.Round(i))
 		a.NoError(err)
-		a.Equal(keys[i], StateProofKey(*r.StateProof.SigningKey))
+		a.Equal(keys[i], StateProofKey(*r.StateProofSecrets.SigningKey))
 	}
 }
 
@@ -777,9 +776,8 @@ func TestSecretNotFound(t *testing.T) {
 	r, err := registry.GetForRound(id, basics.Round(2))
 	a.NoError(err)
 
-	// Empty stateproof key TODO: IsZero method for Signer
-	s := merklekeystore.Signer{SigningKey: &crypto.GenericSigningKey{}, Round: 2}
-	a.Equal(&s, r.StateProof)
+	// Empty stateproof key
+	a.Nil(r.StateProofSecrets)
 
 	_, err = registry.GetForRound(id, basics.Round(100))
 	a.ErrorIs(err, ErrRequestedRoundOutOfRange)
@@ -821,4 +819,28 @@ func TestAddingSecretTwice(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.Error(err)
 	a.EqualError(err, "unable to execute append keys: UNIQUE constraint failed: StateProofKeys.pk, StateProofKeys.round")
+}
+
+func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	access, err := db.MakeAccessor("stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, 200, 3)
+	access.Close()
+	a.NoError(err)
+
+	// Install a key for testing
+	id, err := registry.Insert(p.Participation)
+	a.NoError(err)
+
+	partPerRound, err := registry.GetForRound(id, 1)
+	a.NoError(err)
+	a.Nil(partPerRound.StateProofSecrets)
 }

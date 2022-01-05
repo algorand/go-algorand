@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ func keystoreInstallDatabase(tx *sql.Tx) error {
 
 // Persist dumps the keys into the database and deletes the reference to them in Keystore
 func (s *Keystore) Persist(store db.Accessor) error {
-	if s.signatureAlgorithms == nil {
+	if s.ephemeralKeys == nil {
 		return fmt.Errorf("no keys provided (nil)")
 	}
 
@@ -64,7 +64,7 @@ func (s *Keystore) Persist(store db.Accessor) error {
 			return errIntervalZero
 		}
 		round := indexToRound(s.FirstValid, s.Interval, 0)
-		for i, key := range s.signatureAlgorithms {
+		for i, key := range s.ephemeralKeys {
 			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
 			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)
 			protocol.PutEncodingBuf(encodedKey)

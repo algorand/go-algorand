@@ -65,7 +65,7 @@ func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.
 					VRF:               acc.VRF,
 					Voting:            acc.Voting,
 				},
-				StateProof: &signerInRound,
+				StateProofSecrets: &signerInRound,
 			}
 			km = append(km, partRecordForRound)
 		}

@@ -52,8 +52,7 @@ type (
 		// these keys should be temporarily stored in memory until Persist is called,
 		// in which they will be dumped into database and disposed of.
 		// non-exported fields to prevent msgpack marshalling
-		signatureAlgorithms []crypto.GenericSigningKey
-		//keyStore            PersistentKeystore
+		ephemeralKeys []crypto.GenericSigningKey
 
 		SignerContext
 	}
@@ -113,7 +112,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		return nil, err
 	}
 	s := &Keystore{
-		signatureAlgorithms: keys,
+		ephemeralKeys: keys,
 		SignerContext: SignerContext{
 			FirstValid: firstValid,
 			Interval:   interval,
@@ -184,11 +183,11 @@ func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
 // GetKey retrieves key from memory if exists
 func (s *Keystore) GetKey(round uint64) *crypto.GenericSigningKey {
 	idx := roundToIndex(s.FirstValid, round, s.Interval)
-	if idx < 0 || idx >= uint64(len(s.signatureAlgorithms)) || (round%s.Interval) != 0 {
+	if idx < 0 || idx >= uint64(len(s.ephemeralKeys)) || (round%s.Interval) != 0 {
 		return nil
 	}
 
-	return &s.signatureAlgorithms[idx]
+	return &s.ephemeralKeys[idx]
 }
 
 // GetSigner returns the secret keys required for the specified round as well as the public immutable data

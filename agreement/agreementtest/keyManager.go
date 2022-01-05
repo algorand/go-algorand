@@ -48,7 +48,7 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 			// (within the Participation after calling FillDB)
 			partRecForRound := account.ParticipationRecordForRound{
 				ParticipationRecord: record,
-				StateProof:          acc.StateProofSecrets.GetSigner(uint64(votingRound)),
+				StateProofSecrets:   acc.StateProofSecrets.GetSigner(uint64(votingRound)),
 			}
 			km = append(km, partRecForRound)
 		}

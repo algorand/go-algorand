@@ -90,12 +90,12 @@ type StateProofKey crypto.GenericSigningKey
 type ParticipationRecordForRound struct {
 	ParticipationRecord
 
-	StateProof *merklekeystore.Signer
+	StateProofSecrets *merklekeystore.Signer
 }
 
 // IsZero returns true if the object contains zero values.
 func (r ParticipationRecordForRound) IsZero() bool {
-	return r.StateProof == nil && r.ParticipationRecord.IsZero()
+	return r.StateProofSecrets == nil && r.ParticipationRecord.IsZero()
 }
 
 // VotingSigner returns the voting secrets associated with this Participation account,
@@ -900,10 +900,8 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 // GetForRound fetches a record with all secrets for a particular round.
 func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound
-	result.StateProof = &merklekeystore.Signer{}
-	result.StateProof.SigningKey = &crypto.GenericSigningKey{}
 	var rawStateProofKey []byte
-	var rawSignerRecord []byte
+	var rawSignerContext []byte
 
 	result.ParticipationRecord = db.Get(id)
 	if result.ParticipationRecord.IsZero() {
@@ -913,8 +911,6 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	if round > result.LastValid {
 		return ParticipationRecordForRound{}, ErrRequestedRoundOutOfRange
 	}
-
-	result.StateProof.Round = uint64(round)
 
 	err := db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch secret key
@@ -927,27 +923,37 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 			return fmt.Errorf("error while querying secrets: %w", err)
 		}
 
-		// fetch stateproof public data
-		row = tx.QueryRow(selectStateProofData, id[:])
-		err = row.Scan(&rawSignerRecord)
-		if err != nil {
-			return fmt.Errorf("error while querying stateproof data: %w", err)
-		}
-
 		return nil
 	})
 	if err == ErrSecretNotFound {
-		return result, nil // leave Keystore fields empty as no stateproof exists for requested round
+		return result, nil
 	} else if err != nil {
-		return ParticipationRecordForRound{}, fmt.Errorf("unable to lookup secrets: %w", err)
+		return ParticipationRecordForRound{}, err
 	}
 
-	err = protocol.Decode(rawSignerRecord, &result.StateProof.SignerContext)
+	// Init stateproof fields after being able to retrieve key from database
+	result.StateProofSecrets = &merklekeystore.Signer{}
+	result.StateProofSecrets.SigningKey = &crypto.GenericSigningKey{}
+	result.StateProofSecrets.Round = uint64(round)
+
+	err = protocol.Decode(rawStateProofKey, result.StateProofSecrets.SigningKey)
 	if err != nil {
 		return ParticipationRecordForRound{}, err
 	}
 
-	err = protocol.Decode(rawStateProofKey, result.StateProof.SigningKey)
+	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		// fetch stateproof public data
+		row := tx.QueryRow(selectStateProofData, id[:])
+		err := row.Scan(&rawSignerContext)
+		if err != nil {
+			return fmt.Errorf("error while querying stateproof data: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return ParticipationRecordForRound{}, err
+	}
+	err = protocol.Decode(rawSignerContext, &result.StateProofSecrets.SignerContext)
 	if err != nil {
 		return ParticipationRecordForRound{}, err
 	}

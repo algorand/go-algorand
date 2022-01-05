@@ -526,7 +526,7 @@ func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval 
 //}
 
 func length(s *Keystore, a *require.Assertions) int {
-	return len(s.signatureAlgorithms)
+	return len(s.ephemeralKeys)
 }
 
 func copyProof(proof merklearray.Proof) merklearray.Proof {
