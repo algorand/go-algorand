@@ -167,6 +167,7 @@ func (tree *Tree) buildLayers(leaves Layer) {
 }
 
 // Root returns the root hash of the tree.
+// In case the tree is empty, the return value is an empty GenericDigest.
 func (tree *Tree) Root() crypto.GenericDigest {
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 {
@@ -259,7 +260,7 @@ func (tree *Tree) createProof(idxs []uint64) (*Proof, error) {
 func (tree *Tree) convertLeavesIndexes(idxs []uint64) ([]uint64, error) {
 	vcIdxs := make([]uint64, len(idxs))
 	for i := 0; i < len(idxs); i++ {
-		idx, err := msbToLsbIndex(idxs[i], uint8(len(tree.Levels)-1))
+		idx, err := merkleTreeToVectorCommitmentIndex(idxs[i], uint8(len(tree.Levels)-1))
 		if err != nil {
 			return nil, err
 		}
@@ -378,7 +379,7 @@ func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Has
 func convertIndexes(elems map[uint64]crypto.Hashable, proof *Proof) (map[uint64]crypto.Hashable, error) {
 	msbIndexedElements := make(map[uint64]crypto.Hashable, len(elems))
 	for i, e := range elems {
-		idx, err := msbToLsbIndex(i, proof.TreeDepth)
+		idx, err := merkleTreeToVectorCommitmentIndex(i, proof.TreeDepth)
 		if err != nil {
 			return nil, err
 		}

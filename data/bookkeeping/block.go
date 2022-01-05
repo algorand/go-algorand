@@ -519,9 +519,14 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 		if err != nil {
 			return crypto.Digest{}, err
 		}
-		// in case there are no leaves (e.g empty block with 0 txns) the merkle root is a slice for an 0 len array
-		// We convert this slice to [32]byte{0x00,...0x00}. Hence, the empty root is represented by the value [32]byte{0x00,...0x00}.
-		return tree.Root().To32Byte(), nil
+		// in case there are no leaves (e.g empty block with 0 txns) the merkle root is a slice with length of 0
+		// here we convert the empty slice to a 32-bytes of zeros. this conversion is okay because this merkle
+		// tree uses sha512_256 function. for this function the pre-image of [0x0...0x0] is not known
+		// (it might not be the cases for a different hash function)
+		rootSlice := tree.Root()
+		var rootAsByteArray crypto.Digest
+		copy(rootAsByteArray[:], rootSlice)
+		return rootAsByteArray, nil
 	default:
 		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}

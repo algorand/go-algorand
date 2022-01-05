@@ -25,7 +25,7 @@ import (
 )
 
 func indexTranslate(t *testing.T, from, to uint64, pathLen uint8) {
-	lsbIndex, error := msbToLsbIndex(from, pathLen)
+	lsbIndex, error := merkleTreeToVectorCommitmentIndex(from, pathLen)
 	require.NoError(t, error)
 	require.Equal(t, to, lsbIndex)
 }
@@ -95,24 +95,24 @@ func TestIndexOutOfBounds(t *testing.T) {
 	var pathLen uint8
 
 	pathLen = 1
-	lsbIndex, err := msbToLsbIndex(0, pathLen)
+	lsbIndex, err := merkleTreeToVectorCommitmentIndex(0, pathLen)
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), lsbIndex)
 
-	lsbIndex, err = msbToLsbIndex(1, pathLen)
+	lsbIndex, err = merkleTreeToVectorCommitmentIndex(1, pathLen)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), lsbIndex)
 
-	lsbIndex, err = msbToLsbIndex(2, pathLen)
+	lsbIndex, err = merkleTreeToVectorCommitmentIndex(2, pathLen)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "larger than leaf count")
 
 	pathLen = 4
-	lsbIndex, err = msbToLsbIndex(15, pathLen)
+	lsbIndex, err = merkleTreeToVectorCommitmentIndex(15, pathLen)
 	require.NoError(t, err)
 	require.Equal(t, uint64(15), lsbIndex)
 
-	lsbIndex, err = msbToLsbIndex(16, pathLen)
+	lsbIndex, err = merkleTreeToVectorCommitmentIndex(16, pathLen)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "larger than leaf count")
 
@@ -187,7 +187,7 @@ func TestVcArrayPadding(t *testing.T) {
 	h.Write(leafBytes)
 	leafHash := h.Sum(nil)
 
-	idx, err := msbToLsbIndex(1, 4)
+	idx, err := merkleTreeToVectorCommitmentIndex(1, 4)
 	require.NoError(t, err)
 	leafVc, err := vc.Marshal(idx)
 	hashID, leafData := leafVc.ToBeHashed()

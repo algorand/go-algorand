@@ -65,7 +65,7 @@ func (vc *vectorCommitmentArray) Length() uint64 {
 }
 
 func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
-	lsbIndex, err := msbToLsbIndex(pos, vc.pathLen)
+	lsbIndex, err := merkleTreeToVectorCommitmentIndex(pos, vc.pathLen)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return &bottomElement{}, nil
 }
 
-func msbToLsbIndex(msbIndex uint64, pathLen uint8) (uint64, error) {
+func merkleTreeToVectorCommitmentIndex(msbIndex uint64, pathLen uint8) (uint64, error) {
 	if msbIndex >= (1 << pathLen) {
 		return 0, fmt.Errorf(ErrPosOutOfBound, msbIndex, 1<<pathLen)
 	}
