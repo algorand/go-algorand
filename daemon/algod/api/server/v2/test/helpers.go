@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -73,6 +73,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	AppsLocalState:              &appLocalStates,
 	AppsTotalSchema:             &appsTotalSchema,
 	CreatedApps:                 &appCreatedApps,
+	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
@@ -84,6 +85,8 @@ type mockNode struct {
 	genesisID string
 	config    config.Local
 	err       error
+	id        account.ParticipationID
+	keys      account.StateProofKeys
 }
 
 func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -102,8 +105,14 @@ func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 	panic("implement me")
 }
 
-func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
-	return mockNode{
+func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
+	m.id = id
+	m.keys = keys
+	return m.err
+}
+
+func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) *mockNode {
+	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
 		config:    config.GetDefaultLocal(),
