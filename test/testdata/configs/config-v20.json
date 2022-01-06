@@ -23,6 +23,7 @@
     "DNSBootstrapID": "<network>.algorand.network",
     "DNSSecurityFlags": 1,
     "DeadlockDetection": 0,
+    "DeadlockDetectionThreshold": 30,
     "DisableLocalhostConnectionRateLimit": true,
     "DisableNetworking": false,
     "DisableOutgoingConnectionThrottling": false,

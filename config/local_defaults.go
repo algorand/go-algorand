@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,6 +44,7 @@ var defaultLocal = Local{
 	DNSBootstrapID:                             "<network>.algorand.network",
 	DNSSecurityFlags:                           1,
 	DeadlockDetection:                          0,
+	DeadlockDetectionThreshold:                 30,
 	DisableLocalhostConnectionRateLimit:        true,
 	DisableNetworking:                          false,
 	DisableOutgoingConnectionThrottling:        false,

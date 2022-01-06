@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -191,6 +191,9 @@ type Local struct {
 	// control enabling / disabling deadlock detection.
 	// negative (-1) to disable, positive (1) to enable, 0 for default.
 	DeadlockDetection int `version[1]:"0"`
+
+	// The threshold used for deadlock detection, in seconds.
+	DeadlockDetectionThreshold int `version[20]:"30"`
 
 	// Prefer to run algod Hosted (under algoh)
 	// Observed by `goal` for now.
