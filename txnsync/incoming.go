@@ -34,6 +34,7 @@ type incomingMessage struct {
 	networkPeer       interface{}
 	message           transactionBlockMessage
 	sequenceNumber    uint64
+	nextSequenceNumber uint64
 	peer              *Peer
 	encodedSize       int // the byte length of the incoming network message
 	bloomFilter       *testableBloomFilter
@@ -187,7 +188,7 @@ incomingMessageLoop:
 		}
 
 		// increase the message sequence number, since we're processing this message.
-		peer.nextReceivedMessageSeq++
+		peer.nextReceivedMessageSeq = incomingMsg.nextSequenceNumber
 
 		// skip txnsync messages with proposalData for now
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
