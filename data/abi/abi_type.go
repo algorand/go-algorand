@@ -60,6 +60,14 @@ const (
 	Tuple
 )
 
+const (
+	addressByteSize      = 32
+	checksumByteSize     = 4
+	singleByteSize       = 1
+	singleBoolSize       = 1
+	lengthEncodeByteSize = 2
+)
+
 // Type is the struct that stores information about an ABI value's type.
 type Type struct {
 	abiTypeID  BaseType
@@ -404,14 +412,6 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 	}
 	return until
 }
-
-const (
-	addressByteSize      = 32
-	checksumByteSize     = 4
-	singleByteSize       = 1
-	singleBoolSize       = 1
-	lengthEncodeByteSize = 2
-)
 
 // ByteLen method calculates the byte length of a static ABI type.
 func (t Type) ByteLen() (int, error) {

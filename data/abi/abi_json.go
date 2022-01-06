@@ -18,15 +18,22 @@ package abi
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"math/big"
-
-	"github.com/algorand/go-algorand/crypto"
 )
 
 var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
+
+func addressCheckSum(addressBytes []byte) ([]byte, error) {
+	if len(addressBytes) != addressByteSize {
+		return nil, fmt.Errorf("address bytes should be of length 32")
+	}
+	hashed := sha512.Sum512_256(addressBytes[:])
+	return hashed[:checksumByteSize], nil
+}
 
 func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
 	if num.BitLen() > int(bitSize) {
@@ -90,8 +97,11 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 		default:
 			return nil, fmt.Errorf("cannot infer to byte slice/array for marshal to JSON")
 		}
-		checksum := crypto.Hash(addressValueInternal)
-		addressValueInternal = append(addressValueInternal, checksum[addressByteSize-checksumByteSize:]...)
+		checksum, err := addressCheckSum(addressValueInternal)
+		if err != nil {
+			return nil, err
+		}
+		addressValueInternal = append(addressValueInternal, checksum...)
 		return json.Marshal(base32Encoder.EncodeToString(addressValueInternal))
 	case ArrayStatic, ArrayDynamic:
 		values, err := inferToSlice(value)
@@ -198,8 +208,11 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 					string(jsonEncoded),
 				)
 		}
-		checksum := crypto.Hash(decoded[:addressByteSize])
-		if !bytes.Equal(checksum[addressByteSize-checksumByteSize:], decoded[addressByteSize:]) {
+		checksum, err := addressCheckSum(decoded[:addressByteSize])
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(checksum, decoded[addressByteSize:]) {
 			return nil, fmt.Errorf("cannot cast JSON encoded address string (%s) to address: decoded checksum unmatch", addrStr)
 		}
 		return decoded[:addressByteSize], nil
