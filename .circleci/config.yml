@@ -744,8 +744,8 @@ jobs:
       - upload_binaries_command:
           platform: << parameters.platform >>
           no_build: "false"
-      - slack/notify:
-          <<: *slack-fail-event
+      # - slack/notify:
+      #     <<: *slack-fail-event
 
   upload_nightly_binaries:
     working_directory: << pipeline.parameters.build_dir >>/project
@@ -759,5 +759,5 @@ jobs:
       - upload_binaries_command:
           platform: << parameters.platform >>
           no_build: "true"
-      - slack/notify:
-          <<: *slack-fail-event
+      # - slack/notify:
+      #     <<: *slack-fail-event
