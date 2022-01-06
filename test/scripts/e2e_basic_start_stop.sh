@@ -34,7 +34,7 @@ function verify_none_running() {
         if [ ${RUNNING_COUNT} -eq 0 ]; then
             return 0
         fi
-        sleep 1.4
+        sleep 2.4
     done
     echo "algod not expected to be running but it is"
     exit 1
