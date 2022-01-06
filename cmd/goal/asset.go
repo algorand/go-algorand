@@ -74,7 +74,6 @@ func init() {
 	createAssetCmd.Flags().StringVar(&assetFreezer, "freezer", "", "Freezer account that can freeze or unfreeze the asset holdings for a specific account")
 	createAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Clawback account that is allowed to transfer assets from and to any asset holder")
 	createAssetCmd.Flags().BoolVar(&assetNoManager, "no-manager", false, "Explicitly declare the lack of manager")
-	createAssetCmd.Flags().BoolVar(&assetNoReserve, "no-reserve", false, "Explicitly declare the lack of reserve")
 	createAssetCmd.Flags().BoolVar(&assetNoFreezer, "no-freezer", false, "Explicitly declare the lack of freezer")
 	createAssetCmd.Flags().BoolVar(&assetNoClawback, "no-clawback", false, "Explicitly declare the lack of clawback")
 	createAssetCmd.MarkFlagRequired("total")
@@ -219,10 +218,6 @@ var createAssetCmd = &cobra.Command{
 		if cmd.Flags().Changed("reserve") {
 			assetReserve = accountList.getAddressByName(assetReserve)
 			reserve = assetReserve
-		}
-
-		if cmd.Flags().Changed("no-reserve") {
-			reserve = ""
 		}
 
 		if cmd.Flags().Changed("freezer") {

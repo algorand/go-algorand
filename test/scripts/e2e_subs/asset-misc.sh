@@ -47,4 +47,44 @@ else
     exit 1
 fi
 
+# create asset with no manager, no freezer, and no clawback
+${gcmd} asset create --creator "${ACCOUNT}" --no-manager --no-freezer --no-clawback --name "${ASSET_NAME}" --unitname iamisc --total 1000000000000 --asseturl "${ASSET_URL}"
+
+IMMUTABLE_ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname iamisc|grep 'Asset ID'|awk '{ print $3 }')
+
+MANAGER_ADDRESS=$(${gcmd} asset info --assetid ${IMMUTABLE_ASSET_ID} |grep 'Manager address'|awk '{ print $3 }')
+RESERVE_ADDRESS=$(${gcmd} asset info --assetid ${IMMUTABLE_ASSET_ID} |grep 'Reserve address'|awk '{ print $3 }')
+FREEZE_ADDRESS=$(${gcmd} asset info --assetid ${IMMUTABLE_ASSET_ID} |grep 'Freeze address'|awk '{ print $3 }')
+CLAWBACK_ADDRESS=$(${gcmd} asset info --assetid ${IMMUTABLE_ASSET_ID} |grep 'Clawback address'|awk '{ print $3 }')
+
+if [ "$MANAGER_ADDRESS" = "" ] \
+    && [ "$RESERVE_ADDRESS" = "$ACCOUNT" ] \
+    && [ "$FREEZE_ADDRESS" = "" ] \
+    && [ "$CLAWBACK_ADDRESS" = "" ]; then
+    echo ok
+else
+    date '+asset-misc immutable asset info error %Y%m%d_%H%M%S'
+    exit 1
+fi
+
+# create asset with a manager that is different from the creator
+${gcmd} asset create --creator "${ACCOUNT}" --manager "${ACCOUNTB}" --name "${ASSET_NAME}" --unitname dma --total 1000000000000 --asseturl "${ASSET_URL}"
+
+DIFF_MANAGER_ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname dma|grep 'Asset ID'|awk '{ print $3 }')
+
+DMA_MANAGER_ADDRESS=$(${gcmd} asset info --assetid ${DIFF_MANAGER_ASSET_ID} |grep 'Manager address'|awk '{ print $3 }')
+DMA_RESERVE_ADDRESS=$(${gcmd} asset info --assetid ${DIFF_MANAGER_ASSET_ID} |grep 'Reserve address'|awk '{ print $3 }')
+DMA_FREEZE_ADDRESS=$(${gcmd} asset info --assetid ${DIFF_MANAGER_ASSET_ID} |grep 'Freeze address'|awk '{ print $3 }')
+DMA_CLAWBACK_ADDRESS=$(${gcmd} asset info --assetid ${DIFF_MANAGER_ASSET_ID} |grep 'Clawback address'|awk '{ print $3 }')
+
+if [ "$DMA_MANAGER_ADDRESS" = "$ACCOUNTB" ] \
+    && [ "$DMA_RESERVE_ADDRESS" = "$ACCOUNT" ] \
+    && [ "$DMA_FREEZE_ADDRESS" = "$ACCOUNT" ] \
+    && [ "$DMA_CLAWBACK_ADDRESS" = "$ACCOUNT" ]; then
+    echo ok
+else
+    date '+asset-misc asset info with diff maanger error %Y%m%d_%H%M%S'
+    exit 1
+fi
+
 date '+asset-misc finish %Y%m%d_%H%M%S'
