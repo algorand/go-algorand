@@ -151,28 +151,26 @@ static void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1
 }
 
 static void
-expand256_modm(sc25519 out, const unsigned char *in, size_t len) {
-	unsigned char work[64] = {0};
+expand256_modm64(sc25519 out, const unsigned char *in) {
 	sc25519_element_t x[16];
 	sc25519 q1;
 
-	memcpy(work, in, len);
-	x[0] = U8TO32_LE(work +  0);
-	x[1] = U8TO32_LE(work +  4);
-	x[2] = U8TO32_LE(work +  8);
-	x[3] = U8TO32_LE(work + 12);
-	x[4] = U8TO32_LE(work + 16);
-	x[5] = U8TO32_LE(work + 20);
-	x[6] = U8TO32_LE(work + 24);
-	x[7] = U8TO32_LE(work + 28);
-	x[8] = U8TO32_LE(work + 32);
-	x[9] = U8TO32_LE(work + 36);
-	x[10] = U8TO32_LE(work + 40);
-	x[11] = U8TO32_LE(work + 44);
-	x[12] = U8TO32_LE(work + 48);
-	x[13] = U8TO32_LE(work + 52);
-	x[14] = U8TO32_LE(work + 56);
-	x[15] = U8TO32_LE(work + 60);
+	x[0] = U8TO32_LE(in +  0);
+	x[1] = U8TO32_LE(in +  4);
+	x[2] = U8TO32_LE(in +  8);
+	x[3] = U8TO32_LE(in + 12);
+	x[4] = U8TO32_LE(in + 16);
+	x[5] = U8TO32_LE(in + 20);
+	x[6] = U8TO32_LE(in + 24);
+	x[7] = U8TO32_LE(in + 28);
+	x[8] = U8TO32_LE(in + 32);
+	x[9] = U8TO32_LE(in + 36);
+	x[10] = U8TO32_LE(in + 40);
+	x[11] = U8TO32_LE(in + 44);
+	x[12] = U8TO32_LE(in + 48);
+	x[13] = U8TO32_LE(in + 52);
+	x[14] = U8TO32_LE(in + 56);
+	x[15] = U8TO32_LE(in + 60);
 
 	/* r1 = (x mod 256^(32+1)) = x mod (2^8)(31+1) = x & ((1 << 264) - 1) */
 	out[0] = (                         x[0]) & 0x3fffffff;
@@ -184,10 +182,6 @@ expand256_modm(sc25519 out, const unsigned char *in, size_t len) {
 	out[6] = ((x[ 5] >> 20) | (x[ 6] << 12)) & 0x3fffffff;
 	out[7] = ((x[ 6] >> 18) | (x[ 7] << 14)) & 0x3fffffff;
 	out[8] = ((x[ 7] >> 16) | (x[ 8] << 16)) & 0x00ffffff;
-
-	/* 8*31 = 248 bits, no need to reduce */
-	if (len < 32)
-		return;
 
 	/* q1 = x >> 248 = 264 bits = 9 30 bit elements */
 	q1[0] = ((x[ 7] >> 24) | (x[ 8] <<  8)) & 0x3fffffff;
@@ -205,19 +199,66 @@ expand256_modm(sc25519 out, const unsigned char *in, size_t len) {
 
 
 static void
-expand256_modm64(sc25519 out, const unsigned char *in) {
-	return expand256_modm(out, in, 64);
-}
-
-
-static void
 expand256_modm32(sc25519 out, const unsigned char *in) {
-	return expand256_modm(out, in, 32);
+	sc25519_element_t x[8];
+	sc25519 q1;
+
+	x[0] = U8TO32_LE(in +  0);
+	x[1] = U8TO32_LE(in +  4);
+	x[2] = U8TO32_LE(in +  8);
+	x[3] = U8TO32_LE(in + 12);
+	x[4] = U8TO32_LE(in + 16);
+	x[5] = U8TO32_LE(in + 20);
+	x[6] = U8TO32_LE(in + 24);
+	x[7] = U8TO32_LE(in + 28);
+
+
+	/* r1 = (x mod 256^(32+1)) = x mod (2^8)(31+1) = x & ((1 << 264) - 1) */
+	out[0] = (                         x[0]) & 0x3fffffff;
+	out[1] = ((x[ 0] >> 30) | (x[ 1] <<  2)) & 0x3fffffff;
+	out[2] = ((x[ 1] >> 28) | (x[ 2] <<  4)) & 0x3fffffff;
+	out[3] = ((x[ 2] >> 26) | (x[ 3] <<  6)) & 0x3fffffff;
+	out[4] = ((x[ 3] >> 24) | (x[ 4] <<  8)) & 0x3fffffff;
+	out[5] = ((x[ 4] >> 22) | (x[ 5] << 10)) & 0x3fffffff;
+	out[6] = ((x[ 5] >> 20) | (x[ 6] << 12)) & 0x3fffffff;
+	out[7] = ((x[ 6] >> 18) | (x[ 7] << 14)) & 0x3fffffff;
+	out[8] = ((x[ 7] >> 16)                ) & 0x00ffffff;
+
+	/* q1 = x >> 248 = 264 bits = 9 30 bit elements */
+	q1[0] = ((x[ 7] >> 24) ) & 0x3fffffff;
+	q1[1] = 0;
+	q1[2] = 0;
+	q1[3] = 0;
+	q1[4] = 0;
+	q1[5] = 0;
+	q1[6] = 0;
+	q1[7] = 0;
+	q1[8] = 0;	
+
+	barrett_reduce256_modm(out, q1, out);
 }
 
 static void
 expand256_modm16(sc25519 out, const unsigned char *in) {
-	return expand256_modm(out, in, 16);
+	sc25519_element_t x[4];
+
+	x[0] = U8TO32_LE(in +  0);
+	x[1] = U8TO32_LE(in +  4);
+	x[2] = U8TO32_LE(in +  8);
+	x[3] = U8TO32_LE(in + 12);
+
+
+
+	/* r1 = (x mod 256^(32+1)) = x mod (2^8)(31+1) = x & ((1 << 264) - 1) */
+	out[0] = (                         x[0]) & 0x3fffffff;
+	out[1] = ((x[ 0] >> 30) | (x[ 1] <<  2)) & 0x3fffffff;
+	out[2] = ((x[ 1] >> 28) | (x[ 2] <<  4)) & 0x3fffffff;
+	out[3] = ((x[ 2] >> 26) | (x[ 3] <<  6)) & 0x3fffffff;
+	out[4] = ((x[ 3] >> 24)                ) & 0x3fffffff;
+	out[5] = 0;
+	out[6] = 0;
+	out[7] = 0;
+	out[8] = 0;
 }
 
 
