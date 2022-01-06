@@ -836,7 +836,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 			index:   basics.CreatableIndex(params.Aidx),
 		}
 		mres, _ := au.resources.get(key)
-		mres.resource.AssetParam = params.Params
+		mres.resource.AssetParams = params.Params
 		mres.resource.CreatableIndex = basics.CreatableIndex(params.Aidx)
 		mres.resource.CreatableType = basics.AssetCreatable
 		mres.ndeltas++
@@ -1557,7 +1557,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	knownAddresses := make(map[basics.Address]int64)
+	knownAddresses := make(map[basics.Address]int64, len(dcc.compactAccountDeltas.deltas))
 	for _, delta := range dcc.compactAccountDeltas.deltas {
 		knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
 	}
