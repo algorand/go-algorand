@@ -1326,8 +1326,8 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	if resource.AssetParam != nil {
-		thisAssetParams := modelAssetParams(creator, *resource.AssetParam)
+	if resource.AssetParams != nil {
+		thisAssetParams := modelAssetParams(creator, *resource.AssetParams)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
