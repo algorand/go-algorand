@@ -424,6 +424,7 @@ type blockingTracker struct {
 	postCommitEntryLock           chan struct{}
 	postCommitReleaseLock         chan struct{}
 	committedUpToRound            int64
+	alwaysLock                    bool
 }
 
 // loadFromDisk is not implemented in the blockingTracker.
@@ -458,7 +459,7 @@ func (bt *blockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommit
 
 // postCommit implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
+	if bt.alwaysLock || (dcc.isCatchpointRound && dcc.catchpointLabel != "") {
 		bt.postCommitEntryLock <- struct{}{}
 		<-bt.postCommitReleaseLock
 	}
@@ -466,7 +467,7 @@ func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitCo
 
 // postCommitUnlocked implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
+	if bt.alwaysLock || (dcc.isCatchpointRound && dcc.catchpointLabel != "") {
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
