@@ -164,7 +164,7 @@ workflows:
           filters:
             branches:
               only:
-                - "circle/1809"
+                - "circleci/1809"
                 - "rel/nightly"
           context:
             - slack-secrets
