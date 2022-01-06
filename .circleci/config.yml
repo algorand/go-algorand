@@ -149,26 +149,7 @@ workflows:
       #     requires:
       #       - << matrix.platform >>_<< matrix.job_type >>
 
-      # - upload_nightly_binaries:
-      #     name: << matrix.platform >>_upload_binaries
-      #     matrix:
-      #       <<: *matrix-default
-      #     no_build: "true"
-      #     requires:
-      #       - << matrix.platform >>_test_nightly_verification
-      #       - << matrix.platform >>_integration_nightly_verification
-      #       - << matrix.platform >>_e2e_expect_nightly_verification
-      #       - << matrix.platform >>_e2e_subs_nightly
-      #       - codegen_verification
-      #     filters:
-      #       branches:
-      #         only:
-      #           - "rel/nightly"
-      #     context:
-      #       - slack-secrets
-      #       - aws-secrets
-
-      - upload_binaries:
+      - upload_nightly_binaries:
           name: << matrix.platform >>_upload_binaries
           matrix:
             <<: *matrix-default
@@ -183,9 +164,27 @@ workflows:
           filters:
             branches:
               only:
-                - "circleci/1809"
-                # - "rel/beta"
-                # - "rel/stable"
+                - "circle/1809"
+                - "rel/nightly"
+          context:
+            - slack-secrets
+            - aws-secrets
+
+      - upload_binaries:
+          name: << matrix.platform >>_upload_binaries
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+            - << matrix.platform >>_e2e_subs_nightly
+            - codegen_verification
+          filters:
+            branches:
+              only:
+                - "rel/beta"
+                - "rel/stable"
           context:
             - slack-secrets
             - aws-secrets
