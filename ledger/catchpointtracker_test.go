@@ -619,7 +619,15 @@ func (bt *blockingTracker) close() {
 func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10)
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.EnableAccountDataResourceSeparation = true
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, testProtocolVersion, 10)
 	const inMem = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)

@@ -404,9 +404,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAssetHolding()
 				}
-				if baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); has {
+				baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(assetHold.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
@@ -450,9 +452,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAssetHolding()
 				}
-				if baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); has {
+				baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(assetParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
@@ -497,9 +501,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAppLocalState()
 				}
-				if baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx)); has {
+				baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(localState.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
@@ -544,9 +550,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					// meaning empty asset hodling (or app local state)
 					newEntry.newResource.ClearAppLocalState()
 				}
-				if baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); has {
+				baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(appParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
@@ -1614,7 +1622,7 @@ func accountDataResources(
 				rd.SetAppParams(ap, true)
 				delete(accountData.AppParams, aidx)
 			}
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
 			if err != nil {
 				return err
 			}
@@ -1622,7 +1630,7 @@ func accountDataResources(
 		for aidx, aparams := range accountData.AppParams {
 			var rd resourcesData
 			rd.SetAppParams(aparams, false)
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
 			if err != nil {
 				return err
 			}

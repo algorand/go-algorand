@@ -1397,7 +1397,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	knownAddresses := make(map[basics.Address]int64)
+	knownAddresses := make(map[basics.Address]int64, len(dcc.compactAccountDeltas.deltas))
 	for _, delta := range dcc.compactAccountDeltas.deltas {
 		knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
 	}
