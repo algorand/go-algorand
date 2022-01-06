@@ -1701,6 +1701,15 @@ func TestConsecutiveVersion(t *testing.T) {
 	}
 }
 
+// This test attempts to cover the case when an accountUpdates.lookupX method:
+// - can't find the requested address,
+// - falls through looking at deltas and the LRU accounts cache,
+// - then hits the database (calling accountsDbQueries.lookup)
+// only to discover that the round stored in the database (committed in accountUpdates.commitRound)
+// is out of sync with accountUpdates.cachedDBRound (updated a little bit later in accountUpdates.postCommit).
+//
+// In this case it waits on a condition variable and retries when
+// commitSyncer/accountUpdates has advanced the cachedDBRound.
 func TestAcctUpdatesLookupRetry(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1785,7 +1794,6 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 
 		ml.trackers.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
 		ml.trackers.waitAccountsWriting()
-		//checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
 
 	// flush a couple of rounds (indirectly schedules commitSyncer)
@@ -1836,7 +1844,6 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, d, data)
 	require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
-	t.Log("validThrough", validThrough)
 
 	// allow the postCommitUnlocked() handler to go through
 	<-stallingTracker.postCommitUnlockedEntryLock
