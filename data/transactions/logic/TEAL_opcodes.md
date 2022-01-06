@@ -870,10 +870,10 @@ Decodes X using the base64 encoding E. Specify the encoding with an immediate ar
 - Opcode: 0x5d {return type}
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: any
-- return key B's value from json text A
+- return key B's value from a [valid](jsonspec.md) utf-8 encoded json text A
 - LogicSigVersion >= 6
 
-specify the return type with an immediate arg either as JSONInt or JSONString. When B is a nested key of json object A, A.B returns the value of B. Providing a json with keys containing . will return incorrect value. See <a href="https://datatracker.ietf.org/doc/html/rfc7159.html">RFC 7159</a> for additional json specifications
+specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONOjbect.
 
 ## balance
 

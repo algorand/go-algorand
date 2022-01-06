@@ -251,13 +251,14 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[JSONString-0]
-	_ = x[JSONInt-1]
-	_ = x[invalidJSONRefType-2]
+	_ = x[JSONUint64-1]
+	_ = x[JSONObject-2]
+	_ = x[invalidJSONRefType-3]
 }
 
-const _JSONRefType_name = "JSONStringJSONIntinvalidJSONRefType"
+const _JSONRefType_name = "JSONStringJSONUint64JSONObjectinvalidJSONRefType"
 
-var _JSONRefType_index = [...]uint8{0, 10, 17, 35}
+var _JSONRefType_index = [...]uint8{0, 10, 20, 30, 48}
 
 func (i JSONRefType) String() string {
 	if i < 0 || i >= JSONRefType(len(_JSONRefType_index)-1) {

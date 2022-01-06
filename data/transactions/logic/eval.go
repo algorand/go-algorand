@@ -31,6 +31,7 @@ import (
 	"math/big"
 	"math/bits"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/sha3"
@@ -4061,62 +4062,126 @@ func opBase64Decode(cx *EvalContext) {
 	}
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
 }
+func hasDuplicateKeys(dec *json.Decoder) (bool, error) {
+	keys := make(map[string]bool)
+	var value interface{}
+	dec.Token() // {
+	for dec.More() {
+		// Get JSON key
+		key, err := dec.Token()
+		if err != nil {
+			return false, err
+		}
+		// end of json
+		if key == '}' {
+			break
+		}
+		// decode value
+		err = dec.Decode(&value)
+		if err != nil {
+			return false, err
+		}
+		// check for duplicates
+		if _, ok := keys[key.(string)]; ok {
+			return true, nil
+		}
+		keys[key.(string)] = true
+	}
+	return false, nil
+}
 
 func parseJSON(jsonText []byte) (interface{}, error) {
 	if !json.Valid(jsonText) {
-		return nil, fmt.Errorf("invalid json text %s", jsonText)
+		return nil, fmt.Errorf("invalid json text")
 	}
+	// check for duplicate keys
+	decoder := json.NewDecoder(bytes.NewReader(jsonText))
+	hasDuplicates, err := hasDuplicateKeys(decoder)
+	if hasDuplicates {
+		return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
+	}
+	// decode text
+	decoder = json.NewDecoder(bytes.NewReader(jsonText))
+	decoder.UseNumber()
 	var parsed interface{}
-	err := json.Unmarshal(jsonText, &parsed)
+	err = decoder.Decode(&parsed)
 	if err != nil {
 		return nil, err
 	}
 	return parsed, nil
 }
 func opJSONRef(cx *EvalContext) {
+	// get json key
 	last := len(cx.stack) - 1
-	fields := strings.Split(string(cx.stack[last].Bytes), ".") // get json keys
-	cx.stack = cx.stack[:last]                                 // pop
+	key := string(cx.stack[last].Bytes)
+	cx.stack = cx.stack[:last] // pop
+
+	//parse json text
 	last = len(cx.stack) - 1
 	resp, err := parseJSON(cx.stack[last].Bytes)
 	if err != nil {
 		cx.err = fmt.Errorf("error while parsing JSON text, %v", err)
 		return
 	}
+
 	//get value from json
-	for i := 0; i < len(fields); i++ {
-		key := fields[i]
-		switch resp.(type) {
-		case map[string]interface{}:
-			if _, ok := resp.(map[string]interface{})[key]; ok {
-				resp = resp.(map[string]interface{})[key]
-			} else {
-				cx.err = fmt.Errorf("key %s not found in JSON text", key)
-				return
-			}
-		default:
-			cx.err = fmt.Errorf("key %s not found in JSON text", key)
-			return
-		}
-	}
-	expectedType := jsonRefTypeNames[cx.program[cx.pc+1]]
-	var val stackValue
-	switch resp.(type) {
-	case float64:
-		if expectedType != "JSONInt" {
-			cx.err = fmt.Errorf("value retrieved from JSON text is type int but expected %s", expectedType)
-			return
-		}
-		val.Uint = uint64(resp.(float64))
-	case string:
-		if expectedType != "JSONString" {
-			cx.err = fmt.Errorf("value retrieved from JSON text is type string but expected %s", expectedType)
-			return
-		}
-		val.Bytes = []byte(resp.(string))
-	default:
-		cx.err = fmt.Errorf("value of unexpected type retrieved from JSON text")
+	var stval stackValue
+	resp, ok := resp.(map[string]interface{})[key]
+	if !ok {
+		cx.err = fmt.Errorf("key %s not found in JSON text", key)
 		return
 	}
-	cx.stack[last] = val
+	expectedType := jsonRefTypeNames[cx.program[cx.pc+1]]
+	switch expectedType {
+	case "JSONString":
+		val, ok := resp.(string)
+		if !ok {
+			cx.err = fmt.Errorf("got type %T but expected string", resp)
+			return
+		}
+		stval.Bytes = []byte(val)
+	case "JSONUint64":
+		val, ok := resp.(json.Number)
+		if !ok {
+			cx.err = fmt.Errorf("got type %T but expected uint64", resp)
+			return
+		}
+		// val is not a float
+		if strings.Contains(val.String(), ".") {
+			cx.err = fmt.Errorf("got type float64 but expected uint64")
+			return
+		}
+		// val is not negative
+		if val.String()[0] == '-' {
+			cx.err = fmt.Errorf("JSON value should be a uint64")
+			return
+		}
+		// val > max uint64
+		maxVal := strconv.FormatUint(math.MaxUint64, 10)
+		if val.String() > maxVal {
+			cx.err = fmt.Errorf("JSON value range within uint64 range")
+			return
+		}
+		// convert to uint64
+		var bigInt big.Int
+		bigInt.UnmarshalText([]byte(val.String()))
+		stval.Uint = bigInt.Uint64()
+	case "JSONObject":
+		_, ok := resp.(map[string]interface{})
+		if !ok {
+			cx.err = fmt.Errorf("got type %T but expected JSON object", resp)
+			return
+		}
+		var rawJSONText map[string]json.RawMessage
+		err = json.Unmarshal(cx.stack[last].Bytes, &rawJSONText)
+		if err != nil {
+			cx.err = fmt.Errorf("error while returning JSON object, %v", err)
+			return
+		}
+		stval.Bytes = rawJSONText[key]
+	default:
+		cx.err = fmt.Errorf("unsupported json_ref return type, should not have reached here")
+		return
+	}
+	cx.stack[last] = stval
 }

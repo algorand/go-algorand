@@ -166,6 +166,7 @@ various sizes.
 | `extract_uint32` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails |
 | `base64_decode e` | decode X which was base64-encoded using _encoding_ E. Fail if X is not base64 encoded with encoding E |
+| `json_ref r` | return key B's value from a [valid](jsonspec.md) utf-8 encoded json text A |
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -253,7 +254,6 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
 | `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
 | `gaids` | push the ID of the asset or application created in the Xth transaction of the current group |
-| `json_ref r` | return key B's value from json text A |
 
 **Transaction Fields**
 

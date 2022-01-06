@@ -492,13 +492,15 @@ type JSONRefType int
 const (
 	// JSONString represents string json value
 	JSONString JSONRefType = iota
-	// JSONInt represents int json value
-	JSONInt
+	// JSONUint64 represents uint64 json value
+	JSONUint64
+	// JSONObject represents json object
+	JSONObject
 	invalidJSONRefType
 )
 
 // After running `go generate` these strings will be available:
-var jsonRefTypeNames [2]string = [...]string{JSONString.String(), JSONInt.String()}
+var jsonRefTypeNames [3]string = [...]string{JSONString.String(), JSONUint64.String(), JSONObject.String()}
 
 type jsonRefSpec struct {
 	field   JSONRefType
@@ -508,7 +510,8 @@ type jsonRefSpec struct {
 
 var jsonRefSpecs = []jsonRefSpec{
 	{JSONString, StackBytes, 6},
-	{JSONInt, StackUint64, 6},
+	{JSONUint64, StackUint64, 6},
+	{JSONObject, StackBytes, 6},
 }
 
 var jsonRefSpecByField map[JSONRefType]jsonRefSpec

@@ -17,9 +17,11 @@
 package logic
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -5118,6 +5120,44 @@ func TestOpBase64Decode(t *testing.T) {
 	b64TestDecodeEval(t, args)
 }
 
+func TestHasDuplicateKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	testCases := []struct {
+		text []byte
+	}{
+		{
+			text: []byte(`{"key0": "1","key0": "2", "key1":1}`),
+		},
+		{
+			text: []byte(`{"key0": "1","key1": [1], "key0":{"key2": "a"}}`),
+		},
+	}
+	for _, s := range testCases {
+		decoder := json.NewDecoder(bytes.NewReader(s.text))
+		hasDuplicates, err := hasDuplicateKeys(decoder)
+		require.Nil(t, err)
+		require.True(t, hasDuplicates)
+	}
+
+	noDuplicates := []struct {
+		text []byte
+	}{
+		{
+			text: []byte(`{"key0": "1","key1": "2", "key2":3}`),
+		},
+		{
+			text: []byte(`{"key0": "1","key1": [{"key0":1,"key0":2},{"key0":1,"key0":2}], "key2":{"key5": "a","key5": "b"}}`),
+		},
+	}
+	for _, s := range noDuplicates {
+		decoder := json.NewDecoder(bytes.NewReader(s.text))
+		hasDuplicates, err := hasDuplicateKeys(decoder)
+		require.Nil(t, err)
+		require.False(t, hasDuplicates)
+	}
+}
+
 func TestOpJSONRef(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -5137,16 +5177,96 @@ func TestOpJSONRef(t *testing.T) {
 		source string
 	}{
 		{
-			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key0"; json_ref JSONInt; int 1; ==`,
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\":3}, \"key5\": 18446744073709551615 }"; 
+			byte "key0"; 
+			json_ref JSONUint64; 
+			int 0; 
+			==`,
 		},
 		{
-			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key1"; json_ref JSONString; byte "algo"; ==`,
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }"; 
+			byte "key5"; 
+			json_ref JSONUint64; 
+			int 18446744073709551615; //max uint64 value
+			==`,
 		},
 		{
-			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key2.key3"; json_ref JSONString; byte "teal"; ==`,
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }"; 
+			byte "key1"; 
+			json_ref JSONString; 
+			byte "algo"; 
+			==`,
 		},
 		{
-			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \"based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; byte "response.clientDataJSON"; json_ref JSONString; byte "based64url_encoded_client_data"; ==`,
+			source: `byte  "{\"key0\": 0,\"key1\": \"\\u0061\\u006C\\u0067\\u006F\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }"; 
+			byte "key1"; 
+			json_ref JSONString; 
+			byte "algo"; 
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key4";
+			json_ref JSONObject;
+			byte "key40";
+			json_ref JSONUint64
+			int 10
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key3";
+			json_ref JSONString;
+			byte "teal"
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"\\"teal\\"\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key3";
+			json_ref JSONString;
+			byte ""teal"" // quotes match
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \" teal \", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key3";
+			json_ref JSONString;
+			byte " teal " // spaces match
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"10\"}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key4";
+			json_ref JSONObject;
+			byte "{\"key40\": 10, \"key40\": \"10\"}"
+			==
+			`,
+		},
+		{
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "response"; 
+			json_ref JSONObject; 
+			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
+			==`,
+		},
+		{
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "response"; 
+			json_ref JSONObject; 
+			byte "clientDataJSON"; 
+			json_ref JSONString; 
+			byte " based64url_encoded_client_data"; 
+			==`,
 		},
 	}
 
@@ -5166,32 +5286,88 @@ func TestOpJSONRef(t *testing.T) {
 		error  string
 	}{
 		{
-			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key0"; json_ref JSONString;`,
-			error:  "value retrieved from JSON text is type int but expected JSONString",
+			source: `byte  "{\"key0\": 1 }"; byte "key0"; json_ref JSONString;`,
+			error:  "got type json.Number but expected string",
 		},
 		{
-			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key3\": [1,2,3]} }"; byte "key1"; json_ref JSONInt;`,
-			error:  "value retrieved from JSON text is type string but expected JSONInt",
+			source: `byte  "{\"key0\": [1] }"; byte "key0"; json_ref JSONString;`,
+			error:  "got type []interface {} but expected string",
 		},
 		{
-			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key2"; json_ref JSONString;`,
-			error:  "value of unexpected type retrieved from JSON text",
+			source: `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONString;`,
+			error:  "got type map[string]interface {} but expected string",
+		},
+		{
+			source: `byte  "{\"key0\": \"1\" }"; byte "key0"; json_ref JSONUint64;`,
+			error:  "got type string but expected uint64",
+		},
+		{
+			source: `byte  "{\"key0\": [\"1\"] }"; byte "key0"; json_ref JSONUint64;`,
+			error:  "got type []interface {} but expected uint64",
+		},
+		{
+			source: `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONUint64;`,
+			error:  "got type map[string]interface {} but expected uint64",
+		},
+		{
+			source: `byte  "{\"key0\": [1]}"; byte "key0"; json_ref JSONObject;`,
+			error:  "got type []interface {} but expected JSON object",
+		},
+		{
+			source: `byte  "{\"key0\": 1}"; byte "key0"; json_ref JSONObject;`,
+			error:  "got type json.Number but expected JSON object",
+		},
+		{
+			source: `byte  "{\"key0\": \"1\"}"; byte "key0"; json_ref JSONObject;`,
+			error:  "got type string but expected JSON object",
 		},
 		{
 			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key3"; json_ref JSONString;`,
 			error:  "key key3 not found in JSON text",
 		},
 		{
-			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key2.key3.key5"; json_ref JSONString;`,
-			error:  "key key5 not found in JSON text",
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]}}"; 
+			byte "key2"; 
+			json_ref JSONObject;
+			byte "key5";
+			json_ref JSONString
+			`,
+			error: "key key5 not found in JSON text",
 		},
 		{
-			source: `byte  "{\"key0.name\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key.name"; json_ref JSONString;`,
-			error:  "key key not found in JSON text",
+			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "got type float64 but expected uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key1"; json_ref JSONUint64;`,
+			error:  "got type float64 but expected uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key2"; json_ref JSONUint64;`,
+			error:  "JSON value should be a uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 18446744073709551616}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "JSON value range within uint64 range",
 		},
 		{
 			source: `byte  "{\"key0\": 1,}"; byte "key0"; json_ref JSONString;`,
-			error:  "error while parsing JSON text, invalid json text {\"key0\": 1,}",
+			error:  "error while parsing JSON text, invalid json text",
+		},
+		{
+			source: `byte  "{\"key0\": 1, \"key0\": \"3\"}"; byte "key0"; json_ref JSONString;`,
+			error:  "error while parsing JSON text, invalid json text, duplicate keys not allowed",
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"should fail!\"}}}"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key4";
+			json_ref JSONObject;
+			byte "key40"
+			json_ref JSONString
+			`,
+			error: "error while parsing JSON text, invalid json text, duplicate keys not allowed",
 		},
 	}
 

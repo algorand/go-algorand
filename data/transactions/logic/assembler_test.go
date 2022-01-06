@@ -345,7 +345,7 @@ itxna Logs 3
 const v6Nonsense = v5Nonsense + `
 itxn_next
 base64_decode URLEncoding
-json_ref JSONInt
+json_ref JSONUInt64
 `
 
 var nonsense = map[uint64]string{
@@ -2303,4 +2303,10 @@ func TestTxTypes(t *testing.T) {
 	testProg(t, "itxn_begin; itxn_field Amount", 5, expect{2, "itxn_field Amount expects 1 stack argument..."})
 	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, expect{3, "...wanted type uint64 got []byte"})
 	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
+}
+
+func TestJsonRefAsm(t *testing.T) {
+	testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref JSONUint64;`, 5, expect{3, "json_ref opcode was introduced in TEAL v6"})
+	testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref 2 JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref expects one argument"})
+	testProg(t, `byte  "{\"key0\": [1]}"; byte \"key0\"; json_ref JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref unsupported JSON value type: \"JSONArray\""})
 }
