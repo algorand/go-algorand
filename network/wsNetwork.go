@@ -734,25 +734,11 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
-	var err error
-	if wn.config.IncomingConnectionsLimit < 0 {
-		wn.config.IncomingConnectionsLimit = MaxInt
-	}
-
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
-	}
-
-	// Make sure we do not accept more incoming connections than our
-	// open file rlimit, with some headroom for other FDs (DNS, log
-	// files, SQLite files, telemetry, ...)
-	err = wn.rlimitIncomingConnections()
-	if err != nil {
-		wn.log.Error("ws network start: rlimitIncomingConnections ", err)
-		return
 	}
 
 	if wn.config.NetAddress != "" {
