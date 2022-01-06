@@ -170,24 +170,24 @@ workflows:
             - slack-secrets
             - aws-secrets
 
-      - upload_binaries:
-          name: << matrix.platform >>_upload_binaries
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
-            - << matrix.platform >>_e2e_subs_nightly
-            - codegen_verification
-          filters:
-            branches:
-              only:
-                - "rel/beta"
-                - "rel/stable"
-          context:
-            - slack-secrets
-            - aws-secrets
+      # - upload_binaries:
+      #     name: << matrix.platform >>_upload_binaries
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_test_nightly_verification
+      #       - << matrix.platform >>_integration_nightly_verification
+      #       - << matrix.platform >>_e2e_expect_nightly_verification
+      #       - << matrix.platform >>_e2e_subs_nightly
+      #       - codegen_verification
+      #     filters:
+      #       branches:
+      #         only:
+      #           - "rel/beta"
+      #           - "rel/stable"
+      #     context:
+      #       - slack-secrets
+      #       - aws-secrets
       #- windows_x64_build
 
 commands:
