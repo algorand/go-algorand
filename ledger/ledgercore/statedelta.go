@@ -332,7 +332,7 @@ func (ad NewAccountDeltas) GetResource(addr basics.Address, aidx basics.Creatabl
 		aa := AccountAsset{addr, basics.AssetIndex(aidx)}
 		paramsIdx, okParams := ad.assetParamsCache[aa]
 		if okParams {
-			ret.AssetParam = ad.assetParams[paramsIdx].Params
+			ret.AssetParams = ad.assetParams[paramsIdx].Params
 		}
 		holdingIdx, okHolding := ad.assetHoldingsCache[aa]
 		if okHolding {

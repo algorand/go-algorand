@@ -180,7 +180,7 @@ func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource 
 		}
 		if prd.data.IsOwning() {
 			assetParams := prd.data.GetAssetParams()
-			ret.AssetParam = &assetParams
+			ret.AssetParams = &assetParams
 		}
 	}
 	if prd.data.IsApp() {
@@ -398,9 +398,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if assetHold.Holding != nil {
 					newEntry.newResource.SetAssetHolding(*assetHold.Holding)
 				}
-				if baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); has {
+				baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(assetHold.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
@@ -437,9 +439,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if assetParams.Params != nil {
 					newEntry.newResource.SetAssetParams(*assetParams.Params, false)
 				}
-				if baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); has {
+				baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(assetParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
@@ -477,9 +481,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if localState.State != nil {
 					newEntry.newResource.SetAppLocalState(*localState.State)
 				}
-				if baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx)); has {
+				baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(localState.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
@@ -517,9 +523,11 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				if appParams.Params != nil {
 					newEntry.newResource.SetAppParams(*appParams.Params, false)
 				}
-				if baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); has {
+				baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
+					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(appParams.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}

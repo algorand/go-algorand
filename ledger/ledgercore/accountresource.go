@@ -25,7 +25,7 @@ type AccountResource struct {
 	CreatableIndex basics.CreatableIndex
 	CreatableType  basics.CreatableType
 
-	AssetParam    *basics.AssetParams
+	AssetParams   *basics.AssetParams
 	AssetHolding  *basics.AssetHolding
 	AppLocalState *basics.AppLocalState
 	AppParams     *basics.AppParams
