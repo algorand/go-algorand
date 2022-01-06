@@ -517,7 +517,7 @@ func (ledger *evalTestLedger) LookupResource(rnd basics.Round, addr basics.Addre
 		}
 	} else if ctype == basics.AssetCreatable {
 		if params, ok := ad.AssetParams[basics.AssetIndex(cidx)]; ok {
-			res.AssetParam = &params
+			res.AssetParams = &params
 		}
 		if h, ok := ad.Assets[basics.AssetIndex(cidx)]; ok {
 			res.AssetHolding = &h

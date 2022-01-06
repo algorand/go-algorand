@@ -862,10 +862,10 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	if record.AssetParam == nil {
+	if record.AssetParams == nil {
 		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 	}
-	assetParams := *record.AssetParam
+	assetParams := *record.AssetParams
 	asset := AssetParamsToAsset(creator.String(), assetIdx, &assetParams)
 	response := generated.AssetResponse(asset)
 	return ctx.JSON(http.StatusOK, response)
