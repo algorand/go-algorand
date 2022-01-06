@@ -149,32 +149,29 @@ workflows:
       #     requires:
       #       - << matrix.platform >>_<< matrix.job_type >>
 
-      - upload_nightly_binaries:
-          name: << matrix.platform >>_upload_binaries
-          matrix:
-            <<: *matrix-default
-          parameters:
-            no_build: "true"
-          requires:
-            - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
-            - << matrix.platform >>_e2e_subs_nightly
-            - codegen_verification
-          filters:
-            branches:
-              only:
-                - "rel/nightly"
-          context:
-            - slack-secrets
-            - aws-secrets
+      # - upload_nightly_binaries:
+      #     name: << matrix.platform >>_upload_binaries
+      #     matrix:
+      #       <<: *matrix-default
+      #     no_build: "true"
+      #     requires:
+      #       - << matrix.platform >>_test_nightly_verification
+      #       - << matrix.platform >>_integration_nightly_verification
+      #       - << matrix.platform >>_e2e_expect_nightly_verification
+      #       - << matrix.platform >>_e2e_subs_nightly
+      #       - codegen_verification
+      #     filters:
+      #       branches:
+      #         only:
+      #           - "rel/nightly"
+      #     context:
+      #       - slack-secrets
+      #       - aws-secrets
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
           matrix:
             <<: *matrix-default
-          parameters:
-            no_build: "false"
           requires:
             - << matrix.platform >>_build
           # requires:
@@ -730,15 +727,13 @@ jobs:
     parameters:
       platform:
         type: string
-      no_build:
-        type: string
     executor: << parameters.platform >>_medium
     steps:
       - prepare_build_dir
       - prepare_go
       - upload_binaries_command:
           platform: << parameters.platform >>
-          no_build: << parameters.no_build >>
+          no_build: "false"
       - slack/notify:
           <<: *slack-fail-event
 
@@ -747,14 +742,12 @@ jobs:
     parameters:
       platform:
         type: string
-      no_build:
-        type: string
     executor: << parameters.platform >>_medium
     steps:
       - prepare_build_dir
       - prepare_go
       - upload_binaries_command:
           platform: << parameters.platform >>
-          no_build: << parameters.no_build >>
+          no_build: "true"
       - slack/notify:
           <<: *slack-fail-event
