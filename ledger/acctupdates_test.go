@@ -1590,9 +1590,9 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	// check deltas without missing accounts
 	for i := int64(0); i < 4; i++ {
-		baseResources.write(persistedResourcesData{addrid: i, aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
-			baseResources.write(persistedResourcesData{addrid: i, aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+			baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, addrs[i])
 		}
 	}
 
@@ -1604,11 +1604,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, persistedResourcesData{addrid: i, aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, persistedResourcesData{addrid: i, aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
@@ -1625,7 +1625,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	accountDeltas[1].UpsertAppParams(addrs[4], 104, &appParams104)
 	accountDeltas[1].UpsertAppLocalState(addrs[4], 104, &appLocalState204)
 
-	baseResources.write(persistedResourcesData{addrid: 4, aidx: basics.CreatableIndex(104)}, addrs[4])
+	baseResources.write(persistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
