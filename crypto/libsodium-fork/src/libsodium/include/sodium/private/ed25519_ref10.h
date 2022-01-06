@@ -21,8 +21,10 @@ void fe25519_tobytes(unsigned char *s, const fe25519 h);
 
 #ifdef HAVE_TI_MODE
 # include "ed25519_ref10_fe_51.h"
+# include "ed25519_ref10_sc_51.h"
 #else
 # include "ed25519_ref10_fe_25_5.h"
+# include "ed25519_ref10_sc_25_5.h"
 #endif
 
 

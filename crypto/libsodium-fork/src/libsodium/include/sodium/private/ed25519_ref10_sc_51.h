@@ -1,7 +1,20 @@
-#include "private/ed25519_ref10_sc.h"
 
-#include <string.h>
+#ifndef ed25519_ref10_sc_51_H
+#define ed25519_ref10_sc_51_H
 
+#include <stddef.h>
+#include <stdint.h>
+
+/*
+ The set of scalars is \Z/l
+ where l = 2^252 + 27742317777372353535851937790883648493.
+ */
+
+typedef uint64_t sc25519_element_t;
+typedef sc25519_element_t sc25519[5];
+
+#define SC25519_BITS_PER_LIMB 56
+#define SC25519_LIMB_SIZE 5
 
 typedef unsigned __int128 uint128_t;
 #define mul64x64_128(out,a,b) out = (uint128_t)a * b;
@@ -14,6 +27,8 @@ typedef unsigned __int128 uint128_t;
 #define lo128(a) ((uint64_t)a)
 #define hi128(a) ((uint64_t)(a >> 64))
 
+
+	
 
 
 static inline uint64_t U8TO64_LE(const unsigned char *p) {
@@ -62,7 +77,7 @@ static sc25519_element_t lt_modm(sc25519_element_t a, sc25519_element_t b) {
 	return (a - b) >> 63;
 }
 
-void reduce256_modm(sc25519 r) 
+static void reduce256_modm(sc25519 r) 
 {
 	sc25519 t;
 	sc25519_element_t b = 0, pb, mask;
@@ -85,7 +100,7 @@ void reduce256_modm(sc25519 r)
 	r[4] ^= mask & (r[4] ^ t[4]);
 }
 
-void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1)
+static void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1)
 {
 	sc25519 q3, r2;
 	uint128_t c, mul;
@@ -139,7 +154,7 @@ void barrett_reduce256_modm(sc25519 r, const sc25519 q1, const sc25519 r1)
  where l = 2^252 + 27742317777372353535851937790883648493.
  the output returns in sc25519 presentation 
  */
-void expand256_modm64(sc25519 out, const unsigned char *in)
+static void expand256_modm64(sc25519 out, const unsigned char *in)
 {
 	sc25519_element_t x[8];
 	sc25519 q1;
@@ -179,7 +194,7 @@ void expand256_modm64(sc25519 out, const unsigned char *in)
  where l = 2^252 + 27742317777372353535851937790883648493.
  the output returns in sc25519 presentation 
  */
-void expand256_modm32(sc25519 out, const unsigned char *in)
+static void expand256_modm32(sc25519 out, const unsigned char *in)
 {
 	sc25519_element_t x[4];
 	sc25519 q1;
@@ -216,7 +231,7 @@ void expand256_modm32(sc25519 out, const unsigned char *in)
  where l = 2^252 + 27742317777372353535851937790883648493.
  the output returns in sc25519 presentation 
  */
-void expand256_modm16(sc25519 out, const unsigned char *in)
+static void expand256_modm16(sc25519 out, const unsigned char *in)
 {
 	sc25519_element_t x[2];
 	sc25519 q1;
@@ -233,7 +248,7 @@ void expand256_modm16(sc25519 out, const unsigned char *in)
 
 }
 
-void add256_modm(sc25519 r, const sc25519 x, const sc25519 y) 
+static void add256_modm(sc25519 r, const sc25519 x, const sc25519 y) 
 {
 	sc25519_element_t c;
 
@@ -246,7 +261,7 @@ void add256_modm(sc25519 r, const sc25519 x, const sc25519 y)
 	reduce256_modm(r);
 }
 
-void mul256_modm(sc25519 r, const sc25519 x, const sc25519 y) 
+static void mul256_modm(sc25519 r, const sc25519 x, const sc25519 y) 
 {
 	sc25519 q1, r1;
 	uint128_t c, mul;
@@ -280,7 +295,7 @@ void mul256_modm(sc25519 r, const sc25519 x, const sc25519 y)
 */
 
 /* out = a - b, a must be larger than b */
-void sub256_modm_batch(sc25519 out, const sc25519 a, const sc25519 b, size_t limbsize) {
+static void sub256_modm_batch(sc25519 out, const sc25519 a, const sc25519 b, size_t limbsize) {
 	size_t i = 0;
 	sc25519_element_t carry = 0;
 	switch (limbsize) {
@@ -295,7 +310,7 @@ void sub256_modm_batch(sc25519 out, const sc25519 a, const sc25519 b, size_t lim
 
 
 /* is a < b */
-int lt256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
+static int lt256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
 	size_t i = 0;
 	sc25519_element_t t, carry = 0;
 	switch (limbsize) {
@@ -309,7 +324,7 @@ int lt256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
 }
 
 /* is a <= b */
-int lte256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
+static int lte256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
 	size_t i = 0;
 	sc25519_element_t t, carry = 0;
 	switch (limbsize) {
@@ -323,7 +338,7 @@ int lte256_modm_batch(const sc25519 a, const sc25519 b, size_t limbsize) {
 }
 
 /* is a == 0 */
-int iszero256_modm_batch(const sc25519 a) {
+static int iszero256_modm_batch(const sc25519 a) {
 	sc25519_element_t result = a[0];
 	result |= a[1];
 	result |= a[2];
@@ -334,7 +349,7 @@ int iszero256_modm_batch(const sc25519 a) {
 }
 
 /* is a == 1 */
-int isone256_modm_batch(const sc25519 a) {
+static int isone256_modm_batch(const sc25519 a) {
 	sc25519_element_t result = a[0] ^ 1;
 	result |= a[1];
 	result |= a[2];
@@ -345,7 +360,7 @@ int isone256_modm_batch(const sc25519 a) {
 }
 
 /* can a fit in to (at most) 128 bits */
-int isatmost128bits256_modm_batch(const sc25519 a) {
+static int isatmost128bits256_modm_batch(const sc25519 a) {
 	uint64_t mask =
 		((a[4]                   )  | /*  32 */
 		 (a[3]                   )  | /*  88 */
@@ -355,3 +370,6 @@ int isatmost128bits256_modm_batch(const sc25519 a) {
 }
 
 
+
+
+#endif

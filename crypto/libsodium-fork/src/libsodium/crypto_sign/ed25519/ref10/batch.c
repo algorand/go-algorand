@@ -1,7 +1,6 @@
 #include "crypto_hash_sha512.h"
 #include "sign_ed25519_ref10.h"
 #include "private/ed25519_ref10.h"
-#include "private/ed25519_ref10_sc.h"
 #include "crypto_sign.h"
 
 

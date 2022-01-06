@@ -50,10 +50,19 @@ load_4(const unsigned char *in)
 # include "fe_25_5/fe.h"
 #endif
 
+
+#ifdef HAVE_TI_MODE
 const ge25519_p3 ge25519_basepoint = 
 {
 #include "fe_51/base_ge25519.h"
 };
+#else
+const ge25519_p3 ge25519_basepoint = 
+{
+#include "fe_25_5/base_ge25519.h"
+};
+#endif
+
 
 void
 fe25519_invert(fe25519 out, const fe25519 z)
