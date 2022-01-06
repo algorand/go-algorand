@@ -65,3 +65,5 @@ assets
 
 index.html
 
+# test summary
+testresults.json

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1403,7 +1403,7 @@ transactionGroupLoop:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
-				return ledgercore.StateDelta{}, err
+				return ledgercore.StateDelta{}, txgroup.err
 			}
 
 			for _, br := range txgroup.balances {
