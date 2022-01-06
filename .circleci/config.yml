@@ -500,29 +500,25 @@ commands:
         type: string
         default: "true"
     steps:
-        - when:
-            condition:
-              equal: ["true", << parameters.no_build >>]
-            steps:
-              - attach_workspace:
-                  at: << parameters.build_dir >>
-        - run:
-            name: Upload binaries << parameters.platform >>
-            command: |
-              export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
-              export GOPATH="<< parameters.build_dir >>/go"
-              export NO_BUILD=<< parameters.no_build >>
-              export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-              scripts/travis/deploy_packages.sh
-        - when:
-            condition:
-              equal: [ "amd64", << parameters.platform >> ]
-            steps:
-              - run:
-                  name: test_release.sh
-                  command: |
-                    export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-                    scripts/travis/test_release.sh
+      - attach_workspace:
+          at: << parameters.build_dir >>
+      - run:
+          name: Upload binaries << parameters.platform >>
+          command: |
+            export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.build_dir >>/go"
+            export NO_BUILD=<< parameters.no_build >>
+            export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+            scripts/travis/deploy_packages.sh
+      - when:
+          condition:
+            equal: [ "amd64", << parameters.platform >> ]
+          steps:
+            - run:
+                name: test_release.sh
+                command: |
+                  export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+                  scripts/travis/test_release.sh
 
 jobs:
   codegen_verification:
@@ -734,8 +730,8 @@ jobs:
       - upload_binaries_command:
           platform: << parameters.platform >>
           no_build: "false"
-      - slack/notify:
-          <<: *slack-fail-event
+      # - slack/notify:
+      #     <<: *slack-fail-event
 
   upload_nightly_binaries:
     working_directory: << pipeline.parameters.build_dir >>/project
@@ -749,5 +745,5 @@ jobs:
       - upload_binaries_command:
           platform: << parameters.platform >>
           no_build: "true"
-      - slack/notify:
-          <<: *slack-fail-event
+      # - slack/notify:
+      #     <<: *slack-fail-event
