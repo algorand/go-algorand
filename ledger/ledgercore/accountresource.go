@@ -36,11 +36,11 @@ type AccountResource struct {
 func (r *AccountResource) AssignAccountData(ad *basics.AccountData) {
 	switch r.CreatableType {
 	case basics.AssetCreatable:
-		if r.AssetParam != nil {
+		if r.AssetParams != nil {
 			if ad.AssetParams == nil {
 				ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 			}
-			ad.AssetParams[basics.AssetIndex(r.CreatableIndex)] = *r.AssetParam
+			ad.AssetParams[basics.AssetIndex(r.CreatableIndex)] = *r.AssetParams
 		}
 		if r.AssetHolding != nil {
 			if ad.Assets == nil {

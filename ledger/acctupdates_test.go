@@ -428,7 +428,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 		for _, rec := range rdelta.GetAllAssetParams() {
 			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
 			entry, _ := resources.get(key)
-			entry.resource.AssetParam = rec.Params
+			entry.resource.AssetParams = rec.Params
 			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
 			entry.resource.CreatableType = basics.AssetCreatable
 			entry.ndeltas++
