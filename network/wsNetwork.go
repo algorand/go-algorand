@@ -77,9 +77,6 @@ const httpServerIdleTimeout = time.Second * 4
 // size of the request body.
 const httpServerMaxHeaderBytes = 4096
 
-// MaxInt is the maximum int which might be int32 or int64
-const MaxInt = int((^uint(0)) >> 1)
-
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
 // need to be disconnected.
