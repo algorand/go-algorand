@@ -61,11 +61,12 @@ const (
 )
 
 const (
-	addressByteSize      = 32
-	checksumByteSize     = 4
-	singleByteSize       = 1
-	singleBoolSize       = 1
-	lengthEncodeByteSize = 2
+	addressByteSize        = 32
+	checksumByteSize       = 4
+	singleByteSize         = 1
+	singleBoolSize         = 1
+	lengthEncodeByteSize   = 2
+	abiEncodingLengthLimit = 1 << 16
 )
 
 // Type is the struct that stores information about an ABI value's type.

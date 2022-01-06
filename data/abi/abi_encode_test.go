@@ -29,21 +29,21 @@ import (
 )
 
 const (
-	UintStepLength             = 8
-	UintBegin                  = 8
-	UintEnd                    = 512
-	UintRandomTestPoints       = 1000
-	UintTestCaseCount          = 200
-	UfixedPrecision            = 160
-	UfixedRandomTestPoints     = 20
-	TupleMaxLength             = 10
-	ByteTestCaseCount          = 1 << 8
-	BoolTestCaseCount          = 2
-	AddressTestCaseCount       = 300
-	StringTestCaseCount        = 10
-	StringTestCaseSpecLenCount = 5
-	TakeNum                    = 10
-	TupleTestCaseCount         = 100
+	uintStepLength             = 8
+	uintBegin                  = 8
+	uintEnd                    = 512
+	uintRandomTestPoints       = 1000
+	uintTestCaseCount          = 200
+	ufixedPrecision            = 160
+	ufixedRandomTestPoints     = 20
+	tupleMaxLength             = 10
+	byteTestCaseCount          = 1 << 8
+	boolTestCaseCount          = 2
+	addressTestCaseCount       = 300
+	stringTestCaseCount        = 10
+	stringTestCaseSpecLenCount = 5
+	takeNum                    = 10
+	tupleTestCaseCount         = 100
 )
 
 /*
@@ -74,12 +74,12 @@ func TestEncodeValid(t *testing.T) {
 
 	// encoding test for uint type, iterating through all uint sizes
 	// randomly pick 1000 valid uint values and check if encoded value match with expected
-	for intSize := UintBegin; intSize <= UintEnd; intSize += UintStepLength {
+	for intSize := uintBegin; intSize <= uintEnd; intSize += uintStepLength {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(intSize))
 		uintType, err := makeUintType(intSize)
 		require.NoError(t, err, "make uint type fail")
 
-		for i := 0; i < UintRandomTestPoints; i++ {
+		for i := 0; i < uintRandomTestPoints; i++ {
 			randomInt, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
 
@@ -106,17 +106,17 @@ func TestEncodeValid(t *testing.T) {
 	// encoding test for ufixed, iterating through all the valid ufixed bitSize and precision
 	// randomly generate 10 big int values for ufixed numerator and check if encoded value match with expected
 	// also check if ufixed can fit max numerator (2^bitSize - 1) under specific byte bitSize
-	for size := UintBegin; size <= UintEnd; size += UintStepLength {
+	for size := uintBegin; size <= uintEnd; size += uintStepLength {
 		upperLimit := big.NewInt(0).Lsh(big.NewInt(1), uint(size))
 		largest := big.NewInt(0).Add(
 			upperLimit,
 			big.NewInt(1).Neg(big.NewInt(1)),
 		)
-		for precision := 1; precision <= UfixedPrecision; precision++ {
+		for precision := 1; precision <= ufixedPrecision; precision++ {
 			typeUfixed, err := makeUfixedType(size, precision)
 			require.NoError(t, err, "make ufixed type fail")
 
-			for i := 0; i < UfixedRandomTestPoints; i++ {
+			for i := 0; i < ufixedRandomTestPoints; i++ {
 				randomInt, err := rand.Int(rand.Reader, upperLimit)
 				require.NoError(t, err, "cryptographic random int init fail")
 
@@ -139,7 +139,7 @@ func TestEncodeValid(t *testing.T) {
 	// encoding test for address, since address is 32 byte, it can be considered as 256 bit uint
 	// randomly generate 1000 uint256 and make address values, check if encoded value match with expected
 	upperLimit := big.NewInt(0).Lsh(big.NewInt(1), addressByteSize<<3)
-	for i := 0; i < UintRandomTestPoints; i++ {
+	for i := 0; i < uintRandomTestPoints; i++ {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
@@ -153,7 +153,7 @@ func TestEncodeValid(t *testing.T) {
 	}
 
 	// encoding test for bool values
-	for i := 0; i < BoolTestCaseCount; i++ {
+	for i := 0; i < boolTestCaseCount; i++ {
 		boolEncode, err := boolType.Encode(i == 1)
 		require.NoError(t, err, "bool encode fail")
 		expected := []byte{0x00}
@@ -164,7 +164,7 @@ func TestEncodeValid(t *testing.T) {
 	}
 
 	// encoding test for byte values
-	for i := 0; i < ByteTestCaseCount; i++ {
+	for i := 0; i < byteTestCaseCount; i++ {
 		byteEncode, err := byteType.Encode(byte(i))
 		require.NoError(t, err, "byte encode fail")
 		expected := []byte{byte(i)}
@@ -175,8 +175,8 @@ func TestEncodeValid(t *testing.T) {
 	// we use `gobberish` to generate random utf-8 symbols
 	// randomly generate utf-8 str from length 1 to 100, each length draw 10 random strs
 	// check if encoded ABI str match with expected value
-	for length := 1; length <= StringTestCaseCount; length++ {
-		for i := 0; i < StringTestCaseSpecLenCount; i++ {
+	for length := 1; length <= stringTestCaseCount; length++ {
+		for i := 0; i < stringTestCaseSpecLenCount; i++ {
 			// generate utf8 strings from `gobberish` at some length
 			utf8Str := gobberish.GenerateString(length)
 			// since string is just type alias of `byte[]`, we need to store number of bytes in encoding
@@ -898,20 +898,20 @@ func categorySelfRoundTripTest(t *testing.T, category []testUnit) {
 }
 
 func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
-	(*pool)[Uint] = make([]testUnit, UintTestCaseCount*UintEnd/UintStepLength)
-	(*pool)[Ufixed] = make([]testUnit, UfixedPrecision*UintEnd/UintStepLength)
+	(*pool)[Uint] = make([]testUnit, uintTestCaseCount*uintEnd/uintStepLength)
+	(*pool)[Ufixed] = make([]testUnit, ufixedPrecision*uintEnd/uintStepLength)
 
 	uintIndex := 0
 	ufixedIndex := 0
 
-	for bitSize := UintBegin; bitSize <= UintEnd; bitSize += UintStepLength {
+	for bitSize := uintBegin; bitSize <= uintEnd; bitSize += uintStepLength {
 		max := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
 
 		uintT, err := makeUintType(bitSize)
 		require.NoError(t, err, "make uint type failure")
 		uintTstr := uintT.String()
 
-		for j := 0; j < UintTestCaseCount; j++ {
+		for j := 0; j < uintTestCaseCount; j++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random uint, should be no error")
 
@@ -922,7 +922,7 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 			uintIndex++
 		}
 
-		for precision := 1; precision <= UfixedPrecision; precision++ {
+		for precision := 1; precision <= ufixedPrecision; precision++ {
 			randVal, err := rand.Int(rand.Reader, max)
 			require.NoError(t, err, "generate random ufixed, should be no error")
 
@@ -939,20 +939,20 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	categorySelfRoundTripTest(t, (*pool)[Uint])
 	categorySelfRoundTripTest(t, (*pool)[Ufixed])
 
-	(*pool)[Byte] = make([]testUnit, ByteTestCaseCount)
-	for i := 0; i < ByteTestCaseCount; i++ {
+	(*pool)[Byte] = make([]testUnit, byteTestCaseCount)
+	for i := 0; i < byteTestCaseCount; i++ {
 		(*pool)[Byte][i] = testUnit{serializedType: byteType.String(), value: byte(i)}
 	}
 	categorySelfRoundTripTest(t, (*pool)[Byte])
 
-	(*pool)[Bool] = make([]testUnit, BoolTestCaseCount)
+	(*pool)[Bool] = make([]testUnit, boolTestCaseCount)
 	(*pool)[Bool][0] = testUnit{serializedType: boolType.String(), value: false}
 	(*pool)[Bool][1] = testUnit{serializedType: boolType.String(), value: true}
 	categorySelfRoundTripTest(t, (*pool)[Bool])
 
 	maxAddress := new(big.Int).Lsh(big.NewInt(1), addressByteSize<<3)
-	(*pool)[Address] = make([]testUnit, AddressTestCaseCount)
-	for i := 0; i < AddressTestCaseCount; i++ {
+	(*pool)[Address] = make([]testUnit, addressTestCaseCount)
+	for i := 0; i < addressTestCaseCount; i++ {
 		randAddrVal, err := rand.Int(rand.Reader, maxAddress)
 		require.NoError(t, err, "generate random value for address, should be no error")
 		addrBytes := randAddrVal.Bytes()
@@ -962,10 +962,10 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	}
 	categorySelfRoundTripTest(t, (*pool)[Address])
 
-	(*pool)[String] = make([]testUnit, StringTestCaseCount*StringTestCaseSpecLenCount)
+	(*pool)[String] = make([]testUnit, stringTestCaseCount*stringTestCaseSpecLenCount)
 	stringIndex := 0
-	for length := 1; length <= StringTestCaseCount; length++ {
-		for i := 0; i < StringTestCaseSpecLenCount; i++ {
+	for length := 1; length <= stringTestCaseCount; length++ {
+		for i := 0; i < stringTestCaseSpecLenCount; i++ {
 			(*pool)[String][stringIndex] = testUnit{
 				serializedType: stringType.String(),
 				value:          gobberish.GenerateString(length),
@@ -1000,21 +1000,21 @@ func takeSomeFromCategoryAndGenerateArray(
 }
 
 func addArrayRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
-	for intIndex := 0; intIndex < len((*pool)[Uint]); intIndex += UintTestCaseCount {
-		takeSomeFromCategoryAndGenerateArray(t, Uint, intIndex, TakeNum, pool)
+	for intIndex := 0; intIndex < len((*pool)[Uint]); intIndex += uintTestCaseCount {
+		takeSomeFromCategoryAndGenerateArray(t, Uint, intIndex, takeNum, pool)
 	}
-	takeSomeFromCategoryAndGenerateArray(t, Byte, 0, TakeNum, pool)
-	takeSomeFromCategoryAndGenerateArray(t, Address, 0, TakeNum, pool)
-	takeSomeFromCategoryAndGenerateArray(t, String, 0, TakeNum, pool)
-	takeSomeFromCategoryAndGenerateArray(t, Bool, 0, TakeNum, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Byte, 0, takeNum, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Address, 0, takeNum, pool)
+	takeSomeFromCategoryAndGenerateArray(t, String, 0, takeNum, pool)
+	takeSomeFromCategoryAndGenerateArray(t, Bool, 0, takeNum, pool)
 
 	categorySelfRoundTripTest(t, (*pool)[ArrayStatic])
 	categorySelfRoundTripTest(t, (*pool)[ArrayDynamic])
 }
 
 func addTupleRandomValues(t *testing.T, slotRange BaseType, pool *map[BaseType][]testUnit) {
-	for i := 0; i < TupleTestCaseCount; i++ {
-		tupleLenBig, err := rand.Int(rand.Reader, big.NewInt(TupleMaxLength))
+	for i := 0; i < tupleTestCaseCount; i++ {
+		tupleLenBig, err := rand.Int(rand.Reader, big.NewInt(tupleMaxLength))
 		require.NoError(t, err, "generate random tuple length should not return error")
 		tupleLen := tupleLenBig.Int64() + 1
 		testUnits := make([]testUnit, tupleLen)
