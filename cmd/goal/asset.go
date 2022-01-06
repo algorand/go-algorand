@@ -41,7 +41,6 @@ var (
 	assetClawback           string
 	assetFreezer            string
 	assetNoManager          bool
-	assetNoReserve          bool
 	assetNoFreezer          bool
 	assetNoClawback         bool
 
