@@ -522,7 +522,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
-		Node:     &mockNode,
+		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
 	}
@@ -562,7 +562,7 @@ func tealDryrunTest(
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
-		Node:     &mockNode,
+		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
 	}
@@ -671,4 +671,111 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
+}
+
+func TestAppendParticipationKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
+	defer releasefunc()
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: make(chan struct{}),
+	}
+
+	id := account.ParticipationID{}
+	id[0] = 10
+
+	t.Run("Happy path", func(t *testing.T) {
+		// Create test object to append.
+		keys := make(account.StateProofKeys)
+		keys[100] = []byte{100}
+		keys[101] = []byte{101}
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, id, mockNode.id)
+		require.Len(t, mockNode.keys, 2)
+		require.Equal(t, mockNode.keys[100], keys[100])
+		require.Equal(t, mockNode.keys[101], keys[101])
+	})
+
+	t.Run("Invalid body", func(t *testing.T) {
+		// Create request with bogus bytes in the body
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{0x99, 0x88, 0x77}))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "unable to parse keys from body: msgpack decode error")
+	})
+
+	t.Run("Empty body", func(t *testing.T) {
+		// Create test object with no keys to append.
+		keys := make(account.StateProofKeys)
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "empty request, please attach keys to request body")
+	})
+
+	t.Run("Internal error", func(t *testing.T) {
+		// Create mock node with an error.
+		expectedErr := errors.New("expected error")
+		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr)
+		handler := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: make(chan struct{}),
+		}
+
+		keys := make(account.StateProofKeys)
+		keys[100] = []byte{100}
+		keys[101] = []byte{101}
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusInternalServerError, rec.Code)
+		require.Contains(t, rec.Body.String(), expectedErr.Error())
+	})
 }
