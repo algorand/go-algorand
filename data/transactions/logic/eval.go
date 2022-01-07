@@ -4065,7 +4065,10 @@ func hasDuplicateKeys(jsonText []byte) (bool, error) {
 	dec := json.NewDecoder(bytes.NewReader(jsonText))
 	keys := make(map[string]bool)
 	var value interface{}
-	dec.Token() // {
+	_, err := dec.Token() // {
+	if err != nil {
+		return false, err
+	}
 	for dec.More() {
 		// Get JSON key
 		key, err := dec.Token()
