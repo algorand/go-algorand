@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -169,10 +170,12 @@ func TestCloseOnError(t *testing.T) {
 	// get the current round for partkey creation
 	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
 
-	tempDir := os.TempDir()
+	tempDir, err := ioutil.TempDir(os.TempDir(), "test-close-on-error")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
 	var partkeyFile string
 	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, tempDir)
-	defer os.Remove(partkeyFile)
 
 	// make a participation key for initiallyOffline
 	_, err = client.AddParticipationKey(partkeyFile)
