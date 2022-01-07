@@ -41,6 +41,7 @@ var (
 	assetClawback           string
 	assetFreezer            string
 	assetNoManager          bool
+	assetNoReserve          bool
 	assetNoFreezer          bool
 	assetNoClawback         bool
 
@@ -73,6 +74,7 @@ func init() {
 	createAssetCmd.Flags().StringVar(&assetFreezer, "freezer", "", "Freezer account that can freeze or unfreeze the asset holdings for a specific account")
 	createAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Clawback account that is allowed to transfer assets from and to any asset holder")
 	createAssetCmd.Flags().BoolVar(&assetNoManager, "no-manager", false, "Explicitly declare the lack of manager")
+	createAssetCmd.Flags().BoolVar(&assetNoReserve, "no-reserve", false, "Explicitly declare the lack of reserve")
 	createAssetCmd.Flags().BoolVar(&assetNoFreezer, "no-freezer", false, "Explicitly declare the lack of freezer")
 	createAssetCmd.Flags().BoolVar(&assetNoClawback, "no-clawback", false, "Explicitly declare the lack of clawback")
 	createAssetCmd.MarkFlagRequired("total")
@@ -196,6 +198,22 @@ var createAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
+		if cmd.Flags().Changed("manager") && cmd.Flags().Changed("no-manager") {
+			reportErrorf("The [--manager] flag and the [--no-manager] flag are mutually exclusive, do not provide both flags.")
+		}
+
+		if cmd.Flags().Changed("reserve") && cmd.Flags().Changed("no-reserve") {
+			reportErrorf("The [--reserve] flag and the [--no-reserve] flag are mutually exclusive, do not provide both flags.")
+		}
+
+		if cmd.Flags().Changed("freezer") && cmd.Flags().Changed("no-freezer") {
+			reportErrorf("The [--freezer] flag and the [--no-freezer] flag are mutually exclusive, do not provide both flags.")
+		}
+
+		if cmd.Flags().Changed("clawback") && cmd.Flags().Changed("no-clawback") {
+			reportErrorf("The [--clawback] flag and the [--no-clawback] flag are mutually exclusive, do not provide both flags.")
+		}
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
@@ -210,7 +228,7 @@ var createAssetCmd = &cobra.Command{
 			manager = assetManager
 		}
 
-		if cmd.Flags().Changed("no-manager") {
+		if assetNoManager {
 			manager = ""
 		}
 
@@ -219,12 +237,16 @@ var createAssetCmd = &cobra.Command{
 			reserve = assetReserve
 		}
 
+		if assetNoReserve {
+			reserve = ""
+		}
+
 		if cmd.Flags().Changed("freezer") {
 			assetFreezer = accountList.getAddressByName(assetFreezer)
 			freezer = assetFreezer
 		}
 
-		if cmd.Flags().Changed("no-freezer") {
+		if assetNoFreezer {
 			freezer = ""
 		}
 
@@ -233,7 +255,7 @@ var createAssetCmd = &cobra.Command{
 			clawback = assetClawback
 		}
 
-		if cmd.Flags().Changed("no-clawback") {
+		if assetNoClawback {
 			clawback = ""
 		}
 
