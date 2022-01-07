@@ -565,6 +565,44 @@ func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
+// Base64Encoding is an enum for the `base64decode` opcode
+type Base64Encoding int
+
+const (
+	// URLEncoding represents the base64url encoding defined in https://www.rfc-editor.org/rfc/rfc4648.html
+	URLEncoding Base64Encoding = iota
+	// StdEncoding represents the standard encoding of the RFC
+	StdEncoding
+	invalidBase64Alphabet
+)
+
+// After running `go generate` these strings will be available:
+var base64EncodingNames [2]string = [...]string{URLEncoding.String(), StdEncoding.String()}
+
+type base64EncodingSpec struct {
+	field   Base64Encoding
+	ftype   StackType
+	version uint64
+}
+
+var base64EncodingSpecs = []base64EncodingSpec{
+	{URLEncoding, StackBytes, 6},
+	{StdEncoding, StackBytes, 6},
+}
+
+var base64EncodingSpecByField map[Base64Encoding]base64EncodingSpec
+var base64EncodingSpecByName base64EncodingSpecMap
+
+type base64EncodingSpecMap map[string]base64EncodingSpec
+
+func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 6 here because base64_decode fields were introduced in 6
+	if s[name].version > 6 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
+
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
@@ -842,6 +880,16 @@ func init() {
 	EcdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
 	for i, ahfn := range EcdsaCurveNames {
 		EcdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
+	}
+
+	base64EncodingSpecByField = make(map[Base64Encoding]base64EncodingSpec, len(base64EncodingNames))
+	for _, s := range base64EncodingSpecs {
+		base64EncodingSpecByField[s.field] = s
+	}
+
+	base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
+	for i, encoding := range base64EncodingNames {
+		base64EncodingSpecByName[encoding] = base64EncodingSpecByField[Base64Encoding(i)]
 	}
 
 	base64EncodingSpecByField = make(map[Base64Encoding]base64EncodingSpec, len(base64EncodingNames))
