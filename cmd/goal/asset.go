@@ -198,19 +198,19 @@ var createAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		if cmd.Flags().Changed("manager") && cmd.Flags().Changed("no-manager") {
+		if assetManager != "" && assetNoManager {
 			reportErrorf("The [--manager] flag and the [--no-manager] flag are mutually exclusive, do not provide both flags.")
 		}
 
-		if cmd.Flags().Changed("reserve") && cmd.Flags().Changed("no-reserve") {
+		if assetReserve != "" && assetNoReserve {
 			reportErrorf("The [--reserve] flag and the [--no-reserve] flag are mutually exclusive, do not provide both flags.")
 		}
 
-		if cmd.Flags().Changed("freezer") && cmd.Flags().Changed("no-freezer") {
+		if assetFreezer != "" && assetNoFreezer {
 			reportErrorf("The [--freezer] flag and the [--no-freezer] flag are mutually exclusive, do not provide both flags.")
 		}
 
-		if cmd.Flags().Changed("clawback") && cmd.Flags().Changed("no-clawback") {
+		if assetClawback != "" && assetNoClawback {
 			reportErrorf("The [--clawback] flag and the [--no-clawback] flag are mutually exclusive, do not provide both flags.")
 		}
 
