@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -324,10 +324,13 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.AssetIndex = numOrNil(uint64(txn.ApplyData.ConfigAsset))
 	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
 
-	// Deltas, Logs, and Inners can not be set until we allow appl
-	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-	// response.Logs = convertLogs(txn)
-	// response.Inners = convertInners(&txn)
+	withStatus := node.TxnWithStatus{
+		Txn:       txn.SignedTxn,
+		ApplyData: txn.ApplyData,
+	}
+	response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(withStatus)
+	response.Logs = convertLogs(withStatus)
+	response.Inners = convertInners(&withStatus)
 	return response
 }
 

@@ -164,13 +164,14 @@ The following packages allow developers to interface with the Algorand system:
      - `cmd/catchupsrv` ([README](cmd/catchupsrv/README.md)) is a tool to
        assist with processing historic blocks on a new node.
   - `libgoal` exports a Go interface useful for developers of Algorand clients.
-  - `debug` holds secondary commands which assist developers during debugging.
+  - `tools` ([README](tools/README.md)) various tools and utilities without a better place to go.
+  - `tools/debug` holds secondary commands which assist developers during debugging.
+  - `tools/misc` ([README](tools/misc/README.md)) small tools that are sometimes handy in a pinch.
 
 The following packages contain tools to help Algorand developers deploy networks
 of their own:
 
   - `nodecontrol`
-  - `tools`
   - `docker`
   - `commandandcontrol` ([README](test/commandandcontrol/README.md)) is a tool to
     automate a network of algod instances.
@@ -191,6 +192,6 @@ A number of packages provide utilities for the various components:
 
 Please see the [COPYING_FAQ](COPYING_FAQ) for details about how to apply our license.
 
-Copyright (C) 2019-2021, Algorand Inc.
+Copyright (C) 2019-2022, Algorand Inc.
 
 [developer site url]: https://developer.algorand.org/

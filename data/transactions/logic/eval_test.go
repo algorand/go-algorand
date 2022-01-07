@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -3407,15 +3407,15 @@ func BenchmarkBase64Decode(b *testing.B) {
 		"keccak256",
 		"sha256",
 		"sha512_256",
-		"base64_decode StdAlph",
-		"base64_decode URLAlph",
+		"base64_decode StdEncoding",
+		"base64_decode URLEncoding",
 	}
 	benches := [][]string{}
 	for i, tag := range tags {
 		for _, op := range ops {
 			testName := op
 			encoded := stds[i]
-			if op == "base64_decode URLAlph" {
+			if op == "base64_decode URLEncoding" {
 				encoded = urls[i]
 			}
 			if len(op) > 0 {
@@ -4531,7 +4531,7 @@ func TestOpBase64Decode(t *testing.T) {
 		error   string
 	}{
 		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
-			"StdAlph",
+			"StdEncoding",
 			`MOBY-DICK;
 
 or, THE WHALE.
@@ -4540,7 +4540,7 @@ or, THE WHALE.
 By Herman Melville`, "",
 		},
 		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
-			"URLAlph",
+			"URLEncoding",
 			`MOBY-DICK;
 
 or, THE WHALE.
@@ -4550,28 +4550,69 @@ By Herman Melville`, "",
 		},
 
 		// Test that a string that doesn't need padding can't have it
-		{"cGFk", "StdAlph", "pad", ""},
-		{"cGFk=", "StdAlph", "pad", "input byte 4"},
-		{"cGFk==", "StdAlph", "pad", "input byte 4"},
-		{"cGFk===", "StdAlph", "pad", "input byte 4"},
+		{"cGFk", "StdEncoding", "pad", ""},
+		{"cGFk=", "StdEncoding", "pad", "input byte 4"},
+		{"cGFk==", "StdEncoding", "pad", "input byte 4"},
+		{"cGFk===", "StdEncoding", "pad", "input byte 4"},
 		// Ensures that even correct padding is illegal if not needed
-		{"cGFk====", "StdAlph", "pad", "input byte 4"},
+		{"cGFk====", "StdEncoding", "pad", "input byte 4"},
 
 		// Test that padding must be present to make len = 0 mod 4.
-		{"bm9wYWQ=", "StdAlph", "nopad", ""},
-		{"bm9wYWQ", "StdAlph", "nopad", "illegal"},
-		{"bm9wYWQ==", "StdAlph", "nopad", "illegal"},
+		{"bm9wYWQ=", "StdEncoding", "nopad", ""},
+		{"bm9wYWQ", "StdEncoding", "nopad", "illegal"},
+		{"bm9wYWQ==", "StdEncoding", "nopad", "illegal"},
 
-		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdAlph", "abc123!?$*&()'-=@~", ""},
-		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdAlph", "abc123!?$*&()'-=@~", ""},
-		{"YWJjMTIzIT8kKiYoKSctPUB-", "URLAlph", "abc123!?$*&()'-=@~", ""},
-		{"YWJjMTIzIT8kKiYoKSctPUB+", "URLAlph", "", "input byte 23"},
-		{"YWJjMTIzIT8kKiYoKSctPUB-", "StdAlph", "", "input byte 23"},
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdEncoding", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdEncoding", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB-", "URLEncoding", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB+", "URLEncoding", "", "input byte 23"},
+		{"YWJjMTIzIT8kKiYoKSctPUB-", "StdEncoding", "", "input byte 23"},
+
+		// try extra ='s and various whitespace:
+		{"", "StdEncoding", "", ""},
+		{"", "URLEncoding", "", ""},
+		{"=", "StdEncoding", "", "byte 0"},
+		{"=", "URLEncoding", "", "byte 0"},
+		{" ", "StdEncoding", "", "byte 0"},
+		{" ", "URLEncoding", "", "byte 0"},
+		{"\t", "StdEncoding", "", "byte 0"},
+		{"\t", "URLEncoding", "", "byte 0"},
+		{"\r", "StdEncoding", "", ""},
+		{"\r", "URLEncoding", "", ""},
+		{"\n", "StdEncoding", "", ""},
+		{"\n", "URLEncoding", "", ""},
+
+		{"YWJjMTIzIT8kKiYoKSctPUB+\n", "StdEncoding", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kKiYoKSctPUB-\n", "URLEncoding", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kK\riYoKSctPUB+\n", "StdEncoding", "abc123!?$*&()'-=@~", ""},
+		{"YWJjMTIzIT8kK\riYoKSctPUB-\n", "URLEncoding", "abc123!?$*&()'-=@~", ""},
+		{"\n\rYWJjMTIzIT8\rkKiYoKSctPUB+\n", "StdEncoding", "abc123!?$*&()'-=@~", ""},
+		{"\n\rYWJjMTIzIT8\rkKiYoKSctPUB-\n", "URLEncoding", "abc123!?$*&()'-=@~", ""},
+
+		// padding and extra legal whitespace
+		{"SQ==", "StdEncoding", "I", ""},
+		{"SQ==", "URLEncoding", "I", ""},
+		{"\rS\r\nQ=\n=\r\r\n", "StdEncoding", "I", ""},
+		{"\rS\r\nQ=\n=\r\r\n", "URLEncoding", "I", ""},
+
+		// Padding necessary? - Yes it is! And exactly the expected place and amount.
+		{"SQ==", "StdEncoding", "I", ""},
+		{"SQ==", "URLEncoding", "I", ""},
+		{"S=Q=", "StdEncoding", "", "byte 1"},
+		{"S=Q=", "URLEncoding", "", "byte 1"},
+		{"=SQ=", "StdEncoding", "", "byte 0"},
+		{"=SQ=", "URLEncoding", "", "byte 0"},
+		{"SQ", "StdEncoding", "", "byte 0"},
+		{"SQ", "URLEncoding", "", "byte 0"},
+		{"SQ=", "StdEncoding", "", "byte 3"},
+		{"SQ=", "URLEncoding", "", "byte 3"},
+		{"SQ===", "StdEncoding", "", "byte 4"},
+		{"SQ===", "URLEncoding", "", "byte 4"},
 	}
 
-	template := `byte 0x%s; byte "%s"; base64_decode %s; ==`
+	template := `byte 0x%s; byte 0x%s; base64_decode %s; ==`
 	for _, tc := range testCases {
-		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), tc.encoded, tc.alph)
+		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), hex.EncodeToString([]byte(tc.encoded)), tc.alph)
 
 		if tc.error == "" {
 			testAccepts(t, source, minB64DecodeVersion)

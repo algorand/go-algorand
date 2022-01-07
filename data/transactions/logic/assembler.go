@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -778,22 +778,22 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func txnFieldImm(name string, expectArray bool, ops *OpStream) (txnFieldSpec, error) {
-	fs, ok := txnFieldSpecByName[name]
+func txnFieldImm(name string, expectArray bool, ops *OpStream) (*txnFieldSpec, error) {
+	fs, ok := TxnFieldSpecByName[name]
 	if !ok {
-		return fs, fmt.Errorf("unknown field: %#v", name)
+		return nil, fmt.Errorf("unknown field: %#v", name)
 	}
 	if expectArray != fs.array {
 		if expectArray {
-			return txnFieldSpec{}, fmt.Errorf("found scalar field %#v while expecting array", name)
+			return nil, fmt.Errorf("found scalar field %#v while expecting array", name)
 		}
-		return txnFieldSpec{}, fmt.Errorf("found array field %#v while expecting scalar", name)
+		return nil, fmt.Errorf("found array field %#v while expecting scalar", name)
 	}
 	if fs.version > ops.Version {
-		return txnFieldSpec{},
+		return nil,
 			fmt.Errorf("field %#v available in version %d. Missed #pragma version?", name, fs.version)
 	}
-	return fs, nil
+	return &fs, nil
 }
 
 func simpleImm(value string, label string) (uint64, error) {
@@ -1105,7 +1105,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := globalFieldSpecByName[args[0]]
+	fs, ok := GlobalFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1126,7 +1126,7 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := assetHoldingFieldSpecByName[args[0]]
+	fs, ok := AssetHoldingFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1147,7 +1147,7 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := assetParamsFieldSpecByName[args[0]]
+	fs, ok := AssetParamsFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1168,7 +1168,7 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := appParamsFieldSpecByName[args[0]]
+	fs, ok := AppParamsFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1189,7 +1189,7 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := txnFieldSpecByName[args[0]]
+	fs, ok := TxnFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1209,7 +1209,7 @@ func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
 
-	cs, ok := ecdsaCurveSpecByName[args[0]]
+	cs, ok := EcdsaCurveSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1229,20 +1229,20 @@ func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
 
-	alph, ok := base64AlphabetSpecByName[args[0]]
+	encoding, ok := base64EncodingSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("%s unknown alphabet: %#v", spec.Name, args[0])
+		return ops.errorf("%s unknown encoding: %#v", spec.Name, args[0])
 	}
-	if alph.version > ops.Version {
+	if encoding.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], alph.version)
+		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], encoding.version)
 	}
 
-	val := alph.field
+	val := encoding.field
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
-	ops.trace("%s (%s)", alph.field, alph.ftype)
-	ops.returns(alph.ftype)
+	ops.trace("%s (%s)", encoding.field, encoding.ftype)
+	ops.returns(encoding.ftype)
 	return nil
 }
 
@@ -1411,7 +1411,7 @@ func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	if len(args) != 1 {
 		return oneAny, nil
 	}
-	fs, ok := txnFieldSpecByName[args[0]]
+	fs, ok := TxnFieldSpecByName[args[0]]
 	if !ok {
 		return oneAny, nil
 	}
@@ -2676,10 +2676,10 @@ func disBase64Decode(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	dis.nextpc = dis.pc + 2
 	b64dArg := dis.program[dis.pc+1]
-	if int(b64dArg) >= len(base64AlphabetNames) {
+	if int(b64dArg) >= len(base64EncodingNames) {
 		return "", fmt.Errorf("invalid base64_decode arg index %d at pc=%d", b64dArg, dis.pc)
 	}
-	return fmt.Sprintf("%s %s", spec.Name, base64AlphabetNames[b64dArg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, base64EncodingNames[b64dArg]), nil
 }
 
 type disInfo struct {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -511,6 +511,15 @@ func (st StackType) String() string {
 		return "[]byte"
 	}
 	return "internal error, unknown type"
+}
+
+// Typed tells whether the StackType is a specific concrete type.
+func (st StackType) Typed() bool {
+	switch st {
+	case StackUint64, StackBytes:
+		return true
+	}
+	return false
 }
 
 func (sts StackTypes) plus(other StackTypes) StackTypes {
@@ -2004,7 +2013,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		Txn:        &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}},
 	}
 	fs := txnFieldSpecByField[field]
-	sv, err := cx.txnFieldToStack(cx.Txn, fs, arrayFieldIdx, groupIndex, false)
+	sv, err := cx.txnFieldToStack(cx.Txn, &fs, arrayFieldIdx, groupIndex, false)
 	return sv.toTealValue(), err
 }
 
@@ -2033,7 +2042,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
+func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
 		if cx.runModeFlags == runModeSignature {
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
@@ -2226,18 +2235,18 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs tx
 	return
 }
 
-func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (txnFieldSpec, error) {
+func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSpec, error) {
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
-		return txnFieldSpec{}, fmt.Errorf("invalid txn field %d", field)
+		return nil, fmt.Errorf("invalid txn field %d", field)
 	}
 	if expectArray != fs.array {
 		if expectArray {
-			return txnFieldSpec{}, fmt.Errorf("unsupported array field %d", field)
+			return nil, fmt.Errorf("unsupported array field %d", field)
 		}
-		return txnFieldSpec{}, fmt.Errorf("invalid txn field %d", field)
+		return nil, fmt.Errorf("invalid txn field %d", field)
 	}
-	return fs, nil
+	return &fs, nil
 }
 
 func opTxn(cx *EvalContext) {
@@ -2758,11 +2767,7 @@ func opEd25519verify(cx *EvalContext) {
 	copy(sig[:], cx.stack[prev].Bytes)
 
 	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
-	if sv.Verify(msg, sig) {
-		cx.stack[pprev].Uint = 1
-	} else {
-		cx.stack[pprev].Uint = 0
-	}
+	cx.stack[pprev].Uint = boolToUint(sv.Verify(msg, sig))
 	cx.stack[pprev].Bytes = nil
 	cx.stack = cx.stack[:prev]
 }
@@ -2817,11 +2822,7 @@ func opEcdsaVerify(cx *EvalContext) {
 
 	result := secp256k1.VerifySignature(pubkey, msg, signature)
 
-	if result {
-		cx.stack[fifth].Uint = 1
-	} else {
-		cx.stack[fifth].Uint = 0
-	}
+	cx.stack[fifth].Uint = boolToUint(result)
 	cx.stack[fifth].Bytes = nil
 	cx.stack = cx.stack[:fourth]
 }
@@ -3406,12 +3407,8 @@ func opAppOptedIn(cx *EvalContext) {
 		return
 	}
 
+	cx.stack[prev].Uint = boolToUint(optedIn)
 	cx.stack[prev].Bytes = nil
-	if optedIn {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
 
 	cx.stack = cx.stack[:last]
 }
@@ -4042,7 +4039,7 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 	return 0, fmt.Errorf("invalid App reference %d", aid)
 }
 
-func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *transactions.Transaction) (err error) {
+func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *transactions.Transaction) (err error) {
 	switch fs.field {
 	case Type:
 		if sv.Bytes == nil {
@@ -4286,7 +4283,7 @@ func opTxField(cx *EvalContext) {
 		return
 	}
 	sv := cx.stack[last]
-	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxns[itx].Txn)
+	cx.err = cx.stackIntoTxnField(sv, &fs, &cx.subtxns[itx].Txn)
 	cx.stack = cx.stack[:last] // pop
 }
 
@@ -4438,15 +4435,15 @@ func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 
 func opBase64Decode(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	alphabetField := Base64Alphabet(cx.program[cx.pc+1])
-	fs, ok := base64AlphabetSpecByField[alphabetField]
+	encodingField := Base64Encoding(cx.program[cx.pc+1])
+	fs, ok := base64EncodingSpecByField[encodingField]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid base64_decode alphabet %d", alphabetField)
+		cx.err = fmt.Errorf("invalid base64_decode encoding %d", encodingField)
 		return
 	}
 
 	encoding := base64.URLEncoding
-	if alphabetField == StdAlph {
+	if encodingField == StdEncoding {
 		encoding = base64.StdEncoding
 	}
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)

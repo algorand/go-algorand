@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -867,13 +867,13 @@ func TestAssets(t *testing.T) {
 
 func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
 	for _, field := range AssetHoldingFieldNames {
-		fs := assetHoldingFieldSpecByName[field]
+		fs := AssetHoldingFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
 	for _, field := range AssetParamsFieldNames {
-		fs := assetParamsFieldSpecByName[field]
+		fs := AssetParamsFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
@@ -2258,7 +2258,7 @@ func TestReturnTypes(t *testing.T) {
 		"itxna":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxna Accounts 0",
 		"gitxn":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxn 0 Sender",
 		"gitxna":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
-		"base64_decode":     `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdAlph; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLAlph; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
+		"base64_decode":     `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
