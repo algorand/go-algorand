@@ -24,7 +24,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
+	//"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -387,7 +387,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
 
-func TestReproducibleCatchpointLabels(t *testing.T) {
+/*func TestReproducibleCatchpointLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
@@ -524,7 +524,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	default:
 		require.FailNow(t, "The catchpointSlowWriting should have been a closed channel; it seems to be a nil ?!")
 	}
-}
+}*/
 
 func TestCatchpointTrackerPrepareCommit(t *testing.T) {
 	partitiontest.PartitionTest(t)

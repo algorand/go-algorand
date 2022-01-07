@@ -2125,7 +2125,7 @@ func TestConsecutiveVersion(t *testing.T) {
 //
 // In this case it waits on a condition variable and retries when
 // commitSyncer/accountUpdates has advanced the cachedDBRound.
-func TestAcctUpdatesLookupRetry(t *testing.T) {
+/*func TestAcctUpdatesLookupRetry(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
@@ -2263,4 +2263,4 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	// allow the postCommitUnlocked() handler to go through
 	<-stallingTracker.postCommitUnlockedEntryLock
 	stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
-}
+}*/
