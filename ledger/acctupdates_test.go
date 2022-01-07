@@ -1734,7 +1734,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, false, 10, testProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
