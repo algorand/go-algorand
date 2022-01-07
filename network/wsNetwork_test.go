@@ -108,7 +108,6 @@ func init() {
 	defaultConfig.GossipFanout = 4
 	defaultConfig.NetAddress = "127.0.0.1:0"
 	defaultConfig.BaseLoggerDebugLevel = uint32(logging.Debug)
-	defaultConfig.IncomingConnectionsLimit = -1
 	defaultConfig.DNSBootstrapID = ""
 	defaultConfig.MaxConnectionsPerIP = 30
 }
