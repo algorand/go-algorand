@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package agreement
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -227,7 +226,7 @@ func voteStepFresh(descr string, proto protocol.ConsensusVersion, mine, vote ste
 		// always propagate first recovery vote to ensure synchronous block of periods after partition
 		return nil
 	}
-	if config.Consensus[proto].FastPartitionRecovery && vote >= late {
+	if vote >= late {
 		// always propagate fast partition recovery votes
 		return nil
 	}
