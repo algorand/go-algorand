@@ -39,12 +39,12 @@ import (
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
-	"golang.org/x/net/netutil"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
@@ -76,9 +76,6 @@ const httpServerIdleTimeout = time.Second * 4
 // values, including the request line. It does not limit the
 // size of the request body.
 const httpServerMaxHeaderBytes = 4096
-
-// MaxInt is the maximum int which might be int32 or int64
-const MaxInt = int((^uint(0)) >> 1)
 
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
@@ -734,25 +731,11 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
-	var err error
-	if wn.config.IncomingConnectionsLimit < 0 {
-		wn.config.IncomingConnectionsLimit = MaxInt
-	}
-
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
-	}
-
-	// Make sure we do not accept more incoming connections than our
-	// open file rlimit, with some headroom for other FDs (DNS, log
-	// files, SQLite files, telemetry, ...)
-	err = wn.rlimitIncomingConnections()
-	if err != nil {
-		wn.log.Error("ws network start: rlimitIncomingConnections ", err)
-		return
 	}
 
 	if wn.config.NetAddress != "" {
@@ -762,7 +745,8 @@ func (wn *WebsocketNetwork) Start() {
 			return
 		}
 		// wrap the original listener with a limited connection listener
-		listener = netutil.LimitListener(listener, wn.config.IncomingConnectionsLimit)
+		listener = limitlistener.RejectingLimitListener(
+			listener, uint64(wn.config.IncomingConnectionsLimit), wn.log)
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())

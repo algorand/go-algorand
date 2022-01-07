@@ -24,8 +24,8 @@ import (
 
 /* misc */
 
-// RaiseRlimit increases the number of file descriptors we can have
-func RaiseRlimit(_ uint64) error {
+// SetFdSoftLimit sets a new file descriptors soft limit.
+func SetFdSoftLimit(_ uint64) error {
 	return nil
 }
 
