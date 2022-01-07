@@ -152,7 +152,7 @@ type ConsensusParams struct {
 	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
 
-	FastRecoveryLambda    time.Duration // time between fast recovery attempts
+	FastRecoveryLambda time.Duration // time between fast recovery attempts
 
 	// how to commit to the payset: flat or merkle tree
 	PaysetCommit PaysetCommitType
