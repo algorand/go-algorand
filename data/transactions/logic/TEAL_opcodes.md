@@ -873,7 +873,7 @@ Decodes X using the base64 encoding E. Specify the encoding with an immediate ar
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json text A
 - LogicSigVersion >= 6
 
-specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONOjbect.
+specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.
 
 ## balance
 

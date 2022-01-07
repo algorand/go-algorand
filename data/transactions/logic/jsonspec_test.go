@@ -148,41 +148,19 @@ func TestParseBigNum(t *testing.T) {
 	msg, err := parseJSON([]byte(text))
 	require.NoError(t, err)
 	require.True(t, json.Valid([]byte(text)))
-	require.Equal(t, "0", msg.(map[string]interface{})["key0"].(json.Number).String())
+	require.Equal(t, "0", string(msg["key0"]))
 	// parse int
 	text = `{"key0":123456789}`
 	msg, err = parseJSON([]byte(text))
 	require.NoError(t, err)
 	require.True(t, json.Valid([]byte(text)))
-	require.Equal(t, "123456789", msg.(map[string]interface{})["key0"].(json.Number).String())
+	require.Equal(t, "123456789", string(msg["key0"]))
 	// parse 2^64-1
 	text = `{"key0":18446744073709551615}`
 	msg, err = parseJSON([]byte(text))
 	require.NoError(t, err)
 	require.True(t, json.Valid([]byte(text)))
-	require.Equal(t, "18446744073709551615", msg.(map[string]interface{})["key0"].(json.Number).String())
-}
-
-func TestParseExp(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	text := `{"key0": 1.2E+}`
-	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
-	text = `{"key0": 1.2E+8}`
-	_, err = parseJSON([]byte(text))
-	require.NoError(t, err)
-	text = `{"key0": 0E+8}`
-	_, err = parseJSON([]byte(text))
-	require.NoError(t, err)
-	text = `{"key0": 0.2E+8}`
-	_, err = parseJSON([]byte(text))
-	require.NoError(t, err)
-	text = `{"key0": 0.2E-3}`
-	_, err = parseJSON([]byte(text))
-	require.NoError(t, err)
-	text = `{"key0": 1.2E-6}`
-	_, err = parseJSON([]byte(text))
-	require.NoError(t, err)
+	require.Equal(t, "18446744073709551615", string(msg["key0"]))
 }
 
 func TestParseArrays(t *testing.T) {
@@ -206,6 +184,11 @@ func TestParseKeys(t *testing.T) {
 	text = `{"": "algo"}`
 	_, err = parseJSON([]byte(text))
 	require.NoError(t, err)
+	text = `{"\u0061": 1}`
+	parsed, err := parseJSON([]byte(text))
+	require.NoError(t, err)
+	require.Equal(t, "1", string(parsed["\u0061"]))
+	require.Equal(t, "1", string(parsed["a"]))
 	text = `{"key0": 1,"key0": 2}`
 	_, err = parseJSON([]byte(text))
 	require.Error(t, err)
@@ -308,32 +291,22 @@ func TestParseEscapeChar(t *testing.T) {
 
 func TestParseEscapedInvalidChar(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// unicode escape sequence remains in string
 	// accepted surrogate pair
 	text := `{"key0": "\uD801\udc37"}`
 	msg, err := parseJSON([]byte(text))
 	require.NoError(t, err)
-	require.NotContains(t, msg.(map[string]interface{})["key0"], "�")
-
-	// escaped invalid codepoints are replaced by uFFFD REPLACEMENT CHARACTER
+	require.Equal(t, "\"\\uD801\\udc37\"", string(msg["key0"]))
+	// escaped invalid codepoints
 	text = `{"key0": "\uD800\uD800n"}`
 	msg, err = parseJSON([]byte(text))
 	require.NoError(t, err)
-	require.Contains(t, msg.(map[string]interface{})["key0"], "�")
+	require.Equal(t, "\"\\uD800\\uD800n\"", string(msg["key0"]))
 
-	text = `{"key0": "\uDFAA"}`
+	text = `{"key0": "\uD800\uD800n"}`
 	msg, err = parseJSON([]byte(text))
 	require.NoError(t, err)
-	require.Contains(t, msg.(map[string]interface{})["key0"], "�")
-
-	text = `{"key0": "\uD888\u1234"}`
-	msg, err = parseJSON([]byte(text))
-	require.NoError(t, err)
-	require.Contains(t, msg.(map[string]interface{})["key0"], "�")
-
-	text = `{"key0": "\uDd1e\uD834"}`
-	msg, err = parseJSON([]byte(text))
-	require.NoError(t, err)
-	require.Contains(t, msg.(map[string]interface{})["key0"], "�")
+	require.Equal(t, "\"\\uD800\\uD800n\"", string(msg["key0"]))
 }
 
 func TestParseRawNonUnicodeChar(t *testing.T) {

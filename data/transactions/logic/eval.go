@@ -31,7 +31,6 @@ import (
 	"math/big"
 	"math/bits"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/sha3"
@@ -4062,7 +4061,8 @@ func opBase64Decode(cx *EvalContext) {
 	}
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
 }
-func hasDuplicateKeys(dec *json.Decoder) (bool, error) {
+func hasDuplicateKeys(jsonText []byte) (bool, error) {
+	dec := json.NewDecoder(bytes.NewReader(jsonText))
 	keys := make(map[string]bool)
 	var value interface{}
 	dec.Token() // {
@@ -4090,23 +4090,24 @@ func hasDuplicateKeys(dec *json.Decoder) (bool, error) {
 	return false, nil
 }
 
-func parseJSON(jsonText []byte) (interface{}, error) {
+func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 	if !json.Valid(jsonText) {
 		return nil, fmt.Errorf("invalid json text")
 	}
-	// check for duplicate keys
+	// decode text
 	decoder := json.NewDecoder(bytes.NewReader(jsonText))
-	hasDuplicates, err := hasDuplicateKeys(decoder)
+	var parsed map[string]json.RawMessage
+	err := decoder.Decode(&parsed)
+	if err != nil {
+		return nil, err
+	}
+	// check for duplicate keys
+	hasDuplicates, err := hasDuplicateKeys(jsonText)
 	if hasDuplicates {
 		return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
 	}
-	// decode text
-	decoder = json.NewDecoder(bytes.NewReader(jsonText))
-	decoder.UseNumber()
-	var parsed interface{}
-	err = decoder.Decode(&parsed)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid json text, %v", err)
 	}
 	return parsed, nil
 }
@@ -4118,7 +4119,7 @@ func opJSONRef(cx *EvalContext) {
 
 	//parse json text
 	last = len(cx.stack) - 1
-	resp, err := parseJSON(cx.stack[last].Bytes)
+	parsed, err := parseJSON(cx.stack[last].Bytes)
 	if err != nil {
 		cx.err = fmt.Errorf("error while parsing JSON text, %v", err)
 		return
@@ -4126,59 +4127,37 @@ func opJSONRef(cx *EvalContext) {
 
 	//get value from json
 	var stval stackValue
-	resp, ok := resp.(map[string]interface{})[key]
+	_, ok := parsed[key]
 	if !ok {
 		cx.err = fmt.Errorf("key %s not found in JSON text", key)
 		return
 	}
-	expectedType := jsonRefTypeNames[cx.program[cx.pc+1]]
+	expectedType := JSONRefType(cx.program[cx.pc+1])
 	switch expectedType {
-	case "JSONString":
-		val, ok := resp.(string)
-		if !ok {
-			cx.err = fmt.Errorf("got type %T but expected string", resp)
-			return
-		}
-		stval.Bytes = []byte(val)
-	case "JSONUint64":
-		val, ok := resp.(json.Number)
-		if !ok {
-			cx.err = fmt.Errorf("got type %T but expected uint64", resp)
-			return
-		}
-		// val is not a float
-		if strings.Contains(val.String(), ".") {
-			cx.err = fmt.Errorf("got type float64 but expected uint64")
-			return
-		}
-		// val is not negative
-		if val.String()[0] == '-' {
-			cx.err = fmt.Errorf("JSON value should be a uint64")
-			return
-		}
-		// val > max uint64
-		maxVal := strconv.FormatUint(math.MaxUint64, 10)
-		if val.String() > maxVal {
-			cx.err = fmt.Errorf("JSON value range within uint64 range")
-			return
-		}
-		// convert to uint64
-		var bigInt big.Int
-		bigInt.UnmarshalText([]byte(val.String()))
-		stval.Uint = bigInt.Uint64()
-	case "JSONObject":
-		_, ok := resp.(map[string]interface{})
-		if !ok {
-			cx.err = fmt.Errorf("got type %T but expected JSON object", resp)
-			return
-		}
-		var rawJSONText map[string]json.RawMessage
-		err = json.Unmarshal(cx.stack[last].Bytes, &rawJSONText)
+	case JSONString:
+		var value string // change to uint64 for JSONUint64
+		err := json.Unmarshal(parsed[key], &value)
 		if err != nil {
-			cx.err = fmt.Errorf("error while returning JSON object, %v", err)
+			cx.err = fmt.Errorf("%v", err)
 			return
 		}
-		stval.Bytes = rawJSONText[key]
+		stval.Bytes = []byte(value)
+	case JSONUint64:
+		var value uint64
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = fmt.Errorf("%v", err)
+			return
+		}
+		stval.Uint = value
+	case JSONObject:
+		var value map[string]interface{}
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = fmt.Errorf("%v", err)
+			return
+		}
+		stval.Bytes = parsed[key]
 	default:
 		cx.err = fmt.Errorf("unsupported json_ref return type, should not have reached here")
 		return

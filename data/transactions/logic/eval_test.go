@@ -17,11 +17,9 @@
 package logic
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -5134,8 +5132,7 @@ func TestHasDuplicateKeys(t *testing.T) {
 		},
 	}
 	for _, s := range testCases {
-		decoder := json.NewDecoder(bytes.NewReader(s.text))
-		hasDuplicates, err := hasDuplicateKeys(decoder)
+		hasDuplicates, err := hasDuplicateKeys(s.text)
 		require.Nil(t, err)
 		require.True(t, hasDuplicates)
 	}
@@ -5151,8 +5148,7 @@ func TestHasDuplicateKeys(t *testing.T) {
 		},
 	}
 	for _, s := range noDuplicates {
-		decoder := json.NewDecoder(bytes.NewReader(s.text))
-		hasDuplicates, err := hasDuplicateKeys(decoder)
+		hasDuplicates, err := hasDuplicateKeys(s.text)
 		require.Nil(t, err)
 		require.False(t, hasDuplicates)
 	}
@@ -5260,12 +5256,26 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 		},
 		{
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientD/u0061taJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "response"; 
+			json_ref JSONObject; 
+			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientD/u0061taJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
+			==`,
+		},
+		{
 			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
 			byte "response"; 
 			json_ref JSONObject; 
 			byte "clientDataJSON"; 
 			json_ref JSONString; 
 			byte " based64url_encoded_client_data"; 
+			==`,
+		},
+		{
+			source: `byte  "{\"\\u0072\\u0061\\u0077\\u0049\\u0044\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "rawID"; 
+			json_ref JSONString; 
+			byte "responseId"
 			==`,
 		},
 	}
@@ -5287,39 +5297,39 @@ func TestOpJSONRef(t *testing.T) {
 	}{
 		{
 			source: `byte  "{\"key0\": 1 }"; byte "key0"; json_ref JSONString;`,
-			error:  "got type json.Number but expected string",
+			error:  "json: cannot unmarshal number into Go value of type string",
 		},
 		{
 			source: `byte  "{\"key0\": [1] }"; byte "key0"; json_ref JSONString;`,
-			error:  "got type []interface {} but expected string",
+			error:  "json: cannot unmarshal array into Go value of type string",
 		},
 		{
 			source: `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONString;`,
-			error:  "got type map[string]interface {} but expected string",
+			error:  "json: cannot unmarshal object into Go value of type string",
 		},
 		{
 			source: `byte  "{\"key0\": \"1\" }"; byte "key0"; json_ref JSONUint64;`,
-			error:  "got type string but expected uint64",
+			error:  "json: cannot unmarshal string into Go value of type uint64",
 		},
 		{
 			source: `byte  "{\"key0\": [\"1\"] }"; byte "key0"; json_ref JSONUint64;`,
-			error:  "got type []interface {} but expected uint64",
+			error:  "json: cannot unmarshal array into Go value of type uint64",
 		},
 		{
 			source: `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONUint64;`,
-			error:  "got type map[string]interface {} but expected uint64",
+			error:  "json: cannot unmarshal object into Go value of type uint64",
 		},
 		{
 			source: `byte  "{\"key0\": [1]}"; byte "key0"; json_ref JSONObject;`,
-			error:  "got type []interface {} but expected JSON object",
+			error:  "json: cannot unmarshal array into Go value of type map[string]interface {}",
 		},
 		{
 			source: `byte  "{\"key0\": 1}"; byte "key0"; json_ref JSONObject;`,
-			error:  "got type json.Number but expected JSON object",
+			error:  "json: cannot unmarshal number into Go value of type map[string]interface {}",
 		},
 		{
 			source: `byte  "{\"key0\": \"1\"}"; byte "key0"; json_ref JSONObject;`,
-			error:  "got type string but expected JSON object",
+			error:  "json: cannot unmarshal string into Go value of type map[string]interface {}",
 		},
 		{
 			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key3"; json_ref JSONString;`,
@@ -5335,20 +5345,32 @@ func TestOpJSONRef(t *testing.T) {
 			error: "key key5 not found in JSON text",
 		},
 		{
+			source: `byte  "{\"key0\": -0,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number -0 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1e10,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number 1e10 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 0.2e-2,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number 0.2e-2 into Go value of type uint64",
+		},
+		{
 			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
-			error:  "got type float64 but expected uint64",
+			error:  "json: cannot unmarshal number 1.0 into Go value of type uint64",
 		},
 		{
 			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key1"; json_ref JSONUint64;`,
-			error:  "got type float64 but expected uint64",
+			error:  "json: cannot unmarshal number 2.5 into Go value of type uint64",
 		},
 		{
 			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key2"; json_ref JSONUint64;`,
-			error:  "JSON value should be a uint64",
+			error:  "json: cannot unmarshal number -3 into Go value of type uint64",
 		},
 		{
 			source: `byte  "{\"key0\": 18446744073709551616}"; byte "key0"; json_ref JSONUint64;`,
-			error:  "JSON value range within uint64 range",
+			error:  "json: cannot unmarshal number 18446744073709551616 into Go value of type uint64",
 		},
 		{
 			source: `byte  "{\"key0\": 1,}"; byte "key0"; json_ref JSONString;`,
