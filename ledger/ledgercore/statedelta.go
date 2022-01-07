@@ -729,9 +729,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		for aidx, params := range prev.AppParams {
 			result.AppParams[aidx] = params
 		}
-		// if result.AppParams == nil {
-		// 	result.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		// }
 		for aapp, idx := range ad.appParamsCache {
 			if aapp.Address == addr {
 				if idx >= len(ad.appParams) {
@@ -756,10 +753,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		for aidx, state := range prev.AppLocalStates {
 			result.AppLocalStates[aidx] = state
 		}
-		// if result.AppLocalStates == nil {
-		// 	result.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-		// }
-
 		for aapp, idx := range ad.appLocalStatesCache {
 			if aapp.Address == addr {
 				if idx >= len(ad.appLocalStates) {
@@ -784,9 +777,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		for aidx, params := range prev.AssetParams {
 			result.AssetParams[aidx] = params
 		}
-		// if result.AssetParams == nil {
-		// 	result.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-		// }
 		for aapp, idx := range ad.assetParamsCache {
 			if aapp.Address == addr {
 				if idx >= len(ad.assetParams) {
@@ -810,9 +800,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		for aidx, params := range prev.Assets {
 			result.Assets[aidx] = params
 		}
-		// if result.Assets == nil {
-		// 	result.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-		// }
 		for aapp, idx := range ad.assetHoldingsCache {
 			if aapp.Address == addr {
 				if idx >= len(ad.assetHoldings) {

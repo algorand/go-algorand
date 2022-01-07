@@ -2156,6 +2156,8 @@ func TestConsecutiveVersion(t *testing.T) {
 }
 
 func TestAcctUpdatesLookupLatest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	accts := ledgertesting.RandomAccounts(10, false)
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
 	defer ml.Close()
