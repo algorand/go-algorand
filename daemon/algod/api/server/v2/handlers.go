@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -73,6 +73,7 @@ type NodeInterface interface {
 	ListParticipationKeys() ([]account.ParticipationRecord, error)
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
+	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -140,7 +141,6 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 // AddParticipationKey Add a participation key to the node
 // (POST /v2/participation)
 func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
-
 	buf := new(bytes.Buffer)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
@@ -210,6 +210,33 @@ func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID st
 	response := convertParticipationRecord(participationRecord)
 
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// AppendKeys Append state proof keys to a participation key
+// (POST /v2/participation/{participation-id})
+func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
+	decodedParticipationID, err := account.ParseParticipationID(participationID)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	var keys account.StateProofKeys
+	dec := protocol.NewDecoder(ctx.Request().Body)
+	err = dec.Decode(&keys)
+	if err != nil {
+		err = fmt.Errorf("unable to parse keys from body: %w", err)
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	if len(keys) == 0 {
+		err = errors.New("empty request, please attach keys to request body")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	err = v2.Node.AppendParticipationKeys(decodedParticipationID, keys)
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+	return nil
 }
 
 // ShutdownNode shuts down the node.

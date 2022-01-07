@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -225,5 +225,10 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	close(filling)
 	hook.Close()
 
-	require.Equal(t, maxDepth, len(testHook.entries()))
+	hookEntries := len(testHook.entries())
+	require.GreaterOrEqual(t, hookEntries, maxDepth)
+	// the anonymous goroutine in createAsyncHookLevels might pull an entry off the pending list before
+	// writing it off to the underlying hook. when that happens, the total number of sent entries could
+	// be one higher then the maxDepth.
+	require.LessOrEqual(t, hookEntries, maxDepth+1)
 }

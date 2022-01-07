@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -99,6 +99,8 @@ var defaultLocal = Local{
 	PublicAddress:                              "",
 	ReconnectTime:                              60000000000,
 	ReservedFDs:                                256,
+	RestConnectionsHardLimit:                   2048,
+	RestConnectionsSoftLimit:                   1024,
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
