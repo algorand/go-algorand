@@ -482,10 +482,6 @@ var globalFieldDocs = map[string]string{
 	"CallerApplicationAddress":  "The application address of the application that called this application. ZeroAddress if this application is at the top-level.",
 }
 
-type extractor interface {
-	getExtraFor(string) string
-}
-
 func addExtra(original string, extra string) string {
 	if len(original) == 0 {
 		return extra
@@ -498,15 +494,6 @@ func addExtra(original string, extra string) string {
 		sep = " "
 	}
 	return original + sep + extra
-}
-
-func fieldsDocWithExtra(source map[string]string, ex extractor) map[string]string {
-	result := make(map[string]string, len(source))
-	for name, doc := range source {
-		extra := ex.getExtraFor(name)
-		result[name] = addExtra(doc, extra)
-	}
-	return result
 }
 
 // AssetHoldingFieldDocs are notes on fields available in `asset_holding_get`

@@ -17,8 +17,6 @@
 package logic
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -557,49 +555,24 @@ var base64EncodingSpecByName base64EncodingSpecMap
 
 type base64EncodingSpecMap map[string]base64EncodingSpec
 
+func (fs *base64EncodingSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *base64EncodingSpec) OpVersion() uint64 {
+	return 6
+}
+
+func (fs *base64EncodingSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *base64EncodingSpec) Note() string {
+	note := "" // no doc list?
+	return note
+}
 func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
 	// Uses 6 here because base64_decode fields were introduced in 6
-	if s[name].version > 6 {
-		extra = fmt.Sprintf("Introduced v%d.", s[name].version)
-	}
-	return
-}
-
-// Base64Encoding is an enum for the `base64decode` opcode
-type Base64Encoding int
-
-const (
-	// URLEncoding represents the base64url encoding defined in https://www.rfc-editor.org/rfc/rfc4648.html
-	URLEncoding Base64Encoding = iota
-	// StdEncoding represents the standard encoding of the RFC
-	StdEncoding
-	invalidBase64Alphabet
-)
-
-// After running `go generate` these strings will be available:
-var base64EncodingNames [2]string = [...]string{URLEncoding.String(), StdEncoding.String()}
-
-type base64EncodingSpec struct {
-	field   Base64Encoding
-	ftype   StackType
-	version uint64
-}
-
-var base64EncodingSpecs = []base64EncodingSpec{
-	{URLEncoding, StackBytes, 6},
-	{StdEncoding, StackBytes, 6},
-}
-
-var base64EncodingSpecByField map[Base64Encoding]base64EncodingSpec
-var base64EncodingSpecByName base64EncodingSpecMap
-
-type base64EncodingSpecMap map[string]base64EncodingSpec
-
-func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 6 here because base64_decode fields were introduced in 6
-	if s[name].version > 6 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
 	return
 }
 
