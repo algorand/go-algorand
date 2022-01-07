@@ -66,7 +66,7 @@ else
     exit 1
 fi
 
-# case 2: asset created with no manager, no freezer, and no clawback
+# case 2: asset created with no manager, no reserve, no freezer, and no clawback
 ${gcmd} asset create --creator "${ACCOUNT}" --no-manager --no-reserve --no-freezer --no-clawback --name "${ASSET_NAME}" --unitname iamisc --total 1000000000000 --asseturl "${ASSET_URL}"
 
 IMMUTABLE_ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname iamisc|grep 'Asset ID'|awk '{ print $3 }')
