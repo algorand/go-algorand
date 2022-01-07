@@ -152,8 +152,7 @@ type ConsensusParams struct {
 	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
 
-	FastRecoveryLambda    time.Duration // time between fast recovery attempts
-	FastPartitionRecovery bool          // set when fast partition recovery is enabled
+	FastRecoveryLambda time.Duration // time between fast recovery attempts
 
 	// how to commit to the payset: flat or merkle tree
 	PaysetCommit PaysetCommitType
@@ -708,7 +707,6 @@ func initConsensusProtocols() {
 
 	// v10 introduces fast partition recovery (and also raises NumProposers).
 	v10 := v9
-	v10.FastPartitionRecovery = true
 	v10.NumProposers = 20
 	v10.LateCommitteeSize = 500
 	v10.LateCommitteeThreshold = 320
