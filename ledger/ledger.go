@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"os"
 	"time"
 
@@ -138,7 +137,7 @@ func OpenLedger(
 	l.blockDBs.Rdb.SetLogger(log)
 	l.blockDBs.Wdb.SetLogger(log)
 
-	if cfg.SqliteReadConcurrency > math.MaxInt {
+	if cfg.SqliteReadConcurrency > uint64((^uint(0)) >> 1) {
 		return nil, fmt.Errorf(
 			"OpenLedger() cfg.SqliteReadConcurrency: %d is larger than max int",
 			cfg.SqliteReadConcurrency)
