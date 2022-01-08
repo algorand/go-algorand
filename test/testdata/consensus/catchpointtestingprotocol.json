@@ -36,7 +36,6 @@
     "AgreementFilterTimeout": 1000000000,
     "AgreementFilterTimeoutPeriod0": 1000000000,
     "FastRecoveryLambda": 300000000000,
-    "FastPartitionRecovery": true,
     "PaysetCommit": 1,
     "MaxTimestampIncrement": 25,
     "SupportSignedTxnInBlock": true,
