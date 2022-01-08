@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -98,8 +99,7 @@ type Ledger struct {
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
 func OpenLedger(
-	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
-) (*Ledger, error) {
+	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local) (*Ledger, error) {
 	var err error
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
 	if verifiedCacheSize < cfg.TxPoolSize {
@@ -132,10 +132,21 @@ func OpenLedger(
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
+
 	l.trackerDBs.Rdb.SetLogger(log)
 	l.trackerDBs.Wdb.SetLogger(log)
 	l.blockDBs.Rdb.SetLogger(log)
 	l.blockDBs.Wdb.SetLogger(log)
+
+	if cfg.SqliteReadConcurrency > math.MaxInt {
+		return nil, fmt.Errorf(
+			"OpenLedger() cfg.SqliteReadConcurrency: %d is larger than max int",
+			cfg.SqliteReadConcurrency)
+	}
+	l.trackerDBs.Rdb.Handle.SetMaxOpenConns(int(cfg.SqliteReadConcurrency))
+	l.trackerDBs.Wdb.Handle.SetMaxOpenConns(1)
+	l.blockDBs.Rdb.Handle.SetMaxOpenConns(int(cfg.SqliteReadConcurrency))
+	l.blockDBs.Wdb.Handle.SetMaxOpenConns(1)
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 

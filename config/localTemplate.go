@@ -430,6 +430,9 @@ type Local struct {
 	// The http server does not accept new connections as long we have this many
 	// (hard limit) connections already.
 	RestConnectionsHardLimit uint64 `version[20]:"2048"`
+
+	// How many times tracker and block sqlite dbs can be open for reading simultaneously.
+	SqliteReadConcurrency uint64 `version[20]:"128"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

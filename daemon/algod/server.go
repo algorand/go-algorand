@@ -103,13 +103,20 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	// Set large enough soft file descriptors limit.
 	var ot basics.OverflowTracker
-	fdRequired := ot.Add(
-		cfg.ReservedFDs,
-		ot.Add(uint64(cfg.IncomingConnectionsLimit), cfg.RestConnectionsHardLimit))
+	fdRequired :=
+		ot.Add(cfg.ReservedFDs, uint64(cfg.IncomingConnectionsLimit))
+	fdRequired = ot.Add(fdRequired, cfg.RestConnectionsHardLimit)
+	{
+		// Each of block and tracker dbs requires 3 file descriptors: .sqlite,
+		// .sqlite-shm and .sqlite-wal.
+		sqliteFds := ot.Mul(cfg.SqliteReadConcurrency, 6)
+		fdRequired = ot.Add(fdRequired, sqliteFds)
+	}
 	if ot.Overflowed {
 		return errors.New(
-			"Initialize() overflowed when adding up ReservedFDs, IncomingConnectionsLimit " +
-				"RestConnectionsHardLimit; decrease them")
+			"Initialize() overflowed when calculating ReservedFDs " +
+				"IncomingConnectionsLimit + RestConnectionsHardLimit + " +
+				"SqliteReadConcurrency*6; decrease them")
 	}
 	err = util.SetFdSoftLimit(fdRequired)
 	if err != nil {
