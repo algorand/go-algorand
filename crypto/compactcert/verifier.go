@@ -58,6 +58,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		sigs[pos] = sig
 		parts[pos] = r.Part
 
+		// verify that the msg and the signature is valid under the given participant's Pk
 		err = r.Part.PK.Verify(
 			uint64(v.SigRound),
 			v.Msg,
@@ -68,10 +69,12 @@ func (v *Verifier) Verify(c *Cert) error {
 		}
 	}
 
+	// verify all the reveals proofs on the signature tree.
 	if err := merklearray.Verify(crypto.GenericDigest(c.SigCommit[:]), sigs, &c.SigProofs); err != nil {
 		return err
 	}
 
+	// verify all the reveals proofs on the participant tree.
 	if err := merklearray.Verify(crypto.GenericDigest(v.partcom[:]), parts, &c.PartProofs); err != nil {
 		return err
 	}

@@ -41,6 +41,24 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 	a.NoError(err)
 }
 
+func TestSignAndVerifyFalconHashable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	msg := TestingHashable{data: []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")}
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	byteSig, err := key.Sign(msg)
+	a.NoError(err)
+
+	verifier := key.GetVerifyingKey()
+	err = verifier.GetVerifier().Verify(msg, byteSig)
+	a.NoError(err)
+}
+
 func TestFalconCanHandleNilSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

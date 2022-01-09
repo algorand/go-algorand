@@ -26,8 +26,12 @@ import (
 
 type (
 
-	// Signature is a byte signature on a crypto.Hashable object,
-	// crypto.GenericVerifyingKey and includes a merkle proof for the key.
+	// Signature represents a signature in the merkle signature scheme using an underlying crypto scheme.
+	// It consists of an ephemeral public key, a signature, a merkle verification path and an index.
+	// The merkle signature considered valid only if the ByteSignature is verified under the ephemeral public key and this key
+	// can be proven to be part of the tree which the verifier has a root of. the index is used to identify
+	// the correct leaf's index.
+	// More details can be found on Algorand's spec
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
@@ -191,6 +195,8 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 		Round:        round,
 	}
 
+	// verify the merkle tree verification path using the ephemeral public key, the
+	// verification path and the index.
 	err := merklearray.Verify(
 		v[:],
 		map[uint64]crypto.Hashable{sig.MerkleArrayIndex: &ephkey},
@@ -200,6 +206,7 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 		return err
 	}
 
+	// verify that the signature is valid under the ephemeral public key
 	return sig.VerifyingKey.GetVerifier().Verify(msg, sig.ByteSignature)
 }
 

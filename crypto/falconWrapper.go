@@ -29,10 +29,10 @@ const (
 )
 
 type (
-	// FPublicKey is a wrapper for cfalcon.PublicKeySizey (used for packing)
-	FPublicKey [cfalcon.PublicKeySize]byte
-	// FSecretKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
-	FSecretKey [cfalcon.PrivateKeySize]byte
+	// FalconPublicKey is a wrapper for cfalcon.PublicKeySizey (used for packing)
+	FalconPublicKey [cfalcon.PublicKeySize]byte
+	// FalconPrivateKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
+	FalconPrivateKey [cfalcon.PrivateKeySize]byte
 	// FalconSeed represents the seed which is being used to generate Falcon keys
 	FalconSeed [FalconSeedSize]byte
 )
@@ -41,16 +41,16 @@ type (
 type FalconSigner struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PublicKey FPublicKey `codec:"pk"`
-	SecretKey FSecretKey `codec:"sk"`
+	PublicKey  FalconPublicKey  `codec:"pk"`
+	PrivateKey FalconPrivateKey `codec:"sk"`
 }
 
 // GenerateFalconSigner Generates a Falcon Signer.
 func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
 	pk, sk, err := cfalcon.GenerateKey(seed[:])
 	return FalconSigner{
-		PublicKey: FPublicKey(pk),
-		SecretKey: FSecretKey(sk),
+		PublicKey:  FalconPublicKey(pk),
+		PrivateKey: FalconPrivateKey(sk),
 	}, err
 }
 
@@ -62,7 +62,7 @@ func (d *FalconSigner) Sign(message Hashable) (ByteSignature, error) {
 
 // SignBytes receives bytes and signs over them.
 func (d *FalconSigner) SignBytes(data []byte) (ByteSignature, error) {
-	signedData, err := (*cfalcon.PrivateKey)(&d.SecretKey).SignCompressed(data)
+	signedData, err := (*cfalcon.PrivateKey)(&d.PrivateKey).SignCompressed(data)
 	return ByteSignature(signedData), err
 }
 
@@ -78,7 +78,7 @@ func (d *FalconSigner) GetVerifyingKey() *GenericVerifyingKey {
 type FalconVerifier struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PublicKey FPublicKey `codec:"k"`
+	PublicKey FalconPublicKey `codec:"k"`
 }
 
 // Verify follows falcon algorithm to verify a signature.
