@@ -5036,6 +5036,12 @@ By Herman Melville`,
 	{"SQ=", true, false, "", base64.CorruptInputError(3)},
 	{"SQ===", false, false, "", base64.CorruptInputError(4)},
 	{"SQ===", true, false, "", base64.CorruptInputError(4)},
+
+	// Allow only strict (and therefore unique up to CR and LF) encodings
+	{"AA==", false, false, "\x00", nil},
+	{"AA==", true, false, "\x00", nil},
+	{"AB==", false, false, "", base64.CorruptInputError(2)},
+	{"AB==", true, false, "", base64.CorruptInputError(2)},
 }
 
 func TestBase64DecodeFunc(t *testing.T) {
