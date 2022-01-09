@@ -40,6 +40,9 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// TODO: change to ConsensusCurrentVersion when updated
+var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+
 func getRegistry(t *testing.T) *participationDB {
 	rootDB, err := db.OpenPair(t.Name(), true)
 	require.NoError(t, err)
@@ -805,9 +808,8 @@ func TestAddingSecretTwice(t *testing.T) {
 
 	// Append key
 	keys := make(map[uint64]StateProofKey)
-	// TODO: change to ConsensusCurrentVersion when updated
-	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-	keys[0] = StateProofKey(*p.StateProofSecrets.GetKey(interval))
+
+	keys[0] = StateProofKey(*p.StateProofSecrets.GetKey(CompactCertRounds))
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
@@ -840,7 +842,31 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	id, err := registry.Insert(p.Participation)
 	a.NoError(err)
 
+	a.NoError(registry.Flush(defaultTimeout))
+
 	partPerRound, err := registry.GetForRound(id, 1)
 	a.NoError(err)
 	a.Nil(partPerRound.StateProofSecrets)
+
+	// Should return nil as well since no state proof keys were added
+	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds))
+	a.NoError(err)
+	a.Nil(partPerRound.StateProofSecrets)
+
+	// Append key
+	keys := make(map[uint64]StateProofKey)
+	keys[CompactCertRounds] = StateProofKey(*p.StateProofSecrets.GetKey(CompactCertRounds))
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds)-1)
+	a.NoError(err)
+	a.Nil(partPerRound.StateProofSecrets)
+
+	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds))
+	a.NoError(err)
+	a.NotNil(partPerRound.StateProofSecrets)
+	a.Equal(keys[CompactCertRounds], StateProofKey(*partPerRound.StateProofSecrets.SigningKey))
 }
