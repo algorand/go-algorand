@@ -329,7 +329,7 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 
 	if ot.Overflowed {
 		logging.Base().Errorf("could not compute next reward level (current level %v, adding %v MicroAlgos in total, number of reward units %v) using old level",
-			res.RewardsLevel, res.RewardsRate, totalRewardUnits)
+			s.RewardsLevel, rewardsRate, totalRewardUnits)
 		return
 	}
 
