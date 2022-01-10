@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package abi
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -478,6 +479,16 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 	return values, nil
 }
 
+// maxAppArgs is the maximum number of arguments for an application call transaction, in compliance
+// with ARC-4. Currently this is the same as the MaxAppArgs consensus parameter, but the
+// difference is that the consensus parameter is liable to change in a future consensus upgrade.
+// However, the ARC-4 ABI argument encoding **MUST** always remain the same.
+const maxAppArgs = 16
+
+// The tuple threshold is maxAppArgs, minus 1 for the method selector in the first app arg,
+// minus 1 for the final app argument becoming a tuple of the remaining method args
+const methodArgsTupleThreshold = maxAppArgs - 2
+
 // ParseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
 // it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
 // if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
@@ -495,16 +506,32 @@ func ParseArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationAr
 		return fmt.Errorf("input argument number %d != method argument number %d", len(jsonArgs), len(abiTypes))
 	}
 
-	// change the input args to be 1 - 14 + 15 (compacting everything together)
-	if len(jsonArgs) > 14 {
-		compactedType, err := MakeTupleType(abiTypes[14:])
+	// Up to 16 app arguments can be passed to app call. First is reserved for method selector,
+	// and the rest are for method call arguments. But if more than 15 method call arguments
+	// are present, then the method arguments after the 14th are placed in a tuple in the last
+	// app argument slot
+	if len(abiTypes) > maxAppArgs-1 {
+		typesForTuple := make([]Type, len(abiTypes)-methodArgsTupleThreshold)
+		copy(typesForTuple, abiTypes[methodArgsTupleThreshold:])
+
+		compactedType, err := MakeTupleType(typesForTuple)
 		if err != nil {
 			return err
 		}
-		abiTypes = append(abiTypes[:14], compactedType)
 
-		remainingJSON := "[" + strings.Join(jsonArgs[14:], ",") + "]"
-		jsonArgs = append(jsonArgs[:14], remainingJSON)
+		abiTypes = append(abiTypes[:methodArgsTupleThreshold], compactedType)
+
+		tupleValues := make([]json.RawMessage, len(jsonArgs)-methodArgsTupleThreshold)
+		for i, jsonArg := range jsonArgs[methodArgsTupleThreshold:] {
+			tupleValues[i] = []byte(jsonArg)
+		}
+
+		remainingJSON, err := json.Marshal(tupleValues)
+		if err != nil {
+			return err
+		}
+
+		jsonArgs = append(jsonArgs[:methodArgsTupleThreshold], string(remainingJSON))
 	}
 
 	// parse JSON value to ABI encoded bytes
@@ -523,7 +550,7 @@ func ParseArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationAr
 }
 
 // ParseMethodSignature parses a method of format `method(argType1,argType2,...)retType`
-// into `method` {`argType1`,`argType2`,..} and `retType`
+// into `method` {`argType1`,`argType2`,...} and `retType`
 func ParseMethodSignature(methodSig string) (name string, argTypes []string, returnType string, err error) {
 	argsStart := strings.Index(methodSig, "(")
 	if argsStart == -1 {
