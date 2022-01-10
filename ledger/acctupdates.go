@@ -915,19 +915,20 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	var foundResources map[basics.CreatableIndex]basics.Round
 	var resourceCount uint64
 
-	addResource := func(cidx basics.CreatableIndex, round basics.Round, res ledgercore.AccountResource) {
+	addResource := func(cidx basics.CreatableIndex, round basics.Round, res ledgercore.AccountResource) error {
 		foundRound, ok := foundResources[cidx]
 		if !ok { // first time seeing this cidx
 			resourceCount++
 			foundResources[cidx] = round
 			res.AssignAccountData(&data)
-			return
+			return nil
 		}
-		// is this newer than current "found" rnd for this resource? (XXX is this not possible?)
+		// is this newer than current "found" rnd for this resource?
 		if round > foundRound {
-			panic("logic error in lookupAllResources") // remove after testing
+			return fmt.Errorf("error in lookupAllResources, round %v > foundRound %v: %w", round, foundRound, ErrLookupLatestResources)
 		}
 		// otherwise older than current "found" rnd: ignore, since it's older than what we have
+		return nil
 	}
 
 	// possibly avoid a trip to the DB for more resources, if we can use totals info
@@ -969,12 +970,14 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
-		// offset should now be len(au.deltas)
-		// XXX set offset := len(au.deltas) explicitly?
 		rnd = au.latest()
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return
+		}
+		// offset should now be len(au.deltas)
+		if offset != uint64(len(au.deltas)) {
+			return basics.AccountData{}, basics.Round(0), fmt.Errorf("offset != len(au.deltas): %w", ErrLookupLatestResources)
 		}
 		ad = ledgercore.AccountData{}
 		foundResources = make(map[basics.CreatableIndex]basics.Round)
@@ -1016,7 +1019,9 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 
 		// check for resources modified in the past rounds, in the deltas
 		for _, mr := range au.resources.getForAddress(addr) {
-			addResource(mr.resource.CreatableIndex, rnd, mr.resource)
+			if err := addResource(mr.resource.CreatableIndex, rnd, mr.resource); err != nil {
+				return basics.AccountData{}, basics.Round(0), err
+			}
 		}
 
 		if checkDone() {
@@ -1029,7 +1034,9 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// we don't technically need this, since it's already in the baseResources, however, writing this over
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
-				addResource(prd.aidx, rnd, prd.AccountResource())
+				if err := addResource(prd.aidx, rnd, prd.AccountResource()); err != nil {
+					return basics.AccountData{}, basics.Round(0), err
+				}
 			}
 		}
 		au.accountsMu.RUnlock()
@@ -1081,7 +1088,9 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
 				au.baseResources.writePending(pd, addr)
-				addResource(pd.aidx, currentDbRound, pd.AccountResource())
+				if err := addResource(pd.aidx, currentDbRound, pd.AccountResource()); err != nil {
+					return basics.AccountData{}, basics.Round(0), err
+				}
 			}
 			// We've found all the resources we could find for this address.
 			return
