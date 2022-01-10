@@ -481,7 +481,7 @@ commands:
         - run:
             name: Upload Binaries << parameters.platform >>
             command: |
-              if [ "${CIRCLE_BRANCH}" = "circleci/1809" ]
+              if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
               then
                 export NO_BUILD="true"
               fi
