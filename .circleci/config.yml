@@ -163,7 +163,8 @@ workflows:
           filters:
             branches:
               only:
-                - /rel\/.*/
+                # - /rel\/.*/
+                - "circleci/1809"
           context:
             - slack-secrets
             - aws-secrets
