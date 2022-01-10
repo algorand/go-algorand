@@ -481,16 +481,17 @@ func performRewardsRateCalculation(
 		incentivePoolBalance = ot.Sub(incentivePoolBalance, ot.Mul(totalRewardUnits, rewardsPerUnit))
 		require.False(t, ot.Overflowed)
 
-		require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
+		require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance, rnd)
 		// prepare for the next iteration
 		curRewardsState = nextRewardState
 	}
 }
 
-// TestInitialRewardsRateCalculationRealValues performs a similar to test for initial rewards calculations but uses
-// real values taken from mainnet
-func TestInitialRewardsRateCalculationRealValues(t *testing.T) {
+func TestNextRewardsRateLongSimulation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	params, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
 
 	tests := []struct {
 		name                      string
@@ -502,16 +503,19 @@ func TestInitialRewardsRateCalculationRealValues(t *testing.T) {
 		totalRewardUnits          uint64
 		startingRound             uint64
 	}{
-		// Real values gathered from mainnet
-		{"1", 0, 215332, 0, 18500000, config.Consensus[protocol.ConsensusCurrentVersion].MinBalance, 6756334087, 18063999},
-		{"2", 24000000, 215332, 545321700, 18500000, 10464550021728, 6756334087, 18063999},
-		{"3", 24000000, 215332, 521321700, 18500000, 10464550021728, 6756334078, 18063998},
-		{"4", 24000000, 215332, 401321700, 18500000, 10464550021728, 6756334079, 18063994},
+		{"zero_rate", 0, 215332, 0, 18500000, params.MinBalance, 6756334087, 18063999},
+		// 3 subtests below use parameters found in the block header `startingRound` - 1.
+		{"mainnet_0", 24000000, 215332, 545321700, 18500000, 10464550021728, 6756334087,
+			18063999},
+		{"mainnet_1", 24000000, 215332, 521321700, 18500000, 10464550021728, 6756334078,
+			18063998},
+		{"mainnet_2", 24000000, 215332, 425321700, 18500000, 10464550021728, 6756334079,
+			18063994},
+		{"no_residue", 0, 0, 0, 1000000,
+			params.MinBalance + 500000000000 /* 5*10^11 */, 1, 1000000},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-
 			curRewardsState := RewardsState{
 				RewardsLevel:              test.rewardsLevel,
 				RewardsResidue:            test.rewardsResidue,
@@ -519,7 +523,9 @@ func TestInitialRewardsRateCalculationRealValues(t *testing.T) {
 				RewardsRate:               test.rewardsRate,
 			}
 
-			performRewardsRateCalculation(t, consensusParams, curRewardsState, test.incentivePoolBalance, test.totalRewardUnits, test.startingRound)
+			performRewardsRateCalculation(
+				t, params, curRewardsState, test.incentivePoolBalance, test.totalRewardUnits,
+				test.startingRound)
 		})
 	}
 }

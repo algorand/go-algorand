@@ -318,13 +318,13 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	}
 
 	var ot basics.OverflowTracker
-	rewardsWithResidue := ot.Add(s.RewardsRate, s.RewardsResidue)
-	nextRewardLevel := ot.Add(s.RewardsLevel, rewardsWithResidue/totalRewardUnits)
+	rewardsWithResidue := ot.Add(res.RewardsRate, res.RewardsResidue)
+	nextRewardLevel := ot.Add(res.RewardsLevel, rewardsWithResidue/totalRewardUnits)
 	nextResidue := rewardsWithResidue % totalRewardUnits
 
 	if ot.Overflowed {
 		logging.Base().Errorf("could not compute next reward level (current level %v, adding %v MicroAlgos in total, number of reward units %v) using old level",
-			s.RewardsLevel, s.RewardsRate, totalRewardUnits)
+			res.RewardsLevel, res.RewardsRate, totalRewardUnits)
 		return
 	}
 
