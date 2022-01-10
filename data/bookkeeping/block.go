@@ -317,9 +317,14 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 		return
 	}
 
+	rewardsRate := s.RewardsRate
+	if nextProto.RewardsCalculationFix {
+		rewardsRate = res.RewardsRate
+	}
+
 	var ot basics.OverflowTracker
-	rewardsWithResidue := ot.Add(res.RewardsRate, res.RewardsResidue)
-	nextRewardLevel := ot.Add(res.RewardsLevel, rewardsWithResidue/totalRewardUnits)
+	rewardsWithResidue := ot.Add(rewardsRate, s.RewardsResidue)
+	nextRewardLevel := ot.Add(s.RewardsLevel, rewardsWithResidue/totalRewardUnits)
 	nextResidue := rewardsWithResidue % totalRewardUnits
 
 	if ot.Overflowed {

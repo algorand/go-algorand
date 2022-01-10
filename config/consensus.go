@@ -394,6 +394,9 @@ type ConsensusParams struct {
 	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
+
+	// When rewards rate changes, use the new value immediately.
+	RewardsCalculationFix bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1053,6 +1056,8 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 6
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	vFuture.RewardsCalculationFix = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

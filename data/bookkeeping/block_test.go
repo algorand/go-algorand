@@ -412,6 +412,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.RewardsCalculationFix = false
 
 	runTest := func() bool {
 		incentivePoolBalance := uint64(125000000000000)
@@ -487,11 +488,12 @@ func performRewardsRateCalculation(
 	}
 }
 
-func TestNextRewardsRateLongSimulation(t *testing.T) {
+func TestNextRewardsRateWithFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	params, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
+	params.RewardsCalculationFix = true
 
 	tests := []struct {
 		name                      string
