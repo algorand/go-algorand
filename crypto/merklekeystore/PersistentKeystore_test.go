@@ -15,3 +15,56 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 package merklekeystore
+
+import (
+	"context"
+	"database/sql"
+	"testing"
+
+	uuid "github.com/satori/go.uuid"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
+)
+
+func TestFetchKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	store := createTestDB(a)
+	defer store.Close()
+
+	interval := uint64(128)
+	keystore, err := New(1, 1000, interval, crypto.FalconType)
+	a.NoError(err)
+	a.NoError(keystore.Persist(*store))
+
+	key, rnd, err := keystore.FetchKey(interval*1, *store)
+	a.Equal(keystore.GetKey(rnd), key)
+
+	key, rnd, err = keystore.FetchKey(interval*2, *store)
+	a.Equal(keystore.GetKey(rnd), key)
+
+	key, rnd, err = keystore.FetchKey(interval*5, *store)
+	a.Equal(keystore.GetKey(rnd), key)
+
+}
+
+func createTestDB(a *require.Assertions) *db.Accessor {
+	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+	store, err := db.MakeAccessor(tmpname, false, true)
+	a.NoError(err)
+	a.NotNil(store)
+
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err = tx.Exec(`CREATE TABLE schema (
+			tablename TEXT PRIMARY KEY,
+			version INTEGER
+		);`)
+		return err
+	})
+	a.NoError(err)
+
+	return &store
+}

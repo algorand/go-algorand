@@ -111,9 +111,6 @@ func TestEmptySigner(t *testing.T) {
 
 	_, err = signer.GetSigner(9).Sign(h)
 	a.Error(err)
-	//
-	//_, err = signer.Trim(10)
-	//a.NoError(err)
 }
 
 func TestDisposableKeysGeneration(t *testing.T) {
@@ -368,96 +365,6 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 //	a.Equal(*verifier, verifierToDecodeInto)
 //}
 
-//func TestSignerTrim(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//	a := require.New(t)
-//	var err error
-//
-//	signer := generateTestSigner(crypto.FalconType, 1, 100, 1, a)
-//
-//	_, err = signer.Trim(1)
-//	a.NoError(err)
-//	a.Equal(signer.FirstValid, uint64(1))
-//	a.Equal(length(signer, a), 99)
-//
-//	_, err = signer.Trim(10)
-//	a.NoError(err)
-//	a.Equal(length(signer, a), 90)
-//
-//	signer.Trim(20)
-//	a.Equal(length(signer, a), 80)
-//
-//	signer = generateTestSigner(crypto.FalconType, 1, 100, 11, a)
-//	defer signer.keyStore.store.Close()
-//	a.Equal(9, length(signer, a))
-//
-//	// Should not trim, removes only keys <= round 10
-//	signer.Trim(10)
-//	a.Equal(signer.FirstValid, uint64(1))
-//	a.Equal(9, length(signer, a))
-//
-//	// Should delete keys for rounds 11 and 22
-//	signer.Trim(22)
-//	a.Equal(signer.FirstValid, uint64(1))
-//	a.Equal(7, length(signer, a))
-//
-//	signer.Trim(99)
-//	a.Equal(signer.FirstValid, uint64(1))
-//	a.Equal(length(signer, a), 0)
-//
-//	// create signer and delete all keys.
-//	signer = generateTestSigner(crypto.FalconType, 1, 60, 1, a)
-//	defer signer.keyStore.store.Close()
-//	_, err = signer.Trim(60)
-//	a.NoError(err)
-//	a.Equal(0, length(signer, a))
-//	_, err = signer.Trim(61) // should not return error for rounds bigger than lastValid
-//	a.NoError(err)
-//	a.Equal(0, length(signer, a))
-//
-//	signer = generateTestSigner(crypto.FalconType, 1, 60, 11, a)
-//	defer signer.keyStore.store.Close()
-//	_, err = signer.Trim(55)
-//	a.NoError(err)
-//	a.Equal(0, length(signer, a))
-//}
-
-//func TestKeyDeletion(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//	a := require.New(t)
-//	var err error
-//
-//	signer := generateTestSigner(crypto.FalconType, 1, 60, 1, a)
-//	defer signer.keyStore.store.Close()
-//
-//	signer.Trim(50)
-//	_, err = signer.Sign(genHashableForTest(), 50)
-//	a.Error(err)
-//
-//	for i := uint64(51); i <= 60; i++ {
-//		sig, err := signer.Sign(genHashableForTest(), i)
-//		a.NoError(err)
-//
-//		a.NoError(signer.GetVerifier().Verify(1, i, 1, genHashableForTest(), sig))
-//	}
-//
-//	signer = generateTestSigner(crypto.FalconType, 1, 60, 11, a)
-//	defer signer.keyStore.store.Close()
-//
-//	signer.Trim(50)
-//	_, err = signer.Sign(genHashableForTest(), 49)
-//	a.Error(err)
-//
-//	for i := uint64(50); i <= 60; i++ {
-//		sig, err := signer.Sign(genHashableForTest(), i)
-//		if i%11 != 0 {
-//			a.Error(err)
-//			continue
-//		}
-//		a.NoError(signer.GetVerifier().Verify(1, i, 11, genHashableForTest(), sig))
-//	}
-//}
-
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -506,24 +413,6 @@ func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval 
 
 	return signer
 }
-
-//func initTestDB(a *require.Assertions) *db.Accessor {
-//	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
-//	store, err := db.MakeAccessor(tmpname, false, true)
-//	a.NoError(err)
-//	a.NotNil(store)
-//
-//	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-//		_, err = tx.Exec(`CREATE TABLE schema (
-//			tablename TEXT PRIMARY KEY,
-//			version INTEGER
-//		);`)
-//		return err
-//	})
-//	a.NoError(err)
-//
-//	return &store
-//}
 
 func length(s *Keystore, a *require.Assertions) int {
 	return len(s.ephemeralKeys)

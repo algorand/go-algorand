@@ -121,7 +121,7 @@ func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSignin
 	return key, round, nil
 }
 
-// CountKeys couts the number of rows in StateProofKeys table
+// CountKeys counts the number of rows in StateProofKeys table
 func (s *Keystore) CountKeys(store db.Accessor) int {
 	var count int
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
