@@ -2228,9 +2228,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return
 	}
 
-	txnFieldType := TxnFieldTypes[fs.field]
-	if !typecheck(txnFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), txnFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return
 }

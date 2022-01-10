@@ -1192,7 +1192,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Availability: v5
 - Mode: Application
 
-`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_. (Setting addresses in asset creation transactions need not be _available_.)
+`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_. (Addresses set into asset params of acfg transactions need not be _available_.)
 
 ## itxn_submit
 

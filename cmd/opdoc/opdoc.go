@@ -286,28 +286,6 @@ type LanguageSpec struct {
 	Ops             []OpRecord
 }
 
-func argEnum(name string) []string {
-	if name == "txn" || name == "gtxn" || name == "gtxns" {
-		return logic.TxnFieldNames
-	}
-	if name == "global" {
-		return logic.GlobalFieldNames
-	}
-	if name == "txna" || name == "gtxna" || name == "gtxnsa" || name == "txnas" || name == "gtxnas" || name == "gtxnsas" {
-		return logic.TxnaFieldNames()
-	}
-	if name == "asset_holding_get" {
-		return logic.AssetHoldingFieldNames
-	}
-	if name == "asset_params_get" {
-		return logic.AssetParamsFieldNames
-	}
-	if name == "app_params_get" {
-		return logic.AppParamsFieldNames
-	}
-	return nil
-}
-
 func typeString(types []logic.StackType) string {
 	out := make([]byte, len(types))
 	for i, t := range types {
@@ -330,27 +308,32 @@ func typeString(types []logic.StackType) string {
 	return string(out)
 }
 
-func argEnumTypes(name string) string {
-	if name == "txn" || name == "gtxn" || name == "gtxns" || name == "itxn" || name == "gitxn" || name == "itxn_field" {
-		return typeString(logic.TxnFieldTypes)
+func fieldsAndTypes(names []string, specs speccer) ([]string, string) {
+	types := make([]logic.StackType, len(names))
+	for i, name := range names {
+		types[i] = specs.SpecByName(name).Type()
 	}
-	if name == "global" {
-		return typeString(logic.GlobalFieldTypes)
-	}
-	if name == "txna" || name == "gtxna" || name == "gtxnsa" || name == "txnas" || name == "gtxnas" || name == "gtxnsas" || name == "itxna" || name == "gitxna" {
-		return typeString(logic.TxnaFieldTypes())
-	}
-	if name == "asset_holding_get" {
-		return typeString(logic.AssetHoldingFieldTypes)
-	}
-	if name == "asset_params_get" {
-		return typeString(logic.AssetParamsFieldTypes)
-	}
-	if name == "app_params_get" {
-		return typeString(logic.AppParamsFieldTypes)
-	}
+	return names, typeString(types)
+}
 
-	return ""
+func argEnums(name string) (names []string, types string) {
+	switch name {
+	case "txn", "gtxn", "gtxns", "itxn", "gitxn", "itxn_field":
+		return fieldsAndTypes(logic.TxnFieldNames, logic.TxnFieldSpecByName)
+	case "global":
+		return
+	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
+		// Map is the whole txn field spec map.  That's fine, we only lookup the given names.
+		return fieldsAndTypes(logic.TxnaFieldNames(), logic.TxnFieldSpecByName)
+	case "asset_holding_get":
+		return fieldsAndTypes(logic.AssetHoldingFieldNames, logic.AssetHoldingFieldSpecByName)
+	case "asset_params_get":
+		return fieldsAndTypes(logic.AssetParamsFieldNames, logic.AssetParamsFieldSpecByName)
+	case "app_params_get":
+		return fieldsAndTypes(logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
+	default:
+		return nil, ""
+	}
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
@@ -363,8 +346,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Returns = typeString(spec.Returns)
 		records[i].Cost = spec.Details.Cost
 		records[i].Size = spec.Details.Size
-		records[i].ArgEnum = argEnum(spec.Name)
-		records[i].ArgEnumTypes = argEnumTypes(spec.Name)
+		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
 		records[i].Doc = logic.OpDoc(spec.Name)
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)

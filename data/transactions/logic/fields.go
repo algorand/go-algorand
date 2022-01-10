@@ -173,9 +173,6 @@ type FieldSpec interface {
 // TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames []string
 
-// TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
-var TxnFieldTypes []StackType
-
 var txnFieldSpecByField map[TxnField]txnFieldSpec
 
 // TxnFieldSpecByName gives access to the field specs by field name
@@ -296,17 +293,6 @@ func TxnaFieldNames() []string {
 	return names
 }
 
-// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
-func TxnaFieldTypes() []StackType {
-	var types []StackType
-	for _, fs := range txnFieldSpecs {
-		if fs.array {
-			types = append(types, fs.ftype)
-		}
-	}
-	return types
-}
-
 var innerTxnTypes = map[string]uint64{
 	string(protocol.PaymentTx):         5,
 	string(protocol.KeyRegistrationTx): 6,
@@ -413,9 +399,6 @@ const (
 
 // GlobalFieldNames are arguments to the 'global' opcode
 var GlobalFieldNames []string
-
-// GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
-var GlobalFieldTypes []StackType
 
 type globalFieldSpec struct {
 	field   GlobalField
@@ -590,9 +573,6 @@ const (
 // AssetHoldingFieldNames are arguments to the 'asset_holding_get' opcode
 var AssetHoldingFieldNames []string
 
-// AssetHoldingFieldTypes is StackUint64 StackBytes in parallel with AssetHoldingFieldNames
-var AssetHoldingFieldTypes []StackType
-
 type assetHoldingFieldSpec struct {
 	field   AssetHoldingField
 	ftype   StackType
@@ -668,9 +648,6 @@ const (
 
 // AssetParamsFieldNames are arguments to the 'asset_params_get' opcode
 var AssetParamsFieldNames []string
-
-// AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
-var AssetParamsFieldTypes []StackType
 
 type assetParamsFieldSpec struct {
 	field   AssetParamsField
@@ -753,9 +730,6 @@ const (
 // AppParamsFieldNames are arguments to the 'app_params_get' opcode
 var AppParamsFieldNames []string
 
-// AppParamsFieldTypes is StackUint64 StackBytes in parallel with AppParamsFieldNames
-var AppParamsFieldTypes []StackType
-
 type appParamsFieldSpec struct {
 	field   AppParamsField
 	ftype   StackType
@@ -809,13 +783,11 @@ func init() {
 	for fi := Sender; fi < invalidTxnField; fi++ {
 		TxnFieldNames[fi] = fi.String()
 	}
-	TxnFieldTypes = make([]StackType, int(invalidTxnField))
 	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
 		if int(s.field) != i {
 			panic("txnFieldSpecs disjoint with TxnField enum")
 		}
-		TxnFieldTypes[i] = s.ftype
 		txnFieldSpecByField[s.field] = s
 	}
 	TxnFieldSpecByName = make(map[string]txnFieldSpec, len(TxnFieldNames))
@@ -827,13 +799,11 @@ func init() {
 	for i := MinTxnFee; i < invalidGlobalField; i++ {
 		GlobalFieldNames[int(i)] = i.String()
 	}
-	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
 	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
 	for i, s := range globalFieldSpecs {
 		if int(s.field) != i {
 			panic("globalFieldSpecs disjoint with GlobalField enum")
 		}
-		GlobalFieldTypes[i] = s.ftype
 		globalFieldSpecByField[s.field] = s
 	}
 	GlobalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
@@ -879,10 +849,8 @@ func init() {
 	for i := AssetBalance; i < invalidAssetHoldingField; i++ {
 		AssetHoldingFieldNames[int(i)] = i.String()
 	}
-	AssetHoldingFieldTypes = make([]StackType, len(AssetHoldingFieldNames))
 	assetHoldingFieldSpecByField = make(map[AssetHoldingField]assetHoldingFieldSpec, len(AssetHoldingFieldNames))
 	for _, s := range assetHoldingFieldSpecs {
-		AssetHoldingFieldTypes[int(s.field)] = s.ftype
 		assetHoldingFieldSpecByField[s.field] = s
 	}
 	AssetHoldingFieldSpecByName = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
@@ -894,10 +862,8 @@ func init() {
 	for i := AssetTotal; i < invalidAssetParamsField; i++ {
 		AssetParamsFieldNames[int(i)] = i.String()
 	}
-	AssetParamsFieldTypes = make([]StackType, len(AssetParamsFieldNames))
 	assetParamsFieldSpecByField = make(map[AssetParamsField]assetParamsFieldSpec, len(AssetParamsFieldNames))
 	for _, s := range assetParamsFieldSpecs {
-		AssetParamsFieldTypes[int(s.field)] = s.ftype
 		assetParamsFieldSpecByField[s.field] = s
 	}
 	AssetParamsFieldSpecByName = make(apfNameSpecMap, len(AssetParamsFieldNames))
@@ -909,10 +875,8 @@ func init() {
 	for i := AppApprovalProgram; i < invalidAppParamsField; i++ {
 		AppParamsFieldNames[int(i)] = i.String()
 	}
-	AppParamsFieldTypes = make([]StackType, len(AppParamsFieldNames))
 	appParamsFieldSpecByField = make(map[AppParamsField]appParamsFieldSpec, len(AppParamsFieldNames))
 	for _, s := range appParamsFieldSpecs {
-		AppParamsFieldTypes[int(s.field)] = s.ftype
 		appParamsFieldSpecByField[s.field] = s
 	}
 	AppParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))

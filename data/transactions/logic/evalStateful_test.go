@@ -2102,10 +2102,12 @@ func TestEnumFieldErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	source := `txn Amount`
-	origTxnType := TxnFieldTypes[Amount]
-	TxnFieldTypes[Amount] = StackBytes
+	origSpec := txnFieldSpecByField[Amount]
+	changed := origSpec
+	changed.ftype = StackBytes
+	txnFieldSpecByField[Amount] = changed
 	defer func() {
-		TxnFieldTypes[Amount] = origTxnType
+		txnFieldSpecByField[Amount] = origSpec
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "Amount expected field type is []byte but got uint64")
