@@ -387,6 +387,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 
 func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Round) {
 	accounts := make(map[basics.Address]modifiedAccount)
+	resources := make(resourcesUpdates)
 
 	for _, rdelta := range au.deltas {
 		for i := 0; i < rdelta.Len(); i++ {
@@ -396,21 +397,59 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			macct.ndeltas++
 			accounts[addr] = macct
 		}
+
+		for _, rec := range rdelta.GetAllAppLocalStates() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AppLocalState = rec.State
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AppCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAppParams() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AppParams = rec.Params
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AppCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAssetsHoldings() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AssetHolding = rec.Holding
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AssetCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAssetParams() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AssetParams = rec.Params
+			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
+			entry.resource.CreatableType = basics.AssetCreatable
+			entry.ndeltas++
+			resources[key] = entry
+		}
 	}
 
 	require.Equal(t, au.accounts, accounts)
+	require.Equal(t, au.resources, resources)
 
-	// TODO: restore after lookup full implementation
-	// latest := au.deltas[len(au.deltas)-1]
-	// for i := 0; i < latest.Len(); i++ {
-	// 	addr, acct := latest.GetByIdx(i)
-	// 	d, _, err := au.LookupWithoutRewards(rnd, addr)
-	// 	require.NoError(t, err)
-	// 	require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
-	// 	require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
-	// 	require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
-	// 	require.Equal(t, int(acct.TotalAssets), len(d.Assets))
-	// }
+	latest := au.deltas[len(au.deltas)-1]
+	for i := 0; i < latest.Len(); i++ {
+		addr, acct := latest.GetByIdx(i)
+		d, r, err := au.lookupLatest(addr)
+		require.NoError(t, err)
+		require.Equal(t, rnd, r)
+		require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
+		require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
+		require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
+		require.Equal(t, int(acct.TotalAssets), len(d.Assets))
+	}
 }
 
 func TestAcctUpdates(t *testing.T) {
@@ -2116,7 +2155,24 @@ func TestConsecutiveVersion(t *testing.T) {
 	}
 }
 
-// This test attempts to cover the case when an accountUpdates.lookupX method:
+func TestAcctUpdatesLookupLatest(t *testing.T) {
+	accts := ledgertesting.RandomAccounts(10, false)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	err := au.loadFromDisk(ml, 0)
+	defer au.close()
+	require.NoError(t, err)
+	for addr, acct := range accts {
+		acctData, _, err := au.lookupLatest(addr)
+		require.NoError(t, err)
+		require.Equal(t, acct, acctData)
+	}
+}
+
+// This test helper attempts to cover the case when an accountUpdates.lookupX method:
 // - can't find the requested address,
 // - falls through looking at deltas and the LRU accounts cache,
 // - then hits the database (calling accountsDbQueries.lookup)
@@ -2125,9 +2181,7 @@ func TestConsecutiveVersion(t *testing.T) {
 //
 // In this case it waits on a condition variable and retries when
 // commitSyncer/accountUpdates has advanced the cachedDBRound.
-func TestAcctUpdatesLookupRetry(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64)) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.MaxBalLookback = 10
@@ -2227,7 +2281,8 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
 	// kick off another round
-	go flushRound(basics.Round(2))
+	rnd := basics.Round(2)
+	go flushRound(rnd)
 
 	// let stallingTracker enter postCommit() and block (waiting on postCommitReleaseLock)
 	// this will prevent accountUpdates.postCommit() from updating au.cachedDBRound = newBase
@@ -2238,16 +2293,15 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	au.baseAccounts.prune(0)
 	au.accountsMu.Unlock()
 
-	rnd := basics.Round(2)
+	defer func() { // allow the postCommitUnlocked() handler to go through, even if test fails
+		<-stallingTracker.postCommitUnlockedEntryLock
+		stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
+	}()
 
-	// grab any address and data to use for call to lookup
-	var addr basics.Address
-	var data basics.AccountData
-	for a, d := range accts[rnd] {
-		addr = a
-		data = d
-		break
-	}
+	// issue a lookupWithoutRewards while persistedData.round != au.cachedDBRound
+	// when synchronized=false it will fail fast
+	_, _, err := au.lookupWithoutRewards(rnd, basics.Address{}, false)
+	require.Equal(t, err, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1})
 
 	// release the postCommit lock, once au.lookupWithoutRewards hits au.accountsReadCond.Wait()
 	go func() {
@@ -2255,15 +2309,47 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 		stallingTracker.postCommitReleaseLock <- struct{}{}
 	}()
 
-	// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
-	d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
-	require.NoError(t, err)
-	// TODO: restore assertion after full lookup
-	// require.Equal(t, d, data)
-	require.Equal(t, d, ledgercore.ToAccountData(data))
-	require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
+	assertFn(au, accts, rnd, proto, rewardsLevels)
+}
 
-	// allow the postCommitUnlocked() handler to go through
-	<-stallingTracker.postCommitUnlockedEntryLock
-	stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
+func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testAcctUpdatesLookupRetry(t,
+		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
+			// grab any address and data to use for call to lookup
+			var addr basics.Address
+			for a := range accts[rnd] {
+				addr = a
+				break
+			}
+
+			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
+			d, validThrough, err := au.lookupLatest(addr)
+			require.NoError(t, err)
+			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
+		})
+}
+
+func TestAcctUpdatesLookupRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testAcctUpdatesLookupRetry(t,
+		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
+			// grab any address and data to use for call to lookup
+			var addr basics.Address
+			var data basics.AccountData
+			for a, d := range accts[rnd] {
+				addr = a
+				data = d
+				break
+			}
+
+			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
+			d, validThrough, err := au.lookupWithoutRewards(rnd, addr, true)
+			require.NoError(t, err)
+			require.Equal(t, d, ledgercore.ToAccountData(data))
+			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
+		})
 }

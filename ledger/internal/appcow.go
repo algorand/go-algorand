@@ -647,13 +647,23 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 	if aapp.global {
 		switch storeDelta.action {
 		case deallocAction:
+			// app params and app local states might be accessed without touching base account record
+			// from TEAL by writing into KV store.
+			// This is OK although KV deletion and allocation must be preceded by updating counters in base account record,
+			// so ensure the base record was updated and placed into deltas
+			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
+			}
 			cb.mods.NewAccts.UpsertAppParams(addr, aapp.aidx, nil)
-			// delete(owned, aapp.aidx)
-		case allocAction, remainAllocAction:
+		case allocAction:
+			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
+			}
+			fallthrough
+		case remainAllocAction:
 			// note: these should always exist because they were
-			// at least preceded by a call to Put()
+			// at least preceded by a call to PutAppParams/PutAssetParams()
 			params, exist, err := cb.lookupAppParams(addr, aapp.aidx)
-			// params, ok := owned[aapp.aidx]
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
@@ -682,12 +692,18 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 	} else {
 		switch storeDelta.action {
 		case deallocAction:
+			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
+			}
 			cb.mods.NewAccts.UpsertAppLocalState(addr, aapp.aidx, nil)
-			// delete(owned, aapp.aidx)
-		case allocAction, remainAllocAction:
+		case allocAction:
+			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
+			}
+			fallthrough
+		case remainAllocAction:
 			// note: these should always exist because they were
-			// at least preceded by a call to Put (opting in),
-			// or the account has opted in before and local states are pre-allocated
+			// at least preceded by a call to PutAssetHolding/PutLocalState
 			states, exist, err := cb.lookupAppLocalState(addr, aapp.aidx)
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)

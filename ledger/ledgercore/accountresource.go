@@ -30,3 +30,36 @@ type AccountResource struct {
 	AppLocalState *basics.AppLocalState
 	AppParams     *basics.AppParams
 }
+
+// AssignAccountData assigned the Asset/App params/holdings contained in the AccountResource
+// to the given basics.AccountData, creating maps if necessary.
+func (r *AccountResource) AssignAccountData(ad *basics.AccountData) {
+	switch r.CreatableType {
+	case basics.AssetCreatable:
+		if r.AssetParams != nil {
+			if ad.AssetParams == nil {
+				ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+			}
+			ad.AssetParams[basics.AssetIndex(r.CreatableIndex)] = *r.AssetParams
+		}
+		if r.AssetHolding != nil {
+			if ad.Assets == nil {
+				ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+			}
+			ad.Assets[basics.AssetIndex(r.CreatableIndex)] = *r.AssetHolding
+		}
+	case basics.AppCreatable:
+		if r.AppParams != nil {
+			if ad.AppParams == nil {
+				ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+			}
+			ad.AppParams[basics.AppIndex(r.CreatableIndex)] = *r.AppParams
+		}
+		if r.AppLocalState != nil {
+			if ad.AppLocalStates == nil {
+				ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+			}
+			ad.AppLocalStates[basics.AppIndex(r.CreatableIndex)] = *r.AppLocalState
+		}
+	}
+}

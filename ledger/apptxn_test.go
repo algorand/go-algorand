@@ -92,8 +92,7 @@ func (ledger *Ledger) endBlock(t testing.TB, eval testingEvaluator) *ledgercore.
 
 // lookup gets the current accountdata for an address
 func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
-	rnd := ledger.Latest()
-	ad, err := ledger.Lookup(rnd, addr)
+	ad, _, err := ledger.LookupLatest(addr)
 	require.NoError(t, err)
 	return ad
 }

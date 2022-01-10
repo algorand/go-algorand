@@ -195,16 +195,6 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return nil
 	}
 
-	// TODO: remove after switching the schema
-	record, err := balances.Get(addr, false)
-	if err != nil {
-		return err
-	}
-	err = balances.Put(addr, record)
-	if err != nil {
-		return err
-	}
-
 	sndHolding, ok, err := balances.GetAssetHolding(addr, asset)
 	if err != nil {
 		return err
@@ -229,16 +219,6 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
 	if amount == 0 {
 		return nil
-	}
-
-	// TODO: remove after switching the schema
-	record, err := balances.Get(addr, false)
-	if err != nil {
-		return err
-	}
-	err = balances.Put(addr, record)
-	if err != nil {
-		return err
 	}
 
 	rcvHolding, ok, err := balances.GetAssetHolding(addr, asset)
@@ -453,18 +433,6 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 
 	if params.Freeze.IsZero() || (header.Sender != params.Freeze) {
 		return fmt.Errorf("freeze not allowed: sender %v, freeze %v", header.Sender, params.Freeze)
-	}
-
-	// TODO: remove after the schema switch
-	// get and put base account record - needed for writing full bascis AD back to DB
-	record, err := balances.Get(cf.FreezeAccount, false)
-	if err != nil {
-		return err
-	}
-
-	err = balances.Put(cf.FreezeAccount, record)
-	if err != nil {
-		return err
 	}
 
 	// Get the account to be frozen/unfrozen.

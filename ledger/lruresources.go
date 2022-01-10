@@ -60,13 +60,24 @@ func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWrites
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedResourcesData object that the lruResources has for the given address.
+// read the persistedResourcesData object that the lruResources has for the given address and creatable index.
 // thread locking semantics : read lock
 func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (data persistedResourcesData, has bool) {
 	if el := m.resources[accountCreatable{address: addr, index: aidx}]; el != nil {
 		return el.Value.persistedResourcesData, true
 	}
 	return persistedResourcesData{}, false
+}
+
+// read the persistedResourcesData object that the lruResources has for the given address.
+// thread locking semantics : read lock
+func (m *lruResources) readAll(addr basics.Address) (ret []persistedResourcesData) {
+	for ac, pd := range m.resources {
+		if ac.address == addr {
+			ret = append(ret, pd.Value.persistedResourcesData)
+		}
+	}
+	return
 }
 
 // flushPendingWrites flushes the pending writes to the main lruResources cache.

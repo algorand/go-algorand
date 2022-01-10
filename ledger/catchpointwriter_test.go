@@ -368,7 +368,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
+		acctData, validThrough, err := l.LookupLatest(addr)
 		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)

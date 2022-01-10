@@ -457,22 +457,20 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
-// Lookup uses the accounts tracker to return the account state for a
-// given account in a particular round.  The account values reflect
-// the changes of all blocks up to and including rnd.
-func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+// LookupLatest uses the accounts tracker to return the account state (including
+// resources) for a given address, for the latest round. The returned account values
+// reflect the changes of all blocks up to and including the returned round number.
+func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.LookupWithRewards(rnd, addr)
+	data, rnd, err := l.accts.lookupLatest(addr)
 	if err != nil {
-		return basics.AccountData{}, err
+		return basics.AccountData{}, basics.Round(0), err
 	}
-	// TODO:
-	// implement this properly so that we can take the ledgercore.AccountData, add the resources, and rebuild the basics.AccountData.
-	_ = data
-	return basics.AccountData{}, nil
+
+	return data, rnd, nil
 }
 
 // LookupResource loads a resource that matches the request parameters from the accounts update

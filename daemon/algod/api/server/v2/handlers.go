@@ -260,8 +260,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	}
 
 	myLedger := v2.Node.Ledger()
-	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, addr)
+	record, lastRound, err := myLedger.LookupLatest(addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

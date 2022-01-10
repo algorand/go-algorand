@@ -42,6 +42,7 @@ type accountsDbQueries struct {
 	listCreatablesStmt          *sql.Stmt
 	lookupStmt                  *sql.Stmt
 	lookupResourcesStmt         *sql.Stmt
+	lookupAllResourcesStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
 	deleteStoredCatchpoint      *sql.Stmt
 	insertStoredCatchpoint      *sql.Stmt
@@ -1869,6 +1870,11 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
+	qs.lookupAllResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.aidx, resources.rtype, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -1995,6 +2001,52 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 			return fmt.Errorf("unable to query resource data for address %v aidx %v ctype %v : %w", addr, aidx, ctype, err)
 		}
 		return err
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []persistedResourcesData, rnd basics.Round, err error) {
+	err = db.Retry(func() error {
+		// Query for all resources
+		rows, err := qs.lookupAllResourcesStmt.Query(addr[:])
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var addrid, aidx, rtype sql.NullInt64
+		var dbRound basics.Round
+		data = nil
+		var buf []byte
+		for rows.Next() {
+			err := rows.Scan(&addrid, &dbRound, &aidx, &rtype, &buf)
+			if err != nil {
+				return err
+			}
+			if !addrid.Valid || !aidx.Valid || !rtype.Valid {
+				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
+				// ensure this is the first entry, set the round and return
+				if len(data) != 0 {
+					return fmt.Errorf("lookupAllResources: unexpected invalid result on non-first resource record: (%v, %v, %v)", addrid.Valid, aidx.Valid, rtype.Valid)
+				}
+				rnd = dbRound
+				break
+			}
+			var resData resourcesData
+			err = protocol.Decode(buf, &resData)
+			if err != nil {
+				return err
+			}
+			data = append(data, persistedResourcesData{
+				addrid: addrid.Int64,
+				aidx:   basics.CreatableIndex(aidx.Int64),
+				rtype:  basics.CreatableType(rtype.Int64),
+				data:   resData,
+				round:  dbRound,
+			})
+			rnd = dbRound
+		}
+		return nil
 	})
 	return
 }
@@ -2138,6 +2190,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.listCreatablesStmt,
 		&qs.lookupStmt,
 		&qs.lookupResourcesStmt,
+		&qs.lookupAllResourcesStmt,
 		&qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,

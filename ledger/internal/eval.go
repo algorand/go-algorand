@@ -1319,7 +1319,7 @@ func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
 	// Then we are going to go through each modified account and
 	// see if it meets the criteria for adding it to the expired
 	// participation accounts list.
-	modifiedAccounts := eval.state.mods.NewAccts.ModifiedAccounts()
+	modifiedAccounts := eval.state.modifiedAccounts()
 	currentRound := eval.Round()
 
 	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
