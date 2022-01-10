@@ -984,7 +984,9 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// all in for loop until no more keys in db
 			partID := part.ID()
 			numKeys := part.Participation.StateProofSecrets.CountKeys(part.Store)
+			keys := make(map[uint64]account.StateProofKey, numKeys)
 			for i := uint64(0); i < uint64(numKeys); i++ {
+				// TODO: should we add a method to FetchAllKeys instead?
 				key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
 				if err != nil {
 					return err
@@ -994,17 +996,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 					break // no more keys (should return error instead probably)
 				}
 
-				// TODO: should probably write in chunks instead of one by one
-				m := map[uint64]account.StateProofKey{
-					round: account.StateProofKey(*key),
-				}
-				err = node.accountManager.Registry().AppendKeys(partID, m)
-				// kinda useless since AppendKeys returns nil exclusively and appends asynchronously
-				if err != nil {
-					return err
-				}
+				keys[round] = account.StateProofKey(*key)
 			}
-
+			err = node.accountManager.Registry().AppendKeys(partID, keys)
+			// kinda useless since AppendKeys returns nil exclusively and appends asynchronously
+			if err != nil {
+				return err
+			}
 		}
 	}
 
