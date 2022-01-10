@@ -2125,7 +2125,7 @@ func TestConsecutiveVersion(t *testing.T) {
 //
 // In this case it waits on a condition variable and retries when
 // commitSyncer/accountUpdates has advanced the cachedDBRound.
-/*func TestAcctUpdatesLookupRetry(t *testing.T) {
+func TestAcctUpdatesLookupRetry(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
@@ -2172,8 +2172,8 @@ func TestConsecutiveVersion(t *testing.T) {
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates ledgercore.AccountDeltas
-		var totals map[basics.Address]basics.AccountData
+		var updates ledgercore.NewAccountDeltas
+		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
@@ -2183,6 +2183,7 @@ func TestConsecutiveVersion(t *testing.T) {
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(base, updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -2193,11 +2194,11 @@ func TestConsecutiveVersion(t *testing.T) {
 		blk.CurrentProtocol = testProtocolVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
+		delta.NewAccts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
-		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
 		checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
@@ -2257,10 +2258,12 @@ func TestConsecutiveVersion(t *testing.T) {
 	// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 	d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 	require.NoError(t, err)
-	require.Equal(t, d, data)
+	// TODO: restore assertion after full lookup
+	// require.Equal(t, d, data)
+	require.Equal(t, d, ledgercore.ToAccountData(data))
 	require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 
 	// allow the postCommitUnlocked() handler to go through
 	<-stallingTracker.postCommitUnlockedEntryLock
 	stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
-}*/
+}
