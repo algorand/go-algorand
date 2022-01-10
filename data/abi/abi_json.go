@@ -35,7 +35,7 @@ func addressCheckSum(addressBytes []byte) ([]byte, error) {
 		return nil, fmt.Errorf("address bytes should be of length 32")
 	}
 	hashed := sha512.Sum512_256(addressBytes[:])
-	return hashed[:checksumByteSize], nil
+	return hashed[addressByteSize-checksumByteSize:], nil
 }
 
 func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
