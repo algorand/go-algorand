@@ -170,14 +170,14 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 		return nil, fmt.Errorf("passed in numeric value should be non negative")
 	}
 
-	bytes := bigInt.Bytes()
-	if len(bytes) > int(bitSize/8) {
-		return nil, fmt.Errorf("input value bit size %d > abi type bit size %d", len(bytes)*8, bitSize)
+	castedBytes := make([]byte, bitSize/8)
+
+	if bigInt.Cmp(new(big.Int).Lsh(big.NewInt(1), uint(bitSize))) >= 0 {
+		return nil, fmt.Errorf("input value bit size %d > abi type bit size %d", bigInt.BitLen(), bitSize)
 	}
 
-	zeroPadding := make([]byte, bitSize/8-uint16(len(bytes)))
-	buffer := append(zeroPadding, bytes...)
-	return buffer, nil
+	bigInt.FillBytes(castedBytes)
+	return castedBytes, nil
 }
 
 // inferToSlice infers an interface element to a slice of interface{}, returns error if it cannot infer successfully

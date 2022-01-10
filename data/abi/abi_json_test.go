@@ -23,6 +23,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRandomAddressEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	for testCaseIndex := 0; testCaseIndex < 100; testCaseIndex++ {
+		// Generate random 32 byte address pk
+		// compute checksum of `basics.Address`
+		// compute checksum of abi's Address
+	}
+}
+
 func TestJSONtoInterfaceValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testCases = []struct {
