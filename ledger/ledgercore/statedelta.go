@@ -107,44 +107,34 @@ type StateDelta struct {
 	Totals AccountTotals
 }
 
-// AccountDeltas stores ordered accounts and allows fast lookup by address
-// type AccountDeltas struct {
-// 	// Actual data. If an account is deleted, `accts` contains a balance record
-// 	// with empty `AccountData`.
-// 	accts []basics.BalanceRecord
-// 	// cache for addr to deltas index resolution
-// 	acctsCache map[basics.Address]int
-// }
-
-// NewBalanceRecord todo
+// NewBalanceRecord is similar to basics.BalanceRecord but with decoupled base and voting data
 type NewBalanceRecord struct {
 	Addr basics.Address
-
 	AccountData
 }
 
-// AppParamsRecord todo
+// AppParamsRecord represents app params in deltas
 type AppParamsRecord struct {
 	Aidx   basics.AppIndex
 	Addr   basics.Address
 	Params *basics.AppParams
 }
 
-// AssetParamsRecord todo
+// AssetParamsRecord represents asset params in deltas
 type AssetParamsRecord struct {
 	Aidx   basics.AssetIndex
 	Addr   basics.Address
 	Params *basics.AssetParams
 }
 
-// AppLocalStateRecord todo
+// AppLocalStateRecord represents app local state in deltas
 type AppLocalStateRecord struct {
 	Aidx  basics.AppIndex
 	Addr  basics.Address
 	State *basics.AppLocalState
 }
 
-// AssetHoldingRecord TODO
+// AssetHoldingRecord represents asset holding in deltas
 type AssetHoldingRecord struct {
 	Aidx    basics.AssetIndex
 	Addr    basics.Address
@@ -822,22 +812,22 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 	return result
 }
 
-// GetAllAppParams todo
+// GetAllAppParams returns all app params
 func (ad *NewAccountDeltas) GetAllAppParams() []AppParamsRecord {
 	return ad.appParams
 }
 
-// GetAllAppLocalStates todo
+// GetAllAppLocalStates returns all app local states
 func (ad *NewAccountDeltas) GetAllAppLocalStates() []AppLocalStateRecord {
 	return ad.appLocalStates
 }
 
-// GetAllAssetParams todo
+// GetAllAssetParams returns all asset params
 func (ad *NewAccountDeltas) GetAllAssetParams() []AssetParamsRecord {
 	return ad.assetParams
 }
 
-// GetAllAssetsHoldings todo
+// GetAllAssetsHoldings returns all asset holdings
 func (ad *NewAccountDeltas) GetAllAssetsHoldings() []AssetHoldingRecord {
 	return ad.assetHoldings
 }

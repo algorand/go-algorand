@@ -264,42 +264,6 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	return au
 }
 
-// checkEqualAcctMaps is a low-memory version of map[basics.Address]basics.AccountData comparator.
-// It is slow (10s on TestAcctUpdates ) than require.Equal -> reflect.DeepEqual
-// but uses much less memory (0.9GB vs 4GB on TestAcctUpdates)
-func checkEqualAcctMaps(t *testing.T, all, bll map[basics.Address]basics.AccountData) {
-	require.Equal(t, len(all), len(bll))
-	for addr, ad := range all {
-		bd := bll[addr]
-		require.Equal(t, len(ad.AppParams), len(bd.AppParams))
-		require.Equal(t, len(ad.AppLocalStates), len(bd.AppLocalStates))
-		require.Equal(t, len(ad.AssetParams), len(bd.AssetParams))
-		require.Equal(t, len(ad.Assets), len(bd.Assets))
-		for aidx, a := range ad.AppParams {
-			require.Equal(t, a, bd.AppParams[aidx])
-		}
-		for aidx, a := range ad.AppLocalStates {
-			require.Equal(t, a, bd.AppLocalStates[aidx])
-		}
-		for aidx, a := range ad.AssetParams {
-			require.Equal(t, a, bd.AssetParams[aidx])
-		}
-		for aidx, a := range ad.Assets {
-			require.Equal(t, a, bd.Assets[aidx])
-		}
-		ad.AppParams = nil
-		ad.AppLocalStates = nil
-		ad.AssetParams = nil
-		ad.Assets = nil
-		bd.AppParams = nil
-		bd.AppLocalStates = nil
-		bd.AssetParams = nil
-		bd.Assets = nil
-
-		require.Equal(t, ad, bd)
-	}
-}
-
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)

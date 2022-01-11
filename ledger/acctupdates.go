@@ -200,12 +200,6 @@ type accountUpdates struct {
 	lastMetricsLogTime time.Time
 }
 
-type deferredCommit struct {
-	offset   uint64
-	dbRound  basics.Round
-	lookback basics.Round
-}
-
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
 type RoundOffsetError struct {
 	round   basics.Round
