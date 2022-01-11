@@ -49,6 +49,31 @@
           "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
         }
       ]
+    },
+    {
+      "Name": "NPN1",
+      "Nodes": [
+        {
+          "Name": "pingpong node",
+          "IsRelay": false,
+          "Wallets": [
+            {
+              "Name": "Wallet3",
+              "ParticipationOnly": false
+            }
+          ],
+          "NetAddress": "{{NetworkPort}}",
+          "APIEndpoint": "{{APIEndpoint}}",
+          "APIToken": "{{APIToken}}",
+          "EnableTelemetry": true,
+          "TelemetryURI": "{{TelemetryURI}}",
+          "EnableMetrics": true,
+          "MetricsURI": "{{MetricsURI}}",
+          "EnableService": false,
+          "EnableBlockStats": true,
+          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
+        }
+      ]
     }
   ]
 }

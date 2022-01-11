@@ -8,12 +8,17 @@
   "Wallets": [
     {
       "Name": "Wallet1",
-      "Stake": 50,
+      "Stake": 30,
       "Online": true
     },
     {
       "Name": "Wallet2",
-      "Stake": 50,
+      "Stake": 30,
+      "Online": true
+    },
+    {
+      "Name": "Wallet3",
+      "Stake": 40,
       "Online": true
     }
   ]
