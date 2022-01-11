@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"github.com/algoidan/falcon"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -38,4 +39,72 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 	verifier := key.GetVerifyingKey()
 	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
 	a.NoError(err)
+}
+
+func TestSignAndVerifyFalconHashable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	msg := TestingHashable{data: []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")}
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	byteSig, err := key.Sign(msg)
+	a.NoError(err)
+
+	verifier := key.GetVerifyingKey()
+	err = verifier.GetVerifier().Verify(msg, byteSig)
+	a.NoError(err)
+}
+
+func TestFalconCanHandleNilSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	err = key.GetVerifyingKey().GetVerifier().VerifyBytes([]byte("Test"), nil)
+	a.Error(err)
+}
+
+func TestVerificationBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetFixedLengthHashableRepresentation()
+
+	a.Equal(verifyingRawKey, key.PublicKey[:])
+}
+
+func TestFalconsFormatConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
+	sig, err := key.SignBytes(msg)
+	a.NoError(err)
+
+	falconSig := falcon.CompressedSignature(sig)
+	ctFormat, err := falconSig.ConvertToCT()
+
+	rawFormat, err := key.GetVerifyingKey().GetVerifier().GetSignatureFixedLengthHashableRepresentation(sig)
+	a.NoError(err)
+	a.NotEqual([]byte(sig), rawFormat)
+
+	a.Equal(ctFormat[:], rawFormat)
 }

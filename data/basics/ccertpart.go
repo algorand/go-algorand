@@ -17,8 +17,16 @@
 package basics
 
 import (
+	"encoding/binary"
+	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/protocol"
+)
+
+const (
+	// ErrIndexOutOfBound returned when an index is out of the array's bound
+	ErrIndexOutOfBound = "pos %d past end %d"
 )
 
 // A Participant corresponds to an account whose AccountData.Status
@@ -38,12 +46,41 @@ type Participant struct {
 
 	// Weight is AccountData.MicroAlgos.
 	Weight uint64 `codec:"w"`
-
-	// FirstValid reprents the first round where the commitment is valid
-	FirstValid uint64 `codec:"fv"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
+// In order to create a more SNARK-friendly commitments on the signature we must avoid using the msgpack infrastructure.
+// msgpack creates a compressed representation of the struct which might be varied in length, which will
+// be bad for creating SNARK
 func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertPart, protocol.Encode(&p)
+
+	weightAsBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(weightAsBytes, p.Weight)
+
+	publicKeyBytes := p.PK
+
+	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes))
+	partCommitment = append(partCommitment, weightAsBytes...)
+	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+
+	return protocol.CompactCertPart, partCommitment
+}
+
+// ParticipantsArray implements merklearray.Array and is used to commit
+// to a Merkle tree of online accounts.
+//msgp:ignore ParticipantsArray
+type ParticipantsArray []Participant
+
+// Length returns the ledger of the array.
+func (p ParticipantsArray) Length() uint64 {
+	return uint64(len(p))
+}
+
+// Marshal Returns the hash for the given position.
+func (p ParticipantsArray) Marshal(pos uint64) ([]byte, error) {
+	if pos >= uint64(len(p)) {
+		return crypto.GenericDigest{}, fmt.Errorf(ErrIndexOutOfBound, pos, len(p))
+	}
+
+	return crypto.HashRep(p[pos]), nil
 }

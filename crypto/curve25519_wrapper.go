@@ -80,3 +80,13 @@ func byteSigToSignatureType(sig ByteSignature) Signature {
 	copy(scopy[:], sig)
 	return scopy
 }
+
+// GetFixedLengthHashableRepresentation is used to fetch a plain serialized version of the public data (without the use of the mspg pack).
+func (p *Ed25519PublicKey) GetFixedLengthHashableRepresentation() []byte {
+	return p.SignatureVerifier[:]
+}
+
+// GetSignatureFixedLengthHashableRepresentation returns a serialized version of the signature
+func (p *Ed25519PublicKey) GetSignatureFixedLengthHashableRepresentation(signature ByteSignature) ([]byte, error) {
+	return signature, nil
+}

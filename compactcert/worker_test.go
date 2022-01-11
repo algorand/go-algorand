@@ -135,9 +135,8 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersF
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
 		voters.Participants = append(voters.Participants, basics.Participant{
-			PK:         *k.StateProofSecrets.GetVerifier(),
-			Weight:     1,
-			FirstValid: uint64(k.FirstValid),
+			PK:     *k.StateProofSecrets.GetVerifier(),
+			Weight: 1,
 		})
 	}
 
@@ -265,11 +264,10 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Msg:               signedHdr,
-				ProvenWeight:      provenWeight,
-				SigRound:          basics.Round(signedHdr.Round),
-				SecKQ:             proto.CompactCertSecKQ,
-				CompactCertRounds: proto.CompactCertRounds,
+				Msg:          signedHdr,
+				ProvenWeight: provenWeight,
+				SigRound:     basics.Round(signedHdr.Round),
+				SecKQ:        proto.CompactCertSecKQ,
 			}
 
 			voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
@@ -329,11 +327,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.False(t, overflowed)
 
 	ccparams := compactcert.Params{
-		Msg:               signedHdr,
-		ProvenWeight:      provenWeight,
-		SigRound:          basics.Round(signedHdr.Round),
-		SecKQ:             proto.CompactCertSecKQ,
-		CompactCertRounds: proto.CompactCertRounds,
+		Msg:          signedHdr,
+		ProvenWeight: provenWeight,
+		SigRound:     basics.Round(signedHdr.Round),
+		SecKQ:        proto.CompactCertSecKQ,
 	}
 
 	voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))

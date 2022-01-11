@@ -54,7 +54,7 @@ type VotersForRound struct {
 	// Participants is the array of top #CompactCertVoters online accounts
 	// in this round, sorted by normalized balance (to make sure heavyweight
 	// accounts are biased to the front).
-	Participants ParticipantsArray
+	Participants basics.ParticipantsArray
 
 	// AddrToPos specifies the position of a given account address (if present)
 	// in the Participants array.  This allows adding a vote from a given account
@@ -91,7 +91,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 		return err
 	}
 
-	participants := make(ParticipantsArray, len(top))
+	participants := make(basics.ParticipantsArray, len(top))
 	addrToPos := make(map[basics.Address]uint64)
 	var totalWeight basics.MicroAlgos
 
@@ -109,9 +109,8 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 		}
 
 		participants[i] = basics.Participant{
-			PK:         acct.StateProofID,
-			Weight:     money.ToUint64(),
-			FirstValid: uint64(acct.VoteFirstValid),
+			PK:     acct.StateProofID,
+			Weight: money.ToUint64(),
 		}
 		addrToPos[acct.Address] = uint64(i)
 	}

@@ -17,33 +17,28 @@
 package merklekeystore
 
 import (
+	"encoding/binary"
 	"errors"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 type (
-	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
-	CommittablePublicKey struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		VerifyingKey crypto.GenericVerifyingKey `codec:"pk"`
-		Round        uint64                     `codec:"rnd"`
-	}
-
-	//Proof represent the merkle proof in each signature.
-	Proof merklearray.Proof
-
-	// Signature is a byte signature on a crypto.Hashable object,
-	// crypto.GenericVerifyingKey and includes a merkle proof for the key.
+	// Signature represents a signature in the merkle signature scheme using an underlying crypto scheme.
+	// It consists of an ephemeral public key, a signature, a merkle verification path and an index.
+	// The merkle signature considered valid only if the ByteSignature is verified under the ephemeral public key and
+	// the Merkle verification path verifies that the ephemeral public key is located at the given index of the tree
+	// (for the root given in the long-term public key).
+	// More details can be found on Algorand's spec
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
 
-		Proof        Proof                      `codec:"prf"`
-		VerifyingKey crypto.GenericVerifyingKey `codec:"vkey"`
+		MerkleArrayIndex uint64                     `codec:"idx"`
+		Proof            merklearray.Proof          `codec:"prf"`
+		VerifyingKey     crypto.GenericVerifyingKey `codec:"vkey"`
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
@@ -70,38 +65,10 @@ type (
 	// Verifier is used to verify a merklekeystore.Signature produced by merklekeystore.Signer.
 	// It validates a merklekeystore.Signature by validating the commitment on the GenericVerifyingKey and validating the signature with that key
 	Verifier [KeyStoreRootSize]byte
-
-	// keysArray is only used for building the merkle-tree and nothing else.
-	keysArray struct {
-		keys       []crypto.GenericSigningKey
-		firstValid uint64
-		interval   uint64
-	}
 )
 
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
 var errDivisorIsZero = errors.New("received zero Interval")
-
-// ToBeHashed implementation means CommittablePublicKey is crypto.Hashable, required by merklekeystore.Verifier.Verify()
-func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.KeystorePK, protocol.Encode(e)
-}
-
-func (k *keysArray) Length() uint64 {
-	return uint64(len(k.keys))
-}
-
-// Marshal Gets []byte to represent a GenericVerifyingKey tied to the signatureAlgorithm in a pos.
-// used to implement the merklearray.Array interface needed to build a tree.
-func (k *keysArray) Marshal(pos uint64) ([]byte, error) {
-	signer := k.keys[pos].GetSigner()
-	ephPK := CommittablePublicKey{
-		VerifyingKey: *signer.GetVerifyingKey(),
-		Round:        indexToRound(k.firstValid, k.interval, pos),
-	}
-
-	return crypto.HashRep(&ephPK), nil
-}
 
 // New Generates a merklekeystore.Signer
 // The function allow creation of empty signers, i.e signers without any key to sign with.
@@ -132,7 +99,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		FirstValid:          firstValid,
 		Interval:            interval,
 	}
-	tree, err := merklearray.Build(&keysArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
+	tree, err := merklearray.Build(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
 	if err != nil {
 		return nil, err
 	}
@@ -184,9 +151,10 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	}
 
 	return Signature{
-		ByteSignature: sig,
-		Proof:         Proof(*proof),
-		VerifyingKey:  *signingKey.GetVerifyingKey(),
+		ByteSignature:    sig,
+		Proof:            *proof,
+		VerifyingKey:     *signingKey.GetVerifyingKey(),
+		MerkleArrayIndex: index,
 	}, nil
 }
 
@@ -220,28 +188,50 @@ func (v *Verifier) IsEmpty() bool {
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
-func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashable, sig Signature) error {
-	if firstValid == 0 {
-		firstValid = 1
-	}
-	if err := checkKeystoreParams(firstValid, round, interval); err != nil {
-		return err
-	}
+func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) error {
 
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
 	}
 
-	pos := roundToIndex(firstValid, round, interval)
+	// verify the merkle tree verification path using the ephemeral public key, the
+	// verification path and the index.
 	err := merklearray.Verify(
-		(crypto.GenericDigest)(v[:]),
-		map[uint64]crypto.Hashable{pos: &ephkey},
-		(*merklearray.Proof)(&sig.Proof),
+		v[:],
+		map[uint64]crypto.Hashable{sig.MerkleArrayIndex: &ephkey},
+		&sig.Proof,
 	)
 	if err != nil {
 		return err
 	}
 
-	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
+	// verify that the signature is valid under the ephemeral public key
+	return sig.VerifyingKey.GetVerifier().Verify(msg, sig.ByteSignature)
+}
+
+// GetFixedLengthHashableRepresentation returns the signature as a hashable byte sequence.
+// the format details can be found in the Algorand's spec.
+func (s *Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
+	schemeType := make([]byte, 2)
+	binary.LittleEndian.PutUint16(schemeType, uint16(s.VerifyingKey.Type))
+	sigBytes, err := s.VerifyingKey.GetVerifier().GetSignatureFixedLengthHashableRepresentation(s.ByteSignature)
+	if err != nil {
+		return nil, err
+	}
+
+	verifierBytes := s.VerifyingKey.GetVerifier().GetFixedLengthHashableRepresentation()
+
+	binaryMerkleIndex := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.MerkleArrayIndex)
+
+	proofBytes := s.Proof.GetSerializedProof()
+
+	merkleSignatureBytes := make([]byte, 0, len(schemeType)+len(sigBytes)+len(verifierBytes)+len(binaryMerkleIndex)+len(proofBytes))
+	merkleSignatureBytes = append(merkleSignatureBytes, schemeType...)
+	merkleSignatureBytes = append(merkleSignatureBytes, sigBytes...)
+	merkleSignatureBytes = append(merkleSignatureBytes, verifierBytes...)
+	merkleSignatureBytes = append(merkleSignatureBytes, binaryMerkleIndex...)
+	merkleSignatureBytes = append(merkleSignatureBytes, proofBytes...)
+	return merkleSignatureBytes, nil
 }

@@ -18,7 +18,6 @@ package compactcert
 
 import (
 	"fmt"
-
 	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -102,7 +101,7 @@ func (b *Builder) Add(pos uint64, sig merklekeystore.Signature, verifySig bool) 
 	// Check signature
 
 	if verifySig {
-		if err := p.PK.Verify(p.FirstValid, uint64(b.SigRound), b.CompactCertRounds, b.Msg, sig); err != nil {
+		if err := p.PK.Verify(uint64(b.SigRound), b.Msg, sig); err != nil {
 			return err
 		}
 	}
@@ -124,21 +123,6 @@ func (b *Builder) Ready() bool {
 // SignedWeight returns the total weight of signatures added so far.
 func (b *Builder) SignedWeight() uint64 {
 	return b.signedWeight
-}
-
-//msgp:ignore sigsToCommit
-type sigsToCommit []sigslot
-
-func (sc sigsToCommit) Length() uint64 {
-	return uint64(len(sc))
-}
-
-func (sc sigsToCommit) Marshal(pos uint64) ([]byte, error) {
-	if pos >= uint64(len(sc)) {
-		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
-	}
-
-	return crypto.HashRep(&sc[pos].sigslotCommit), nil
 }
 
 // coinIndex returns the position pos in the sigs array such that the sum
@@ -192,7 +176,7 @@ func (b *Builder) Build() (*Cert, error) {
 	b.sigsHasValidL = true
 
 	hfactory := crypto.HashFactory{HashType: HashType}
-	sigtree, err := merklearray.Build(sigsToCommit(b.sigs), hfactory)
+	sigtree, err := merklearray.Build(committableSignatureSlotArray(b.sigs), hfactory)
 	if err != nil {
 		return nil, err
 	}

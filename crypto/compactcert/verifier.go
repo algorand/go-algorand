@@ -50,13 +50,17 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 	for pos, r := range c.Reveals {
-		sigs[pos] = r.SigSlot
+		sig, err := buildCommittableSignature(r.SigSlot)
+		if err != nil {
+			return err
+		}
+
+		sigs[pos] = sig
 		parts[pos] = r.Part
 
-		err := r.Part.PK.Verify(
-			uint64(r.Part.FirstValid),
+		// verify that the msg and the signature is valid under the given participant's Pk
+		err = r.Part.PK.Verify(
 			uint64(v.SigRound),
-			v.CompactCertRounds,
 			v.Msg,
 			r.SigSlot.Sig.Signature)
 
@@ -65,10 +69,12 @@ func (v *Verifier) Verify(c *Cert) error {
 		}
 	}
 
+	// verify all the reveals proofs on the signature tree.
 	if err := merklearray.Verify(crypto.GenericDigest(c.SigCommit[:]), sigs, &c.SigProofs); err != nil {
 		return err
 	}
 
+	// verify all the reveals proofs on the participant tree.
 	if err := merklearray.Verify(crypto.GenericDigest(v.partcom[:]), parts, &c.PartProofs); err != nil {
 		return err
 	}

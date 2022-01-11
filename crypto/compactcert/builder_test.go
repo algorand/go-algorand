@@ -17,10 +17,12 @@
 package compactcert
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
-	"github.com/algorand/go-algorand/config"
+	"github.com/algoidan/falcon"
 	"strconv"
 	"testing"
 
@@ -34,29 +36,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type TestMessage string
+type testMessage string
 
-// TODO: change to CurrentVersion when updated
-var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+const compactCertRoundsForTests = 128
 
-func (m TestMessage) ToBeHashed() (protocol.HashID, []byte) {
+func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
-}
-
-type PartCommit struct {
-	participants []basics.Participant
-}
-
-func (pc PartCommit) Length() uint64 {
-	return uint64(len(pc.participants))
-}
-
-func (pc PartCommit) Marshal(pos uint64) ([]byte, error) {
-	if pos >= uint64(len(pc.participants)) {
-		return nil, fmt.Errorf("pos %d >= len %d", pos, len(pc.participants))
-	}
-
-	return crypto.HashRep(pc.participants[pos]), nil
 }
 
 func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Signer) []basics.Participant {
@@ -64,9 +49,8 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 
 	for i := 0; i < numberOfParticipant; i++ {
 		part := basics.Participant{
-			PK:         *key.GetVerifier(),
-			Weight:     uint64(totalWeight / 2 / numberOfParticipant),
-			FirstValid: 0,
+			PK:     *key.GetVerifier(),
+			Weight: uint64(totalWeight / 2 / numberOfParticipant),
 		}
 
 		parts = append(parts, part)
@@ -74,7 +58,7 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
-func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *require.Assertions) (*merklekeystore.Signer, db.Accessor) {
+func generateTestSigner(name string, firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) (*merklekeystore.Signer, db.Accessor) {
 	store, err := db.MakeAccessor(name, false, true)
 	a.NoError(err)
 	a.NotNil(store)
@@ -88,7 +72,7 @@ func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *req
 	})
 	a.NoError(err)
 
-	signer, err := merklekeystore.New(firstValid, lastValid, CompactCertRounds, crypto.FalconType, store)
+	signer, err := merklekeystore.New(firstValid, lastValid, interval, SignatureScheme, store)
 	a.NoError(err)
 
 	err = signer.Persist()
@@ -117,15 +101,14 @@ func TestBuildVerify(t *testing.T) {
 	npart := npartHi + npartLo
 
 	param := Params{
-		Msg:               TestMessage("hello world"),
-		ProvenWeight:      uint64(totalWeight / 2),
-		SigRound:          currentRound,
-		SecKQ:             128,
-		CompactCertRounds: CompactCertRounds,
+		Msg:          testMessage("hello world"),
+		ProvenWeight: uint64(totalWeight / 2),
+		SigRound:     currentRound,
+		SecKQ:        128,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, a)
+	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 	defer dbAccessor.Close()
 	require.NotNil(t, dbAccessor, "failed to create signer")
 	var parts []basics.Participant
@@ -140,7 +123,7 @@ func TestBuildVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		t.Error(err)
 	}
@@ -185,31 +168,298 @@ func TestBuildVerify(t *testing.T) {
 	require.NoError(t, err, "failed to verify the compact cert")
 }
 
+func generateRandomParticipant(a *require.Assertions, testname string) basics.Participant {
+	key, dbAccessor := generateTestSigner(testname+".db", 0, 8, 1, a)
+	a.NotNil(dbAccessor, "failed to create signer")
+	defer dbAccessor.Close()
+
+	p := basics.Participant{
+		PK:     *key.GetVerifier(),
+		Weight: crypto.RandUint64(),
+	}
+	return p
+}
+
+func calculateHashOnPartLeaf(part basics.Participant) []byte {
+	binaryWeight := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryWeight, part.Weight)
+
+	publicKeyBytes := part.PK
+	partCommitment := make([]byte, 0, len(protocol.CompactCertPart)+len(binaryWeight)+len(publicKeyBytes))
+	partCommitment = append(partCommitment, protocol.CompactCertPart...)
+	partCommitment = append(partCommitment, binaryWeight...)
+	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+
+	factory := crypto.HashFactory{HashType: HashType}
+	hashValue := crypto.HashBytes(factory.NewHash(), partCommitment)
+	return hashValue
+}
+
+func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
+	buf := make([]byte, len(leftNode)+len(rightNode)+len(protocol.MerkleArrayNode))
+	copy(buf[:], protocol.MerkleArrayNode)
+	copy(buf[len(protocol.MerkleArrayNode):], leftNode[:])
+	copy(buf[len(protocol.MerkleArrayNode)+len(leftNode):], rightNode[:])
+
+	factory := crypto.HashFactory{HashType: HashType}
+	hashValue := crypto.HashBytes(factory.NewHash(), buf)
+	return hashValue
+}
+
+func TestParticipationCommitmentBinaryFormat(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	var parts []basics.Participant
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+	parts = append(parts, generateRandomParticipant(a, t.Name()))
+
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	partCommitmentRoot := partcom.Root()
+
+	leaf0 := calculateHashOnPartLeaf(parts[0])
+	leaf1 := calculateHashOnPartLeaf(parts[1])
+	leaf2 := calculateHashOnPartLeaf(parts[2])
+	leaf3 := calculateHashOnPartLeaf(parts[3])
+
+	inner1 := calculateHashOnInternalNode(leaf0, leaf1)
+	inner2 := calculateHashOnInternalNode(leaf2, leaf3)
+
+	calcRoot := calculateHashOnInternalNode(inner1, inner2)
+
+	a.Equal(partCommitmentRoot, crypto.GenericDigest(calcRoot))
+
+}
+
+func TestSignatureCommitmentBinaryFormat(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	currentRound := basics.Round(128)
+	totalWeight := 10000000
+	numPart := 4
+
+	param := Params{
+		Msg:          testMessage("test!"),
+		ProvenWeight: uint64(totalWeight / (2 * numPart)),
+		SigRound:     currentRound,
+		SecKQ:        128,
+	}
+
+	var parts []basics.Participant
+	var sigs []merklekeystore.Signature
+
+	for i := 0; i < numPart; i++ {
+		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)*8, compactCertRoundsForTests, a)
+		require.NotNil(t, dbAccessor, "failed to create signer")
+
+		part := basics.Participant{
+			PK:     *key.GetVerifier(),
+			Weight: uint64(totalWeight / 2 / numPart),
+		}
+		parts = append(parts, part)
+
+		sig, err := key.Sign(param.Msg, uint64(currentRound))
+		require.NoError(t, err, "failed to create keys")
+		sigs = append(sigs, sig)
+
+		dbAccessor.Close()
+	}
+
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	b, err := MkBuilder(param, parts, partcom)
+	a.NoError(err)
+
+	for i := 0; i < numPart; i++ {
+		err = b.Add(uint64(i), sigs[i], false)
+		a.NoError(err)
+	}
+
+	cert, err := b.Build()
+	a.NoError(err)
+
+	leaf0 := calculateHashOnSigLeaf(t, sigs[0], findLInCert(a, sigs[0], cert))
+	leaf1 := calculateHashOnSigLeaf(t, sigs[1], findLInCert(a, sigs[1], cert))
+	leaf2 := calculateHashOnSigLeaf(t, sigs[2], findLInCert(a, sigs[2], cert))
+	leaf3 := calculateHashOnSigLeaf(t, sigs[3], findLInCert(a, sigs[3], cert))
+
+	inner1 := calculateHashOnInternalNode(leaf0, leaf1)
+	inner2 := calculateHashOnInternalNode(leaf2, leaf3)
+
+	calcRoot := calculateHashOnInternalNode(inner1, inner2)
+
+	a.Equal(cert.SigCommit, crypto.GenericDigest(calcRoot))
+
+}
+
+// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall compcatcert verification)
+// it includes parsing the signature's format (according to Algorand's spec) and binds it to a specific length.
+// here we also expect the scheme to use Falcon signatures and nothing else.
+func TestSimulateSignatureVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer, dbaccess := generateTestSigner(t.Name()+"_1.db", 50, 100, 1, a)
+	defer dbaccess.Close()
+
+	sigRound := uint64(55)
+	hashable := testMessage("testMessage")
+	sig, err := signer.Sign(hashable, sigRound)
+	a.NoError(err)
+
+	genericKey := signer.GetVerifier()
+	sigBytes, err := sig.GetFixedLengthHashableRepresentation()
+	a.NoError(err)
+	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 5, 6)
+}
+
+// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall compcatcert verification)
+// it includes parsing the signature's format (according to Algorand's spec) and binds it to a specific length.
+// here we also expect the scheme to use Falcon signatures and nothing else.
+func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// we create one ephemeral key so the signature's proof should be with len 0
+	signer, dbaccess := generateTestSigner(t.Name()+"_2.db", 1, 128, 128, a)
+	defer dbaccess.Close()
+
+	sigRound := uint64(128)
+	hashable := testMessage("testMessage")
+	sig, err := signer.Sign(hashable, sigRound)
+	a.NoError(err)
+
+	genericKey := signer.GetVerifier()
+	sigBytes, err := sig.GetFixedLengthHashableRepresentation()
+	a.NoError(err)
+	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 0, 0)
+}
+
+func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklekeystore.Verifier, round uint64, message crypto.Hashable, expectedIndex uint64, expectedPathLen uint8) {
+	a.Equal(len(sigBytes), 4366)
+
+	parsedBytes := 0
+	// check schemeId
+	schemeID := binary.LittleEndian.Uint16(sigBytes[parsedBytes : parsedBytes+2])
+	parsedBytes += 2
+	a.Equal(schemeID, uint16(0))
+
+	parsedBytes, falconPK := verifyFalconSignature(a, sigBytes, parsedBytes, message)
+
+	// check the public key commitment
+
+	leafHash := hashEphemeralPublicKeyLeaf(round, falconPK)
+
+	// parsing the merkle path index and the proof's len
+	idx := binary.LittleEndian.Uint64(sigBytes[parsedBytes : parsedBytes+8])
+	parsedBytes += 8
+	pathLe := sigBytes[parsedBytes]
+	parsedBytes++
+
+	a.Equal(expectedIndex, idx)
+	a.Equal(expectedPathLen, pathLe)
+
+	leafHash = verifyMerklePath(idx, pathLe, sigBytes, parsedBytes, leafHash)
+
+	a.Equal(leafHash, verifier[:])
+}
+
+func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int, leafHash []byte) []byte {
+	// idxDirection will indicate which sibling we should fetch LSB to MSB leaf-to-root
+	// todo when change to vector commitment this needs to be changed.
+	idxDirection := idx
+	// use the verification path to hash siblings up to the root
+	for i := uint8(0); i < pathLe; i++ {
+		var innerNodeBytes []byte
+
+		siblingHash := sigBytes[parsedBytes : parsedBytes+64]
+		parsedBytes += 64
+
+		innerNodeBytes = append(innerNodeBytes, []byte{'M', 'A'}...)
+		if (idxDirection & 1) != 0 {
+			innerNodeBytes = append(innerNodeBytes, siblingHash...)
+			innerNodeBytes = append(innerNodeBytes, leafHash...)
+		} else {
+			innerNodeBytes = append(innerNodeBytes, leafHash...)
+			innerNodeBytes = append(innerNodeBytes, siblingHash...)
+		}
+		idxDirection = idxDirection >> 1
+		leafHash = crypto.HashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), innerNodeBytes)
+	}
+	return leafHash
+}
+
+func hashEphemeralPublicKeyLeaf(round uint64, falconPK [falcon.PublicKeySize]byte) []byte {
+	var sigRoundAsBytes [8]byte
+	binary.LittleEndian.PutUint64(sigRoundAsBytes[:], round)
+
+	var ephemeralPublicKeyBytes []byte
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, []byte{'K', 'P'}...)
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, []byte{0, 0}...)
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, sigRoundAsBytes[:]...)
+	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, falconPK[:]...)
+	leafHash := crypto.HashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), ephemeralPublicKeyBytes)
+	return leafHash
+}
+
+func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes int, message crypto.Hashable) (int, [falcon.PublicKeySize]byte) {
+	var falconSig [falcon.CTSignatureSize]byte
+	copy(falconSig[:], sigBytes[parsedBytes:parsedBytes+1538])
+	parsedBytes += 1538
+	ctSign := falcon.CTSignature(falconSig)
+
+	var falconPK [falcon.PublicKeySize]byte
+	copy(falconPK[:], sigBytes[parsedBytes:parsedBytes+1793])
+	parsedBytes += 1793
+	ephemeralPk := falcon.PublicKey(falconPK)
+
+	msgBytes := crypto.Hash(crypto.HashRep(message))
+	err := ephemeralPk.VerifyCTSignature(ctSign, msgBytes[:])
+	a.NoError(err)
+	return parsedBytes, falconPK
+}
+func findLInCert(a *require.Assertions, signature merklekeystore.Signature, cert *Cert) uint64 {
+	for _, t := range cert.Reveals {
+		if bytes.Compare(t.SigSlot.Sig.Signature.ByteSignature, signature.ByteSignature) == 0 {
+			return t.SigSlot.L
+		}
+	}
+	a.Fail("could not find matching reveal")
+	return 0
+}
+
 func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 10000
+
 	currentRound := basics.Round(128)
 	a := require.New(b)
 
 	param := Params{
-		Msg:               TestMessage("hello world"),
-		ProvenWeight:      uint64(totalWeight / 2),
-		SigRound:          128,
-		SecKQ:             128,
-		CompactCertRounds: CompactCertRounds,
+		Msg:          testMessage("hello world"),
+		ProvenWeight: uint64(totalWeight / 2),
+		SigRound:     128,
+		SecKQ:        128,
 	}
 
 	var parts []basics.Participant
 	var partkeys []*merklekeystore.Signer
 	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, a)
+		key, dbAccessor := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(compactCertRoundsForTests)+1, compactCertRoundsForTests, a)
 		defer dbAccessor.Close()
 		require.NotNil(b, dbAccessor, "failed to create signer")
 		part := basics.Participant{
-			PK:         *key.GetVerifier(),
-			Weight:     uint64(totalWeight / npart),
-			FirstValid: 0,
+			PK:     *key.GetVerifier(),
+			Weight: uint64(totalWeight / npart),
 		}
 
 		sig, err := key.Sign(param.Msg, uint64(currentRound))
@@ -221,7 +471,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(PartCommit{parts}, crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		b.Error(err)
 	}

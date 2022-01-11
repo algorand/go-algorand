@@ -192,9 +192,9 @@ func BenchmarkUnmarshalEd25519PublicKey(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalFPublicKey(t *testing.T) {
+func TestMarshalUnmarshalFalconPrivateKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := FPublicKey{}
+	v := FalconPrivateKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -213,12 +213,12 @@ func TestMarshalUnmarshalFPublicKey(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingFPublicKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &FPublicKey{})
+func TestRandomizedEncodingFalconPrivateKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &FalconPrivateKey{})
 }
 
-func BenchmarkMarshalMsgFPublicKey(b *testing.B) {
-	v := FPublicKey{}
+func BenchmarkMarshalMsgFalconPrivateKey(b *testing.B) {
+	v := FalconPrivateKey{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -226,8 +226,8 @@ func BenchmarkMarshalMsgFPublicKey(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgFPublicKey(b *testing.B) {
-	v := FPublicKey{}
+func BenchmarkAppendMsgFalconPrivateKey(b *testing.B) {
+	v := FalconPrivateKey{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -238,8 +238,8 @@ func BenchmarkAppendMsgFPublicKey(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalFPublicKey(b *testing.B) {
-	v := FPublicKey{}
+func BenchmarkUnmarshalFalconPrivateKey(b *testing.B) {
+	v := FalconPrivateKey{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -252,9 +252,9 @@ func BenchmarkUnmarshalFPublicKey(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalFSecretKey(t *testing.T) {
+func TestMarshalUnmarshalFalconPublicKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := FSecretKey{}
+	v := FalconPublicKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -273,12 +273,12 @@ func TestMarshalUnmarshalFSecretKey(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingFSecretKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &FSecretKey{})
+func TestRandomizedEncodingFalconPublicKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &FalconPublicKey{})
 }
 
-func BenchmarkMarshalMsgFSecretKey(b *testing.B) {
-	v := FSecretKey{}
+func BenchmarkMarshalMsgFalconPublicKey(b *testing.B) {
+	v := FalconPublicKey{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -286,8 +286,8 @@ func BenchmarkMarshalMsgFSecretKey(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgFSecretKey(b *testing.B) {
-	v := FSecretKey{}
+func BenchmarkAppendMsgFalconPublicKey(b *testing.B) {
+	v := FalconPublicKey{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -298,8 +298,8 @@ func BenchmarkAppendMsgFSecretKey(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalFSecretKey(b *testing.B) {
-	v := FSecretKey{}
+func BenchmarkUnmarshalFalconPublicKey(b *testing.B) {
+	v := FalconPublicKey{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

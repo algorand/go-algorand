@@ -37,7 +37,7 @@ func TestInvalidSinger(t *testing.T) {
 	a.Error(err)
 
 	dummySig := make([]byte, 6)
-	a.Error(sigAlgo.GetSigner().GetVerifyingKey().GetVerifier().VerifyBytes(dummySig, dummyMsg))
+	a.Error(sigAlgo.GetSigner().GetVerifyingKey().GetVerifier().VerifyBytes(dummyMsg, dummySig))
 
 	sigAlgo, err = NewSigner(FalconType)
 	a.NoError(err)
@@ -49,5 +49,5 @@ func TestInvalidSinger(t *testing.T) {
 	a.Error(err)
 
 	dummySig = make([]byte, 6)
-	a.Error(sigAlgo.GetSigner().GetVerifyingKey().GetVerifier().VerifyBytes(dummySig, dummyMsg))
+	a.Error(sigAlgo.GetSigner().GetVerifyingKey().GetVerifier().VerifyBytes(dummyMsg, dummySig))
 }

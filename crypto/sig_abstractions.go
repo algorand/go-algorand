@@ -26,7 +26,7 @@ import (
 const (
 	// MaxSignatureSize is the size of the largest signature
 	// Used signature schemes: ed25519Signature and Falcon signature
-	MaxSignatureSize = FalconSigSize
+	MaxSignatureSize = FalconMaxSignatureSize
 )
 
 type (
@@ -69,6 +69,12 @@ type Verifier interface {
 	// Verify and VerifyBytes returns error on bad signature, and any other problem.
 	Verify(message Hashable, sig ByteSignature) error
 	VerifyBytes(message []byte, sig ByteSignature) error
+	// GetFixedLengthHashableRepresentation returns a fixed length (for each crypo scheme) hashable representation of the verification key
+	// (without the using msgpack).
+	GetFixedLengthHashableRepresentation() []byte
+	// GetSignatureFixedLengthHashableRepresentation returns  a fixed length (for each crypo scheme) hashable representation of the signature
+	// (without the using msgpack).
+	GetSignatureFixedLengthHashableRepresentation(signature ByteSignature) ([]byte, error)
 }
 
 // GenericSigningKey holds a Signer, and the type of algorithm the Signer conforms with.

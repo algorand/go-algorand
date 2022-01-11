@@ -22,8 +22,9 @@ import (
 
 // HashType/ hashSize relate to the type of hash this package uses.
 const (
-	HashType = crypto.Sumhash
-	HashSize = crypto.SumhashDigestSize
+	HashType        = crypto.Sumhash
+	HashSize        = crypto.SumhashDigestSize
+	SignatureScheme = crypto.FalconType
 )
 
 const (

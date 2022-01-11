@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestSignAndVerify(t *testing.T) {
+func TestCurve25519SignAndVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var seed Seed
@@ -34,4 +34,46 @@ func TestSignAndVerify(t *testing.T) {
 	verifier := key.GetVerifyingKey()
 	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
 	a.NoError(err)
+}
+
+func TestCurve25519VerificationBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed Seed
+	SystemRNG.RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+
+	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetFixedLengthHashableRepresentation()
+
+	a.Equal(verifyingRawKey, key.Sec.SignatureVerifier[:])
+}
+
+func TestCurve25519RawSignatureBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed Seed
+	SystemRNG.RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+
+	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
+	sig, err := key.SignBytes(msg)
+	a.NoError(err)
+
+	rawFormat, err := key.GetVerifyingKey().GetVerifier().GetSignatureFixedLengthHashableRepresentation(sig)
+	a.NoError(err)
+	a.Equal([]byte(sig), rawFormat)
+}
+
+func TestEd25519CanHandleNilSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed Seed
+	SystemRNG.RandBytes(seed[:])
+	key := GenerateEd25519Key(seed)
+
+	err := key.GetVerifyingKey().GetVerifier().VerifyBytes([]byte("Test"), nil)
+	a.Error(err)
 }

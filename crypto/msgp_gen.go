@@ -6,7 +6,7 @@ import (
 	_ "runtime/cgo"
 	_ "unsafe"
 
-	cfalcon "github.com/algorand/falcon"
+	cfalcon "github.com/algoidan/falcon"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -51,21 +51,21 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
-// FPublicKey
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
+// FalconPrivateKey
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
 //
-// FSecretKey
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
+// FalconPublicKey
+//        |-----> (*) MarshalMsg
+//        |-----> (*) CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> (*) Msgsize
+//        |-----> (*) MsgIsZero
 //
 // FalconSeed
 //      |-----> (*) MarshalMsg
@@ -812,19 +812,19 @@ func (z *Ed25519PublicKey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FPublicKey) MarshalMsg(b []byte) (o []byte) {
+func (z *FalconPrivateKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *FPublicKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FPublicKey)
+func (_ *FalconPrivateKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*FalconPrivateKey)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -834,59 +834,59 @@ func (z *FPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *FPublicKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FPublicKey)
+func (_ *FalconPrivateKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*FalconPrivateKey)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FPublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *FPublicKey) MsgIsZero() bool {
-	return (*z) == (FPublicKey{})
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *FSecretKey) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *FSecretKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FSecretKey)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *FSecretKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (_ *FSecretKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FSecretKey)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FSecretKey) Msgsize() (s int) {
+func (z *FalconPrivateKey) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize + (cfalcon.PrivateKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FSecretKey) MsgIsZero() bool {
-	return (*z) == (FSecretKey{})
+func (z *FalconPrivateKey) MsgIsZero() bool {
+	return (*z) == (FalconPrivateKey{})
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *FalconPublicKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *FalconPublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*FalconPublicKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (_ *FalconPublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*FalconPublicKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *FalconPublicKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *FalconPublicKey) MsgIsZero() bool {
+	return (*z) == (FalconPublicKey{})
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -934,11 +934,11 @@ func (z *FalconSigner) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0003Len := uint32(2)
 	var zb0003Mask uint8 /* 3 bits */
-	if (*z).PublicKey == (FPublicKey{}) {
+	if (*z).PublicKey == (FalconPublicKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).SecretKey == (FSecretKey{}) {
+	if (*z).PrivateKey == (FalconPrivateKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
@@ -953,7 +953,7 @@ func (z *FalconSigner) MarshalMsg(b []byte) (o []byte) {
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "sk"
 			o = append(o, 0xa2, 0x73, 0x6b)
-			o = msgp.AppendBytes(o, ((*z).SecretKey)[:])
+			o = msgp.AppendBytes(o, ((*z).PrivateKey)[:])
 		}
 	}
 	return
@@ -987,9 +987,9 @@ func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SecretKey)[:])
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SecretKey")
+				err = msgp.WrapError(err, "struct-from-array", "PrivateKey")
 				return
 			}
 		}
@@ -1023,9 +1023,9 @@ func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "sk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SecretKey)[:])
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
 				if err != nil {
-					err = msgp.WrapError(err, "SecretKey")
+					err = msgp.WrapError(err, "PrivateKey")
 					return
 				}
 			default:
@@ -1054,7 +1054,7 @@ func (z *FalconSigner) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *FalconSigner) MsgIsZero() bool {
-	return ((*z).PublicKey == (FPublicKey{})) && ((*z).SecretKey == (FSecretKey{}))
+	return ((*z).PublicKey == (FalconPublicKey{})) && ((*z).PrivateKey == (FalconPrivateKey{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1063,7 +1063,7 @@ func (z *FalconVerifier) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
 	var zb0002Mask uint8 /* 2 bits */
-	if (*z).PublicKey == (FPublicKey{}) {
+	if (*z).PublicKey == (FalconPublicKey{}) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
@@ -1160,7 +1160,7 @@ func (z *FalconVerifier) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *FalconVerifier) MsgIsZero() bool {
-	return ((*z).PublicKey == (FPublicKey{}))
+	return ((*z).PublicKey == (FalconPublicKey{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1392,7 +1392,7 @@ func (z *GenericVerifyingKey) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
-	if (*z).FalconPublicKey.PublicKey == (FPublicKey{}) {
+	if (*z).FalconPublicKey.PublicKey == (FalconPublicKey{}) {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
@@ -1427,7 +1427,7 @@ func (z *GenericVerifyingKey) MarshalMsg(b []byte) (o []byte) {
 			// omitempty: check for empty values
 			zb0004Len := uint32(1)
 			var zb0004Mask uint8 /* 2 bits */
-			if (*z).FalconPublicKey.PublicKey == (FPublicKey{}) {
+			if (*z).FalconPublicKey.PublicKey == (FalconPublicKey{}) {
 				zb0004Len--
 				zb0004Mask |= 0x2
 			}
@@ -1768,7 +1768,7 @@ func (z *GenericVerifyingKey) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *GenericVerifyingKey) MsgIsZero() bool {
-	return ((*z).Type == 0) && ((*z).FalconPublicKey.PublicKey == (FPublicKey{})) && ((*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero())
+	return ((*z).Type == 0) && ((*z).FalconPublicKey.PublicKey == (FalconPublicKey{})) && ((*z).Ed25519PublicKey.SignatureVerifier.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

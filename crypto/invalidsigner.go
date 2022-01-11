@@ -63,3 +63,13 @@ func (d *invalidVerifier) Verify(message Hashable, sig ByteSignature) error {
 func (d *invalidVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return errInvalidVerifier
 }
+
+// GetFixedLengthHashableRepresentation returns an empty slice to signal that the verifier is invalid.
+func (d *invalidVerifier) GetFixedLengthHashableRepresentation() []byte {
+	return []byte{}
+}
+
+// GetSignatureFixedLengthHashableRepresentation returns a serialized version of the signature
+func (d *invalidVerifier) GetSignatureFixedLengthHashableRepresentation(signature ByteSignature) ([]byte, error) {
+	return []byte{}, errInvalidVerifier
+}
