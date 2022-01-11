@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -466,7 +467,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 func performRewardsRateCalculation(
 	t *testing.T, consensusParams config.ConsensusParams,
 	curRewardsState RewardsState,
-	incentivePoolBalance uint64, totalRewardUnits uint64, startingRound uint64) {
+	incentivePoolBalance uint64, totalRewardUnits uint64, startingRound uint64) bool {
 	require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
 
 	for rnd := startingRound; rnd < startingRound+uint64(consensusParams.RewardsRateRefreshInterval)*3; rnd++ {
@@ -480,12 +481,19 @@ func performRewardsRateCalculation(
 
 		// subtract the total dispersed funds from the pool balance
 		incentivePoolBalance = ot.Sub(incentivePoolBalance, ot.Mul(totalRewardUnits, rewardsPerUnit))
-		require.False(t, ot.Overflowed)
+		if ot.Overflowed {
+			return false
+		}
 
-		require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance, rnd)
+		if incentivePoolBalance < consensusParams.MinBalance {
+			return false
+		}
+
 		// prepare for the next iteration
 		curRewardsState = nextRewardState
 	}
+
+	return true
 }
 
 func TestNextRewardsRateWithFix(t *testing.T) {
@@ -525,9 +533,28 @@ func TestNextRewardsRateWithFix(t *testing.T) {
 				RewardsRate:               test.rewardsRate,
 			}
 
-			performRewardsRateCalculation(
+			assert.True(t, performRewardsRateCalculation(
 				t, params, curRewardsState, test.incentivePoolBalance, test.totalRewardUnits,
-				test.startingRound)
+				test.startingRound))
 		})
 	}
+}
+
+func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	params, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	params.RewardsCalculationFix = false
+
+	curRewardsState := RewardsState{
+		RewardsLevel:              0,
+		RewardsResidue:            0,
+		RewardsRecalculationRound: 1000000,
+		RewardsRate:               0,
+	}
+
+	assert.False(t, performRewardsRateCalculation(
+		t, params, curRewardsState, params.MinBalance+500000000000,
+		1, 1000000))
 }
