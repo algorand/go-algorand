@@ -797,7 +797,7 @@ func init() {
 
 	GlobalFieldNames = make([]string, int(invalidGlobalField))
 	for i := MinTxnFee; i < invalidGlobalField; i++ {
-		GlobalFieldNames[int(i)] = i.String()
+		GlobalFieldNames[i] = i.String()
 	}
 	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
 	for i, s := range globalFieldSpecs {
@@ -813,7 +813,7 @@ func init() {
 
 	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
 	for i := Secp256k1; i < invalidEcdsaCurve; i++ {
-		EcdsaCurveNames[int(i)] = i.String()
+		EcdsaCurveNames[i] = i.String()
 	}
 	ecdsaCurveSpecByField = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
 	for _, s := range ecdsaCurveSpecs {
@@ -847,7 +847,7 @@ func init() {
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
 	for i := AssetBalance; i < invalidAssetHoldingField; i++ {
-		AssetHoldingFieldNames[int(i)] = i.String()
+		AssetHoldingFieldNames[i] = i.String()
 	}
 	assetHoldingFieldSpecByField = make(map[AssetHoldingField]assetHoldingFieldSpec, len(AssetHoldingFieldNames))
 	for _, s := range assetHoldingFieldSpecs {
@@ -860,7 +860,7 @@ func init() {
 
 	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
 	for i := AssetTotal; i < invalidAssetParamsField; i++ {
-		AssetParamsFieldNames[int(i)] = i.String()
+		AssetParamsFieldNames[i] = i.String()
 	}
 	assetParamsFieldSpecByField = make(map[AssetParamsField]assetParamsFieldSpec, len(AssetParamsFieldNames))
 	for _, s := range assetParamsFieldSpecs {
@@ -873,7 +873,7 @@ func init() {
 
 	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
 	for i := AppApprovalProgram; i < invalidAppParamsField; i++ {
-		AppParamsFieldNames[int(i)] = i.String()
+		AppParamsFieldNames[i] = i.String()
 	}
 	appParamsFieldSpecByField = make(map[AppParamsField]appParamsFieldSpec, len(AppParamsFieldNames))
 	for _, s := range appParamsFieldSpecs {

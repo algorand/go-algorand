@@ -1159,11 +1159,7 @@ func opLt(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := cx.stack[prev].Uint < cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1186,11 +1182,7 @@ func opAnd(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) && (cx.stack[last].Uint != 0)
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1198,11 +1190,7 @@ func opOr(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) || (cx.stack[last].Uint != 0)
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1221,11 +1209,7 @@ func opEq(cx *EvalContext) {
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
 	}
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack[prev].Bytes = nil
 	cx.stack = cx.stack[:last]
 }
@@ -1238,11 +1222,7 @@ func opNeq(cx *EvalContext) {
 func opNot(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cond := cx.stack[last].Uint == 0
-	if cond {
-		cx.stack[last].Uint = 1
-	} else {
-		cx.stack[last].Uint = 0
-	}
+	cx.stack[last].Uint = boolToUint(cond)
 }
 
 func opLen(cx *EvalContext) {
@@ -1509,6 +1489,19 @@ func opBytesMul(cx *EvalContext) {
 	opBytesBinOp(cx, result, result.Mul)
 }
 
+func opBytesSqrt(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	if len(cx.stack[last].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
+
+	val := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	val.Sqrt(val)
+	cx.stack[last].Bytes = val.Bytes()
+}
+
 func opBytesLt(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
@@ -1521,11 +1514,7 @@ func opBytesLt(cx *EvalContext) {
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
-	if lhs.Cmp(rhs) < 0 {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) < 0)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1556,11 +1545,7 @@ func opBytesEq(cx *EvalContext) {
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
-	if lhs.Cmp(rhs) == 0 {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) == 0)
 	cx.stack = cx.stack[:last]
 }
 
