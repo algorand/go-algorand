@@ -24,8 +24,8 @@ const (
 	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
 	FalconSeedSize = 48
 
-	// MaxFalconSignatureSize Represents the max possible size in bytes of a falcon signature
-	MaxFalconSignatureSize = cfalcon.CTSignatureSize
+	// FalconMaxSignatureSize Represents the max possible size in bytes of a falcon signature
+	FalconMaxSignatureSize = cfalcon.CTSignatureSize
 )
 
 type (
@@ -89,17 +89,19 @@ func (d *FalconVerifier) Verify(message Hashable, sig ByteSignature) error {
 
 // VerifyBytes follows falcon algorithm to verify a signature.
 func (d *FalconVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
+	// The wrapper, currently, support only the compress form signature. so we can
+	// assume that the signature given is in a compress form
 	falconSig := cfalcon.CompressedSignature(sig)
 	return (*cfalcon.PublicKey)(&d.PublicKey).Verify(falconSig, data)
 }
 
-// GetVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the msgpack).
-func (d *FalconVerifier) GetVerificationBytes() []byte {
+// GetFixedLengthHashableRepresentation is used to fetch a plain serialized version of the public data (without the use of the msgpack).
+func (d *FalconVerifier) GetFixedLengthHashableRepresentation() []byte {
 	return d.PublicKey[:]
 }
 
-// GetSerializedSignature returns a serialized version of the signature
-func (d *FalconVerifier) GetSerializedSignature(signature ByteSignature) ([]byte, error) {
+// GetSignatureFixedLengthHashableRepresentation returns a serialized version of the signature
+func (d *FalconVerifier) GetSignatureFixedLengthHashableRepresentation(signature ByteSignature) ([]byte, error) {
 	compressedSignature := cfalcon.CompressedSignature(signature)
 	ctSignature, err := compressedSignature.ConvertToCT()
 	return ctSignature[:], err

@@ -28,9 +28,9 @@ type (
 
 	// Signature represents a signature in the merkle signature scheme using an underlying crypto scheme.
 	// It consists of an ephemeral public key, a signature, a merkle verification path and an index.
-	// The merkle signature considered valid only if the ByteSignature is verified under the ephemeral public key and this key
-	// can be proven to be part of the tree which the verifier has a root of. the index is used to identify
-	// the correct leaf's index.
+	// The merkle signature considered valid only if the ByteSignature is verified under the ephemeral public key and
+	// the Merkle verification path verifies that the ephemeral public key is located at the given index of the tree
+	// (for the root given in the long-term public key).
 	// More details can be found on Algorand's spec
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
@@ -210,17 +210,17 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 	return sig.VerifyingKey.GetVerifier().Verify(msg, sig.ByteSignature)
 }
 
-// GetSerializedSignature serializes the merkle scheme into a sequence of bytes.
+// GetFixedLengthHashableRepresentation returns the signature as a hashable byte sequence.
 // the format details can be found in the Algorand's spec.
-func (s *Signature) GetSerializedSignature() ([]byte, error) {
+func (s *Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 	schemeType := make([]byte, 2)
 	binary.LittleEndian.PutUint16(schemeType, uint16(s.VerifyingKey.Type))
-	sigBytes, err := s.VerifyingKey.GetVerifier().GetSerializedSignature(s.ByteSignature)
+	sigBytes, err := s.VerifyingKey.GetVerifier().GetSignatureFixedLengthHashableRepresentation(s.ByteSignature)
 	if err != nil {
 		return nil, err
 	}
 
-	verifierBytes := s.VerifyingKey.GetVerifier().GetVerificationBytes()
+	verifierBytes := s.VerifyingKey.GetVerifier().GetFixedLengthHashableRepresentation()
 
 	binaryMerkleIndex := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.MerkleArrayIndex)

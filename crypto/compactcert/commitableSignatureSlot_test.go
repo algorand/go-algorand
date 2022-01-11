@@ -66,7 +66,7 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	//build the expected binary representation of the merkle signature
 	pK := sig.VerifyingKey.GetVerifier()
-	serializedSig, err := pK.GetSerializedSignature(sig.ByteSignature)
+	serializedSig, err := pK.GetSignatureFixedLengthHashableRepresentation(sig.ByteSignature)
 	require.NoError(t, err)
 
 	schemeType := make([]byte, 2)
@@ -74,7 +74,7 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	sigCommitment = append(sigCommitment, schemeType...)
 	sigCommitment = append(sigCommitment, serializedSig...)
-	sigCommitment = append(sigCommitment, pK.GetVerificationBytes()...)
+	sigCommitment = append(sigCommitment, pK.GetFixedLengthHashableRepresentation()...)
 
 	treeIdxBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(treeIdxBytes, sig.MerkleArrayIndex)

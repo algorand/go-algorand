@@ -34,7 +34,7 @@ func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte 
 	schemeBytes := make([]byte, 2)
 	binary.LittleEndian.PutUint16(schemeBytes, uint16(key.Type))
 
-	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetVerificationBytes()
+	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetFixedLengthHashableRepresentation()
 	keyCommitment := make([]byte, 0, len(protocol.KeystorePK)+len(verifyingRawKey)+len(binaryRound))
 
 	keyCommitment = append(keyCommitment, protocol.KeystorePK...)

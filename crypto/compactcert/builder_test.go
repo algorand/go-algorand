@@ -316,7 +316,7 @@ func TestSimulateSignatureVerification(t *testing.T) {
 	a.NoError(err)
 
 	genericKey := signer.GetVerifier()
-	sigBytes, err := sig.GetSerializedSignature()
+	sigBytes, err := sig.GetFixedLengthHashableRepresentation()
 	a.NoError(err)
 	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 5, 6)
 }
@@ -338,7 +338,7 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	a.NoError(err)
 
 	genericKey := signer.GetVerifier()
-	sigBytes, err := sig.GetSerializedSignature()
+	sigBytes, err := sig.GetFixedLengthHashableRepresentation()
 	a.NoError(err)
 	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 0, 0)
 }

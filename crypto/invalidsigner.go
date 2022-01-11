@@ -64,12 +64,12 @@ func (d *invalidVerifier) VerifyBytes(data []byte, sig ByteSignature) error {
 	return errInvalidVerifier
 }
 
-// GetVerificationBytes returns an empty slice to signal that the verifier is invalid.
-func (d *invalidVerifier) GetVerificationBytes() []byte {
+// GetFixedLengthHashableRepresentation returns an empty slice to signal that the verifier is invalid.
+func (d *invalidVerifier) GetFixedLengthHashableRepresentation() []byte {
 	return []byte{}
 }
 
-// GetSerializedSignature returns a serialized version of the signature
-func (d *invalidVerifier) GetSerializedSignature(signature ByteSignature) ([]byte, error) {
+// GetSignatureFixedLengthHashableRepresentation returns a serialized version of the signature
+func (d *invalidVerifier) GetSignatureFixedLengthHashableRepresentation(signature ByteSignature) ([]byte, error) {
 	return []byte{}, errInvalidVerifier
 }

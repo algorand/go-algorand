@@ -62,7 +62,7 @@ func buildCommittableSignature(sigCommit sigslotCommit) (*committableSignatureSl
 	if sigCommit.Sig.Signature.ByteSignature == nil {
 		return &committableSignatureSlot{isEmptySlot: true}, nil
 	}
-	sigBytes, err := sigCommit.Sig.GetSerializedSignature()
+	sigBytes, err := sigCommit.Sig.GetFixedLengthHashableRepresentation()
 	if err != nil {
 		return nil, err
 	}

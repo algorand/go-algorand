@@ -70,7 +70,7 @@ func (k *CommittablePublicKeyArray) Marshal(pos uint64) ([]byte, error) {
 // msgpack creates a compressed representation of the struct which might be varied in length, this will
 // be bad for creating SNARK
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	verifyingRawKey := e.VerifyingKey.GetVerifier().GetVerificationBytes()
+	verifyingRawKey := e.VerifyingKey.GetVerifier().GetFixedLengthHashableRepresentation()
 
 	roundAsBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundAsBytes, e.Round)

@@ -81,12 +81,12 @@ func byteSigToSignatureType(sig ByteSignature) Signature {
 	return scopy
 }
 
-// GetVerificationBytes is used to fetch a plain serialized version of the public data (without the use of the mspg pack).
-func (p *Ed25519PublicKey) GetVerificationBytes() []byte {
+// GetFixedLengthHashableRepresentation is used to fetch a plain serialized version of the public data (without the use of the mspg pack).
+func (p *Ed25519PublicKey) GetFixedLengthHashableRepresentation() []byte {
 	return p.SignatureVerifier[:]
 }
 
-// GetSerializedSignature returns a serialized version of the signature
-func (p *Ed25519PublicKey) GetSerializedSignature(signature ByteSignature) ([]byte, error) {
+// GetSignatureFixedLengthHashableRepresentation returns a serialized version of the signature
+func (p *Ed25519PublicKey) GetSignatureFixedLengthHashableRepresentation(signature ByteSignature) ([]byte, error) {
 	return signature, nil
 }
