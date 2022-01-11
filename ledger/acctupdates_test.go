@@ -493,7 +493,9 @@ func TestAcctUpdates(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
-	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
+	start := basics.Round(10)
+	end := basics.Round(proto.MaxBalLookback + 15)
+	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.NewAccountDeltas
@@ -526,7 +528,11 @@ func TestAcctUpdates(t *testing.T) {
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
-		checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
+		// checkAcctUpdates is kind of slow because of amount of data it needs to compare
+		// instead, compare at start, end in between approx 10 rounds
+		if i == start || i == end-1 || crypto.RandUint64()%10 == 0 {
+			checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
+		}
 	}
 
 	for i := basics.Round(0); i < 15; i++ {
