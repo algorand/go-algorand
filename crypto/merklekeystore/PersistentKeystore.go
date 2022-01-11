@@ -94,7 +94,6 @@ func (s *Keystore) Restore(store db.Accessor) (err error) {
 }
 
 // FetchKey returns the SigningKey and round for a specified index from the StateProof DB
-// TODO: add unit test
 func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
 	var keyB []byte
 	var round uint64
@@ -133,7 +132,7 @@ func (s *Keystore) CountKeys(store db.Accessor) int {
 		return nil
 	})
 	if err != nil {
-		return -1
+		return 0
 	}
 	return count
 }
