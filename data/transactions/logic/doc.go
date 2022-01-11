@@ -233,7 +233,7 @@ var opcodeImmediateNotes = map[string]string{
 	"ecdsa_pk_recover":    "{uint8 curve index}",
 
 	"base64_decode": "{uint8 encoding index}",
-	"json_ref":      "{return type}",
+	"json_ref":      "{string return type}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte

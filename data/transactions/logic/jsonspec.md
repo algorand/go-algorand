@@ -2,12 +2,11 @@
 
 A valid JSON text must follow the grammar defined in <a href="https://www.rfc-editor.org/rfc/rfc7159.html">RFC7159</a>
 
-Additional specifications used by **json_ref** that are extensions to RFC7159 grammar are listed below.
+Additional specifications used by **json_ref** that are extensions to the RFC7159 grammar are listed below.
 
 ### File Encoding
-- Only utf-8 encoded are accepted.
-- Byte order mark(BOM),"\uFEFF", is not allowed at the beginning of a JSON text,
-  it is treated as an error
+- Only utf-8 encoded are accepted
+- The byte order mark (BOM), "\uFEFF", is not allowed at the beginning of a JSON text
 - Raw non-unicode characters not accepted
 #### Invalid JSON text
 ```json
@@ -18,26 +17,26 @@ Additional specifications used by **json_ref** that are extensions to RFC7159 gr
 ```
 ### Object
 #### duplicate key
-Duplicate key at top level is treated as error and ignored when it is in nested object. 
+Duplicate keys at the top level result in an error; however, duplicate keys nested at a lower level are ignored. 
 #### Invalid JSON text
 ```json
 {"key0": 1,"key0": 2}
 ```
-#### Valid JSON text
+#### Acceptable JSON text
 ```json
 {"key0": 1,"key1": {"key2":2,"key2":"10"}}
 ```
 ### Numbers
 #### Range 
 - Only integers between 0 and 2^64-1 are accepted
-- All other values are treated as error.
+- All other values result in an error
 
 #### Special Values
 - `null`, `true`, `false` are the only accepted special values. 
 - other spcial values such as `NaN`,`+Inf`,`-Inf` are not accepted
 
 #### Exponential Notation
-Exponential notation not accepted
+Exponential notation is not accepted
 #### Invalid JSON text
 ```json
 {"key": 1.2E-6}
@@ -46,7 +45,7 @@ Exponential notation not accepted
 {"key": 0.2E+8}
 ```
 ##### Hex values
-Hex values not accepted
+Hex values are not accepted
 
 #### Invalid JSON text
 ```json
@@ -56,7 +55,7 @@ Hex values not accepted
 {"key0": 0xFF}
 ```
 ### Trailing Commas
-Trailing commas not accepted.
+Trailing commas are not accepted.
 #### Invalid JSON text
 ```json
 {"key": 4160,,,}
@@ -65,7 +64,7 @@ Trailing commas not accepted.
 {"key": "algo",,,}
 ```
 ### Comment
-Comment block not accepted.
+Comment blocks are not accepted.
 #### Invalid JSON text
 ```json
 {"key0": /*comment*/"algo"}
@@ -78,12 +77,12 @@ Comment block not accepted.
 ```
 ### White Spaces
 - space, tab(`\t`), new line(`\n`) and carriage return(`\r`) are allowed
-- form feed(`\f`) not allowed
+- form feed(`\f`) is not allowed
 
 ### Escaped Characters
 
 - control chars (U+0000 - U+001F) must be escaped
-- surrogate pair is accepted  
+- surrogate pairs are accepted
 - escaped invalid characters are replaced by replacement character (U+FFFD)
 #### Example
 a valid surrogate pair
