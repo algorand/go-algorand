@@ -5256,10 +5256,10 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 		},
 		{
-			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientD/u0061taJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientD\\u0061taJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
 			byte "response"; 
 			json_ref JSONObject; 
-			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientD/u0061taJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
+			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientD\\u0061taJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
 			==`,
 		},
 		{

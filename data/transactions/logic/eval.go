@@ -4065,7 +4065,7 @@ func hasDuplicateKeys(jsonText []byte) (bool, error) {
 	dec := json.NewDecoder(bytes.NewReader(jsonText))
 	keys := make(map[string]bool)
 	var value interface{}
-	_, err := dec.Token() // {
+	_, err := dec.Token()
 	if err != nil {
 		return false, err
 	}
@@ -4138,10 +4138,10 @@ func opJSONRef(cx *EvalContext) {
 	expectedType := JSONRefType(cx.program[cx.pc+1])
 	switch expectedType {
 	case JSONString:
-		var value string // change to uint64 for JSONUint64
+		var value string
 		err := json.Unmarshal(parsed[key], &value)
 		if err != nil {
-			cx.err = fmt.Errorf("%v", err)
+			cx.err = err
 			return
 		}
 		stval.Bytes = []byte(value)
@@ -4149,7 +4149,7 @@ func opJSONRef(cx *EvalContext) {
 		var value uint64
 		err := json.Unmarshal(parsed[key], &value)
 		if err != nil {
-			cx.err = fmt.Errorf("%v", err)
+			cx.err = err
 			return
 		}
 		stval.Uint = value
@@ -4157,7 +4157,7 @@ func opJSONRef(cx *EvalContext) {
 		var value map[string]interface{}
 		err := json.Unmarshal(parsed[key], &value)
 		if err != nil {
-			cx.err = fmt.Errorf("%v", err)
+			cx.err = err
 			return
 		}
 		stval.Bytes = parsed[key]
