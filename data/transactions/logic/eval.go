@@ -3885,13 +3885,12 @@ func opAcctParamsGet(cx *EvalContext) {
 		return
 	}
 
-	var exist uint64 = 0
 	bal, err := cx.Ledger.Balance(addr)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	exist = boolToUint(bal.Raw > 0)
+	exist := boolToUint(bal.Raw > 0)
 
 	var value stackValue
 
