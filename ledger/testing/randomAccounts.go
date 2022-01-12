@@ -359,43 +359,70 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 				data, knownCreatables, lastCreatableID = RandomFullAccountData(rewardsLevel, knownCreatables, lastCreatableID)
 				new = ledgercore.ToAccountData(data)
 				updates.Upsert(addr, new)
+				appResources := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
+				assetResources := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
+
 				for aidx, params := range data.AppParams {
 					val := params
-					updates.UpsertAppParams(addr, aidx, &val)
+					res := appResources[aidx]
+					res.Params = &val
+					appResources[aidx] = res
 				}
 				for aidx, states := range data.AppLocalStates {
 					val := states
-					updates.UpsertAppLocalState(addr, aidx, &val)
+					res := appResources[aidx]
+					res.State = &val
+					appResources[aidx] = res
 				}
+
 				for aidx, params := range data.AssetParams {
 					val := params
-					updates.UpsertAssetParams(addr, aidx, &val)
+					res := assetResources[aidx]
+					res.Params = &val
+					assetResources[aidx] = res
 				}
 				for aidx, holding := range data.Assets {
 					val := holding
-					updates.UpsertAssetHolding(addr, aidx, &val)
+					res := assetResources[aidx]
+					res.Holding = &val
+					assetResources[aidx] = res
 				}
 
 				// remove deleted
 				for aidx := range old.AppParams {
 					if _, ok := data.AppParams[aidx]; !ok {
-						updates.UpsertAppParams(addr, aidx, nil)
+						res := appResources[aidx]
+						res.Params = nil
+						appResources[aidx] = res
 					}
 				}
 				for aidx := range old.AppLocalStates {
 					if _, ok := data.AppLocalStates[aidx]; !ok {
-						updates.UpsertAppLocalState(addr, aidx, nil)
+						res := appResources[aidx]
+						res.State = nil
+						appResources[aidx] = res
 					}
 				}
 				for aidx := range old.AssetParams {
 					if _, ok := data.AssetParams[aidx]; !ok {
-						updates.UpsertAssetParams(addr, aidx, nil)
+						res := assetResources[aidx]
+						res.Params = nil
+						assetResources[aidx] = res
 					}
 				}
 				for aidx := range old.Assets {
 					if _, ok := data.Assets[aidx]; !ok {
-						updates.UpsertAssetHolding(addr, aidx, nil)
+						res := assetResources[aidx]
+						res.Holding = nil
+						assetResources[aidx] = res
 					}
+				}
+
+				for aidx, res := range appResources {
+					updates.UpsertAppResource(addr, aidx, res.Params, res.State)
+				}
+				for aidx, res := range assetResources {
+					updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 				}
 			}
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
@@ -417,21 +444,39 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 			data, knownCreatables, lastCreatableID = RandomFullAccountData(rewardsLevel, knownCreatables, lastCreatableID)
 			new = ledgercore.ToAccountData(data)
 			updates.Upsert(addr, new)
+			appResources := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
+			assetResources := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
+
 			for aidx, params := range data.AppParams {
 				val := params
-				updates.UpsertAppParams(addr, aidx, &val)
+				res := appResources[aidx]
+				res.Params = &val
+				appResources[aidx] = res
 			}
 			for aidx, states := range data.AppLocalStates {
 				val := states
-				updates.UpsertAppLocalState(addr, aidx, &val)
+				res := appResources[aidx]
+				res.State = &val
+				appResources[aidx] = res
 			}
 			for aidx, params := range data.AssetParams {
 				val := params
-				updates.UpsertAssetParams(addr, aidx, &val)
+				res := assetResources[aidx]
+				res.Params = &val
+				assetResources[aidx] = res
 			}
 			for aidx, holding := range data.Assets {
 				val := holding
-				updates.UpsertAssetHolding(addr, aidx, &val)
+				res := assetResources[aidx]
+				res.Holding = &val
+				assetResources[aidx] = res
+			}
+
+			for aidx, res := range appResources {
+				updates.UpsertAppResource(addr, aidx, res.Params, res.State)
+			}
+			for aidx, res := range assetResources {
+				updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 			}
 		}
 		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)

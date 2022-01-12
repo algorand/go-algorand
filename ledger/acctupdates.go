@@ -818,50 +818,28 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		macct.data = data
 		au.accounts[addr] = macct
 	}
-	for _, holding := range delta.NewAccts.GetAllAssetsHoldings() {
+	for _, res := range delta.NewAccts.GetAllAssetResources() {
 		key := accountCreatable{
-			address: holding.Addr,
-			index:   basics.CreatableIndex(holding.Aidx),
+			address: res.Addr,
+			index:   basics.CreatableIndex(res.Aidx),
 		}
 		mres, _ := au.resources.get(key)
-		mres.resource.AssetHolding = holding.Holding
-		mres.resource.CreatableIndex = basics.CreatableIndex(holding.Aidx)
+		mres.resource.AssetHolding = res.Holding
+		mres.resource.AssetParams = res.Params
+		mres.resource.CreatableIndex = basics.CreatableIndex(res.Aidx)
 		mres.resource.CreatableType = basics.AssetCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
-	for _, params := range delta.NewAccts.GetAllAssetParams() {
+	for _, res := range delta.NewAccts.GetAllAppResources() {
 		key := accountCreatable{
-			address: params.Addr,
-			index:   basics.CreatableIndex(params.Aidx),
+			address: res.Addr,
+			index:   basics.CreatableIndex(res.Aidx),
 		}
 		mres, _ := au.resources.get(key)
-		mres.resource.AssetParams = params.Params
-		mres.resource.CreatableIndex = basics.CreatableIndex(params.Aidx)
-		mres.resource.CreatableType = basics.AssetCreatable
-		mres.ndeltas++
-		au.resources.set(key, mres)
-	}
-	for _, localStates := range delta.NewAccts.GetAllAppLocalStates() {
-		key := accountCreatable{
-			address: localStates.Addr,
-			index:   basics.CreatableIndex(localStates.Aidx),
-		}
-		mres, _ := au.resources.get(key)
-		mres.resource.AppLocalState = localStates.State
-		mres.resource.CreatableIndex = basics.CreatableIndex(localStates.Aidx)
-		mres.resource.CreatableType = basics.AppCreatable
-		mres.ndeltas++
-		au.resources.set(key, mres)
-	}
-	for _, appParams := range delta.NewAccts.GetAllAppParams() {
-		key := accountCreatable{
-			address: appParams.Addr,
-			index:   basics.CreatableIndex(appParams.Aidx),
-		}
-		mres, _ := au.resources.get(key)
-		mres.resource.AppParams = appParams.Params
-		mres.resource.CreatableIndex = basics.CreatableIndex(appParams.Aidx)
+		mres.resource.AppLocalState = res.State
+		mres.resource.AppParams = res.Params
+		mres.resource.CreatableIndex = basics.CreatableIndex(res.Aidx)
 		mres.resource.CreatableType = basics.AppCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)

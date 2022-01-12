@@ -74,22 +74,62 @@ func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIn
 }
 
 func (cs *roundCowState) PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error {
-	cs.mods.NewAccts.UpsertAppParams(addr, aidx, &params)
+	return cs.putAppParams(addr, aidx, &params)
+}
+
+func (cs *roundCowState) putAppParams(addr basics.Address, aidx basics.AppIndex, params *basics.AppParams) error {
+	var state *basics.AppLocalState
+	if as, ok, err := cs.lookupAppLocalState(addr, aidx); err != nil { // should be cached
+		return err
+	} else if ok {
+		state = &as
+	}
+	cs.mods.NewAccts.UpsertAppResource(addr, aidx, params, state)
 	return nil
 }
 
 func (cs *roundCowState) PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error {
-	cs.mods.NewAccts.UpsertAppLocalState(addr, aidx, &state)
+	return cs.putAppLocalState(addr, aidx, &state)
+}
+
+func (cs *roundCowState) putAppLocalState(addr basics.Address, aidx basics.AppIndex, state *basics.AppLocalState) error {
+	var params *basics.AppParams
+	if ap, ok, err := cs.lookupAppParams(addr, aidx); err != nil { // should be cached
+		return err
+	} else if ok {
+		params = &ap
+	}
+	cs.mods.NewAccts.UpsertAppResource(addr, aidx, params, state)
 	return nil
 }
 
 func (cs *roundCowState) PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error {
-	cs.mods.NewAccts.UpsertAssetHolding(addr, aidx, &data)
+	return cs.putAssetHolding(addr, aidx, &data)
+}
+
+func (cs *roundCowState) putAssetHolding(addr basics.Address, aidx basics.AssetIndex, data *basics.AssetHolding) error {
+	var params *basics.AssetParams
+	if ap, ok, err := cs.lookupAssetParams(addr, aidx); err != nil { // should be cached
+		return err
+	} else if ok {
+		params = &ap
+	}
+	cs.mods.NewAccts.UpsertAssetResource(addr, aidx, params, data)
 	return nil
 }
 
 func (cs *roundCowState) PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error {
-	cs.mods.NewAccts.UpsertAssetParams(addr, aidx, &data)
+	return cs.putAssetParams(addr, aidx, &data)
+}
+
+func (cs *roundCowState) putAssetParams(addr basics.Address, aidx basics.AssetIndex, data *basics.AssetParams) error {
+	var holding *basics.AssetHolding
+	if ah, ok, err := cs.lookupAssetHolding(addr, aidx); err != nil { // should be cached
+		return err
+	} else if ok {
+		holding = &ah
+	}
+	cs.mods.NewAccts.UpsertAssetResource(addr, aidx, data, holding)
 	return nil
 }
 
@@ -98,7 +138,7 @@ func (cs *roundCowState) DeleteAppParams(addr basics.Address, aidx basics.AppInd
 		return fmt.Errorf("DeleteAppParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.mods.NewAccts.UpsertAppParams(addr, aidx, nil)
+	cs.putAppParams(addr, aidx, nil)
 	return nil
 }
 
@@ -107,7 +147,7 @@ func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.Ap
 		return fmt.Errorf("DeleteAppLocalState: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.mods.NewAccts.UpsertAppLocalState(addr, aidx, nil)
+	cs.putAppLocalState(addr, aidx, nil)
 	return nil
 }
 
@@ -116,7 +156,7 @@ func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.Ass
 		return fmt.Errorf("DeleteAssetHolding: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.mods.NewAccts.UpsertAssetHolding(addr, aidx, nil)
+	cs.putAssetHolding(addr, aidx, nil)
 	return nil
 }
 
@@ -125,7 +165,7 @@ func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.Asse
 		return fmt.Errorf("DeleteAssetParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.mods.NewAccts.UpsertAssetParams(addr, aidx, nil)
+	cs.putAssetParams(addr, aidx, nil)
 	return nil
 }
 

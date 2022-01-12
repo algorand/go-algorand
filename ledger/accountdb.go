@@ -372,8 +372,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	for _, roundDelta := range accountDeltas {
 		deltaRound++
 		// assets
-		for _, assetHold := range roundDelta.GetAllAssetsHoldings() {
-			if prev, idx := outResourcesDeltas.get(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); idx != -1 {
+		for _, res := range roundDelta.GetAllAssetResources() {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
@@ -381,49 +381,13 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if assetHold.Holding != nil {
-					updEntry.newResource.SetAssetHolding(*assetHold.Holding)
+				if res.Holding != nil {
+					updEntry.newResource.SetAssetHolding(*res.Holding)
 				} else {
 					updEntry.newResource.ClearAssetHolding()
 				}
-				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
-				outResourcesDeltas.update(idx, updEntry)
-			} else {
-				// it's a new entry.
-				newEntry := resourceDelta{
-					nAcctDeltas: 1,
-					address:     assetHold.Addr,
-					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
-				}
-				if assetHold.Holding != nil {
-					newEntry.newResource.SetAssetHolding(*assetHold.Holding)
-				}
-				baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx))
-				existingAcctCacheEntry := has && baseResourceData.addrid != 0
-				if existingAcctCacheEntry {
-					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry)
-				} else {
-					if pad, has := baseAccounts.read(assetHold.Addr); has {
-						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
-					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(assetHold.Aidx)
-					outResourcesDeltas.insertMissing(newEntry)
-				}
-			}
-		}
-		// asset params
-		for _, assetParams := range roundDelta.GetAllAssetParams() {
-			if prev, idx := outResourcesDeltas.get(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); idx != -1 {
-				// update existing entry with new data.
-				updEntry := resourceDelta{
-					oldResource: prev.oldResource,
-					newResource: prev.newResource,
-					nAcctDeltas: prev.nAcctDeltas + 1,
-					address:     prev.address,
-				}
-				if assetParams.Params != nil {
-					updEntry.newResource.SetAssetParams(*assetParams.Params, updEntry.newResource.IsHolding())
+				if res.Params != nil {
+					updEntry.newResource.SetAssetParams(*res.Params, updEntry.newResource.IsHolding())
 				} else {
 					updEntry.newResource.ClearAssetParams()
 				}
@@ -433,30 +397,33 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				// it's a new entry.
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
-					address:     assetParams.Addr,
+					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if assetParams.Params != nil {
-					newEntry.newResource.SetAssetParams(*assetParams.Params, false)
+				if res.Holding != nil {
+					newEntry.newResource.SetAssetHolding(*res.Holding)
 				}
-				baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx))
+				if res.Params != nil {
+					newEntry.newResource.SetAssetParams(*res.Params, false)
+				}
+				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(newEntry)
 				} else {
-					if pad, has := baseAccounts.read(assetParams.Addr); has {
+					if pad, has := baseAccounts.read(res.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(assetParams.Aidx)
+					newEntry.oldResource.aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
 		}
 
-		// application local state
-		for _, localState := range roundDelta.GetAllAppLocalStates() {
-			if prev, idx := outResourcesDeltas.get(localState.Addr, basics.CreatableIndex(localState.Aidx)); idx != -1 {
+		// application
+		for _, res := range roundDelta.GetAllAppResources() {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
@@ -464,50 +431,13 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if localState.State != nil {
-					updEntry.newResource.SetAppLocalState(*localState.State)
+				if res.State != nil {
+					updEntry.newResource.SetAppLocalState(*res.State)
 				} else {
 					updEntry.newResource.ClearAppLocalState()
 				}
-				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
-				outResourcesDeltas.update(idx, updEntry)
-			} else {
-				// it's a new entry.
-				newEntry := resourceDelta{
-					nAcctDeltas: 1,
-					address:     localState.Addr,
-					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
-				}
-				if localState.State != nil {
-					newEntry.newResource.SetAppLocalState(*localState.State)
-				}
-				baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx))
-				existingAcctCacheEntry := has && baseResourceData.addrid != 0
-				if existingAcctCacheEntry {
-					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry)
-				} else {
-					if pad, has := baseAccounts.read(localState.Addr); has {
-						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
-					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(localState.Aidx)
-					outResourcesDeltas.insertMissing(newEntry)
-				}
-			}
-		}
-
-		// application params
-		for _, appParams := range roundDelta.GetAllAppParams() {
-			if prev, idx := outResourcesDeltas.get(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); idx != -1 {
-				// update existing entry with new data.
-				updEntry := resourceDelta{
-					oldResource: prev.oldResource,
-					newResource: prev.newResource,
-					nAcctDeltas: prev.nAcctDeltas + 1,
-					address:     prev.address,
-				}
-				if appParams.Params != nil {
-					updEntry.newResource.SetAppParams(*appParams.Params, updEntry.newResource.IsHolding())
+				if res.Params != nil {
+					updEntry.newResource.SetAppParams(*res.Params, updEntry.newResource.IsHolding())
 				} else {
 					updEntry.newResource.ClearAppParams()
 				}
@@ -517,22 +447,25 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 				// it's a new entry.
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
-					address:     appParams.Addr,
+					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if appParams.Params != nil {
-					newEntry.newResource.SetAppParams(*appParams.Params, false)
+				if res.State != nil {
+					newEntry.newResource.SetAppLocalState(*res.State)
 				}
-				baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx))
+				if res.Params != nil {
+					newEntry.newResource.SetAppParams(*res.Params, false)
+				}
+				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(newEntry)
 				} else {
-					if pad, has := baseAccounts.read(appParams.Addr); has {
+					if pad, has := baseAccounts.read(res.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(appParams.Aidx)
+					newEntry.oldResource.aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}

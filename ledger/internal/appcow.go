@@ -654,7 +654,14 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
 				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
-			cb.mods.NewAccts.UpsertAppParams(addr, aapp.aidx, nil)
+			// fetch AppLocalState to store along with deleted AppParams
+			var state *basics.AppLocalState
+			if st, exist, err := cb.lookupAppLocalState(addr, aapp.aidx); err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			} else if exist {
+				state = &st
+			}
+			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, nil, state)
 		case allocAction:
 			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
 				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
@@ -687,7 +694,14 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 					params.GlobalState[k] = v.new
 				}
 			}
-			cb.mods.NewAccts.UpsertAppParams(addr, aapp.aidx, &params)
+			// fetch AppLocalState to store along with updated AppParams
+			var state *basics.AppLocalState
+			if st, exist, err := cb.lookupAppLocalState(addr, aapp.aidx); err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			} else if exist {
+				state = &st
+			}
+			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, &params, state)
 		}
 	} else {
 		switch storeDelta.action {
@@ -695,7 +709,14 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
 				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
-			cb.mods.NewAccts.UpsertAppLocalState(addr, aapp.aidx, nil)
+			// fetch AppParams to store along with deleted AppLocalState
+			var params *basics.AppParams
+			if ap, exist, err := cb.lookupAppParams(addr, aapp.aidx); err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			} else if exist {
+				params = &ap
+			}
+			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, nil)
 		case allocAction:
 			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
 				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
@@ -729,7 +750,14 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 					states.KeyValue[k] = v.new
 				}
 			}
-			cb.mods.NewAccts.UpsertAppLocalState(addr, aapp.aidx, &states)
+			// fetch AppParams to store along with deleted AppLocalState
+			var params *basics.AppParams
+			if ap, exist, err := cb.lookupAppParams(addr, aapp.aidx); err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			} else if exist {
+				params = &ap
+			}
+			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, &states)
 		}
 	}
 	return nil
