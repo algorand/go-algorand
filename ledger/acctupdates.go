@@ -814,7 +814,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	}
 
 	// merge deltas into AccountResources
-	resources := make(map[basics.CreatableIndex]struct {
+	resources := make(map[accountCreatable]struct {
 		Addr           basics.Address
 		CreatableIndex basics.CreatableIndex
 		CreatableType  basics.CreatableType
@@ -825,37 +825,37 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	}) // XXX provide size hint?
 
 	for _, d := range delta.NewAccts.GetAllAssetsHoldings() {
-		idx := basics.CreatableIndex(d.Aidx)
+		idx := accountCreatable{d.Addr, basics.CreatableIndex(d.Aidx)}
 		r := resources[idx]
 		r.Addr = d.Addr
-		r.CreatableIndex = idx
+		r.CreatableIndex = idx.index
 		r.CreatableType = basics.AssetCreatable
 		r.AssetHolding = d.Holding
 		resources[idx] = r
 	}
 	for _, d := range delta.NewAccts.GetAllAssetParams() {
-		idx := basics.CreatableIndex(d.Aidx)
+		idx := accountCreatable{d.Addr, basics.CreatableIndex(d.Aidx)}
 		r := resources[idx]
 		r.Addr = d.Addr
-		r.CreatableIndex = idx
+		r.CreatableIndex = idx.index
 		r.CreatableType = basics.AssetCreatable
 		r.AssetParams = d.Params
 		resources[idx] = r
 	}
 	for _, d := range delta.NewAccts.GetAllAppLocalStates() {
-		idx := basics.CreatableIndex(d.Aidx)
+		idx := accountCreatable{d.Addr, basics.CreatableIndex(d.Aidx)}
 		r := resources[idx]
 		r.Addr = d.Addr
-		r.CreatableIndex = idx
+		r.CreatableIndex = idx.index
 		r.CreatableType = basics.AppCreatable
 		r.AppLocalState = d.State
 		resources[idx] = r
 	}
 	for _, d := range delta.NewAccts.GetAllAppParams() {
-		idx := basics.CreatableIndex(d.Aidx)
+		idx := accountCreatable{d.Addr, basics.CreatableIndex(d.Aidx)}
 		r := resources[idx]
 		r.Addr = d.Addr
-		r.CreatableIndex = idx
+		r.CreatableIndex = idx.index
 		r.CreatableType = basics.AppCreatable
 		r.AppParams = d.Params
 		resources[idx] = r
