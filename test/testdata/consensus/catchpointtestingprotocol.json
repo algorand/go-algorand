@@ -1,7 +1,7 @@
 {
   "catchpointtestingprotocol": {
-    "AgreementFilterTimeout": 4000000000,
-    "AgreementFilterTimeoutPeriod0": 4000000000,
+    "AgreementFilterTimeout": 1000000000,
+    "AgreementFilterTimeoutPeriod0": 1000000000,
     "AppFlatOptInMinBalance": 100000,
     "AppFlatParamsMinBalance": 100000,
     "Application": true,
