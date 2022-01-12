@@ -84,7 +84,7 @@ type (
 		Sigs      [2]crypto.OneTimeSignature `codec:"sigs"`
 	}
 
-	// Exported for dumping textual versions of messages
+	// UnauthenticatedVote exported for dumping textual versions of messages
 	UnauthenticatedVote = unauthenticatedVote
 )
 

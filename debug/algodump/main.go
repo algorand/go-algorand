@@ -49,17 +49,15 @@ type dumpHandler struct {
 func shortaddr(addr basics.Address) string {
 	if *longFlag {
 		return addr.String()
-	} else {
-		return fmt.Sprintf("%s..", addr.String()[0:8])
 	}
+	return fmt.Sprintf("%s..", addr.String()[0:8])
 }
 
 func shortdigest(d crypto.Digest) string {
 	if *longFlag {
 		return d.String()
-	} else {
-		return fmt.Sprintf("%s..", d.String()[0:8])
 	}
+	return fmt.Sprintf("%s..", d.String()[0:8])
 }
 
 func (dh *dumpHandler) Handle(msg network.IncomingMessage) network.OutgoingMessage {
