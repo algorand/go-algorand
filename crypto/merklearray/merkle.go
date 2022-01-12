@@ -166,6 +166,16 @@ func (tree *Tree) Root() crypto.GenericDigest {
 // TODO: change into something global and more configurable
 const validateProof = false
 
+// ProveOnSingleLeaf constructs a proof for a leaf in a specific position in the array that was
+// used to construct the tree.
+func (tree *Tree) ProveOnSingleLeaf(idx uint64) (*SingleLeafProof, error) {
+	proof, err := tree.Prove([]uint64{idx})
+	if err != nil {
+		return nil, err
+	}
+	return &SingleLeafProof{Proof: *proof}, err
+}
+
 // Prove constructs a proof for some set of positions in the array that was
 // used to construct the tree.
 func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {

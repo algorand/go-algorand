@@ -36,14 +36,22 @@ type Proof struct {
 	TreeDepth uint8 `codec:"td"`
 }
 
-// GetSerializedProof serializes the proof into a sequence of bytes.
+// SingleLeafProof is used to convince a verifier about membership of a specific
+// leaf h at index i on a tree. The verifier has a trusted value of the tree
+// root hash. it corresponds to merkle verification path.
+type SingleLeafProof struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Proof
+}
+
+// GetFixedLengthHashableRepresentation serializes the proof into a sequence of bytes.
 // it basically concatenates all the verification path one after another.
 // The function returns a fixed length array for each hash function. which is 1 + MaxTreeDepth * digestsize
 //
 // the path is guaranteed to be less than MaxTreeDepth and if the path length is less
 // than MaxTreeDepth, array is padded with zeros.
 // more details could be found in the Algorand's spec.
-func (p *Proof) GetSerializedProof() []byte {
+func (p *SingleLeafProof) GetFixedLengthHashableRepresentation() []byte {
 	hash := p.HashFactory.NewHash()
 
 	var binProof = make([]byte, 0, 1+(MaxTreeDepth*hash.Size()))
@@ -61,4 +69,10 @@ func (p *Proof) GetSerializedProof() []byte {
 	}
 
 	return binProof
+}
+
+// ToProof export a Proof from a SingleProof. the result should be
+// used as an input for merklearray.Verify or  merklearray.VerifyVectorCommitment
+func (p *SingleLeafProof) ToProof() *Proof {
+	return &p.Proof
 }

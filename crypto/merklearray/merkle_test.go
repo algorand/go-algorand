@@ -953,6 +953,64 @@ func TestTreeNumOfLeavesField(t *testing.T) {
 	a.Equal(tree.NumOfLeaves, uint64(3))
 }
 
+func TestProveOnSingleLeaf(t *testing.T) {
+	var junk TestData
+	size := uint64(15)
+	crypto.RandBytes(junk[:])
+
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	for i := uint64(0); i < size; i++ {
+		proof, err := tree.Prove([]uint64{i})
+		require.NoError(t, err)
+
+		singleLeafproof, err := tree.ProveOnSingleLeaf(i)
+		require.NoError(t, err)
+
+		require.Equal(t, singleLeafproof.ToProof(), proof)
+
+		err = Verify(root, map[uint64]crypto.Hashable{i: a[i]}, singleLeafproof.ToProof())
+		require.NoError(t, err)
+	}
+}
+
+func TestVCProveOnSingleLeaf(t *testing.T) {
+	var junk TestData
+	size := uint64(15)
+	crypto.RandBytes(junk[:])
+
+	a := make(TestArray, size)
+	for i := uint64(0); i < size; i++ {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+	require.NoError(t, err)
+
+	root := tree.Root()
+
+	for i := uint64(0); i < size; i++ {
+		proof, err := tree.Prove([]uint64{i})
+		require.NoError(t, err)
+
+		singleLeafproof, err := tree.ProveOnSingleLeaf(i)
+		require.NoError(t, err)
+
+		require.Equal(t, singleLeafproof.ToProof(), proof)
+
+		err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{i: a[i]}, singleLeafproof.ToProof())
+		require.NoError(t, err)
+	}
+}
+
 func BenchmarkMerkleCommit(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
