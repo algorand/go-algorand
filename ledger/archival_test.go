@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,14 +87,6 @@ func (wl *wrappedLedger) blockDB() db.Pair {
 
 func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
-}
-
-func (wl *wrappedLedger) scheduleCommit(basics.Round) {
-	return
-}
-
-func (wl *wrappedLedger) waitAccountsWriting() {
-	return
 }
 
 func (wl *wrappedLedger) GenesisHash() crypto.Digest {
@@ -804,8 +796,8 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	for _, trk := range wl.l.trackers.trackers {
 		if au, ok := trk.(*accountUpdates); ok {
 			wl.l.trackers.waitAccountsWriting()
-			minSave = trk.committedUpTo(rnd)
-			wl.l.trackers.scheduleCommit(rnd)
+			minSave, _ = trk.committedUpTo(rnd)
+			wl.l.trackers.committedUpTo(rnd)
 			wl.l.trackers.waitAccountsWriting()
 			if minSave < minMinSave {
 				minMinSave = minSave
@@ -818,9 +810,9 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
-			au.initialize(cfg, "")
+			au.initialize(cfg)
 		} else {
-			minSave = trk.committedUpTo(rnd)
+			minSave, _ = trk.committedUpTo(rnd)
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}

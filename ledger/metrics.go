@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,8 +50,8 @@ func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	mt.ledgerRewardClaimsTotal.Add(float64(1), map[string]string{})
 }
 
-func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) basics.Round {
-	return committedRnd
+func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) (retRound, lookback basics.Round) {
+	return committedRnd, basics.Round(0)
 }
 
 func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
@@ -62,8 +62,14 @@ func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitC
 	return nil
 }
 
-func (mt *metricsTracker) postCommit(deferredCommitContext) {
+func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 func (mt *metricsTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
+}
+func (mt *metricsTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
 }

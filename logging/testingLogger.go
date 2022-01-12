@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ import (
 
 // TestLogWriter is an io.Writer that wraps a testing.T (or a testing.B) -- anything written to it gets logged with t.Log(...)
 // Being an io.Writer lets us pass it to Logger.SetOutput() in testing code -- this way if we want we can use Go's built-in testing log instead of making a new base.log file for each test.
-// As a bonus, the detailed logs produced in a Travis test are now easily accessible and are printed if and only if that particular ttest fails.
+// As a bonus, the detailed logs produced in a Travis test are now easily accessible and are printed if and only if that particular test fails.
 type TestLogWriter struct {
 	testing.TB
 }

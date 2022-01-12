@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1426,7 +1426,7 @@ func TestGetLastCatchpointLabel(t *testing.T) {
 
 	// set some value
 	lastCatchpointLabel := "someCatchpointLabel"
-	ledger.accts.lastCatchpointLabel = lastCatchpointLabel
+	ledger.catchpoint.lastCatchpointLabel = lastCatchpointLabel
 
 	// verify the value is returned
 	require.Equal(t, lastCatchpointLabel, ledger.GetLastCatchpointLabel())

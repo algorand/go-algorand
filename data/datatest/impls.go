@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package datatest
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -54,7 +53,7 @@ type entryFactoryImpl struct {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (i entryFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
 	prev, err := i.l.BlockHdr(round - 1)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals: could not read block from ledger at round %v: %v", round, err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,12 +42,6 @@ func (eval *BlockEvaluator) ProcessBlockForIndexer(block *bookkeeping.Block) (le
 
 	// Finally, process any pending end-of-block state changes.
 	err = eval.endOfBlock()
-	if err != nil {
-		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
-			fmt.Errorf("ProcessBlockForIndexer() err: %w", err)
-	}
-
-	err = eval.finalValidation()
 	if err != nil {
 		return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 			fmt.Errorf("ProcessBlockForIndexer() err: %w", err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,12 +39,12 @@ import (
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
-	"golang.org/x/net/netutil"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
@@ -52,11 +52,7 @@ import (
 )
 
 const incomingThreads = 20
-
-// messageFilterSize is the threshold beyond we send a request to the other peer to avoid sending us a message with that particular hash.
-// typically, this is beneficial for proposal messages, which tends to be large and uniform across the network. Non-uniform messages, such
-// as the transaction sync messages should not included in this filter.
-const messageFilterSize = 200000
+const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
 // request headers. The connection's read deadline is reset
@@ -80,9 +76,6 @@ const httpServerIdleTimeout = time.Second * 4
 // values, including the request line. It does not limit the
 // size of the request body.
 const httpServerMaxHeaderBytes = 4096
-
-// MaxInt is the maximum int which might be int32 or int64
-const MaxInt = int((^uint(0)) >> 1)
 
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
@@ -221,9 +214,6 @@ type IncomingMessage struct {
 	Data   []byte
 	Err    error
 	Net    GossipNode
-
-	// Sequence is the sequence number of the message for the specific tag and peer
-	Sequence uint64
 
 	// Received is time.Time.UnixNano()
 	Received int64
@@ -741,25 +731,11 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
-	var err error
-	if wn.config.IncomingConnectionsLimit < 0 {
-		wn.config.IncomingConnectionsLimit = MaxInt
-	}
-
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
-	}
-
-	// Make sure we do not accept more incoming connections than our
-	// open file rlimit, with some headroom for other FDs (DNS, log
-	// files, SQLite files, telemetry, ...)
-	err = wn.rlimitIncomingConnections()
-	if err != nil {
-		wn.log.Error("ws network start: rlimitIncomingConnections ", err)
-		return
 	}
 
 	if wn.config.NetAddress != "" {
@@ -769,7 +745,8 @@ func (wn *WebsocketNetwork) Start() {
 			return
 		}
 		// wrap the original listener with a limited connection listener
-		listener = netutil.LimitListener(listener, wn.config.IncomingConnectionsLimit)
+		listener = limitlistener.RejectingLimitListener(
+			listener, uint64(wn.config.IncomingConnectionsLimit), wn.log)
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
@@ -1136,21 +1113,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
 	if wn.messagesOfInterestEnc != nil {
-		msg := wn.messagesOfInterestEnc
-		// for older peers, we want to include also the "TX" message, for backward compatibility.
-		// this statement could be safely removed once we've fully migrated.
-		if peer.version == "2.1" {
-			wn.messagesOfInterestMu.Lock()
-			txSendMsgTags := make(map[protocol.Tag]bool)
-			for tag := range wn.messagesOfInterest {
-				txSendMsgTags[tag] = true
-			}
-			wn.messagesOfInterestMu.Unlock()
-			txSendMsgTags[protocol.TxnTag] = true
-			msg = MarshallMessageOfInterestMap(txSendMsgTags)
-		}
-		err = peer.Unicast(wn.ctx, msg, protocol.MsgOfInterestTag, nil)
-
+		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag)
 		if err != nil {
 			wn.log.Infof("ws send msgOfInterest: %v", err)
 		}
@@ -1432,7 +1395,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime, nil)
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1807,15 +1770,14 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.1", "3.0"}
+var SupportedProtocolVersions = []string{"2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
- *  3.0 Introduced new transaction gossiping protocol
  */
-const ProtocolVersion = "3.0"
+const ProtocolVersion = "2.1"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -2081,7 +2043,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now(), nil)
+				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}

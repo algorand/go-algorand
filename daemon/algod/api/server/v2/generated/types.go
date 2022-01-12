@@ -49,6 +49,11 @@ type Account struct {
 	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
+	// MicroAlgo balance required by the account.
+	//
+	// The requirement grows based on asset and application usage.
+	MinBalance uint64 `json:"min-balance"`
+
 	// AccountParticipation describes the parameters used by this account in consensus protocol.
 	Participation *AccountParticipation `json:"participation,omitempty"`
 
@@ -340,6 +345,34 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// ParticipationKey defines model for ParticipationKey.
+type ParticipationKey struct {
+
+	// Address the key was generated for.
+	Address string `json:"address"`
+
+	// When registered, this is the first round it may be used.
+	EffectiveFirstValid *uint64 `json:"effective-first-valid,omitempty"`
+
+	// When registered, this is the last round it may be used.
+	EffectiveLastValid *uint64 `json:"effective-last-valid,omitempty"`
+
+	// The key's ParticipationID.
+	Id string `json:"id"`
+
+	// AccountParticipation describes the parameters used by this account in consensus protocol.
+	Key AccountParticipation `json:"key"`
+
+	// Round when this key was last used to propose a block.
+	LastBlockProposal *uint64 `json:"last-block-proposal,omitempty"`
+
+	// Round when this key was last used to generate a state proof.
+	LastStateProof *uint64 `json:"last-state-proof,omitempty"`
+
+	// Round when this key was last used to vote.
+	LastVote *uint64 `json:"last-vote,omitempty"`
+}
+
 // PendingTransactionResponse defines model for PendingTransactionResponse.
 type PendingTransactionResponse struct {
 
@@ -588,6 +621,12 @@ type NodeStatusResponse struct {
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
 }
 
+// ParticipationKeyResponse defines model for ParticipationKeyResponse.
+type ParticipationKeyResponse ParticipationKey
+
+// ParticipationKeysResponse defines model for ParticipationKeysResponse.
+type ParticipationKeysResponse []ParticipationKey
+
 // PendingTransactionsResponse defines model for PendingTransactionsResponse.
 type PendingTransactionsResponse struct {
 
@@ -596,6 +635,13 @@ type PendingTransactionsResponse struct {
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
+}
+
+// PostParticipationResponse defines model for PostParticipationResponse.
+type PostParticipationResponse struct {
+
+	// encoding of the participation ID.
+	PartId string `json:"partId"`
 }
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.

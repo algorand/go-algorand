@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ const minBatchVerifierAlloc = 16
 
 // Batch verifications errors
 var (
-	ErrBatchVerificationFailed = errors.New("At least on signature didn't pass verification")
+	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
 	ErrZeroTranscationsInBatch = errors.New("Could not validate empty signature set")
 )
 

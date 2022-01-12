@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    18,
+	Version:                                    20,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AnnounceParticipationKey:                   true,
@@ -44,6 +44,7 @@ var defaultLocal = Local{
 	DNSBootstrapID:                             "<network>.algorand.network",
 	DNSSecurityFlags:                           1,
 	DeadlockDetection:                          0,
+	DeadlockDetectionThreshold:                 30,
 	DisableLocalhostConnectionRateLimit:        true,
 	DisableNetworking:                          false,
 	DisableOutgoingConnectionThrottling:        false,
@@ -92,11 +93,14 @@ var defaultLocal = Local{
 	OutgoingMessageFilterBucketSize:            128,
 	ParticipationKeysRefreshInterval:           60000000000,
 	PeerConnectionsUpdateInterval:              3600,
-	PeerPingPeriodSeconds:                      10,
+	PeerPingPeriodSeconds:                      0,
 	PriorityPeers:                              map[string]bool{},
+	ProposalAssemblyTime:                       250000000,
 	PublicAddress:                              "",
 	ReconnectTime:                              60000000000,
 	ReservedFDs:                                256,
+	RestConnectionsHardLimit:                   2048,
+	RestConnectionsSoftLimit:                   1024,
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,

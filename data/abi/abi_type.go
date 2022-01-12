@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -185,7 +185,7 @@ func TypeOf(str string) (Type, error) {
 			}
 			tupleTypes[i] = ti
 		}
-		return makeTupleType(tupleTypes)
+		return MakeTupleType(tupleTypes)
 	default:
 		return Type{}, fmt.Errorf("cannot convert a string %s to an ABI type", str)
 	}
@@ -333,8 +333,8 @@ func makeDynamicArrayType(argumentType Type) Type {
 	}
 }
 
-// makeTupleType makes tuple ABI type by taking an array of tuple element types as argument.
-func makeTupleType(argumentTypes []Type) (Type, error) {
+// MakeTupleType makes tuple ABI type by taking an array of tuple element types as argument.
+func MakeTupleType(argumentTypes []Type) (Type, error) {
 	if len(argumentTypes) >= math.MaxUint16 {
 		return Type{}, fmt.Errorf("tuple type child type number larger than maximum uint16 error")
 	}
@@ -455,5 +455,39 @@ func (t Type) ByteLen() (int, error) {
 		return size, nil
 	default:
 		return -1, fmt.Errorf("%s is a dynamic type", t.String())
+	}
+}
+
+// AnyTransactionType is the ABI argument type string for a nonspecific transaction argument
+const AnyTransactionType = "txn"
+
+// IsTransactionType checks if a type string represents a transaction type
+// argument, such as "txn", "pay", "keyreg", etc.
+func IsTransactionType(s string) bool {
+	switch s {
+	case AnyTransactionType, "pay", "keyreg", "acfg", "axfer", "afrz", "appl":
+		return true
+	default:
+		return false
+	}
+}
+
+// AccountReferenceType is the ABI argument type string for account references
+const AccountReferenceType = "account"
+
+// AssetReferenceType is the ABI argument type string for asset references
+const AssetReferenceType = "asset"
+
+// ApplicationReferenceType is the ABI argument type string for application references
+const ApplicationReferenceType = "application"
+
+// IsReferenceType checks if a type string represents a reference type argument,
+// such as "account", "asset", or "application".
+func IsReferenceType(s string) bool {
+	switch s {
+	case AccountReferenceType, AssetReferenceType, ApplicationReferenceType:
+		return true
+	default:
+		return false
 	}
 }

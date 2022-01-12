@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,5 +41,4 @@ const (
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
 	VoteBundleTag Tag = "VB"
-	Txn2Tag       Tag = "tx"
 )

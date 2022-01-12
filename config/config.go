@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"time"
 
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -65,6 +64,10 @@ const CrashFilename = "crash.sqlite"
 // CompactCertFilename is the name of the compact certificate database file.
 // It is used to track in-progress compact certificates.
 const CompactCertFilename = "compactcert.sqlite"
+
+// ParticipationRegistryFilename is the name of the participation registry database file.
+// It is used for tracking participation key metadata.
+const ParticipationRegistryFilename = "partregistry.sqlite"
 
 // ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
 // are to be loaded from the data directory ( if present ), to override the
@@ -233,9 +236,6 @@ const (
 	dnssecRelayAddr
 	dnssecTelemetryAddr
 )
-
-// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
-const ProposalAssemblyTime time.Duration = 250 * time.Millisecond
 
 const (
 	catchupValidationModeCertificate                 = 1

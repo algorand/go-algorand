@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -62,7 +62,7 @@ type Local struct {
 	MaxConnectionsPerIP int `version[3]:"30"`
 
 	// 0 == disable
-	PeerPingPeriodSeconds int `version[0]:"0" version[18]:"10"`
+	PeerPingPeriodSeconds int `version[0]:"0"`
 
 	// for https serving
 	TLSCertFile string `version[0]:""`
@@ -74,7 +74,7 @@ type Local struct {
 	CadaverSizeTarget uint64 `version[0]:"1073741824"`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
-	// connections.  0 means no connections allowed.  -1 is unbounded.
+	// connections. 0 means no connections allowed. Must be non-negative.
 	// Estimating 5MB per incoming connection, 5MB*800 = 4GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800"`
 
@@ -99,9 +99,9 @@ type Local struct {
 	PriorityPeers map[string]bool `version[4]:""`
 
 	// To make sure the algod process does not run out of FDs, algod ensures
-	// that RLIMIT_NOFILE exceeds the max number of incoming connections (i.e.,
-	// IncomingConnectionsLimit) by at least ReservedFDs.  ReservedFDs are meant
-	// to leave room for short-lived FDs like DNS queries, SQLite files, etc.
+	// that RLIMIT_NOFILE >= IncomingConnectionsLimit + RestConnectionsHardLimit +
+	// ReservedFDs. ReservedFDs are meant to leave room for short-lived FDs like
+	// DNS queries, SQLite files, etc. This parameter shouldn't be changed.
 	ReservedFDs uint64 `version[2]:"256"`
 
 	// local server
@@ -191,6 +191,9 @@ type Local struct {
 	// control enabling / disabling deadlock detection.
 	// negative (-1) to disable, positive (1) to enable, 0 for default.
 	DeadlockDetection int `version[1]:"0"`
+
+	// The threshold used for deadlock detection, in seconds.
+	DeadlockDetectionThreshold int `version[20]:"30"`
 
 	// Prefer to run algod Hosted (under algoh)
 	// Observed by `goal` for now.
@@ -417,6 +420,16 @@ type Local struct {
 	// message before it can be used for calculating the data exchange rate. Setting this to zero
 	// would use the default values. The threshold is defined in units of bytes.
 	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
+
+	// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block.
+	ProposalAssemblyTime time.Duration `version[19]:"250000000"`
+
+	// When the number of http connections to the REST layer exceeds the soft limit,
+	// we start returning http code 429 Too Many Requests.
+	RestConnectionsSoftLimit uint64 `version[20]:"1024"`
+	// The http server does not accept new connections as long we have this many
+	// (hard limit) connections already.
+	RestConnectionsHardLimit uint64 `version[20]:"2048"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,9 +18,11 @@ package abi
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 )
 
 // typeCastToTuple cast an array-like ABI type into an ABI tuple type.
@@ -58,7 +60,7 @@ func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 		return Type{}, fmt.Errorf("type cannot support conversion to tuple")
 	}
 
-	tuple, err := makeTupleType(childT)
+	tuple, err := MakeTupleType(childT)
 	if err != nil {
 		return Type{}, err
 	}
@@ -475,4 +477,112 @@ func decodeTuple(encoded []byte, childT []Type) ([]interface{}, error) {
 		}
 	}
 	return values, nil
+}
+
+// maxAppArgs is the maximum number of arguments for an application call transaction, in compliance
+// with ARC-4. Currently this is the same as the MaxAppArgs consensus parameter, but the
+// difference is that the consensus parameter is liable to change in a future consensus upgrade.
+// However, the ARC-4 ABI argument encoding **MUST** always remain the same.
+const maxAppArgs = 16
+
+// The tuple threshold is maxAppArgs, minus 1 for the method selector in the first app arg,
+// minus 1 for the final app argument becoming a tuple of the remaining method args
+const methodArgsTupleThreshold = maxAppArgs - 2
+
+// ParseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
+// if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
+func ParseArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {
+	abiTypes := make([]Type, len(argTypes))
+	for i, typeString := range argTypes {
+		abiType, err := TypeOf(typeString)
+		if err != nil {
+			return err
+		}
+		abiTypes[i] = abiType
+	}
+
+	if len(abiTypes) != len(jsonArgs) {
+		return fmt.Errorf("input argument number %d != method argument number %d", len(jsonArgs), len(abiTypes))
+	}
+
+	// Up to 16 app arguments can be passed to app call. First is reserved for method selector,
+	// and the rest are for method call arguments. But if more than 15 method call arguments
+	// are present, then the method arguments after the 14th are placed in a tuple in the last
+	// app argument slot
+	if len(abiTypes) > maxAppArgs-1 {
+		typesForTuple := make([]Type, len(abiTypes)-methodArgsTupleThreshold)
+		copy(typesForTuple, abiTypes[methodArgsTupleThreshold:])
+
+		compactedType, err := MakeTupleType(typesForTuple)
+		if err != nil {
+			return err
+		}
+
+		abiTypes = append(abiTypes[:methodArgsTupleThreshold], compactedType)
+
+		tupleValues := make([]json.RawMessage, len(jsonArgs)-methodArgsTupleThreshold)
+		for i, jsonArg := range jsonArgs[methodArgsTupleThreshold:] {
+			tupleValues[i] = []byte(jsonArg)
+		}
+
+		remainingJSON, err := json.Marshal(tupleValues)
+		if err != nil {
+			return err
+		}
+
+		jsonArgs = append(jsonArgs[:methodArgsTupleThreshold], string(remainingJSON))
+	}
+
+	// parse JSON value to ABI encoded bytes
+	for i := 0; i < len(jsonArgs); i++ {
+		interfaceVal, err := abiTypes[i].UnmarshalFromJSON([]byte(jsonArgs[i]))
+		if err != nil {
+			return err
+		}
+		abiEncoded, err := abiTypes[i].Encode(interfaceVal)
+		if err != nil {
+			return err
+		}
+		*applicationArgs = append(*applicationArgs, abiEncoded)
+	}
+	return nil
+}
+
+// ParseMethodSignature parses a method of format `method(argType1,argType2,...)retType`
+// into `method` {`argType1`,`argType2`,...} and `retType`
+func ParseMethodSignature(methodSig string) (name string, argTypes []string, returnType string, err error) {
+	argsStart := strings.Index(methodSig, "(")
+	if argsStart == -1 {
+		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		return
+	}
+
+	argsEnd := -1
+	depth := 0
+	for index, char := range methodSig {
+		if char == '(' {
+			depth++
+		} else if char == ')' {
+			if depth == 0 {
+				err = fmt.Errorf("Unpaired parenthesis in method signature: %s", methodSig)
+				return
+			}
+			depth--
+			if depth == 0 {
+				argsEnd = index
+				break
+			}
+		}
+	}
+
+	if argsEnd == -1 {
+		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		return
+	}
+
+	name = methodSig[:argsStart]
+	argTypes, err = parseTupleContent(methodSig[argsStart+1 : argsEnd])
+	returnType = methodSig[argsEnd+1:]
+	return
 }

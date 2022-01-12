@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -242,7 +242,7 @@ var runCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(programStr)
 			if err != nil {
-				ops.ReportProblems(teal)
+				ops.ReportProblems(teal, os.Stderr)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
 			cfg.Program = ops.Program

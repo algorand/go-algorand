@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -155,27 +155,18 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
 
-	if proto.FastPartitionRecovery {
-		switch rv.Step {
-		case propose, soft, cert, late, redo:
-			if rv.Proposal == bottom {
-				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
-			}
-		case down:
-			if rv.Proposal != bottom {
-				logging.Base().Panicf("makeVote: votes from step %d must validate bottom", rv.Step)
-			}
+	switch rv.Step {
+	case propose, soft, cert, late, redo:
+		if rv.Proposal == bottom {
+			logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
 		}
-	} else {
-		switch rv.Step {
-		case propose, soft, cert:
-			if rv.Proposal == bottom {
-				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
-			}
+	case down:
+		if rv.Proposal != bottom {
+			logging.Base().Panicf("makeVote: votes from step %d must validate bottom", rv.Step)
 		}
 	}
 
-	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto.DefaultKeyDilution))
 	sig := voting.Sign(ephID, rv)
 	if (sig == crypto.OneTimeSignature{}) {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: got back empty signature for vote")
