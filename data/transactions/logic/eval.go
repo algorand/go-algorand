@@ -3864,6 +3864,63 @@ func opAppParamsGet(cx *EvalContext) {
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
 }
 
+func opAcctParamsGet(cx *EvalContext) {
+	last := len(cx.stack) - 1 // acct
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, _, err := cx.accountReference(cx.stack[last])
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	paramField := AcctParamsField(cx.program[cx.pc+1])
+	fs, ok := acctParamsFieldSpecByField[paramField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid acct_params_get field %d", paramField)
+		return
+	}
+
+	var exist uint64 = 0
+	bal, err := cx.Ledger.Balance(addr)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	exist = boolToUint(bal.Raw > 0)
+
+	var value stackValue
+
+	switch fs.field {
+	case AcctBalance:
+		value.Uint = bal.Raw
+	case AcctMinBalance:
+		mbal, err := cx.Ledger.MinBalance(addr, cx.Proto)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		value.Uint = mbal.Raw
+	case AcctAuthAddr:
+		auth, err := cx.Ledger.Authorizer(addr)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		if auth == addr {
+			value.Bytes = zeroAddress[:]
+		} else {
+			value.Bytes = auth[:]
+		}
+	}
+	cx.stack[last] = value
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
+}
+
 func opLog(cx *EvalContext) {
 	last := len(cx.stack) - 1
 

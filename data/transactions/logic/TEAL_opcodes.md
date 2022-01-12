@@ -373,14 +373,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | Sender | []byte |      | 32 byte address |
-| 1 | Fee | uint64 |      | micro-Algos |
+| 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
 | 7 | Receiver | []byte |      | 32 byte address |
-| 8 | Amount | uint64 |      | micro-Algos |
+| 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | []byte |      | 32 byte address |
 | 10 | VotePK | []byte |      | 32 byte address |
 | 11 | SelectionPK | []byte |      | 32 byte address |
@@ -461,8 +461,8 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
-| 0 | MinTxnFee | uint64 |      | micro Algos |
-| 1 | MinBalance | uint64 |      | micro Algos |
+| 0 | MinTxnFee | uint64 |      | microalgos |
+| 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
 | 3 | ZeroAddress | []byte |      | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 |      | Number of transactions in this atomic transaction group. At least 1 |
@@ -880,11 +880,11 @@ params: state key.
 
 Deleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)
 
-## asset_holding_get i
+## asset_holding_get f
 
 - Opcode: 0x70 {uint8 asset holding field index}
 - Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: uint64
-- read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value}
+- read from account A and asset B holding field F => {0 or 1 (top), value}
 - Availability: v2
 - Mode: Application
 
@@ -898,11 +898,11 @@ Deleting a key which is already absent has no effect on the application global s
 
 params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
 
-## asset_params_get i
+## asset_params_get f
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
-- read from asset A params field X (imm arg) => {0 or 1 (top), value}
+- read field F from asset A => {0 or 1 (top), value}
 - Availability: v2
 - Mode: Application
 
@@ -926,11 +926,11 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 
 params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
 
-## app_params_get i
+## app_params_get f
 
 - Opcode: 0x72 {uint8 app params field index}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
-- read from app A params field X (imm arg) => {0 or 1 (top), value}
+- read field F from app A => {0 or 1 (top), value}
 - Availability: v5
 - Mode: Application
 
@@ -950,6 +950,14 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 
 
 params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
+
+## acct_params_get f
+
+- Opcode: 0x73 {uint8 account params field index}
+- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
+- read field F from account A => {0 or 1 (top), value}
+- Availability: v6
+- Mode: Application
 
 ## min_balance
 
@@ -1042,6 +1050,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1
 - **Cost**: 10
 - Availability: v4
+
+## bsqrt
+
+- Opcode: 0x96
+- Stack: ..., A: []byte &rarr; ..., []byte
+- The largest integer B such that B^2 <= A. A and B are byte-arrays interpreted as big-endian unsigned integers
+- **Cost**: 40
+- Availability: v6
 
 ## b+
 

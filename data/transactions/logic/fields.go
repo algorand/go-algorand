@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -778,6 +778,65 @@ func (s appNameSpecMap) SpecByName(name string) FieldSpec {
 	return &fs
 }
 
+// AcctParamsField is an enum for `acct_params_get` opcode
+type AcctParamsField int
+
+const (
+	// AcctBalance is the blance, with pending rewards
+	AcctBalance AcctParamsField = iota
+	// AcctMinBalance is algos needed for this accounts apps and assets
+	AcctMinBalance
+	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
+	AcctAuthAddr
+
+	invalidAcctParamsField
+)
+
+// AcctParamsFieldNames are arguments to the 'acct_params_get' opcode
+var AcctParamsFieldNames []string
+
+type acctParamsFieldSpec struct {
+	field   AcctParamsField
+	ftype   StackType
+	version uint64
+}
+
+func (fs *acctParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *acctParamsFieldSpec) OpVersion() uint64 {
+	return 6
+}
+
+func (fs *acctParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *acctParamsFieldSpec) Note() string {
+	note := acctParamsFieldDocs[fs.field.String()]
+	return note
+}
+
+var acctParamsFieldSpecs = []acctParamsFieldSpec{
+	{AcctBalance, StackUint64, 6},
+	{AcctMinBalance, StackUint64, 6},
+	{AcctAuthAddr, StackBytes, 6},
+}
+
+var acctParamsFieldSpecByField map[AcctParamsField]acctParamsFieldSpec
+
+// AcctParamsFieldSpecByName gives access to the field specs by field name
+var AcctParamsFieldSpecByName acctNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type acctNameSpecMap map[string]acctParamsFieldSpec
+
+func (s acctNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
+}
+
 func init() {
 	TxnFieldNames = make([]string, int(invalidTxnField))
 	for fi := Sender; fi < invalidTxnField; fi++ {
@@ -882,6 +941,19 @@ func init() {
 	AppParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
 	for i, apfn := range AppParamsFieldNames {
 		AppParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
+	}
+
+	AcctParamsFieldNames = make([]string, int(invalidAcctParamsField))
+	for i := AcctBalance; i < invalidAcctParamsField; i++ {
+		AcctParamsFieldNames[i] = i.String()
+	}
+	acctParamsFieldSpecByField = make(map[AcctParamsField]acctParamsFieldSpec, len(AcctParamsFieldNames))
+	for _, s := range acctParamsFieldSpecs {
+		acctParamsFieldSpecByField[s.field] = s
+	}
+	AcctParamsFieldSpecByName = make(acctNameSpecMap, len(AcctParamsFieldNames))
+	for i, apfn := range AcctParamsFieldNames {
+		AcctParamsFieldSpecByName[apfn] = acctParamsFieldSpecByField[AcctParamsField(i)]
 	}
 
 	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))

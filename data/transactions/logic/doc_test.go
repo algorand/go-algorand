@@ -46,6 +46,7 @@ func TestOpDocs(t *testing.T) {
 	require.Len(t, assetHoldingFieldDocs, len(AssetHoldingFieldNames))
 	require.Len(t, assetParamsFieldDocs, len(AssetParamsFieldNames))
 	require.Len(t, appParamsFieldDocs, len(AppParamsFieldNames))
+	require.Len(t, acctParamsFieldDocs, len(AcctParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
 	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }

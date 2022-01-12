@@ -398,6 +398,10 @@ func main() {
 	fieldSpecsMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
 	appparams.Close()
 
+	acctparams, _ := os.Create("acct_params_fields.md")
+	fieldSpecsMarkdown(acctparams, logic.AcctParamsFieldNames, logic.AcctParamsFieldSpecByName)
+	acctparams.Close()
+
 	langspecjs, _ := os.Create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
 	enc.Encode(buildLanguageSpec(opGroups))

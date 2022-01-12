@@ -1072,6 +1072,29 @@ func TestAppParams(t *testing.T) {
 	testApp(t, source, ep)
 }
 
+func TestAcctParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, tx, ledger := makeSampleEnv()
+
+	source := "int 0; acct_params_get AcctBalance; !; assert; int 0; =="
+	testApp(t, source, ep)
+
+	source = "int 0; acct_params_get AcctMinBalance; !; assert; int 1001; =="
+	testApp(t, source, ep)
+
+	ledger.NewAccount(tx.Sender, 42)
+
+	source = "int 0; acct_params_get AcctBalance; assert; int 42; =="
+	testApp(t, source, ep)
+
+	source = "int 0; acct_params_get AcctMinBalance; assert; int 1001; =="
+	testApp(t, source, ep)
+
+	source = "int 0; acct_params_get AcctAuthAddr; assert; global ZeroAddress; =="
+	testApp(t, source, ep)
+}
+
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2251,6 +2274,7 @@ func TestReturnTypes(t *testing.T) {
 		"pushint":           "pushint 7272",
 		"pushbytes":         `pushbytes "jojogoodgorilla"`,
 		"app_params_get":    "app_params_get AppGlobalNumUint",
+		"acct_params_get":   "acct_params_get AcctMinBalance",
 		"extract":           "extract 0 2",
 		"txnas":             "txnas ApplicationArgs",
 		"gtxnas":            "gtxnas 0 ApplicationArgs",

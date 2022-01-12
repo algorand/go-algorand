@@ -279,6 +279,7 @@ bytes on outputs.
 | `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
+| `bsqrt` | The largest integer B such that B^2 <= A. A and B are byte-arrays interpreted as big-endian unsigned integers |
 
 These opcodes operate on the bits of byte-array values.  The shorter
 input array is interpreted as though left padded with zeros until it is the
@@ -347,14 +348,14 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | Sender | []byte |      | 32 byte address |
-| 1 | Fee | uint64 |      | micro-Algos |
+| 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
 | 7 | Receiver | []byte |      | 32 byte address |
-| 8 | Amount | uint64 |      | micro-Algos |
+| 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | []byte |      | 32 byte address |
 | 10 | VotePK | []byte |      | 32 byte address |
 | 11 | SelectionPK | []byte |      | 32 byte address |
@@ -418,8 +419,8 @@ Global fields are fields that are common to all the transactions in the group. I
 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
-| 0 | MinTxnFee | uint64 |      | micro Algos |
-| 1 | MinBalance | uint64 |      | micro Algos |
+| 0 | MinTxnFee | uint64 |      | microalgos |
+| 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
 | 3 | ZeroAddress | []byte |      | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 |      | Number of transactions in this atomic transaction group. At least 1 |
@@ -478,6 +479,17 @@ App fields used in the `app_params_get` opcode.
 | 8 | AppAddress | []byte | Address for which this application has authority |
 
 
+**Account Fields**
+
+Account fields used in the `acct_params_get` opcode.
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | AcctBalance | uint64 | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+
+
 ### Flow Control
 
 | Opcode | Description |
@@ -514,9 +526,10 @@ App fields used in the `app_params_get` opcode.
 | `app_global_put` | write key A and value B to global state of the current application |
 | `app_local_del` | delete from account A local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
-| `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
-| `app_params_get i` | read from app A params field X (imm arg) => {0 or 1 (top), value} |
+| `asset_holding_get f` | read from account A and asset B holding field F => {0 or 1 (top), value} |
+| `asset_params_get f` | read field F from asset A => {0 or 1 (top), value} |
+| `app_params_get f` | read field F from app A => {0 or 1 (top), value} |
+| `acct_params_get f` | read field F from account A => {0 or 1 (top), value} |
 | `log` | write bytes to log state of the current application |
 
 ### Inner Transactions
@@ -541,11 +554,11 @@ with the next instruction with, for example, `balance` and
 
 In v5, only a few of the Header fields may be set: `Type`/`TypeEnum`,
 `Sender`, and `Fee`. In v6, Header fields `Note` and `RekeyTo` may
-also be set.  For the specific fields of each transaction types, any
-field may be set (except `RekeyTo` in v5).  This allows, for example,
-clawback transactions, asset opt-ins, and asset creates in addition to
-the more common uses of `axfer` and `acfg`.  All fields default to the
-zero value, except those described under `itxn_begin`.
+also be set.  For the specific (non-header) fields of each transaction
+type, any field may be set.  This allows, for example, clawback
+transactions, asset opt-ins, and asset creates in addition to the more
+common uses of `axfer` and `acfg`.  All fields default to the zero
+value, except those described under `itxn_begin`.
 
 Fields may be set multiple times, but may not be read. The most recent
 setting is used when `itxn_submit` executes. For this purpose `Type`
