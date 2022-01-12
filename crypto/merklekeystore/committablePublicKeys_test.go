@@ -63,23 +63,19 @@ func TestEphemeralPublicKeysCommitmentBinaryFormat(t *testing.T) {
 	a := require.New(t)
 
 	signer := generateTestSigner(crypto.FalconType, 1, 9, 2, a)
-	defer signer.keyStore.store.Close()
 	a.Equal(4, length(signer, a))
 
-	k0, err := signer.keyStore.GetKey(2)
-	a.NoError(err)
+	k0 := signer.GetSigner(2).SigningKey
+
 	k0hash := calculateHashOnKeyLeaf(k0, 2)
 
-	k1, err := signer.keyStore.GetKey(4)
-	a.NoError(err)
+	k1 := signer.GetSigner(4).SigningKey
 	k1hash := calculateHashOnKeyLeaf(k1, 4)
 
-	k2, err := signer.keyStore.GetKey(6)
-	a.NoError(err)
+	k2 := signer.GetSigner(6).SigningKey
 	k2hash := calculateHashOnKeyLeaf(k2, 6)
 
-	k3, err := signer.keyStore.GetKey(8)
-	a.NoError(err)
+	k3 := signer.GetSigner(8).SigningKey
 	k3hash := calculateHashOnKeyLeaf(k3, 8)
 
 	internal1 := calculateHashOnInternalNode(k0hash, k1hash)

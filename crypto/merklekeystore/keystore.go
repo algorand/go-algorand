@@ -17,12 +17,12 @@
 package merklekeystore
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 type (
@@ -111,7 +111,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		return nil, err
 	}
 
-	tree, err := merklearray.Build(&keysArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
+	tree, err := merklearray.Build(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
 	if err != nil {
 		return nil, err
 	}
@@ -164,9 +164,10 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 	}
 
 	return Signature{
-		ByteSignature: sig,
-		Proof:         Proof(*proof),
-		VerifyingKey:  *signingKey.GetVerifyingKey(),
+		ByteSignature:    sig,
+		Proof:            *proof,
+		VerifyingKey:     *signingKey.GetVerifyingKey(),
+		MerkleArrayIndex: index,
 	}, nil
 }
 

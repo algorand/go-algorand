@@ -33,11 +33,10 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	a := require.New(t)
 	sigs := make([]sigslot, 2)
 
-	key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
-	defer dbAccessor.Close()
+	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 
 	message := testMessage("hello world")
-	sig, err := key.Sign(message, uint64(128))
+	sig, err := key.GetSigner(uint64(128)).Sign(message)
 	a.NoError(err)
 
 	sigs[0] = sigslot{

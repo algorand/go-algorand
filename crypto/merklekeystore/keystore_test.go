@@ -18,6 +18,7 @@ package merklekeystore
 
 import (
 	"crypto/rand"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -103,7 +104,6 @@ func TestEmptySigner(t *testing.T) {
 
 	h := genHashableForTest()
 	signer := generateTestSigner(crypto.FalconType, 8, 9, 5, a)
-	a.NoError(err)
 	a.Equal(0, length(signer, a))
 
 	_, err = signer.GetSigner(8).Sign(h)
@@ -317,7 +317,7 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	signer := generateTestSigner(crypto.FalconType, 8, 100, 5, a)
 	a.NoError(err)
 
-	sig, err := signer.Sign(h, 20)
+	sig, err := signer.GetSigner(20).Sign(h)
 	a.NoError(err)
 
 	sig.MerkleArrayIndex = 0

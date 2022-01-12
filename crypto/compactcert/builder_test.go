@@ -18,12 +18,9 @@ package compactcert
 
 import (
 	"bytes"
-	"context"
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"github.com/algoidan/falcon"
-	"strconv"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -43,12 +40,12 @@ func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
 }
 
-func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Signer) []basics.Participant {
+func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Verifier) []basics.Participant {
 	parts := make([]basics.Participant, 0, numberOfParticipant)
 
 	for i := 0; i < numberOfParticipant; i++ {
 		part := basics.Participant{
-			PK:     *key.GetVerifier(),
+			PK:     *key,
 			Weight: uint64(totalWeight / 2 / numberOfParticipant),
 		}
 
@@ -57,8 +54,8 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
-func generateTestSigner(name string, firstValid uint64, lastValid uint64, a *require.Assertions) *merklekeystore.Keystore {
-	signer, err := merklekeystore.New(firstValid, lastValid, CompactCertRounds, crypto.FalconType)
+func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *merklekeystore.Keystore {
+	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.FalconType)
 	a.NoError(err)
 
 	return signer
@@ -91,13 +88,13 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	signer := generateTestSigner(t.Name()+".db", 0, uint64(param.CompactCertRounds)+1, a)
+	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 	var parts []basics.Participant
 	var sigs []merklekeystore.Signature
-	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, signer)...)
-	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, signer)...)
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
-	signerInRound := signer.GetSigner(uint64(currentRound))
+	signerInRound := key.GetSigner(uint64(currentRound))
 	sig, err := signerInRound.Sign(param.Msg)
 	require.NoError(t, err, "failed to create keys")
 
@@ -151,9 +148,7 @@ func TestBuildVerify(t *testing.T) {
 }
 
 func generateRandomParticipant(a *require.Assertions, testname string) basics.Participant {
-	key, dbAccessor := generateTestSigner(testname+".db", 0, 8, 1, a)
-	a.NotNil(dbAccessor, "failed to create signer")
-	defer dbAccessor.Close()
+	key := generateTestSigner(0, 8, 1, a)
 
 	p := basics.Participant{
 		PK:     *key.GetVerifier(),
@@ -238,8 +233,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	var sigs []merklekeystore.Signature
 
 	for i := 0; i < numPart; i++ {
-		key, dbAccessor := generateTestSigner(t.Name()+".db", 0, uint64(compactCertRoundsForTests)*8, compactCertRoundsForTests, a)
-		require.NotNil(t, dbAccessor, "failed to create signer")
+		key := generateTestSigner(0, uint64(compactCertRoundsForTests)*8, compactCertRoundsForTests, a)
 
 		part := basics.Participant{
 			PK:     *key.GetVerifier(),
@@ -247,11 +241,10 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		sig, err := key.Sign(param.Msg, uint64(currentRound))
+		sig, err := key.GetSigner(uint64(currentRound)).Sign(param.Msg)
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
 
-		dbAccessor.Close()
 	}
 
 	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
@@ -289,12 +282,10 @@ func TestSimulateSignatureVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer, dbaccess := generateTestSigner(t.Name()+"_1.db", 50, 100, 1, a)
-	defer dbaccess.Close()
-
+	signer := generateTestSigner(50, 100, 1, a)
 	sigRound := uint64(55)
 	hashable := testMessage("testMessage")
-	sig, err := signer.Sign(hashable, sigRound)
+	sig, err := signer.GetSigner(sigRound).Sign(hashable)
 	a.NoError(err)
 
 	genericKey := signer.GetVerifier()
@@ -311,12 +302,11 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	a := require.New(t)
 
 	// we create one ephemeral key so the signature's proof should be with len 0
-	signer, dbaccess := generateTestSigner(t.Name()+"_2.db", 1, 128, 128, a)
-	defer dbaccess.Close()
+	signer := generateTestSigner(1, 128, 128, a)
 
 	sigRound := uint64(128)
 	hashable := testMessage("testMessage")
-	sig, err := signer.Sign(hashable, sigRound)
+	sig, err := signer.GetSigner(sigRound).Sign(hashable)
 	a.NoError(err)
 
 	genericKey := signer.GetVerifier()
@@ -436,11 +426,10 @@ func BenchmarkBuildVerify(b *testing.B) {
 	var partkeys []*merklekeystore.Keystore
 	var sigs []merklekeystore.Signature
 	for i := 0; i < npart; i++ {
-		signer := generateTestSigner(b.Name()+"_"+strconv.Itoa(i)+"_crash.db", 0, uint64(param.CompactCertRounds)+1, a)
+		signer := generateTestSigner(0, compactCertRoundsForTests, compactCertRoundsForTests+1, a)
 		part := basics.Participant{
-			PK:         *signer.GetVerifier(),
-			Weight:     uint64(totalWeight / npart),
-			FirstValid: 0,
+			PK:     *signer.GetVerifier(),
+			Weight: uint64(totalWeight / npart),
 		}
 
 		signerInRound := signer.GetSigner(uint64(currentRound))
