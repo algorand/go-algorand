@@ -288,14 +288,14 @@ func (block *Block) Seed() committee.Seed {
 func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.ConsensusParams, incentivePoolBalance basics.MicroAlgos, totalRewardUnits uint64) (res RewardsState) {
 	res = s
 
-	if nextRound == s.RewardsRecalculationRound {
+	if nextRound == res.RewardsRecalculationRound {
 		maxSpentOver := nextProto.MinBalance
 		overflowed := false
 
 		if nextProto.PendingResidueRewards {
-			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, s.RewardsResidue)
+			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, res.RewardsResidue)
 			if overflowed {
-				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, s.RewardsResidue, nextRound, s)
+				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, res.RewardsResidue, nextRound, s)
 				// this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
 				maxSpentOver = incentivePoolBalance.Raw
 			}
@@ -323,13 +323,13 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 	}
 
 	var ot basics.OverflowTracker
-	rewardsWithResidue := ot.Add(rewardsRate, s.RewardsResidue)
-	nextRewardLevel := ot.Add(s.RewardsLevel, rewardsWithResidue/totalRewardUnits)
+	rewardsWithResidue := ot.Add(rewardsRate, res.RewardsResidue)
+	nextRewardLevel := ot.Add(res.RewardsLevel, rewardsWithResidue/totalRewardUnits)
 	nextResidue := rewardsWithResidue % totalRewardUnits
 
 	if ot.Overflowed {
 		logging.Base().Errorf("could not compute next reward level (current level %v, adding %v MicroAlgos in total, number of reward units %v) using old level",
-			s.RewardsLevel, rewardsRate, totalRewardUnits)
+			res.RewardsLevel, rewardsRate, totalRewardUnits)
 		return
 	}
 
