@@ -39,10 +39,10 @@ import (
 
 type roundCowParent interface {
 	lookup(basics.Address) (ledgercore.AccountData, error)
-	lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
-	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
-	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error)
-	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
+	lookupAppParams(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppParamsDelta, bool, error)
+	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetParamsDelta, bool, error)
+	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppLocalStateDelta, bool, error)
+	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetHoldingDelta, bool, error)
 
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
@@ -164,49 +164,37 @@ func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountDat
 	return cb.lookupParent.lookup(addr)
 }
 
-func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error) {
+func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppParamsDelta, bool, error) {
 	params, ok := cb.mods.NewAccts.GetAppParams(addr, aidx)
 	if ok {
-		if params == nil {
-			return basics.AppParams{}, false, nil
-		}
-		return *params, ok, nil
+		return params, ok, nil
 	}
 
 	return cb.lookupParent.lookupAppParams(addr, aidx)
 }
 
-func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error) {
+func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetParamsDelta, bool, error) {
 	params, ok := cb.mods.NewAccts.GetAssetParams(addr, aidx)
 	if ok {
-		if params == nil {
-			return basics.AssetParams{}, false, nil
-		}
-		return *params, ok, nil
+		return params, ok, nil
 	}
 
 	return cb.lookupParent.lookupAssetParams(addr, aidx)
 }
 
-func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {
+func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppLocalStateDelta, bool, error) {
 	state, ok := cb.mods.NewAccts.GetAppLocalState(addr, aidx)
 	if ok {
-		if state == nil {
-			return basics.AppLocalState{}, false, nil
-		}
-		return *state, ok, nil
+		return state, ok, nil
 	}
 
 	return cb.lookupParent.lookupAppLocalState(addr, aidx)
 }
 
-func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error) {
+func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetHoldingDelta, bool, error) {
 	holding, ok := cb.mods.NewAccts.GetAssetHolding(addr, aidx)
 	if ok {
-		if holding == nil {
-			return basics.AssetHolding{}, false, nil
-		}
-		return *holding, ok, nil
+		return holding, ok, nil
 	}
 
 	return cb.lookupParent.lookupAssetHolding(addr, aidx)
