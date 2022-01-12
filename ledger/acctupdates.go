@@ -812,51 +812,67 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		macct.data = data
 		au.accounts[addr] = macct
 	}
-	for _, holding := range delta.NewAccts.GetAllAssetsHoldings() {
-		key := accountCreatable{
-			address: holding.Addr,
-			index:   basics.CreatableIndex(holding.Aidx),
-		}
-		mres, _ := au.resources.get(key)
-		mres.resource.AssetHolding = holding.Holding
-		mres.resource.CreatableIndex = basics.CreatableIndex(holding.Aidx)
-		mres.resource.CreatableType = basics.AssetCreatable
-		mres.ndeltas++
-		au.resources.set(key, mres)
+
+	// merge deltas into AccountResources
+	resources := make(map[basics.CreatableIndex]struct {
+		Addr           basics.Address
+		CreatableIndex basics.CreatableIndex
+		CreatableType  basics.CreatableType
+		AssetParams    *basics.AssetParams
+		AssetHolding   *basics.AssetHolding
+		AppLocalState  *basics.AppLocalState
+		AppParams      *basics.AppParams
+	}) // XXX provide size hint?
+
+	for _, d := range delta.NewAccts.GetAllAssetsHoldings() {
+		idx := basics.CreatableIndex(d.Aidx)
+		r := resources[idx]
+		r.Addr = d.Addr
+		r.CreatableIndex = idx
+		r.CreatableType = basics.AssetCreatable
+		r.AssetHolding = d.Holding
+		resources[idx] = r
 	}
-	for _, params := range delta.NewAccts.GetAllAssetParams() {
-		key := accountCreatable{
-			address: params.Addr,
-			index:   basics.CreatableIndex(params.Aidx),
-		}
-		mres, _ := au.resources.get(key)
-		mres.resource.AssetParams = params.Params
-		mres.resource.CreatableIndex = basics.CreatableIndex(params.Aidx)
-		mres.resource.CreatableType = basics.AssetCreatable
-		mres.ndeltas++
-		au.resources.set(key, mres)
+	for _, d := range delta.NewAccts.GetAllAssetParams() {
+		idx := basics.CreatableIndex(d.Aidx)
+		r := resources[idx]
+		r.Addr = d.Addr
+		r.CreatableIndex = idx
+		r.CreatableType = basics.AssetCreatable
+		r.AssetParams = d.Params
+		resources[idx] = r
 	}
-	for _, localStates := range delta.NewAccts.GetAllAppLocalStates() {
-		key := accountCreatable{
-			address: localStates.Addr,
-			index:   basics.CreatableIndex(localStates.Aidx),
-		}
-		mres, _ := au.resources.get(key)
-		mres.resource.AppLocalState = localStates.State
-		mres.resource.CreatableIndex = basics.CreatableIndex(localStates.Aidx)
-		mres.resource.CreatableType = basics.AppCreatable
-		mres.ndeltas++
-		au.resources.set(key, mres)
+	for _, d := range delta.NewAccts.GetAllAppLocalStates() {
+		idx := basics.CreatableIndex(d.Aidx)
+		r := resources[idx]
+		r.Addr = d.Addr
+		r.CreatableIndex = idx
+		r.CreatableType = basics.AppCreatable
+		r.AppLocalState = d.State
+		resources[idx] = r
 	}
-	for _, appParams := range delta.NewAccts.GetAllAppParams() {
+	for _, d := range delta.NewAccts.GetAllAppParams() {
+		idx := basics.CreatableIndex(d.Aidx)
+		r := resources[idx]
+		r.Addr = d.Addr
+		r.CreatableIndex = idx
+		r.CreatableType = basics.AppCreatable
+		r.AppParams = d.Params
+		resources[idx] = r
+	}
+
+	for _, res := range resources {
 		key := accountCreatable{
-			address: appParams.Addr,
-			index:   basics.CreatableIndex(appParams.Aidx),
+			address: res.Addr,
+			index:   res.CreatableIndex,
 		}
 		mres, _ := au.resources.get(key)
-		mres.resource.AppParams = appParams.Params
-		mres.resource.CreatableIndex = basics.CreatableIndex(appParams.Aidx)
-		mres.resource.CreatableType = basics.AppCreatable
+		mres.resource.AssetHolding = res.AssetHolding
+		mres.resource.AssetParams = res.AssetParams
+		mres.resource.AppLocalState = res.AppLocalState
+		mres.resource.AppParams = res.AppParams
+		mres.resource.CreatableIndex = res.CreatableIndex
+		mres.resource.CreatableType = res.CreatableType
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
