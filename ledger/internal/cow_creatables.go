@@ -138,8 +138,7 @@ func (cs *roundCowState) DeleteAppParams(addr basics.Address, aidx basics.AppInd
 		return fmt.Errorf("DeleteAppParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.putAppParams(addr, aidx, nil)
-	return nil
+	return cs.putAppParams(addr, aidx, nil)
 }
 
 func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error {
@@ -147,8 +146,7 @@ func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.Ap
 		return fmt.Errorf("DeleteAppLocalState: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.putAppLocalState(addr, aidx, nil)
-	return nil
+	return cs.putAppLocalState(addr, aidx, nil)
 }
 
 func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error {
@@ -156,8 +154,7 @@ func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.Ass
 		return fmt.Errorf("DeleteAssetHolding: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.putAssetHolding(addr, aidx, nil)
-	return nil
+	return cs.putAssetHolding(addr, aidx, nil)
 }
 
 func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error {
@@ -165,8 +162,7 @@ func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.Asse
 		return fmt.Errorf("DeleteAssetParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
-	cs.putAssetParams(addr, aidx, nil)
-	return nil
+	return cs.putAssetParams(addr, aidx, nil)
 }
 
 func (cs *roundCowState) HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
