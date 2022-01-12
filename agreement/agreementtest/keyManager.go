@@ -17,6 +17,7 @@
 package agreementtest
 
 import (
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -46,9 +47,14 @@ func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Part
 			// Usually this struct will be retrieved from the registry, however in this test
 			// case we can allow ourselves to generate it from the data already in memory
 			// (within the Participation after calling FillDB)
+			var stateproofSinger *merklekeystore.Signer
+			stateproofSinger = nil
+			if acc.StateProofSecrets != nil {
+				stateproofSinger = acc.StateProofSecrets.GetSigner(uint64(votingRound))
+			}
 			partRecForRound := account.ParticipationRecordForRound{
 				ParticipationRecord: record,
-				StateProofSecrets:   acc.StateProofSecrets.GetSigner(uint64(votingRound)),
+				StateProofSecrets:   stateproofSinger,
 			}
 			km = append(km, partRecForRound)
 		}
