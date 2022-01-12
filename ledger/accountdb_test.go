@@ -352,7 +352,7 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 		if ctb.Created &&
 			// Always delete the first element, to make sure at least one
 			// element is always deleted.
-			(i == delSegmentStart || 1 == (crypto.RandUint64()%2)) {
+			(i == delSegmentStart || (crypto.RandUint64()%2) == 1) {
 			ctb.Created = false
 			newSample[crtbsList[i]] = ctb
 			delete(expectedDbImage, crtbsList[i])

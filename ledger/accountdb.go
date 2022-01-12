@@ -129,7 +129,6 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-// TODO - this should be bumped to 6 if we want to enable the new database schema upgrade.
 var accountDBVersion = int32(6)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
@@ -2554,7 +2553,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 			return
 		}
 		reencodedAccountData := protocol.Encode(&decodedAccountData)
-		if bytes.Compare(preencodedAccountData, reencodedAccountData) == 0 {
+		if bytes.Equal(preencodedAccountData, reencodedAccountData) {
 			// these are identical, no need to store re-encoded account data
 			continue
 		}
@@ -2579,7 +2578,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	return
 }
 
-// MerkleCommitter todo
+// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
 	tx         *sql.Tx

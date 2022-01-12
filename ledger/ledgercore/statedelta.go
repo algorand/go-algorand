@@ -107,23 +107,13 @@ type StateDelta struct {
 	Totals AccountTotals
 }
 
-// AccountDeltas stores ordered accounts and allows fast lookup by address
-// type AccountDeltas struct {
-// 	// Actual data. If an account is deleted, `accts` contains a balance record
-// 	// with empty `AccountData`.
-// 	accts []basics.BalanceRecord
-// 	// cache for addr to deltas index resolution
-// 	acctsCache map[basics.Address]int
-// }
-
-// NewBalanceRecord todo
+// NewBalanceRecord is similar to basics.BalanceRecord but with decoupled base and voting data
 type NewBalanceRecord struct {
 	Addr basics.Address
-
 	AccountData
 }
 
-// AppResourceRecord todo
+// AppResourceRecord represents AppParams and AppLocalState in deltas
 type AppResourceRecord struct {
 	Aidx   basics.AppIndex
 	Addr   basics.Address
@@ -131,7 +121,7 @@ type AppResourceRecord struct {
 	State  *basics.AppLocalState
 }
 
-// AssetResourceRecord todo
+// AssetResourceRecord represents AssetParams and AssetHolding in deltas
 type AssetResourceRecord struct {
 	Aidx    basics.AssetIndex
 	Addr    basics.Address
@@ -711,12 +701,12 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 	return result
 }
 
-// GetAllAppResources todo
+// GetAllAppResources returns all AppResourceRecords
 func (ad *NewAccountDeltas) GetAllAppResources() []AppResourceRecord {
 	return ad.appResources
 }
 
-// GetAllAssetResources todo
+// GetAllAssetResources returns all AssetResourceRecords
 func (ad *NewAccountDeltas) GetAllAssetResources() []AssetResourceRecord {
 	return ad.assetResources
 }
