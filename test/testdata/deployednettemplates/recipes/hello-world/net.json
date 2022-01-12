@@ -51,27 +51,48 @@
       ]
     },
     {
-      "Name": "NPN1",
+      "Name": "N1",
+      "Group": "",
       "Nodes": [
         {
-          "Name": "pingpong node",
-          "IsRelay": false,
+          "Name": "node1",
           "Wallets": [
             {
               "Name": "Wallet3",
               "ParticipationOnly": false
             }
           ],
-          "NetAddress": "{{NetworkPort}}",
           "APIEndpoint": "{{APIEndpoint}}",
           "APIToken": "{{APIToken}}",
-          "EnableTelemetry": true,
+          "EnableTelemetry": false,
           "TelemetryURI": "{{TelemetryURI}}",
-          "EnableMetrics": true,
+          "EnableMetrics": false,
           "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
-          "EnableBlockStats": true,
-          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
+          "EnableBlockStats": false,
+          "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+        }
+      ]
+    },
+    {
+      "Name": "NPN1",
+      "Group": "",
+      "Nodes": [
+        {
+          "Name": "nonParticipatingNode1",
+          "Wallets": [
+            {
+              "Name": "Wallet4",
+              "ParticipationOnly": false
+            }
+          ],
+          "APIEndpoint": "{{APIEndpoint}}",
+          "APIToken": "{{APIToken}}",
+          "EnableTelemetry": false,
+          "EnableMetrics": false,
+          "EnableService": false,
+          "EnableBlockStats": false,
+          "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
         }
       ]
     }
