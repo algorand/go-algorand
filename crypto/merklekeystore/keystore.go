@@ -42,7 +42,6 @@ type (
 		VerifyingKey     crypto.GenericVerifyingKey `codec:"vkey"`
 	}
 
-	// Keystore is a merkleKeyStore, contain multiple keys which can be used per round.
 	// Keystore will generate all keys in the range [A,Z] that are divisible by some divisor d.
 	// in case A equals zero then signer will generate all keys from (0,Z], i.e will not generate key for round zero.
 	// i.e. the generated keys are {all values x such that x >= firstValid, x <= lastValid, and x%interval == 0}
@@ -68,7 +67,7 @@ type (
 		SignerContext
 	}
 
-	// SignerContext contains all the public immutable data related to merklekeystore.Keystore
+	// SignerContext contains all the immutable data and metadata related to merklekeystore.Keystore (without the secret keys)
 	SignerContext struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -111,19 +110,20 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	if err != nil {
 		return nil, err
 	}
-	s := &Keystore{
+
+	tree, err := merklearray.Build(&keysArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
+	if err != nil {
+		return nil, err
+	}
+
+	return &Keystore{
 		ephemeralKeys: keys,
 		SignerContext: SignerContext{
 			FirstValid: firstValid,
 			Interval:   interval,
+			Tree:       *tree,
 		},
-	}
-	tree, err := merklearray.Build(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
-	if err != nil {
-		return nil, err
-	}
-	s.Tree = *tree
-	return s, nil
+	}, nil
 }
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
@@ -171,11 +171,6 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 }
 
 // expects valid rounds, i.e round that are bigger than FirstValid.
-func (s *Keystore) getMerkleTreeIndex(round uint64) uint64 {
-	return roundToIndex(s.FirstValid, round, s.Interval)
-}
-
-// expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
 	return roundToIndex(s.FirstValid, round, s.Interval)
 }
@@ -183,14 +178,14 @@ func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
 // GetKey retrieves key from memory if exists
 func (s *Keystore) GetKey(round uint64) *crypto.GenericSigningKey {
 	idx := roundToIndex(s.FirstValid, round, s.Interval)
-	if idx < 0 || idx >= uint64(len(s.ephemeralKeys)) || (round%s.Interval) != 0 {
+	if idx >= uint64(len(s.ephemeralKeys)) || (round%s.Interval) != 0 {
 		return nil
 	}
 
 	return &s.ephemeralKeys[idx]
 }
 
-// GetSigner returns the secret keys required for the specified round as well as the public immutable data
+// GetSigner returns the secret keys required for the specified round as well as the rest of the required state proof immutable data
 func (s *Keystore) GetSigner(round uint64) *Signer {
 	return &Signer{
 		SigningKey:    s.GetKey(round),

@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+/* This file contains every database and persistence related method for the merkle Keystore.
+ * It is used when generating the State Proof keys (storing them into a database), and for
+ * importing those keys from the created database file into the algod participation registry.
+ */
+
 package merklekeystore
 
 import (
@@ -83,16 +88,6 @@ func (s *Keystore) Persist(store db.Accessor) error {
 	return nil // Success
 }
 
-// Restore loads Keystore from given database, as well as restoring PersistenKeystore (where the actual keys are stored)
-func (s *Keystore) Restore(store db.Accessor) (err error) {
-	//keystore, err := RestoreKeystore(store)
-	//if err != nil {
-	//	return
-	//}
-	//s.keyStore = keystore
-	return
-}
-
 // FetchKey returns the SigningKey and round for a specified index from the StateProof DB
 func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
 	var keyB []byte
@@ -121,7 +116,7 @@ func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSignin
 }
 
 // CountKeys counts the number of rows in StateProofKeys table
-func (s *Keystore) CountKeys(store db.Accessor) int {
+func (s *Keystore) CountKeys(store db.Accessor) (int, error) {
 	var count int
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT COUNT(*) FROM StateProofKeys")
@@ -132,7 +127,7 @@ func (s *Keystore) CountKeys(store db.Accessor) int {
 		return nil
 	})
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return count
+	return count, nil
 }

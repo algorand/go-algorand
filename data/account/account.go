@@ -187,11 +187,8 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return acc, nil
 	}
 	acc.StateProofSecrets = &merklekeystore.Keystore{}
+	// only the state proof data is decoded here (the keys are stored in a different DB table and are fetched separately)
 	if err = protocol.Decode(rawStateProof, acc.StateProofSecrets); err != nil {
-		return PersistedParticipation{}, err
-	}
-	err = acc.StateProofSecrets.Restore(store)
-	if err != nil {
 		return PersistedParticipation{}, err
 	}
 

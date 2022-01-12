@@ -979,31 +979,39 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				part.Close()
 				continue
 			}
-			// create a const value Number of records in one fetch
-			// insert into the registry X rounds of keys via account manager
-			// all in for loop until no more keys in db
-			partID := part.ID()
-			numKeys := part.Participation.StateProofSecrets.CountKeys(part.Store)
-			keys := make(map[uint64]account.StateProofKey, numKeys)
-			for i := uint64(0); i < uint64(numKeys); i++ {
-				// TODO: should we add a method to FetchAllKeys instead?
-				key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
-				if err != nil {
-					return err
-				}
-				if key == nil {
-					node.log.Warnf("Was able to fetch %d State Proof keys from database, out of existing %d", i, numKeys)
-					break // no more keys (should return error instead probably)
-				}
-
-				keys[round] = account.StateProofKey(*key)
-			}
-			err = node.accountManager.Registry().AppendKeys(partID, keys)
-			// kinda useless since AppendKeys returns nil exclusively and appends asynchronously
+			err = insertStateProofToRegistry(part, node)
 			if err != nil {
 				return err
 			}
 		}
+	}
+
+	return nil
+}
+
+func insertStateProofToRegistry(part account.PersistedParticipation, node *AlgorandFullNode) error {
+	// create a const value Number of records in one fetch
+	// insert into the registry X rounds of keys via account manager
+	// all in for loop until no more keys in db
+	partID := part.ID()
+	numKeys, err := part.Participation.StateProofSecrets.CountKeys(part.Store)
+	if err != nil {
+		return err
+	}
+	keys := make(map[uint64]account.StateProofKey, numKeys)
+	for i := uint64(0); i < uint64(numKeys); i++ {
+		// TODO: should we add a method to FetchAllKeys instead?
+		key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
+		if err != nil {
+			return err
+		}
+
+		keys[round] = account.StateProofKey(*key)
+	}
+	err = node.accountManager.Registry().AppendKeys(partID, keys)
+	// kinda useless since AppendKeys returns nil exclusively and appends asynchronously
+	if err != nil {
+		return err
 	}
 
 	return nil

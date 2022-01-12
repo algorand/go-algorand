@@ -107,18 +107,6 @@ func (r *ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
-// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
-func (r *ParticipationRecordForRound) OverlapsInterval(first, last basics.Round) bool {
-	// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
-	if last < first {
-		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)
-	}
-	if last < r.FirstValid || first > r.LastValid {
-		return false
-	}
-	return true
-}
-
 var zeroParticipationRecord = ParticipationRecord{}
 
 // IsZero returns true if the object contains zero values.
@@ -487,7 +475,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		rawVoting = protocol.Encode(&voting)
 	}
 
-	// This does not contain secrets! only the public immutable data
+	// This contains all the state proof data except for the actual secret keys (stored in a different table)
 	if record.StateProofSecrets != nil {
 		rawStateProof = protocol.Encode(&record.StateProofSecrets.SignerContext)
 	}
@@ -896,7 +884,6 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 
 // TODO: improve performance somehow but not querying the DB if stateproof key should not
 // exist for this round
-// TODO: make sure it returns a nil stateproof if none exist for this round
 // GetForRound fetches a record with all secrets for a particular round.
 func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound

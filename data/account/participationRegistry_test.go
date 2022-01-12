@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"strings"
 	"sync"
 	"testing"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -727,7 +727,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	defer registryCloseTest(t, registry)
 
 	// Install a key to add StateProof keys.
-	max := uint64(1000)
+	max := uint64(20)
 	p := makeTestParticipation(1, 0, basics.Round(max), 3)
 	id, err := registry.Insert(p)
 	a.NoError(err)
