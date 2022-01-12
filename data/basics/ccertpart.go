@@ -77,10 +77,10 @@ func (p ParticipantsArray) Length() uint64 {
 }
 
 // Marshal Returns the hash for the given position.
-func (p ParticipantsArray) Marshal(pos uint64) ([]byte, error) {
+func (p ParticipantsArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(p)) {
-		return crypto.GenericDigest{}, fmt.Errorf(ErrIndexOutOfBound, pos, len(p))
+		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(p))
 	}
 
-	return crypto.HashRep(p[pos]), nil
+	return p[pos], nil
 }

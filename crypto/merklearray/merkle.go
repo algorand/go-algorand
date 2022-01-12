@@ -58,20 +58,6 @@ type Tree struct {
 	VectorCommitment bool               `codec:"vc"`
 }
 
-// Proof contains the merkle path, along with the hash factory that should be used.
-type Proof struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	// Path is bounded by MaxNumLeaves since there could be multiple reveals, and
-	// given the distribution of the elt positions and the depth of the tree,
-	// the path length can increase up to 2^MaxTreeDepth / 2
-	Path        []crypto.GenericDigest `codec:"pth,allocbound=MaxNumLeaves/2"`
-	HashFactory crypto.HashFactory     `codec:"hsh"`
-	// TreeDepth represents the depth of the tree that is being proven.
-	// the root level is not included
-	TreeDepth uint8 `codec:"td"`
-}
-
 func (tree *Tree) topLayer() Layer {
 	return tree.Levels[len(tree.Levels)-1]
 }

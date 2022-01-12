@@ -45,7 +45,7 @@ func (sc committableSignatureSlotArray) Length() uint64 {
 	return uint64(len(sc))
 }
 
-func (sc committableSignatureSlotArray) Marshal(pos uint64) ([]byte, error) {
+func (sc committableSignatureSlotArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(sc)) {
 		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(sc))
 	}
@@ -55,7 +55,7 @@ func (sc committableSignatureSlotArray) Marshal(pos uint64) ([]byte, error) {
 		return nil, err
 	}
 
-	return crypto.HashRep(signatureSlot), nil
+	return signatureSlot, nil
 }
 
 func buildCommittableSignature(sigCommit sigslotCommit) (*committableSignatureSlot, error) {
