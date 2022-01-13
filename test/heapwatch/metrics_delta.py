@@ -54,20 +54,23 @@ def test_metric_line_re():
 
 def parse_metrics(fin):
     out = dict()
-    for line in fin:
-        if not line:
-            continue
-        line = line.strip()
-        if not line:
-            continue
-        if line[0] == '#':
-            continue
-        m = metric_line_re.match(line)
-        if m:
-            out[m.group(1)] = num(m.group(2))
-        else:
-            ab = line.split()
-            out[ab[0]] = num(ab[1])
+    try:
+        for line in fin:
+            if not line:
+                continue
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == '#':
+                continue
+            m = metric_line_re.match(line)
+            if m:
+                out[m.group(1)] = num(m.group(2))
+            else:
+                ab = line.split()
+                out[ab[0]] = num(ab[1])
+    except:
+        print("An exception occurred in parse_metrics")
     return out
 
 # return b-a
@@ -396,6 +399,7 @@ class nodestats:
         prevbi = None
 
         for path in sorted(metrics_files):
+            print("processing file: ",  path)
             with open(path, 'rt') as fin:
                 cur = parse_metrics(fin)
             bijsonpath = path.replace('.metrics', '.blockinfo.json')
