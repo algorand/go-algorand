@@ -1276,8 +1276,7 @@ func assembleJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unsupported JSON value type: %#v", spec.Name, args[0])
 	}
 	if jsonSpec.version > ops.Version {
-		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
+		return ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
 	}
 
 	valueType := jsonSpec.field

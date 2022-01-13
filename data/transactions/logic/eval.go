@@ -4061,19 +4061,19 @@ func opBase64Decode(cx *EvalContext) {
 	}
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
 }
-func hasDuplicateKeys(jsonText []byte) (bool, error) {
+func hasDuplicateKeys(jsonText []byte) (bool, map[string]json.RawMessage, error) {
 	dec := json.NewDecoder(bytes.NewReader(jsonText))
-	keys := make(map[string]bool)
-	var value interface{}
+	parsed := make(map[string]json.RawMessage)
 	_, err := dec.Token()
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	for dec.More() {
-		// Get JSON key
+		var value json.RawMessage
+		// get JSON key
 		key, err := dec.Token()
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 		// end of json
 		if key == '}' {
@@ -4082,30 +4082,23 @@ func hasDuplicateKeys(jsonText []byte) (bool, error) {
 		// decode value
 		err = dec.Decode(&value)
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 		// check for duplicates
-		if _, ok := keys[key.(string)]; ok {
-			return true, nil
+		if _, ok := parsed[key.(string)]; ok {
+			return true, nil, nil
 		}
-		keys[key.(string)] = true
+		parsed[key.(string)] = value
 	}
-	return false, nil
+	return false, parsed, nil
 }
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 	if !json.Valid(jsonText) {
 		return nil, fmt.Errorf("invalid json text")
 	}
-	// decode text
-	decoder := json.NewDecoder(bytes.NewReader(jsonText))
-	var parsed map[string]json.RawMessage
-	err := decoder.Decode(&parsed)
-	if err != nil {
-		return nil, err
-	}
-	// check for duplicate keys
-	hasDuplicates, err := hasDuplicateKeys(jsonText)
+	// parse json text and check for duplicate keys
+	hasDuplicates, parsed, err := hasDuplicateKeys(jsonText)
 	if hasDuplicates {
 		return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
 	}
@@ -4120,7 +4113,7 @@ func opJSONRef(cx *EvalContext) {
 	key := string(cx.stack[last].Bytes)
 	cx.stack = cx.stack[:last] // pop
 
-	//parse json text
+	// parse json text
 	last = len(cx.stack) - 1
 	parsed, err := parseJSON(cx.stack[last].Bytes)
 	if err != nil {
@@ -4128,7 +4121,7 @@ func opJSONRef(cx *EvalContext) {
 		return
 	}
 
-	//get value from json
+	// get value from json
 	var stval stackValue
 	_, ok := parsed[key]
 	if !ok {

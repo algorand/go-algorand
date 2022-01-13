@@ -5132,7 +5132,7 @@ func TestHasDuplicateKeys(t *testing.T) {
 		},
 	}
 	for _, s := range testCases {
-		hasDuplicates, err := hasDuplicateKeys(s.text)
+		hasDuplicates, _, err := hasDuplicateKeys(s.text)
 		require.Nil(t, err)
 		require.True(t, hasDuplicates)
 	}
@@ -5148,7 +5148,7 @@ func TestHasDuplicateKeys(t *testing.T) {
 		},
 	}
 	for _, s := range noDuplicates {
-		hasDuplicates, err := hasDuplicateKeys(s.text)
+		hasDuplicates, _, err := hasDuplicateKeys(s.text)
 		require.Nil(t, err)
 		require.False(t, hasDuplicates)
 	}
