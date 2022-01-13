@@ -195,11 +195,17 @@ func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.Asse
 }
 
 func (cs *roundCowState) HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
-	_, ok, err = cs.lookupAppLocalState(addr, aidx)
-	return
+	d, ok, err := cs.lookupAppLocalState(addr, aidx)
+	if d.Deleted || d.State == nil {
+		ok = false
+	}
+	return ok, err
 }
 
 func (cs *roundCowState) HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
-	_, ok, err = cs.lookupAssetParams(addr, aidx)
-	return
+	d, ok, err := cs.lookupAssetParams(addr, aidx)
+	if d.Deleted || d.Params == nil {
+		ok = false
+	}
+	return ok, err
 }

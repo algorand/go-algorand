@@ -399,10 +399,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if !res.Holding.Deleted {
+				if !res.Holding.Deleted && res.Holding.Holding != nil {
 					newEntry.newResource.SetAssetHolding(*res.Holding.Holding)
 				}
-				if !res.Params.Deleted {
+				if !res.Params.Deleted && res.Params.Params != nil {
 					newEntry.newResource.SetAssetParams(*res.Params.Params, false)
 				}
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
@@ -449,10 +449,10 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if !res.State.Deleted {
+				if !res.State.Deleted && res.State.State != nil {
 					newEntry.newResource.SetAppLocalState(*res.State.State)
 				}
-				if !res.Params.Deleted {
+				if !res.Params.Deleted && res.Params.Params != nil {
 					newEntry.newResource.SetAppParams(*res.Params.Params, false)
 				}
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
