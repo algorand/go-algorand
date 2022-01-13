@@ -380,16 +380,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if res.Holding.Holding != nil {
-					updEntry.newResource.SetAssetHolding(*res.Holding.Holding)
-				} else if res.Holding.Deleted {
-					updEntry.newResource.ClearAssetHolding()
-				}
-				if res.Params.Params != nil {
-					updEntry.newResource.SetAssetParams(*res.Params.Params, updEntry.newResource.IsHolding())
-				} else if res.Params.Deleted {
-					updEntry.newResource.ClearAssetParams()
-				}
+				updEntry.newResource.SetAssetData(res.Params, res.Holding)
 				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
@@ -399,12 +390,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if !res.Holding.Deleted && res.Holding.Holding != nil {
-					newEntry.newResource.SetAssetHolding(*res.Holding.Holding)
-				}
-				if !res.Params.Deleted && res.Params.Params != nil {
-					newEntry.newResource.SetAssetParams(*res.Params.Params, newEntry.newResource.IsHolding())
-				}
+				newEntry.newResource.SetAssetData(res.Params, res.Holding)
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
@@ -430,16 +416,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if res.State.State != nil {
-					updEntry.newResource.SetAppLocalState(*res.State.State)
-				} else if res.State.Deleted {
-					updEntry.newResource.ClearAppLocalState()
-				}
-				if res.Params.Params != nil {
-					updEntry.newResource.SetAppParams(*res.Params.Params, updEntry.newResource.IsHolding())
-				} else if res.Params.Deleted {
-					updEntry.newResource.ClearAppParams()
-				}
+				updEntry.newResource.SetAppData(res.Params, res.State)
 				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
@@ -449,12 +426,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if !res.State.Deleted && res.State.State != nil {
-					newEntry.newResource.SetAppLocalState(*res.State.State)
-				}
-				if !res.Params.Deleted && res.Params.Params != nil {
-					newEntry.newResource.SetAppParams(*res.Params.Params, newEntry.newResource.IsHolding())
-				}
+				newEntry.newResource.SetAppData(res.Params, res.State)
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
@@ -1494,6 +1466,32 @@ func (rd *resourcesData) GetAppParams() basics.AppParams {
 			},
 		},
 		ExtraProgramPages: rd.ExtraProgramPages,
+	}
+}
+
+func (rd *resourcesData) SetAssetData(ap ledgercore.AssetParamsDelta, ah ledgercore.AssetHoldingDelta) {
+	if ah.Holding != nil {
+		rd.SetAssetHolding(*ah.Holding)
+	} else if ah.Deleted {
+		rd.ClearAssetHolding()
+	}
+	if ap.Params != nil {
+		rd.SetAssetParams(*ap.Params, rd.IsHolding())
+	} else if ap.Deleted {
+		rd.ClearAssetParams()
+	}
+}
+
+func (rd *resourcesData) SetAppData(ap ledgercore.AppParamsDelta, al ledgercore.AppLocalStateDelta) {
+	if al.State != nil {
+		rd.SetAppLocalState(*al.State)
+	} else if al.Deleted {
+		rd.ClearAppLocalState()
+	}
+	if ap.Params != nil {
+		rd.SetAppParams(*ap.Params, rd.IsHolding())
+	} else if ap.Deleted {
+		rd.ClearAppParams()
 	}
 }
 

@@ -655,11 +655,9 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
 			// fetch AppLocalState to store along with deleted AppParams
-			var state ledgercore.AppLocalStateDelta
-			if st, exist, err := cb.lookupAppLocalState(addr, aapp.aidx); err != nil {
+			state, _, err := cb.lookupAppLocalState(addr, aapp.aidx, true)
+			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
-			} else if exist {
-				state = st
 			}
 			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, ledgercore.AppParamsDelta{Deleted: true}, state)
 		case allocAction:
@@ -670,7 +668,7 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 		case remainAllocAction:
 			// note: these should always exist because they were
 			// at least preceded by a call to PutAppParams/PutAssetParams()
-			params, exist, err := cb.lookupAppParams(addr, aapp.aidx)
+			params, exist, err := cb.lookupAppParams(addr, aapp.aidx, true)
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
@@ -696,11 +694,9 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 				}
 			}
 			// fetch AppLocalState to store along with updated AppParams
-			var state ledgercore.AppLocalStateDelta
-			if st, exist, err := cb.lookupAppLocalState(addr, aapp.aidx); err != nil {
+			state, _, err := cb.lookupAppLocalState(addr, aapp.aidx, true)
+			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
-			} else if exist {
-				state = st
 			}
 			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, state)
 		}
@@ -711,11 +707,9 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
 			// fetch AppParams to store along with deleted AppLocalState
-			var params ledgercore.AppParamsDelta
-			if ap, exist, err := cb.lookupAppParams(addr, aapp.aidx); err != nil {
+			params, _, err := cb.lookupAppParams(addr, aapp.aidx, true)
+			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
-			} else if exist {
-				params = ap
 			}
 			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, ledgercore.AppLocalStateDelta{Deleted: true})
 		case allocAction:
@@ -726,7 +720,7 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 		case remainAllocAction:
 			// note: these should always exist because they were
 			// at least preceded by a call to PutAssetHolding/PutLocalState
-			states, exist, err := cb.lookupAppLocalState(addr, aapp.aidx)
+			states, exist, err := cb.lookupAppLocalState(addr, aapp.aidx, true)
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
@@ -753,11 +747,9 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 				}
 			}
 			// fetch AppParams to store along with deleted AppLocalState
-			var params ledgercore.AppParamsDelta
-			if ap, exist, err := cb.lookupAppParams(addr, aapp.aidx); err != nil {
+			params, _, err := cb.lookupAppParams(addr, aapp.aidx, true)
+			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
-			} else if exist {
-				params = ap
 			}
 			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, states)
 		}

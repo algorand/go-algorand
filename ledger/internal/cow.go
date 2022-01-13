@@ -39,10 +39,10 @@ import (
 
 type roundCowParent interface {
 	lookup(basics.Address) (ledgercore.AccountData, error)
-	lookupAppParams(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppParamsDelta, bool, error)
-	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetParamsDelta, bool, error)
-	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppLocalStateDelta, bool, error)
-	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetHoldingDelta, bool, error)
+	lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error)
+	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error)
+	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error)
+	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error)
 
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
@@ -164,7 +164,7 @@ func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountDat
 	return cb.lookupParent.lookup(addr)
 }
 
-func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppParamsDelta, bool, error) {
+func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
 	params, ok := cb.mods.NewAccts.GetAppParams(addr, aidx)
 	if ok {
 		if params.Deleted {
@@ -173,10 +173,10 @@ func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppInd
 		return params, ok, nil
 	}
 
-	return cb.lookupParent.lookupAppParams(addr, aidx)
+	return cb.lookupParent.lookupAppParams(addr, aidx, fromCache)
 }
 
-func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetParamsDelta, bool, error) {
+func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
 	params, ok := cb.mods.NewAccts.GetAssetParams(addr, aidx)
 	if ok {
 		if params.Deleted {
@@ -185,10 +185,10 @@ func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.Asse
 		return params, ok, nil
 	}
 
-	return cb.lookupParent.lookupAssetParams(addr, aidx)
+	return cb.lookupParent.lookupAssetParams(addr, aidx, fromCache)
 }
 
-func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppLocalStateDelta, bool, error) {
+func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	state, ok := cb.mods.NewAccts.GetAppLocalState(addr, aidx)
 	if ok {
 		if state.Deleted {
@@ -197,10 +197,10 @@ func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.Ap
 		return state, ok, nil
 	}
 
-	return cb.lookupParent.lookupAppLocalState(addr, aidx)
+	return cb.lookupParent.lookupAppLocalState(addr, aidx, fromCache)
 }
 
-func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetHoldingDelta, bool, error) {
+func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
 	holding, ok := cb.mods.NewAccts.GetAssetHolding(addr, aidx)
 	if ok {
 		if holding.Deleted {
@@ -209,7 +209,7 @@ func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.Ass
 		return holding, ok, nil
 	}
 
-	return cb.lookupParent.lookupAssetHolding(addr, aidx)
+	return cb.lookupParent.lookupAssetHolding(addr, aidx, fromCache)
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
