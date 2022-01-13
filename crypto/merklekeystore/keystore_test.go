@@ -346,24 +346,23 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	a.Error(signer.GetVerifier().Verify(start+1, hashable, sig2))
 }
 
-// TODO: test marshaling SignerContext instead of Keystore
-//func TestMarshal(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//	a := require.New(t)
-//
-//	signer := generateTestSigner(crypto.FalconType, 0, 10, 1, a)
-//
-//	out := protocol.Encode(signer)
-//	decodeInto := &Keystore{}
-//	a.NoError(protocol.Decode(out, decodeInto))
-//	a.Equal(signer, decodeInto)
-//
-//	verifier := signer.GetVerifier()
-//	bs := protocol.Encode(verifier)
-//	verifierToDecodeInto := Verifier{}
-//	protocol.Decode(bs, &verifierToDecodeInto)
-//	a.Equal(*verifier, verifierToDecodeInto)
-//}
+func TestMarshal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer := generateTestSigner(crypto.FalconType, 0, 10, 1, a)
+
+	out := protocol.Encode(&signer.SignerContext)
+	decodeInto := SignerContext{}
+	a.NoError(protocol.Decode(out, &decodeInto))
+	a.Equal(signer.SignerContext, decodeInto)
+
+	verifier := signer.GetVerifier()
+	bs := protocol.Encode(verifier)
+	verifierToDecodeInto := Verifier{}
+	protocol.Decode(bs, &verifierToDecodeInto)
+	a.Equal(*verifier, verifierToDecodeInto)
+}
 
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)

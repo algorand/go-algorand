@@ -142,15 +142,6 @@ func (part Participation) VotingSecrets() *crypto.OneTimeSignatureSecrets {
 	return part.Voting
 }
 
-// VotingSigner returns the voting secrets associated with this Participation account,
-// together with the KeyDilution value.
-func (part Participation) VotingSigner() crypto.OneTimeSigner {
-	return crypto.OneTimeSigner{
-		OneTimeSignatureSecrets: part.Voting,
-		OptionalKeyDilution:     part.KeyDilution,
-	}
-}
-
 // StateProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
 func (part Participation) StateProofSigner() *merklekeystore.Keystore {
