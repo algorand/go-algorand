@@ -4326,7 +4326,6 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x01; bsqrt; byte 0x01; ==; return", 6)
 	testAccepts(t, "byte 0x10; bsqrt; byte 0x04; ==; return", 6)
 	testAccepts(t, "byte 0x11; bsqrt; byte 0x04; ==; return", 6)
-	testAccepts(t, "byte 0x11; bsqrt; byte 0x04; ==; return", 6)
 	testAccepts(t, "byte 0xffffff; bsqrt; len; int 2; ==; return", 6)
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs), 6)
