@@ -161,7 +161,7 @@ type NewAccountDeltas struct {
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
 
-	// AppResources deltas. If app params or local state is deleted, there is a nil value in appResources.Params or appResources.State
+	// AppResources deltas. If app params or local state is deleted, there is a nil value in appResources.Params or appResources.State and Deleted flag set
 	appResources []AppResourceRecord
 	// caches for {addr, app id} to app params delta resolution
 	appResourcesCache map[AccountApp]int
@@ -213,40 +213,48 @@ func (ad NewAccountDeltas) GetData(addr basics.Address) (AccountData, bool) {
 func (ad NewAccountDeltas) GetAppParams(addr basics.Address, aidx basics.AppIndex) (AppParamsDelta, bool) {
 	idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]
 	var result AppParamsDelta
+	var exist bool
 	if ok {
 		result = ad.appResources[idx].Params
+		exist = result.Deleted || result.Params != nil
 	}
-	return result, ok
+	return result, exist
 }
 
 // GetAssetParams returns asset params delta value
 func (ad NewAccountDeltas) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (AssetParamsDelta, bool) {
 	idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]
 	var result AssetParamsDelta
+	var exist bool
 	if ok {
 		result = ad.assetResources[idx].Params
+		exist = result.Deleted || result.Params != nil
 	}
-	return result, ok
+	return result, exist
 }
 
 // GetAppLocalState returns app local state delta value
 func (ad NewAccountDeltas) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (AppLocalStateDelta, bool) {
 	idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]
 	var result AppLocalStateDelta
+	var exist bool
 	if ok {
 		result = ad.appResources[idx].State
+		exist = result.Deleted || result.State != nil
 	}
-	return result, ok
+	return result, exist
 }
 
 // GetAssetHolding returns asset holding delta value
 func (ad NewAccountDeltas) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (AssetHoldingDelta, bool) {
 	idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]
 	var result AssetHoldingDelta
+	var exist bool
 	if ok {
 		result = ad.assetResources[idx].Holding
+		exist = result.Deleted || result.Holding != nil
 	}
-	return result, ok
+	return result, exist
 }
 
 // ModifiedAccounts returns list of addresses of modified accounts

@@ -216,7 +216,10 @@ func (x *roundCowBase) updateAppResourceCache(aa ledgercore.AccountApp, r ledger
 func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
 	aa := ledgercore.AccountApp{Address: addr, App: aidx}
 	if result, ok := x.appParams[aa]; ok {
-		return ledgercore.AppParamsDelta{Params: &result.value}, result.exists, nil
+		if !result.exists {
+			return ledgercore.AppParamsDelta{}, false, nil
+		}
+		return ledgercore.AppParamsDelta{Params: &result.value}, true, nil
 	}
 
 	if fromCache { // hasn't been found yet; we were asked not to query DB
@@ -239,7 +242,10 @@ func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex
 func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
 	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
 	if result, ok := x.assetParams[aa]; ok {
-		return ledgercore.AssetParamsDelta{Params: &result.value}, result.exists, nil
+		if !result.exists {
+			return ledgercore.AssetParamsDelta{}, false, nil
+		}
+		return ledgercore.AssetParamsDelta{Params: &result.value}, true, nil
 	}
 
 	if fromCache { // hasn't been found yet; we were asked not to query DB
@@ -262,7 +268,10 @@ func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetI
 func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	aa := ledgercore.AccountApp{Address: addr, App: aidx}
 	if result, ok := x.appLocalStates[aa]; ok {
-		return ledgercore.AppLocalStateDelta{State: &result.value}, result.exists, nil
+		if !result.exists {
+			return ledgercore.AppLocalStateDelta{}, false, nil
+		}
+		return ledgercore.AppLocalStateDelta{State: &result.value}, true, nil
 	}
 
 	if fromCache { // hasn't been found yet; we were asked not to query DB
@@ -285,7 +294,10 @@ func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppI
 func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
 	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
 	if result, ok := x.assets[aa]; ok {
-		return ledgercore.AssetHoldingDelta{Holding: &result.value}, result.exists, nil
+		if !result.exists {
+			return ledgercore.AssetHoldingDelta{}, false, nil
+		}
+		return ledgercore.AssetHoldingDelta{Holding: &result.value}, true, nil
 	}
 
 	if fromCache { // hasn't been found yet; we were asked not to query DB
