@@ -71,6 +71,7 @@ def parse_metrics(fin):
                 out[ab[0]] = num(ab[1])
     except:
         print("An exception occurred in parse_metrics")
+        pass
     return out
 
 # return b-a
