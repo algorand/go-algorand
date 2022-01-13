@@ -19,6 +19,7 @@ package compactcert
 import (
 	"context"
 	"database/sql"
+	"github.com/algorand/go-algorand/data/account"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -71,8 +72,17 @@ restart:
 				goto restart
 			}
 
-			ccw.signBlock(hdr)
+			safeToDeleteIds := ccw.signBlock(hdr)
 			ccw.signedBlock(nextrnd)
+
+			// send ids that are safe to delete keys from.
+			for _, id := range safeToDeleteIds {
+				if err := ccw.accts.DeleteStateProofKey(id, hdr.Round); err != nil {
+					ccw.log.Warnf("ccw.signer(): DeleteStateProofKey failed (%d): %w", hdr.Round, err)
+				}
+
+			}
+
 			nextrnd++
 
 		case <-ccw.ctx.Done():
@@ -82,21 +92,22 @@ restart:
 	}
 }
 
-func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
+// signBlock returns the ids of all keys that successfully signed a block, and their signature is stored safely in the db.
+func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) []account.ParticipationID {
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.CompactCertRounds == 0 {
-		return
+		return nil
 	}
 
 	// Only sign blocks that are a multiple of CompactCertRounds.
 	if hdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
-		return
+		return nil
 	}
 
 	keys := ccw.accts.StateProofKeys(hdr.Round)
 	if len(keys) == 0 {
 		// No keys, nothing to do.
-		return
+		return nil
 	}
 
 	// votersRound is the round containing the merkle root commitment
@@ -105,17 +116,17 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	votersHdr, err := ccw.ledger.BlockHdr(votersRound)
 	if err != nil {
 		ccw.log.Warnf("ccw.signBlock(%d): BlockHdr(%d): %v", hdr.Round, votersRound, err)
-		return
+		return nil
 	}
 
 	if votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
 		// No voter commitment, perhaps because compact certs were
 		// just enabled.
-		return
+		return nil
 	}
 
 	sigs := make([]sigFromAddr, 0, len(keys))
-
+	ids := make([]account.ParticipationID, 0, len(keys))
 	for _, key := range keys {
 		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
 			continue
@@ -137,14 +148,20 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			Round:  hdr.Round,
 			Sig:    sig,
 		})
+		ids = append(ids, key.ParticipationID)
 	}
 
-	for _, sfa := range sigs {
+	safeToDeleteIds := make([]account.ParticipationID, 0, len(keys))
+	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
+	for i, sfa := range sigs {
 		_, err = ccw.handleSig(sfa, nil)
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): handleSig: %v", hdr.Round, err)
+			continue
 		}
+		safeToDeleteIds = append(safeToDeleteIds, ids[i])
 	}
+	return safeToDeleteIds
 }
 
 // LatestSigsFromThisNode returns information about compact cert signatures from

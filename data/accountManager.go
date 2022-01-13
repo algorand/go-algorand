@@ -45,6 +45,11 @@ type AccountManager struct {
 	log      logging.Logger
 }
 
+// DeleteStateProofKey deletes all keys connected to ParticipationID that came before (including) the given round.
+func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
+	return manager.registry.DeleteStateProofKeys(id, round)
+}
+
 // MakeAccountManager creates a new AccountManager with a custom logger
 func MakeAccountManager(log logging.Logger, registry account.ParticipationRegistry) *AccountManager {
 	manager := &AccountManager{}

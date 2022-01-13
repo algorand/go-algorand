@@ -932,3 +932,95 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.Equal(*partPerRound.StateProofSecrets.SigningKey, *keys[0].Key)
 	a.Equal(CompactCertRounds, keys[0].Round)
 }
+
+type keypairs []merklesignature.KeyRoundPair
+
+func (k keypairs) findPairForSpecificRound(round uint64) merklesignature.KeyRoundPair {
+	for _, pair := range k {
+		if pair.Round == round {
+			return pair
+		}
+	}
+	return merklesignature.KeyRoundPair{}
+}
+
+// Test the recording function.
+func TestDeleteStateProofKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	// Install a key to add StateProof keys.
+	maxRound := uint64(20)
+	p := makeTestParticipation(a, 1, 0, basics.Round(maxRound), 3)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.Equal(p.ID(), id)
+
+	// Wait for async DB operations to finish.
+	a.NoError(registry.Flush(10 * time.Second))
+
+	//each round receives a stateproof key.
+	signer, err := merklesignature.New(1, maxRound, 1)
+	a.NoError(err)
+
+	// Initialize keys array.
+	keys := make(keypairs, 0)
+	for i := uint64(1); i < maxRound; i++ {
+		k := signer.GetKey(i)
+		if k == nil {
+			continue
+		}
+		keys = append(keys, merklesignature.KeyRoundPair{Round: i, Key: k})
+	}
+
+	a.NoError(registry.AppendKeys(id, StateProofKeys(keys)))
+
+	// Wait for async DB operations to finish.
+	a.NoError(registry.Flush(10 * time.Second))
+
+	// Make sure we're able to fetch the same data that was put in.
+	for i := uint64(1); i < maxRound; i++ {
+		r, err := registry.GetStateProofForRound(id, basics.Round(i))
+		a.NoError(err)
+
+		a.Equal(keys.findPairForSpecificRound(i).Key, r.StateProofSecrets.SigningKey)
+	}
+
+	removeKeysRound := basics.Round(maxRound / 2)
+	a.NoError(registry.DeleteStateProofKeys(id, removeKeysRound))
+
+	a.NoError(registry.Flush(10 * time.Second))
+
+	// verify that the db does not contain any state proof key with round less than 10
+
+	registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var pk int
+		a.NoError(tx.QueryRow(selectPK, id[:]).Scan(&pk))
+
+		// make certain keys below the cutting round do not exist in the db.
+		var num int
+		a.NoError(
+			tx.QueryRow(
+				"SELECT COUNT(*) FROM StateProofKeys where pk=? AND round <=?",
+				pk,
+				removeKeysRound,
+			).Scan(&num),
+		)
+		a.Zero(num)
+
+		// make certain keys above the cutting round exist in the db.
+		a.NoError(
+			tx.QueryRow(
+				"SELECT COUNT(*) FROM StateProofKeys where pk=? AND round >?",
+				pk,
+				removeKeysRound,
+			).Scan(&num),
+		)
+
+		// includes removeKeysRound
+		a.Equal(int(maxRound)-(int(removeKeysRound)+1), num)
+		return nil
+	})
+}
