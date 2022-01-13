@@ -970,6 +970,9 @@ func TestApplyStorageDelta(t *testing.T) {
 			TotalAppLocalStates: 1,
 		}},
 	)
+	baseCow := makeRoundCowBase(nil, 0, 0, 0, config.ConsensusParams{})
+	baseCow.updateAppResourceCache(ledgercore.AccountApp{Address: addr, App: 1}, ledgercore.AccountResource{})
+	cow.lookupParent = baseCow
 
 	err := applyStorageDelta(cow, addr, storagePtr{1, true}, &sd)
 	a.NoError(err)

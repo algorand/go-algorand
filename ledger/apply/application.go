@@ -78,6 +78,17 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Allocate the new app params (+ 1 to match Assets Idx namespace)
 	appIdx = basics.AppIndex(txnCounter + 1)
+
+	// Sanity check that there isn't an app with this counter value.
+	_, present, err := balances.GetAppParams(creator, appIdx)
+	if err != nil {
+		return
+	}
+	if present {
+		err = fmt.Errorf("already found app with index %d", appIdx)
+		return
+	}
+
 	params := basics.AppParams{
 		ApprovalProgram:   ac.ApprovalProgram,
 		ClearStateProgram: ac.ClearStateProgram,
