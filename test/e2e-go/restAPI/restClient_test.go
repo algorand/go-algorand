@@ -1119,7 +1119,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 60*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformationV2(someAddress)
