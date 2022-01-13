@@ -170,6 +170,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				Weight:                e.Vote.Cred.Weight,
 				PreviousProposalHash1: oldVote.R.Proposal.BlockDigest.String(),
 			}
+
 			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
 
 			logging.Base().Warnf("voteTracker: observed an equivocator: %v (vote was %v)", sender, e.Vote)
