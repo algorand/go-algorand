@@ -1500,7 +1500,8 @@ func TestCompactDeltasResources(t *testing.T) {
 		delta, _ := outResourcesDeltas.get(addrs[0], 100)
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, appParams100.ApprovalProgram, delta.newResource.ApprovalProgram)
-		// do not delta.nAcctDeltas since checkNewDeltas func is reused and this entry gets modified
+		// do not check delta.nAcctDeltas since checkNewDeltas func is reused and this entry gets modified
+
 		delta, _ = outResourcesDeltas.get(addrs[0], 200)
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, appLocalState200.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
@@ -1510,7 +1511,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, appParams101.ApprovalProgram, delta.newResource.ApprovalProgram)
 		require.Equal(t, appLocalState101.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
-		require.Equal(t, int(2), delta.nAcctDeltas)
+		require.Equal(t, int(1), delta.nAcctDeltas)
 
 		delta, _ = outResourcesDeltas.get(addrs[2], 102)
 		require.NotEmpty(t, delta.newResource)
@@ -1525,7 +1526,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, assetParams103.Total, delta.newResource.Total)
 		require.Equal(t, assetHolding103.Amount, delta.newResource.GetAssetHolding().Amount)
-		require.Equal(t, int(2), delta.nAcctDeltas)
+		require.Equal(t, int(1), delta.nAcctDeltas)
 	}
 
 	checkNewDeltas(outResourcesDeltas)
@@ -1574,8 +1575,7 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	appParams104 := basics.AppParams{ApprovalProgram: []byte{104}}
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
-	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{})
-	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{State: &appLocalState204})
+	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{State: &appLocalState204})
 
 	baseResources.write(persistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
@@ -1591,7 +1591,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	delta, _ = outResourcesDeltas.get(addrs[4], 104)
 	require.Equal(t, appParams104.ApprovalProgram, delta.newResource.GetAppParams().ApprovalProgram)
 	require.Equal(t, appLocalState204.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
-	require.Equal(t, int(2), delta.nAcctDeltas)
+	require.Equal(t, int(1), delta.nAcctDeltas)
 }
 
 // TestAcctUpdatesCachesInitialization test the functionality of the initializeCaches cache.
