@@ -22,10 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
-
-	uuid "github.com/satori/go.uuid"
 )
 
 func TestBuilderSanity(t *testing.T) {
@@ -79,16 +76,8 @@ func BenchmarkMerkleKeyStoreGenEd25519(b *testing.B) {
 }
 
 func bencKeyGen(b *testing.B, algoType crypto.AlgorithmType) {
-	a := require.New(b)
-
-	tmpname := uuid.NewV4().String()
-
-	store, err := db.MakeAccessor(tmpname, false, true)
-	a.NoError(err)
-	a.NotNil(store)
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		New(0, 3000000, 128, algoType, store)
+		New(0, 3000000, 128, algoType)
 	}
 }

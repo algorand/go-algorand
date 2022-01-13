@@ -17,107 +17,54 @@
 package merklekeystore
 
 import (
+	"context"
+	"database/sql"
+	"testing"
+
+	uuid "github.com/satori/go.uuid"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"testing"
+	"github.com/algorand/go-algorand/util/db"
 )
 
-func TestStoringKeys(t *testing.T) {
+func TestFetchKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
+	store := createTestDB(a)
+	defer store.Close()
 
-	s := generateTestSigner(crypto.FalconType, 0, 4096, 345, a)
-	k := s.keyStore
-	defer k.store.Close()
-
-	a.Equal(countKeysInRange(0, 4096, 345), length(s, a))
-	count, err := k.DropKeys(700)
-	a.NoError(err)
-	a.Equal(2, int(count))
-	a.Equal(countKeysInRange(700, 4096, 345), length(s, a))
-}
-
-func TestDroppingKeys(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	s := generateTestSigner(crypto.FalconType, 25, 1023, 23, a)
-	k := s.keyStore
-	defer k.store.Close()
-
-	a.Equal(countKeysInRange(25, 1023, 23), length(s, a))
-	count, err := k.DropKeys(600)
-	a.NoError(err)
-	a.Equal(countKeysInRange(25, 600, 23), int(count))
-	a.Equal(countKeysInRange(601, 1023, 23), length(s, a))
-
-	count, err = k.DropKeys(601)
-	a.NoError(err)
-	a.Equal(0, int(count))
-	a.Equal(countKeysInRange(602, 1023, 23), length(s, a))
-
-	count, err = k.DropKeys(1023)
-	a.NoError(err)
-	a.Equal(countKeysInRange(602, 1023, 23), int(count))
-	a.Equal(0, length(s, a))
-}
-
-func TestPersistRestore(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	s := generateTestSigner(crypto.FalconType, 25, 1023, 23, a)
-	k := s.keyStore
-	defer k.store.Close()
-
-	s2 := &Signer{}
-	a.NoError(s2.Restore(k.store))
-	a.Equal(countKeysInRange(25, 1023, 23), length(s2, a))
-}
-
-func BenchmarkFetchKeys(b *testing.B) {
-	a := require.New(b)
-
-	start := uint64(1)
-	end := uint64(3000000)
 	interval := uint64(128)
-	s := generateTestSigner(crypto.FalconType, start, end, interval, a)
-	defer s.keyStore.store.Close()
-	b.ResetTimer()
+	keystore, err := New(1, 1000, interval, crypto.FalconType)
+	a.NoError(err)
+	a.NoError(keystore.Persist(*store))
 
-	j := interval
-	for i := 0; i < b.N; i++ {
-		_, _ = s.keyStore.GetKey(j)
-		j += interval
-		if j > end {
-			j = interval
-		}
-	}
+	key, rnd, err := keystore.FetchKey(interval*1, *store)
+	a.Equal(keystore.GetKey(rnd), key)
+
+	key, rnd, err = keystore.FetchKey(interval*2, *store)
+	a.Equal(keystore.GetKey(rnd), key)
+
+	key, rnd, err = keystore.FetchKey(interval*5, *store)
+	a.Equal(keystore.GetKey(rnd), key)
+
 }
 
-func BenchmarkTrimKeys(b *testing.B) {
-	a := require.New(b)
-	start := uint64(1)
-	end := uint64(3000000)
-	interval := uint64(128)
-	s := generateTestSigner(crypto.FalconType, start, end, interval, a)
-	defer s.keyStore.store.Close()
-	b.ResetTimer()
+func createTestDB(a *require.Assertions) *db.Accessor {
+	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+	store, err := db.MakeAccessor(tmpname, false, true)
+	a.NoError(err)
+	a.NotNil(store)
 
-	j := interval
-	for i := 0; i < b.N; i++ {
-		_, _ = s.Trim(j)
-		j += interval
-		if j > end {
-			j = interval
-		}
-	}
-}
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err = tx.Exec(`CREATE TABLE schema (
+			tablename TEXT PRIMARY KEY,
+			version INTEGER
+		);`)
+		return err
+	})
+	a.NoError(err)
 
-func countKeysInRange(firstValid uint64, lastValid uint64, interval uint64) int {
-	keysSkipped := firstValid / interval
-	keysUpTo := lastValid / interval
-
-	return int(keysUpTo - keysSkipped)
+	return &store
 }

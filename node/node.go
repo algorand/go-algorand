@@ -970,13 +970,48 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			}
 		} else {
 			// Tell the AccountManager about the Participation (dupes don't matter)
+			// make sure that all stateproof data (with are not the keys per round)
+			// are being store to the registry in that point
 			added := node.accountManager.AddParticipation(part)
 			if added {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
 			} else {
 				part.Close()
+				continue
+			}
+			err = insertStateProofToRegistry(part, node)
+			if err != nil {
+				return err
 			}
 		}
+	}
+
+	return nil
+}
+
+func insertStateProofToRegistry(part account.PersistedParticipation, node *AlgorandFullNode) error {
+	// create a const value Number of records in one fetch
+	// insert into the registry X rounds of keys via account manager
+	// all in for loop until no more keys in db
+	partID := part.ID()
+	numKeys, err := part.Participation.StateProofSecrets.CountKeys(part.Store)
+	if err != nil {
+		return err
+	}
+	keys := make(map[uint64]account.StateProofKey, numKeys)
+	for i := uint64(0); i < uint64(numKeys); i++ {
+		// TODO: should we add a method to FetchAllKeys instead?
+		key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
+		if err != nil {
+			return err
+		}
+
+		keys[round] = account.StateProofKey(*key)
+	}
+	err = node.accountManager.Registry().AppendKeys(partID, keys)
+	// kinda useless since AppendKeys returns nil exclusively and appends asynchronously
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -1276,42 +1311,41 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
-func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
-	keys := node.accountManager.Keys(votingRound)
-
-	participations := make([]account.Participation, 0, len(keys))
-	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(keys))
+func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound {
+	parts := node.accountManager.Keys(votingRound)
+	participations := make([]account.ParticipationRecordForRound, 0, len(parts))
+	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(parts))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)
 	const bitMismatchingVotingKey = 1
 	const bitMismatchingSelectionKey = 2
-	for _, part := range keys {
-		acctData, hasAccountData := accountsData[part.Parent]
+	for _, p := range parts {
+		acctData, hasAccountData := accountsData[p.Account]
 		if !hasAccountData {
 			var err error
-			acctData, err = node.ledger.LookupAgreement(keysRound, part.Parent)
+			acctData, err = node.ledger.LookupAgreement(keysRound, p.Account)
 			if err != nil {
-				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), keysRound, err)
+				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", p.Account, keysRound, err)
 				continue
 			}
-			accountsData[part.Parent] = acctData
+			accountsData[p.Account] = acctData
 		}
 
-		if acctData.VoteID != part.Voting.OneTimeSignatureVerifier {
-			mismatchingAccountsKeys[part.Address()] = mismatchingAccountsKeys[part.Address()] | bitMismatchingVotingKey
+		if acctData.VoteID != p.Voting.OneTimeSignatureVerifier {
+			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitMismatchingVotingKey
 			continue
 		}
-		if acctData.SelectionID != part.VRF.PK {
-			mismatchingAccountsKeys[part.Address()] = mismatchingAccountsKeys[part.Address()] | bitMismatchingSelectionKey
+		if acctData.SelectionID != p.VRF.PK {
+			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitMismatchingSelectionKey
 			continue
 		}
-		participations = append(participations, part)
-		matchingAccountsKeys[part.Address()] = true
+		participations = append(participations, p)
+		matchingAccountsKeys[p.Account] = true
 
 		// Make sure the key is registered.
-		err := node.accountManager.Registry().Register(part.ID(), votingRound)
+		err := node.accountManager.Registry().Register(p.ParticipationID, votingRound)
 		if err != nil {
-			node.log.Warnf("Failed to register participation key (%s) with participation registry: %v\n", part.ID(), err)
+			node.log.Warnf("Failed to register participation key (%s) with participation registry: %v\n", p.ParticipationID, err)
 		}
 	}
 	// write the warnings per account only if we couldn't find a single valid key for that account.

@@ -32,12 +32,16 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
+
+// TODO: change to ConsensusCurrentVersion when updated
+var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 
 func getRegistry(t *testing.T) *participationDB {
 	rootDB, err := db.OpenPair(t.Name(), true)
@@ -59,11 +63,12 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 
 func makeTestParticipation(addrID int, first, last basics.Round, dilution uint64) Participation {
 	p := Participation{
-		FirstValid:  first,
-		LastValid:   last,
-		KeyDilution: dilution,
-		Voting:      &crypto.OneTimeSignatureSecrets{},
-		VRF:         &crypto.VRFSecrets{},
+		FirstValid:        first,
+		LastValid:         last,
+		KeyDilution:       dilution,
+		Voting:            &crypto.OneTimeSignatureSecrets{},
+		VRF:               &crypto.VRFSecrets{},
+		StateProofSecrets: &merklekeystore.Keystore{},
 	}
 	binary.LittleEndian.PutUint32(p.Parent[:], uint32(addrID))
 	return p
@@ -722,7 +727,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	defer registryCloseTest(t, registry)
 
 	// Install a key to add StateProof keys.
-	max := uint64(1000)
+	max := uint64(20)
 	p := makeTestParticipation(1, 0, basics.Round(max), 3)
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -732,12 +737,16 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
+	signer, err := merklekeystore.New(1, max, 1, crypto.FalconType)
+	a.NoError(err)
 	// Initialize keys array.
 	keys := make(map[uint64]StateProofKey)
-	for i := uint64(0); i <= max; i++ {
-		bs := make([]byte, 8)
-		binary.LittleEndian.PutUint64(bs, i)
-		keys[i] = bs
+	for i := uint64(1); i < max; i++ {
+		k := signer.GetKey(i)
+		if k == nil {
+			continue
+		}
+		keys[i] = StateProofKey(*k)
 	}
 
 	err = registry.AppendKeys(id, keys)
@@ -748,12 +757,10 @@ func TestAddStateProofKeys(t *testing.T) {
 	a.NoError(err)
 
 	// Make sure we're able to fetch the same data that was put in.
-	for i := uint64(0); i <= max; i++ {
+	for i := uint64(1); i < max; i++ {
 		r, err := registry.GetForRound(id, basics.Round(i))
 		a.NoError(err)
-		a.Equal(keys[i], r.StateProof)
-		number := binary.LittleEndian.Uint64(r.StateProof)
-		a.Equal(i, number)
+		a.Equal(keys[i], StateProofKey(*r.StateProofSecrets.SigningKey))
 	}
 }
 
@@ -769,11 +776,14 @@ func TestSecretNotFound(t *testing.T) {
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
-	r, err := registry.GetForRound(id, basics.Round(100))
+	r, err := registry.GetForRound(id, basics.Round(2))
+	a.NoError(err)
 
-	a.True(r.IsZero())
-	a.Error(err)
-	a.ErrorIs(err, ErrSecretNotFound)
+	// Empty stateproof key
+	a.Nil(r.StateProofSecrets)
+
+	_, err = registry.GetForRound(id, basics.Round(100))
+	a.ErrorIs(err, ErrRequestedRoundOutOfRange)
 }
 
 func TestAddingSecretTwice(t *testing.T) {
@@ -782,17 +792,24 @@ func TestAddingSecretTwice(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
+	access, err := db.MakeAccessor("stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, 200, 3)
+	access.Close()
+	a.NoError(err)
+
 	// Install a key for testing
-	p := makeTestParticipation(1, 0, 2, 3)
-	id, err := registry.Insert(p)
+	id, err := registry.Insert(p.Participation)
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
 	// Append key
 	keys := make(map[uint64]StateProofKey)
-	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, 10)
-	keys[0] = bs
+
+	keys[0] = StateProofKey(*p.StateProofSecrets.GetKey(CompactCertRounds))
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
@@ -804,4 +821,52 @@ func TestAddingSecretTwice(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.Error(err)
 	a.EqualError(err, "unable to execute append keys: UNIQUE constraint failed: StateProofKeys.pk, StateProofKeys.round")
+}
+
+func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	access, err := db.MakeAccessor("stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, 200, 3)
+	access.Close()
+	a.NoError(err)
+
+	// Install a key for testing
+	id, err := registry.Insert(p.Participation)
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	partPerRound, err := registry.GetForRound(id, 1)
+	a.NoError(err)
+	a.Nil(partPerRound.StateProofSecrets)
+
+	// Should return nil as well since no state proof keys were added
+	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds))
+	a.NoError(err)
+	a.Nil(partPerRound.StateProofSecrets)
+
+	// Append key
+	keys := make(map[uint64]StateProofKey)
+	keys[CompactCertRounds] = StateProofKey(*p.StateProofSecrets.GetKey(CompactCertRounds))
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds)-1)
+	a.NoError(err)
+	a.Nil(partPerRound.StateProofSecrets)
+
+	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds))
+	a.NoError(err)
+	a.NotNil(partPerRound.StateProofSecrets)
+	a.Equal(keys[CompactCertRounds], StateProofKey(*partPerRound.StateProofSecrets.SigningKey))
 }

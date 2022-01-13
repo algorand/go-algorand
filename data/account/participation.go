@@ -50,7 +50,7 @@ type Participation struct {
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
 	// StateProofSecrets is used to sign compact certificates. might be nil
-	StateProofSecrets *merklekeystore.Signer
+	StateProofSecrets *merklekeystore.Keystore
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -142,19 +142,15 @@ func (part Participation) VotingSecrets() *crypto.OneTimeSignatureSecrets {
 	return part.Voting
 }
 
-// VotingSigner returns the voting secrets associated with this Participation account,
-// together with the KeyDilution value.
-func (part Participation) VotingSigner() crypto.OneTimeSigner {
-	return crypto.OneTimeSigner{
-		OneTimeSignatureSecrets: part.Voting,
-		OptionalKeyDilution:     part.KeyDilution,
-	}
-}
-
 // StateProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
-func (part Participation) StateProofSigner() *merklekeystore.Signer {
+func (part Participation) StateProofSigner() *merklekeystore.Keystore {
 	return part.StateProofSecrets
+}
+
+// StateProofVerifier returns the verifier for the StateProof keys.
+func (part Participation) StateProofVerifier() *merklekeystore.Verifier {
+	return part.StateProofSecrets.GetVerifier()
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
@@ -245,7 +241,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), interval, compactcert.SignatureScheme, store)
+	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), interval, compactcert.SignatureScheme)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
@@ -266,7 +262,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Persist the Participation into the database
 	err = part.Persist()
 	if err == nil {
-		err = stateProofSecrets.Persist() // must be called after part.Persist()
+		err = stateProofSecrets.Persist(store) // must be called after part.Persist()
 	}
 	return part, err
 }

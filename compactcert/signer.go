@@ -121,14 +121,14 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
-		sig, err := key.StateProofSecrets.Sign(hdr, uint64(hdr.Round))
+		sig, err := key.StateProofSecrets.Sign(hdr)
 		if err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): StateProof.Sign: %v", hdr.Round, err)
+			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
 			continue
 		}
 
 		sigs = append(sigs, sigFromAddr{
-			Signer: key.Parent,
+			Signer: key.Account,
 			Round:  hdr.Round,
 			Sig:    sig,
 		})

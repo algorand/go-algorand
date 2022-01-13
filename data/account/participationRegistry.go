@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"strings"
 	"time"
 
@@ -82,20 +83,28 @@ type ParticipationRecord struct {
 	Voting *crypto.OneTimeSignatureSecrets
 }
 
-// StateProofKey is a placeholder for the real state proof key type.
-// PKI TODO: Replace this with a real object.
-type StateProofKey []byte
+// StateProofKey defined the type used for the compact certificate signing key
+type StateProofKey crypto.GenericSigningKey
 
 // ParticipationRecordForRound adds in the per-round state proof key.
 type ParticipationRecordForRound struct {
 	ParticipationRecord
 
-	StateProof StateProofKey
+	StateProofSecrets *merklekeystore.Signer
 }
 
 // IsZero returns true if the object contains zero values.
 func (r ParticipationRecordForRound) IsZero() bool {
-	return r.StateProof == nil && r.ParticipationRecord.IsZero()
+	return r.StateProofSecrets == nil && r.ParticipationRecord.IsZero()
+}
+
+// VotingSigner returns the voting secrets associated with this Participation account,
+// together with the KeyDilution value.
+func (r *ParticipationRecordForRound) VotingSigner() crypto.OneTimeSigner {
+	return crypto.OneTimeSigner{
+		OneTimeSignatureSecrets: r.Voting,
+		OptionalKeyDilution:     r.KeyDilution,
+	}
 }
 
 var zeroParticipationRecord = ParticipationRecord{}
@@ -150,6 +159,9 @@ var ErrParticipationIDNotFound = errors.New("the participation ID was not found"
 // ErrInvalidRegisterRange is used when attempting to register a participation key on a round that is out of range.
 var ErrInvalidRegisterRange = errors.New("key would not be active within range")
 
+// ErrRequestedRoundOutOfRange is used when the requested round for GetForRound is outside the valid range of this participation
+var ErrRequestedRoundOutOfRange = errors.New("request range is not within the validity range")
+
 // ErrUnknownParticipationAction is used when record is given something other than the known actions.
 var ErrUnknownParticipationAction = errors.New("unknown participation action")
 
@@ -169,6 +181,7 @@ var ErrMultipleKeysForID = errors.New("multiple valid keys found for the same pa
 var ErrNoKeyForID = errors.New("no valid key found for the participationID")
 
 // ErrSecretNotFound is used when attempting to lookup secrets for a particular round.
+// TODO: add round parameter to this error message?
 var ErrSecretNotFound = errors.New("the participation ID did not have secrets for the requested round")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
@@ -261,7 +274,7 @@ const (
 			keyDilution     INTEGER NOT NULL,
 
 			vrf BLOB,       --*  msgpack encoding of ParticipationAccount.vrf
-			stateProof BLOB --*  msgpack encoding of ParticipationAccount.BlockProof
+			stateProof BLOB --*  msgpack encoding of merklekeystore.SignerContext
 		)`
 
 	createRolling = `CREATE TABLE Rolling (
@@ -297,7 +310,8 @@ const (
 		FROM Keysets k
 		INNER JOIN Rolling r
 		ON k.pk = r.pk`
-	selectStateProofKeys = `SELECT s.key
+	selectStateProofData = `SELECT stateProof FROM Keysets WHERE participationID = ? LIMIT 1`
+	selectStateProofKey  = `SELECT s.key
 		FROM StateProofKeys s
 		WHERE round=?
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
@@ -460,7 +474,11 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 		voting := record.Voting.Snapshot()
 		rawVoting = protocol.Encode(&voting)
 	}
-	// PKI TODO: Extract state proof from record.
+
+	// This contains all the state proof data except for the actual secret keys (stored in a different table)
+	if record.StateProofSecrets != nil {
+		rawStateProof = protocol.Encode(&record.StateProofSecrets.SignerContext)
+	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		result, err := tx.Exec(
@@ -510,8 +528,8 @@ func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]S
 			return fmt.Errorf("unable to prepare state proof insert: %w", err)
 		}
 
-		for k, v := range keys {
-			result, err := stmt.Exec(pk, k, v)
+		for rnd, key := range keys {
+			result, err := stmt.Exec(pk, rnd, protocol.Encode(&key))
 			if err = verifyExecWithOneRowEffected(err, result, "append keys"); err != nil {
 				return err
 			}
@@ -690,6 +708,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	return
 }
 
+// TODO: should keys be a tuple array instead of map? what's the added value for map?
 func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -863,17 +882,27 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 	return results
 }
 
+// TODO: improve performance somehow but not querying the DB if stateproof key should not
+// exist for this round
 // GetForRound fetches a record with all secrets for a particular round.
 func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound
+	var rawStateProofKey []byte
+	var rawSignerContext []byte
+
 	result.ParticipationRecord = db.Get(id)
 	if result.ParticipationRecord.IsZero() {
 		return ParticipationRecordForRound{}, ErrParticipationIDNotFound
 	}
 
+	if round > result.LastValid {
+		return ParticipationRecordForRound{}, ErrRequestedRoundOutOfRange
+	}
+
 	err := db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow(selectStateProofKeys, round, id[:])
-		err := row.Scan(&result.StateProof)
+		// fetch secret key
+		row := tx.QueryRow(selectStateProofKey, round, id[:])
+		err := row.Scan(&rawStateProofKey)
 		if err == sql.ErrNoRows {
 			return ErrSecretNotFound
 		}
@@ -883,9 +912,37 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 
 		return nil
 	})
+	if err == ErrSecretNotFound {
+		return result, nil
+	} else if err != nil {
+		return ParticipationRecordForRound{}, err
+	}
 
+	// Init stateproof fields after being able to retrieve key from database
+	result.StateProofSecrets = &merklekeystore.Signer{}
+	result.StateProofSecrets.SigningKey = &crypto.GenericSigningKey{}
+	result.StateProofSecrets.Round = uint64(round)
+
+	err = protocol.Decode(rawStateProofKey, result.StateProofSecrets.SigningKey)
 	if err != nil {
-		return ParticipationRecordForRound{}, fmt.Errorf("unable to lookup secrets: %w", err)
+		return ParticipationRecordForRound{}, err
+	}
+
+	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		// fetch stateproof public data
+		row := tx.QueryRow(selectStateProofData, id[:])
+		err := row.Scan(&rawSignerContext)
+		if err != nil {
+			return fmt.Errorf("error while querying stateproof data: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return ParticipationRecordForRound{}, err
+	}
+	err = protocol.Decode(rawSignerContext, &result.StateProofSecrets.SignerContext)
+	if err != nil {
+		return ParticipationRecordForRound{}, err
 	}
 
 	return result, nil

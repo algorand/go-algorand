@@ -100,10 +100,29 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.Participation) {
+func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.ParticipationRecordForRound) {
 	for _, part := range s.keys {
 		if part.OverlapsInterval(rnd, rnd) {
-			out = append(out, part)
+			partRecord := account.ParticipationRecord{
+				ParticipationID:   part.ID(),
+				Account:           part.Parent,
+				FirstValid:        part.FirstValid,
+				LastValid:         part.LastValid,
+				KeyDilution:       part.KeyDilution,
+				LastVote:          0,
+				LastBlockProposal: 0,
+				LastStateProof:    0,
+				EffectiveFirst:    0,
+				EffectiveLast:     0,
+				VRF:               part.VRF,
+				Voting:            part.Voting,
+			}
+			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
+			partRecordForRound := account.ParticipationRecordForRound{
+				ParticipationRecord: partRecord,
+				StateProofSecrets:   signerInRound,
+			}
+			out = append(out, partRecordForRound)
 		}
 	}
 	return

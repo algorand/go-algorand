@@ -14,12 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+/* This file contains every database and persistence related method for the merkle Keystore.
+ * It is used when generating the State Proof keys (storing them into a database), and for
+ * importing those keys from the created database file into the algod participation registry.
+ */
+
 package merklekeystore
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -27,83 +33,6 @@ import (
 
 const keystoreSchemaVersion = 1
 const keystoreTableSchemaName = "merklekeystore"
-
-// PersistentKeystore Provides an abstraction to the keystore, the DB operations for fetching/storing them and an internal caching mechanism
-type PersistentKeystore struct {
-	store db.Accessor
-}
-
-// Persist dumps the keys into the database as separate row for each key
-func (p *PersistentKeystore) Persist(keys []crypto.GenericSigningKey, firstValid uint64, interval uint64) error {
-	if keys == nil {
-		return fmt.Errorf("no keys provided (nil)")
-	}
-
-	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := keystoreInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
-		if err != nil {
-			return err
-		}
-
-		if interval == 0 {
-			return errIntervalZero
-		}
-		round := indexToRound(firstValid, interval, 0)
-		for i, key := range keys {
-			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
-			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)
-			protocol.PutEncodingBuf(encodedKey)
-			if err != nil {
-				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
-			}
-			round += interval
-		}
-
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("PersistentKeystore.Persist: %w", err)
-	}
-
-	return nil // Success
-}
-
-// GetKey receives a round number and returns the corresponding (previously committed on) key.
-func (p *PersistentKeystore) GetKey(round uint64) (*crypto.GenericSigningKey, error) {
-	var keyB []byte
-	err := p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT key FROM StateProofKeys WHERE round = ?", round)
-		err := row.Scan(&keyB)
-		if err != nil {
-			return fmt.Errorf("failed to select stateProof key for round %d : %w", round, err)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("PersistentKeystore.GetKey: %w", err)
-	}
-
-	key := &crypto.GenericSigningKey{}
-	err = protocol.Decode(keyB, key)
-	if err != nil {
-		return nil, fmt.Errorf("PersistentKeystore.GetKey: %w", err)
-	}
-
-	return key, nil
-}
-
-// DropKeys deletes the keys up to the specified round (including)
-func (p *PersistentKeystore) DropKeys(round uint64) (count int64, err error) {
-	err = p.store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		res, err := tx.Exec("DELETE FROM StateProofKeys WHERE round <= ?", round)
-		if err == nil {
-			count, err = res.RowsAffected()
-		}
-		return err
-	})
-	return count, err
-}
 
 func keystoreInstallDatabase(tx *sql.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE StateProofKeys (
@@ -124,31 +53,81 @@ func keystoreInstallDatabase(tx *sql.Tx) error {
 	return err
 }
 
-// RestoreKeystore loads the PersistentKeystore from given database
-func RestoreKeystore(store db.Accessor) (PersistentKeystore, error) {
+// Persist dumps the keys into the database and deletes the reference to them in Keystore
+func (s *Keystore) Persist(store db.Accessor) error {
+	if s.ephemeralKeys == nil {
+		return fmt.Errorf("no keys provided (nil)")
+	}
+
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return MigrateDB(tx)
+		err := keystoreInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
+		if err != nil {
+			return err
+		}
+
+		if s.Interval == 0 {
+			return errIntervalZero
+		}
+		round := indexToRound(s.FirstValid, s.Interval, 0)
+		for i, key := range s.ephemeralKeys {
+			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
+			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)
+			protocol.PutEncodingBuf(encodedKey)
+			if err != nil {
+				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
+			}
+			round += s.Interval
+		}
+
+		return nil
 	})
 	if err != nil {
-		return PersistentKeystore{}, err
+		return fmt.Errorf("PersistentKeystore.Persist: %w", err)
 	}
 
-	return PersistentKeystore{store}, nil
+	return nil // Success
 }
 
-// MigrateDB updates the database if necessary, according the schema version
-func MigrateDB(tx *sql.Tx) error {
-	var version int
-	schemaQuery := `SELECT version FROM schema WHERE tablename = ?`
-	err := tx.QueryRow(schemaQuery, keystoreTableSchemaName).Scan(&version)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil
+// FetchKey returns the SigningKey and round for a specified index from the StateProof DB
+func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
+	var keyB []byte
+	var round uint64
+	key := &crypto.GenericSigningKey{}
+
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT key,round FROM StateProofKeys WHERE id = ?", id)
+		err := row.Scan(&keyB, &round)
+		if err != nil {
+			return fmt.Errorf("failed to select stateProof key for round %d : %w", round, err)
 		}
-		// In the future this should not return quietly, as stateproof keys will be required
-		return err
+
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
 	}
 
-	// When migrations are required: err = updateDB(tx, version)
-	return nil
+	err = protocol.Decode(keyB, key)
+	if err != nil {
+		return nil, 0, err // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
+	}
+
+	return key, round, nil
+}
+
+// CountKeys counts the number of rows in StateProofKeys table
+func (s *Keystore) CountKeys(store db.Accessor) (int, error) {
+	var count int
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT COUNT(*) FROM StateProofKeys")
+		err := row.Scan(&count)
+		if err != nil {
+			return fmt.Errorf("failed to count rows in table StateProofKeys : %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

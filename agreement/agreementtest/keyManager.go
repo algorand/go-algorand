@@ -17,6 +17,7 @@
 package agreementtest
 
 import (
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -25,11 +26,37 @@ import (
 type SimpleKeyManager []account.Participation
 
 // VotingKeys implements KeyManager.VotingKeys.
-func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
+func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.ParticipationRecordForRound {
+	var km []account.ParticipationRecordForRound
 	for _, acc := range m {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
+			record := account.ParticipationRecord{
+				ParticipationID:   acc.ID(),
+				Account:           acc.Parent,
+				FirstValid:        acc.FirstValid,
+				LastValid:         acc.LastValid,
+				KeyDilution:       acc.KeyDilution,
+				LastVote:          0,
+				LastBlockProposal: 0,
+				LastStateProof:    0,
+				EffectiveFirst:    acc.FirstValid,
+				EffectiveLast:     acc.LastValid,
+				VRF:               acc.VRF,
+				Voting:            acc.Voting,
+			}
+			// Usually this struct will be retrieved from the registry, however in this test
+			// case we can allow ourselves to generate it from the data already in memory
+			// (within the Participation after calling FillDB)
+			var stateproofSinger *merklekeystore.Signer
+			stateproofSinger = nil
+			if acc.StateProofSecrets != nil {
+				stateproofSinger = acc.StateProofSecrets.GetSigner(uint64(votingRound))
+			}
+			partRecForRound := account.ParticipationRecordForRound{
+				ParticipationRecord: record,
+				StateProofSecrets:   stateproofSinger,
+			}
+			km = append(km, partRecForRound)
 		}
 	}
 	return km
