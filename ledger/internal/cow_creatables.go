@@ -59,45 +59,37 @@ func (cs *roundCowState) CountAssetParams(addr basics.Address) (int, error) {
 }
 
 func (cs *roundCowState) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
-	d, ok, err := cs.lookupAppParams(addr, aidx)
+	var d ledgercore.AppParamsDelta
+	d, ok, err = cs.lookupAppParams(addr, aidx)
 	if d.Params != nil {
 		ret = *d.Params
-	}
-	if d.Deleted { // XXX return ok=false for deleted?
-		ok = false
 	}
 	return
 }
 
 func (cs *roundCowState) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (ret basics.AppLocalState, ok bool, err error) {
-	d, ok, err := cs.lookupAppLocalState(addr, aidx)
+	var d ledgercore.AppLocalStateDelta
+	d, ok, err = cs.lookupAppLocalState(addr, aidx)
 	if d.State != nil {
 		ret = *d.State
-	}
-	if d.Deleted { // XXX return ok=false for deleted?
-		ok = false
 	}
 	return
 }
 
 func (cs *roundCowState) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
-	d, ok, err := cs.lookupAssetHolding(addr, aidx)
+	var d ledgercore.AssetHoldingDelta
+	d, ok, err = cs.lookupAssetHolding(addr, aidx)
 	if d.Holding != nil {
 		ret = *d.Holding
-	}
-	if d.Deleted { // XXX return ok=false for deleted?
-		ok = false
 	}
 	return
 }
 
 func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
-	d, ok, err := cs.lookupAssetParams(addr, aidx)
+	var d ledgercore.AssetParamsDelta
+	d, ok, err = cs.lookupAssetParams(addr, aidx)
 	if d.Params != nil {
 		ret = *d.Params
-	}
-	if d.Deleted { // XXX return ok=false for deleted?
-		ok = false
 	}
 	return
 }
@@ -107,11 +99,9 @@ func (cs *roundCowState) PutAppParams(addr basics.Address, aidx basics.AppIndex,
 }
 
 func (cs *roundCowState) putAppParams(addr basics.Address, aidx basics.AppIndex, params ledgercore.AppParamsDelta) error {
-	var state ledgercore.AppLocalStateDelta
-	if as, ok, err := cs.lookupAppLocalState(addr, aidx); err != nil { // should be cached
+	state, _, err := cs.lookupAppLocalState(addr, aidx)
+	if err != nil { // should be cached
 		return err
-	} else if ok {
-		state = as
 	}
 	cs.mods.NewAccts.UpsertAppResource(addr, aidx, params, state)
 	return nil
@@ -122,11 +112,9 @@ func (cs *roundCowState) PutAppLocalState(addr basics.Address, aidx basics.AppIn
 }
 
 func (cs *roundCowState) putAppLocalState(addr basics.Address, aidx basics.AppIndex, state ledgercore.AppLocalStateDelta) error {
-	var params ledgercore.AppParamsDelta
-	if ap, ok, err := cs.lookupAppParams(addr, aidx); err != nil { // should be cached
+	params, _, err := cs.lookupAppParams(addr, aidx)
+	if err != nil { // should be cached
 		return err
-	} else if ok {
-		params = ap
 	}
 	cs.mods.NewAccts.UpsertAppResource(addr, aidx, params, state)
 	return nil
@@ -137,11 +125,9 @@ func (cs *roundCowState) PutAssetHolding(addr basics.Address, aidx basics.AssetI
 }
 
 func (cs *roundCowState) putAssetHolding(addr basics.Address, aidx basics.AssetIndex, data ledgercore.AssetHoldingDelta) error {
-	var params ledgercore.AssetParamsDelta
-	if ap, ok, err := cs.lookupAssetParams(addr, aidx); err != nil { // should be cached
+	params, _, err := cs.lookupAssetParams(addr, aidx)
+	if err != nil { // should be cached
 		return err
-	} else if ok {
-		params = ap
 	}
 	cs.mods.NewAccts.UpsertAssetResource(addr, aidx, params, data)
 	return nil
@@ -152,11 +138,9 @@ func (cs *roundCowState) PutAssetParams(addr basics.Address, aidx basics.AssetIn
 }
 
 func (cs *roundCowState) putAssetParams(addr basics.Address, aidx basics.AssetIndex, data ledgercore.AssetParamsDelta) error {
-	var holding ledgercore.AssetHoldingDelta
-	if ah, ok, err := cs.lookupAssetHolding(addr, aidx); err != nil { // should be cached
+	holding, _, err := cs.lookupAssetHolding(addr, aidx)
+	if err != nil { // should be cached
 		return err
-	} else if ok {
-		holding = ah
 	}
 	cs.mods.NewAccts.UpsertAssetResource(addr, aidx, data, holding)
 	return nil
