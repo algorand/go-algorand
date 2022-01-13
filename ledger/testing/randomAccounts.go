@@ -365,26 +365,26 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 				for aidx, params := range data.AppParams {
 					val := params
 					res := appResources[aidx]
-					res.Params = &val
+					res.Params.Params = &val
 					appResources[aidx] = res
 				}
 				for aidx, states := range data.AppLocalStates {
 					val := states
 					res := appResources[aidx]
-					res.State = &val
+					res.State.State = &val
 					appResources[aidx] = res
 				}
 
 				for aidx, params := range data.AssetParams {
 					val := params
 					res := assetResources[aidx]
-					res.Params = &val
+					res.Params.Params = &val
 					assetResources[aidx] = res
 				}
 				for aidx, holding := range data.Assets {
 					val := holding
 					res := assetResources[aidx]
-					res.Holding = &val
+					res.Holding.Holding = &val
 					assetResources[aidx] = res
 				}
 
@@ -392,28 +392,28 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 				for aidx := range old.AppParams {
 					if _, ok := data.AppParams[aidx]; !ok {
 						res := appResources[aidx]
-						res.Params = nil
+						res.Params.Deleted = true
 						appResources[aidx] = res
 					}
 				}
 				for aidx := range old.AppLocalStates {
 					if _, ok := data.AppLocalStates[aidx]; !ok {
 						res := appResources[aidx]
-						res.State = nil
+						res.State.Deleted = true
 						appResources[aidx] = res
 					}
 				}
 				for aidx := range old.AssetParams {
 					if _, ok := data.AssetParams[aidx]; !ok {
 						res := assetResources[aidx]
-						res.Params = nil
+						res.Params.Deleted = true
 						assetResources[aidx] = res
 					}
 				}
 				for aidx := range old.Assets {
 					if _, ok := data.Assets[aidx]; !ok {
 						res := assetResources[aidx]
-						res.Holding = nil
+						res.Holding.Deleted = true
 						assetResources[aidx] = res
 					}
 				}
@@ -450,25 +450,25 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 			for aidx, params := range data.AppParams {
 				val := params
 				res := appResources[aidx]
-				res.Params = &val
+				res.Params.Params = &val
 				appResources[aidx] = res
 			}
 			for aidx, states := range data.AppLocalStates {
 				val := states
 				res := appResources[aidx]
-				res.State = &val
+				res.State.State = &val
 				appResources[aidx] = res
 			}
 			for aidx, params := range data.AssetParams {
 				val := params
 				res := assetResources[aidx]
-				res.Params = &val
+				res.Params.Params = &val
 				assetResources[aidx] = res
 			}
 			for aidx, holding := range data.Assets {
 				val := holding
 				res := assetResources[aidx]
-				res.Holding = &val
+				res.Holding.Holding = &val
 				assetResources[aidx] = res
 			}
 
