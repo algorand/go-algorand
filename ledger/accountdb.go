@@ -403,7 +403,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					newEntry.newResource.SetAssetHolding(*res.Holding.Holding)
 				}
 				if !res.Params.Deleted && res.Params.Params != nil {
-					newEntry.newResource.SetAssetParams(*res.Params.Params, false)
+					newEntry.newResource.SetAssetParams(*res.Params.Params, newEntry.newResource.IsHolding())
 				}
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
@@ -453,7 +453,7 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					newEntry.newResource.SetAppLocalState(*res.State.State)
 				}
 				if !res.Params.Deleted && res.Params.Params != nil {
-					newEntry.newResource.SetAppParams(*res.Params.Params, false)
+					newEntry.newResource.SetAppParams(*res.Params.Params, newEntry.newResource.IsHolding())
 				}
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
