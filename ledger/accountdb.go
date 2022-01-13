@@ -380,14 +380,14 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if !res.Holding.Deleted {
+				if res.Holding.Holding != nil {
 					updEntry.newResource.SetAssetHolding(*res.Holding.Holding)
-				} else {
+				} else if res.Holding.Deleted {
 					updEntry.newResource.ClearAssetHolding()
 				}
-				if !res.Params.Deleted {
+				if res.Params.Params != nil {
 					updEntry.newResource.SetAssetParams(*res.Params.Params, updEntry.newResource.IsHolding())
-				} else {
+				} else if res.Params.Deleted {
 					updEntry.newResource.ClearAssetParams()
 				}
 				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
@@ -430,14 +430,14 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if !res.State.Deleted {
+				if res.State.State != nil {
 					updEntry.newResource.SetAppLocalState(*res.State.State)
-				} else {
+				} else if res.State.Deleted {
 					updEntry.newResource.ClearAppLocalState()
 				}
-				if !res.Params.Deleted {
+				if res.Params.Params != nil {
 					updEntry.newResource.SetAppParams(*res.Params.Params, updEntry.newResource.IsHolding())
-				} else {
+				} else if res.Params.Deleted {
 					updEntry.newResource.ClearAppParams()
 				}
 				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
