@@ -513,11 +513,13 @@ func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]s
 				Created: false,
 				Creator: aapp.Address,
 			}
-		} else if _, ok := seen[basics.CreatableIndex(rec.Aidx)]; !ok {
-			result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
-				Ctype:   basics.AppCreatable,
-				Created: true,
-				Creator: aapp.Address,
+		} else if rec.Params.Params != nil {
+			if _, ok := seen[basics.CreatableIndex(rec.Aidx)]; !ok {
+				result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
+					Ctype:   basics.AppCreatable,
+					Created: true,
+					Creator: aapp.Address,
+				}
 			}
 		}
 	}
@@ -530,11 +532,13 @@ func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]s
 				Created: false,
 				Creator: aapp.Address,
 			}
-		} else if _, ok := seen[basics.CreatableIndex(rec.Aidx)]; !ok {
-			result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
-				Ctype:   basics.AssetCreatable,
-				Created: true,
-				Creator: aapp.Address,
+		} else if rec.Params.Params != nil {
+			if _, ok := seen[basics.CreatableIndex(rec.Aidx)]; !ok {
+				result[basics.CreatableIndex(rec.Aidx)] = ModifiedCreatable{
+					Ctype:   basics.AssetCreatable,
+					Created: true,
+					Creator: aapp.Address,
+				}
 			}
 		}
 	}
