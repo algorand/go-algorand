@@ -453,10 +453,10 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 		for aapp, idx := range ad.appResourcesCache {
 			rec := ad.appResources[idx]
 			if aapp.Address == addr {
-				if !rec.Params.Deleted {
+				if !rec.Params.Deleted && rec.Params.Params != nil {
 					result.AppParams[aapp.App] = *rec.Params.Params
 				}
-				if !rec.State.Deleted {
+				if !rec.State.Deleted && rec.State.State != nil {
 					result.AppLocalStates[aapp.App] = *rec.State.State
 				}
 			}
@@ -475,10 +475,10 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 		for aapp, idx := range ad.assetResourcesCache {
 			rec := ad.assetResources[idx]
 			if aapp.Address == addr {
-				if !rec.Params.Deleted {
+				if !rec.Params.Deleted && rec.Params.Params != nil {
 					result.AssetParams[aapp.Asset] = *rec.Params.Params
 				}
-				if !rec.Holding.Deleted {
+				if !rec.Holding.Deleted && rec.Holding.Holding != nil {
 					result.Assets[aapp.Asset] = *rec.Holding.Holding
 				}
 			}
@@ -560,12 +560,12 @@ func AccumulateDeltas(base map[basics.Address]basics.AccountData, deltas NewAcco
 		rec := deltas.appResources[idx]
 		if rec.Params.Deleted {
 			delete(ad.AppParams, aapp.App)
-		} else {
+		} else if rec.Params.Params != nil {
 			ad.AppParams[aapp.App] = *rec.Params.Params
 		}
 		if rec.State.Deleted {
 			delete(ad.AppLocalStates, aapp.App)
-		} else {
+		} else if rec.State.State != nil {
 			ad.AppLocalStates[aapp.App] = *rec.State.State
 		}
 		base[aapp.Address] = ad
@@ -586,12 +586,12 @@ func AccumulateDeltas(base map[basics.Address]basics.AccountData, deltas NewAcco
 		rec := deltas.assetResources[idx]
 		if rec.Params.Deleted {
 			delete(ad.AssetParams, aapp.Asset)
-		} else {
+		} else if rec.Params.Params != nil {
 			ad.AssetParams[aapp.Asset] = *rec.Params.Params
 		}
 		if rec.Holding.Deleted {
 			delete(ad.Assets, aapp.Asset)
-		} else {
+		} else if rec.Holding.Holding != nil {
 			ad.Assets[aapp.Asset] = *rec.Holding.Holding
 		}
 		base[aapp.Address] = ad
@@ -641,7 +641,7 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 				rec := ad.appResources[idx]
 				if rec.Params.Deleted {
 					delete(result.AppParams, aapp.App)
-				} else {
+				} else if rec.Params.Params != nil {
 					result.AppParams[aapp.App] = *rec.Params.Params
 				}
 			}
@@ -665,7 +665,7 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 				rec := ad.appResources[idx]
 				if rec.State.Deleted {
 					delete(result.AppLocalStates, aapp.App)
-				} else {
+				} else if rec.State.State != nil {
 					result.AppLocalStates[aapp.App] = *rec.State.State
 				}
 			}
@@ -688,7 +688,7 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 				rec := ad.assetResources[idx]
 				if rec.Params.Deleted {
 					delete(result.AssetParams, aapp.Asset)
-				} else {
+				} else if rec.Params.Params != nil {
 					result.AssetParams[aapp.Asset] = *rec.Params.Params
 				}
 			}
@@ -712,7 +712,7 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 				rec := ad.assetResources[idx]
 				if rec.Holding.Deleted {
 					delete(result.Assets, aapp.Asset)
-				} else {
+				} else if rec.Holding.Holding != nil {
 					result.Assets[aapp.Asset] = *rec.Holding.Holding
 				}
 			}
@@ -752,13 +752,13 @@ func (ad *NewAccountDeltas) mergeInOther(addr basics.Address, other NewAccountDe
 		if rec.Addr == addr {
 			var newParams AppParamsDelta
 			newParams.Deleted = rec.Params.Deleted
-			if !rec.Params.Deleted {
+			if !rec.Params.Deleted && rec.Params.Params != nil {
 				cp := *rec.Params.Params
 				newParams.Params = &cp
 			}
 			var newState AppLocalStateDelta
 			newState.Deleted = rec.State.Deleted
-			if !rec.State.Deleted {
+			if !rec.State.Deleted && rec.State.State != nil {
 				cp := *rec.State.State
 				newState.State = &cp
 			}
@@ -773,13 +773,13 @@ func (ad *NewAccountDeltas) mergeInOther(addr basics.Address, other NewAccountDe
 		if rec.Addr == addr {
 			var newParams AssetParamsDelta
 			newParams.Deleted = rec.Params.Deleted
-			if !rec.Params.Deleted {
+			if !rec.Params.Deleted && rec.Params.Params != nil {
 				cp := *rec.Params.Params
 				newParams.Params = &cp
 			}
 			var newHolding AssetHoldingDelta
 			newHolding.Deleted = rec.Holding.Deleted
-			if !rec.Holding.Deleted {
+			if !rec.Holding.Deleted && rec.Holding.Holding != nil {
 				cp := *rec.Holding.Holding
 				newHolding.Holding = &cp
 			}

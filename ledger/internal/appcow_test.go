@@ -47,20 +47,20 @@ func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.AccountData, erro
 	return ledgercore.AccountData{}, nil
 }
 
-func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error) {
-	return basics.AppParams{}, true, nil
+func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
+	return ledgercore.AppParamsDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error) {
-	return basics.AssetParams{}, true, nil
+func (ml *emptyLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
+	return ledgercore.AssetParamsDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {
-	return basics.AppLocalState{}, true, nil
+func (ml *emptyLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
+	return ledgercore.AppLocalStateDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error) {
-	return basics.AssetHolding{}, true, nil
+func (ml *emptyLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
+	return ledgercore.AssetHoldingDelta{}, true, nil
 }
 
 func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
@@ -847,14 +847,13 @@ func TestApplyStorageDelta(t *testing.T) {
 		)
 
 		params1 := basics.AppParams{GlobalState: make(basics.TealKeyValue)}
-		cow.mods.NewAccts.UpsertAppParams(addr, 1, &params1)
 		params2 := basics.AppParams{GlobalState: kv}
-		cow.mods.NewAccts.UpsertAppParams(addr, 2, &params2)
 
 		state1 := basics.AppLocalState{KeyValue: make(basics.TealKeyValue)}
-		cow.mods.NewAccts.UpsertAppLocalState(addr, 1, &state1)
 		state2 := basics.AppLocalState{KeyValue: kv}
-		cow.mods.NewAccts.UpsertAppLocalState(addr, 2, &state2)
+
+		cow.mods.NewAccts.UpsertAppResource(addr, 1, ledgercore.AppParamsDelta{Params: &params1}, ledgercore.AppLocalStateDelta{State: &state1})
+		cow.mods.NewAccts.UpsertAppResource(addr, 2, ledgercore.AppParamsDelta{Params: &params2}, ledgercore.AppLocalStateDelta{State: &state2})
 
 		return cow
 	}
@@ -881,7 +880,7 @@ func TestApplyStorageDelta(t *testing.T) {
 		a.True(ok)
 		state2, ok := cow.mods.NewAccts.GetAppLocalState(addr, 2)
 		a.True(ok)
-		return params1, params2, state1, state2
+		return params1.Params, params2.Params, state1.State, state2.State
 	}
 
 	kv := basics.TealKeyValue{
@@ -974,18 +973,22 @@ func TestApplyStorageDelta(t *testing.T) {
 
 	err := applyStorageDelta(cow, addr, storagePtr{1, true}, &sd)
 	a.NoError(err)
-	params1, ok := cow.mods.NewAccts.GetAppParams(addr, 1)
+	params1d, ok := cow.mods.NewAccts.GetAppParams(addr, 1)
+	params1 = params1d.Params
 	a.True(ok)
-	state1, ok = cow.mods.NewAccts.GetAppLocalState(addr, 1)
+	state1d, ok := cow.mods.NewAccts.GetAppLocalState(addr, 1)
+	state1 = state1d.State
 	a.False(ok)
 	a.Nil(params1)
 	a.Nil(state1)
 
 	err = applyStorageDelta(cow, addr, storagePtr{1, false}, &sd)
 	a.NoError(err)
-	params1, ok = cow.mods.NewAccts.GetAppParams(addr, 1)
+	params1d, ok = cow.mods.NewAccts.GetAppParams(addr, 1)
+	params1 = params1d.Params
 	a.True(ok)
-	state1, ok = cow.mods.NewAccts.GetAppLocalState(addr, 1)
+	state1d, ok = cow.mods.NewAccts.GetAppLocalState(addr, 1)
+	state1 = state1d.State
 	a.True(ok)
 	a.Nil(params1)
 	a.Nil(state1)
