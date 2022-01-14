@@ -357,8 +357,10 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 		if err != nil {
 			return basics.TealValue{}, false, err
 		}
-
-		if exist && !app.Deleted { // XXX right place to check deleted?
+		if app.Deleted {
+			return basics.TealValue{}, false, fmt.Errorf("getKey: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
+		if exist {
 			kv = app.Params.GlobalState
 		}
 	} else {
@@ -367,8 +369,11 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 		if err != nil {
 			return basics.TealValue{}, false, err
 		}
+		if ls.Deleted {
+			return basics.TealValue{}, false, fmt.Errorf("getKey: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
 
-		if exist && !ls.Deleted { // XXX right place to check deleted?
+		if exist {
 			kv = ls.LocalState.KeyValue
 		}
 	}
@@ -394,7 +399,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
-		if exist && !app.Deleted { // XXX right place to check deleted?
+		if app.Deleted {
+			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
+		if exist {
 			kv = app.Params.GlobalState
 		}
 	} else {
@@ -403,7 +411,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
-		if exist && !ls.Deleted { // XXX right place to check deleted?
+		if ls.Deleted {
+			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
+		if exist {
 			kv = ls.LocalState.KeyValue
 		}
 	}
@@ -436,7 +447,10 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
-	if !ok || params.Deleted { // XXX check deleted?
+	if params.Deleted {
+		return basics.StateSchema{}, fmt.Errorf("getStorageLimits: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+	}
+	if !ok {
 		// This should never happen. If app exists then we should have
 		// found the creator successfully.
 		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
