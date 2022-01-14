@@ -2023,36 +2023,36 @@ func TestAcctUpdatesResources(t *testing.T) {
 		// expect no errors on accounts writing
 		if i == 1 {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
-			updates.UpsertAssetHolding(addr1, aidx, &basics.AssetHolding{Amount: 100})
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
 		}
 		if i == 2 {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 0}})
-			updates.UpsertAssetHolding(addr1, aidx, nil)
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
 		}
 		if i == 3 {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
-			updates.UpsertAssetHolding(addr1, aidx, &basics.AssetHolding{Amount: 200})
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
 		}
 
 		// test 2: send back to creator creator
 		// expect matching balances at the end
+		creatorParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
 		if i == 4 {
 			// create base account to make lookup work
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2, TotalAssetParams: 1}})
 			updates.Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
 
 			// create an asset
-			updates.UpsertAssetParams(addr1, aidx2, &basics.AssetParams{Total: 1000})
-			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 1000})
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 1000}})
 
 			// transfer
-			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 900})
-			updates.UpsertAssetHolding(addr2, aidx2, &basics.AssetHolding{Amount: 100})
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 900}})
+			updates.UpsertAssetResource(addr2, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
 		}
 		if i == 5 {
 			// transfer back: asset holding record incorrectly clears params record
-			updates.UpsertAssetHolding(addr2, aidx2, &basics.AssetHolding{Amount: 99})
-			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 901})
+			updates.UpsertAssetResource(addr2, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 99}})
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 901}})
 		}
 
 		prevTotals, err := au.Totals(basics.Round(i - 1))
