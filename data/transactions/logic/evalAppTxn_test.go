@@ -423,6 +423,8 @@ func TestNumInnerShallow(t *testing.T) {
 `
 
 	ep, tx, ledger := MakeSampleEnv()
+	ep.Proto.EnableInnerTransactionPooling = false
+	ep.Reset()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
 	TestApp(t, pay+";int 1", ep)
@@ -431,6 +433,19 @@ func TestNumInnerShallow(t *testing.T) {
 	TestApp(t, pay+pay+pay+pay+";int 1", ep)
 	// In the sample proto, MaxInnerTransactions = 4
 	TestApp(t, pay+pay+pay+pay+pay+";int 1", ep, "too many inner transactions")
+
+	ep, tx, ledger = MakeSampleEnv()
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 1000000)
+	TestApp(t, pay+";int 1", ep)
+	TestApp(t, pay+pay+";int 1", ep)
+	TestApp(t, pay+pay+pay+";int 1", ep)
+	TestApp(t, pay+pay+pay+pay+";int 1", ep)
+	// In the sample proto, MaxInnerTransactions = 4, but when pooling you get
+	// MaxTxGroupSize (here, 8) * that.
+	TestApp(t, pay+pay+pay+pay+pay+";int 1", ep)
+	TestApp(t, strings.Repeat(pay, 32)+";int 1", ep)
+	TestApp(t, strings.Repeat(pay, 33)+";int 1", ep, "too many inner transactions")
 }
 
 // TestNumInnerPooled ensures that inner call limits are pooled across app calls
@@ -454,33 +469,21 @@ func TestNumInnerPooled(t *testing.T) {
 	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
 	short := pay + ";int 1"
-	long := pay + pay + pay + pay + pay + ";int 1"
-	// First two just replicate the non-pooled test
-	one := MakeSampleTxnGroup(tx)
-	TestApps(t, []string{short, ""}, one, LogicVersion, ledger)
-	TestApps(t, []string{short, ""}, one, LogicVersion, ledger)
-	TestApps(t, []string{short, ""}, one, LogicVersion, ledger)
-	TestApps(t, []string{short, ""}, one, LogicVersion, ledger)
-	TestApps(t, []string{short, ""}, one, LogicVersion, ledger)
-	TestApps(t, []string{short, ""}, one, LogicVersion, ledger)
-	TestApps(t, []string{long, ""}, one, LogicVersion, ledger,
-		NewExpect(0, "too many inner transactions"))
+	long := strings.Repeat(pay, 17) + ";int 1" // More than half allowed
 
-	// Now try pooling. But it won't work, because in `one`, only the first txn
-	// is an appcall.
-	TestApps(t, []string{long, short}, one, LogicVersion, ledger,
-		NewExpect(0, "too many inner transactions"))
-	TestApps(t, []string{short, long}, one, LogicVersion, ledger,
+	grp := MakeSampleTxnGroup(tx)
+	TestApps(t, []string{short, ""}, grp, LogicVersion, ledger)
+	TestApps(t, []string{short, short}, grp, LogicVersion, ledger)
+	TestApps(t, []string{long, ""}, grp, LogicVersion, ledger)
+	TestApps(t, []string{short, long}, grp, LogicVersion, ledger)
+	TestApps(t, []string{long, short}, grp, LogicVersion, ledger)
+	TestApps(t, []string{long, long}, grp, LogicVersion, ledger,
 		NewExpect(1, "too many inner transactions"))
-
-	// Now show pooling works, whether the first txn is heavy, or the second (but not both)
-	two := MakeSampleTxnGroup(tx)
-	two[1].Txn.Type = protocol.ApplicationCallTx
-	TestApps(t, []string{short, long}, two, LogicVersion, ledger)
-	TestApps(t, []string{long, short}, two, LogicVersion, ledger)
-	TestApps(t, []string{long, long}, two, LogicVersion, ledger,
+	grp = append(grp, grp[0])
+	TestApps(t, []string{short, long, long}, grp, LogicVersion, ledger,
+		NewExpect(2, "too many inner transactions"))
+	TestApps(t, []string{long, long, long}, grp, LogicVersion, ledger,
 		NewExpect(1, "too many inner transactions"))
-
 }
 
 func TestAssetCreate(t *testing.T) {

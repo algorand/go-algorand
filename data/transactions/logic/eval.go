@@ -315,7 +315,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 
 	if proto.EnableInnerTransactionPooling {
 		pooledAllowedInners = new(int)
-		*pooledAllowedInners = apps * proto.MaxInnerTransactions
+		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
 	}
 
 	return &EvalParams{
