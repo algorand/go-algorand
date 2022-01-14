@@ -2338,7 +2338,7 @@ func TestInvalidAssetsNotAccessible(t *testing.T) {
 	endBlock(t, l, eval)
 }
 
-func BenchmarkMaximumCallStackDepth(b *testing.B) {
+func executeMegaContract(b *testing.B) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	vTest := config.Consensus[protocol.ConsensusFuture]
@@ -2432,4 +2432,10 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 	err := txgroup(b, l, eval, &createapp, &app1, &app1, &app1, &app1, &app1, &app1)
 	require.NoError(b, err)
 	endBlock(b, l, eval)
+}
+
+func BenchmarkMaximumCallStackDepth(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		executeMegaContract(b)
+	}
 }
