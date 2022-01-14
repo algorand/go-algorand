@@ -1993,39 +1993,73 @@ func TestAcctUpdatesResources(t *testing.T) {
 	au := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
-	var addr basics.Address
-	for addr = range accts[0] {
+	var addr1 basics.Address
+	var addr2 basics.Address
+	for addr := range accts[0] {
 		if addr != testSinkAddr && addr != testPoolAddr {
-			break
+			if addr1 == (basics.Address{}) {
+				addr1 = addr
+			} else if addr2 == (basics.Address{}) {
+				addr2 = addr
+			} else {
+				break
+			}
 		}
 	}
 
 	aidx := basics.AssetIndex(1)
+	aidx2 := basics.AssetIndex(2)
 
 	rewardLevel := uint64(0)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
-	// the test requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3); i++ {
+	// the test 1 requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
+	// the test 2 requires 2 more blocks
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+5); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.NewAccountDeltas
-		base := accts[i-1]
 
-		// modify state as needed for the tests: create, delete, create
+		// test 1: modify state as needed for the tests: create, delete, create
+		// expect no errors on accounts writing
 		if i == 1 {
-			updates.UpsertAssetResource(addr, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+			updates.UpsertAssetHolding(addr1, aidx, &basics.AssetHolding{Amount: 100})
 		}
 		if i == 2 {
-			updates.UpsertAssetResource(addr, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 0}})
+			updates.UpsertAssetHolding(addr1, aidx, nil)
 		}
 		if i == 3 {
-			updates.UpsertAssetResource(addr, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+			updates.UpsertAssetHolding(addr1, aidx, &basics.AssetHolding{Amount: 200})
 		}
+
+		// test 2: send back to creator creator
+		// expect matching balances at the end
+		if i == 4 {
+			// create base account to make lookup work
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2, TotalAssetParams: 1}})
+			updates.Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+
+			// create an asset
+			updates.UpsertAssetParams(addr1, aidx2, &basics.AssetParams{Total: 1000})
+			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 1000})
+
+			// transfer
+			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 900})
+			updates.UpsertAssetHolding(addr2, aidx2, &basics.AssetHolding{Amount: 100})
+		}
+		if i == 5 {
+			// transfer back: asset holding record incorrectly clears params record
+			updates.UpsertAssetHolding(addr2, aidx2, &basics.AssetHolding{Amount: 99})
+			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 901})
+		}
+
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
+		base := accts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
-
 		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
 
 		blk := bookkeeping.Block{
@@ -2064,7 +2098,12 @@ func TestAcctUpdatesResources(t *testing.T) {
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
 				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-					return au.commitRound(ctx, tx, dcc)
+					err = au.commitRound(ctx, tx, dcc)
+					if err != nil {
+						return err
+					}
+					err = updateAccountsRound(tx, newBase)
+					return err
 				})
 				require.NoError(t, err)
 				ml.trackers.dbRound = newBase
@@ -2075,6 +2114,15 @@ func TestAcctUpdatesResources(t *testing.T) {
 		}
 		accts = append(accts, newAccts)
 	}
+
+	ad1, _, err := au.lookupLatest(addr1)
+	require.NoError(t, err)
+	ad2, _, err := au.lookupLatest(addr2)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(1000), ad1.AssetParams[aidx2].Total)
+	require.Equal(t, uint64(901), ad1.Assets[aidx2].Amount)
+	require.Equal(t, uint64(99), ad2.Assets[aidx2].Amount)
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.

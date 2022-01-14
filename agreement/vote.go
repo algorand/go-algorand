@@ -83,6 +83,9 @@ type (
 		Proposals [2]proposalValue           `codec:"props"`
 		Sigs      [2]crypto.OneTimeSignature `codec:"sigs"`
 	}
+
+	// UnauthenticatedVote exported for dumping textual versions of messages
+	UnauthenticatedVote = unauthenticatedVote
 )
 
 // verify verifies that a vote that was received from the network is valid.
@@ -163,7 +166,7 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 		}
 	}
 
-	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto.DefaultKeyDilution))
 	sig := voting.Sign(ephID, rv)
 	if (sig == crypto.OneTimeSignature{}) {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: got back empty signature for vote")
