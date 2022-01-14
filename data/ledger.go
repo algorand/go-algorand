@@ -325,11 +325,12 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement
 			break
 		}
 
-		logfn := logging.Base().Errorf
+		// use  l.log to veryfy with custom logger that is not writting this message.
+		logfn := l.log.Errorf
 
 		switch err.(type) {
 		case ledgercore.BlockInLedgerError:
-			logfn = logging.Base().Debugf
+			logfn = l.log.Debugf
 		}
 
 		logfn("could not write block %d to the ledger: %v", round, err)
@@ -353,14 +354,14 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 		switch err.(type) {
 		case protocol.Error:
 			if !protocolErrorLogged {
-				logging.Base().Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
+				l.log.Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
 				protocolErrorLogged = true
 			}
 		case ledgercore.BlockInLedgerError:
-			logging.Base().Debugf("could not write block %d to the ledger: %v", round, err)
+			l.log.Debugf("could not write block %d to the ledger: %v", round, err)
 			return // this error implies that l.LastRound() >= round
 		default:
-			logging.Base().Errorf("could not write block %d to the ledger: %v", round, err)
+			l.log.Errorf("could not write block %d to the ledger: %v", round, err)
 		}
 
 		// If there was an error add a short delay before the next attempt.

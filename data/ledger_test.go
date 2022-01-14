@@ -17,6 +17,9 @@
 package data
 
 import (
+	"context"
+	"sync"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,10 +31,12 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"	
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -420,3 +425,179 @@ func TestConsensusVersion(t *testing.T) {
 	require.Equal(t, protocol.ConsensusVersion(""), ver)
 	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(blk.BlockHeader.NextProtocolSwitchOn + 1), Latest: basics.Round(blk.BlockHeader.Round), Committed: basics.Round(blk.BlockHeader.Round)}, err)
 }
+
+type mockLedger struct {
+	Ledger
+}
+
+func (ml *mockLedger) LastRound() basics.Round {
+	return ml.Latest()
+}
+
+func TestLedgerErrorValidate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer realLedger.Close()
+
+	l := Ledger{Ledger: realLedger, log: logging.TestingLog(t)}
+	require.NotNil(t, &l)
+
+	totalsRound, _, err := realLedger.LatestTotals()
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(0), totalsRound)
+	//	baseCirculation := totals.Online.Money.Raw
+
+	//	srcAccountKey := keys[sourceAccount]
+	//	require.NotNil(t, srcAccountKey)
+
+
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
+	
+	blkChan1 := make(chan bookkeeping.Block, 10)
+	blkChan2 := make(chan bookkeeping.Block, 10)
+	errChan := make(chan error, 1)
+	defer close(blkChan1)
+	defer close(blkChan2)
+	defer close(errChan)
+	
+
+	go func() {
+		wg.Add(1)
+		for blk := range blkChan1 {
+			vb, err := validatedBlock(l.Ledger, blk)
+			if err != nil {
+				// AddBlock already added the blcok
+				continue
+			}
+			l.EnsureValidatedBlock(vb, agreement.Certificate{})
+		}
+		wg.Done()
+		fmt.Println("out1")
+	}()
+
+	go func() {
+		wg.Add(1)
+		for blk := range blkChan2 {
+			//			require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
+			//			fmt.Print("Adding Block...")
+			err := l.AddBlock(blk, agreement.Certificate{})
+			//			fmt.Println("Done")
+			if err != nil {
+				errChan <- err
+				//				break
+			}
+			//			l.WaitForCommit(blk.BlockHeader.Round)
+			//			l.AddBlock(blk, agreement.Certificate{})
+		}
+		wg.Done()
+		fmt.Println("out2")
+	}()
+
+	
+	
+	for rnd := basics.Round(1); rnd < basics.Round(10000); rnd++ {
+		blk := ledgertesting.MakeNewEmptyBlockSync(t, rnd-1, l.Ledger, t.Name(), genesisInitState.Accounts)
+		if int(rnd) % 100 == 0 {
+			fmt.Println(rnd)
+		}
+		select {
+		case blkChan1 <- blk:
+		default:
+			if int(rnd) % 100 == 0 {
+				fmt.Println("skipping 1")
+			}
+		}
+		select {
+		case 		blkChan2 <- blk:
+		default:
+			fmt.Println("skipping 2")
+		}
+		select {
+		case err := <- errChan:
+			fmt.Println(err)
+			//			require.NoError(t, err)
+		default:
+		}
+	}
+
+		/*		lastBlock, err := l.Block(blk.BlockHeader.Round)
+		require.NoError(t, err)
+		blk.BlockHeader.Round++
+		blk.BlockHeader.Branch = lastBlock.Hash()
+*/		//		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		/*		var tx transactions.Transaction
+				tx.Sender = sourceAccount
+				tx.Fee = basics.MicroAlgos{Raw: 10000}
+				tx.FirstValid = rnd - 1
+				tx.LastValid = tx.FirstValid + 999
+				tx.Receiver = destAccount
+				tx.Amount = basics.MicroAlgos{Raw: 1}
+				tx.Type = protocol.PaymentTx
+				signedTx := tx.Sign(srcAccountKey)
+				blk.Payset = transactions.Payset{transactions.SignedTxnInBlock{
+					SignedTxnWithAD: transactions.SignedTxnWithAD{
+						SignedTxn: signedTx,
+					},
+				}}
+		*/
+
+}
+
+func validatedBlock(l *ledger.Ledger, blk bookkeeping.Block) (vb *ledgercore.ValidatedBlock, err error) {
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+	//	(*l).verifiedTxnCache = verify.GetMockedCache(false)
+	vb, err = l.Validate(context.Background(), blk, backlogPool)
+	return
+}
+
+/*
+
+	var sourceAccount basics.Address
+	var destAccount basics.Address
+	for addr, acctData := range genesisInitState.Accounts {
+		if addr == testPoolAddr || addr == testSinkAddr {
+			continue
+		}
+		if acctData.Status == basics.Online {
+			sourceAccount = addr
+			break
+		}
+	}
+	for addr, acctData := range genesisInitState.Accounts {
+		if addr == testPoolAddr || addr == testSinkAddr {
+			continue
+		}
+		if acctData.Status == basics.NotParticipating {
+			destAccount = addr
+			break
+		}
+	}
+	require.False(t, sourceAccount.IsZero())
+	require.False(t, destAccount.IsZero())
+
+	data, err := realLedger.Lookup(basics.Round(0), destAccount)
+	require.NoError(t, err)
+	baseDestValue := data.MicroAlgos.Raw
+
+	blk := genesisInitState.Block
+	totalsRound, totals, err := realLedger.LatestTotals()
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(0), totalsRound)
+	baseCirculation := totals.Online.Money.Raw
+
+	srcAccountKey := keys[sourceAccount]
+	require.NotNil(t, srcAccountKey)
+
+*/
+

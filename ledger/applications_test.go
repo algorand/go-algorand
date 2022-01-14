@@ -524,7 +524,7 @@ return`
 	stx1 := sign(initKeys, appCall1)
 	stx2 := sign(initKeys, appCall2)
 
-	blk = makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	blk = MakeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
 	ad1 := transactions.ApplyData{
 		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk1": basics.ValueDelta{
@@ -677,7 +677,7 @@ return`
 	stx1 := sign(initKeys, appCall)
 	stx2 := sign(initKeys, payment)
 
-	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	blk := MakeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
 	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{})
 	a.NoError(err)
 	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{ClosingAmount: balance})
@@ -805,7 +805,7 @@ return`
 	stx1 := sign(initKeys, appCall)
 	stx2 := sign(initKeys, payment)
 
-	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	blk := MakeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
 	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 		GlobalDelta: basics.StateDelta{
 			"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"},

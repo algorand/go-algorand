@@ -72,77 +72,9 @@ func (l *Ledger) appendUnvalidatedTx(t *testing.T, initAccounts map[basics.Addre
 	return l.appendUnvalidatedSignedTx(t, initAccounts, stx, ad)
 }
 
-func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookkeeping.Block, proto config.ConsensusParams) {
-	if proto.TxnCounter {
-		correctHeader.TxnCounter = lastBlock.TxnCounter
-	}
-
-	if proto.CompactCertRounds > 0 {
-		var ccBasic bookkeeping.CompactCertState
-		if lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
-			ccBasic.CompactCertNextRound = (correctHeader.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds)) + basics.Round(proto.CompactCertRounds)
-		} else {
-			ccBasic.CompactCertNextRound = lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
-		}
-		correctHeader.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
-			protocol.CompactCertBasic: ccBasic,
-		}
-	}
-}
-
-func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
-	a := require.New(t)
-
-	lastBlock, err := l.Block(l.Latest())
-	a.NoError(err, "could not get last block")
-
-	proto := config.Consensus[lastBlock.CurrentProtocol]
-	poolAddr := testPoolAddr
-	var totalRewardUnits uint64
-	if l.Latest() == 0 {
-		require.NotNil(t, initAccounts)
-		for _, acctdata := range initAccounts {
-			if acctdata.Status != basics.NotParticipating {
-				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
-			}
-		}
-	} else {
-		latestRound, totals, err := l.LatestTotals()
-		require.NoError(t, err)
-		require.Equal(t, l.Latest(), latestRound)
-		totalRewardUnits = totals.RewardUnits()
-	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
-	a.NoError(err, "could not get incentive pool balance")
-
-	blk.BlockHeader = bookkeeping.BlockHeader{
-		GenesisID:    GenesisID,
-		Round:        l.Latest() + 1,
-		Branch:       lastBlock.Hash(),
-		TimeStamp:    0,
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
-		UpgradeState: lastBlock.UpgradeState,
-		// Seed:       does not matter,
-		// UpgradeVote: empty,
-	}
-
-	blk.TxnRoot, err = blk.PaysetCommit()
-	require.NoError(t, err)
-
-	if proto.SupportGenesisHash {
-		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(GenesisID))
-	}
-
-	initNextBlockHeader(&blk.BlockHeader, lastBlock, proto)
-
-	blk.RewardsPool = testPoolAddr
-	blk.FeeSink = testSinkAddr
-	blk.CurrentProtocol = lastBlock.CurrentProtocol
-	return
-}
 
 func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
-	blk := makeNewEmptyBlock(t, l, t.Name(), initAccounts)
+	blk := ledgertesting.MakeNewEmptyBlock(t, l, t.Name(), initAccounts)
 	proto := config.Consensus[blk.CurrentProtocol]
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	if err != nil {
@@ -158,7 +90,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 }
 
 func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
-	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
+	blk := ledgertesting.MakeNewEmptyBlock(t, l, t.Name(), accounts)
 	proto := config.Consensus[blk.CurrentProtocol]
 	for _, stx := range stxns {
 		txib, err := blk.EncodeSignedTxn(stx, ad)
@@ -238,7 +170,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
 
-	initNextBlockHeader(&correctHeader, lastBlock, proto)
+	ledgertesting.InitNextBlockHeader(&correctHeader, lastBlock, proto)
 
 	var badBlock bookkeeping.Block
 
@@ -700,7 +632,7 @@ func addEmptyValidatedBlock(t *testing.T, l *Ledger, initAccounts map[basics.Add
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	blk := makeNewEmptyBlock(t, l, t.Name(), initAccounts)
+	blk := ledgertesting.MakeNewEmptyBlock(t, l, t.Name(), initAccounts)
 	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	a.NoError(err)
 	err = l.AddValidatedBlock(*vb, agreement.Certificate{})
@@ -986,7 +918,7 @@ int 1                   // [1]
 			stx1 := sign(initSecrets, appcall1)
 			stx2 := sign(initSecrets, appcall2)
 
-			blk := makeNewEmptyBlock(t, l, genesisID, initAccounts)
+			blk := ledgertesting.MakeNewEmptyBlock(t, l, genesisID, initAccounts)
 			txib1, err := blk.EncodeSignedTxn(stx1, ad1)
 			a.NoError(err)
 			txib2, err := blk.EncodeSignedTxn(stx2, ad2)
@@ -1228,7 +1160,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 			}
 
-			initNextBlockHeader(&correctHeader, lastBlock, proto)
+			ledgertesting.InitNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
 			correctBlock.TxnRoot, err = correctBlock.PaysetCommit()
