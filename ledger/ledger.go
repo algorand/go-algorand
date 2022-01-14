@@ -710,7 +710,7 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnB
 // It returns an error if blk is not the expected next block, or if blk is
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
-func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
+func (l *Ledger) ValidateX(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	delta, err := internal.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err

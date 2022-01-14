@@ -18,8 +18,8 @@ package data
 
 import (
 	"context"
-	"sync"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,8 +31,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
-	ledgertesting "github.com/algorand/go-algorand/ledger/testing"	
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -443,12 +443,13 @@ func TestLedgerErrorValidate(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Warn)
+	log.SetLevel(logging.Info)
 	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
 
 	l := Ledger{Ledger: realLedger, log: logging.TestingLog(t)}
+	l.log.SetLevel(logging.Info)
 	require.NotNil(t, &l)
 
 	totalsRound, _, err := realLedger.LatestTotals()
@@ -459,97 +460,138 @@ func TestLedgerErrorValidate(t *testing.T) {
 	//	srcAccountKey := keys[sourceAccount]
 	//	require.NotNil(t, srcAccountKey)
 
+	errChan := make(chan error, 1)
+	defer close(errChan)
 
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
-	
+
 	blkChan1 := make(chan bookkeeping.Block, 10)
 	blkChan2 := make(chan bookkeeping.Block, 10)
-	errChan := make(chan error, 1)
+	blkChan3 := make(chan bookkeeping.Block, 10)
 	defer close(blkChan1)
 	defer close(blkChan2)
-	defer close(errChan)
-	
+	defer close(blkChan3)
 
 	go func() {
 		wg.Add(1)
+		i:= 0 
 		for blk := range blkChan1 {
+			i++
 			vb, err := validatedBlock(l.Ledger, blk)
 			if err != nil {
-				// AddBlock already added the blcok
+				// AddBlock already added the block
+				// This is okay to ignore.
+				// This error is generated from ledger.Ledger Validate function, used from:
+				// - node blockValidatorImpl Validate
+				// - catchup service s.ledger.Validate (Catchup service returns after the first error)
 				continue
 			}
 			l.EnsureValidatedBlock(vb, agreement.Certificate{})
 		}
+		fmt.Printf("\n1 processed %d\n", i)
 		wg.Done()
 		fmt.Println("out1")
 	}()
 
+	// Add blocks to the ledger via EnsureBlock. This basically calls AddBlock, but handles
+	// the errors by logging them. Checking the logged messages with verify its behavior.
 	go func() {
 		wg.Add(1)
+		i:=0
 		for blk := range blkChan2 {
-			//			require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
-			//			fmt.Print("Adding Block...")
+			i++
+			l.EnsureBlock(&blk, agreement.Certificate{})
+		}
+		fmt.Printf("\n2 processed %d\n", i)
+		wg.Done()
+		fmt.Println("out1")
+	}()
+
+	// Add blocks directly to the ledger
+	go func() {
+		wg.Add(1)
+		i:=0
+		for blk := range blkChan3 {
+			i++
 			err := l.AddBlock(blk, agreement.Certificate{})
-			//			fmt.Println("Done")
+			// AddBlock is used in 2 places:
+			// - data.ledger.EnsureBlock which reports a log message as Error or Debug
+			// - catchup.service.fetchAndWrite which leads to interrupting catchup or skiping the round
 			if err != nil {
-				errChan <- err
-				//				break
+				switch err.(type) {
+				// The following two cases are okay to ignore, since these are expected and handled
+				case ledgercore.BlockInLedgerError:
+				case ledgercore.ErrNonSequentialBlockEval:					
+					continue
+				default:
+					// Make sure unexpected error is not obtained here
+					errChan <- err
+				}
 			}
-			//			l.WaitForCommit(blk.BlockHeader.Round)
+			l.WaitForCommit(blk.BlockHeader.Round)
 			//			l.AddBlock(blk, agreement.Certificate{})
 		}
+		fmt.Printf("\n3 processed %d\n", i)
 		wg.Done()
 		fmt.Println("out2")
 	}()
 
-	
-	
-	for rnd := basics.Round(1); rnd < basics.Round(10000); rnd++ {
+	for rnd := basics.Round(1); rnd <= basics.Round(10000); rnd++ {
 		blk := ledgertesting.MakeNewEmptyBlockSync(t, rnd-1, l.Ledger, t.Name(), genesisInitState.Accounts)
-		if int(rnd) % 100 == 0 {
+		if int(rnd)%100 == 0 {
 			fmt.Println(rnd)
 		}
+		blkChan3 <- blk
+		blkChan2 <- blk
+		//		blkChan1 <- blk
+
+
+		/*
 		select {
 		case blkChan1 <- blk:
 		default:
-			if int(rnd) % 100 == 0 {
-				fmt.Println("skipping 1")
-			}
+			fmt.Println("skipping 1")
 		}
 		select {
-		case 		blkChan2 <- blk:
+		case blkChan2 <- blk:
 		default:
 			fmt.Println("skipping 2")
 		}
 		select {
-		case err := <- errChan:
-			fmt.Println(err)
+		case blkChan3 <- blk:
+		default:
+			fmt.Println("skipping 3")
+		}
+*/		
+		select {
+		case err := <-errChan:
+			fmt.Printf("\nXXXXXXXXXXXX %v\n", err)
 			//			require.NoError(t, err)
 		default:
 		}
 	}
 
-		/*		lastBlock, err := l.Block(blk.BlockHeader.Round)
-		require.NoError(t, err)
-		blk.BlockHeader.Round++
-		blk.BlockHeader.Branch = lastBlock.Hash()
-*/		//		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		/*		var tx transactions.Transaction
-				tx.Sender = sourceAccount
-				tx.Fee = basics.MicroAlgos{Raw: 10000}
-				tx.FirstValid = rnd - 1
-				tx.LastValid = tx.FirstValid + 999
-				tx.Receiver = destAccount
-				tx.Amount = basics.MicroAlgos{Raw: 1}
-				tx.Type = protocol.PaymentTx
-				signedTx := tx.Sign(srcAccountKey)
-				blk.Payset = transactions.Payset{transactions.SignedTxnInBlock{
-					SignedTxnWithAD: transactions.SignedTxnWithAD{
-						SignedTxn: signedTx,
-					},
-				}}
-		*/
+	/*		lastBlock, err := l.Block(blk.BlockHeader.Round)
+			require.NoError(t, err)
+			blk.BlockHeader.Round++
+			blk.BlockHeader.Branch = lastBlock.Hash()
+	*/ //		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+	/*		var tx transactions.Transaction
+			tx.Sender = sourceAccount
+			tx.Fee = basics.MicroAlgos{Raw: 10000}
+			tx.FirstValid = rnd - 1
+			tx.LastValid = tx.FirstValid + 999
+			tx.Receiver = destAccount
+			tx.Amount = basics.MicroAlgos{Raw: 1}
+			tx.Type = protocol.PaymentTx
+			signedTx := tx.Sign(srcAccountKey)
+			blk.Payset = transactions.Payset{transactions.SignedTxnInBlock{
+				SignedTxnWithAD: transactions.SignedTxnWithAD{
+					SignedTxn: signedTx,
+				},
+			}}
+	*/
 
 }
 
@@ -557,7 +599,7 @@ func validatedBlock(l *ledger.Ledger, blk bookkeeping.Block) (vb *ledgercore.Val
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 	//	(*l).verifiedTxnCache = verify.GetMockedCache(false)
-	vb, err = l.Validate(context.Background(), blk, backlogPool)
+	vb, err = l.ValidateX(context.Background(), blk, backlogPool)
 	return
 }
 
@@ -600,4 +642,3 @@ func validatedBlock(l *ledger.Ledger, blk bookkeeping.Block) (vb *ledgercore.Val
 	require.NotNil(t, srcAccountKey)
 
 */
-

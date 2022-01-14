@@ -325,14 +325,14 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement
 			break
 		}
 
-		// use  l.log to veryfy with custom logger that is not writting this message.
 		logfn := l.log.Errorf
 
 		switch err.(type) {
 		case ledgercore.BlockInLedgerError:
+			// If the block is already in the ledger (catchup and agreement might be competing),
+			// reporting this as a debug message is sufficient. 
 			logfn = l.log.Debugf
 		}
-
 		logfn("could not write block %d to the ledger: %v", round, err)
 	}
 }
@@ -358,8 +358,20 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 				protocolErrorLogged = true
 			}
 		case ledgercore.BlockInLedgerError:
+			// The block is already in the ledger. Catchup and agreement could be competing
+			// It is sufficient to report this as a Debug message
 			l.log.Debugf("could not write block %d to the ledger: %v", round, err)
-			return // this error implies that l.LastRound() >= round
+			return
+		case ledgercore.ErrNonSequentialBlockEval:
+			errNSBE := err.(ledgercore.ErrNonSequentialBlockEval)
+			if errNSBE.EvaluatorRound < errNSBE.LatestRound {
+				// Evaluator found that the ledger is already ahead of this block
+				// It is sufficient to report this as s Debug message
+				l.log.Debugf("could not write block %d to the ledger: %v", round, err)
+				return
+			}
+			// This is unexpected. Report an error
+			l.log.Errorf("could not write block %d to the ledger: %v", round, err)
 		default:
 			l.log.Errorf("could not write block %d to the ledger: %v", round, err)
 		}
