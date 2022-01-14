@@ -56,7 +56,7 @@ const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
 const bloomFilterRetryCount = 3                                  // number of bloom filters we would try against each transaction group before skipping it.
 const maxTransactionGroupTrackers = 15                           // number of different bloom filter parameters we store before rolling over
-const maxTransactionsPerMsg = 100 // maximum number of transactions in every message
+const maxTransactionsPerMsg = 100                                // maximum number of transactions in every message
 
 const (
 	// peerStateStartup is before the timeout for the sending the first message to the peer has reached.
