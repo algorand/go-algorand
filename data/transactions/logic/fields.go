@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -173,9 +173,6 @@ type FieldSpec interface {
 // TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames []string
 
-// TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
-var TxnFieldTypes []StackType
-
 var txnFieldSpecByField map[TxnField]txnFieldSpec
 
 // TxnFieldSpecByName gives access to the field specs by field name
@@ -296,17 +293,6 @@ func TxnaFieldNames() []string {
 	return names
 }
 
-// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnaFieldNames
-func TxnaFieldTypes() []StackType {
-	var types []StackType
-	for _, fs := range txnFieldSpecs {
-		if fs.array {
-			types = append(types, fs.ftype)
-		}
-	}
-	return types
-}
-
 var innerTxnTypes = map[string]uint64{
 	string(protocol.PaymentTx):         5,
 	string(protocol.KeyRegistrationTx): 6,
@@ -413,9 +399,6 @@ const (
 
 // GlobalFieldNames are arguments to the 'global' opcode
 var GlobalFieldNames []string
-
-// GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
-var GlobalFieldTypes []StackType
 
 type globalFieldSpec struct {
 	field   GlobalField
@@ -590,9 +573,6 @@ const (
 // AssetHoldingFieldNames are arguments to the 'asset_holding_get' opcode
 var AssetHoldingFieldNames []string
 
-// AssetHoldingFieldTypes is StackUint64 StackBytes in parallel with AssetHoldingFieldNames
-var AssetHoldingFieldTypes []StackType
-
 type assetHoldingFieldSpec struct {
 	field   AssetHoldingField
 	ftype   StackType
@@ -668,9 +648,6 @@ const (
 
 // AssetParamsFieldNames are arguments to the 'asset_params_get' opcode
 var AssetParamsFieldNames []string
-
-// AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
-var AssetParamsFieldTypes []StackType
 
 type assetParamsFieldSpec struct {
 	field   AssetParamsField
@@ -753,9 +730,6 @@ const (
 // AppParamsFieldNames are arguments to the 'app_params_get' opcode
 var AppParamsFieldNames []string
 
-// AppParamsFieldTypes is StackUint64 StackBytes in parallel with AppParamsFieldNames
-var AppParamsFieldTypes []StackType
-
 type appParamsFieldSpec struct {
 	field   AppParamsField
 	ftype   StackType
@@ -804,18 +778,75 @@ func (s appNameSpecMap) SpecByName(name string) FieldSpec {
 	return &fs
 }
 
+// AcctParamsField is an enum for `acct_params_get` opcode
+type AcctParamsField int
+
+const (
+	// AcctBalance is the blance, with pending rewards
+	AcctBalance AcctParamsField = iota
+	// AcctMinBalance is algos needed for this accounts apps and assets
+	AcctMinBalance
+	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
+	AcctAuthAddr
+
+	invalidAcctParamsField
+)
+
+// AcctParamsFieldNames are arguments to the 'acct_params_get' opcode
+var AcctParamsFieldNames []string
+
+type acctParamsFieldSpec struct {
+	field   AcctParamsField
+	ftype   StackType
+	version uint64
+}
+
+func (fs *acctParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs *acctParamsFieldSpec) OpVersion() uint64 {
+	return 6
+}
+
+func (fs *acctParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs *acctParamsFieldSpec) Note() string {
+	note := acctParamsFieldDocs[fs.field.String()]
+	return note
+}
+
+var acctParamsFieldSpecs = []acctParamsFieldSpec{
+	{AcctBalance, StackUint64, 6},
+	{AcctMinBalance, StackUint64, 6},
+	{AcctAuthAddr, StackBytes, 6},
+}
+
+var acctParamsFieldSpecByField map[AcctParamsField]acctParamsFieldSpec
+
+// AcctParamsFieldSpecByName gives access to the field specs by field name
+var AcctParamsFieldSpecByName acctNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type acctNameSpecMap map[string]acctParamsFieldSpec
+
+func (s acctNameSpecMap) SpecByName(name string) FieldSpec {
+	fs := s[name]
+	return &fs
+}
+
 func init() {
 	TxnFieldNames = make([]string, int(invalidTxnField))
 	for fi := Sender; fi < invalidTxnField; fi++ {
 		TxnFieldNames[fi] = fi.String()
 	}
-	TxnFieldTypes = make([]StackType, int(invalidTxnField))
 	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
 		if int(s.field) != i {
 			panic("txnFieldSpecs disjoint with TxnField enum")
 		}
-		TxnFieldTypes[i] = s.ftype
 		txnFieldSpecByField[s.field] = s
 	}
 	TxnFieldSpecByName = make(map[string]txnFieldSpec, len(TxnFieldNames))
@@ -825,15 +856,13 @@ func init() {
 
 	GlobalFieldNames = make([]string, int(invalidGlobalField))
 	for i := MinTxnFee; i < invalidGlobalField; i++ {
-		GlobalFieldNames[int(i)] = i.String()
+		GlobalFieldNames[i] = i.String()
 	}
-	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
 	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
 	for i, s := range globalFieldSpecs {
 		if int(s.field) != i {
 			panic("globalFieldSpecs disjoint with GlobalField enum")
 		}
-		GlobalFieldTypes[i] = s.ftype
 		globalFieldSpecByField[s.field] = s
 	}
 	GlobalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
@@ -843,7 +872,7 @@ func init() {
 
 	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
 	for i := Secp256k1; i < invalidEcdsaCurve; i++ {
-		EcdsaCurveNames[int(i)] = i.String()
+		EcdsaCurveNames[i] = i.String()
 	}
 	ecdsaCurveSpecByField = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
 	for _, s := range ecdsaCurveSpecs {
@@ -877,12 +906,10 @@ func init() {
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
 	for i := AssetBalance; i < invalidAssetHoldingField; i++ {
-		AssetHoldingFieldNames[int(i)] = i.String()
+		AssetHoldingFieldNames[i] = i.String()
 	}
-	AssetHoldingFieldTypes = make([]StackType, len(AssetHoldingFieldNames))
 	assetHoldingFieldSpecByField = make(map[AssetHoldingField]assetHoldingFieldSpec, len(AssetHoldingFieldNames))
 	for _, s := range assetHoldingFieldSpecs {
-		AssetHoldingFieldTypes[int(s.field)] = s.ftype
 		assetHoldingFieldSpecByField[s.field] = s
 	}
 	AssetHoldingFieldSpecByName = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
@@ -892,12 +919,10 @@ func init() {
 
 	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
 	for i := AssetTotal; i < invalidAssetParamsField; i++ {
-		AssetParamsFieldNames[int(i)] = i.String()
+		AssetParamsFieldNames[i] = i.String()
 	}
-	AssetParamsFieldTypes = make([]StackType, len(AssetParamsFieldNames))
 	assetParamsFieldSpecByField = make(map[AssetParamsField]assetParamsFieldSpec, len(AssetParamsFieldNames))
 	for _, s := range assetParamsFieldSpecs {
-		AssetParamsFieldTypes[int(s.field)] = s.ftype
 		assetParamsFieldSpecByField[s.field] = s
 	}
 	AssetParamsFieldSpecByName = make(apfNameSpecMap, len(AssetParamsFieldNames))
@@ -907,17 +932,28 @@ func init() {
 
 	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
 	for i := AppApprovalProgram; i < invalidAppParamsField; i++ {
-		AppParamsFieldNames[int(i)] = i.String()
+		AppParamsFieldNames[i] = i.String()
 	}
-	AppParamsFieldTypes = make([]StackType, len(AppParamsFieldNames))
 	appParamsFieldSpecByField = make(map[AppParamsField]appParamsFieldSpec, len(AppParamsFieldNames))
 	for _, s := range appParamsFieldSpecs {
-		AppParamsFieldTypes[int(s.field)] = s.ftype
 		appParamsFieldSpecByField[s.field] = s
 	}
 	AppParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
 	for i, apfn := range AppParamsFieldNames {
 		AppParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
+	}
+
+	AcctParamsFieldNames = make([]string, int(invalidAcctParamsField))
+	for i := AcctBalance; i < invalidAcctParamsField; i++ {
+		AcctParamsFieldNames[i] = i.String()
+	}
+	acctParamsFieldSpecByField = make(map[AcctParamsField]acctParamsFieldSpec, len(AcctParamsFieldNames))
+	for _, s := range acctParamsFieldSpecs {
+		acctParamsFieldSpecByField[s.field] = s
+	}
+	AcctParamsFieldSpecByName = make(acctNameSpecMap, len(AcctParamsFieldNames))
+	for i, apfn := range AcctParamsFieldNames {
+		AcctParamsFieldSpecByName[apfn] = acctParamsFieldSpecByField[AcctParamsField(i)]
 	}
 
 	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))

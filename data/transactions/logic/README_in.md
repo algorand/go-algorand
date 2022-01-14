@@ -234,6 +234,12 @@ App fields used in the `app_params_get` opcode.
 
 @@ app_params_fields.md @@
 
+**Account Fields**
+
+Account fields used in the `acct_params_get` opcode.
+
+@@ acct_params_fields.md @@
+
 ### Flow Control
 
 @@ Flow_Control.md @@
@@ -264,11 +270,11 @@ with the next instruction with, for example, `balance` and
 
 In v5, only a few of the Header fields may be set: `Type`/`TypeEnum`,
 `Sender`, and `Fee`. In v6, Header fields `Note` and `RekeyTo` may
-also be set.  For the specific fields of each transaction types, any
-field may be set (except `RekeyTo` in v5).  This allows, for example,
-clawback transactions, asset opt-ins, and asset creates in addition to
-the more common uses of `axfer` and `acfg`.  All fields default to the
-zero value, except those described under `itxn_begin`.
+also be set.  For the specific (non-header) fields of each transaction
+type, any field may be set.  This allows, for example, clawback
+transactions, asset opt-ins, and asset creates in addition to the more
+common uses of `axfer` and `acfg`.  All fields default to the zero
+value, except those described under `itxn_begin`.
 
 Fields may be set multiple times, but may not be read. The most recent
 setting is used when `itxn_submit` executes. For this purpose `Type`

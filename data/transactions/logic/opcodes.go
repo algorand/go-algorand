@@ -282,10 +282,11 @@ var OpSpecs = []OpSpec{
 	{0x68, "app_local_del", opAppLocalDel, asmDefault, disDefault, oneAny.plus(oneBytes), nil, directRefEnabledVersion, runModeApplication, opDefault},
 	{0x69, "app_global_del", opAppGlobalDel, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opDefault},
 
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, oneAny.plus(oneInt), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, immediates("i")},
-	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
-	{0x72, "app_params_get", opAppParamsGet, assembleAppParams, disAppParams, oneInt, oneAny.plus(oneInt), 5, runModeApplication, immediates("i")},
+	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, immediates("f")},
+	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, oneAny.plus(oneInt), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, immediates("f")},
+	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, immediates("f")},
+	{0x72, "app_params_get", opAppParamsGet, assembleAppParams, disAppParams, oneInt, oneAny.plus(oneInt), 5, runModeApplication, immediates("f")},
+	{0x73, "acct_params_get", opAcctParamsGet, assembleAcctParams, disAcctParams, oneInt, oneAny.plus(oneInt), 6, runModeApplication, immediates("f")},
 
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opDefault},
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
@@ -306,6 +307,7 @@ var OpSpecs = []OpSpec{
 	{0x93, "bitlen", opBitLen, asmDefault, disDefault, oneAny, oneInt, 4, modeAny, opDefault},
 	{0x94, "exp", opExp, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
 	{0x95, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, costly(10)},
+	{0x96, "bsqrt", opBytesSqrt, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(40)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},

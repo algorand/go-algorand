@@ -3359,6 +3359,7 @@ func BenchmarkBigMath(b *testing.B) {
 		{"b*", "", "byte 0x01234576; byte 0x0223627389; b*; pop", "int 1"},
 		{"b/", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
 		{"b%", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
+		{"bsqrt", "", "byte 0x0123457673624736; bsqrt; pop", "int 1"},
 
 		{"b+big", // u256 + u256
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
@@ -3379,6 +3380,10 @@ func BenchmarkBigMath(b *testing.B) {
 		{"b%big", "", // u256 / u128 (half sized divisor seems pessimal)
 			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
 			 byte 0x34576012345760123457601234576312; b/; pop`,
+			"int 1"},
+		{"bsqrt-big", "",
+			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
+			 bsqrt; pop`,
 			"int 1"},
 	}
 	for _, bench := range benches {
@@ -3865,6 +3870,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 			// EvalParams, so try all forward versions.
 			for lv := v; lv <= AssemblerMaxVersion; lv++ {
 				t.Run(fmt.Sprintf("lv=%d", lv), func(t *testing.T) {
+					t.Helper()
 					var txn transactions.SignedTxn
 					txn.Lsig.Logic = ops.Program
 					ep := defaultEvalParamsWithVersion(&txn, lv)
@@ -4315,6 +4321,16 @@ func TestBytesMath(t *testing.T) {
 
 	// Even 128 byte outputs are ok
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs), 4)
+
+	testAccepts(t, "byte 0x00; bsqrt; byte 0x; ==; return", 6)
+	testAccepts(t, "byte 0x01; bsqrt; byte 0x01; ==; return", 6)
+	testAccepts(t, "byte 0x10; bsqrt; byte 0x04; ==; return", 6)
+	testAccepts(t, "byte 0x11; bsqrt; byte 0x04; ==; return", 6)
+	testAccepts(t, "byte 0xffffff; bsqrt; len; int 2; ==; return", 6)
+	// 64 byte long inputs are accepted, even if they produce longer outputs
+	testAccepts(t, fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs), 6)
+	// 65 byte inputs are not ok.
+	testPanics(t, fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs), 6)
 }
 
 func TestBytesCompare(t *testing.T) {

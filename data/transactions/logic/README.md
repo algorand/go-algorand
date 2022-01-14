@@ -217,7 +217,7 @@ return stack matches the name of the input value.
 | `\|\|` | A is not zero or B is not zero => {0 or 1} |
 | `shl` | A times 2^B, modulo 2^64 |
 | `shr` | A divided by 2^B |
-| `sqrt` | The largest integer B such that B^2 <= A |
+| `sqrt` | The largest integer I such that I^2 <= A |
 | `bitlen` | The highest set bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4 |
 | `exp` | A raised to the Bth power. Fail if A == B == 0 and on overflow |
 | `==` | A is equal to B => {0 or 1} |
@@ -233,26 +233,26 @@ return stack matches the name of the input value.
 | `~` | bitwise invert value A |
 | `mulw` | A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low |
 | `addw` | A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits. |
-| `divmodw` | Pop four uint64 values.  A and B are interpreted as a uint128 dividend (A is the high word), C and D are interpreted as a uint128 divisor (C is the high word).  Four uint64 values are pushed to the stack. The W and X are the quotient (W is the high uint64). Y and Z are the remainder, Y is the high bits. |
+| `divmodw` | W,X = (A,B / C,D); Y,Z = (A,B modulo C,D) |
 | `expw` | A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1 |
-| `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
-| `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
-| `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
-| `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
-| `concat` | pop two byte-arrays A and B and join them, push the result |
+| `getbit` | Bth bit of (byte-array or integer) A. |
+| `setbit` | Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C |
+| `getbyte` | Bth byte of A, as an integer |
+| `setbyte` | Copy of A with the Bth byte set to small integer (between 0..255) C |
+| `concat` | join A and B |
 
 ### Byte Array Manipulation
 
 | Opcode | Description |
 | - | -- |
-| `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
-| `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
-| `extract s l` | pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
-| `extract3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails |
-| `extract_uint16` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails |
-| `extract_uint32` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails |
-| `extract_uint64` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails |
-| `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if X is not base64 encoded with encoding E |
+| `substring s e` | A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails |
+| `substring3` | A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails |
+| `extract s l` | A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
+| `extract3` | A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails |
+| `extract_uint16` | A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails |
+| `extract_uint32` | A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails |
+| `extract_uint64` | A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails |
+| `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E |
 
 The following opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -268,17 +268,18 @@ bytes on outputs.
 
 | Opcode | Description |
 | - | -- |
-| `b+` | A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers |
-| `b-` | A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail on underflow. |
-| `b/` | A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
-| `b*` | A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers. |
-| `b<` | A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b>` | A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b<=` | A is less than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b>=` | A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Fail if B is zero. |
+| `b+` | A plus B. A and B are interpreted as big-endian unsigned integers |
+| `b-` | A minus B. A and B are interpreted as big-endian unsigned integers. Fail on underflow. |
+| `b/` | A divided by B (truncated division). A and B are interpreted as big-endian unsigned integers. Fail if B is zero. |
+| `b*` | A times B. A and B are interpreted as big-endian unsigned integers. |
+| `b<` | 1 if A is less than B, else 0. A and B are interpreted as big-endian unsigned integers |
+| `b>` | 1 if A is greater than B, else 0. A and B are interpreted as big-endian unsigned integers |
+| `b<=` | 1 if A is less than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers |
+| `b>=` | 1 if A is greater than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers |
+| `b==` | 1 if A is equal to B, else 0. A and B are interpreted as big-endian unsigned integers |
+| `b!=` | 0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers |
+| `b%` | A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero. |
+| `bsqrt` | The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers |
 
 These opcodes operate on the bits of byte-array values.  The shorter
 input array is interpreted as though left padded with zeros until it is the
@@ -288,9 +289,9 @@ these results may contain leading zero bytes.
 
 | Opcode | Description |
 | - | -- |
-| `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
-| `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
-| `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b\|` | A bitwise-or B. A and B are zero-left extended to the greater of their lengths |
+| `b&` | A bitwise-and B. A and B are zero-left extended to the greater of their lengths |
+| `b^` | A bitwise-xor B. A and B are zero-left extended to the greater of their lengths |
 | `b~` | A with all bits inverted |
 
 ### Loading Values
@@ -302,59 +303,59 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | Opcode | Description |
 | - | -- |
 | `intcblock uint ...` | prepare block of uint64 constants for use by intc |
-| `intc i` | push Ith constant from intcblock to stack |
-| `intc_0` | push constant 0 from intcblock to stack |
-| `intc_1` | push constant 1 from intcblock to stack |
-| `intc_2` | push constant 2 from intcblock to stack |
-| `intc_3` | push constant 3 from intcblock to stack |
-| `pushint uint` | push immediate UINT to the stack as an integer |
+| `intc i` | Ith constant from intcblock |
+| `intc_0` | constant 0 from intcblock |
+| `intc_1` | constant 1 from intcblock |
+| `intc_2` | constant 2 from intcblock |
+| `intc_3` | constant 3 from intcblock |
+| `pushint uint` | immediate UINT |
 | `bytecblock bytes ...` | prepare block of byte-array constants for use by bytec |
-| `bytec i` | push Ith constant from bytecblock to stack |
-| `bytec_0` | push constant 0 from bytecblock to stack |
-| `bytec_1` | push constant 1 from bytecblock to stack |
-| `bytec_2` | push constant 2 from bytecblock to stack |
-| `bytec_3` | push constant 3 from bytecblock to stack |
-| `pushbytes bytes` | push the following program bytes to the stack |
-| `bzero` | push a byte-array of length A, containing all zero bytes |
-| `arg n` | push Nth LogicSig argument to stack |
-| `arg_0` | push LogicSig argument 0 to stack |
-| `arg_1` | push LogicSig argument 1 to stack |
-| `arg_2` | push LogicSig argument 2 to stack |
-| `arg_3` | push LogicSig argument 3 to stack |
-| `args` | push Ath LogicSig argument to stack |
-| `txn f` | push field F of current transaction to stack |
-| `gtxn t f` | push field F of the Tth transaction in the current group |
-| `txna f i` | push Ith value of the array field F of the current transaction |
-| `txnas f` | push Ath value of the array field F of the current transaction |
-| `gtxna t f i` | push Ith value of the array field F from the Tth transaction in the current group |
-| `gtxnas t f` | push Ath value of the array field F from the Tth transaction in the current group |
-| `gtxns f` | push field F of the Ath transaction in the current group |
-| `gtxnsa f i` | push Ith value of the array field F from the Ath transaction in the current group |
-| `gtxnsas f` | pop an index A and an index B. push Bth value of the array field F from the Ath transaction in the current group |
-| `global f` | push value from globals to stack |
-| `load i` | copy a value from scratch space to the stack. All scratch spaces are 0 at program start. |
-| `loads` | copy a value from the Ath scratch space to the stack.  All scratch spaces are 0 at program start. |
-| `store i` | pop value A. store A to the Ith scratch space |
-| `stores` | pop indexes A and B. store B to the Ath scratch space |
-| `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
-| `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
-| `gloadss` | push Bth scratch space index of the Ath transaction in the current group |
-| `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
-| `gaids` | push the ID of the asset or application created in the Ath transaction of the current group |
+| `bytec i` | Ith constant from bytecblock |
+| `bytec_0` | constant 0 from bytecblock |
+| `bytec_1` | constant 1 from bytecblock |
+| `bytec_2` | constant 2 from bytecblock |
+| `bytec_3` | constant 3 from bytecblock |
+| `pushbytes bytes` | immediate BYTES |
+| `bzero` | zero filled byte-array of length A |
+| `arg n` | Nth LogicSig argument |
+| `arg_0` | LogicSig argument 0 |
+| `arg_1` | LogicSig argument 1 |
+| `arg_2` | LogicSig argument 2 |
+| `arg_3` | LogicSig argument 3 |
+| `args` | Ath LogicSig argument |
+| `txn f` | field F of current transaction |
+| `gtxn t f` | field F of the Tth transaction in the current group |
+| `txna f i` | Ith value of the array field F of the current transaction |
+| `txnas f` | Ath value of the array field F of the current transaction |
+| `gtxna t f i` | Ith value of the array field F from the Tth transaction in the current group |
+| `gtxnas t f` | Ath value of the array field F from the Tth transaction in the current group |
+| `gtxns f` | field F of the Ath transaction in the current group |
+| `gtxnsa f i` | Ith value of the array field F from the Ath transaction in the current group |
+| `gtxnsas f` | Bth value of the array field F from the Ath transaction in the current group |
+| `global f` | global field F |
+| `load i` | Ith scratch space value. All scratch spaces are 0 at program start. |
+| `loads` | Ath scratch space value.  All scratch spaces are 0 at program start. |
+| `store i` | store A to the Ith scratch space |
+| `stores` | store B to the Ath scratch space |
+| `gload t i` | Ith scratch space value of the Tth transaction in the current group |
+| `gloads i` | Ith scratch space value of the Ath transaction in the current group |
+| `gloadss` | Bth scratch space value of the Ath transaction in the current group |
+| `gaid t` | ID of the asset or application created in the Tth transaction of the current group |
+| `gaids` | ID of the asset or application created in the Ath transaction of the current group |
 
 **Transaction Fields**
 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | Sender | []byte |      | 32 byte address |
-| 1 | Fee | uint64 |      | micro-Algos |
+| 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 |      | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |
 | 7 | Receiver | []byte |      | 32 byte address |
-| 8 | Amount | uint64 |      | micro-Algos |
+| 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | []byte |      | 32 byte address |
 | 10 | VotePK | []byte |      | 32 byte address |
 | 11 | SelectionPK | []byte |      | 32 byte address |
@@ -418,8 +419,8 @@ Global fields are fields that are common to all the transactions in the group. I
 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
-| 0 | MinTxnFee | uint64 |      | micro Algos |
-| 1 | MinBalance | uint64 |      | micro Algos |
+| 0 | MinTxnFee | uint64 |      | microalgos |
+| 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
 | 3 | ZeroAddress | []byte |      | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 |      | Number of transactions in this atomic transaction group. At least 1 |
@@ -478,6 +479,17 @@ App fields used in the `app_params_get` opcode.
 | 8 | AppAddress | []byte | Address for which this application has authority |
 
 
+**Account Fields**
+
+Account fields used in the `acct_params_get` opcode.
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | AcctBalance | uint64 | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+
+
 ### Flow Control
 
 | Opcode | Description |
@@ -486,16 +498,16 @@ App fields used in the `app_params_get` opcode.
 | `bnz target` | branch to TARGET if value A is not zero |
 | `bz target` | branch to TARGET if value A is zero |
 | `b target` | branch unconditionally to TARGET |
-| `return` | use last value on stack as success value; end |
-| `pop` | discard value A from stack |
-| `dup` | duplicate last value on stack |
-| `dup2` | duplicate two last values on stack |
-| `dig n` | push the Nth value from the top of the stack. dig 0 is equivalent to dup |
+| `return` | use A as success value; end |
+| `pop` | discard A |
+| `dup` | duplicate A |
+| `dup2` | duplicate A and B |
+| `dig n` | Nth value from the top of the stack. dig 0 is equivalent to dup |
 | `cover n` | remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N. |
 | `uncover n` | remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N. |
-| `swap` | swaps two last values on stack |
+| `swap` | swaps A and B on stack |
 | `select` | selects one of two values based on top-of-stack: B if C != 0, else A |
-| `assert` | immediately fail unless value X is a non-zero number |
+| `assert` | immediately fail unless X is a non-zero number |
 | `callsub target` | branch unconditionally to TARGET, saving the next instruction on the call stack |
 | `retsub` | pop the top instruction from the call stack and branch to it |
 
@@ -505,19 +517,20 @@ App fields used in the `app_params_get` opcode.
 | - | -- |
 | `balance` | get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
 | `min_balance` | get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
-| `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
-| `app_local_get` | read from account A from local state of the current application key B => value |
-| `app_local_get_ex` | read from account A from local state of the application B key C => [*... stack*, value, 0 or 1] |
-| `app_global_get` | read key A from global state of a current application => value |
-| `app_global_get_ex` | read from application A global state key B => [*... stack*, value, 0 or 1] |
-| `app_local_put` | write to account specified by A to local state of a current application key B with value C |
-| `app_global_put` | write key A and value B to global state of the current application |
-| `app_local_del` | delete from account A local state key B of the current application |
-| `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
-| `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
-| `app_params_get i` | read from app A params field X (imm arg) => {0 or 1 (top), value} |
-| `log` | write bytes to log state of the current application |
+| `app_opted_in` | 1 if account A is opted in to application B, else 0 |
+| `app_local_get` | local state of the key B in the current application in account A |
+| `app_local_get_ex` | X is the local state of application B, key C in account A. Y is 1 if key existed, else 0 |
+| `app_global_get` | global state of the key A in the current application |
+| `app_global_get_ex` | X is the global state of application A, key B. Y is 1 if key existed, else 0 |
+| `app_local_put` | write C to key B in account A's local state of the current application |
+| `app_global_put` | write B to key A in the global state of the current application |
+| `app_local_del` | delete key B from account A's local state of the current application |
+| `app_global_del` | delete key A from the global state of the current application |
+| `asset_holding_get f` | X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0 |
+| `asset_params_get f` | X is field F from asset A. Y is 1 if A exists, else 0 |
+| `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
+| `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
+| `log` | write A to log state of the current application |
 
 ### Inner Transactions
 
@@ -541,11 +554,11 @@ with the next instruction with, for example, `balance` and
 
 In v5, only a few of the Header fields may be set: `Type`/`TypeEnum`,
 `Sender`, and `Fee`. In v6, Header fields `Note` and `RekeyTo` may
-also be set.  For the specific fields of each transaction types, any
-field may be set (except `RekeyTo` in v5).  This allows, for example,
-clawback transactions, asset opt-ins, and asset creates in addition to
-the more common uses of `axfer` and `acfg`.  All fields default to the
-zero value, except those described under `itxn_begin`.
+also be set.  For the specific (non-header) fields of each transaction
+type, any field may be set.  This allows, for example, clawback
+transactions, asset opt-ins, and asset creates in addition to the more
+common uses of `axfer` and `acfg`.  All fields default to the zero
+value, except those described under `itxn_begin`.
 
 Fields may be set multiple times, but may not be read. The most recent
 setting is used when `itxn_submit` executes. For this purpose `Type`
@@ -567,10 +580,10 @@ different transaction types, are rejected by `itxn_submit`.
 | `itxn_next` | begin preparation of a new inner transaction in the same transaction group |
 | `itxn_field f` | set field F of the current inner transaction to A |
 | `itxn_submit` | execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails. |
-| `itxn f` | push field F of the last inner transaction |
-| `itxna f i` | push Ith value of the array field F of the last inner transaction |
-| `gitxn t f` | push field F of the Tth transaction in the last inner group submitted |
-| `gitxna t f i` | push Ith value of the array field F from the Tth transaction in the last inner group submitted |
+| `itxn f` | field F of the last inner transaction |
+| `itxna f i` | Ith value of the array field F of the last inner transaction |
+| `gitxn t f` | field F of the Tth transaction in the last inner group submitted |
+| `gitxna t f i` | Ith value of the array field F from the Tth transaction in the last inner group submitted |
 
 
 # Assembler Syntax

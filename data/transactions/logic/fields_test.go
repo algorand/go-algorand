@@ -27,11 +27,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestArrayFields(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	require.Equal(t, len(TxnaFieldNames()), len(TxnaFieldTypes()))
-}
-
 // ensure v2+ fields fail in TEAL assembler and evaluator on a version before they introduced
 // ensure v2+ fields error in v1 program
 func TestGlobalFieldsVersions(t *testing.T) {
