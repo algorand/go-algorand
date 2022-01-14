@@ -61,36 +61,72 @@ func (cs *roundCowState) CountAssetParams(addr basics.Address) (int, error) {
 func (cs *roundCowState) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
 	var d ledgercore.AppParamsDelta
 	d, ok, err = cs.lookupAppParams(addr, aidx, false)
-	if d.Params != nil {
-		ret = *d.Params
+	if err != nil || !ok {
+		return
 	}
+	if d.Deleted {
+		ok = false
+		return
+	}
+	if d.Params == nil {
+		// found and not deleled => must exist. Err if not
+		err = fmt.Errorf("GetAppParams got a nil entry for (%s, %d): %p, %v", addr.String(), aidx, d.Params, d.Deleted)
+	}
+	ret = *d.Params
 	return
 }
 
 func (cs *roundCowState) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (ret basics.AppLocalState, ok bool, err error) {
 	var d ledgercore.AppLocalStateDelta
 	d, ok, err = cs.lookupAppLocalState(addr, aidx, false)
-	if d.LocalState != nil {
-		ret = *d.LocalState
+	if err != nil || !ok {
+		return
 	}
+	if d.Deleted {
+		ok = false
+		return
+	}
+	if d.LocalState == nil {
+		// found and not deleled => must exist. Err if not
+		err = fmt.Errorf("GetAppLocalState got a nil entry for (%s, %d): %p, %v", addr.String(), aidx, d.LocalState, d.Deleted)
+	}
+	ret = *d.LocalState
 	return
 }
 
 func (cs *roundCowState) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
 	var d ledgercore.AssetHoldingDelta
 	d, ok, err = cs.lookupAssetHolding(addr, aidx, false)
-	if d.Holding != nil {
-		ret = *d.Holding
+	if err != nil || !ok {
+		return
 	}
+	if d.Deleted {
+		ok = false
+		return
+	}
+	if d.Holding == nil {
+		// found and not deleled => must exist. Err if not
+		err = fmt.Errorf("GetAppLocalState got a nil entry for (%s, %d): %p, %v", addr.String(), aidx, d.Holding, d.Deleted)
+	}
+	ret = *d.Holding
 	return
 }
 
 func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
 	var d ledgercore.AssetParamsDelta
 	d, ok, err = cs.lookupAssetParams(addr, aidx, false)
-	if d.Params != nil {
-		ret = *d.Params
+	if err != nil || !ok {
+		return
 	}
+	if d.Deleted {
+		ok = false
+		return
+	}
+	if d.Params == nil {
+		// found and not deleled => must exist. Err if not
+		err = fmt.Errorf("GetAppLocalState got a nil entry for (%s, %d): %p, %v", addr.String(), aidx, d.Params, d.Deleted)
+	}
+	ret = *d.Params
 	return
 }
 

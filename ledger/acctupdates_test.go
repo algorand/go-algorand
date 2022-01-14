@@ -2009,12 +2009,15 @@ func TestAcctUpdatesResources(t *testing.T) {
 
 	aidx := basics.AssetIndex(1)
 	aidx2 := basics.AssetIndex(2)
+	aidx3 := basics.AppIndex(3)
+	aidx4 := basics.AssetIndex(5)
 
 	rewardLevel := uint64(0)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	// the test 1 requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
 	// the test 2 requires 2 more blocks
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+5); i++ {
+	// the test 2 requires 2 more blocks
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3+2+2); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.NewAccountDeltas
@@ -2053,6 +2056,23 @@ func TestAcctUpdatesResources(t *testing.T) {
 			// transfer back: asset holding record incorrectly clears params record
 			updates.UpsertAssetResource(addr2, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 99}})
 			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 901}})
+		}
+
+		// test 3: own app local state closeout, own empty
+		appParams := ledgercore.AppParamsDelta{Params: &basics.AppParams{ApprovalProgram: []byte{2, 0x20, 1, 1, 0x22} /* int 1 */}}
+		if i == 6 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 3, TotalAssetParams: 2, TotalAppParams: 1, TotalAppLocalStates: 1}})
+
+			// create an app
+			updates.UpsertAppResource(addr1, aidx3, appParams, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// create an asset
+			updates.UpsertAssetResource(addr1, aidx4, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 1000}})
+		}
+		if i == 7 {
+			// closeout app
+			updates.UpsertAppResource(addr1, aidx3, appParams, ledgercore.AppLocalStateDelta{LocalState: nil, Deleted: true})
+			// transfer own holdings
+			updates.UpsertAssetResource(addr1, aidx4, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
 		}
 
 		prevTotals, err := au.Totals(basics.Round(i - 1))
@@ -2115,14 +2135,21 @@ func TestAcctUpdatesResources(t *testing.T) {
 		accts = append(accts, newAccts)
 	}
 
-	ad1, _, err := au.lookupLatest(addr1)
+	ad, _, err := au.lookupLatest(addr1)
 	require.NoError(t, err)
-	ad2, _, err := au.lookupLatest(addr2)
-	require.NoError(t, err)
+	require.Equal(t, uint64(1000), ad.AssetParams[aidx2].Total)
+	require.Equal(t, uint64(901), ad.Assets[aidx2].Amount)
 
-	require.Equal(t, uint64(1000), ad1.AssetParams[aidx2].Total)
-	require.Equal(t, uint64(901), ad1.Assets[aidx2].Amount)
-	require.Equal(t, uint64(99), ad2.Assets[aidx2].Amount)
+	require.NotEmpty(t, ad.AppParams[aidx3])
+	require.NotEmpty(t, ad.AppParams[aidx3].ApprovalProgram)
+	require.NotEmpty(t, ad.AssetParams[aidx4])
+	h, ok := ad.Assets[aidx4]
+	require.True(t, ok)
+	require.Empty(t, h)
+
+	ad, _, err = au.lookupLatest(addr2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(99), ad.Assets[aidx2].Amount)
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.
