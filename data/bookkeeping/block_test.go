@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -255,7 +256,7 @@ func TestRewardsLevel(t *testing.T) {
 	prev.RewardsRate = 10
 
 	rewardUnits := uint64(10)
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, logging.Base())
 	require.Equal(t, uint64(2), state.RewardsLevel)
 	require.Equal(t, uint64(0), state.RewardsResidue)
 }
@@ -271,7 +272,7 @@ func TestRewardsLevelWithResidue(t *testing.T) {
 	prev.RewardsRate = 1
 
 	rewardUnits := uint64(10)
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, logging.Base())
 	require.Equal(t, uint64(11), state.RewardsLevel)
 	require.Equal(t, uint64(0), state.RewardsResidue)
 }
@@ -286,7 +287,7 @@ func TestRewardsLevelNoUnits(t *testing.T) {
 	prev.RewardsResidue = 2
 
 	rewardUnits := uint64(0)
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, logging.Base())
 	require.Equal(t, prev.RewardsLevel, state.RewardsLevel)
 	require.Equal(t, prev.RewardsResidue, state.RewardsResidue)
 }
@@ -301,7 +302,7 @@ func TestTinyLevel(t *testing.T) {
 	prev.RewardsRate = 10 * unitsInAlgos
 	algosInSystem := uint64(1000 * 1000 * 1000)
 	rewardUnits := algosInSystem * unitsInAlgos / proto.RewardUnit
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, logging.Base())
 	require.True(t, state.RewardsLevel > 0 || state.RewardsResidue > 0)
 }
 
@@ -319,7 +320,7 @@ func TestRewardsRate(t *testing.T) {
 	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * uint64(proto.RewardsRateRefreshInterval)}
 
 	// make sure that RewardsRate stays the same
-	state := prev.NextRewardsState(prev.Round()+1, proto, incentivePoolBalance, 0)
+	state := prev.NextRewardsState(prev.Round()+1, proto, incentivePoolBalance, 0, logging.Base())
 	require.Equal(t, prev.RewardsRate, state.RewardsRate)
 	require.Equal(t, prev.BlockHeader.RewardsRecalculationRound, state.RewardsRecalculationRound)
 }
@@ -338,7 +339,7 @@ func TestRewardsRateRefresh(t *testing.T) {
 	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * uint64(proto.RewardsRateRefreshInterval)}
 	// make sure that RewardsRate was recomputed
 	nextRound := prev.Round() + 1
-	state := prev.NextRewardsState(nextRound, proto, incentivePoolBalance, 0)
+	state := prev.NextRewardsState(nextRound, proto, incentivePoolBalance, 0, logging.Base())
 	require.Equal(t, (incentivePoolBalance.Raw-proto.MinBalance)/uint64(proto.RewardsRateRefreshInterval), state.RewardsRate)
 	require.Equal(t, nextRound+basics.Round(proto.RewardsRateRefreshInterval), state.RewardsRecalculationRound)
 }
@@ -431,7 +432,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 			curRewardsState.RewardsRate = incentivePoolBalance / uint64(consensusParams.RewardsRateRefreshInterval)
 		}
 		for rnd := 1; rnd < int(consensusParams.RewardsRateRefreshInterval+2); rnd++ {
-			nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits)
+			nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits, logging.Base())
 			// adjust the incentive pool balance
 			var ot basics.OverflowTracker
 
@@ -471,7 +472,7 @@ func performRewardsRateCalculation(
 	require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
 
 	for rnd := startingRound; rnd < startingRound+uint64(consensusParams.RewardsRateRefreshInterval)*3; rnd++ {
-		nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits)
+		nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits, logging.Base())
 		// adjust the incentive pool balance
 		var ot basics.OverflowTracker
 
