@@ -125,6 +125,12 @@ var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", De
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
+// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete.
+const peerDisconnectionAckDuration time.Duration = 5 * time.Second
+
+// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
+const peerShutdownDisconnectionAckDuration time.Duration = 50 * time.Millisecond
+
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
 
@@ -542,13 +548,13 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 		return
 	}
 	peer := badnode.(*wsPeer)
-	peer.CloseAndWait()
+	peer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
 	wn.removePeer(peer, reason)
 }
 
-func closeWaiter(wg *sync.WaitGroup, peer *wsPeer) {
+func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 	defer wg.Done()
-	peer.CloseAndWait()
+	peer.CloseAndWait(deadline)
 }
 
 // DisconnectPeers shuts down all connections
@@ -557,8 +563,9 @@ func (wn *WebsocketNetwork) DisconnectPeers() {
 	defer wn.peersLock.Unlock()
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(wn.peers))
+	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&closeGroup, peer)
+		go closeWaiter(&closeGroup, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
 	closeGroup.Wait()
@@ -812,8 +819,12 @@ func (wn *WebsocketNetwork) innerStop() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	wn.wg.Add(len(wn.peers))
+	// this method is called only during node shutdown. In this case, we want to send the
+	// shutdown message, but we don't want to wait for a long time - since we might not be lucky
+	// to get a response.
+	deadline := time.Now().Add(peerShutdownDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&wn.wg, peer)
+		go closeWaiter(&wn.wg, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
 }
