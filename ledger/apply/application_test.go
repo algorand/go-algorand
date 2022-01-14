@@ -349,33 +349,6 @@ func (b *testBalances) SetParams(params config.ConsensusParams) {
 	b.proto = params
 }
 
-type testEvaluator struct {
-	pass   bool
-	delta  transactions.EvalDelta
-	appIdx basics.AppIndex
-}
-
-// Eval for tests that fail on program version > 10 and returns pass/delta from its own state rather than running the program
-func (e *testEvaluator) Eval(program []byte) (pass bool, stateDelta transactions.EvalDelta, err error) {
-	if len(program) < 1 || program[0] > 10 {
-		return false, transactions.EvalDelta{}, fmt.Errorf("mock eval error")
-	}
-	return e.pass, e.delta, nil
-}
-
-// Check for tests that fail on program version > 10 and returns program len as cost
-func (e *testEvaluator) Check(program []byte) (cost int, err error) {
-	if len(program) < 1 || program[0] > 10 {
-		return 0, fmt.Errorf("mock check error")
-	}
-	return len(program), nil
-}
-
-func (e *testEvaluator) InitLedger(balances Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
-	e.appIdx = appIdx
-	return nil
-}
-
 func TestAppCallCloneEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -513,7 +486,7 @@ func TestAppCallCreate(t *testing.T) {
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
-	appIdx, err = createApplication(&ac, b, creator, txnCounter)
+	_, err = createApplication(&ac, b, creator, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "max created apps per acct is")
 
@@ -602,10 +575,10 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b.balances[creator] = cp
 	err = ApplicationCall(ac, h, b, ad, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(uint64(b.allocatedAppIdx), txnCounter+1)
-	a.Equal(1, b.put)
-	a.Equal(1, b.putAppParams)
+	a.Contains(err.Error(), "already found app with index")
+	a.Equal(uint64(0), uint64(b.allocatedAppIdx))
+	a.Equal(0, b.put)
+	a.Equal(0, b.putAppParams)
 	// ensure original balance record in the mock was not changed
 	// this ensure proper cloning and any in-intended in-memory modifications
 	//
@@ -618,8 +591,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.pass = true
 	cp = basics.AccountData{}
-	cp.AppParams = cloneAppParams(saved.AppParams)
-	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
 	cp.TotalAppSchema = saved.TotalAppSchema
 	b.balances[creator] = cp
 
@@ -640,6 +611,9 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
 
 	ac.ExtraProgramPages = 1
+	txnCounter++
+	appIdx = basics.AppIndex(txnCounter + 1)
+	b.appCreators[appIdx] = creator
 	err = ApplicationCall(ac, h, b, ad, &ep, txnCounter)
 	a.NoError(err)
 	br = b.putBalances[creator]
