@@ -271,7 +271,7 @@ func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppI
 		if !result.exists {
 			return ledgercore.AppLocalStateDelta{}, false, nil
 		}
-		return ledgercore.AppLocalStateDelta{State: &result.value}, true, nil
+		return ledgercore.AppLocalStateDelta{LocalState: &result.value}, true, nil
 	}
 
 	if fromCache { // hasn't been found yet; we were asked not to query DB
@@ -288,7 +288,7 @@ func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppI
 	if resourceData.AppLocalState == nil {
 		return ledgercore.AppLocalStateDelta{}, false, nil
 	}
-	return ledgercore.AppLocalStateDelta{State: resourceData.AppLocalState}, true, nil
+	return ledgercore.AppLocalStateDelta{LocalState: resourceData.AppLocalState}, true, nil
 }
 
 func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
@@ -369,7 +369,7 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 		}
 
 		if exist && !ls.Deleted { // XXX right place to check deleted?
-			kv = ls.State.KeyValue
+			kv = ls.LocalState.KeyValue
 		}
 	}
 	if !exist {
@@ -404,7 +404,7 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 			return basics.StateSchema{}, err
 		}
 		if exist && !ls.Deleted { // XXX right place to check deleted?
-			kv = ls.State.KeyValue
+			kv = ls.LocalState.KeyValue
 		}
 	}
 	if !exist {

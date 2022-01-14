@@ -852,8 +852,8 @@ func TestApplyStorageDelta(t *testing.T) {
 		state1 := basics.AppLocalState{KeyValue: make(basics.TealKeyValue)}
 		state2 := basics.AppLocalState{KeyValue: kv}
 
-		cow.mods.NewAccts.UpsertAppResource(addr, 1, ledgercore.AppParamsDelta{Params: &params1}, ledgercore.AppLocalStateDelta{State: &state1})
-		cow.mods.NewAccts.UpsertAppResource(addr, 2, ledgercore.AppParamsDelta{Params: &params2}, ledgercore.AppLocalStateDelta{State: &state2})
+		cow.mods.NewAccts.UpsertAppResource(addr, 1, ledgercore.AppParamsDelta{Params: &params1}, ledgercore.AppLocalStateDelta{LocalState: &state1})
+		cow.mods.NewAccts.UpsertAppResource(addr, 2, ledgercore.AppParamsDelta{Params: &params2}, ledgercore.AppLocalStateDelta{LocalState: &state2})
 
 		return cow
 	}
@@ -880,7 +880,7 @@ func TestApplyStorageDelta(t *testing.T) {
 		a.True(ok)
 		state2, ok := cow.mods.NewAccts.GetAppLocalState(addr, 2)
 		a.True(ok)
-		return params1.Params, params2.Params, state1.State, state2.State
+		return params1.Params, params2.Params, state1.LocalState, state2.LocalState
 	}
 
 	kv := basics.TealKeyValue{
@@ -980,7 +980,7 @@ func TestApplyStorageDelta(t *testing.T) {
 	params1 = params1d.Params
 	a.True(ok)
 	state1d, ok := cow.mods.NewAccts.GetAppLocalState(addr, 1)
-	state1 = state1d.State
+	state1 = state1d.LocalState
 	a.False(ok)
 	a.Nil(params1)
 	a.Nil(state1)
@@ -991,7 +991,7 @@ func TestApplyStorageDelta(t *testing.T) {
 	params1 = params1d.Params
 	a.True(ok)
 	state1d, ok = cow.mods.NewAccts.GetAppLocalState(addr, 1)
-	state1 = state1d.State
+	state1 = state1d.LocalState
 	a.True(ok)
 	a.Nil(params1)
 	a.Nil(state1)

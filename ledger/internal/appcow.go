@@ -728,22 +728,22 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 				return fmt.Errorf("could not find existing states for %v", aapp.aidx)
 			}
 
-			statesClone := states.State.Clone()
-			states.State = &statesClone
+			statesClone := states.LocalState.Clone()
+			states.LocalState = &statesClone
 			if (storeDelta.action == allocAction && len(storeDelta.kvCow) > 0) ||
-				(storeDelta.action == remainAllocAction && states.State.KeyValue == nil) {
+				(storeDelta.action == remainAllocAction && states.LocalState.KeyValue == nil) {
 				// allocate KeyValue for
 				// 1) opting in and local state write in the same app call
 				// 2) local state writing into empty local state (opted in)
-				states.State.KeyValue = make(basics.TealKeyValue)
+				states.LocalState.KeyValue = make(basics.TealKeyValue)
 			}
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
 			for k, v := range storeDelta.kvCow {
 				if !v.newExists {
-					delete(states.State.KeyValue, k)
+					delete(states.LocalState.KeyValue, k)
 				} else {
-					states.State.KeyValue[k] = v.new
+					states.LocalState.KeyValue[k] = v.new
 				}
 			}
 			// fetch AppParams to store along with deleted AppLocalState

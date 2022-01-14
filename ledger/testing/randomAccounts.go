@@ -371,7 +371,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 				for aidx, states := range data.AppLocalStates {
 					val := states
 					res := appResources[aidx]
-					res.State.State = &val
+					res.State.LocalState = &val
 					appResources[aidx] = res
 				}
 
@@ -456,7 +456,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 			for aidx, states := range data.AppLocalStates {
 				val := states
 				res := appResources[aidx]
-				res.State.State = &val
+				res.State.LocalState = &val
 				appResources[aidx] = res
 			}
 			for aidx, params := range data.AssetParams {

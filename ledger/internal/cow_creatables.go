@@ -70,8 +70,8 @@ func (cs *roundCowState) GetAppParams(addr basics.Address, aidx basics.AppIndex)
 func (cs *roundCowState) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (ret basics.AppLocalState, ok bool, err error) {
 	var d ledgercore.AppLocalStateDelta
 	d, ok, err = cs.lookupAppLocalState(addr, aidx, false)
-	if d.State != nil {
-		ret = *d.State
+	if d.LocalState != nil {
+		ret = *d.LocalState
 	}
 	return
 }
@@ -108,7 +108,7 @@ func (cs *roundCowState) putAppParams(addr basics.Address, aidx basics.AppIndex,
 }
 
 func (cs *roundCowState) PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error {
-	return cs.putAppLocalState(addr, aidx, ledgercore.AppLocalStateDelta{State: &state})
+	return cs.putAppLocalState(addr, aidx, ledgercore.AppLocalStateDelta{LocalState: &state})
 }
 
 func (cs *roundCowState) putAppLocalState(addr basics.Address, aidx basics.AppIndex, state ledgercore.AppLocalStateDelta) error {
@@ -183,7 +183,7 @@ func (cs *roundCowState) HasAppLocalState(addr basics.Address, aidx basics.AppIn
 	if err != nil {
 		return false, err
 	}
-	if d.Deleted || d.State == nil {
+	if d.Deleted || d.LocalState == nil {
 		ok = false
 	}
 	return ok, nil

@@ -53,7 +53,7 @@ func (ml *mockLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIn
 
 func (ml *mockLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	params, ok := ml.balanceMap[addr].AppLocalStates[aidx]
-	return ledgercore.AppLocalStateDelta{State: &params}, ok, nil
+	return ledgercore.AppLocalStateDelta{LocalState: &params}, ok, nil
 }
 
 func (ml *mockLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {

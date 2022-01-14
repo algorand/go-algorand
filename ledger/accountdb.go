@@ -1483,8 +1483,8 @@ func (rd *resourcesData) SetAssetData(ap ledgercore.AssetParamsDelta, ah ledgerc
 }
 
 func (rd *resourcesData) SetAppData(ap ledgercore.AppParamsDelta, al ledgercore.AppLocalStateDelta) {
-	if al.State != nil {
-		rd.SetAppLocalState(*al.State)
+	if al.LocalState != nil {
+		rd.SetAppLocalState(*al.LocalState)
 	} else if al.Deleted {
 		rd.ClearAppLocalState()
 	}

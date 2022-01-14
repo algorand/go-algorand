@@ -831,7 +831,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 			index:   basics.CreatableIndex(res.Aidx),
 		}
 		mres, _ := au.resources.get(key)
-		mres.resource.AppLocalState = res.State.State
+		mres.resource.AppLocalState = res.State.LocalState
 		mres.resource.AppParams = res.Params.Params
 		mres.resource.CreatableIndex = basics.CreatableIndex(res.Aidx)
 		mres.resource.CreatableType = basics.AppCreatable

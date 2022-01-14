@@ -127,8 +127,8 @@ type AssetParamsDelta struct {
 
 // AppLocalStateDelta tracks a changed AppLocalState, and whether it was deleted
 type AppLocalStateDelta struct {
-	State   *basics.AppLocalState
-	Deleted bool
+	LocalState *basics.AppLocalState
+	Deleted    bool
 }
 
 // AppParamsDelta tracks a changed AppParams, and whether it was deleted
@@ -183,8 +183,8 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 		Hdr:                      hdr,
 		CompactCertNext:          compactCertNext,
 		PrevTimestamp:            prevTimestamp,
-		ModifiedAssetHoldings:    make(map[AccountAsset]bool),
-		ModifiedAppLocalStates:   make(map[AccountApp]bool),
+		ModifiedAssetHoldings:    make(map[AccountAsset]bool, hint),
+		ModifiedAppLocalStates:   make(map[AccountApp]bool, hint),
 		initialTransactionsCount: hint,
 	}
 }
@@ -211,50 +211,38 @@ func (ad NewAccountDeltas) GetData(addr basics.Address) (AccountData, bool) {
 
 // GetAppParams returns app params delta value
 func (ad NewAccountDeltas) GetAppParams(addr basics.Address, aidx basics.AppIndex) (AppParamsDelta, bool) {
-	idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]
-	var result AppParamsDelta
-	var exist bool
-	if ok {
-		result = ad.appResources[idx].Params
-		exist = result.Deleted || result.Params != nil
+	if idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]; ok {
+		result := ad.appResources[idx].Params
+		return result, result.Deleted || result.Params != nil
 	}
-	return result, exist
+	return AppParamsDelta{}, false
 }
 
 // GetAssetParams returns asset params delta value
 func (ad NewAccountDeltas) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (AssetParamsDelta, bool) {
-	idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]
-	var result AssetParamsDelta
-	var exist bool
-	if ok {
-		result = ad.assetResources[idx].Params
-		exist = result.Deleted || result.Params != nil
+	if idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]; ok {
+		result := ad.assetResources[idx].Params
+		return result, result.Deleted || result.Params != nil
 	}
-	return result, exist
+	return AssetParamsDelta{}, false
 }
 
 // GetAppLocalState returns app local state delta value
 func (ad NewAccountDeltas) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (AppLocalStateDelta, bool) {
-	idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]
-	var result AppLocalStateDelta
-	var exist bool
-	if ok {
-		result = ad.appResources[idx].State
-		exist = result.Deleted || result.State != nil
+	if idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]; ok {
+		result := ad.appResources[idx].State
+		return result, result.Deleted || result.LocalState != nil
 	}
-	return result, exist
+	return AppLocalStateDelta{}, false
 }
 
 // GetAssetHolding returns asset holding delta value
 func (ad NewAccountDeltas) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (AssetHoldingDelta, bool) {
-	idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]
-	var result AssetHoldingDelta
-	var exist bool
-	if ok {
-		result = ad.assetResources[idx].Holding
-		exist = result.Deleted || result.Holding != nil
+	if idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]; ok {
+		result := ad.assetResources[idx].Holding
+		return result, result.Deleted || result.Holding != nil
 	}
-	return result, exist
+	return AssetHoldingDelta{}, false
 }
 
 // ModifiedAccounts returns list of addresses of modified accounts
@@ -332,7 +320,7 @@ func (ad NewAccountDeltas) GetResource(addr basics.Address, aidx basics.Creatabl
 		idx, ok := ad.appResourcesCache[aa]
 		if ok {
 			ret.AppParams = ad.appResources[idx].Params.Params
-			ret.AppLocalState = ad.appResources[idx].State.State
+			ret.AppLocalState = ad.appResources[idx].State.LocalState
 		}
 		return ret, ok
 	}
@@ -464,8 +452,8 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 				if !rec.Params.Deleted && rec.Params.Params != nil {
 					result.AppParams[aapp.App] = *rec.Params.Params
 				}
-				if !rec.State.Deleted && rec.State.State != nil {
-					result.AppLocalStates[aapp.App] = *rec.State.State
+				if !rec.State.Deleted && rec.State.LocalState != nil {
+					result.AppLocalStates[aapp.App] = *rec.State.LocalState
 				}
 			}
 		}
@@ -502,7 +490,7 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 	return result, true
 }
 
-// ToModifiedCreatables creates map of ModifiedCreatable
+// ToModifiedCreatables is only used in tests, to create a map of ModifiedCreatable.
 func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]struct{}) map[basics.CreatableIndex]ModifiedCreatable {
 	result := make(map[basics.CreatableIndex]ModifiedCreatable, len(ad.appResources)+len(ad.assetResources))
 	for aapp, idx := range ad.appResourcesCache {
@@ -577,8 +565,8 @@ func AccumulateDeltas(base map[basics.Address]basics.AccountData, deltas NewAcco
 		}
 		if rec.State.Deleted {
 			delete(ad.AppLocalStates, aapp.App)
-		} else if rec.State.State != nil {
-			ad.AppLocalStates[aapp.App] = *rec.State.State
+		} else if rec.State.LocalState != nil {
+			ad.AppLocalStates[aapp.App] = *rec.State.LocalState
 		}
 		base[aapp.Address] = ad
 	}
@@ -677,8 +665,8 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 				rec := ad.appResources[idx]
 				if rec.State.Deleted {
 					delete(result.AppLocalStates, aapp.App)
-				} else if rec.State.State != nil {
-					result.AppLocalStates[aapp.App] = *rec.State.State
+				} else if rec.State.LocalState != nil {
+					result.AppLocalStates[aapp.App] = *rec.State.LocalState
 				}
 			}
 		}
@@ -770,9 +758,9 @@ func (ad *NewAccountDeltas) mergeInOther(addr basics.Address, other NewAccountDe
 			}
 			var newState AppLocalStateDelta
 			newState.Deleted = rec.State.Deleted
-			if !rec.State.Deleted && rec.State.State != nil {
-				cp := *rec.State.State
-				newState.State = &cp
+			if !rec.State.Deleted && rec.State.LocalState != nil {
+				cp := *rec.State.LocalState
+				newState.LocalState = &cp
 			}
 			last := len(ad.appResources)
 			key := AccountApp{rec.Addr, rec.Aidx}
