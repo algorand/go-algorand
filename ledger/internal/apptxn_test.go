@@ -17,6 +17,7 @@
 package internal_test
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -27,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -381,9 +383,13 @@ submit:  itxn_submit
 }
 
 func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *ledger.Ledger {
+	return newTestLedgerWithConsensusVersion(t, balances, protocol.ConsensusFuture)
+}
+
+func newTestLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) *ledger.Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture, balances, "test", genHash)
+	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
@@ -1499,4 +1505,937 @@ func TestGtxnEffects(t *testing.T) {
 
 	require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
 	require.Equal(t, asaIndex, vb.Block().Payset[2].ApplyData.ConfigAsset)
+}
+
+func TestBasicReentry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+`),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	call1 := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[2],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{index0},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call1, "self-call")
+	endBlock(t, l, eval)
+}
+
+func TestIndirectReentry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+   txn Applications 2
+   itxn_field Applications
+  itxn_submit
+`),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund)
+	vb = endBlock(t, l, eval)
+	index1 := vb.Block().Payset[0].ApplicationID
+
+	call1 := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{index1, index0},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call1, "attempt to re-enter")
+	endBlock(t, l, eval)
+}
+
+// This tests a valid form of reentry (which may not be the correct word here).
+// When A calls B then returns to A then A calls C which calls B, the execution
+// should not produce an error because B doesn't occur in the call stack twice.
+func TestValidAppReentry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 2
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+   txn Applications 2
+   itxn_field Applications
+  itxn_submit
+`),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  int 3
+  int 3
+  ==
+  assert
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund0)
+	vb = endBlock(t, l, eval)
+	index1 := vb.Block().Payset[0].ApplicationID
+
+	app2 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app2)
+	vb = endBlock(t, l, eval)
+	index2 := vb.Block().Payset[0].ApplicationID
+
+	fund2 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index2.Address(),
+		Amount:   1_000_000,
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &fund2)
+	_ = endBlock(t, l, eval)
+
+	call1 := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{index2, index1, index0},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call1)
+	endBlock(t, l, eval)
+}
+
+func TestMaxInnerTxFanOut(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+
+  itxn_begin
+   int appl
+   itxn_field TypeEnum
+   txn Applications 1
+   itxn_field ApplicationID
+  itxn_submit
+`),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  int 3
+  int 3
+  ==
+  assert
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund0)
+	vb = endBlock(t, l, eval)
+	index1 := vb.Block().Payset[0].ApplicationID
+
+	callTxGroup := make([]txntest.Txn, 16)
+	for i := 0; i < 16; i++ {
+		callTxGroup[i] = txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: index0,
+			ForeignApps:   []basics.AppIndex{index1},
+		}
+	}
+	eval = nextBlock(t, l, true, nil)
+	err := txgroup(t, l, eval, &callTxGroup[0], &callTxGroup[1], &callTxGroup[2], &callTxGroup[3], &callTxGroup[4], &callTxGroup[5], &callTxGroup[6], &callTxGroup[7], &callTxGroup[8], &callTxGroup[9], &callTxGroup[10], &callTxGroup[11], &callTxGroup[12], &callTxGroup[13], &callTxGroup[14], &callTxGroup[15])
+	require.NoError(t, err)
+
+	endBlock(t, l, eval)
+}
+
+func TestExceedMaxInnerTxFanOut(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	var program string
+	for i := 0; i < 17; i++ {
+		program += `
+  itxn_begin
+    int appl
+    itxn_field TypeEnum
+	txn Applications 1
+	itxn_field ApplicationID
+  itxn_submit
+`
+	}
+
+	// 17 inner txns
+	app0 := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: main(program),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  int 3
+  int 3
+  ==
+  assert
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund0)
+	vb = endBlock(t, l, eval)
+	index1 := vb.Block().Payset[0].ApplicationID
+
+	callTxGroup := make([]txntest.Txn, 16)
+	for i := 0; i < 16; i++ {
+		callTxGroup[i] = txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: index0,
+			ForeignApps:   []basics.AppIndex{index1},
+		}
+	}
+	eval = nextBlock(t, l, true, nil)
+	err := txgroup(t, l, eval, &callTxGroup[0], &callTxGroup[1], &callTxGroup[2], &callTxGroup[3], &callTxGroup[4], &callTxGroup[5], &callTxGroup[6], &callTxGroup[7], &callTxGroup[8], &callTxGroup[9], &callTxGroup[10], &callTxGroup[11], &callTxGroup[12], &callTxGroup[13], &callTxGroup[14], &callTxGroup[15])
+	require.Error(t, err)
+
+	endBlock(t, l, eval)
+}
+
+func TestMaxInnerTxForSingleAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	program := `
+int 1
+loop:
+itxn_begin
+  int appl
+  itxn_field TypeEnum
+  txn Applications 1
+  itxn_field ApplicationID
+itxn_submit
+int 1
++
+dup
+int 256
+<=
+bnz loop
+int 257
+==
+assert
+`
+
+	// 256 inner txns
+	app0 := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: main(program),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  int 3
+  int 3
+  ==
+  assert
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund0)
+	vb = endBlock(t, l, eval)
+	index1 := vb.Block().Payset[0].ApplicationID
+
+	callTxGroup := make([]txntest.Txn, 16)
+	callTxGroup[0] = txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{index1},
+	}
+	for i := 1; i < 16; i++ {
+		callTxGroup[i] = txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{},
+		}
+	}
+	eval = nextBlock(t, l, true, nil)
+	err := txgroup(t, l, eval, &callTxGroup[0], &callTxGroup[1], &callTxGroup[2], &callTxGroup[3], &callTxGroup[4], &callTxGroup[5], &callTxGroup[6], &callTxGroup[7], &callTxGroup[8], &callTxGroup[9], &callTxGroup[10], &callTxGroup[11], &callTxGroup[12], &callTxGroup[13], &callTxGroup[14], &callTxGroup[15])
+	require.NoError(t, err)
+
+	endBlock(t, l, eval)
+}
+
+func TestExceedMaxInnerTxForSingleAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	program := `
+int 1
+loop:
+itxn_begin
+  int appl
+  itxn_field TypeEnum
+  txn Applications 1
+  itxn_field ApplicationID
+itxn_submit
+int 1
++
+dup
+int 257
+<=
+bnz loop
+int 258
+==
+assert
+`
+
+	// 257 inner txns
+	app0 := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: main(program),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  int 3
+  int 3
+  ==
+  assert
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund0)
+	vb = endBlock(t, l, eval)
+	index1 := vb.Block().Payset[0].ApplicationID
+
+	callTxGroup := make([]txntest.Txn, 16)
+	callTxGroup[0] = txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{index1},
+	}
+	for i := 1; i < 16; i++ {
+		callTxGroup[i] = txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{},
+		}
+	}
+	eval = nextBlock(t, l, true, nil)
+	err := txgroup(t, l, eval, &callTxGroup[0], &callTxGroup[1], &callTxGroup[2], &callTxGroup[3], &callTxGroup[4], &callTxGroup[5], &callTxGroup[6], &callTxGroup[7], &callTxGroup[8], &callTxGroup[9], &callTxGroup[10], &callTxGroup[11], &callTxGroup[12], &callTxGroup[13], &callTxGroup[14], &callTxGroup[15])
+	require.Error(t, err)
+
+	endBlock(t, l, eval)
+}
+
+func TestAbortWhenInnerAppCallFails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+  int appl
+  itxn_field TypeEnum
+  txn Applications 1
+  itxn_field ApplicationID
+itxn_submit
+int 1
+int 1
+==
+assert
+`),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  int 3
+  int 2
+  ==
+  assert
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund0)
+	vb = endBlock(t, l, eval)
+	index1 := vb.Block().Payset[0].ApplicationID
+
+	callTx := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{index1},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &callTx, "logic eval error")
+	endBlock(t, l, eval)
+}
+
+func TestCreatedAppsAreAccessible(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	ops, err := logic.AssembleStringWithVersion("int 1\nint 1\nassert", logic.AssemblerMaxVersion)
+	require.NoError(t, err)
+	program := "byte 0x" + hex.EncodeToString(ops.Program)
+
+	createapp := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+		itxn_begin
+		int appl;    itxn_field TypeEnum
+		` + program + `; itxn_field ApprovalProgram
+		` + program + `; itxn_field ClearStateProgram
+		int 1;       itxn_field GlobalNumUint
+		int 2;       itxn_field LocalNumByteSlice
+		int 3;       itxn_field LocalNumUint
+		itxn_submit`),
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &createapp)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &fund0)
+	endBlock(t, l, eval)
+
+	callTx := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &callTx)
+	endBlock(t, l, eval)
+	index1 := basics.AppIndex(1)
+
+	callTx = txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index1,
+		ForeignApps:   []basics.AppIndex{},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &callTx)
+	endBlock(t, l, eval)
+}
+
+func TestInvalidAppsNotAccessible(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+	int appl
+	itxn_field TypeEnum
+	int 2
+	itxn_field ApplicationID
+itxn_submit`),
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	app1 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+int 2
+int 2
+==
+assert
+`),
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &app1, &fund0)
+	endBlock(t, l, eval)
+
+	callTx := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: index0,
+		ForeignApps:   []basics.AppIndex{},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &callTx, "invalid App reference 2")
+	endBlock(t, l, eval)
+}
+
+func TestInvalidAssetsNotAccessible(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	createapp := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+			itxn_begin
+			int axfer; itxn_field TypeEnum
+			int 0;     itxn_field Amount
+			int 3;    itxn_field XferAsset
+			global CurrentApplicationAddress;  itxn_field Sender
+			global CurrentApplicationAddress;  itxn_field AssetReceiver
+			itxn_submit
+`),
+	}
+	appIndex := basics.AppIndex(1)
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: appIndex.Address(),
+		Amount:   1_000_000,
+	}
+
+	createasa := txntest.Txn{
+		Type:   "acfg",
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			Decimals:  3,
+			UnitName:  "oz",
+			AssetName: "Gold",
+			URL:       "https://gold.rush/",
+		},
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &createapp, &fund, &createasa)
+	endBlock(t, l, eval)
+
+	use := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: basics.AppIndex(1),
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &use, "invalid Asset reference 3")
+	endBlock(t, l, eval)
+}
+
+func executeMegaContract(b *testing.B) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	vTest := config.Consensus[protocol.ConsensusFuture]
+	vTest.MaxAppProgramCost = 20000
+	var cv protocol.ConsensusVersion = "temp test"
+	config.Consensus[cv] = vTest
+
+	l := newTestLedgerWithConsensusVersion(b, genBalances, cv)
+	defer l.Close()
+	defer delete(config.Consensus, cv)
+
+	// app must use maximum memory then recursively create a new app with the same approval program.
+	// recursion is terminated when a depth of 256 is reached
+	// fill scratch space
+	// fill stack
+	depth := 255
+	createapp := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: `
+		int 0
+		loop:
+		dup
+		int 4096
+		bzero
+		stores
+		int 1
+		+
+		dup
+		int 256
+		<
+		bnz loop
+		pop
+		int 0
+		loop2:
+		int 4096
+		bzero
+		swap
+		int 1
+		+
+		dup
+		int 994
+		<=
+		bnz loop2
+		txna ApplicationArgs 0
+		btoi
+		int 1
+		-
+		dup
+		int 0
+		<=
+		bnz done
+		itxn_begin
+		itob
+		itxn_field ApplicationArgs
+		int appl
+		itxn_field TypeEnum
+		txn ApprovalProgram
+		itxn_field ApprovalProgram
+		txn ClearStateProgram
+		itxn_field ClearStateProgram
+		itxn_submit
+		done:
+		int 1
+		return`,
+		ApplicationArgs:   [][]byte{{byte(depth)}},
+		ExtraProgramPages: 3,
+	}
+
+	funds := make([]*txntest.Txn, 256)
+	for i := 257; i <= 2*256; i++ {
+		funds[i-257] = &txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: basics.AppIndex(i).Address(),
+			Amount:   1_000_000,
+		}
+	}
+
+	eval := nextBlock(b, l, true, nil)
+	txns(b, l, eval, funds...)
+	endBlock(b, l, eval)
+
+	app1 := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: `int 1`,
+	}
+
+	eval = nextBlock(b, l, true, nil)
+	err := txgroup(b, l, eval, &createapp, &app1, &app1, &app1, &app1, &app1, &app1)
+	require.NoError(b, err)
+	endBlock(b, l, eval)
+}
+
+func BenchmarkMaximumCallStackDepth(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		executeMegaContract(b)
+	}
 }

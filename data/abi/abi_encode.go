@@ -170,14 +170,14 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 		return nil, fmt.Errorf("passed in numeric value should be non negative")
 	}
 
-	bytes := bigInt.Bytes()
-	if len(bytes) > int(bitSize/8) {
-		return nil, fmt.Errorf("input value bit size %d > abi type bit size %d", len(bytes)*8, bitSize)
+	castedBytes := make([]byte, bitSize/8)
+
+	if bigInt.Cmp(new(big.Int).Lsh(big.NewInt(1), uint(bitSize))) >= 0 {
+		return nil, fmt.Errorf("input value bit size %d > abi type bit size %d", bigInt.BitLen(), bitSize)
 	}
 
-	zeroPadding := make([]byte, bitSize/8-uint16(len(bytes)))
-	buffer := append(zeroPadding, bytes...)
-	return buffer, nil
+	bigInt.FillBytes(castedBytes)
+	return castedBytes, nil
 }
 
 // inferToSlice infers an interface element to a slice of interface{}, returns error if it cannot infer successfully
@@ -201,7 +201,7 @@ func inferToSlice(value interface{}) ([]interface{}, error) {
 
 // encodeTuple encodes slice-of-interface of golang values to bytes, following ABI encoding rules
 func encodeTuple(value interface{}, childT []Type) ([]byte, error) {
-	if len(childT) >= (1 << 16) {
+	if len(childT) >= abiEncodingLengthLimit {
 		return nil, fmt.Errorf("abi child type number exceeds uint16 maximum")
 	}
 	values, err := inferToSlice(value)
@@ -277,7 +277,7 @@ func encodeTuple(value interface{}, childT []Type) ([]byte, error) {
 		if isDynamicIndex[i] {
 			// calculate where the index of dynamic value encoding byte start
 			headValue := headLength + tailCurrLength
-			if headValue >= (1 << 16) {
+			if headValue >= abiEncodingLengthLimit {
 				return nil, fmt.Errorf("cannot encode abi tuple: encode length exceeds uint16 maximum")
 			}
 			binary.BigEndian.PutUint16(heads[i], uint16(headValue))
