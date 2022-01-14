@@ -383,9 +383,13 @@ submit:  itxn_submit
 }
 
 func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *ledger.Ledger {
+	return newTestLedgerWithConsensusVersion(t, balances, protocol.ConsensusFuture)
+}
+
+func newTestLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) *ledger.Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture, balances, "test", genHash)
+	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
@@ -2153,7 +2157,7 @@ assert
 	}
 
 	eval = nextBlock(t, l, true, nil)
-	txn(t, l, eval, &callTx)
+	txn(t, l, eval, &callTx, "logic eval error")
 	endBlock(t, l, eval)
 }
 
@@ -2336,14 +2340,21 @@ func TestInvalidAssetsNotAccessible(t *testing.T) {
 
 func BenchmarkMaximumCallStackDepth(b *testing.B) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(b, genBalances)
+
+	vTest := config.Consensus[protocol.ConsensusFuture]
+	vTest.MaxAppProgramCost = 20000
+	var cv protocol.ConsensusVersion = "temp test"
+	config.Consensus[cv] = vTest
+
+	l := newTestLedgerWithConsensusVersion(b, genBalances, cv)
 	defer l.Close()
+	defer delete(config.Consensus, cv)
 
 	// app must use maximum memory then recursively create a new app with the same approval program.
 	// recursion is terminated when a depth of 256 is reached
 	// fill scratch space
 	// fill stack
-	depth := 10
+	depth := 255
 	createapp := txntest.Txn{
 		Type:   "appl",
 		Sender: addrs[0],
@@ -2361,10 +2372,10 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 		<
 		bnz loop
 		pop
-		load 0
 		int 0
 		loop2:
-		dig 1
+		int 4096
+		bzero
 		swap
 		int 1
 		+
@@ -2411,12 +2422,6 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 	txns(b, l, eval, funds...)
 	endBlock(b, l, eval)
 
-	// use := txntest.Txn{
-	// 	Type:          "appl",
-	// 	Sender:        addrs[0],
-	// 	ApplicationID: basics.AppIndex(257),
-	// }
-
 	app1 := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
@@ -2424,11 +2429,7 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 	}
 
 	eval = nextBlock(b, l, true, nil)
-	err := txgroup(b, l, eval, &createapp, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1, &app1)
+	err := txgroup(b, l, eval, &createapp, &app1, &app1, &app1, &app1, &app1, &app1)
 	require.NoError(b, err)
 	endBlock(b, l, eval)
-
-	// eval = nextBlock(b, l, true, nil)
-	// txn(b, l, eval, &use)
-	// endBlock(b, l, eval)
 }
