@@ -128,7 +128,7 @@ var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_ou
 // peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete.
 const peerDisconnectionAckDuration time.Duration = 5 * time.Second
 
-// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
+// peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
 const peerShutdownDisconnectionAckDuration time.Duration = 50 * time.Millisecond
 
 // Peer opaque interface for referring to a neighbor in the network
