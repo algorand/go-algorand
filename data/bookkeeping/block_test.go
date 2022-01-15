@@ -18,6 +18,7 @@ package bookkeeping
 
 import (
 	"bytes"
+	"math"
 	"testing"
 	"time"
 
@@ -673,5 +674,88 @@ func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
 	}
 	assert.Equal(t, expected, newState)
 
-	assert.Contains(t, string(buf.Bytes()), "overflow")
+	assert.Contains(
+		t, string(buf.Bytes()), "overflowed when trying to refresh RewardsRate")
+}
+
+func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 10
+
+	state := RewardsState{
+		RewardsLevel:              4,
+		RewardsRate:               80,
+		RewardsResidue:            math.MaxUint64,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound, proto, basics.MicroAlgos{Raw: 9009}, 10, log)
+
+	expected := RewardsState{
+		RewardsLevel:              4 + math.MaxUint64/10,
+		RewardsRate:               0,
+		RewardsResidue:            math.MaxUint64 % 10,
+		RewardsRecalculationRound: 100 + basics.Round(proto.RewardsRateRefreshInterval),
+	}
+	assert.Equal(t, expected, newState)
+
+	assert.Contains(
+		t, string(buf.Bytes()),
+		"overflowed when trying to accumulate MinBalance(10) and "+
+			"RewardsResidue(18446744073709551615)")
+}
+
+func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 10
+
+	state := RewardsState{
+		RewardsLevel:              4,
+		RewardsRate:               80,
+		RewardsResidue:            math.MaxUint64,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound-1, proto, basics.MicroAlgos{Raw: 0}, 1, log)
+	assert.Equal(t, state, newState)
+
+	assert.Contains(t, string(buf.Bytes()), "could not compute next reward level")
+}
+
+func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 10
+
+	state := RewardsState{
+		RewardsLevel:              math.MaxUint64,
+		RewardsRate:               0,
+		RewardsResidue:            1,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound-1, proto, basics.MicroAlgos{Raw: 1000}, 1, log)
+	assert.Equal(t, state, newState)
+
+	assert.Contains(t, string(buf.Bytes()), "could not compute next reward level")
 }
