@@ -18,8 +18,6 @@ package agreement
 
 import (
 	"fmt"
-
-	"github.com/algorand/go-algorand/logging"
 )
 
 // A proposalManager is a proposalMachine which applies relay rules to incoming
@@ -71,7 +69,7 @@ func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 		r = m.handleNewPeriod(r, p, e.(thresholdEvent))
 		return emptyEvent{}
 	}
-	logging.Base().Panicf("proposalManager: bad event type: observed an event of type %v", e.t())
+	r.t.log.Panicf("proposalManager: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
 }
 

@@ -481,7 +481,6 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 
 	payloads, votes := t.node.makeProposals(t.round, t.period, t.participation)
 	fields := logging.Fields{
-		"Context":      "Agreement",
 		"Type":         logspec.ProposalAssembled.String(),
 		"ObjectRound":  t.round,
 		"ObjectPeriod": t.period,
