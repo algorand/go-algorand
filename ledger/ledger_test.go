@@ -72,7 +72,6 @@ func (l *Ledger) appendUnvalidatedTx(t *testing.T, initAccounts map[basics.Addre
 	return l.appendUnvalidatedSignedTx(t, initAccounts, stx, ad)
 }
 
-
 func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
 	blk := ledgertesting.MakeNewEmptyBlock(t, l, t.Name(), initAccounts)
 	proto := config.Consensus[blk.CurrentProtocol]

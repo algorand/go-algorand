@@ -332,6 +332,7 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement
 			// If the block is already in the ledger (catchup and agreement might be competing),
 			// reporting this as a debug message is sufficient. 
 			logfn = l.log.Debugf
+			// Otherwise, the error is because the block is in the future. Error is logged.
 		}
 		logfn("could not write block %d to the ledger: %v", round, err)
 	}

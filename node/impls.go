@@ -54,7 +54,7 @@ type blockValidatorImpl struct {
 // Validate implements BlockValidator.Validate.
 func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (agreement.ValidatedBlock, error) {
 	b := &e
-	lvb, err := i.l.ValidateX(ctx, *b, i.verificationPool)
+	lvb, err := i.l.Validate(ctx, *b, i.verificationPool)
 	if err != nil {
 		return nil, err
 	}

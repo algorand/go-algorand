@@ -58,7 +58,7 @@ type Ledger interface {
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	IsWritingCatchpointFile() bool
-	ValidateX(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
+	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 }
 
@@ -339,7 +339,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 				if s.cfg.CatchupVerifyTransactionSignatures() || s.cfg.CatchupVerifyApplyData() {
 					var vb *ledgercore.ValidatedBlock
-					vb, err = s.ledger.ValidateX(s.ctx, *block, s.blockValidationPool)
+					vb, err = s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
 					if err != nil {
 						if s.ctx.Err() != nil {
 							// if the context expired, just exit.
