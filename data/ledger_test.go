@@ -426,22 +426,65 @@ func TestConsensusVersion(t *testing.T) {
 	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(blk.BlockHeader.NextProtocolSwitchOn + 1), Latest: basics.Round(blk.BlockHeader.Round), Committed: basics.Round(blk.BlockHeader.Round)}, err)
 }
 
+type loggedMessages struct {
+	logging.Logger
+	messages chan string
+}
+
+func (lm loggedMessages) Debug(args ...interface{}) {
+	m := fmt.Sprint(args...)
+	lm.messages <- m
+}
+func (lm loggedMessages) Debugf(s string, args ...interface{}) {
+	m := fmt.Sprintf(s, args...)
+	lm.messages <- m
+}
+func (lm loggedMessages) Info(args ...interface{}) {
+	m := fmt.Sprint(args...)
+	lm.messages <- m
+}
+func (lm loggedMessages) Infof(s string, args ...interface{}) {
+	m := fmt.Sprintf(s, args...)
+	lm.messages <- m
+}
+func (lm loggedMessages) Warn(args ...interface{}) {
+	m := fmt.Sprint(args...)
+	lm.messages <- m
+}
+func (lm loggedMessages) Warnf(s string, args ...interface{}) {
+	m := fmt.Sprintf(s, args...)
+	lm.messages <- m
+}
+func (lm loggedMessages) Error(args ...interface{}) {
+	m := fmt.Sprint(args...)
+	lm.messages <- m
+}
+func (lm loggedMessages) Errorf(s string, args ...interface{}) {
+	m := fmt.Sprintf(s, args...)
+	lm.messages <- m
+}
+
+// TestLedgerErrorValidate creates 3 parallel routines adding blocks to the ledger through different interfaces.
+// The purpose here is to simulate the scenario where the catchup and the agreement compete to add blocks to the ledger.
+// The error messages reported can be excessive or unnecessary. This test evaluates what messages are generate and at what frequency.
 func TestLedgerErrorValidate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 
+	messagesChan := make(chan string, 100)
+
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
+	log := loggedMessages{Logger: logging.TestingLog(t), messages: messagesChan}
+	log.SetLevel(logging.Debug)
 	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
 
-	l := Ledger{Ledger: realLedger, log: logging.TestingLog(t)}
-	l.log.SetLevel(logging.Info)
+	l := Ledger{Ledger: realLedger, log: log}
+	l.log.SetLevel(logging.Debug)
 	require.NotNil(t, &l)
 
 	totalsRound, _, err := realLedger.LatestTotals()
@@ -461,9 +504,12 @@ func TestLedgerErrorValidate(t *testing.T) {
 	defer close(blkChan2)
 	defer close(blkChan3)
 
+	// Add blocks to the ledger via EnsureValidatedBlock. This calls AddValidatedBlock, which simply
+	// passes the block to blockQueue. The returned error is handled by EnsureValidatedBlock, which reports
+	// in the form of logged error message.
 	go func() {
 		wg.Add(1)
-		i:= 0 
+		i := 0
 		for blk := range blkChan1 {
 			i++
 			vb, err := validatedBlock(l.Ledger, blk)
@@ -483,10 +529,10 @@ func TestLedgerErrorValidate(t *testing.T) {
 	}()
 
 	// Add blocks to the ledger via EnsureBlock. This basically calls AddBlock, but handles
-	// the errors by logging them. Checking the logged messages with verify its behavior.
+	// the errors by logging them. Checking the logged messages to verify its behavior.
 	go func() {
 		wg.Add(1)
-		i:=0
+		i := 0
 		for blk := range blkChan2 {
 			i++
 			l.EnsureBlock(&blk, agreement.Certificate{})
@@ -499,7 +545,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	// Add blocks directly to the ledger
 	go func() {
 		wg.Add(1)
-		i:=0
+		i := 0
 		for blk := range blkChan3 {
 			i++
 			err := l.AddBlock(blk, agreement.Certificate{})
@@ -510,7 +556,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 				switch err.(type) {
 				// The following two cases are okay to ignore, since these are expected and handled
 				case ledgercore.BlockInLedgerError:
-				case ledgercore.ErrNonSequentialBlockEval:					
+				case ledgercore.ErrNonSequentialBlockEval:
 					continue
 				default:
 					// Make sure unexpected error is not obtained here
@@ -533,10 +579,16 @@ func TestLedgerErrorValidate(t *testing.T) {
 		blkChan2 <- blk
 		blkChan1 <- blk
 
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
-		default:
+		more := true
+		for more {
+			select {
+			case err := <-errChan:
+				require.NoError(t, err)
+			case m := <-messagesChan:
+				fmt.Println(m)
+			default:
+				more = false
+			}
 		}
 	}
 }
@@ -544,6 +596,6 @@ func TestLedgerErrorValidate(t *testing.T) {
 func validatedBlock(l *ledger.Ledger, blk bookkeeping.Block) (vb *ledgercore.ValidatedBlock, err error) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
-	vb, err = l.ValidateX(context.Background(), blk, backlogPool)
+	vb, err = l.Validate(context.Background(), blk, backlogPool)
 	return
 }
