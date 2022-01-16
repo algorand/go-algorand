@@ -79,12 +79,16 @@ type ParticipationRecord struct {
 	EffectiveFirst    basics.Round
 	EffectiveLast     basics.Round
 
-	VRF    *crypto.VRFSecrets
-	Voting *crypto.OneTimeSignatureSecrets
+	StateProofPK *StateProofPublicKey
+	VRF          *crypto.VRFSecrets
+	Voting       *crypto.OneTimeSignatureSecrets
 }
 
 // StateProofKey defined the type used for the compact certificate signing key
 type StateProofKey crypto.GenericSigningKey
+
+// StateProofPublicKey defined the type used for the stateproofs public key
+type StateProofPublicKey merklekeystore.Verifier
 
 // ParticipationRecordForRound adds in the per-round state proof key.
 type ParticipationRecordForRound struct {
@@ -126,7 +130,7 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 	if r.Voting != nil {
 		voting = r.Voting.Snapshot()
 	}
-	return ParticipationRecord{
+	dupParticipation := ParticipationRecord{
 		ParticipationID:   r.ParticipationID,
 		Account:           r.Account,
 		FirstValid:        r.FirstValid,
@@ -137,9 +141,17 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		LastStateProof:    r.LastStateProof,
 		EffectiveFirst:    r.EffectiveFirst,
 		EffectiveLast:     r.EffectiveLast,
+		StateProofPK:      nil,
 		VRF:               &vrf,
 		Voting:            &voting,
 	}
+	if r.StateProofPK != nil {
+		var statproofPk StateProofPublicKey
+		copy(statproofPk[:], r.StateProofPK[:])
+		dupParticipation.StateProofPK = &statproofPk
+	}
+
+	return dupParticipation
 }
 
 // ParticipationAction is used when recording participation actions.
@@ -304,7 +316,7 @@ const (
 	selectLastPK  = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
 	selectRecords = `SELECT
 			k.participationID, k.account, k.firstValidRound,
-       		k.lastValidRound, k.keyDilution, k.vrf,
+       		k.lastValidRound, k.keyDilution, k.vrf, k.stateProof,
 			r.lastVoteRound, r.lastBlockProposalRound, r.lastStateProofRound,
 			r.effectiveFirstRound, r.effectiveLastRound, r.voting
 		FROM Keysets k
@@ -690,7 +702,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	}
 
 	// update cache.
-	db.cache[id] = ParticipationRecord{
+	cachedRecord := ParticipationRecord{
 		ParticipationID:   id,
 		Account:           record.Address(),
 		FirstValid:        record.FirstValid,
@@ -704,11 +716,16 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		Voting:            voting,
 		VRF:               vrf,
 	}
+	if record.StateProofSecrets != nil {
+		var stateProofPk StateProofPublicKey
+		copy(stateProofPk[:], record.StateProofSecrets.GetVerifier()[:])
+		cachedRecord.StateProofPK = &stateProofPk
+	}
 
+	db.cache[id] = cachedRecord
 	return
 }
 
-// TODO: should keys be a tuple array instead of map? what's the added value for map?
 func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -770,6 +787,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		var rawAccount []byte
 		var rawVRF []byte
 		var rawVoting []byte
+		var rawStateProof []byte
 
 		var lastVote sql.NullInt64
 		var lastBlockProposal sql.NullInt64
@@ -784,6 +802,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			&record.LastValid,
 			&record.KeyDilution,
 			&rawVRF,
+			&rawStateProof,
 			&lastVote,
 			&lastBlockProposal,
 			&lastCompactCertificate,
@@ -804,6 +823,17 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode VRF: %w", err)
 			}
+		}
+
+		if len(rawStateProof) > 0 {
+			stateProof := merklekeystore.Signer{}
+			err = protocol.Decode(rawStateProof, &stateProof)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode stateproof: %w", err)
+			}
+			var stateProofPk StateProofPublicKey
+			copy(stateProofPk[:], stateProof.GetVerifier()[:])
+			record.StateProofPK = &stateProofPk
 		}
 
 		if len(rawVoting) > 0 {
@@ -882,8 +912,6 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 	return results
 }
 
-// TODO: improve performance somehow but not querying the DB if stateproof key should not
-// exist for this round
 // GetForRound fetches a record with all secrets for a particular round.
 func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
 	var result ParticipationRecordForRound

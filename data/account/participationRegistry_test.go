@@ -32,6 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -59,17 +60,26 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 	require.Equal(t, p.LastValid, pr.LastValid)
 	require.Equal(t, p.KeyDilution, pr.KeyDilution)
 	require.Equal(t, p.Parent, pr.Account)
+	if p.StateProofSecrets != nil {
+		require.Equal(t, p.StateProofSecrets.GetVerifier()[:], pr.StateProofPK[:])
+	}
+
 }
 
-func makeTestParticipation(addrID int, first, last basics.Round, dilution uint64) Participation {
+func makeTestParticipation(a *require.Assertions, addrID int, first, last basics.Round, dilution uint64) Participation {
+	// Generate sample of stateproof keys. because it might take time we will reduce the number always to get 2 keys
+	stateProofSecrets, err := merklekeystore.New(uint64(first), uint64(last), (uint64(last)+1)/2, compactcert.SignatureScheme)
+	a.NoError(err)
+
 	p := Participation{
 		FirstValid:        first,
 		LastValid:         last,
 		KeyDilution:       dilution,
 		Voting:            &crypto.OneTimeSignatureSecrets{},
 		VRF:               &crypto.VRFSecrets{},
-		StateProofSecrets: &merklekeystore.Keystore{},
+		StateProofSecrets: stateProofSecrets,
 	}
+
 	binary.LittleEndian.PutUint32(p.Parent[:], uint32(addrID))
 	return p
 }
@@ -88,8 +98,8 @@ func TestParticipation_InsertGet(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
-	p := makeTestParticipation(1, 1, 2, 3)
-	p2 := makeTestParticipation(2, 4, 5, 6)
+	p := makeTestParticipation(a, 1, 1, 2, 3)
+	p2 := makeTestParticipation(a, 2, 4, 5, 6)
 
 	insertAndVerify := func(part Participation) {
 		id, err := registry.Insert(part)
@@ -134,6 +144,46 @@ func TestParticipation_InsertGet(t *testing.T) {
 	}
 }
 
+// Insert participation records and make sure they can be fetched.
+func TestParticipation_InsertGetWithoutEmptyStateproof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	p := Participation{
+		FirstValid:  1,
+		LastValid:   3,
+		KeyDilution: 1,
+		Voting:      &crypto.OneTimeSignatureSecrets{},
+		VRF:         &crypto.VRFSecrets{},
+	}
+
+	binary.LittleEndian.PutUint32(p.Parent[:], uint32(1))
+
+	insertAndVerify := func(part Participation) {
+		id, err := registry.Insert(part)
+		a.NoError(err)
+		a.Equal(part.ID(), id)
+
+		record := registry.Get(part.ID())
+		a.False(record.IsZero())
+		assertParticipation(t, part, record)
+	}
+
+	// Verify inserting some records.
+	insertAndVerify(p)
+
+	// Data should be available immediately
+	results := registry.GetAll()
+	if results[0].Account == p.Parent {
+		assertParticipation(t, p, results[0])
+		a.Nil(results[0].StateProofPK)
+	} else {
+		a.Fail("unexpected account")
+	}
+}
+
 // Make sure a record can be deleted by id.
 func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -141,8 +191,8 @@ func TestParticipation_Delete(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
-	p := makeTestParticipation(1, 1, 2, 3)
-	p2 := makeTestParticipation(2, 4, 5, 6)
+	p := makeTestParticipation(a, 1, 1, 2, 3)
+	p2 := makeTestParticipation(a, 2, 4, 5, 6)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -174,7 +224,7 @@ func TestParticipation_DeleteExpired(t *testing.T) {
 	defer registryCloseTest(t, registry)
 
 	for i := 10; i < 20; i++ {
-		p := makeTestParticipation(i, 1, basics.Round(i), 1)
+		p := makeTestParticipation(a, i, 1, basics.Round(i), 1)
 		id, err := registry.Insert(p)
 		a.NoError(err)
 		a.Equal(p.ID(), id)
@@ -199,8 +249,8 @@ func TestParticipation_Register(t *testing.T) {
 	defer registryCloseTest(t, registry)
 
 	// Overlapping keys.
-	p := makeTestParticipation(1, 250000, 3000000, 1)
-	p2 := makeTestParticipation(1, 200000, 4000000, 2)
+	p := makeTestParticipation(a, 1, 250000, 3000000, 1)
+	p2 := makeTestParticipation(a, 1, 200000, 4000000, 2)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -236,7 +286,7 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
-	p := makeTestParticipation(0, 250000, 3000000, 1)
+	p := makeTestParticipation(a, 0, 250000, 3000000, 1)
 
 	err := registry.Register(p.ID(), 10000000)
 	a.EqualError(err, ErrParticipationIDNotFound.Error())
@@ -249,7 +299,7 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
-	p := makeTestParticipation(0, 250000, 3000000, 1)
+	p := makeTestParticipation(a, 0, 250000, 3000000, 1)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -268,10 +318,10 @@ func TestParticipation_Record(t *testing.T) {
 	defer registryCloseTest(t, registry)
 
 	// Setup p
-	p := makeTestParticipation(1, 0, 3000000, 1)
+	p := makeTestParticipation(a, 1, 0, 3000000, 1)
 	// Setup some other keys to make sure they are not updated.
-	p2 := makeTestParticipation(2, 0, 3000000, 1)
-	p3 := makeTestParticipation(3, 0, 3000000, 1)
+	p2 := makeTestParticipation(a, 2, 0, 3000000, 1)
+	p3 := makeTestParticipation(a, 3, 0, 3000000, 1)
 
 	// Install and register all of the keys
 	for _, part := range []Participation{p, p2, p3} {
@@ -321,7 +371,7 @@ func TestParticipation_RecordInvalidActionAndOutOfRange(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
-	p := makeTestParticipation(1, 0, 3000000, 1)
+	p := makeTestParticipation(a, 1, 0, 3000000, 1)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	err = registry.Register(id, 0)
@@ -358,8 +408,8 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	// We'll test that recording at this round fails because both keys are active
 	testRound := basics.Round(5000)
 
-	p := makeTestParticipation(1, 0, 3000000, 1)
-	p2 := makeTestParticipation(1, 1, 3000000, 1)
+	p := makeTestParticipation(a, 1, 0, 3000000, 1)
+	p2 := makeTestParticipation(a, 1, 1, 3000000, 1)
 
 	_, err := registry.Insert(p)
 	a.NoError(err)
@@ -405,7 +455,7 @@ func TestParticipation_MultipleInsertError(t *testing.T) {
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
-	p := makeTestParticipation(1, 1, 2, 3)
+	p := makeTestParticipation(a, 1, 1, 2, 3)
 
 	_, err := registry.Insert(p)
 	a.NoError(err)
@@ -423,7 +473,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	a := require.New(t)
 	registry := getRegistry(t)
 
-	p := makeTestParticipation(1, 1, 2000000, 3)
+	p := makeTestParticipation(a, 1, 1, 2000000, 3)
 	id := p.ID()
 
 	// Insert the same record twice
@@ -632,12 +682,12 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 
 func TestRegisterUpdatedEvent(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := assert.New(t)
+	a := require.New(t)
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
-	p := makeTestParticipation(1, 1, 2, 3)
-	p2 := makeTestParticipation(2, 4, 5, 6)
+	p := makeTestParticipation(a, 1, 1, 2, 3)
+	p2 := makeTestParticipation(a, 2, 4, 5, 6)
 
 	id1, err := registry.Insert(p)
 	a.NoError(err)
@@ -722,13 +772,13 @@ func TestFlushDeadlock(t *testing.T) {
 
 func TestAddStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := assert.New(t)
+	a := require.New(t)
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
 	// Install a key to add StateProof keys.
 	max := uint64(20)
-	p := makeTestParticipation(1, 0, basics.Round(max), 3)
+	p := makeTestParticipation(a, 1, 0, basics.Round(max), 3)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	a.Equal(p.ID(), id)
@@ -766,12 +816,12 @@ func TestAddStateProofKeys(t *testing.T) {
 
 func TestSecretNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := assert.New(t)
+	a := require.New(t)
 	registry := getRegistry(t)
 	defer registryCloseTest(t, registry)
 
 	// Install a key for testing
-	p := makeTestParticipation(1, 0, 2, 3)
+	p := makeTestParticipation(a, 1, 0, 2, 3)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	a.Equal(p.ID(), id)

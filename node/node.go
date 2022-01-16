@@ -1000,7 +1000,6 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 	}
 	keys := make(map[uint64]account.StateProofKey, numKeys)
 	for i := uint64(0); i < uint64(numKeys); i++ {
-		// TODO: should we add a method to FetchAllKeys instead?
 		key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
 		if err != nil {
 			return err
