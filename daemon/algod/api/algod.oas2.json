@@ -1483,7 +1483,7 @@
           "format": "byte"
         },
         "state-proof-key": {
-          "description": "\\[state\\] root of the state proof key (if any)",
+          "description": "\\[stprf\\] Root of the state proof key (if any)",
           "type": "string",
           "format": "byte"
         }

@@ -84,14 +84,21 @@ func roundToPtrOrNil(value basics.Round) *uint64 {
 }
 
 func convertParticipationRecord(record account.ParticipationRecord) generated.ParticipationKey {
+	key := generated.AccountParticipation{
+		VoteFirstValid:  uint64(record.FirstValid),
+		VoteLastValid:   uint64(record.LastValid),
+		VoteKeyDilution: record.KeyDilution,
+	}
+
+	if record.StateProofPK != nil {
+		tmp := record.StateProofPK[:]
+		key.StateProofKey = &tmp
+	}
+
 	participationKey := generated.ParticipationKey{
 		Id:      record.ParticipationID.String(),
 		Address: record.Account.String(),
-		Key: generated.AccountParticipation{
-			VoteFirstValid:  uint64(record.FirstValid),
-			VoteLastValid:   uint64(record.LastValid),
-			VoteKeyDilution: record.KeyDilution,
-		},
+		Key:     key,
 	}
 
 	// These are pointers but should always be present.
