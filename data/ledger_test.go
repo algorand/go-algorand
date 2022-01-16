@@ -428,40 +428,41 @@ func TestConsensusVersion(t *testing.T) {
 
 type loggedMessages struct {
 	logging.Logger
-	messages chan string
+	expectedMessages   chan string
+	unexpectedMessages chan string
 }
 
 func (lm loggedMessages) Debug(args ...interface{}) {
 	m := fmt.Sprint(args...)
-	lm.messages <- m
+	lm.unexpectedMessages <- m
 }
 func (lm loggedMessages) Debugf(s string, args ...interface{}) {
 	m := fmt.Sprintf(s, args...)
-	lm.messages <- m
+	lm.expectedMessages <- m
 }
 func (lm loggedMessages) Info(args ...interface{}) {
 	m := fmt.Sprint(args...)
-	lm.messages <- m
+	lm.unexpectedMessages <- m
 }
 func (lm loggedMessages) Infof(s string, args ...interface{}) {
 	m := fmt.Sprintf(s, args...)
-	lm.messages <- m
+	lm.unexpectedMessages <- m
 }
 func (lm loggedMessages) Warn(args ...interface{}) {
 	m := fmt.Sprint(args...)
-	lm.messages <- m
+	lm.unexpectedMessages <- m
 }
 func (lm loggedMessages) Warnf(s string, args ...interface{}) {
 	m := fmt.Sprintf(s, args...)
-	lm.messages <- m
+	lm.unexpectedMessages <- m
 }
 func (lm loggedMessages) Error(args ...interface{}) {
 	m := fmt.Sprint(args...)
-	lm.messages <- m
+	lm.unexpectedMessages <- m
 }
 func (lm loggedMessages) Errorf(s string, args ...interface{}) {
 	m := fmt.Sprintf(s, args...)
-	lm.messages <- m
+	lm.unexpectedMessages <- m
 }
 
 // TestLedgerErrorValidate creates 3 parallel routines adding blocks to the ledger through different interfaces.
@@ -472,12 +473,13 @@ func TestLedgerErrorValidate(t *testing.T) {
 
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 
-	messagesChan := make(chan string, 100)
+	expectedMessages := make(chan string, 100)
+	unexpectedMessages := make(chan string, 100)
 
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	log := loggedMessages{Logger: logging.TestingLog(t), messages: messagesChan}
+	log := loggedMessages{Logger: logging.TestingLog(t), expectedMessages: expectedMessages, unexpectedMessages: unexpectedMessages}
 	log.SetLevel(logging.Debug)
 	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
@@ -523,9 +525,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 			}
 			l.EnsureValidatedBlock(vb, agreement.Certificate{})
 		}
-		fmt.Printf("\n1 processed %d\n", i)
 		wg.Done()
-		fmt.Println("out1")
 	}()
 
 	// Add blocks to the ledger via EnsureBlock. This basically calls AddBlock, but handles
@@ -537,9 +537,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 			i++
 			l.EnsureBlock(&blk, agreement.Certificate{})
 		}
-		fmt.Printf("\n2 processed %d\n", i)
 		wg.Done()
-		fmt.Println("out1")
 	}()
 
 	// Add blocks directly to the ledger
@@ -565,27 +563,35 @@ func TestLedgerErrorValidate(t *testing.T) {
 			}
 			l.WaitForCommit(blk.BlockHeader.Round)
 		}
-		fmt.Printf("\n3 processed %d\n", i)
 		wg.Done()
-		fmt.Println("out2")
 	}()
 
-	for rnd := basics.Round(1); rnd <= basics.Round(10000); rnd++ {
-		blk := ledgertesting.MakeNewEmptyBlockSync(t, rnd-1, l.Ledger, t.Name(), genesisInitState.Accounts)
-		if int(rnd)%1000 == 0 {
-			fmt.Println(rnd)
+	// flush the messages output during the setup
+	more := true
+	for more {
+		select {
+		case <-expectedMessages:
+		case <-unexpectedMessages:
+		default:
+			more = false
 		}
+	}
+
+	for rnd := basics.Round(1); rnd <= basics.Round(2000); rnd++ {
+		blk := ledgertesting.MakeNewEmptyBlockSync(t, rnd-1, l.Ledger, t.Name(), genesisInitState.Accounts)
 		blkChan3 <- blk
 		blkChan2 <- blk
 		blkChan1 <- blk
 
-		more := true
+		more = true
 		for more {
 			select {
 			case err := <-errChan:
 				require.NoError(t, err)
-			case m := <-messagesChan:
-				fmt.Println(m)
+			case <-expectedMessages:
+				// only debug messages should be reported
+			case um := <-unexpectedMessages:
+				require.Empty(t, um, um)
 			default:
 				more = false
 			}

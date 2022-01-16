@@ -330,7 +330,7 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement
 		switch err.(type) {
 		case ledgercore.BlockInLedgerError:
 			// If the block is already in the ledger (catchup and agreement might be competing),
-			// reporting this as a debug message is sufficient. 
+			// reporting this as a debug message is sufficient.
 			logfn = l.log.Debugf
 			// Otherwise, the error is because the block is in the future. Error is logged.
 		}
@@ -365,7 +365,7 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 			return
 		case ledgercore.ErrNonSequentialBlockEval:
 			errNSBE := err.(ledgercore.ErrNonSequentialBlockEval)
-			if errNSBE.EvaluatorRound < errNSBE.LatestRound {
+			if errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 				// Evaluator found that the ledger is already ahead of this block
 				// It is sufficient to report this as s Debug message
 				l.log.Debugf("could not write block %d to the ledger: %v", round, err)
