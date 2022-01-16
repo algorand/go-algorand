@@ -4,6 +4,7 @@ package account
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -16,13 +17,21 @@ import (
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
 //
-// StateProofKey
-//       |-----> (*) MarshalMsg
-//       |-----> (*) CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> (*) Msgsize
-//       |-----> (*) MsgIsZero
+// StateProofSinger
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+// StateProofVerifier
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -247,29 +256,57 @@ func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *StateProofKey) MarshalMsg(b []byte) []byte {
+func (z *StateProofSinger) MarshalMsg(b []byte) []byte {
 	return ((*(crypto.GenericSigningKey))(z)).MarshalMsg(b)
 }
-func (_ *StateProofKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofKey)
+func (_ *StateProofSinger) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofSinger)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofKey) UnmarshalMsg(bts []byte) ([]byte, error) {
+func (z *StateProofSinger) UnmarshalMsg(bts []byte) ([]byte, error) {
 	return ((*(crypto.GenericSigningKey))(z)).UnmarshalMsg(bts)
 }
-func (_ *StateProofKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofKey)
+func (_ *StateProofSinger) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofSinger)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *StateProofKey) Msgsize() int {
+func (z *StateProofSinger) Msgsize() int {
 	return ((*(crypto.GenericSigningKey))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *StateProofKey) MsgIsZero() bool {
+func (z *StateProofSinger) MsgIsZero() bool {
 	return ((*(crypto.GenericSigningKey))(z)).MsgIsZero()
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *StateProofVerifier) MarshalMsg(b []byte) []byte {
+	return ((*(merklekeystore.Verifier))(z)).MarshalMsg(b)
+}
+func (_ *StateProofVerifier) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerifier)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *StateProofVerifier) UnmarshalMsg(bts []byte) ([]byte, error) {
+	return ((*(merklekeystore.Verifier))(z)).UnmarshalMsg(bts)
+}
+func (_ *StateProofVerifier) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerifier)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *StateProofVerifier) Msgsize() int {
+	return ((*(merklekeystore.Verifier))(z)).Msgsize()
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *StateProofVerifier) MsgIsZero() bool {
+	return ((*(merklekeystore.Verifier))(z)).MsgIsZero()
 }

@@ -79,16 +79,16 @@ type ParticipationRecord struct {
 	EffectiveFirst    basics.Round
 	EffectiveLast     basics.Round
 
-	StateProofPK *StateProofPublicKey
-	VRF          *crypto.VRFSecrets
-	Voting       *crypto.OneTimeSignatureSecrets
+	StateProof *StateProofVerifier
+	VRF        *crypto.VRFSecrets
+	Voting     *crypto.OneTimeSignatureSecrets
 }
 
-// StateProofKey defined the type used for the compact certificate signing key
-type StateProofKey crypto.GenericSigningKey
+// StateProofSinger defined the type used for the compact certificate signing key
+type StateProofSinger crypto.GenericSigningKey
 
-// StateProofPublicKey defined the type used for the stateproofs public key
-type StateProofPublicKey merklekeystore.Verifier
+// StateProofVerifier defined the type used for the stateproofs public key
+type StateProofVerifier merklekeystore.Verifier
 
 // ParticipationRecordForRound adds in the per-round state proof key.
 type ParticipationRecordForRound struct {
@@ -130,6 +130,14 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 	if r.Voting != nil {
 		voting = r.Voting.Snapshot()
 	}
+
+	var stateProof *StateProofVerifier
+	var statproofVerifer StateProofVerifier
+	if r.StateProof != nil {
+		copy(statproofVerifer[:], r.StateProof[:])
+		stateProof = &statproofVerifer
+	}
+
 	dupParticipation := ParticipationRecord{
 		ParticipationID:   r.ParticipationID,
 		Account:           r.Account,
@@ -141,14 +149,9 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 		LastStateProof:    r.LastStateProof,
 		EffectiveFirst:    r.EffectiveFirst,
 		EffectiveLast:     r.EffectiveLast,
-		StateProofPK:      nil,
+		StateProof:        stateProof,
 		VRF:               &vrf,
 		Voting:            &voting,
-	}
-	if r.StateProofPK != nil {
-		var statproofPk StateProofPublicKey
-		copy(statproofPk[:], r.StateProofPK[:])
-		dupParticipation.StateProofPK = &statproofPk
 	}
 
 	return dupParticipation
@@ -203,7 +206,7 @@ type ParticipationRegistry interface {
 
 	// AppendKeys appends state proof keys to an existing Participation record. Keys can only be appended
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
-	AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error
+	AppendKeys(id ParticipationID, keys map[uint64]StateProofSinger) error
 
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
@@ -389,7 +392,7 @@ type updatingParticipationRecord struct {
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
-	keys     map[uint64]StateProofKey
+	keys     map[uint64]StateProofSinger
 
 	registerUpdated map[ParticipationID]updatingParticipationRecord
 
@@ -521,7 +524,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 	return err
 }
 
-func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]StateProofKey) error {
+func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]StateProofSinger) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
@@ -701,8 +704,15 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		*voting = record.Voting.Snapshot()
 	}
 
+	var stateProofVeriferPtr *StateProofVerifier
+	var statproofVerifier StateProofVerifier
+	if record.StateProofSecrets != nil {
+		copy(statproofVerifier[:], record.StateProofSecrets.GetVerifier()[:])
+		stateProofVeriferPtr = &statproofVerifier
+	}
+
 	// update cache.
-	cachedRecord := ParticipationRecord{
+	db.cache[id] = ParticipationRecord{
 		ParticipationID:   id,
 		Account:           record.Address(),
 		FirstValid:        record.FirstValid,
@@ -713,20 +723,15 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		LastStateProof:    0,
 		EffectiveFirst:    0,
 		EffectiveLast:     0,
+		StateProof:        stateProofVeriferPtr,
 		Voting:            voting,
 		VRF:               vrf,
 	}
-	if record.StateProofSecrets != nil {
-		var stateProofPk StateProofPublicKey
-		copy(stateProofPk[:], record.StateProofSecrets.GetVerifier()[:])
-		cachedRecord.StateProofPK = &stateProofPk
-	}
 
-	db.cache[id] = cachedRecord
 	return
 }
 
-func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error {
+func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofSinger) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
@@ -734,7 +739,7 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateP
 		return ErrParticipationIDNotFound
 	}
 
-	keyCopy := make(map[uint64]StateProofKey, len(keys))
+	keyCopy := make(map[uint64]StateProofSinger, len(keys))
 	for k, v := range keys {
 		keyCopy[k] = v // PKI TODO: Deep copy?
 	}
@@ -831,9 +836,9 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode stateproof: %w", err)
 			}
-			var stateProofPk StateProofPublicKey
-			copy(stateProofPk[:], stateProof.GetVerifier()[:])
-			record.StateProofPK = &stateProofPk
+			var stateProofVerifer StateProofVerifier
+			copy(stateProofVerifer[:], stateProof.GetVerifier()[:])
+			record.StateProof = &stateProofVerifer
 		}
 
 		if len(rawVoting) > 0 {
