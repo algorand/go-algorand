@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/algoidan/falcon"
+	"hash"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
