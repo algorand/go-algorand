@@ -90,8 +90,13 @@ type StateProofSinger crypto.GenericSigningKey
 // StateProofVerifier defined the type used for the stateproofs public key
 type StateProofVerifier merklekeystore.Verifier
 
-// ParticipationRecordForRound adds in the per-round state proof key.
+// ParticipationRecordForRound r
 type ParticipationRecordForRound struct {
+	ParticipationRecord
+}
+
+// StateProofRecordForRound adds in the per-round state proof key.
+type StateProofRecordForRound struct {
 	ParticipationRecord
 
 	StateProofSecrets *merklekeystore.Signer
@@ -99,7 +104,7 @@ type ParticipationRecordForRound struct {
 
 // IsZero returns true if the object contains zero values.
 func (r ParticipationRecordForRound) IsZero() bool {
-	return r.StateProofSecrets == nil && r.ParticipationRecord.IsZero()
+	return r.ParticipationRecord.IsZero()
 }
 
 // VotingSigner returns the voting secrets associated with this Participation account,
@@ -220,8 +225,11 @@ type ParticipationRegistry interface {
 	// GetAll of the participation records.
 	GetAll() []ParticipationRecord
 
-	// GetForRound fetches a record with all secrets for a particular round.
+	// GetForRound fetches a record with voting secrets for a particular round.
 	GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error)
+
+	// GetStateProofForRound fetches a record with stateproof secrets for a particular round.
+	GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error)
 
 	// Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 	// then it is possible for multiple records to be updated.
@@ -832,7 +840,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 
 		if len(rawStateProof) > 0 {
 			stateProof := merklekeystore.Signer{}
-			err = protocol.Decode(rawStateProof, &stateProof)
+			err = protocol.Decode(rawStateProof, &stateProof.SignerContext)
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode stateproof: %w", err)
 			}
@@ -917,21 +925,19 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 	return results
 }
 
-// GetForRound fetches a record with all secrets for a particular round.
-func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
-	var result ParticipationRecordForRound
-	var rawStateProofKey []byte
-	var rawSignerContext []byte
+func (db *participationDB) GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error) {
+	var result StateProofRecordForRound
 
 	result.ParticipationRecord = db.Get(id)
 	if result.ParticipationRecord.IsZero() {
-		return ParticipationRecordForRound{}, ErrParticipationIDNotFound
+		return StateProofRecordForRound{}, ErrParticipationIDNotFound
 	}
 
 	if round > result.LastValid {
-		return ParticipationRecordForRound{}, ErrRequestedRoundOutOfRange
+		return StateProofRecordForRound{}, ErrRequestedRoundOutOfRange
 	}
 
+	var rawStateProofKey []byte
 	err := db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch secret key
 		row := tx.QueryRow(selectStateProofKey, round, id[:])
@@ -948,7 +954,7 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	if err == ErrSecretNotFound {
 		return result, nil
 	} else if err != nil {
-		return ParticipationRecordForRound{}, err
+		return StateProofRecordForRound{}, err
 	}
 
 	// Init stateproof fields after being able to retrieve key from database
@@ -958,9 +964,10 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 
 	err = protocol.Decode(rawStateProofKey, result.StateProofSecrets.SigningKey)
 	if err != nil {
-		return ParticipationRecordForRound{}, err
+		return StateProofRecordForRound{}, err
 	}
 
+	var rawSignerContext []byte
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch stateproof public data
 		row := tx.QueryRow(selectStateProofData, id[:])
@@ -971,11 +978,26 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 		return nil
 	})
 	if err != nil {
-		return ParticipationRecordForRound{}, err
+		return StateProofRecordForRound{}, err
 	}
 	err = protocol.Decode(rawSignerContext, &result.StateProofSecrets.SignerContext)
 	if err != nil {
-		return ParticipationRecordForRound{}, err
+		return StateProofRecordForRound{}, err
+	}
+	return result, nil
+}
+
+// GetForRound fetches a record with all secrets for a particular round.
+func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error) {
+	var result ParticipationRecordForRound
+
+	result.ParticipationRecord = db.Get(id)
+	if result.ParticipationRecord.IsZero() {
+		return ParticipationRecordForRound{}, ErrParticipationIDNotFound
+	}
+
+	if round > result.LastValid {
+		return ParticipationRecordForRound{}, ErrRequestedRoundOutOfRange
 	}
 
 	return result, nil

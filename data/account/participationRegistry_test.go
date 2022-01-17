@@ -808,7 +808,7 @@ func TestAddStateProofKeys(t *testing.T) {
 
 	// Make sure we're able to fetch the same data that was put in.
 	for i := uint64(1); i < max; i++ {
-		r, err := registry.GetForRound(id, basics.Round(i))
+		r, err := registry.GetStateProofForRound(id, basics.Round(i))
 		a.NoError(err)
 		a.Equal(keys[i], StateProofSinger(*r.StateProofSecrets.SigningKey))
 	}
@@ -826,7 +826,7 @@ func TestSecretNotFound(t *testing.T) {
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
-	r, err := registry.GetForRound(id, basics.Round(2))
+	r, err := registry.GetStateProofForRound(id, basics.Round(2))
 	a.NoError(err)
 
 	// Empty stateproof key
@@ -894,12 +894,12 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 
 	a.NoError(registry.Flush(defaultTimeout))
 
-	partPerRound, err := registry.GetForRound(id, 1)
+	partPerRound, err := registry.GetStateProofForRound(id, 1)
 	a.NoError(err)
 	a.Nil(partPerRound.StateProofSecrets)
 
 	// Should return nil as well since no state proof keys were added
-	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds))
+	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
 	a.NoError(err)
 	a.Nil(partPerRound.StateProofSecrets)
 
@@ -911,11 +911,11 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 
 	a.NoError(registry.Flush(defaultTimeout))
 
-	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds)-1)
+	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds)-1)
 	a.NoError(err)
 	a.Nil(partPerRound.StateProofSecrets)
 
-	partPerRound, err = registry.GetForRound(id, basics.Round(CompactCertRounds))
+	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
 	a.NoError(err)
 	a.NotNil(partPerRound.StateProofSecrets)
 	a.Equal(keys[CompactCertRounds], StateProofSinger(*partPerRound.StateProofSecrets.SigningKey))

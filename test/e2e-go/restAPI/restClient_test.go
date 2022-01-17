@@ -1090,10 +1090,10 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	dilution := uint64(100)
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
-	copy(votePK[:], []byte(randomVotePKStr))
+	copy(votePK[:], randomVotePKStr)
 	randomSelPKStr := randomString(32)
 	var selPK crypto.VRFVerifier
-	copy(selPK[:], []byte(randomSelPKStr))
+	copy(selPK[:], randomSelPKStr)
 	var keystoreRoot [merklekeystore.KeyStoreRootSize]byte
 	randomRootStr := randomString(merklekeystore.KeyStoreRootSize)
 	copy(keystoreRoot[:], randomRootStr)
@@ -1121,7 +1121,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 60*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformationV2(someAddress)

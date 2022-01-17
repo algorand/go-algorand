@@ -93,7 +93,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	keys := ccw.accts.Keys(hdr.Round)
+	keys := ccw.accts.StateProofKeys(hdr.Round)
 	if len(keys) == 0 {
 		// No keys, nothing to do.
 		return

@@ -55,4 +55,5 @@ type Network interface {
 // this package.
 type Accounts interface {
 	Keys(basics.Round) []account.ParticipationRecordForRound
+	StateProofKeys(basics.Round) []account.StateProofRecordForRound
 }
