@@ -18,11 +18,25 @@ package abi
 
 import (
 	"bytes"
+	"crypto/sha512"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"math/big"
 )
+
+// NOTE: discussion about go-algorand-sdk
+// https://github.com/algorand/go-algorand/pull/3375#issuecomment-1007536841
+
+var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
+
+func addressCheckSum(addressBytes []byte) ([]byte, error) {
+	if len(addressBytes) != addressByteSize {
+		return nil, fmt.Errorf("address bytes should be of length 32")
+	}
+	hashed := sha512.Sum512_256(addressBytes[:])
+	return hashed[addressByteSize-checksumByteSize:], nil
+}
 
 func castBigIntToNearestPrimitive(num *big.Int, bitSize uint16) (interface{}, error) {
 	if num.BitLen() > int(bitSize) {
@@ -74,17 +88,24 @@ func (t Type) MarshalToJSON(value interface{}) ([]byte, error) {
 		}
 		return json.Marshal(byteValue)
 	case Address:
-		var addressInternal basics.Address
+		var addressValueInternal []byte
 		switch valueCasted := value.(type) {
 		case []byte:
-			copy(addressInternal[:], valueCasted[:])
-			return json.Marshal(addressInternal.String())
+			if len(valueCasted) != addressByteSize {
+				return nil, fmt.Errorf("address byte slice length not equal to 32 byte")
+			}
+			addressValueInternal = valueCasted
 		case [addressByteSize]byte:
-			addressInternal = valueCasted
-			return json.Marshal(addressInternal.String())
+			copy(addressValueInternal[:], valueCasted[:])
 		default:
 			return nil, fmt.Errorf("cannot infer to byte slice/array for marshal to JSON")
 		}
+		checksum, err := addressCheckSum(addressValueInternal)
+		if err != nil {
+			return nil, err
+		}
+		addressValueInternal = append(addressValueInternal, checksum...)
+		return json.Marshal(base32Encoder.EncodeToString(addressValueInternal))
 	case ArrayStatic, ArrayDynamic:
 		values, err := inferToSlice(value)
 		if err != nil {
@@ -175,13 +196,29 @@ func (t Type) UnmarshalFromJSON(jsonEncoded []byte) (interface{}, error) {
 	case Address:
 		var addrStr string
 		if err := json.Unmarshal(jsonEncoded, &addrStr); err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded to string: %v", err)
+			return nil, fmt.Errorf("cannot cast JSON encoded to address string: %v", err)
 		}
-		addr, err := basics.UnmarshalChecksumAddress(addrStr)
+		decoded, err := base32Encoder.DecodeString(addrStr)
 		if err != nil {
-			return nil, fmt.Errorf("cannot cast JSON encoded (%s) to address: %v", string(jsonEncoded), err)
+			return nil,
+				fmt.Errorf("cannot cast JSON encoded address string (%s) to address: %v", addrStr, err)
 		}
-		return addr[:], nil
+		if len(decoded) != addressByteSize+checksumByteSize {
+			return nil,
+				fmt.Errorf(
+					"cannot cast JSON encoded address string (%s) to address: "+
+						"decoded byte length should equal to 36 with address and checksum",
+					string(jsonEncoded),
+				)
+		}
+		checksum, err := addressCheckSum(decoded[:addressByteSize])
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(checksum, decoded[addressByteSize:]) {
+			return nil, fmt.Errorf("cannot cast JSON encoded address string (%s) to address: decoded checksum unmatch", addrStr)
+		}
+		return decoded[:addressByteSize], nil
 	case ArrayStatic, ArrayDynamic:
 		if t.childTypes[0].abiTypeID == Byte && bytes.HasPrefix(jsonEncoded, []byte{'"'}) {
 			var byteArr []byte

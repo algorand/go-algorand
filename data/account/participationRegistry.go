@@ -64,43 +64,53 @@ func ParseParticipationID(str string) (d ParticipationID, err error) {
 	return d, err
 }
 
-// ParticipationRecord contains all metadata relating to a set of participation keys.
-type ParticipationRecord struct {
-	ParticipationID ParticipationID
+type (
+	// ParticipationRecord contains all metadata relating to a set of participation keys.
+	ParticipationRecord struct {
+		ParticipationID ParticipationID
 
-	Account     basics.Address
-	FirstValid  basics.Round
-	LastValid   basics.Round
-	KeyDilution uint64
+		Account     basics.Address
+		FirstValid  basics.Round
+		LastValid   basics.Round
+		KeyDilution uint64
 
-	LastVote          basics.Round
-	LastBlockProposal basics.Round
-	LastStateProof    basics.Round
-	EffectiveFirst    basics.Round
-	EffectiveLast     basics.Round
+		LastVote          basics.Round
+		LastBlockProposal basics.Round
+		LastStateProof    basics.Round
+		EffectiveFirst    basics.Round
+		EffectiveLast     basics.Round
 
-	StateProof *StateProofVerifier
-	VRF        *crypto.VRFSecrets
-	Voting     *crypto.OneTimeSignatureSecrets
-}
+		StateProof *StateProofVerifier
+		VRF        *crypto.VRFSecrets
+		Voting     *crypto.OneTimeSignatureSecrets
+	}
 
-// StateProofSigner defined the type used for the compact certificate signing key
-type StateProofSigner crypto.GenericSigningKey
+	// StateProofSigner defined the type used for the compact certificate signing key
+	StateProofSigner crypto.GenericSigningKey
 
-// StateProofVerifier defined the type used for the stateproofs public key
-type StateProofVerifier merklekeystore.Verifier
+	// StateProofVerifier defined the type used for the stateproofs public key
+	StateProofVerifier merklekeystore.Verifier
 
-// ParticipationRecordForRound r
-type ParticipationRecordForRound struct {
-	ParticipationRecord
-}
+	// StateProofKeys represents a set of ephemeral stateproof keys with their corresponding round
+	//msgp:allocbound StateProofKeys 1000
+	StateProofKeys map[uint64]StateProofSigner
 
-// StateProofRecordForRound adds in the per-round state proof key.
-type StateProofRecordForRound struct {
-	ParticipationRecord
+	// ParticipationRecordForRound r
+	ParticipationRecordForRound struct {
+		ParticipationRecord
+	}
 
-	StateProofSecrets *merklekeystore.Signer
-}
+	// StateProofRecordForRound adds in the per-round state proof key.
+	StateProofRecordForRound struct {
+		ParticipationRecord
+
+		StateProofSecrets *merklekeystore.Signer
+	}
+
+	// SortUint64 implements sorting by uint64 keys for
+	// canonical encoding of maps in msgpack format.
+	SortUint64 = basics.SortUint64
+)
 
 // IsZero returns true if the object contains zero values.
 func (r ParticipationRecordForRound) IsZero() bool {

@@ -81,6 +81,8 @@ import (
 
 const (
 	apiV1Tag = "/v1"
+	// TokenHeader is the header where we put the token.
+	TokenHeader = "X-Algo-API-Token"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -99,11 +101,8 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
-// TokenHeader is the header where we put the token.
-const TokenHeader = "X-Algo-API-Token"
-
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener) *echo.Echo {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
 	if err := tokens.ValidateAPIToken(apiToken); err != nil {
 		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
 	}
@@ -118,9 +117,12 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	e.Listener = listener
 	e.HideBanner = true
 
-	e.Pre(middleware.RemoveTrailingSlash())
-	e.Use(middlewares.MakeLogger(logger))
-	e.Use(middlewares.MakeCORS(TokenHeader))
+	e.Pre(
+		middlewares.MakeConnectionLimiter(numConnectionsLimit),
+		middleware.RemoveTrailingSlash())
+	e.Use(
+		middlewares.MakeLogger(logger),
+		middlewares.MakeCORS(TokenHeader))
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}

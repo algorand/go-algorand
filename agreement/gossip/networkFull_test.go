@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 
 	logging.Base().SetLevel(logging.Debug)
 	// increase limit on max allowed number of sockets
-	err := util.RaiseRlimit(500)
+	err := util.SetFdSoftLimit(500)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -50,7 +50,6 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = nodesCount - 1
 	cfg.NetAddress = "127.0.0.1:0"
-	cfg.IncomingConnectionsLimit = -1
 	cfg.IncomingMessageFilterBucketCount = 5
 	cfg.IncomingMessageFilterBucketSize = 32
 	cfg.OutgoingMessageFilterBucketCount = 3
