@@ -99,6 +99,24 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	*/
 }
 
+// StateProofKeys returns a list of Participation accounts, and their stateproof secrets
+func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
+	for _, part := range manager.partKeys {
+		if part.OverlapsInterval(rnd, rnd) {
+			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ID(), rnd)
+			if err != nil {
+				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				continue
+			}
+			out = append(out, partRndSecrets)
+		}
+	}
+	return out
+}
+
 // HasLiveKeys returns true if we have any Participation
 // keys valid for the specified round range (inclusive)
 func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {

@@ -23,7 +23,9 @@ import (
 	"flag"
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/util/db"
 	"math"
 	"math/rand"
 	"os"
@@ -1088,10 +1090,10 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	dilution := uint64(100)
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
-	copy(votePK[:], []byte(randomVotePKStr))
+	copy(votePK[:], randomVotePKStr)
 	randomSelPKStr := randomString(32)
 	var selPK crypto.VRFVerifier
-	copy(selPK[:], []byte(randomSelPKStr))
+	copy(selPK[:], randomSelPKStr)
 	var keystoreRoot [merklekeystore.KeyStoreRootSize]byte
 	randomRootStr := randomString(merklekeystore.KeyStoreRootSize)
 	copy(keystoreRoot[:], randomRootStr)
@@ -1119,7 +1121,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 60*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformationV2(someAddress)
@@ -1129,6 +1131,33 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	actual := [merklekeystore.KeyStoreRootSize]byte{}
 	copy(actual[:], *account.Participation.StateProofKey)
 	a.Equal(keystoreRoot, actual)
+}
+
+func TestStateProofParticipationKeysAPI(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+
+	partdb, err := db.MakeErasableAccessor(filepath.Join(testClient.DataDir(), "/..", "/Wallet1.0.3000.partkey"))
+	a.NoError(err)
+
+	partkey, err := account.RestoreParticipation(partdb)
+
+	pRoot, err := testClient.GetParticipationKeys()
+	a.NoError(err)
+
+	actual := [merklekeystore.KeyStoreRootSize]byte{}
+	a.NotNil(pRoot[0].Key.StateProofKey)
+	copy(actual[:], *pRoot[0].Key.StateProofKey)
+	a.Equal(partkey.StateProofSecrets.GetVerifier()[:], actual[:])
 }
 
 func TestNilStateProofInParticipationInfo(t *testing.T) {

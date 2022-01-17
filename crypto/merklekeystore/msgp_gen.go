@@ -7,7 +7,7 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// Signature
+// Keystore
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
@@ -15,13 +15,13 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
-// Keystore
-//    |-----> (*) MarshalMsg
-//    |-----> (*) CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> (*) Msgsize
-//    |-----> (*) MsgIsZero
+// Signature
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
 //
 // SignerContext
 //       |-----> (*) MarshalMsg
@@ -39,6 +39,158 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Keystore) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(3)
+	var zb0002Mask uint8 /* 6 bits */
+	if (*z).SignerContext.Interval == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x8
+	}
+	if (*z).SignerContext.FirstValid == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x10
+	}
+	if (*z).SignerContext.Tree.MsgIsZero() {
+		zb0002Len--
+		zb0002Mask |= 0x20
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "iv"
+			o = append(o, 0xa2, 0x69, 0x76)
+			o = msgp.AppendUint64(o, (*z).SignerContext.Interval)
+		}
+		if (zb0002Mask & 0x10) == 0 { // if not empty
+			// string "rnd"
+			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
+			o = msgp.AppendUint64(o, (*z).SignerContext.FirstValid)
+		}
+		if (zb0002Mask & 0x20) == 0 { // if not empty
+			// string "tree"
+			o = append(o, 0xa4, 0x74, 0x72, 0x65, 0x65)
+			o = (*z).SignerContext.Tree.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *Keystore) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Keystore)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Keystore) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).SignerContext.FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).SignerContext.Interval, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Interval")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).SignerContext.Tree.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Tree")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = Keystore{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "rnd":
+				(*z).SignerContext.FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+			case "iv":
+				(*z).SignerContext.Interval, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Interval")
+					return
+				}
+			case "tree":
+				bts, err = (*z).SignerContext.Tree.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Tree")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *Keystore) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Keystore)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Keystore) Msgsize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).SignerContext.Tree.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Keystore) MsgIsZero() bool {
+	return ((*z).SignerContext.FirstValid == 0) && ((*z).SignerContext.Interval == 0) && ((*z).SignerContext.Tree.MsgIsZero())
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Signature) MarshalMsg(b []byte) (o []byte) {
@@ -213,158 +365,6 @@ func (z *Signature) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
 	return ((*z).ByteSignature.MsgIsZero()) && ((*z).MerkleArrayIndex == 0) && ((*z).Proof.MsgIsZero()) && ((*z).VerifyingKey.MsgIsZero())
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *Keystore) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0002Len := uint32(3)
-	var zb0002Mask uint8 /* 6 bits */
-	if (*z).SignerContext.Interval == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x4
-	}
-	if (*z).SignerContext.FirstValid == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x8
-	}
-	if (*z).SignerContext.Tree.MsgIsZero() {
-		zb0002Len--
-		zb0002Mask |= 0x20
-	}
-	// variable map header, size zb0002Len
-	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len != 0 {
-		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "iv"
-			o = append(o, 0xa2, 0x69, 0x76)
-			o = msgp.AppendUint64(o, (*z).SignerContext.Interval)
-		}
-		if (zb0002Mask & 0x8) == 0 { // if not empty
-			// string "rnd"
-			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o = msgp.AppendUint64(o, (*z).SignerContext.FirstValid)
-		}
-		if (zb0002Mask & 0x20) == 0 { // if not empty
-			// string "tree"
-			o = append(o, 0xa4, 0x74, 0x72, 0x65, 0x65)
-			o = (*z).SignerContext.Tree.MarshalMsg(o)
-		}
-	}
-	return
-}
-
-func (_ *Keystore) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Keystore)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *Keystore) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 > 0 {
-			zb0002--
-			(*z).SignerContext.FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			zb0002--
-			(*z).SignerContext.Interval, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Interval")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			zb0002--
-			bts, err = (*z).SignerContext.Tree.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Tree")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = Keystore{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "rnd":
-				(*z).SignerContext.FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstValid")
-					return
-				}
-			case "iv":
-				(*z).SignerContext.Interval, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Interval")
-					return
-				}
-			case "tree":
-				bts, err = (*z).SignerContext.Tree.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Tree")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *Keystore) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Keystore)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *Keystore) Msgsize() (s int) {
-	s = 1 + 4 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).SignerContext.Tree.Msgsize()
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *Keystore) MsgIsZero() bool {
-	return ((*z).SignerContext.FirstValid == 0) && ((*z).SignerContext.Interval == 0) && ((*z).SignerContext.Tree.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

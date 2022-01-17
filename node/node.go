@@ -998,15 +998,14 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 	if err != nil {
 		return err
 	}
-	keys := make(map[uint64]account.StateProofKey, numKeys)
+	keys := make(map[uint64]account.StateProofSigner, numKeys)
 	for i := uint64(0); i < uint64(numKeys); i++ {
-		// TODO: should we add a method to FetchAllKeys instead?
 		key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
 		if err != nil {
 			return err
 		}
 
-		keys[round] = account.StateProofKey(*key)
+		keys[round] = account.StateProofSigner(*key)
 	}
 	err = node.accountManager.Registry().AppendKeys(partID, keys)
 	// kinda useless since AppendKeys returns nil exclusively and appends asynchronously

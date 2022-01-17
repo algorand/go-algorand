@@ -94,6 +94,11 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 		},
 	}
 
+	if record.StateProof != nil {
+		tmp := record.StateProof[:]
+		participationKey.Key.StateProofKey = &tmp
+	}
+
 	// These are pointers but should always be present.
 	if record.Voting != nil {
 		participationKey.Key.VoteParticipationKey = record.Voting.OneTimeSignatureVerifier[:]

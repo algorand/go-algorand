@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-deadlock"
@@ -46,10 +45,6 @@ func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.
 	var km []account.ParticipationRecordForRound
 	for _, acc := range m.keys {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			var signerInRound merklekeystore.Signer
-			if acc.StateProofSecrets != nil {
-				acc.StateProofSecrets.GetSigner(uint64(votingRound))
-			}
 			partRecordForRound := account.ParticipationRecordForRound{
 				ParticipationRecord: account.ParticipationRecord{
 					ParticipationID:   acc.ID(),
@@ -65,7 +60,6 @@ func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.
 					VRF:               acc.VRF,
 					Voting:            acc.Voting,
 				},
-				StateProofSecrets: &signerInRound,
 			}
 			km = append(km, partRecordForRound)
 		}

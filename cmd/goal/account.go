@@ -1491,9 +1491,9 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
-				// PKI TODO: enable with state proof support.
-				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
-				//fmt.Printf("State proof ID:            %s\n", base64.StdEncoding.EncodeToString(stateProofID))
+				if part.Key.StateProofKey != nil {
+					fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+				}
 			}
 		})
 	},
