@@ -404,7 +404,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 				Proof:     proofconcat,
 				Stibhash:  stibhash[:],
 				Idx:       uint64(idx),
-				TreeDepth: uint64(proof.TreeDepth),
+				Treedepth: uint64(proof.TreeDepth),
 				Hashtype:  proof.HashFactory.HashType.String(),
 			}
 

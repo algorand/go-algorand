@@ -670,7 +670,7 @@ type ProofResponse struct {
 	Stibhash []byte `json:"stibhash"`
 
 	// represents the depth of the tree that is being proven. the root level is not included.
-	TreeDepth uint64 `json:"treeDepth"`
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // SupplyResponse defines model for SupplyResponse.

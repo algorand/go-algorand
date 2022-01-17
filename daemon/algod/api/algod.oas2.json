@@ -2486,7 +2486,7 @@
           "proof",
           "stibhash",
           "idx",
-          "treeDepth",
+          "treedepth",
           "hashtype"
         ],
         "properties": {
@@ -2500,7 +2500,7 @@
             "type": "string",
             "format": "byte"
           },
-          "treeDepth": {
+          "treedepth": {
             "description": "represents the depth of the tree that is being proven. the root level is not included.",
             "type": "integer"
           },
