@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestInvalidSinger(t *testing.T) {
+func TestInvalidSigner(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 

@@ -17,7 +17,7 @@ import (
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
 //
-// StateProofSinger
+// StateProofSigner
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
@@ -256,30 +256,30 @@ func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *StateProofSinger) MarshalMsg(b []byte) []byte {
+func (z *StateProofSigner) MarshalMsg(b []byte) []byte {
 	return ((*(crypto.GenericSigningKey))(z)).MarshalMsg(b)
 }
-func (_ *StateProofSinger) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofSinger)
+func (_ *StateProofSigner) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofSigner)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofSinger) UnmarshalMsg(bts []byte) ([]byte, error) {
+func (z *StateProofSigner) UnmarshalMsg(bts []byte) ([]byte, error) {
 	return ((*(crypto.GenericSigningKey))(z)).UnmarshalMsg(bts)
 }
-func (_ *StateProofSinger) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofSinger)
+func (_ *StateProofSigner) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofSigner)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *StateProofSinger) Msgsize() int {
+func (z *StateProofSigner) Msgsize() int {
 	return ((*(crypto.GenericSigningKey))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *StateProofSinger) MsgIsZero() bool {
+func (z *StateProofSigner) MsgIsZero() bool {
 	return ((*(crypto.GenericSigningKey))(z)).MsgIsZero()
 }
 

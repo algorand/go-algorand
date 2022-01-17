@@ -100,10 +100,6 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.ParticipationRecordForRound) {
-	return nil
-}
-
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
 	for _, part := range s.keys {
 		if part.OverlapsInterval(rnd, rnd) {

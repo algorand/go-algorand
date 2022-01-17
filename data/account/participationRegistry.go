@@ -84,8 +84,8 @@ type ParticipationRecord struct {
 	Voting     *crypto.OneTimeSignatureSecrets
 }
 
-// StateProofSinger defined the type used for the compact certificate signing key
-type StateProofSinger crypto.GenericSigningKey
+// StateProofSigner defined the type used for the compact certificate signing key
+type StateProofSigner crypto.GenericSigningKey
 
 // StateProofVerifier defined the type used for the stateproofs public key
 type StateProofVerifier merklekeystore.Verifier
@@ -137,10 +137,9 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 	}
 
 	var stateProof *StateProofVerifier
-	var statproofVerifer StateProofVerifier
 	if r.StateProof != nil {
-		copy(statproofVerifer[:], r.StateProof[:])
-		stateProof = &statproofVerifer
+		stateProof = &StateProofVerifier{}
+		copy(stateProof[:], r.StateProof[:])
 	}
 
 	dupParticipation := ParticipationRecord{
@@ -211,7 +210,7 @@ type ParticipationRegistry interface {
 
 	// AppendKeys appends state proof keys to an existing Participation record. Keys can only be appended
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
-	AppendKeys(id ParticipationID, keys map[uint64]StateProofSinger) error
+	AppendKeys(id ParticipationID, keys map[uint64]StateProofSigner) error
 
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
@@ -400,7 +399,7 @@ type updatingParticipationRecord struct {
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
-	keys     map[uint64]StateProofSinger
+	keys     map[uint64]StateProofSigner
 
 	registerUpdated map[ParticipationID]updatingParticipationRecord
 
@@ -532,7 +531,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 	return err
 }
 
-func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]StateProofSinger) error {
+func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]StateProofSigner) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
@@ -713,10 +712,10 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	}
 
 	var stateProofVeriferPtr *StateProofVerifier
-	var statproofVerifier StateProofVerifier
 	if record.StateProofSecrets != nil {
-		copy(statproofVerifier[:], record.StateProofSecrets.GetVerifier()[:])
-		stateProofVeriferPtr = &statproofVerifier
+		stateProofVeriferPtr = &StateProofVerifier{}
+		copy(stateProofVeriferPtr[:], record.StateProofSecrets.GetVerifier()[:])
+
 	}
 
 	// update cache.
@@ -739,7 +738,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	return
 }
 
-func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofSinger) error {
+func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofSigner) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
@@ -747,7 +746,7 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateP
 		return ErrParticipationIDNotFound
 	}
 
-	keyCopy := make(map[uint64]StateProofSinger, len(keys))
+	keyCopy := make(map[uint64]StateProofSigner, len(keys))
 	for k, v := range keys {
 		keyCopy[k] = v // PKI TODO: Deep copy?
 	}

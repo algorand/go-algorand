@@ -85,7 +85,7 @@ type GenericSigningKey struct {
 	Type AlgorithmType `codec:"sigType"`
 
 	FalconSigner  FalconSigner `codec:"fs"`
-	Ed25519Singer Ed25519Key   `codec:"edds"`
+	Ed25519Signer Ed25519Key   `codec:"edds"`
 }
 
 // IsValid states whether the GenericSigningKey is valid, and is safe to use.
@@ -120,9 +120,9 @@ func (z *GenericSigningKey) GetSigner() Signer {
 	case FalconType:
 		return &z.FalconSigner
 	case Ed25519Type:
-		return &z.Ed25519Singer
+		return &z.Ed25519Signer
 	default:
-		return NewInvalidSinger()
+		return NewInvalidSigner()
 	}
 }
 
@@ -144,7 +144,7 @@ var errNonExistingSignatureAlgorithmType = errors.New("signing algorithm type do
 func NewSigner(t AlgorithmType) (*GenericSigningKey, error) {
 	switch t {
 	case FalconType:
-		return newFalconSinger(t)
+		return newFalconSigner(t)
 	case Ed25519Type:
 		return newEd25519Signer(t)
 	default:
@@ -158,11 +158,11 @@ func newEd25519Signer(t AlgorithmType) (*GenericSigningKey, error) {
 	key := GenerateEd25519Key(seed)
 	return &GenericSigningKey{
 		Type:          t,
-		Ed25519Singer: *key,
+		Ed25519Signer: *key,
 	}, nil
 }
 
-func newFalconSinger(t AlgorithmType) (*GenericSigningKey, error) {
+func newFalconSigner(t AlgorithmType) (*GenericSigningKey, error) {
 	var seed FalconSeed
 	RandBytes(seed[:])
 	signer, err := GenerateFalconSigner(seed)

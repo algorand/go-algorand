@@ -45,9 +45,6 @@ func (m *recordingKeyManager) VotingKeys(votingRound, _ basics.Round) []account.
 	var km []account.ParticipationRecordForRound
 	for _, acc := range m.keys {
 		if acc.OverlapsInterval(votingRound, votingRound) {
-			if acc.StateProofSecrets != nil {
-				acc.StateProofSecrets.GetSigner(uint64(votingRound))
-			}
 			partRecordForRound := account.ParticipationRecordForRound{
 				ParticipationRecord: account.ParticipationRecord{
 					ParticipationID:   acc.ID(),

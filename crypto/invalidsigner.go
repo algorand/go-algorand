@@ -20,9 +20,9 @@ import (
 	"errors"
 )
 
-// invalidSinger is used for cases with the signer is invalid.
+// invalidSigner is used for cases with the signer is invalid.
 // this will return an error while using.
-type invalidSinger struct {
+type invalidSigner struct {
 }
 
 // invalidVerifier is used for cases with the verifier is invalid.
@@ -30,23 +30,23 @@ type invalidSinger struct {
 type invalidVerifier struct {
 }
 
-// NewInvalidSinger Generates invalid Signer.
-func NewInvalidSinger() Signer {
-	return &invalidSinger{}
+// NewInvalidSigner Generates invalid Signer.
+func NewInvalidSigner() Signer {
+	return &invalidSigner{}
 }
 
 // Sign returns an empty signature
-func (d *invalidSinger) Sign(message Hashable) (ByteSignature, error) {
+func (d *invalidSigner) Sign(message Hashable) (ByteSignature, error) {
 	return ByteSignature{}, errInvalidVerifier
 }
 
 // SignBytes returns an empty signature
-func (d *invalidSinger) SignBytes(data []byte) (ByteSignature, error) {
+func (d *invalidSigner) SignBytes(data []byte) (ByteSignature, error) {
 	return ByteSignature{}, errInvalidVerifier
 }
 
 // GetVerifyingKey Outputs an invalid verifying key.
-func (d *invalidSinger) GetVerifyingKey() *GenericVerifyingKey {
+func (d *invalidSigner) GetVerifyingKey() *GenericVerifyingKey {
 	return &GenericVerifyingKey{
 		Type: MaxAlgorithmType,
 	}

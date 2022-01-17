@@ -1225,7 +1225,7 @@ func (z *GenericSigningKey) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).Ed25519Singer.MsgIsZero() {
+	if (*z).Ed25519Signer.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -1243,7 +1243,7 @@ func (z *GenericSigningKey) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "edds"
 			o = append(o, 0xa4, 0x65, 0x64, 0x64, 0x73)
-			o = (*z).Ed25519Singer.MarshalMsg(o)
+			o = (*z).Ed25519Signer.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "fs"
@@ -1299,9 +1299,9 @@ func (z *GenericSigningKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Ed25519Singer.UnmarshalMsg(bts)
+			bts, err = (*z).Ed25519Signer.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Ed25519Singer")
+				err = msgp.WrapError(err, "struct-from-array", "Ed25519Signer")
 				return
 			}
 		}
@@ -1345,9 +1345,9 @@ func (z *GenericSigningKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "edds":
-				bts, err = (*z).Ed25519Singer.UnmarshalMsg(bts)
+				bts, err = (*z).Ed25519Signer.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Ed25519Singer")
+					err = msgp.WrapError(err, "Ed25519Signer")
 					return
 				}
 			default:
@@ -1373,13 +1373,13 @@ func (_ *GenericSigningKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *GenericSigningKey) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint16Size + 3 + (*z).FalconSigner.Msgsize() + 5 + (*z).Ed25519Singer.Msgsize()
+	s = 1 + 8 + msgp.Uint16Size + 3 + (*z).FalconSigner.Msgsize() + 5 + (*z).Ed25519Signer.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *GenericSigningKey) MsgIsZero() bool {
-	return ((*z).Type == 0) && ((*z).FalconSigner.MsgIsZero()) && ((*z).Ed25519Singer.MsgIsZero())
+	return ((*z).Type == 0) && ((*z).FalconSigner.MsgIsZero()) && ((*z).Ed25519Signer.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
