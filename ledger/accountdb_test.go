@@ -1284,13 +1284,13 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	}
 	var empty baseAccountData
 	negativeTesting := func(t *testing.T) {
-		for i := 0; i < 1000; i++ {
-			randObj, _ := protocol.RandomizeObject(&baseAccountData{})
+		for i := 0; i < 10000; i++ {
+			randObj, _ := protocol.RandomizeObjectField(&baseAccountData{})
 			ba := randObj.(*baseAccountData)
-			if *ba == empty {
-				return
+			if *ba == empty || ba.UpdateRound != 0 {
+				continue
 			}
-			require.False(t, ba.IsEmpty())
+			require.False(t, ba.IsEmpty(), "base account : %v", ba)
 		}
 	}
 	t.Run("Positive", positiveTesting)
