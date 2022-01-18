@@ -43,7 +43,8 @@ func TestAgreementSerialization(t *testing.T) {
 	encodedBytes := encode(clock, router, status, a)
 
 	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
-	clock2, router2, status2, a2, err := decode(encodedBytes, t0)
+	log := makeServiceLogger(logging.Base())
+	clock2, router2, status2, a2, err := decode(encodedBytes, t0, log)
 	require.NoError(t, err)
 	require.Equalf(t, clock, clock2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
@@ -77,10 +78,10 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 
 	encodedBytes := encode(clock, router, status, a)
 	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
-
+	log := makeServiceLogger(logging.Base())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		decode(encodedBytes, t0)
+		decode(encodedBytes, t0, log)
 	}
 }
 

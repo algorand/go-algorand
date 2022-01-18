@@ -16,10 +16,6 @@
 
 package agreement
 
-import (
-	"github.com/algorand/go-algorand/logging"
-)
-
 // A listener is a state machine which can handle events, returning new events.
 type listener interface {
 	// T returns the stateMachineTag describing the listener.
@@ -60,17 +56,17 @@ func (l checkedListener) handle(r routerHandle, p player, in event) event {
 	errs := l.pre(p, in)
 	if len(errs) != 0 {
 		for _, err := range errs {
-			logging.Base().Errorf("%v: precondition violated: %v", l.T(), err)
+			r.t.log.Errorf("%v: precondition violated: %v", l.T(), err)
 		}
-		logging.Base().Panicf("%v: precondition violated: %v", l.T(), errs[0])
+		r.t.log.Panicf("%v: precondition violated: %v", l.T(), errs[0])
 	}
 	out := l.listener.handle(r, p, in)
 	errs = l.post(p, in, out)
 	if len(errs) != 0 {
 		for _, err := range errs {
-			logging.Base().Errorf("%v: postcondition violated: %v", l.T(), err)
+			r.t.log.Errorf("%v: postcondition violated: %v", l.T(), err)
 		}
-		logging.Base().Panicf("%v: postcondition violated: %v", l.T(), errs[0])
+		r.t.log.Panicf("%v: postcondition violated: %v", l.T(), errs[0])
 	}
 	return out
 }
