@@ -1180,6 +1180,27 @@ type baseAccountData struct {
 	UpdateRound uint64 `codec:"z"`
 }
 
+// IsEmpty return true if any of the fields other then the UpdateRound are non-zero.
+func (ba *baseAccountData) IsEmpty() bool {
+	return ba.Status == 0 &&
+		ba.MicroAlgos.Raw == 0 &&
+		ba.RewardsBase == 0 &&
+		ba.RewardedMicroAlgos.Raw == 0 &&
+		ba.AuthAddr.IsZero() &&
+		ba.TotalAppSchemaNumUint == 0 &&
+		ba.TotalAppSchemaNumByteSlice == 0 &&
+		ba.TotalExtraAppPages == 0 &&
+		ba.TotalAssetParams == 0 &&
+		ba.TotalAssets == 0 &&
+		ba.TotalAppParams == 0 &&
+		ba.TotalAppLocalStates == 0 &&
+		ba.VoteID.MsgIsZero() &&
+		ba.SelectionID.MsgIsZero() &&
+		ba.VoteFirstValid == 0 &&
+		ba.VoteLastValid == 0 &&
+		ba.VoteKeyDilution == 0
+}
+
 func (ba *baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
@@ -2322,7 +2343,7 @@ func accountsNewRound(
 		data := updates.getByIdx(i)
 		if data.oldAcct.rowid == 0 {
 			// zero rowid means we don't have a previous value.
-			if data.newAcct.MsgIsZero() {
+			if data.newAcct.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
@@ -2338,7 +2359,7 @@ func accountsNewRound(
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
-			if data.newAcct.MsgIsZero() {
+			if data.newAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
 				result, err = deleteByRowIDStmt.Exec(data.oldAcct.rowid)
 				if err == nil {
