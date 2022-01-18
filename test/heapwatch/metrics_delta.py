@@ -197,9 +197,10 @@ class summary:
                 continue
             # skip the first two while the system could still count as warming up
             txp = ns.txPool[2:]
-            mins.append(min(txp))
-            maxs.append(max(txp))
-            means.append(statistics.mean(txp))
+            if not txp is None:
+                mins.append(min(txp))
+                maxs.append(max(txp))
+                means.append(statistics.mean(txp))
         if not means or not maxs or not mins:
             return 'txnpool(no stats)'
         return 'txnpool({:.0f} {:.0f} {:.0f} {:.0f} {:.0f})'.format(
