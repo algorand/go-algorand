@@ -1177,6 +1177,11 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 	}
 }
 
+func (ba baseAccountData) IsEmpty() bool {
+	ba.UpdateRound = 0
+	return ba == baseAccountData{}
+}
+
 type resourceFlags uint8
 
 const (
@@ -2253,7 +2258,7 @@ func accountsNewRound(
 		data := updates.getByIdx(i)
 		if data.oldAcct.rowid == 0 {
 			// zero rowid means we don't have a previous value.
-			if data.newAcct.MsgIsZero() {
+			if data.newAcct.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
@@ -2269,7 +2274,7 @@ func accountsNewRound(
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
-			if data.newAcct.MsgIsZero() {
+			if data.newAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
 				result, err = deleteByRowIDStmt.Exec(data.oldAcct.rowid)
 				if err == nil {
@@ -2332,8 +2337,11 @@ func accountsNewRound(
 		addrid := data.oldResource.addrid
 		if addrid == 0 {
 			// new entry, data.oldResource does not have addrid
+			// check if this delta is part of in-memory only account
+			// that is created, funded, transferred, and closed within a commit range
+			inMemEntry := data.oldResource.data.IsEmpty() && data.newResource.IsEmpty()
 			addrid = newAddressesRowIDs[addr]
-			if addrid == 0 {
+			if addrid == 0 && !inMemEntry {
 				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 				return
 			}
