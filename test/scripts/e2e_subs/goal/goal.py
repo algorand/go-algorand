@@ -156,12 +156,12 @@ class Goal:
                 return txid, ""
             return self.confirm(txid), ""
         except algosdk.error.AlgodHTTPError as e:
-            return (None, str(e))
+            return (None, e)
 
     def send_group(self, txns, confirm=True):
         # Need unsigned transactions to calculate the group This pulls
-        # out the unsigned tx if tx is sigged, logigsigged or
-        # multisgged
+        # out the unsigned tx if tx is sigged, logicsigged or
+        # multisigged
         utxns = [
             tx if isinstance(tx, txn.Transaction) else tx.transaction
             for tx in txns
@@ -172,14 +172,15 @@ class Goal:
                 tx.group = gid
             else:
                 tx.transaction.group = gid
+        txids = [utxn.get_txid() for utxn in utxns]
         try:
             stxns = [self.sign(tx) for tx in txns]
-            txid = self.algod.send_transactions(stxns)
+            self.algod.send_transactions(stxns)
             if not confirm:
-                return txid, ""
-            return self.confirm(txid), ""
+                return txids, None
+            return [self.confirm(txid) for txid in txids], None
         except algosdk.error.AlgodHTTPError as e:
-            return (None, str(e))
+            return (txids, e)
 
     def status(self):
         return self.algod.status()
@@ -196,7 +197,7 @@ class Goal:
 
     def wait_for_block(self, block):
         """
-        Utility function to wait until the block number given has been confirmed
+        Utility function to wait until the given block has been confirmed
         """
         print(f"Waiting for block {block}.")
         s = self.algod.status()
@@ -321,6 +322,10 @@ class Goal:
             return self.holding(account, asa)[0]
         info = self.algod.account_info(account)
         return info["amount"]
+
+    def min_balance(self, account):
+        info = self.algod.account_info(account)
+        return info["min-balance"]
 
     def holding(self, account, asa):
         info = self.algod.account_info(account)

@@ -620,6 +620,42 @@ func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator
 	return validatedBlock
 }
 
+// lookup gets the current accountdata for an address
+func lookup(t testing.TB, ledger *ledger.Ledger, addr basics.Address) basics.AccountData {
+	rnd := ledger.Latest()
+	ad, err := ledger.Lookup(rnd, addr)
+	require.NoError(t, err)
+	return ad
+}
+
+// micros gets the current microAlgo balance for an address
+func micros(t testing.TB, ledger *ledger.Ledger, addr basics.Address) uint64 {
+	return lookup(t, ledger, addr).MicroAlgos.Raw
+}
+
+// holding gets the current balance and optin status for some asa for an address
+func holding(t testing.TB, ledger *ledger.Ledger, addr basics.Address, asset basics.AssetIndex) (uint64, bool) {
+	if holding, ok := lookup(t, ledger, addr).Assets[asset]; ok {
+		return holding.Amount, true
+	}
+	return 0, false
+}
+
+// asaParams gets the asset params for a given asa index
+func asaParams(t testing.TB, ledger *ledger.Ledger, asset basics.AssetIndex) (basics.AssetParams, error) {
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
+	if err != nil {
+		return basics.AssetParams{}, err
+	}
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("no asset (%d)", asset)
+	}
+	if params, ok := lookup(t, ledger, creator).AssetParams[asset]; ok {
+		return params, nil
+	}
+	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
+}
+
 func TestRewardsInAD(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

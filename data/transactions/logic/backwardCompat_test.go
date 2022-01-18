@@ -22,11 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions/logictest"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -280,98 +277,71 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 		Data:        data[:],
 	})
 
-	txn := makeSampleTxn()
+	ep, tx, _ := makeSampleEnvWithVersion(1)
 	// RekeyTo disallowed on TEAL v0/v1
-	txn.Txn.RekeyTo = basics.Address{}
-	txgroup := makeSampleTxnGroup(txn)
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
-	txn.Txn.RekeyTo = basics.Address{} // RekeyTo not allowed in TEAL v1
+	tx.RekeyTo = basics.Address{}
 
-	sb := strings.Builder{}
-	ep := defaultEvalParamsWithVersion(&sb, &txn, 1)
-	ep.TxnGroup = txgroup
+	ep.TxnGroup[0].Lsig.Logic = program
+	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
 
 	// ensure v1 program runs well on latest TEAL evaluator
 	require.Equal(t, uint8(1), program[0])
 
 	// Cost should stay exactly 2140
 	ep.Proto.LogicSigMaxCost = 2139
-	err = Check(program, ep)
+	err = CheckSignature(0, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "static cost")
 
 	ep.Proto.LogicSigMaxCost = 2140
-	err = Check(program, ep)
+	err = CheckSignature(0, ep)
 	require.NoError(t, err)
 
-	pass, err := Eval(program, ep)
+	pass, err := EvalSignature(0, ep)
 	if err != nil || !pass {
 		t.Log(hex.EncodeToString(program))
-		t.Log(sb.String())
+		t.Log(ep.Trace.String())
 	}
 	require.NoError(t, err)
 	require.True(t, pass)
 
 	// Costs for v2 should be higher because of hash opcode cost changes
-	ep2 := defaultEvalParamsWithVersion(&sb, &txn, 2)
-	ep2.TxnGroup = txgroup
+	ep2, tx, _ := makeSampleEnvWithVersion(2)
 	ep2.Proto.LogicSigMaxCost = 2307
-	err = Check(opsV2.Program, ep2)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "static cost")
+	//	ep2.TxnGroup[0].Lsig.Logic = opsV2.Program
+	ep2.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
+	// Eval doesn't fail, but it would be ok (better?) if it did
+	testLogicBytes(t, opsV2.Program, ep2, "static cost", "")
 
 	ep2.Proto.LogicSigMaxCost = 2308
-	err = Check(opsV2.Program, ep2)
-	require.NoError(t, err)
-
-	pass, err = Eval(opsV2.Program, ep2)
-	if err != nil || !pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, opsV2.Program, ep2)
 
 	// ensure v0 program runs well on latest TEAL evaluator
-	ep = defaultEvalParams(&sb, &txn)
-	ep.TxnGroup = txgroup
+	ep, tx, _ = makeSampleEnv()
 	program[0] = 0
 	sig = c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
 		Data:        data[:],
 	})
-	txn.Lsig.Logic = program
-	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
+	ep.TxnGroup[0].Lsig.Logic = program
+	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
 
 	// Cost remains the same, because v0 does not get dynamic treatment
 	ep.Proto.LogicSigMaxCost = 2139
-	err = Check(program, ep)
-	require.Error(t, err)
+	ep.MinTealVersion = new(uint64) // Was higher because sample txn has a rekey
+	testLogicBytes(t, program, ep, "static cost", "")
 
 	ep.Proto.LogicSigMaxCost = 2140
-	err = Check(program, ep)
-	require.NoError(t, err)
-	pass, err = Eval(program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testLogicBytes(t, program, ep)
 
 	// But in v4, cost is now dynamic and exactly 1 less than v2/v3,
 	// because bnz skips "err". It's caught during Eval
 	program[0] = 4
 	ep.Proto.LogicSigMaxCost = 2306
-	err = Check(program, ep)
-	require.NoError(t, err)
-	_, err = Eval(program, ep)
-	require.Error(t, err)
+	testLogicBytes(t, program, ep, "dynamic cost")
 
 	ep.Proto.LogicSigMaxCost = 2307
-	err = Check(program, ep)
-	require.NoError(t, err)
-	pass, err = Eval(program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-
+	testLogicBytes(t, program, ep)
 }
 
 // ensure v2 fields error on pre TEAL v2 logicsig version
@@ -388,7 +358,6 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 	}
 	require.Greater(t, len(fields), 1)
 
-	ledger := logictest.MakeLedger(nil)
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
@@ -399,35 +368,22 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 		ops := testProg(t, text, AssemblerMaxVersion)
 
-		proto := config.Consensus[protocol.ConsensusV23]
-		require.False(t, proto.Application)
-		ep := defaultEvalParams(nil, nil)
-		ep.Proto = &proto
-		ep.Ledger = ledger
-
-		// check failure with version check
-		_, err := Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
-		_, err = Eval(ops.Program, ep)
+		ep, _, _ := makeSampleEnvWithVersion(1)
+		ep.TxnGroup[0].Txn.RekeyTo = basics.Address{} // avoid min teal version issues
+		ep.TxnGroup[0].Lsig.Logic = ops.Program
+		_, err := EvalSignature(0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
 		// check opcodes failures
-		ops.Program[0] = 1 // set version to 1
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
-		_, err = Eval(ops.Program, ep)
+		ep.TxnGroup[0].Lsig.Logic[0] = 1 // set version to 1
+		_, err = EvalSignature(0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global field")
 
 		// check opcodes failures
-		ops.Program[0] = 0 // set version to 0
-		_, err = Eval(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
-		_, err = Eval(ops.Program, ep)
+		ep.TxnGroup[0].Lsig.Logic[0] = 0 // set version to 0
+		_, err = EvalSignature(0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global field")
 	}
@@ -451,22 +407,15 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		"gtxn 0 %s",
 	}
 
-	ledger := logictest.MakeLedger(nil)
-	txn := makeSampleTxn()
-	// We'll reject too early if we have a nonzero RekeyTo, because that
-	// field must be zero for every txn in the group if this is an old
-	// TEAL version
-	txn.Txn.RekeyTo = basics.Address{}
-	txgroup := makeSampleTxnGroup(txn)
 	for _, fs := range fields {
 		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
 			asmError := "...available in version ..."
-			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+			if fs.array {
 				parts := strings.Split(text, " ")
 				op := parts[0]
-				asmError = fmt.Sprintf("found array field %#v in %s op", field, op)
+				asmError = fmt.Sprintf("%s found array field %#v while expecting scalar", op, field)
 			}
 			// check assembler fails if version before introduction
 			testLine(t, text, assemblerNoVersion, asmError)
@@ -475,7 +424,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			}
 
 			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+			if fs.array {
 				// "txn Accounts" is invalid, so skip evaluation
 				require.Error(t, err, asmError)
 				continue
@@ -483,36 +432,27 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			proto := config.Consensus[protocol.ConsensusV23]
-			require.False(t, proto.Application)
-			ep := defaultEvalParams(nil, nil)
-			ep.Proto = &proto
-			ep.Ledger = ledger
-			ep.TxnGroup = txgroup
+			ep, tx, _ := makeSampleEnvWithVersion(1)
+			// We'll reject too early if we have a nonzero RekeyTo, because that
+			// field must be zero for every txn in the group if this is an old
+			// TEAL version
+			tx.RekeyTo = basics.Address{}
+			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
 			// check failure with version check
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
-			_, err = Eval(ops.Program, ep)
+			_, err = EvalSignature(0, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
 
 			// check opcodes failures
 			ops.Program[0] = 1 // set version to 1
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
-			_, err = Eval(ops.Program, ep)
+			_, err = EvalSignature(0, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 
 			// check opcodes failures
 			ops.Program[0] = 0 // set version to 0
-			_, err = Eval(ops.Program, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
-			_, err = Eval(ops.Program, ep)
+			_, err = EvalSignature(0, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 		}
@@ -525,30 +465,23 @@ func TestBackwardCompatAssemble(t *testing.T) {
 	// TEAL v1 does not allow branching to the last line
 	// TEAL v2 makes such programs legal
 	t.Parallel()
-	source := `int 0
-int 1
-bnz done
-done:`
+	source := "int 1; int 1; bnz done; done:"
 
 	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, assemblerNoVersion, expect{4, "label \"done\" is too far away"})
+		testProg(t, source, assemblerNoVersion, Expect{4, "label \"done\" is too far away"})
 	})
 
 	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 0, expect{4, "label \"done\" is too far away"})
+		testProg(t, source, 0, Expect{4, "label \"done\" is too far away"})
 	})
 
 	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 1, expect{4, "label \"done\" is too far away"})
+		testProg(t, source, 1, Expect{4, "label \"done\" is too far away"})
 	})
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(source, v)
-			require.NoError(t, err)
-			ep := defaultEvalParams(nil, nil)
-			_, err = Eval(ops.Program, ep)
-			require.NoError(t, err)
+			testLogic(t, source, v, defaultEvalParams(nil))
 		})
 	}
 }

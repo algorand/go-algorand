@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,24 +33,20 @@ func TestOpDocs(t *testing.T) {
 		opsSeen[op.Name] = false
 	}
 	for name := range opDocByName {
-		_, exists := opsSeen[name]
-		if !exists {
-			t.Errorf("error: doc for op %#v that does not exist in OpSpecs", name)
-		}
+		assert.Contains(t, opsSeen, name, "opDocByName contains strange opcode %#v", name)
 		opsSeen[name] = true
 	}
 	for op, seen := range opsSeen {
-		if !seen {
-			t.Errorf("error: doc for op %#v missing from opDocByName", op)
-		}
+		assert.True(t, seen, "opDocByName is missing doc for %#v", op)
 	}
 
 	require.Len(t, txnFieldDocs, len(TxnFieldNames))
 	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
 	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
-	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
+	require.Len(t, assetHoldingFieldDocs, len(AssetHoldingFieldNames))
 	require.Len(t, assetParamsFieldDocs, len(AssetParamsFieldNames))
 	require.Len(t, appParamsFieldDocs, len(AppParamsFieldNames))
+	require.Len(t, acctParamsFieldDocs, len(AcctParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
 	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }
@@ -119,10 +116,10 @@ func TestAllImmediatesDocumented(t *testing.T) {
 		note := OpImmediateNote(op.Name)
 		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
 			// More elaborate than can be checked by easy count.
-			require.NotEmpty(t, note)
+			assert.NotEmpty(t, note)
 			continue
 		}
-		require.Equal(t, count, strings.Count(note, "{"), "%s immediates doc is wrong", op.Name)
+		assert.Equal(t, count, strings.Count(note, "{"), "opcodeImmediateNotes for %s is wrong", op.Name)
 	}
 }
 
@@ -157,21 +154,4 @@ func TestOnCompletionDescription(t *testing.T) {
 
 	desc = OnCompletionDescription(100)
 	require.Equal(t, "invalid constant value", desc)
-}
-
-func TestFieldDocs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	txnFields := TxnFieldDocs()
-	require.Greater(t, len(txnFields), 0)
-
-	globalFields := GlobalFieldDocs()
-	require.Greater(t, len(globalFields), 0)
-
-	doc := globalFields["MinTxnFee"]
-	require.NotContains(t, doc, "LogicSigVersion >= 2")
-
-	doc = globalFields["Round"]
-	require.Contains(t, doc, "LogicSigVersion >= 2")
-
 }

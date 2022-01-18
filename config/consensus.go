@@ -285,6 +285,9 @@ type ConsensusParams struct {
 	// maximum number of inner transactions that can be created by an app call
 	MaxInnerTransactions int
 
+	// should inner transaction limit be pooled across app calls?
+	EnableInnerTransactionPooling bool
+
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
 	MaxAppsCreated int
@@ -1051,6 +1054,7 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 6 / AVM 1.1
 	vFuture.LogicSigVersion = 6
+	vFuture.EnableInnerTransactionPooling = true
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
 

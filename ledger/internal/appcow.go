@@ -256,8 +256,6 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 		cb.mods.ModifiedAppLocalStates[aa] = true
 	}
 
-	cb.trackCreatable(basics.CreatableIndex(aidx))
-
 	return nil
 }
 
@@ -471,19 +469,16 @@ func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.Co
 	return cb
 }
 
-// StatefulEval runs application.
-// Execution happens in a child cow and all modifications are merged into parent if the program passes
-func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta transactions.EvalDelta, err error) {
+// StatefulEval runs application.  Execution happens in a child cow and all
+// modifications are merged into parent and the ApplyData in params[gi] is
+// filled if the program passes.
+func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta transactions.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child(1)
-	params.Ledger, err = newLogicLedger(calf, aidx)
-	if err != nil {
-		return false, transactions.EvalDelta{}, err
-	}
+	params.Ledger = newLogicLedger(calf)
 
 	// Eval the program
-	var cx *logic.EvalContext
-	pass, cx, err = logic.EvalStatefulCx(program, params)
+	pass, cx, err := logic.EvalContract(program, gi, aidx, params)
 	if err != nil {
 		var details string
 		if cx != nil {
@@ -495,13 +490,23 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 
 	// If program passed, build our eval delta, and commit to state changes
 	if pass {
-		evalDelta, err = calf.BuildEvalDelta(aidx, &params.Txn.Txn)
-		if err != nil {
-			return false, transactions.EvalDelta{}, err
+		// Before Contract to Contract calls, use BuildEvalDelta because it has
+		// hairy code to maintain compatibility over some buggy old versions
+		// that created EvalDeltas differently.  But after introducing c2c, it's
+		// "too late" to build the EvalDelta here, since the ledger includes
+		// changes from this app and any inner called apps. Instead, we now keep
+		// the EvalDelta built as we go, in app evaluation.  So just use it.
+		if cb.proto.LogicSigVersion < 6 {
+			evalDelta, err = calf.BuildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
+			if err != nil {
+				return false, transactions.EvalDelta{}, err
+			}
+			evalDelta.Logs = params.TxnGroup[gi].EvalDelta.Logs
+			evalDelta.InnerTxns = params.TxnGroup[gi].EvalDelta.InnerTxns
+		} else {
+			evalDelta = params.TxnGroup[gi].EvalDelta
 		}
 		calf.commitToParent()
-		evalDelta.Logs = cx.Logs
-		evalDelta.InnerTxns = cx.InnerTxns
 	}
 
 	return pass, evalDelta, nil

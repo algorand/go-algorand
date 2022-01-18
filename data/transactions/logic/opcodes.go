@@ -42,6 +42,19 @@ const backBranchEnabledVersion = 4
 // using an index into arrays.
 const directRefEnabledVersion = 4
 
+// innerAppsEnabledVersion is first version that allowed inner app calls. No old
+// apps should be called as inner apps.
+const innerAppsEnabledVersion = 6
+
+// txnEffectsVersion is first version that allowed txn opcode to access
+// "effects" (ApplyData info)
+const txnEffectsVersion = 6
+
+// createdResourcesVersion is the first version that allows access to assets and
+// applications that were created in the same group, despite them not being in
+// the Foreign arrays.
+const createdResourcesVersion = 6
+
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {
@@ -213,7 +226,7 @@ var OpSpecs = []OpSpec{
 	// Group scratch space access
 	{0x3a, "gload", opGload, asmDefault, disDefault, nil, oneAny, 4, runModeApplication, immediates("t", "i")},
 	{0x3b, "gloads", opGloads, asmDefault, disDefault, oneInt, oneAny, 4, runModeApplication, immediates("i")},
-	// Access creatable IDs
+	// Access creatable IDs (consider deprecating, as txn CreatedAssetID, CreatedApplicationID should be enough
 	{0x3c, "gaid", opGaid, asmDefault, disDefault, nil, oneInt, 4, runModeApplication, immediates("t")},
 	{0x3d, "gaids", opGaids, asmDefault, disDefault, oneInt, oneInt, 4, runModeApplication, opDefault},
 
@@ -269,10 +282,11 @@ var OpSpecs = []OpSpec{
 	{0x68, "app_local_del", opAppLocalDel, asmDefault, disDefault, oneAny.plus(oneBytes), nil, directRefEnabledVersion, runModeApplication, opDefault},
 	{0x69, "app_global_del", opAppGlobalDel, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opDefault},
 
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, oneAny.plus(oneInt), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, immediates("i")},
-	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
-	{0x72, "app_params_get", opAppParamsGet, assembleAppParams, disAppParams, oneInt, oneAny.plus(oneInt), 5, runModeApplication, immediates("i")},
+	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, immediates("f")},
+	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, oneAny.plus(oneInt), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, immediates("f")},
+	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, immediates("f")},
+	{0x72, "app_params_get", opAppParamsGet, assembleAppParams, disAppParams, oneInt, oneAny.plus(oneInt), 5, runModeApplication, immediates("f")},
+	{0x73, "acct_params_get", opAcctParamsGet, assembleAcctParams, disAcctParams, oneInt, oneAny.plus(oneInt), 6, runModeApplication, immediates("f")},
 
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opDefault},
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
@@ -293,6 +307,7 @@ var OpSpecs = []OpSpec{
 	{0x93, "bitlen", opBitLen, asmDefault, disDefault, oneAny, oneInt, 4, modeAny, opDefault},
 	{0x94, "exp", opExp, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
 	{0x95, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, costly(10)},
+	{0x96, "bsqrt", opBytesSqrt, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(40)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
@@ -320,12 +335,15 @@ var OpSpecs = []OpSpec{
 	{0xb4, "itxn", opItxn, asmItxn, disTxn, nil, oneAny, 5, runModeApplication, immediates("f")},
 	{0xb5, "itxna", opItxna, asmItxna, disTxna, nil, oneAny, 5, runModeApplication, immediates("f", "i")},
 	{0xb6, "itxn_next", opTxNext, asmDefault, disDefault, nil, nil, 6, runModeApplication, opDefault},
+	{0xb7, "gitxn", opGitxn, asmGitxn, disGtxn, nil, oneAny, 6, runModeApplication, immediates("t", "f")},
+	{0xb8, "gitxna", opGitxna, asmGitxna, disGtxna, nil, oneAny, 6, runModeApplication, immediates("t", "f", "i")},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, assembleTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
 	{0xc1, "gtxnas", opGtxnas, assembleGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
 	{0xc2, "gtxnsas", opGtxnsas, assembleGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},
 	{0xc3, "args", opArgs, asmDefault, disDefault, oneInt, oneBytes, 5, runModeSignature, opDefault},
+	{0xc4, "gloadss", opGloadss, asmDefault, disDefault, twoInts, oneAny, 6, runModeApplication, opDefault},
 }
 
 type sortByOpcode []OpSpec

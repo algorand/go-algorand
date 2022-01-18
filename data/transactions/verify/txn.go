@@ -85,7 +85,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		},
 		consensusVersion: contextHdr.CurrentProtocol,
 		consensusParams:  consensusParams,
-		minTealVersion:   logic.ComputeMinTealVersion(group),
+		minTealVersion:   logic.ComputeMinTealVersion(transactions.WrapSignedTxnsWithAD(group), false),
 		signedGroupTxns:  group,
 	}, nil
 }
@@ -289,14 +289,13 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 	if groupIndex < 0 {
 		return errors.New("Negative groupIndex")
 	}
+	txngroup := transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns)
 	ep := logic.EvalParams{
-		Txn:            txn,
 		Proto:          &groupCtx.consensusParams,
-		TxnGroup:       groupCtx.signedGroupTxns,
-		GroupIndex:     uint64(groupIndex),
+		TxnGroup:       txngroup,
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
-	err := logic.Check(lsig.Logic, ep)
+	err := logic.CheckSignature(groupIndex, &ep)
 	if err != nil {
 		return err
 	}
@@ -347,13 +346,11 @@ func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		return errors.New("Negative groupIndex")
 	}
 	ep := logic.EvalParams{
-		Txn:            txn,
 		Proto:          &groupCtx.consensusParams,
-		TxnGroup:       groupCtx.signedGroupTxns,
-		GroupIndex:     uint64(groupIndex),
+		TxnGroup:       transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
-	pass, err := logic.Eval(txn.Lsig.Logic, ep)
+	pass, err := logic.EvalSignature(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
