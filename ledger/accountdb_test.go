@@ -1269,3 +1269,30 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 }
+
+func TestBaseAccountDataIsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	positiveTesting := func(t *testing.T) {
+		var ba baseAccountData
+		require.True(t, ba.IsEmpty())
+		for i := 0; i < 20; i++ {
+			h := crypto.Hash([]byte{byte(i)})
+			rnd := binary.BigEndian.Uint64(h[:])
+			ba.UpdateRound = rnd
+			require.True(t, ba.IsEmpty())
+		}
+	}
+	var empty baseAccountData
+	negativeTesting := func(t *testing.T) {
+		for i := 0; i < 1000; i++ {
+			randObj, _ := protocol.RandomizeObject(&baseAccountData{})
+			ba := randObj.(*baseAccountData)
+			if *ba == empty {
+				return
+			}
+			require.False(t, ba.IsEmpty())
+		}
+	}
+	t.Run("Positive", positiveTesting)
+	t.Run("Negative", negativeTesting)
+}
