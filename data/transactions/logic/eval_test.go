@@ -138,7 +138,7 @@ func (ep *EvalParams) reset() {
 		ep.PooledApplicationBudget = &budget
 	}
 	if ep.Proto.EnableInnerTransactionPooling {
-		inners := ep.Proto.MaxInnerTransactions
+		inners := ep.Proto.MaxTxGroupSize * ep.Proto.MaxInnerTransactions
 		ep.pooledAllowedInners = &inners
 	}
 	ep.pastScratch = make([]*scratchSpace, ep.Proto.MaxTxGroupSize)

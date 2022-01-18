@@ -24,6 +24,10 @@ func NewExpect(l int, s string) Expect {
 	return Expect{l, s}
 }
 
+func (ep *EvalParams) Reset() {
+	ep.reset()
+}
+
 var MakeSampleEnv = makeSampleEnv
 var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
 var MakeSampleTxn = makeSampleTxn
