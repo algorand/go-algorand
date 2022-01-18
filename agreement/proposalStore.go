@@ -18,8 +18,6 @@ package agreement
 
 import (
 	"fmt"
-
-	"github.com/algorand/go-algorand/logging"
 )
 
 // An blockAssembler contains the proposal data associated with some
@@ -289,7 +287,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	case newRound:
 		if len(store.Assemblers) > 1 {
 			// TODO this check is really an implementation invariant; move it into a whitebox test
-			logging.Base().Panic("too many assemblers")
+			r.t.log.Panic("too many assemblers")
 		}
 		for pv, ea := range store.Assemblers {
 			if ea.Filled {
@@ -347,7 +345,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		se.Payload = ea.Payload
 		return se
 	}
-	logging.Base().Panicf("proposalStore: bad event type: observed an event of type %v", e.t())
+	r.t.log.Panicf("proposalStore: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
 }
 
