@@ -334,7 +334,7 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement
 			logfn = l.log.Debugf
 			// Otherwise, the error is because the block is in the future. Error is logged.
 		}
-		logfn("could not write block %d to the ledger: %v", round, err)
+		logfn("data.EnsureValidatedBlock: could not write block %d to the ledger: %v", round, err)
 	}
 }
 
@@ -355,26 +355,16 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 		switch err.(type) {
 		case protocol.Error:
 			if !protocolErrorLogged {
-				l.log.Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
+				l.log.Errorf("data.EnsureBlock: unrecoverable protocol error detected at block %d: %v", round, err)
 				protocolErrorLogged = true
 			}
 		case ledgercore.BlockInLedgerError:
 			// The block is already in the ledger. Catchup and agreement could be competing
 			// It is sufficient to report this as a Debug message
-			l.log.Debugf("could not write block %d to the ledger: %v", round, err)
+			l.log.Debugf("data.EnsureBlock: could not write block %d to the ledger: %v", round, err)
 			return
-		case ledgercore.ErrNonSequentialBlockEval:
-			errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval)
-			if ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
-				// Evaluator found that the ledger is already ahead of this block
-				// It is sufficient to report this as s Debug message
-				l.log.Debugf("could not write block %d to the ledger: %v", round, err)
-				return
-			}
-			// This is unexpected. Report an error
-			l.log.Errorf("could not write block %d to the ledger: %v", round, err)
 		default:
-			l.log.Errorf("could not write block %d to the ledger: %v", round, err)
+			l.log.Errorf("data.EnsureBlock: could not write block %d to the ledger: %v", round, err)
 		}
 
 		// If there was an error add a short delay before the next attempt.
