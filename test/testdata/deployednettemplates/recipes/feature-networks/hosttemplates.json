@@ -1,0 +1,10 @@
+{
+  "Hosts": [
+    {
+      "Name": "AWS-US-EAST-1-Large",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "m6i.large"
+    }
+  ]
+}

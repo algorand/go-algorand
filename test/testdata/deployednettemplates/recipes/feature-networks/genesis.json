@@ -1,0 +1,29 @@
+{
+  "NetworkName": "",
+  "VersionModifier": "",
+  "ConsensusProtocol": "future",
+  "FirstPartKeyRound": 0,
+  "LastPartKeyRound": 100000000,
+  "Wallets": [
+    {
+      "Name": "Wallet1",
+      "Stake": 45,
+      "Online": true
+    },
+    {
+      "Name": "Wallet2",
+      "Stake": 45,
+      "Online": true
+    },
+    {
+      "Name": "Wallet3",
+      "Stake": 5,
+      "Online": true
+    },
+    {
+      "Name": "Wallet4",
+      "Stake": 5,
+      "Online": true
+    }
+  ]
+}
