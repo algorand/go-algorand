@@ -94,7 +94,9 @@ func TestEmptyVerifier(t *testing.T) {
 	a := require.New(t)
 
 	signer := generateTestSigner(crypto.FalconType, 8, 9, 5, a)
-	a.Equal(signer.GetVerifier().IsEmpty(), true)
+	// even if there are no keys for that period, the root is not empty
+	// (part of the vector commitment property).
+	a.Equal(signer.GetVerifier().IsEmpty(), false)
 }
 
 func TestEmptySigner(t *testing.T) {

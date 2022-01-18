@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/algoidan/falcon"
 	"hash"
+	"math/bits"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -356,7 +357,7 @@ func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklekeys
 func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int, leafHash []byte) []byte {
 	// idxDirection will indicate which sibling we should fetch LSB to MSB leaf-to-root
 	// todo when change to vector commitment this needs to be changed.
-	idxDirection := idx
+	idxDirection := bits.Reverse64(idx) >> (64 - pathLe)
 	// use the verification path to hash siblings up to the root
 	for i := uint8(0); i < pathLe; i++ {
 		var innerNodeBytes []byte
