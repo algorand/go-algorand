@@ -21,19 +21,21 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// MakeNewEmptyBlockSync returns an empty block which is set to pass eval. afterRound is for syncronizing the block generation
 func MakeNewEmptyBlockSync(t *testing.T, afterRound basics.Round, l *ledger.Ledger, genesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
 	l.WaitForCommit(afterRound)
-	return MakeNewEmptyBlock(t, l, genesisID, initAccounts)	
+	return MakeNewEmptyBlock(t, l, genesisID, initAccounts)
 }
 
+// MakeNewEmptyBlock returns an empty block which is set to pass eval.
 func MakeNewEmptyBlock(t *testing.T, l *ledger.Ledger, genesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
 	a := require.New(t)
 
@@ -85,6 +87,7 @@ func MakeNewEmptyBlock(t *testing.T, l *ledger.Ledger, genesisID string, initAcc
 	return
 }
 
+// InitNextBlockHeader initializes the block header so that the block passes eval
 func InitNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookkeeping.Block, proto config.ConsensusParams) {
 	if proto.TxnCounter {
 		correctHeader.TxnCounter = lastBlock.TxnCounter

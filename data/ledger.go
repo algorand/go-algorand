@@ -364,8 +364,8 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 			l.log.Debugf("could not write block %d to the ledger: %v", round, err)
 			return
 		case ledgercore.ErrNonSequentialBlockEval:
-			errNSBE := err.(ledgercore.ErrNonSequentialBlockEval)
-			if errNSBE.EvaluatorRound <= errNSBE.LatestRound {
+			errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval)
+			if ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 				// Evaluator found that the ledger is already ahead of this block
 				// It is sufficient to report this as s Debug message
 				l.log.Debugf("could not write block %d to the ledger: %v", round, err)
