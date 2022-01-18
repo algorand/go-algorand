@@ -23,7 +23,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
@@ -129,12 +128,12 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				PreviousProposalHash1: eqVote.Proposals[0].BlockDigest.String(),
 				PreviousProposalHash2: eqVote.Proposals[1].BlockDigest.String(),
 			}
-			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
+			r.t.log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
 
 			return thresholdEvent{}
 		}
 
-		_, overBefore := tracker.overThreshold(proto, e.Vote.R.Step)
+		_, overBefore := tracker.overThreshold(proto, e.Vote.R.Step, r.t.log)
 
 		oldVote, voted := tracker.Voters[sender]
 
@@ -170,9 +169,10 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				Weight:                e.Vote.Cred.Weight,
 				PreviousProposalHash1: oldVote.R.Proposal.BlockDigest.String(),
 			}
-			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
 
-			logging.Base().Warnf("voteTracker: observed an equivocator: %v (vote was %v)", sender, e.Vote)
+			r.t.log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
+
+			r.t.log.Warnf("voteTracker: observed an equivocator: %v (vote was %v)", sender, e.Vote)
 
 			// sender was not already marked as an equivocator so track
 			// their weight
@@ -183,7 +183,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				// In order for this to be triggered, more than 75% of the vote for the given step need to vote for more than
 				// a single proposal. In that state, all the proposals become "above threshold". That's a serious issue, since
 				// it would compromise the honest node core assumption.
-				logging.Base().Panicf("too many equivocators for step %d: %d", e.Vote.R.Step, tracker.EquivocatorsCount)
+				r.t.log.Panicf("too many equivocators for step %d: %d", e.Vote.R.Step, tracker.EquivocatorsCount)
 			}
 
 			// decrease their weight from any block proposal they already
@@ -227,7 +227,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 			}
 		}
 
-		prop, overAfter := tracker.overThreshold(proto, e.Vote.R.Step)
+		prop, overAfter := tracker.overThreshold(proto, e.Vote.R.Step, r.t.log)
 
 		if overBefore || !overAfter {
 			return res
@@ -265,7 +265,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 				PreviousProposalHash1: eqVote.Proposals[0].BlockDigest.String(),
 				PreviousProposalHash2: eqVote.Proposals[1].BlockDigest.String(),
 			}
-			logging.Base().EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
+			r.t.log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.EquivocatedVoteEvent, equivocationDetails)
 
 			return filteredStepEvent{T: voteFilteredStep}
 		}
@@ -289,18 +289,18 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		return dumpVotesEvent{Votes: votes}
 
 	default:
-		logging.Base().Panicf("voteTracker: bad event type: observed an event of type %v", e0.t())
+		r.t.log.Panicf("voteTracker: bad event type: observed an event of type %v", e0.t())
 		panic("not reached")
 	}
 }
 
 // overThreshold returns an arbitrary proposal over the step threshold or
 // (_, false) if none exists.
-func (tracker *voteTracker) overThreshold(proto config.ConsensusParams, step step) (res proposalValue, ok bool) {
+func (tracker *voteTracker) overThreshold(proto config.ConsensusParams, step step, log serviceLogger) (res proposalValue, ok bool) {
 	for proposal := range tracker.Counts {
 		if step.reachesQuorum(proto, tracker.count(proposal)) {
 			if ok {
-				logging.Base().Panicf("voteTracker: more than value reached a threhsold in a given step: %v; %v", res, proposal)
+				log.Panicf("voteTracker: more than value reached a threhsold in a given step: %v; %v", res, proposal)
 			}
 			res = proposal
 			ok = true

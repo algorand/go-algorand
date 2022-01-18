@@ -122,7 +122,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 				o, err := tokenize(raw.Data)
 				if err != nil {
-					logging.Base().Warnf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
+					d.log.Warnf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
 					net.Disconnect(raw.MessageHandle)
 					d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
 					continue
