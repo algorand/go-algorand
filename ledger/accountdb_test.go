@@ -1276,6 +1276,14 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsEmptyApp())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	a.True(rd.IsEmptyApp())
+	a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
+	rd.ClearAppLocalState()
+	a.True(rd.IsEmptyApp())
+	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
 }
 
 func TestResourcesDataAsset(t *testing.T) {
@@ -1371,4 +1379,12 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsEmptyAsset())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	a.True(rd.IsEmptyAsset())
+	a.Equal(rd.ResourceFlags, resourceFlagsEmptyAsset)
+	rd.ClearAssetHolding()
+	a.True(rd.IsEmptyAsset())
+	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
 }

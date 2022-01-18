@@ -1373,6 +1373,12 @@ func (rd *resourcesData) GetAssetParams() basics.AssetParams {
 func (rd *resourcesData) ClearAssetHolding() {
 	rd.Amount = 0
 	rd.Frozen = false
+
+	// we might have resourceFlagsEmptyAsset only if resourcesData has empty holding
+	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
+	if rd.ResourceFlags == resourceFlagsEmptyAsset {
+		rd.ResourceFlags &= ^resourceFlagsEmptyAsset
+	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
 }
 
@@ -1380,6 +1386,7 @@ func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
 	rd.Amount = ah.Amount
 	rd.Frozen = ah.Frozen
 	rd.ResourceFlags &= ^(resourceFlagsNotHolding + resourceFlagsEmptyAsset)
+	// resourceFlagsHolding is set implicitly since it is zero
 	if rd.IsEmptyAsset() {
 		rd.ResourceFlags |= resourceFlagsEmptyAsset
 	}
@@ -1396,6 +1403,12 @@ func (rd *resourcesData) ClearAppLocalState() {
 	rd.SchemaNumUint = 0
 	rd.SchemaNumByteSlice = 0
 	rd.KeyValue = nil
+
+	// we might have resourceFlagsEmptyApp only if resourcesData has empty local state
+	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
+	if rd.ResourceFlags == resourceFlagsEmptyApp {
+		rd.ResourceFlags &= ^resourceFlagsEmptyApp
+	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
 }
 
