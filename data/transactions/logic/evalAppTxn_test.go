@@ -1324,7 +1324,9 @@ itxn_submit
 
 	ledger.NewAccount(appAddr(222), 1_000_000)
 	TestApp(t, callpay3+"int 1", ep)
-	TestApp(t, callpay3+callpay3+"int 1", ep, "too many inner transactions")
+	// Each use of callpay3 is 4 inners total, so 8 is ok. (32 allowed in test ep)
+	TestApp(t, strings.Repeat(callpay3, 8)+"int 1", ep)
+	TestApp(t, strings.Repeat(callpay3, 9)+"int 1", ep, "too many inner transactions")
 }
 
 // TestCreateAndUse checks that an ASA can be created in an inner app, and then
