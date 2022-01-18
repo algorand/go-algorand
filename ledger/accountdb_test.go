@@ -354,15 +354,19 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 	err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 	require.NoError(t, err)
 
-	updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(4))
+	updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(5))
 	require.NoError(t, err)
-	require.Equal(t, 1, len(updatedAccts))
-	require.Equal(t, persistedAccountData{addr: addr, round: 4}, updatedAccts[0]) // we store empty even for non-existing accounts
-	numResUpdates := 0
-	for _, rs := range updatesResources {
-		numResUpdates += len(rs)
-	}
-	require.Equal(t, 0, numResUpdates) // no resources changes since all of them are in memory
+	require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
+	require.Equal(t,
+		persistedAccountData{addr: addr, round: 5},
+		updatedAccts[0],
+	)
+
+	require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
+	require.Equal(t,
+		persistedResourcesData{addrid: 0, aidx: 100, data: makeResourcesData(4), round: 5},
+		updatesResources[addr][0],
+	)
 }
 
 // checkCreatables compares the expected database image to the actual database content

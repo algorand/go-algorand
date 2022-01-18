@@ -2259,6 +2259,8 @@ func accountsNewRound(
 		if data.oldAcct.rowid == 0 {
 			// zero rowid means we don't have a previous value.
 			if data.newAcct.IsEmpty() {
+				// IsEmpty means we don't have a previous value. Note, can't use newAcct.MsgIsZero
+				// because of non-zero UpdateRound field in a new delta
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
@@ -2346,11 +2348,14 @@ func accountsNewRound(
 				return
 			}
 		}
+		var entry persistedResourcesData
 		if data.oldResource.data.IsEmpty() {
 			// IsEmpty means we don't have a previous value. Note, can't use oldResource.data.MsgIsZero
-			// because of possibility of empty asset holdings or app local state after opting in
+			// because of possibility of empty asset holdings or app local state after opting in,
+			// as well as non-zero UpdateRound field in a new delta
 			if data.newResource.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
+				entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(data.newResource.UpdateRound), lastUpdateRound}
 			} else {
 				// create a new entry.
 				var rtype basics.CreatableType
@@ -2365,10 +2370,7 @@ func accountsNewRound(
 				_, err = insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data.newResource))
 				if err == nil {
 					// set the returned persisted account states so that we could store that as the baseResources in commitRound
-					entry := persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
-					deltas := updatedResources[addr]
-					deltas = append(deltas, entry)
-					updatedResources[addr] = deltas
+					entry = persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
 				}
 			}
 		} else {
@@ -2378,11 +2380,7 @@ func accountsNewRound(
 				result, err = deleteResourceStmt.Exec(addrid, aidx)
 				if err == nil {
 					// we deleted the entry successfully.
-					entry := persistedResourcesData{addrid, aidx, 0, makeResourcesData(0), lastUpdateRound}
-					deltas := updatedResources[addr]
-					deltas = append(deltas, entry)
-					updatedResources[addr] = deltas
-
+					entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(data.newResource.UpdateRound), lastUpdateRound}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", addr.String(), addrid, aidx)
@@ -2402,11 +2400,7 @@ func accountsNewRound(
 				result, err = updateResourceStmt.Exec(protocol.Encode(&data.newResource), addrid, aidx)
 				if err == nil {
 					// rowid doesn't change on update.
-					entry := persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
-					deltas := updatedResources[addr]
-					deltas = append(deltas, entry)
-					updatedResources[addr] = deltas
-
+					entry = persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
@@ -2418,6 +2412,10 @@ func accountsNewRound(
 		if err != nil {
 			return
 		}
+
+		deltas := updatedResources[addr]
+		deltas = append(deltas, entry)
+		updatedResources[addr] = deltas
 	}
 
 	if len(creatables) > 0 {
