@@ -45,7 +45,7 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	}
 
 	hfactory := crypto.HashFactory{HashType: HashType}
-	tree, err := merklearray.Build(committableSignatureSlotArray(sigs), hfactory)
+	tree, err := merklearray.BuildVectorCommitmentTree(committableSignatureSlotArray(sigs), hfactory)
 
 	leftLeafHash := calculateHashOnSigLeaf(t, sig, 60)
 	rightLeafHash := hashBytes(hfactory.NewHash(), []byte(protocol.CompactCertSig))

@@ -159,7 +159,7 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersF
 		})
 	}
 
-	tree, err := merklearray.Build(voters.Participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return nil, err
 	}

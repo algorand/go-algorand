@@ -110,7 +110,7 @@ func TestBuildVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 	}
 
-	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		t.Error(err)
 	}
@@ -202,7 +202,7 @@ func TestParticipationCommitmentBinaryFormat(t *testing.T) {
 	parts = append(parts, generateRandomParticipant(a, t.Name()))
 	parts = append(parts, generateRandomParticipant(a, t.Name()))
 
-	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
 	partCommitmentRoot := partcom.Root()
@@ -212,8 +212,8 @@ func TestParticipationCommitmentBinaryFormat(t *testing.T) {
 	leaf2 := calculateHashOnPartLeaf(parts[2])
 	leaf3 := calculateHashOnPartLeaf(parts[3])
 
-	inner1 := calculateHashOnInternalNode(leaf0, leaf1)
-	inner2 := calculateHashOnInternalNode(leaf2, leaf3)
+	inner1 := calculateHashOnInternalNode(leaf0, leaf2)
+	inner2 := calculateHashOnInternalNode(leaf1, leaf3)
 
 	calcRoot := calculateHashOnInternalNode(inner1, inner2)
 
@@ -255,7 +255,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 
 	}
 
-	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
 	b, err := MkBuilder(param, parts, partcom)
@@ -274,8 +274,9 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	leaf2 := calculateHashOnSigLeaf(t, sigs[2], findLInCert(a, sigs[2], cert))
 	leaf3 := calculateHashOnSigLeaf(t, sigs[3], findLInCert(a, sigs[3], cert))
 
-	inner1 := calculateHashOnInternalNode(leaf0, leaf1)
-	inner2 := calculateHashOnInternalNode(leaf2, leaf3)
+	// hash internal node according to the vector commitment according to reverse order indexes
+	inner1 := calculateHashOnInternalNode(leaf0, leaf2)
+	inner2 := calculateHashOnInternalNode(leaf1, leaf3)
 
 	calcRoot := calculateHashOnInternalNode(inner1, inner2)
 
@@ -451,7 +452,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var cert *Cert
-	partcom, err := merklearray.Build(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		b.Error(err)
 	}
