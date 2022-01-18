@@ -404,12 +404,12 @@ class nodestats:
 
         for path in sorted(metrics_files):
             print("processing file: ",  path)
-            with open(path, 'rt') as fin:
+            with open(path, 'rt', encoding="utf-8") as fin:
                 cur = parse_metrics(fin)
             bijsonpath = path.replace('.metrics', '.blockinfo.json')
             bi = None
             if os.path.exists(bijsonpath):
-                with open(bijsonpath, 'rt') as fin:
+                with open(bijsonpath, 'rt', encoding="utf-8") as fin:
                     bi = json.load(fin)
             curtime = os.path.getmtime(path)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
