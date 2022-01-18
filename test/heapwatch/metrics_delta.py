@@ -70,7 +70,7 @@ def parse_metrics(fin):
                 ab = line.split()
                 out[ab[0]] = num(ab[1])
     except:
-        print("An exception occurred in parse_metrics")
+        print(f'An exception occurred in parse_metrics {sys.exc_info()[0]}')
         pass
     return out
 
