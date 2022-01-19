@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,6 +58,15 @@ const (
 	String
 	// Tuple is the index (8) for tuple `(<type 0>, ..., <type k>)` in ABI encoding.
 	Tuple
+)
+
+const (
+	addressByteSize        = 32
+	checksumByteSize       = 4
+	singleByteSize         = 1
+	singleBoolSize         = 1
+	lengthEncodeByteSize   = 2
+	abiEncodingLengthLimit = 1 << 16
 )
 
 // Type is the struct that stores information about an ABI value's type.
@@ -405,13 +414,6 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 	return until
 }
 
-const (
-	addressByteSize      = 32
-	singleByteSize       = 1
-	singleBoolSize       = 1
-	lengthEncodeByteSize = 2
-)
-
 // ByteLen method calculates the byte length of a static ABI type.
 func (t Type) ByteLen() (int, error) {
 	switch t.abiTypeID {
@@ -458,11 +460,34 @@ func (t Type) ByteLen() (int, error) {
 	}
 }
 
+// AnyTransactionType is the ABI argument type string for a nonspecific transaction argument
+const AnyTransactionType = "txn"
+
 // IsTransactionType checks if a type string represents a transaction type
 // argument, such as "txn", "pay", "keyreg", etc.
 func IsTransactionType(s string) bool {
 	switch s {
-	case "txn", "pay", "keyreg", "acfg", "axfer", "afrz", "appl":
+	case AnyTransactionType, "pay", "keyreg", "acfg", "axfer", "afrz", "appl":
+		return true
+	default:
+		return false
+	}
+}
+
+// AccountReferenceType is the ABI argument type string for account references
+const AccountReferenceType = "account"
+
+// AssetReferenceType is the ABI argument type string for asset references
+const AssetReferenceType = "asset"
+
+// ApplicationReferenceType is the ABI argument type string for application references
+const ApplicationReferenceType = "application"
+
+// IsReferenceType checks if a type string represents a reference type argument,
+// such as "account", "asset", or "application".
+func IsReferenceType(s string) bool {
+	switch s {
+	case AccountReferenceType, AssetReferenceType, ApplicationReferenceType:
 		return true
 	default:
 		return false

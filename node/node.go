@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -159,7 +159,6 @@ type TxnWithStatus struct {
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
-
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
@@ -786,23 +785,23 @@ func (node *AlgorandFullNode) ListParticipationKeys() (partKeys []account.Partic
 }
 
 // GetParticipationKey retries the information of a participation id from the node
-func (node *AlgorandFullNode) GetParticipationKey(partKey account.ParticipationID) (account.ParticipationRecord, error) {
-	rval := node.accountManager.Registry().Get(partKey)
+func (node *AlgorandFullNode) GetParticipationKey(partKeyID account.ParticipationID) (account.ParticipationRecord, error) {
+	rval := node.accountManager.Registry().Get(partKeyID)
 
 	if rval.IsZero() {
 		return account.ParticipationRecord{}, account.ErrParticipationIDNotFound
 	}
 
-	return node.accountManager.Registry().Get(partKey), nil
+	return rval, nil
 }
 
 // RemoveParticipationKey given a participation id, remove the records from the node
-func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.ParticipationID) error {
+func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.ParticipationID) error {
 
 	// Need to remove the file and then remove the entry in the registry
 	// Let's first get the recorded information from the registry so we can lookup the file
 
-	partRecord := node.accountManager.Registry().Get(partKey)
+	partRecord := node.accountManager.Registry().Get(partKeyID)
 
 	if partRecord.IsZero() {
 		return account.ErrParticipationIDNotFound
@@ -815,7 +814,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
 
-	err := node.accountManager.Registry().Delete(partKey)
+	err := node.accountManager.Registry().Delete(partKeyID)
 	if err != nil {
 		return err
 	}
@@ -832,6 +831,19 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKey account.Participati
 	_ = os.Remove(fullyQualifiedFilename)
 
 	return nil
+}
+
+// AppendParticipationKeys given a participation id, remove the records from the node
+func (node *AlgorandFullNode) AppendParticipationKeys(partKeyID account.ParticipationID, keys account.StateProofKeys) error {
+	err := node.accountManager.Registry().AppendKeys(partKeyID, keys)
+	if err != nil {
+		return err
+	}
+
+	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
+	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
+	// the error message.
+	return node.accountManager.Registry().Flush(500 * time.Millisecond)
 }
 
 func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (string, error) {

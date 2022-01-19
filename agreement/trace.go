@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -497,9 +497,12 @@ type serviceLogger struct {
 	logging.Logger
 }
 
+func makeServiceLogger(log logging.Logger) serviceLogger {
+	return serviceLogger{log.With("Context", "Agreement")}
+}
+
 func (log serviceLogger) with(e logspec.AgreementEvent) serviceLogger {
 	fields := logging.Fields{
-		"Context":      "Agreement",
 		"Type":         e.Type.String(),
 		"Round":        e.Round,
 		"Period":       e.Period,

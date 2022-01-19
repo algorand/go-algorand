@@ -854,6 +854,17 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails
 - LogicSigVersion >= 5
 
+## base64_decode e
+
+- Opcode: 0x5c {uint8 encoding index}
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- decode X which was base64-encoded using _encoding_ E. Fail if X is not base64 encoded with encoding E
+- **Cost**: 25
+- LogicSigVersion >= 6
+
+Decodes X using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\n` and `\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\r`, or `\n`.
+
 ## balance
 
 - Opcode: 0x60

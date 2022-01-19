@@ -1,6 +1,6 @@
 module github.com/algorand/go-algorand
 
-go 1.14
+go 1.16
 
 require (
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
@@ -42,7 +42,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect
