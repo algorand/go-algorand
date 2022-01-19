@@ -58,7 +58,7 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 	}
 	v := reflect.New(tt.Elem())
 	changes := int(^uint(0) >> 1)
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes)
+	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
 	return v.Interface(), err
 }
 
@@ -70,7 +70,7 @@ func RandomizeObjectField(template interface{}) (interface{}, error) {
 	}
 	v := reflect.New(tt.Elem())
 	changes := 1
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes)
+	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
 	return v.Interface(), err
 }
 
@@ -210,7 +210,7 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 	return
 }
 
-func randomizeValue(v reflect.Value, datapath string, tag string, remainingChanges *int) error {
+func randomizeValue(v reflect.Value, datapath string, tag string, remainingChanges *int, seenTypes map[reflect.Type]bool) error {
 	if *remainingChanges == 0 {
 		return nil
 	}
@@ -244,6 +244,11 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		*remainingChanges--
 	case reflect.Struct:
 		st := v.Type()
+		if !seenTypes[st] {
+			seenTypes[st] = true
+		} else {
+			return nil
+		}
 		fieldsOrder := rand.Perm(v.NumField())
 		for i := 0; i < v.NumField(); i++ {
 			fieldIdx := fieldsOrder[i]
@@ -257,7 +262,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			if rawMsgpType == f.Type {
 				return errSkipRawMsgpTesting
 			}
-			err := randomizeValue(v.Field(fieldIdx), datapath+"/"+f.Name, string(tag), remainingChanges)
+			err := randomizeValue(v.Field(fieldIdx), datapath+"/"+f.Name, string(tag), remainingChanges, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -269,7 +274,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 	case reflect.Array:
 		indicesOrder := rand.Perm(v.Len())
 		for i := 0; i < v.Len(); i++ {
-			err := randomizeValue(v.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges)
+			err := randomizeValue(v.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -287,7 +292,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		s := reflect.MakeSlice(v.Type(), l, l)
 		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
-			err := randomizeValue(s.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges)
+			err := randomizeValue(s.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -311,13 +316,13 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
 			mk := reflect.New(mt.Key())
-			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges)
+			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
 			if err != nil {
 				return err
 			}
 
 			mv := reflect.New(mt.Elem())
-			err = randomizeValue(mv.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges)
+			err = randomizeValue(mv.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
 			if err != nil {
 				return err
 			}
