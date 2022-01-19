@@ -371,8 +371,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 	for _, roundDelta := range accountDeltas {
 		deltaRound++
 		// assets
-		for _, assetHold := range roundDelta.GetAllAssetsHoldings() {
-			if prev, idx := outResourcesDeltas.get(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx)); idx != -1 {
+		for _, res := range roundDelta.GetAllAssetResources() {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
@@ -380,82 +380,35 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if assetHold.Holding != nil {
-					updEntry.newResource.SetAssetHolding(*assetHold.Holding)
-				} else {
-					updEntry.newResource.ClearAssetHolding()
-				}
+				updEntry.newResource.SetAssetData(res.Params, res.Holding)
 				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
-					address:     assetHold.Addr,
+					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if assetHold.Holding != nil {
-					newEntry.newResource.SetAssetHolding(*assetHold.Holding)
-				}
-				baseResourceData, has := baseResources.read(assetHold.Addr, basics.CreatableIndex(assetHold.Aidx))
+				newEntry.newResource.SetAssetData(res.Params, res.Holding)
+				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(newEntry)
 				} else {
-					if pad, has := baseAccounts.read(assetHold.Addr); has {
+					if pad, has := baseAccounts.read(res.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(assetHold.Aidx)
-					outResourcesDeltas.insertMissing(newEntry)
-				}
-			}
-		}
-		// asset params
-		for _, assetParams := range roundDelta.GetAllAssetParams() {
-			if prev, idx := outResourcesDeltas.get(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx)); idx != -1 {
-				// update existing entry with new data.
-				updEntry := resourceDelta{
-					oldResource: prev.oldResource,
-					newResource: prev.newResource,
-					nAcctDeltas: prev.nAcctDeltas + 1,
-					address:     prev.address,
-				}
-				if assetParams.Params != nil {
-					updEntry.newResource.SetAssetParams(*assetParams.Params, updEntry.newResource.IsHolding())
-				} else {
-					updEntry.newResource.ClearAssetParams()
-				}
-				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
-				outResourcesDeltas.update(idx, updEntry)
-			} else {
-				// it's a new entry.
-				newEntry := resourceDelta{
-					nAcctDeltas: 1,
-					address:     assetParams.Addr,
-					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
-				}
-				if assetParams.Params != nil {
-					newEntry.newResource.SetAssetParams(*assetParams.Params, false)
-				}
-				baseResourceData, has := baseResources.read(assetParams.Addr, basics.CreatableIndex(assetParams.Aidx))
-				existingAcctCacheEntry := has && baseResourceData.addrid != 0
-				if existingAcctCacheEntry {
-					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry)
-				} else {
-					if pad, has := baseAccounts.read(assetParams.Addr); has {
-						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
-					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(assetParams.Aidx)
+					newEntry.oldResource.aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
 		}
 
-		// application local state
-		for _, localState := range roundDelta.GetAllAppLocalStates() {
-			if prev, idx := outResourcesDeltas.get(localState.Addr, basics.CreatableIndex(localState.Aidx)); idx != -1 {
+		// application
+		for _, res := range roundDelta.GetAllAppResources() {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := resourceDelta{
 					oldResource: prev.oldResource,
@@ -463,75 +416,27 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				if localState.State != nil {
-					updEntry.newResource.SetAppLocalState(*localState.State)
-				} else {
-					updEntry.newResource.ClearAppLocalState()
-				}
+				updEntry.newResource.SetAppData(res.Params, res.State)
 				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
 				outResourcesDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
-					address:     localState.Addr,
+					address:     res.Addr,
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
-				if localState.State != nil {
-					newEntry.newResource.SetAppLocalState(*localState.State)
-				}
-				baseResourceData, has := baseResources.read(localState.Addr, basics.CreatableIndex(localState.Aidx))
+				newEntry.newResource.SetAppData(res.Params, res.State)
+				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
 					newEntry.oldResource = baseResourceData
 					outResourcesDeltas.insert(newEntry)
 				} else {
-					if pad, has := baseAccounts.read(localState.Addr); has {
+					if pad, has := baseAccounts.read(res.Addr); has {
 						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
 					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(localState.Aidx)
-					outResourcesDeltas.insertMissing(newEntry)
-				}
-			}
-		}
-
-		// application params
-		for _, appParams := range roundDelta.GetAllAppParams() {
-			if prev, idx := outResourcesDeltas.get(appParams.Addr, basics.CreatableIndex(appParams.Aidx)); idx != -1 {
-				// update existing entry with new data.
-				updEntry := resourceDelta{
-					oldResource: prev.oldResource,
-					newResource: prev.newResource,
-					nAcctDeltas: prev.nAcctDeltas + 1,
-					address:     prev.address,
-				}
-				if appParams.Params != nil {
-					updEntry.newResource.SetAppParams(*appParams.Params, updEntry.newResource.IsHolding())
-				} else {
-					updEntry.newResource.ClearAppParams()
-				}
-				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
-				outResourcesDeltas.update(idx, updEntry)
-			} else {
-				// it's a new entry.
-				newEntry := resourceDelta{
-					nAcctDeltas: 1,
-					address:     appParams.Addr,
-					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
-				}
-				if appParams.Params != nil {
-					newEntry.newResource.SetAppParams(*appParams.Params, false)
-				}
-				baseResourceData, has := baseResources.read(appParams.Addr, basics.CreatableIndex(appParams.Aidx))
-				existingAcctCacheEntry := has && baseResourceData.addrid != 0
-				if existingAcctCacheEntry {
-					newEntry.oldResource = baseResourceData
-					outResourcesDeltas.insert(newEntry)
-				} else {
-					if pad, has := baseAccounts.read(appParams.Addr); has {
-						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
-					}
-					newEntry.oldResource.aidx = basics.CreatableIndex(appParams.Aidx)
+					newEntry.oldResource.aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
 				}
 			}
@@ -1272,6 +1177,11 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 	}
 }
 
+func (ba baseAccountData) IsEmpty() bool {
+	ba.UpdateRound = 0
+	return ba == baseAccountData{}
+}
+
 type resourceFlags uint8
 
 const (
@@ -1463,6 +1373,12 @@ func (rd *resourcesData) GetAssetParams() basics.AssetParams {
 func (rd *resourcesData) ClearAssetHolding() {
 	rd.Amount = 0
 	rd.Frozen = false
+
+	// we might have resourceFlagsEmptyAsset only if resourcesData has empty holding
+	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
+	if rd.ResourceFlags == resourceFlagsEmptyAsset {
+		rd.ResourceFlags &= ^resourceFlagsEmptyAsset
+	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
 }
 
@@ -1470,6 +1386,7 @@ func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
 	rd.Amount = ah.Amount
 	rd.Frozen = ah.Frozen
 	rd.ResourceFlags &= ^(resourceFlagsNotHolding + resourceFlagsEmptyAsset)
+	// resourceFlagsHolding is set implicitly since it is zero
 	if rd.IsEmptyAsset() {
 		rd.ResourceFlags |= resourceFlagsEmptyAsset
 	}
@@ -1486,6 +1403,12 @@ func (rd *resourcesData) ClearAppLocalState() {
 	rd.SchemaNumUint = 0
 	rd.SchemaNumByteSlice = 0
 	rd.KeyValue = nil
+
+	// we might have resourceFlagsEmptyApp only if resourcesData has empty local state
+	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
+	if rd.ResourceFlags == resourceFlagsEmptyApp {
+		rd.ResourceFlags &= ^resourceFlagsEmptyApp
+	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
 }
 
@@ -1561,6 +1484,32 @@ func (rd *resourcesData) GetAppParams() basics.AppParams {
 			},
 		},
 		ExtraProgramPages: rd.ExtraProgramPages,
+	}
+}
+
+func (rd *resourcesData) SetAssetData(ap ledgercore.AssetParamsDelta, ah ledgercore.AssetHoldingDelta) {
+	if ah.Holding != nil {
+		rd.SetAssetHolding(*ah.Holding)
+	} else if ah.Deleted {
+		rd.ClearAssetHolding()
+	}
+	if ap.Params != nil {
+		rd.SetAssetParams(*ap.Params, rd.IsHolding())
+	} else if ap.Deleted {
+		rd.ClearAssetParams()
+	}
+}
+
+func (rd *resourcesData) SetAppData(ap ledgercore.AppParamsDelta, al ledgercore.AppLocalStateDelta) {
+	if al.LocalState != nil {
+		rd.SetAppLocalState(*al.LocalState)
+	} else if al.Deleted {
+		rd.ClearAppLocalState()
+	}
+	if ap.Params != nil {
+		rd.SetAppParams(*ap.Params, rd.IsHolding())
+	} else if ap.Deleted {
+		rd.ClearAppParams()
 	}
 }
 
@@ -2322,7 +2271,9 @@ func accountsNewRound(
 		data := updates.getByIdx(i)
 		if data.oldAcct.rowid == 0 {
 			// zero rowid means we don't have a previous value.
-			if data.newAcct.MsgIsZero() {
+			if data.newAcct.IsEmpty() {
+				// IsEmpty means we don't have a previous value. Note, can't use newAcct.MsgIsZero
+				// because of non-zero UpdateRound field in a new delta
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
@@ -2338,7 +2289,7 @@ func accountsNewRound(
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
-			if data.newAcct.MsgIsZero() {
+			if data.newAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
 				result, err = deleteByRowIDStmt.Exec(data.oldAcct.rowid)
 				if err == nil {
@@ -2401,17 +2352,23 @@ func accountsNewRound(
 		addrid := data.oldResource.addrid
 		if addrid == 0 {
 			// new entry, data.oldResource does not have addrid
+			// check if this delta is part of in-memory only account
+			// that is created, funded, transferred, and closed within a commit range
+			inMemEntry := data.oldResource.data.IsEmpty() && data.newResource.IsEmpty()
 			addrid = newAddressesRowIDs[addr]
-			if addrid == 0 {
+			if addrid == 0 && !inMemEntry {
 				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 				return
 			}
 		}
+		var entry persistedResourcesData
 		if data.oldResource.data.IsEmpty() {
 			// IsEmpty means we don't have a previous value. Note, can't use oldResource.data.MsgIsZero
-			// because of possibility of empty asset holdings or app local state after opting in
+			// because of possibility of empty asset holdings or app local state after opting in,
+			// as well as non-zero UpdateRound field in a new delta
 			if data.newResource.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
+				entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(data.newResource.UpdateRound), lastUpdateRound}
 			} else {
 				// create a new entry.
 				var rtype basics.CreatableType
@@ -2426,10 +2383,7 @@ func accountsNewRound(
 				_, err = insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data.newResource))
 				if err == nil {
 					// set the returned persisted account states so that we could store that as the baseResources in commitRound
-					entry := persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
-					deltas := updatedResources[addr]
-					deltas = append(deltas, entry)
-					updatedResources[addr] = deltas
+					entry = persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
 				}
 			}
 		} else {
@@ -2439,11 +2393,7 @@ func accountsNewRound(
 				result, err = deleteResourceStmt.Exec(addrid, aidx)
 				if err == nil {
 					// we deleted the entry successfully.
-					entry := persistedResourcesData{addrid, aidx, 0, makeResourcesData(0), lastUpdateRound}
-					deltas := updatedResources[addr]
-					deltas = append(deltas, entry)
-					updatedResources[addr] = deltas
-
+					entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(data.newResource.UpdateRound), lastUpdateRound}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", addr.String(), addrid, aidx)
@@ -2463,11 +2413,7 @@ func accountsNewRound(
 				result, err = updateResourceStmt.Exec(protocol.Encode(&data.newResource), addrid, aidx)
 				if err == nil {
 					// rowid doesn't change on update.
-					entry := persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
-					deltas := updatedResources[addr]
-					deltas = append(deltas, entry)
-					updatedResources[addr] = deltas
-
+					entry = persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
@@ -2479,6 +2425,10 @@ func accountsNewRound(
 		if err != nil {
 			return
 		}
+
+		deltas := updatedResources[addr]
+		deltas = append(deltas, entry)
+		updatedResources[addr] = deltas
 	}
 
 	if len(creatables) > 0 {

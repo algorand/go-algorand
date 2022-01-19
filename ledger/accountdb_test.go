@@ -292,7 +292,110 @@ func TestAccountDBRound(t *testing.T) {
 	require.Equal(t, expectedTotals, actualTotals)
 }
 
-// checkCreatables compares the expected database image to the actual databse content
+// TestAccountDBInMemoryAcct checks in-memory only account modifications are handled correctly by
+// makeCompactAccountDeltas, makeCompactResourceDeltas and accountsNewRound
+func TestAccountDBInMemoryAcct(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	type testfunc func(basics.Address) ([]ledgercore.NewAccountDeltas, int, int)
+	var tests = []testfunc{
+		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+			const numRounds = 4
+			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
+			accountDeltas[0].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+			// transfer some asset
+			accountDeltas[1].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+			// close out the asset
+			accountDeltas[2].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+			// close the account
+			accountDeltas[3].Upsert(addr, ledgercore.AccountData{})
+			return accountDeltas, 2, 3
+		},
+		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+			const numRounds = 4
+			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
+			accountDeltas[1].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+			// close out the asset
+			accountDeltas[2].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+			// close the account
+			accountDeltas[3].Upsert(addr, ledgercore.AccountData{})
+			return accountDeltas, 2, 2
+		},
+	}
+
+	for i, test := range tests {
+
+		dbs, _ := dbOpenTest(t, true)
+		setDbLogging(t, dbs)
+		defer dbs.Close()
+
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+		defer tx.Rollback()
+
+		accts := ledgertesting.RandomAccounts(1, true)
+		accountsInitTest(t, tx, accts, proto)
+		addr := ledgertesting.RandomAddress()
+
+		// lastCreatableID stores asset or app max used index to get rid of conflicts
+		var baseAccounts lruAccounts
+		var baseResources lruResources
+		baseAccounts.init(nil, 100, 80)
+		baseResources.init(nil, 100, 80)
+
+		t.Run(fmt.Sprintf("test%d", i), func(t *testing.T) {
+
+			accountDeltas, numAcctDeltas, numResDeltas := test(addr)
+			lastRound := uint64(len(accountDeltas) + 1)
+
+			outAccountDeltas := makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
+			require.Equal(t, 1, len(outAccountDeltas.deltas))
+			require.Equal(t, accountDelta{newAcct: baseAccountData{UpdateRound: lastRound}, nAcctDeltas: numAcctDeltas, address: addr}, outAccountDeltas.deltas[0])
+			require.Equal(t, 1, len(outAccountDeltas.misses))
+
+			outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+			require.Equal(t, 1, len(outResourcesDeltas.deltas))
+			require.Equal(t,
+				resourceDelta{
+					oldResource: persistedResourcesData{aidx: 100}, newResource: makeResourcesData(lastRound - 1),
+					nAcctDeltas: numResDeltas, address: addr,
+				},
+				outResourcesDeltas.deltas[0],
+			)
+			require.Equal(t, 1, len(outAccountDeltas.misses))
+
+			err = outAccountDeltas.accountsLoadOld(tx)
+			require.NoError(t, err)
+
+			knownAddresses := make(map[basics.Address]int64)
+			for _, delta := range outAccountDeltas.deltas {
+				knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
+			}
+
+			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
+			require.NoError(t, err)
+
+			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(lastRound))
+			require.NoError(t, err)
+			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
+			require.Equal(t,
+				persistedAccountData{addr: addr, round: basics.Round(lastRound)},
+				updatedAccts[0],
+			)
+
+			require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
+			require.Equal(t,
+				persistedResourcesData{addrid: 0, aidx: 100, data: makeResourcesData(lastRound - 1), round: basics.Round(lastRound)},
+				updatesResources[addr][0],
+			)
+		})
+	}
+}
+
+// checkCreatables compares the expected database image to the actual database content
 func checkCreatables(t *testing.T,
 	tx *sql.Tx, iteration int,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
@@ -1173,6 +1276,14 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsEmptyApp())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	a.True(rd.IsEmptyApp())
+	a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
+	rd.ClearAppLocalState()
+	a.True(rd.IsEmptyApp())
+	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
 }
 
 func TestResourcesDataAsset(t *testing.T) {
@@ -1268,4 +1379,12 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsEmptyAsset())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	a.True(rd.IsEmptyAsset())
+	a.Equal(rd.ResourceFlags, resourceFlagsEmptyAsset)
+	rd.ClearAssetHolding()
+	a.True(rd.IsEmptyAsset())
+	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
 }

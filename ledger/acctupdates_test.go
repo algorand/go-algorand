@@ -362,37 +362,21 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			accounts[addr] = macct
 		}
 
-		for _, rec := range rdelta.GetAllAppLocalStates() {
+		for _, rec := range rdelta.GetAllAppResources() {
 			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
 			entry, _ := resources.get(key)
-			entry.resource.AppLocalState = rec.State
+			entry.resource.AppLocalState = rec.State.LocalState
+			entry.resource.AppParams = rec.Params.Params
 			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
 			entry.resource.CreatableType = basics.AppCreatable
 			entry.ndeltas++
 			resources[key] = entry
 		}
-		for _, rec := range rdelta.GetAllAppParams() {
+		for _, rec := range rdelta.GetAllAssetResources() {
 			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
 			entry, _ := resources.get(key)
-			entry.resource.AppParams = rec.Params
-			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
-			entry.resource.CreatableType = basics.AppCreatable
-			entry.ndeltas++
-			resources[key] = entry
-		}
-		for _, rec := range rdelta.GetAllAssetsHoldings() {
-			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
-			entry, _ := resources.get(key)
-			entry.resource.AssetHolding = rec.Holding
-			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
-			entry.resource.CreatableType = basics.AssetCreatable
-			entry.ndeltas++
-			resources[key] = entry
-		}
-		for _, rec := range rdelta.GetAllAssetParams() {
-			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
-			entry, _ := resources.get(key)
-			entry.resource.AssetParams = rec.Params
+			entry.resource.AssetHolding = rec.Holding.Holding
+			entry.resource.AssetParams = rec.Params.Params
 			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
 			entry.resource.CreatableType = basics.AssetCreatable
 			entry.ndeltas++
@@ -1453,10 +1437,10 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	// check empty deltas do no produce empty resourcesData records
 	accountDeltas := make([]ledgercore.NewAccountDeltas, 1)
-	accountDeltas[0].UpsertAppParams(addrs[0], 100, nil)
-	accountDeltas[0].UpsertAppLocalState(addrs[1], 101, nil)
-	accountDeltas[0].UpsertAssetParams(addrs[2], 102, nil)
-	accountDeltas[0].UpsertAssetHolding(addrs[3], 103, nil)
+	accountDeltas[0].UpsertAppResource(addrs[0], 100, ledgercore.AppParamsDelta{Deleted: true}, ledgercore.AppLocalStateDelta{})
+	accountDeltas[0].UpsertAppResource(addrs[1], 101, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+	accountDeltas[0].UpsertAssetResource(addrs[2], 102, ledgercore.AssetParamsDelta{Deleted: true}, ledgercore.AssetHoldingDelta{})
+	accountDeltas[0].UpsertAssetResource(addrs[3], 103, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
 
 	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 	delta, _ := outResourcesDeltas.get(addrs[0], 100)
@@ -1484,26 +1468,24 @@ func TestCompactDeltasResources(t *testing.T) {
 	// addr 0 has app params and a local state for another app
 	appParams100 := basics.AppParams{ApprovalProgram: []byte{100}}
 	appLocalState200 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"200": basics.TealValue{Type: basics.TealBytesType, Bytes: "200"}}}
-	accountDeltas[0].UpsertAppParams(addrs[0], 100, &appParams100)
-	accountDeltas[0].UpsertAppLocalState(addrs[0], 200, &appLocalState200)
+	accountDeltas[0].UpsertAppResource(addrs[0], 100, ledgercore.AppParamsDelta{Params: &appParams100}, ledgercore.AppLocalStateDelta{})
+	accountDeltas[0].UpsertAppResource(addrs[0], 200, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState200})
 
 	// addr 1 has app params and a local state for the same app
 	appParams101 := basics.AppParams{ApprovalProgram: []byte{101}}
 	appLocalState101 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"101": basics.TealValue{Type: basics.TealBytesType, Bytes: "101"}}}
-	accountDeltas[0].UpsertAppParams(addrs[1], 101, &appParams101)
-	accountDeltas[0].UpsertAppLocalState(addrs[1], 101, &appLocalState101)
+	accountDeltas[0].UpsertAppResource(addrs[1], 101, ledgercore.AppParamsDelta{Params: &appParams101}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState101})
 
 	// addr 2 has asset params and a holding for another asset
 	assetParams102 := basics.AssetParams{Total: 102}
 	assetHolding202 := basics.AssetHolding{Amount: 202}
-	accountDeltas[0].UpsertAssetParams(addrs[2], 102, &assetParams102)
-	accountDeltas[0].UpsertAssetHolding(addrs[2], 202, &assetHolding202)
+	accountDeltas[0].UpsertAssetResource(addrs[2], 102, ledgercore.AssetParamsDelta{Params: &assetParams102}, ledgercore.AssetHoldingDelta{})
+	accountDeltas[0].UpsertAssetResource(addrs[2], 202, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &assetHolding202})
 
 	// addr 3 has asset params and a holding for the same asset
 	assetParams103 := basics.AssetParams{Total: 103}
 	assetHolding103 := basics.AssetHolding{Amount: 103}
-	accountDeltas[0].UpsertAssetParams(addrs[3], 103, &assetParams103)
-	accountDeltas[0].UpsertAssetHolding(addrs[3], 103, &assetHolding103)
+	accountDeltas[0].UpsertAssetResource(addrs[3], 103, ledgercore.AssetParamsDelta{Params: &assetParams103}, ledgercore.AssetHoldingDelta{Holding: &assetHolding103})
 
 	baseResources.init(nil, 100, 80)
 
@@ -1518,7 +1500,8 @@ func TestCompactDeltasResources(t *testing.T) {
 		delta, _ := outResourcesDeltas.get(addrs[0], 100)
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, appParams100.ApprovalProgram, delta.newResource.ApprovalProgram)
-		// do not delta.nAcctDeltas since checkNewDeltas func is reused and this entry gets modified
+		// do not check delta.nAcctDeltas since checkNewDeltas func is reused and this entry gets modified
+
 		delta, _ = outResourcesDeltas.get(addrs[0], 200)
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, appLocalState200.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
@@ -1528,7 +1511,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, appParams101.ApprovalProgram, delta.newResource.ApprovalProgram)
 		require.Equal(t, appLocalState101.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
-		require.Equal(t, int(2), delta.nAcctDeltas)
+		require.Equal(t, int(1), delta.nAcctDeltas)
 
 		delta, _ = outResourcesDeltas.get(addrs[2], 102)
 		require.NotEmpty(t, delta.newResource)
@@ -1543,7 +1526,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		require.NotEmpty(t, delta.newResource)
 		require.Equal(t, assetParams103.Total, delta.newResource.Total)
 		require.Equal(t, assetHolding103.Amount, delta.newResource.GetAssetHolding().Amount)
-		require.Equal(t, int(2), delta.nAcctDeltas)
+		require.Equal(t, int(1), delta.nAcctDeltas)
 	}
 
 	checkNewDeltas(outResourcesDeltas)
@@ -1588,12 +1571,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	accountDeltas[1].Upsert(addrs[3], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 8}}})
 
 	appLocalState100 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"100": basics.TealValue{Type: basics.TealBytesType, Bytes: "100"}}}
-	accountDeltas[1].UpsertAppLocalState(addrs[0], 100, &appLocalState100)
+	accountDeltas[1].UpsertAppResource(addrs[0], 100, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState100})
 
 	appParams104 := basics.AppParams{ApprovalProgram: []byte{104}}
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
-	accountDeltas[1].UpsertAppParams(addrs[4], 104, &appParams104)
-	accountDeltas[1].UpsertAppLocalState(addrs[4], 104, &appLocalState204)
+	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
 
 	baseResources.write(persistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
@@ -1609,7 +1591,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	delta, _ = outResourcesDeltas.get(addrs[4], 104)
 	require.Equal(t, appParams104.ApprovalProgram, delta.newResource.GetAppParams().ApprovalProgram)
 	require.Equal(t, appLocalState204.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
-	require.Equal(t, int(2), delta.nAcctDeltas)
+	require.Equal(t, int(1), delta.nAcctDeltas)
 }
 
 // TestAcctUpdatesCachesInitialization test the functionality of the initializeCaches cache.
@@ -2027,12 +2009,15 @@ func TestAcctUpdatesResources(t *testing.T) {
 
 	aidx := basics.AssetIndex(1)
 	aidx2 := basics.AssetIndex(2)
+	aidx3 := basics.AppIndex(3)
+	aidx4 := basics.AssetIndex(5)
 
 	rewardLevel := uint64(0)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	// the test 1 requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
 	// the test 2 requires 2 more blocks
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+5); i++ {
+	// the test 2 requires 2 more blocks
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3+2+2); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.NewAccountDeltas
@@ -2041,36 +2026,53 @@ func TestAcctUpdatesResources(t *testing.T) {
 		// expect no errors on accounts writing
 		if i == 1 {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
-			updates.UpsertAssetHolding(addr1, aidx, &basics.AssetHolding{Amount: 100})
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
 		}
 		if i == 2 {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 0}})
-			updates.UpsertAssetHolding(addr1, aidx, nil)
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
 		}
 		if i == 3 {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
-			updates.UpsertAssetHolding(addr1, aidx, &basics.AssetHolding{Amount: 200})
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
 		}
 
 		// test 2: send back to creator creator
 		// expect matching balances at the end
+		creatorParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
 		if i == 4 {
 			// create base account to make lookup work
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2, TotalAssetParams: 1}})
 			updates.Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
 
 			// create an asset
-			updates.UpsertAssetParams(addr1, aidx2, &basics.AssetParams{Total: 1000})
-			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 1000})
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 1000}})
 
 			// transfer
-			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 900})
-			updates.UpsertAssetHolding(addr2, aidx2, &basics.AssetHolding{Amount: 100})
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 900}})
+			updates.UpsertAssetResource(addr2, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
 		}
 		if i == 5 {
 			// transfer back: asset holding record incorrectly clears params record
-			updates.UpsertAssetHolding(addr2, aidx2, &basics.AssetHolding{Amount: 99})
-			updates.UpsertAssetHolding(addr1, aidx2, &basics.AssetHolding{Amount: 901})
+			updates.UpsertAssetResource(addr2, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 99}})
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 901}})
+		}
+
+		// test 3: own app local state closeout, own empty
+		appParams := ledgercore.AppParamsDelta{Params: &basics.AppParams{ApprovalProgram: []byte{2, 0x20, 1, 1, 0x22} /* int 1 */}}
+		if i == 6 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 3, TotalAssetParams: 2, TotalAppParams: 1, TotalAppLocalStates: 1}})
+
+			// create an app
+			updates.UpsertAppResource(addr1, aidx3, appParams, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// create an asset
+			updates.UpsertAssetResource(addr1, aidx4, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 1000}})
+		}
+		if i == 7 {
+			// closeout app
+			updates.UpsertAppResource(addr1, aidx3, appParams, ledgercore.AppLocalStateDelta{LocalState: nil, Deleted: true})
+			// transfer own holdings
+			updates.UpsertAssetResource(addr1, aidx4, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
 		}
 
 		prevTotals, err := au.Totals(basics.Round(i - 1))
@@ -2133,14 +2135,21 @@ func TestAcctUpdatesResources(t *testing.T) {
 		accts = append(accts, newAccts)
 	}
 
-	ad1, _, err := au.lookupLatest(addr1)
+	ad, _, err := au.lookupLatest(addr1)
 	require.NoError(t, err)
-	ad2, _, err := au.lookupLatest(addr2)
-	require.NoError(t, err)
+	require.Equal(t, uint64(1000), ad.AssetParams[aidx2].Total)
+	require.Equal(t, uint64(901), ad.Assets[aidx2].Amount)
 
-	require.Equal(t, uint64(1000), ad1.AssetParams[aidx2].Total)
-	require.Equal(t, uint64(901), ad1.Assets[aidx2].Amount)
-	require.Equal(t, uint64(99), ad2.Assets[aidx2].Amount)
+	require.NotEmpty(t, ad.AppParams[aidx3])
+	require.NotEmpty(t, ad.AppParams[aidx3].ApprovalProgram)
+	require.NotEmpty(t, ad.AssetParams[aidx4])
+	h, ok := ad.Assets[aidx4]
+	require.True(t, ok)
+	require.Empty(t, h)
+
+	ad, _, err = au.lookupLatest(addr2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(99), ad.Assets[aidx2].Amount)
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.

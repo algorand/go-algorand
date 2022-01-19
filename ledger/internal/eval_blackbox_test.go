@@ -448,7 +448,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	deltas := vb.Delta()
 
 	params, _ := deltas.NewAccts.GetAppParams(addr, 1)
-	state := params.GlobalState
+	state := params.Params.GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }

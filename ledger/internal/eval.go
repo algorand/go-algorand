@@ -49,6 +49,9 @@ type LedgerForCowBase interface {
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 
+// ErrNotInCowCache is returned when a lookup method requests a cached value, but it can't be found
+var ErrNotInCowCache = errors.New("can't find object in roundCowBase")
+
 // averageEncodedTxnSizeHint is an estimation for the encoded transaction size
 // which is used for preallocating memory upfront in the payset. Preallocating
 // helps to avoid re-allocating storage during the evaluation/validation which
@@ -210,80 +213,108 @@ func (x *roundCowBase) updateAppResourceCache(aa ledgercore.AccountApp, r ledger
 	}
 }
 
-func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error) {
+func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
 	aa := ledgercore.AccountApp{Address: addr, App: aidx}
 	if result, ok := x.appParams[aa]; ok {
-		return result.value, result.exists, nil
+		if !result.exists {
+			return ledgercore.AppParamsDelta{}, false, nil
+		}
+		return ledgercore.AppParamsDelta{Params: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AppParamsDelta{}, false, fmt.Errorf("lookupAppParams couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
 	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
-		return basics.AppParams{}, false, err
+		return ledgercore.AppParamsDelta{}, false, err
 	}
 
 	x.updateAppResourceCache(aa, resourceData)
 
 	if resourceData.AppParams == nil {
-		return basics.AppParams{}, false, nil
+		return ledgercore.AppParamsDelta{}, false, nil
 	}
-	return *resourceData.AppParams, true, nil
+	return ledgercore.AppParamsDelta{Params: resourceData.AppParams}, true, nil
 }
 
-func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error) {
+func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
 	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
 	if result, ok := x.assetParams[aa]; ok {
-		return result.value, result.exists, nil
+		if !result.exists {
+			return ledgercore.AssetParamsDelta{}, false, nil
+		}
+		return ledgercore.AssetParamsDelta{Params: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AssetParamsDelta{}, false, fmt.Errorf("lookupAssetParams couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
 	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
-		return basics.AssetParams{}, false, err
+		return ledgercore.AssetParamsDelta{}, false, err
 	}
 
 	x.updateAssetResourceCache(aa, resourceData)
 
 	if resourceData.AssetParams == nil {
-		return basics.AssetParams{}, false, nil
+		return ledgercore.AssetParamsDelta{}, false, nil
 	}
-	return *resourceData.AssetParams, true, nil
+	return ledgercore.AssetParamsDelta{Params: resourceData.AssetParams}, true, nil
 }
 
-func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error) {
+func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	aa := ledgercore.AccountApp{Address: addr, App: aidx}
 	if result, ok := x.appLocalStates[aa]; ok {
-		return result.value, result.exists, nil
+		if !result.exists {
+			return ledgercore.AppLocalStateDelta{}, false, nil
+		}
+		return ledgercore.AppLocalStateDelta{LocalState: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AppLocalStateDelta{}, false, fmt.Errorf("lookupAppLocalState couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
 	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
-		return basics.AppLocalState{}, false, err
+		return ledgercore.AppLocalStateDelta{}, false, err
 	}
 
 	x.updateAppResourceCache(aa, resourceData)
 
 	if resourceData.AppLocalState == nil {
-		return basics.AppLocalState{}, false, nil
+		return ledgercore.AppLocalStateDelta{}, false, nil
 	}
-	return *resourceData.AppLocalState, true, nil
+	return ledgercore.AppLocalStateDelta{LocalState: resourceData.AppLocalState}, true, nil
 }
 
-func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error) {
+func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
 	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
 	if result, ok := x.assets[aa]; ok {
-		return result.value, result.exists, nil
+		if !result.exists {
+			return ledgercore.AssetHoldingDelta{}, false, nil
+		}
+		return ledgercore.AssetHoldingDelta{Holding: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AssetHoldingDelta{}, false, fmt.Errorf("lookupAssetHolding couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
 	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
-		return basics.AssetHolding{}, false, err
+		return ledgercore.AssetHoldingDelta{}, false, err
 	}
 
 	x.updateAssetResourceCache(aa, resourceData)
 
 	if resourceData.AssetHolding == nil {
-		return basics.AssetHolding{}, false, nil
+		return ledgercore.AssetHoldingDelta{}, false, nil
 	}
-	return *resourceData.AssetHolding, true, nil
+	return ledgercore.AssetHoldingDelta{Holding: resourceData.AssetHolding}, true, nil
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -305,12 +336,12 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	// For global, check if app params exist
 	if global {
-		_, ok, err := x.lookupAppParams(addr, aidx)
+		_, ok, err := x.lookupAppParams(addr, aidx, false)
 		return ok, err
 	}
 
 	// Otherwise, check app local states
-	_, ok, err := x.lookupAppLocalState(addr, aidx)
+	_, ok, err := x.lookupAppLocalState(addr, aidx, false)
 	return ok, err
 }
 
@@ -321,23 +352,29 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 	exist := false
 	kv := basics.TealKeyValue{}
 	if global {
-		var app basics.AppParams
-		app, exist, err = x.lookupAppParams(addr, aidx)
+		var app ledgercore.AppParamsDelta
+		app, exist, err = x.lookupAppParams(addr, aidx, false)
 		if err != nil {
 			return basics.TealValue{}, false, err
+		}
+		if app.Deleted {
+			return basics.TealValue{}, false, fmt.Errorf("getKey: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 		if exist {
-			kv = app.GlobalState
+			kv = app.Params.GlobalState
 		}
 	} else {
-		var ls basics.AppLocalState
-		ls, exist, err = x.lookupAppLocalState(addr, aidx)
+		var ls ledgercore.AppLocalStateDelta
+		ls, exist, err = x.lookupAppLocalState(addr, aidx, false)
 		if err != nil {
 			return basics.TealValue{}, false, err
+		}
+		if ls.Deleted {
+			return basics.TealValue{}, false, fmt.Errorf("getKey: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 
 		if exist {
-			kv = ls.KeyValue
+			kv = ls.LocalState.KeyValue
 		}
 	}
 	if !exist {
@@ -357,22 +394,28 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 	exist := false
 	kv := basics.TealKeyValue{}
 	if global {
-		var app basics.AppParams
-		app, exist, err = x.lookupAppParams(addr, aidx)
+		var app ledgercore.AppParamsDelta
+		app, exist, err = x.lookupAppParams(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
+		if app.Deleted {
+			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
 		if exist {
-			kv = app.GlobalState
+			kv = app.Params.GlobalState
 		}
 	} else {
-		var ls basics.AppLocalState
-		ls, exist, err = x.lookupAppLocalState(addr, aidx)
+		var ls ledgercore.AppLocalStateDelta
+		ls, exist, err = x.lookupAppLocalState(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
+		if ls.Deleted {
+			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
 		if exist {
-			kv = ls.KeyValue
+			kv = ls.LocalState.KeyValue
 		}
 	}
 	if !exist {
@@ -400,9 +443,12 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 		return basics.StateSchema{}, nil
 	}
 
-	params, ok, err := x.lookupAppParams(creator, aidx)
+	params, ok, err := x.lookupAppParams(creator, aidx, false)
 	if err != nil {
 		return basics.StateSchema{}, err
+	}
+	if params.Deleted {
+		return basics.StateSchema{}, fmt.Errorf("getStorageLimits: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 	}
 	if !ok {
 		// This should never happen. If app exists then we should have
@@ -412,9 +458,9 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 	}
 
 	if global {
-		return params.GlobalStateSchema, nil
+		return params.Params.GlobalStateSchema, nil
 	}
-	return params.LocalStateSchema, nil
+	return params.Params.LocalStateSchema, nil
 }
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
