@@ -285,6 +285,12 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 		}
+		if fileHeader.Version == CatchpointFileVersionV6 {
+			_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
+			if err != nil {
+				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupHashRound, err)
+			}
+		}
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
 	})
@@ -800,7 +806,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 	start := time.Now()
 	ledgerCatchpointFinishBalsCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		var balancesRound uint64
+		var balancesRound, hashRound uint64
 		var totals ledgercore.AccountTotals
 
 		sq, err := accountsInitDbQueries(tx, tx)
@@ -814,12 +820,24 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
+		hashRound, _, err = sq.readCatchpointStateUint64(ctx, catchpointStateCatchupHashRound)
+		if err != nil {
+			return err
+		}
+
 		totals, err = accountsTotals(tx, true)
 		if err != nil {
 			return err
 		}
 
-		err = applyCatchpointStagingBalances(ctx, tx, basics.Round(balancesRound))
+		if hashRound == 0 {
+			err = resetAccountHashes(tx)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = applyCatchpointStagingBalances(ctx, tx, basics.Round(balancesRound), basics.Round(hashRound))
 		if err != nil {
 			return err
 		}
@@ -847,6 +865,13 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		_, err = sq.writeCatchpointStateString(ctx, catchpointStateCatchupLabel, "")
 		if err != nil {
 			return err
+		}
+
+		if hashRound != 0 {
+			_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupHashRound, 0)
+			if err != nil {
+				return err
+			}
 		}
 
 		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupState, 0)

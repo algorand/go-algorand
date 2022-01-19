@@ -273,17 +273,21 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		if err != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
-			return fmt.Errorf("tracker %s failed to loadFromDisk : %v", trackerName, err)
+			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err)
 		}
 	}
 
 	err := tr.initializeTrackerCaches(l)
 	if err != nil {
-		return err
+		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
+
 	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
 	tr.accts.voters = &votersTracker{}
 	err = tr.accts.voters.loadFromDisk(l, tr.accts)
+	if err != nil {
+		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
+	}
 	return err
 }
 
@@ -507,7 +511,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 	if lastBalancesRound < lastestBlockRound {
 		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
 		if err != nil {
-			return err
+			return fmt.Errorf("unalbe to load block header %d : %w", lastBalancesRound, err)
 		}
 	}
 
@@ -585,6 +589,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		delta, err = l.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
 			close(blockEvalFailed)
+			err = fmt.Errorf("trackerEvalVerified failed : %w", err)
 			return
 		}
 		tr.newBlock(blk, delta)
