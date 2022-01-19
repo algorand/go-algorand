@@ -2,11 +2,11 @@
   "Hosts": [
     {
       "Name": "R1",
-      "Template": "AWS-US-EAST-1-Large"
+      "Template": "AWS-US-EAST-2-Large"
     },
     {
       "Name": "R2",
-      "Template": "AWS-US-EAST-1-Large"
+      "Template": "AWS-US-EAST-2-Large"
     }
   ]
 }

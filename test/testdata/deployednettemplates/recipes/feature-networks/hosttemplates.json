@@ -1,9 +1,9 @@
 {
   "Hosts": [
     {
-      "Name": "AWS-US-EAST-1-Large",
+      "Name": "AWS-US-EAST-2-Large",
       "Provider": "AWS",
-      "Region": "us-east-1",
+      "Region": "us-east-2",
       "BaseConfiguration": "m6i.large"
     }
   ]

@@ -7,23 +7,23 @@
   "Wallets": [
     {
       "Name": "Wallet1",
-      "Stake": 45,
+      "Stake": 25,
       "Online": true
     },
     {
       "Name": "Wallet2",
-      "Stake": 45,
+      "Stake": 25,
       "Online": true
     },
     {
       "Name": "Wallet3",
-      "Stake": 5,
-      "Online": true
+      "Stake": 25,
+      "Online": false
     },
     {
       "Name": "Wallet4",
-      "Stake": 5,
-      "Online": true
+      "Stake": 25,
+      "Online": false
     }
   ]
 }
