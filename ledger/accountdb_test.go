@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1387,4 +1388,39 @@ func TestResourcesDataAsset(t *testing.T) {
 	rd.ClearAssetHolding()
 	a.True(rd.IsEmptyAsset())
 	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+}
+
+func TestBaseAccountDataIsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	positiveTesting := func(t *testing.T) {
+		var ba baseAccountData
+		require.True(t, ba.IsEmpty())
+		for i := 0; i < 20; i++ {
+			h := crypto.Hash([]byte{byte(i)})
+			rnd := binary.BigEndian.Uint64(h[:])
+			ba.UpdateRound = rnd
+			require.True(t, ba.IsEmpty())
+		}
+	}
+	var empty baseAccountData
+	negativeTesting := func(t *testing.T) {
+		for i := 0; i < 10000; i++ {
+			randObj, _ := protocol.RandomizeObjectField(&baseAccountData{})
+			ba := randObj.(*baseAccountData)
+			if *ba == empty || ba.UpdateRound != 0 {
+				continue
+			}
+			require.False(t, ba.IsEmpty(), "base account : %v", ba)
+		}
+	}
+	structureTesting := func(t *testing.T) {
+		encoding, err := json.Marshal(&empty)
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"UpdateRound":0}`
+		require.NoError(t, err)
+		require.Equal(t, expectedEncoding, string(encoding))
+	}
+	t.Run("Positive", positiveTesting)
+	t.Run("Negative", negativeTesting)
+	t.Run("Structure", structureTesting)
+
 }
