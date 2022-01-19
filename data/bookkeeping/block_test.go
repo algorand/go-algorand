@@ -615,6 +615,8 @@ func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
 }
 
 func TestNextRewardsRateWithFixUsesNewRate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
 	proto.RewardsCalculationFix = true
@@ -647,6 +649,8 @@ func TestNextRewardsRateWithFixUsesNewRate(t *testing.T) {
 }
 
 func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
 	proto.RewardsCalculationFix = true
@@ -679,6 +683,8 @@ func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
 }
 
 func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
 	proto.RewardsCalculationFix = true
@@ -713,6 +719,8 @@ func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
 }
 
 func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
 	proto.RewardsCalculationFix = true
@@ -737,6 +745,8 @@ func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
 }
 
 func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
 	proto.RewardsCalculationFix = true
