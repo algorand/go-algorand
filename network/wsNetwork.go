@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,12 +39,12 @@ import (
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
-	"golang.org/x/net/netutil"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
@@ -76,9 +76,6 @@ const httpServerIdleTimeout = time.Second * 4
 // values, including the request line. It does not limit the
 // size of the request body.
 const httpServerMaxHeaderBytes = 4096
-
-// MaxInt is the maximum int which might be int32 or int64
-const MaxInt = int((^uint(0)) >> 1)
 
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
@@ -127,6 +124,12 @@ var maxPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_max
 var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", Description: "Number of active peers."})
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
+
+// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete.
+const peerDisconnectionAckDuration time.Duration = 5 * time.Second
+
+// peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
+const peerShutdownDisconnectionAckDuration time.Duration = 50 * time.Millisecond
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
@@ -545,13 +548,13 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 		return
 	}
 	peer := badnode.(*wsPeer)
-	peer.CloseAndWait()
+	peer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
 	wn.removePeer(peer, reason)
 }
 
-func closeWaiter(wg *sync.WaitGroup, peer *wsPeer) {
+func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 	defer wg.Done()
-	peer.CloseAndWait()
+	peer.CloseAndWait(deadline)
 }
 
 // DisconnectPeers shuts down all connections
@@ -560,8 +563,9 @@ func (wn *WebsocketNetwork) DisconnectPeers() {
 	defer wn.peersLock.Unlock()
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(wn.peers))
+	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&closeGroup, peer)
+		go closeWaiter(&closeGroup, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
 	closeGroup.Wait()
@@ -734,25 +738,11 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
-	var err error
-	if wn.config.IncomingConnectionsLimit < 0 {
-		wn.config.IncomingConnectionsLimit = MaxInt
-	}
-
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
-	}
-
-	// Make sure we do not accept more incoming connections than our
-	// open file rlimit, with some headroom for other FDs (DNS, log
-	// files, SQLite files, telemetry, ...)
-	err = wn.rlimitIncomingConnections()
-	if err != nil {
-		wn.log.Error("ws network start: rlimitIncomingConnections ", err)
-		return
 	}
 
 	if wn.config.NetAddress != "" {
@@ -762,7 +752,8 @@ func (wn *WebsocketNetwork) Start() {
 			return
 		}
 		// wrap the original listener with a limited connection listener
-		listener = netutil.LimitListener(listener, wn.config.IncomingConnectionsLimit)
+		listener = limitlistener.RejectingLimitListener(
+			listener, uint64(wn.config.IncomingConnectionsLimit), wn.log)
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
@@ -828,8 +819,12 @@ func (wn *WebsocketNetwork) innerStop() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	wn.wg.Add(len(wn.peers))
+	// this method is called only during node shutdown. In this case, we want to send the
+	// shutdown message, but we don't want to wait for a long time - since we might not be lucky
+	// to get a response.
+	deadline := time.Now().Add(peerShutdownDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&wn.wg, peer)
+		go closeWaiter(&wn.wg, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
 }

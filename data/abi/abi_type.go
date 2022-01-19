@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,6 +58,15 @@ const (
 	String
 	// Tuple is the index (8) for tuple `(<type 0>, ..., <type k>)` in ABI encoding.
 	Tuple
+)
+
+const (
+	addressByteSize        = 32
+	checksumByteSize       = 4
+	singleByteSize         = 1
+	singleBoolSize         = 1
+	lengthEncodeByteSize   = 2
+	abiEncodingLengthLimit = 1 << 16
 )
 
 // Type is the struct that stores information about an ABI value's type.
@@ -404,13 +413,6 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 	}
 	return until
 }
-
-const (
-	addressByteSize      = 32
-	singleByteSize       = 1
-	singleBoolSize       = 1
-	lengthEncodeByteSize = 2
-)
 
 // ByteLen method calculates the byte length of a static ABI type.
 func (t Type) ByteLen() (int, error) {

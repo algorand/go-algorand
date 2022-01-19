@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -344,7 +344,7 @@ itxna Logs 3
 
 const v6Nonsense = v5Nonsense + `
 itxn_next
-base64_decode URLAlph
+base64_decode URLEncoding
 `
 
 var nonsense = map[uint64]string{

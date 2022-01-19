@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,6 @@ package agreement
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -119,7 +117,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		} else if tE.(thresholdEvent).Round == e.FreshnessData.PlayerRound+1 {
 			return emptyEvent{}
 		}
-		logging.Base().Panicf("bad round (%v, %v)", tE.(thresholdEvent).Round, e.FreshnessData.PlayerRound) // TODO this should be a postcondition check; move it
+		r.t.log.Panicf("bad round (%v, %v)", tE.(thresholdEvent).Round, e.FreshnessData.PlayerRound) // TODO this should be a postcondition check; move it
 
 	case bundlePresent:
 		ub := e.Input.UnauthenticatedBundle
@@ -181,7 +179,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		smErr := makeSerErrf("bundle for (%v, %v, %v: %v) failed to cause a significant state change", b.U.Round, b.U.Period, b.U.Step, b.U.Proposal)
 		return filteredEvent{T: bundleFiltered, Err: smErr}
 	}
-	logging.Base().Panicf("voteAggregator: bad event type: observed an event of type %v", e.t())
+	r.t.log.Panicf("voteAggregator: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
 }
 
@@ -201,7 +199,7 @@ func (agg *voteAggregator) filterVote(proto protocol.ConsensusVersion, p player,
 	case none:
 		return nil
 	}
-	logging.Base().Panicf("voteAggregator: bad event type: while filtering, observed an event of type %v", filterRes.t())
+	r.t.log.Panicf("voteAggregator: bad event type: while filtering, observed an event of type %v", filterRes.t())
 	panic("not reached")
 }
 
@@ -227,7 +225,7 @@ func voteStepFresh(descr string, proto protocol.ConsensusVersion, mine, vote ste
 		// always propagate first recovery vote to ensure synchronous block of periods after partition
 		return nil
 	}
-	if config.Consensus[proto].FastPartitionRecovery && vote >= late {
+	if vote >= late {
 		// always propagate fast partition recovery votes
 		return nil
 	}

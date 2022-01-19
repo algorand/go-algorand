@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,11 +17,38 @@
 package abi
 
 import (
+	"crypto/rand"
+	"math/big"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRandomAddressEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	upperLimit := new(big.Int).Lsh(big.NewInt(1), addressByteSize<<3)
+	var addrBasics basics.Address
+	var addrABI []byte = make([]byte, addressByteSize)
+
+	for testCaseIndex := 0; testCaseIndex < addressTestCaseCount; testCaseIndex++ {
+		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
+		require.NoError(t, err, "cryptographic random int init fail")
+
+		randomAddrInt.FillBytes(addrBasics[:])
+		randomAddrInt.FillBytes(addrABI)
+
+		checkSumBasics := addrBasics.GetChecksum()
+		checkSumABI, err := addressCheckSum(addrABI)
+		require.NoError(t, err, "ABI compute checksum for address slice failed")
+
+		require.Equal(t, checkSumBasics, checkSumABI,
+			"basics.Address computed checksum %v not equal to data.abi computed checksum %v",
+		)
+	}
+}
 
 func TestJSONtoInterfaceValid(t *testing.T) {
 	partitiontest.PartitionTest(t)

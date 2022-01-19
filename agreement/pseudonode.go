@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -481,7 +481,6 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 
 	payloads, votes := t.node.makeProposals(t.round, t.period, t.participation)
 	fields := logging.Fields{
-		"Context":      "Agreement",
 		"Type":         logspec.ProposalAssembled.String(),
 		"ObjectRound":  t.round,
 		"ObjectPeriod": t.period,

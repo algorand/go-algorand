@@ -465,7 +465,7 @@
             }
           }
         },
-        "description": "A detailed description of a participation id"
+        "description": "A detailed description of a participation ID"
       },
       "ParticipationKeysResponse": {
         "content": {
@@ -516,7 +516,7 @@
             "schema": {
               "properties": {
                 "partId": {
-                  "description": "encoding of the participation id.",
+                  "description": "encoding of the participation ID.",
                   "type": "string"
                 }
               },
@@ -726,6 +726,10 @@
             },
             "type": "array"
           },
+          "min-balance": {
+            "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
+            "type": "integer"
+          },
           "participation": {
             "$ref": "#/components/schemas/AccountParticipation"
           },
@@ -763,6 +767,7 @@
           "address",
           "amount",
           "amount-without-pending-rewards",
+          "min-balance",
           "pending-rewards",
           "rewards",
           "round",
@@ -1893,7 +1898,7 @@
     },
     "/v2/applications/{application-id}": {
       "get": {
-        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
         "operationId": "GetApplicationByID",
         "parameters": [
           {
@@ -1967,7 +1972,7 @@
     },
     "/v2/assets/{asset-id}": {
       "get": {
-        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
+        "description": "Given a asset ID, it returns asset information including creator, name, total supply and special addresses.",
         "operationId": "GetAssetByID",
         "parameters": [
           {
@@ -2577,7 +2582,7 @@
                 }
               }
             },
-            "description": "Application Not Found"
+            "description": "Participation Key Not Found"
           },
           "500": {
             "content": {
@@ -2620,7 +2625,7 @@
                 "schema": {
                   "properties": {
                     "partId": {
-                      "description": "encoding of the participation id.",
+                      "description": "encoding of the participation ID.",
                       "type": "string"
                     }
                   },
@@ -2652,6 +2657,16 @@
               }
             },
             "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Participation Key Not Found"
           },
           "500": {
             "content": {
@@ -2687,7 +2702,7 @@
     },
     "/v2/participation/{participation-id}": {
       "delete": {
-        "description": "Delete a given participation key by id",
+        "description": "Delete a given participation key by ID",
         "operationId": "DeleteParticipationKeyByID",
         "parameters": [
           {
@@ -2724,6 +2739,16 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Participation Key Not Found"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2739,13 +2764,13 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Delete a given participation key by id",
+        "summary": "Delete a given participation key by ID",
         "tags": [
           "private"
         ]
       },
       "get": {
-        "description": "Given a participation id, return information about that participation key",
+        "description": "Given a participation ID, return information about that participation key",
         "operationId": "GetParticipationKeyByID",
         "parameters": [
           {
@@ -2766,7 +2791,7 @@
                 }
               }
             },
-            "description": "A detailed description of a participation id"
+            "description": "A detailed description of a participation ID"
           },
           "400": {
             "content": {
@@ -2796,7 +2821,7 @@
                 }
               }
             },
-            "description": "Application Not Found"
+            "description": "Participation Key Not Found"
           },
           "500": {
             "content": {
@@ -2813,10 +2838,97 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get participation key info by id",
+        "summary": "Get participation key info given a participation ID",
         "tags": [
           "private"
         ]
+      },
+      "post": {
+        "description": "Given a participation ID, append state proof keys to a particular set of participation keys",
+        "operationId": "AppendKeys",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "participation-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/msgpack": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The state proof keys to add to an existing participation ID",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipationKey"
+                }
+              }
+            },
+            "description": "A detailed description of a participation ID"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Participation Key Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Append state proof keys to a participation key",
+        "tags": [
+          "private"
+        ],
+        "x-codegen-request-body-name": "keymap"
       }
     },
     "/v2/shutdown": {
@@ -3599,11 +3711,11 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "operationId": "PendingTransactionInformation",
         "parameters": [
           {
-            "description": "A transaction id",
+            "description": "A transaction ID",
             "in": "path",
             "name": "txid",
             "required": true,
@@ -3639,7 +3751,7 @@
                 }
               }
             },
-            "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error."
+            "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error."
           },
           "400": {
             "content": {

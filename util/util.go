@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,23 +19,24 @@
 package util
 
 import (
+	"fmt"
 	"syscall"
 )
 
 /* misc */
 
-// RaiseRlimit increases the number of file descriptors we can have
-func RaiseRlimit(amount uint64) error {
+// SetFdSoftLimit sets a new file descriptors soft limit.
+func SetFdSoftLimit(newLimit uint64) error {
 	var rLimit syscall.Rlimit
 	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
-		return err
+		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
 	}
 
-	rLimit.Cur = amount
+	rLimit.Cur = newLimit
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
-		return err
+		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
 	}
 	return nil
 }

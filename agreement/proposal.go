@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,6 +59,9 @@ type unauthenticatedProposal struct {
 	OriginalPeriod   period         `codec:"oper"`
 	OriginalProposer basics.Address `codec:"oprop"`
 }
+
+// TransmittedPayload exported for dumping textual versions of messages
+type TransmittedPayload = transmittedPayload
 
 // ToBeHashed implements the Hashable interface.
 func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,6 +63,9 @@ func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitC
 }
 
 func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 func (mt *metricsTracker) handleUnorderedCommit(uint64, basics.Round, basics.Round) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,8 +37,13 @@ var (
 	assetURL                string
 	assetName               string
 	assetManager            string
+	assetReserve            string
 	assetClawback           string
 	assetFreezer            string
+	assetNoManager          bool
+	assetNoReserve          bool
+	assetNoFreezer          bool
+	assetNoClawback         bool
 
 	assetNewManager  string
 	assetNewReserve  string
@@ -64,6 +69,14 @@ func init() {
 	createAssetCmd.Flags().StringVar(&assetName, "name", "", "Name for the entire asset")
 	createAssetCmd.Flags().StringVar(&assetURL, "asseturl", "", "URL where user can access more information about the asset (max 32 bytes)")
 	createAssetCmd.Flags().StringVar(&assetMetadataHashBase64, "assetmetadatab64", "", "base-64 encoded 32-byte commitment to asset metadata")
+	createAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account that can issue transactions to re-configure or destroy the asset")
+	createAssetCmd.Flags().StringVar(&assetReserve, "reserve", "", "Reserve account that non-minted assets will reside in")
+	createAssetCmd.Flags().StringVar(&assetFreezer, "freezer", "", "Freezer account that can freeze or unfreeze the asset holdings for a specific account")
+	createAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Clawback account that is allowed to transfer assets from and to any asset holder")
+	createAssetCmd.Flags().BoolVar(&assetNoManager, "no-manager", false, "Explicitly declare the lack of manager")
+	createAssetCmd.Flags().BoolVar(&assetNoReserve, "no-reserve", false, "Explicitly declare the lack of reserve")
+	createAssetCmd.Flags().BoolVar(&assetNoFreezer, "no-freezer", false, "Explicitly declare the lack of freezer")
+	createAssetCmd.Flags().BoolVar(&assetNoClawback, "no-clawback", false, "Explicitly declare the lack of clawback")
 	createAssetCmd.MarkFlagRequired("total")
 	createAssetCmd.MarkFlagRequired("creator")
 
@@ -185,10 +198,66 @@ var createAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
+		if assetManager != "" && assetNoManager {
+			reportErrorf("The [--manager] flag and the [--no-manager] flag are mutually exclusive, do not provide both flags.")
+		}
+
+		if assetReserve != "" && assetNoReserve {
+			reportErrorf("The [--reserve] flag and the [--no-reserve] flag are mutually exclusive, do not provide both flags.")
+		}
+
+		if assetFreezer != "" && assetNoFreezer {
+			reportErrorf("The [--freezer] flag and the [--no-freezer] flag are mutually exclusive, do not provide both flags.")
+		}
+
+		if assetClawback != "" && assetNoClawback {
+			reportErrorf("The [--clawback] flag and the [--no-clawback] flag are mutually exclusive, do not provide both flags.")
+		}
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(assetCreator)
+		manager := creator
+		reserve := creator
+		freezer := creator
+		clawback := creator
+
+		if cmd.Flags().Changed("manager") {
+			assetManager = accountList.getAddressByName(assetManager)
+			manager = assetManager
+		}
+
+		if assetNoManager {
+			manager = ""
+		}
+
+		if cmd.Flags().Changed("reserve") {
+			assetReserve = accountList.getAddressByName(assetReserve)
+			reserve = assetReserve
+		}
+
+		if assetNoReserve {
+			reserve = ""
+		}
+
+		if cmd.Flags().Changed("freezer") {
+			assetFreezer = accountList.getAddressByName(assetFreezer)
+			freezer = assetFreezer
+		}
+
+		if assetNoFreezer {
+			freezer = ""
+		}
+
+		if cmd.Flags().Changed("clawback") {
+			assetClawback = accountList.getAddressByName(assetClawback)
+			clawback = assetClawback
+		}
+
+		if assetNoClawback {
+			clawback = ""
+		}
 
 		var err error
 		var assetMetadataHash []byte
@@ -199,7 +268,7 @@ var createAssetCmd = &cobra.Command{
 			}
 		}
 
-		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, creator, creator, creator, creator, assetUnitName, assetName, assetURL, assetMetadataHash, assetDecimals)
+		tx, err := client.MakeUnsignedAssetCreateTx(assetTotal, assetFrozen, manager, reserve, freezer, clawback, assetUnitName, assetName, assetURL, assetMetadataHash, assetDecimals)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}

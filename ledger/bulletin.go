@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -118,6 +118,9 @@ func (b *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext)
 }
 
 func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 func (b *bulletin) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
