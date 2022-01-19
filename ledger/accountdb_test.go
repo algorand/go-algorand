@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1293,6 +1294,14 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 			require.False(t, ba.IsEmpty(), "base account : %v", ba)
 		}
 	}
+	structureTesting := func(t *testing.T) {
+		encoding, err := json.Marshal(&empty)
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"UpdateRound":0}`
+		require.NoError(t, err)
+		require.Equal(t, expectedEncoding, string(encoding))
+	}
 	t.Run("Positive", positiveTesting)
 	t.Run("Negative", negativeTesting)
+	t.Run("Structure", structureTesting)
+
 }

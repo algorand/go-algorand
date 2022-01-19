@@ -57,7 +57,7 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
-	changes := ^int(0)
+	changes := int(^uint(0) >> 1)
 	err := randomizeValue(v.Elem(), tt.String(), "", &changes)
 	return v.Interface(), err
 }
