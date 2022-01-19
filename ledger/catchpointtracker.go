@@ -154,7 +154,7 @@ func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 	case 2:
 		ct.catchpointInterval = cfg.CatchpointInterval
 		ct.enableGeneratingCatchpointFiles = true
-	case 99:
+	case forceCatchpointFileGenerationTrackingMode:
 		ct.catchpointInterval = cfg.CatchpointInterval
 		ct.enableGeneratingCatchpointFiles = true
 		ct.forceCatchpointFileWriting = true
