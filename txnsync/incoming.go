@@ -31,15 +31,15 @@ var (
 )
 
 type incomingMessage struct {
-	networkPeer       interface{}
-	message           transactionBlockMessage
-	sequenceNumber    uint64
+	networkPeer        interface{}
+	message            transactionBlockMessage
+	sequenceNumber     uint64
 	nextSequenceNumber uint64
-	peer              *Peer
-	encodedSize       int // the byte length of the incoming network message
-	bloomFilter       *testableBloomFilter
-	transactionGroups []pooldata.SignedTxGroup
-	timeReceived      int64
+	peer               *Peer
+	encodedSize        int // the byte length of the incoming network message
+	bloomFilter        *testableBloomFilter
+	transactionGroups  []pooldata.SignedTxGroup
+	timeReceived       int64
 }
 
 // incomingMessageHandler

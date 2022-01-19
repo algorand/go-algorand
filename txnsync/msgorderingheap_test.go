@@ -274,7 +274,7 @@ func TestCompressHeap(t *testing.T) {
 
 	heap := messageOrderingHeap{}
 
-	for i := 0; i < messageOrderingHeapLimit - 1; i++ {
+	for i := 0; i < messageOrderingHeapLimit-1; i++ {
 		txnGroup := []pooldata.SignedTxGroup{
 			{
 				GroupTransactionID: transactions.Txid{byte(i % 255)},
@@ -282,7 +282,7 @@ func TestCompressHeap(t *testing.T) {
 		}
 		a.Nil(heap.enqueue(incomingMessage{sequenceNumber: uint64(i), transactionGroups: txnGroup}))
 	}
-	a.Nil(heap.enqueue(incomingMessage{sequenceNumber: uint64(messageOrderingHeapLimit), }))
+	a.Nil(heap.enqueue(incomingMessage{sequenceNumber: uint64(messageOrderingHeapLimit)}))
 
 	a.Equal(heap.Len(), int(messageOrderingHeapLimit))
 	a.Nil(heap.enqueue(incomingMessage{sequenceNumber: uint64(messageOrderingHeapLimit + 1)}))
@@ -306,7 +306,7 @@ func TestCompressHeap(t *testing.T) {
 
 	msg, err = heap.pop()
 	a.Nil(err)
-	a.Equal(msg.sequenceNumber, uint64(messageOrderingHeapLimit + 1))
+	a.Equal(msg.sequenceNumber, uint64(messageOrderingHeapLimit+1))
 	a.Equal(uint64(messageOrderingHeapLimit+1), msg.sequenceNumber)
 	a.Equal(uint64(messageOrderingHeapLimit+2), msg.nextSequenceNumber)
 
