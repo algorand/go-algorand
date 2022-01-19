@@ -1734,7 +1734,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, false, 10, testProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -1833,19 +1833,25 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 		break
 	}
 
-	// release the postCommit lock, once au.lookupWithoutRewards hits au.accountsReadCond.Wait()
+	defer func() { // allow the postCommitUnlocked() handler to go through, even if test fails
+		<-stallingTracker.postCommitUnlockedEntryLock
+		stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
+	}()
+
+	// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
+	// when synchronized=false it will fail fast
+	d, validThrough, err := au.lookupWithoutRewards(rnd, addr, false)
+	require.Equal(t, err, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1})
+
+	// release the postCommit lock, once au.lookupWithoutRewards() hits au.accountsReadCond.Wait()
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		stallingTracker.postCommitReleaseLock <- struct{}{}
 	}()
 
-	// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
-	d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
+	// when synchronized=true it will wait until above goroutine releases postCommitReleaseLock
+	d, validThrough, err = au.lookupWithoutRewards(rnd, addr, true)
 	require.NoError(t, err)
 	require.Equal(t, d, data)
 	require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
-
-	// allow the postCommitUnlocked() handler to go through
-	<-stallingTracker.postCommitUnlockedEntryLock
-	stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
 }
