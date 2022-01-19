@@ -459,7 +459,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 	for i := 0; i < accountsDeltas.len(); i++ {
 		delta := accountsDeltas.getByIdx(i)
-		if !delta.oldAcct.accountData.MsgIsZero() {
+		if !delta.oldAcct.accountData.IsEmpty() {
 			deleteHash := accountHashBuilderV6(delta.address, &delta.oldAcct.accountData, protocol.Encode(&delta.oldAcct.accountData))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
@@ -472,7 +472,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			}
 		}
 
-		if !delta.newAcct.MsgIsZero() {
+		if !delta.newAcct.IsEmpty() {
 			addHash := accountHashBuilderV6(delta.address, &delta.newAcct, protocol.Encode(&delta.newAcct))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {

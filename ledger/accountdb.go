@@ -1085,6 +1085,27 @@ type baseAccountData struct {
 	UpdateRound uint64 `codec:"z"`
 }
 
+// IsEmpty return true if any of the fields other then the UpdateRound are non-zero.
+func (ba *baseAccountData) IsEmpty() bool {
+	return ba.Status == 0 &&
+		ba.MicroAlgos.Raw == 0 &&
+		ba.RewardsBase == 0 &&
+		ba.RewardedMicroAlgos.Raw == 0 &&
+		ba.AuthAddr.IsZero() &&
+		ba.TotalAppSchemaNumUint == 0 &&
+		ba.TotalAppSchemaNumByteSlice == 0 &&
+		ba.TotalExtraAppPages == 0 &&
+		ba.TotalAssetParams == 0 &&
+		ba.TotalAssets == 0 &&
+		ba.TotalAppParams == 0 &&
+		ba.TotalAppLocalStates == 0 &&
+		ba.VoteID.MsgIsZero() &&
+		ba.SelectionID.MsgIsZero() &&
+		ba.VoteFirstValid == 0 &&
+		ba.VoteLastValid == 0 &&
+		ba.VoteKeyDilution == 0
+}
+
 func (ba *baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
@@ -1175,11 +1196,6 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 		},
 		TotalExtraAppPages: ba.TotalExtraAppPages,
 	}
-}
-
-func (ba baseAccountData) IsEmpty() bool {
-	ba.UpdateRound = 0
-	return ba == baseAccountData{}
 }
 
 type resourceFlags uint8
