@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -471,7 +470,32 @@ func (lm loggedMessages) Errorf(s string, args ...interface{}) {
 func TestLedgerErrorValidate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
+
+	proto, _ := config.Consensus[protocol.ConsensusCurrentVersion]
+	origProto := proto
+	defer func() {
+		config.Consensus[protocol.ConsensusCurrentVersion] = origProto
+	}()
+	proto.MinBalance = 0
+	config.Consensus[protocol.ConsensusCurrentVersion] = proto
+
+	blk := bookkeeping.Block{}
+	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+	blk.RewardsPool = testPoolAddr
+	blk.FeeSink = testSinkAddr
+	blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+
+	accts := make(map[basics.Address]basics.AccountData)
+	accts[testPoolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
+	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
+
+	genesisInitState := ledgercore.InitState{
+		Accounts:    accts,
+		Block:       blk,
+		GenesisHash: crypto.Hash([]byte(t.Name())),
+	}
 
 	expectedMessages := make(chan string, 100)
 	unexpectedMessages := make(chan string, 100)
@@ -578,7 +602,8 @@ func TestLedgerErrorValidate(t *testing.T) {
 	}
 
 	for rnd := basics.Round(1); rnd <= basics.Round(2000); rnd++ {
-		blk := ledgertesting.MakeNewEmptyBlockSync(t, rnd-1, l.Ledger, t.Name(), genesisInitState.Accounts)
+		blk, err := getEmptyBlock(rnd-1, l.Ledger, t.Name(), genesisInitState.Accounts)
+		require.NoError(t, err)
 		blkChan3 <- blk
 		blkChan2 <- blk
 		blkChan1 <- blk
@@ -603,5 +628,36 @@ func validatedBlock(l *ledger.Ledger, blk bookkeeping.Block) (vb *ledgercore.Val
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 	vb, err = l.Validate(context.Background(), blk, backlogPool)
+	return
+}
+
+func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block, err error) {
+	l.WaitForCommit(afterRound)
+
+	lastBlock, err := l.Block(l.Latest())
+	if err != nil {
+		return
+	}
+
+	proto := config.Consensus[lastBlock.CurrentProtocol]
+	blk.BlockHeader = bookkeeping.BlockHeader{
+		GenesisID: genesisID,
+		Round:     l.Latest() + 1,
+		Branch:    lastBlock.Hash(),
+		TimeStamp: 0,
+	}
+
+	if proto.SupportGenesisHash {
+		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(genesisID))
+	}
+
+	blk.RewardsPool = testPoolAddr
+	blk.FeeSink = testSinkAddr
+	blk.CurrentProtocol = lastBlock.CurrentProtocol
+
+	blk.TxnRoot, err = blk.PaysetCommit()
+	if err != nil {
+		return
+	}
 	return
 }
