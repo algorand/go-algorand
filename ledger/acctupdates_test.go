@@ -75,12 +75,10 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 	return
 }
 
-func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
+func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
 	dbs, fileName := dbOpenTest(t, inMemory)
-	dblogger := logging.TestingLog(t)
-	dblogger.SetLevel(logging.Info)
-	dbs.Rdb.SetLogger(dblogger)
-	dbs.Wdb.SetLogger(dblogger)
+	dbs.Rdb.SetLogger(l)
+	dbs.Wdb.SetLogger(l)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
@@ -92,7 +90,15 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount in
 		}
 	}
 	consensusParams := config.Consensus[consensusVersion]
-	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams, accts: accts[0]}
+	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams, accts: accts[0]}
+
+}
+
+func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
+	dblogger := logging.TestingLog(t)
+	dblogger.SetLevel(logging.Info)
+
+	return makeMockLedgerForTrackerWithLogger(t, inMemory, initialBlocksCount, consensusVersion, accts, dblogger)
 }
 
 // fork creates another database which has the same content as the current one. Works only for non-memory databases.
