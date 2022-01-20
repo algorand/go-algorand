@@ -2214,7 +2214,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 //
 // In this case it waits on a condition variable and retries when
 // commitSyncer/accountUpdates has advanced the cachedDBRound.
-func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64)) {
+/*func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64)) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.MaxBalLookback = 10
@@ -2396,3 +2396,4 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
 }
+*/
