@@ -37,7 +37,7 @@ func TestActionTypes(t *testing.T) {
 	// or vice versa
 	testApp(t, obfuscate("itxn_begin; byte \"pay\"; itxn_field TypeEnum; itxn_submit; int 1;"), ep, "not a uint64")
 
-	// good types, not alllowed yet
+	// good types, not allowed yet
 	testApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", ep, "keyreg is not a valid Type for itxn_field")
 	testApp(t, "itxn_begin; byte \"appl\"; itxn_field Type; itxn_submit; int 1;", ep, "appl is not a valid Type for itxn_field")
 	// same, as enums

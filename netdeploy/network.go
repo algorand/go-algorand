@@ -457,8 +457,8 @@ func (n Network) Delete(binDir string) error {
 // any of the nodes starts
 func (n Network) SetConsensus(binDir string, consensus config.ConsensusProtocols) error {
 	for _, relayDir := range n.cfg.RelayDirs {
-		relayFulllPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)
+		relayFullPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err
