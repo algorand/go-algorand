@@ -3,15 +3,13 @@ ARG ARCH="amd64"
 FROM ${ARCH}/ubuntu:18.04
 ARG GOLANG_VERSION
 ARG ARCH="amd64"
+ARG GOARCH="amd64"
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y build-essential git libboost-all-dev wget sqlite3 autoconf jq bsdmainutils shellcheck awscli
 WORKDIR /root
-RUN if [ "${ARCH}" = "arm32v7" ]; then wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-armv6l.tar.gz \
-    && tar -xvf go${GOLANG_VERSION}.linux-armv6l.tar.gz && \
-    mv go /usr/local; else \
-    wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz \
-    && tar -xvf go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz && \
-    mv go /usr/local; fi
+RUN wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${GOARCH}.tar.gz \
+    && tar -xvf go${GOLANG_VERSION}.linux-${GOARCH}.tar.gz && \
+    mv go /usr/local
 ENV GOROOT=/usr/local/go \
     GOPATH=$HOME/go \
     ARCH_TYPE=${ARCH}
