@@ -398,6 +398,9 @@ type ConsensusParams struct {
 	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
+
+	// When rewards rate changes, use the new value immediately.
+	RewardsCalculationFix bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1063,6 +1066,8 @@ func initConsensusProtocols() {
 	// application storage, and therefore would not produce catchpoints and/or
 	// catchpoint labels prior to this feature being enabled.
 	vFuture.EnableAccountDataResourceSeparation = true
+
+	vFuture.RewardsCalculationFix = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

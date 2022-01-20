@@ -2518,7 +2518,7 @@ func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
 	}
 
 	if aff != 1 {
-		err = fmt.Errorf("updateAccountsRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
 		return
 	}
 	return
