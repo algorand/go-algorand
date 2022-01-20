@@ -2214,7 +2214,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 //
 // In this case it waits on a condition variable and retries when
 // commitSyncer/accountUpdates has advanced the cachedDBRound.
-/*func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64)) {
+func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64)) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.MaxBalLookback = 10
@@ -2236,7 +2236,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, false, 10, testProtocolVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -2336,17 +2336,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	_, _, err := au.lookupWithoutRewards(rnd, basics.Address{}, false)
 	require.Equal(t, err, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1})
 
-	defer func() { // allow the postCommitUnlocked() handler to go through, even if test fails
-		<-stallingTracker.postCommitUnlockedEntryLock
-		stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
-	}()
-
-	// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
-	// when synchronized=false it will fail fast
-	d, validThrough, err := au.lookupWithoutRewards(rnd, addr, false)
-	require.Equal(t, err, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1})
-
-	// release the postCommit lock, once au.lookupWithoutRewards() hits au.accountsReadCond.Wait()
+	// release the postCommit lock, once au.lookupWithoutRewards hits au.accountsReadCond.Wait()
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		stallingTracker.postCommitReleaseLock <- struct{}{}
@@ -2396,4 +2386,3 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
 }
-*/
