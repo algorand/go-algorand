@@ -870,7 +870,7 @@ Decodes X using the base64 encoding E. Specify the encoding with an immediate ar
 - Opcode: 0x5d {string return type}
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: any
-- return key B's value from a [valid](jsonspec.md) utf-8 encoded json text A
+- return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
 - LogicSigVersion >= 6
 
 specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.
