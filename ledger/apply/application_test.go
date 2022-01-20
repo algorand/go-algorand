@@ -745,18 +745,27 @@ func TestAppCallOptIn(t *testing.T) {
 
 	// check max optins
 
-	var optInCountTest = []struct {
-		proto protocol.ConsensusVersion
-	}{
-		{protocol.ConsensusV29},
-		{protocol.ConsensusFuture},
-	}
+	var optInCountTest = []protocol.ConsensusVersion{}
 
-	prevMaxAppsOptedIn := 0
-	for _, test := range optInCountTest {
-		cparams, ok := config.Consensus[test.proto]
+	protocolVer := protocol.ConsensusV24
+	for protocolVer != "" {
+		optInCountTest = append(optInCountTest, protocolVer)
+		upgrades := config.Consensus[protocolVer].ApprovedUpgrades
+		protocolVer = ""
+		for next := range upgrades {
+			protocolVer = next
+			break
+		}
+	}
+	optInCountTest = append(optInCountTest, protocol.ConsensusFuture)
+
+	prevMaxAppsOptedIn := config.Consensus[protocol.ConsensusV24].MaxAppsOptedIn
+	for _, testProtoVer := range optInCountTest {
+		cparams, ok := config.Consensus[testProtoVer]
 		a.True(ok)
-		a.Less(prevMaxAppsOptedIn, cparams.MaxAppsOptedIn)
+		if cparams.MaxAppsOptedIn > 0 {
+			a.LessOrEqual(prevMaxAppsOptedIn, cparams.MaxAppsOptedIn)
+		}
 		prevMaxAppsOptedIn = cparams.MaxAppsOptedIn
 
 		b.SetParams(cparams)
@@ -775,8 +784,12 @@ func TestAppCallOptIn(t *testing.T) {
 		}
 		appIdx++
 		err = optInApplication(b, sender, appIdx, aparams)
-		a.Error(err)
-		a.Contains(err.Error(), "max opted-in apps per acct")
+		if cparams.MaxAppsOptedIn > 0 {
+			a.Error(err)
+			a.Contains(err.Error(), "max opted-in apps per acct")
+		} else {
+			a.NoError(err)
+		}
 	}
 }
 

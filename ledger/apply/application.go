@@ -217,6 +217,10 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 }
 
 func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
+	if !balances.ConsensusParams().Application {
+		return fmt.Errorf("cannot opt in app %d for %s: protocol does not supports applications", appIdx, sender.String())
+	}
+
 	record, err := balances.Get(sender, false)
 	if err != nil {
 		return err
