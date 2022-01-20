@@ -5321,15 +5321,15 @@ func TestOpJSONRef(t *testing.T) {
 		},
 		{
 			source: `byte  "{\"key0\": [1]}"; byte "key0"; json_ref JSONObject;`,
-			error:  "json: cannot unmarshal array into Go value of type map[string]interface {}",
+			error:  "json: cannot unmarshal array into Go value of type map[string]json.RawMessage",
 		},
 		{
 			source: `byte  "{\"key0\": 1}"; byte "key0"; json_ref JSONObject;`,
-			error:  "json: cannot unmarshal number into Go value of type map[string]interface {}",
+			error:  "json: cannot unmarshal number into Go value of type map[string]json.RawMessage",
 		},
 		{
 			source: `byte  "{\"key0\": \"1\"}"; byte "key0"; json_ref JSONObject;`,
-			error:  "json: cannot unmarshal string into Go value of type map[string]interface {}",
+			error:  "json: cannot unmarshal string into Go value of type map[string]json.RawMessage",
 		},
 		{
 			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key3"; json_ref JSONString;`,
@@ -5390,6 +5390,41 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONString
 			`,
 			error: "error while parsing JSON text, invalid json text, duplicate keys not allowed",
+		},
+		{
+			source: `byte  "[1,2,3]";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "2";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "null";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "true";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "\"sometext\"";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
 		},
 	}
 

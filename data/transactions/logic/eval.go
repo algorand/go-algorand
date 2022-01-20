@@ -4064,9 +4064,13 @@ func opBase64Decode(cx *EvalContext) {
 func hasDuplicateKeys(jsonText []byte) (bool, map[string]json.RawMessage, error) {
 	dec := json.NewDecoder(bytes.NewReader(jsonText))
 	parsed := make(map[string]json.RawMessage)
-	_, err := dec.Token()
+	t, err := dec.Token()
 	if err != nil {
 		return false, nil, err
+	}
+	t, ok := t.(json.Delim)
+	if !ok || t.(json.Delim).String() != "{" {
+		return false, nil, fmt.Errorf("only json object is allowed")
 	}
 	for dec.More() {
 		var value json.RawMessage
@@ -4147,7 +4151,7 @@ func opJSONRef(cx *EvalContext) {
 		}
 		stval.Uint = value
 	case JSONObject:
-		var value map[string]interface{}
+		var value map[string]json.RawMessage
 		err := json.Unmarshal(parsed[key], &value)
 		if err != nil {
 			cx.err = err

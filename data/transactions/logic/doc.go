@@ -107,7 +107,7 @@ var opDocByName = map[string]string{
 	"gloads":   "push Ith scratch space index of the Xth transaction in the current group",
 	"gaid":     "push the ID of the asset or application created in the Tth transaction of the current group",
 	"gaids":    "push the ID of the asset or application created in the Xth transaction of the current group",
-	"json_ref": "return key B's value from a [valid](jsonspec.md) utf-8 encoded json text A",
+	"json_ref": "return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A",
 
 	"bnz":     "branch to TARGET if value X is not zero",
 	"bz":      "branch to TARGET if value X is zero",
