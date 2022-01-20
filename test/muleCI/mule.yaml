@@ -96,7 +96,7 @@ tasks:
     target: ci-build
   - task: docker.Make
     name: build.arm
-    agent: cicd.alpine.arm
+    agent: cicd.ubuntu.arm
     target: ci-build
 
   - task: docker.Make
