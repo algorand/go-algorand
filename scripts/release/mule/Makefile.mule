@@ -4,7 +4,7 @@ PKG_DIR = $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
 
 .PHONY: ci-clean ci-setup ci-build
 
-ci-clean:
+ci-clean: clean
 	rm -rf tmp
 
 ci-setup:
@@ -28,7 +28,7 @@ ci-integration:
 	SRCROOT=$(SRCPATH) \
 	test/scripts/e2e.sh -c $(CHANNEL) -n
 
-ci-build: buildsrc gen ci-setup
+ci-build: ci-clean buildsrc gen ci-setup
 	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
 	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
 	mkdir -p $(PKG_DIR)/data && \

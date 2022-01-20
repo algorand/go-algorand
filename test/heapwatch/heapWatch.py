@@ -218,7 +218,7 @@ class watcher:
         if net in self.netseen:
             return
         self.netseen.add(net)
-        net = net + ':8580'
+        net = net + ':' + self.args.port
         try:
             ad = algodDir(net, net=net, token=self.args.token, admin_token=self.args.admin_token)
             self.they.append(ad)
@@ -279,6 +279,7 @@ def main():
     ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
     ap.add_argument('--tf-name-re', action='append', default=[], help='regexp to match terraform node names, may be repeated')
     ap.add_argument('--no-svg', dest='svg', default=True, action='store_false', help='do not automatically run `go tool pprof` to generate svg from collected data')
+    ap.add_argument('-p', '--port', default='8580', help='algod port on each host in terraform-inventory')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()

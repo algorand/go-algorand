@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -80,12 +80,12 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	voteRound := latest + 2
 	for _, part := range node.accountManager.Keys(voteRound) {
 		parent := part.Address()
-		data, err := node.ledger.Lookup(latest, parent)
+		data, err := node.ledger.LookupAgreement(latest, parent)
 		if err != nil {
 			continue
 		}
 
-		weight := data.MicroAlgos.ToUint64()
+		weight := data.MicroAlgosWithRewards.ToUint64()
 		if weight > maxWeight {
 			maxPart = part
 			maxWeight = weight
@@ -97,7 +97,7 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	}
 
 	signer := maxPart.VotingSigner()
-	ephID := basics.OneTimeIDForRound(voteRound, signer.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(voteRound, signer.KeyDilution(proto.DefaultKeyDilution))
 
 	rs.Round = voteRound
 	rs.Sender = maxPart.Address()
@@ -125,7 +125,7 @@ func (node *AlgorandFullNode) VerifyPrioResponse(challenge string, response []by
 		return
 	}
 
-	data, err := node.ledger.Lookup(balanceRound, rs.Sender)
+	data, err := node.ledger.LookupAgreement(balanceRound, rs.Sender)
 	if err != nil {
 		return
 	}
@@ -143,10 +143,10 @@ func (node *AlgorandFullNode) VerifyPrioResponse(challenge string, response []by
 // GetPrioWeight implements the network.NetPrioScheme interface
 func (node *AlgorandFullNode) GetPrioWeight(addr basics.Address) uint64 {
 	latest := node.ledger.LastRound()
-	data, err := node.ledger.Lookup(latest, addr)
+	data, err := node.ledger.LookupAgreement(latest, addr)
 	if err != nil {
 		return 0
 	}
 
-	return data.MicroAlgos.ToUint64()
+	return data.MicroAlgosWithRewards.ToUint64()
 }

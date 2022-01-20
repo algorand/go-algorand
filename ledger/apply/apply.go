@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,4 +63,27 @@ type Balances interface {
 	// Balances correspond to a Round, which mean that they also correspond
 	// to a ConsensusParams.  This returns those parameters.
 	ConsensusParams() config.ConsensusParams
+}
+
+// Rekey updates tx.Sender's AuthAddr to tx.RekeyTo, if provided
+func Rekey(balances Balances, tx *transactions.Transaction) error {
+	if (tx.RekeyTo != basics.Address{}) {
+		acct, err := balances.Get(tx.Sender, false)
+		if err != nil {
+			return err
+		}
+		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
+		// This saves 32 bytes in your balance record if you want to go back to using your original key
+		if tx.RekeyTo == tx.Sender {
+			acct.AuthAddr = basics.Address{}
+		} else {
+			acct.AuthAddr = tx.RekeyTo
+		}
+
+		err = balances.Put(tx.Sender, acct)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -74,6 +73,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	AppsLocalState:              &appLocalStates,
 	AppsTotalSchema:             &appsTotalSchema,
 	CreatedApps:                 &appCreatedApps,
+	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
@@ -85,10 +85,34 @@ type mockNode struct {
 	genesisID string
 	config    config.Local
 	err       error
+	id        account.ParticipationID
+	keys      account.StateProofKeys
 }
 
-func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
-	return mockNode{
+func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
+	panic("implement me")
+}
+
+func (m mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) GetParticipationKey(id account.ParticipationID) (account.ParticipationRecord, error) {
+	panic("implement me")
+}
+
+func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
+	panic("implement me")
+}
+
+func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
+	m.id = id
+	m.keys = keys
+	return m.err
+}
+
+func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) *mockNode {
+	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
 		config:    config.GetDefaultLocal(),
@@ -171,7 +195,7 @@ func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (
 	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
 }
 
-func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+func (m mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
 	return nil, fmt.Errorf("assemble block not implemented")
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -294,7 +294,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (e
 
 func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.Tx) (err error) {
 	var header CatchpointFileHeader
-	header.BalancesRound, _, err = accountsRound(tx)
+	header.BalancesRound, err = accountsRound(tx)
 	if err != nil {
 		return
 	}

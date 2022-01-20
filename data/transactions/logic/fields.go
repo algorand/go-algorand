@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -197,16 +197,16 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FirstValid, StackUint64, 0, 0, false},
 	{FirstValidTime, StackUint64, 0, 0, false},
 	{LastValid, StackUint64, 0, 0, false},
-	{Note, StackBytes, 0, 0, false},
+	{Note, StackBytes, 0, 6, false},
 	{Lease, StackBytes, 0, 0, false},
 	{Receiver, StackBytes, 0, 5, false},
 	{Amount, StackUint64, 0, 5, false},
 	{CloseRemainderTo, StackBytes, 0, 5, false},
-	{VotePK, StackBytes, 0, 0, false},
-	{SelectionPK, StackBytes, 0, 0, false},
-	{VoteFirst, StackUint64, 0, 0, false},
-	{VoteLast, StackUint64, 0, 0, false},
-	{VoteKeyDilution, StackUint64, 0, 0, false},
+	{VotePK, StackBytes, 0, 6, false},
+	{SelectionPK, StackBytes, 0, 6, false},
+	{VoteFirst, StackUint64, 0, 6, false},
+	{VoteLast, StackUint64, 0, 6, false},
+	{VoteKeyDilution, StackUint64, 0, 6, false},
 	{Type, StackBytes, 0, 5, false},
 	{TypeEnum, StackUint64, 0, 5, false},
 	{XferAsset, StackUint64, 0, 5, false},
@@ -224,7 +224,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{NumAccounts, StackUint64, 2, 0, false},
 	{ApprovalProgram, StackBytes, 2, 0, false},
 	{ClearStateProgram, StackBytes, 2, 0, false},
-	{RekeyTo, StackBytes, 2, 0, false},
+	{RekeyTo, StackBytes, 2, 6, false},
 	{ConfigAsset, StackUint64, 2, 5, false},
 	{ConfigAssetTotal, StackUint64, 2, 5, false},
 	{ConfigAssetDecimals, StackUint64, 2, 5, false},
@@ -249,7 +249,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{LocalNumUint, StackUint64, 3, 0, false},
 	{LocalNumByteSlice, StackUint64, 3, 0, false},
 	{ExtraProgramPages, StackUint64, 4, 0, false},
-	{Nonparticipation, StackUint64, 5, 0, false},
+	{Nonparticipation, StackUint64, 5, 6, false},
 
 	{Logs, StackBytes, 5, 5, true},
 	{NumLogs, StackUint64, 5, 5, true},
@@ -279,11 +279,12 @@ var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	Logs: {Logs, StackBytes, 5, 5, true},
 }
 
-var innerTxnTypes = map[string]protocol.TxType{
-	string(protocol.PaymentTx):       protocol.PaymentTx,
-	string(protocol.AssetTransferTx): protocol.AssetTransferTx,
-	string(protocol.AssetConfigTx):   protocol.AssetConfigTx,
-	string(protocol.AssetFreezeTx):   protocol.AssetFreezeTx,
+var innerTxnTypes = map[string]uint64{
+	string(protocol.PaymentTx):         5,
+	string(protocol.KeyRegistrationTx): 6,
+	string(protocol.AssetTransferTx):   5,
+	string(protocol.AssetConfigTx):     5,
+	string(protocol.AssetFreezeTx):     5,
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -442,6 +443,44 @@ type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
 func (s ecDsaCurveNameSpecMap) getExtraFor(name string) (extra string) {
 	// Uses 5 here because ecdsa fields were introduced in 5
 	if s[name].version > 5 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
+
+// Base64Encoding is an enum for the `base64decode` opcode
+type Base64Encoding int
+
+const (
+	// URLEncoding represents the base64url encoding defined in https://www.rfc-editor.org/rfc/rfc4648.html
+	URLEncoding Base64Encoding = iota
+	// StdEncoding represents the standard encoding of the RFC
+	StdEncoding
+	invalidBase64Alphabet
+)
+
+// After running `go generate` these strings will be available:
+var base64EncodingNames [2]string = [...]string{URLEncoding.String(), StdEncoding.String()}
+
+type base64EncodingSpec struct {
+	field   Base64Encoding
+	ftype   StackType
+	version uint64
+}
+
+var base64EncodingSpecs = []base64EncodingSpec{
+	{URLEncoding, StackBytes, 6},
+	{StdEncoding, StackBytes, 6},
+}
+
+var base64EncodingSpecByField map[Base64Encoding]base64EncodingSpec
+var base64EncodingSpecByName base64EncodingSpecMap
+
+type base64EncodingSpecMap map[string]base64EncodingSpec
+
+func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 6 here because base64_decode fields were introduced in 6
+	if s[name].version > 6 {
 		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return
@@ -638,7 +677,7 @@ func init() {
 	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
 		if int(s.field) != i {
-			panic("txnFieldTypePairs disjoint with TxnField enum")
+			panic("txnFieldSpecs disjoint with TxnField enum")
 		}
 		TxnFieldTypes[i] = s.ftype
 		txnFieldSpecByField[s.field] = s
@@ -654,8 +693,11 @@ func init() {
 	}
 	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
 	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
-	for _, s := range globalFieldSpecs {
-		GlobalFieldTypes[int(s.field)] = s.ftype
+	for i, s := range globalFieldSpecs {
+		if int(s.field) != i {
+			panic("globalFieldSpecs disjoint with GlobalField enum")
+		}
+		GlobalFieldTypes[i] = s.ftype
 		globalFieldSpecByField[s.field] = s
 	}
 	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
@@ -675,6 +717,16 @@ func init() {
 	ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
 	for i, ahfn := range EcdsaCurveNames {
 		ecdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
+	}
+
+	base64EncodingSpecByField = make(map[Base64Encoding]base64EncodingSpec, len(base64EncodingNames))
+	for _, s := range base64EncodingSpecs {
+		base64EncodingSpecByField[s.field] = s
+	}
+
+	base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
+	for i, encoding := range base64EncodingNames {
+		base64EncodingSpecByName[encoding] = base64EncodingSpecByField[Base64Encoding(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))

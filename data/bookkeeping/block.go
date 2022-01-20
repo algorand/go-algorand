@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -125,6 +125,21 @@ type (
 		// for multiple types of certs.
 		//msgp:sort protocol.CompactCertType protocol.SortCompactCertType
 		CompactCert map[protocol.CompactCertType]CompactCertState `codec:"cc,allocbound=protocol.NumCompactCertTypes"`
+
+		// ParticipationUpdates contains the information needed to mark
+		// certain accounts offline because their participation keys expired
+		ParticipationUpdates
+	}
+
+	// ParticipationUpdates represents participation account data that
+	// needs to be checked/acted on by the network
+	ParticipationUpdates struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+		// ExpiredParticipationAccounts contains a list of online accounts
+		// that needs to be converted to offline since their
+		// participation key expired.
+		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -270,17 +285,17 @@ func (block *Block) Seed() committee.Seed {
 // NextRewardsState computes the RewardsState of the subsequent round
 // given the subsequent consensus parameters, along with the incentive pool
 // balance and the total reward units in the system as of the current round.
-func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.ConsensusParams, incentivePoolBalance basics.MicroAlgos, totalRewardUnits uint64) (res RewardsState) {
+func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.ConsensusParams, incentivePoolBalance basics.MicroAlgos, totalRewardUnits uint64, log logging.Logger) (res RewardsState) {
 	res = s
 
-	if nextRound == s.RewardsRecalculationRound {
+	if nextRound == res.RewardsRecalculationRound {
 		maxSpentOver := nextProto.MinBalance
 		overflowed := false
 
 		if nextProto.PendingResidueRewards {
-			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, s.RewardsResidue)
+			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, res.RewardsResidue)
 			if overflowed {
-				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, s.RewardsResidue, nextRound, s)
+				log.Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, res.RewardsResidue, nextRound, s)
 				// this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
 				maxSpentOver = incentivePoolBalance.Raw
 			}
@@ -289,7 +304,7 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 		// it is time to refresh the rewards rate
 		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, maxSpentOver)
 		if overflowed {
-			logging.Base().Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
+			log.Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
 			newRate = 0
 		}
 
@@ -302,14 +317,21 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 		return
 	}
 
+	var rewardsRate uint64
+	if nextProto.RewardsCalculationFix {
+		rewardsRate = res.RewardsRate
+	} else {
+		rewardsRate = s.RewardsRate
+	}
+
 	var ot basics.OverflowTracker
-	rewardsWithResidue := ot.Add(s.RewardsRate, s.RewardsResidue)
-	nextRewardLevel := ot.Add(s.RewardsLevel, rewardsWithResidue/totalRewardUnits)
+	rewardsWithResidue := ot.Add(rewardsRate, res.RewardsResidue)
+	nextRewardLevel := ot.Add(res.RewardsLevel, rewardsWithResidue/totalRewardUnits)
 	nextResidue := rewardsWithResidue % totalRewardUnits
 
 	if ot.Overflowed {
-		logging.Base().Errorf("could not compute next reward level (current level %v, adding %v MicroAlgos in total, number of reward units %v) using old level",
-			s.RewardsLevel, s.RewardsRate, totalRewardUnits)
+		log.Errorf("could not compute next reward level (current level %v, adding %v MicroAlgos in total, number of reward units %v) using old level",
+			res.RewardsLevel, rewardsRate, totalRewardUnits)
 		return
 	}
 

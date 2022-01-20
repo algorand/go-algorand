@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -484,9 +484,9 @@ func (t *demuxTester) LookupDigest(basics.Round) (crypto.Digest, error) {
 }
 
 // implement Ledger
-func (t *demuxTester) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
+func (t *demuxTester) LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error) {
 	// we don't care about this function in this test.
-	return basics.AccountData{}, nil
+	return basics.OnlineAccountData{}, nil
 }
 
 // implement Ledger

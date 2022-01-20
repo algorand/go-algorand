@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -540,7 +540,7 @@ func (r *LocalRunner) RunAll() error {
 		ep := logic.EvalParams{
 			Proto:                   &r.proto,
 			Debugger:                r.debugger,
-			Txn:                     &r.txnGroup[groupIndex],
+			Txn:                     &r.txnGroup[run.groupIndex],
 			TxnGroup:                r.txnGroup,
 			GroupIndex:              run.groupIndex,
 			PastSideEffects:         run.pastSideEffects,
@@ -588,7 +588,7 @@ func (r *LocalRunner) Run() (bool, error) {
 		}
 		ep := logic.EvalParams{
 			Proto:                   &r.proto,
-			Txn:                     &r.txnGroup[groupIndex],
+			Txn:                     &r.txnGroup[run.groupIndex],
 			TxnGroup:                r.txnGroup,
 			GroupIndex:              run.groupIndex,
 			PastSideEffects:         run.pastSideEffects,

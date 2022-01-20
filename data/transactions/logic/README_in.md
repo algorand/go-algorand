@@ -90,7 +90,7 @@ various sizes.
 
 ### Byte Array Manipulation
 
-@@ Byte_Array_Slicing.md @@
+@@ Byte_Array_Manipulation.md @@
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -208,7 +208,7 @@ Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-spe
 
 ## Constants and Pseudo-Ops
 
-A few pseudo-ops simplify writing code. `int` and `byte` and `addr` followed by a constant record the constant to a `intcblock` or `bytecblock` at the beginning of code and insert an `intc` or `bytec` reference where the instruction appears to load that value. `addr` parses an Algorand account address base32 and converts it to a regular bytes constant.
+A few pseudo-ops simplify writing code. `int` and `byte` and `addr` and `method` followed by a constant record the constant to a `intcblock` or `bytecblock` at the beginning of code and insert an `intc` or `bytec` reference where the instruction appears to load that value. `addr` parses an Algorand account address base32 and converts it to a regular bytes constant. `method` is passed a method signature and takes the first 4 bytes of the hash to convert it to the standard method selector defined in [ARC4](https://github.com/algorandfoundation/ARCs/blob/main/ARCs/arc-0004.md)
 
 `byte` constants are:
 ```

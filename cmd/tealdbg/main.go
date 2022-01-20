@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -240,7 +240,7 @@ func debugLocal(args []string) {
 	if len(txnFile) > 0 {
 		txnBlob, err = ioutil.ReadFile(txnFile)
 		if err != nil {
-			log.Fatalf("Error txn reading %s: %s", balanceFile, err)
+			log.Fatalf("Error txn reading %s: %s", txnFile, err)
 		}
 	}
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,6 +61,11 @@ func (d *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics n
 }
 func (d *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, topics network.Topics) (e error) {
 	return nil
+}
+
+// GetConnectionLatency returns the connection latency between the local node and this peer.
+func (d *mockUnicastPeer) GetConnectionLatency() time.Duration {
+	return time.Duration(0)
 }
 
 func TestPeerAddress(t *testing.T) {

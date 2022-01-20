@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -101,7 +101,7 @@ func LoadLedger(
 	l := &Ledger{
 		log: log,
 	}
-	genesisInitState := ledger.InitState{
+	genesisInitState := ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    genesisBal.Balances,
 		GenesisHash: genesisHash,
@@ -184,7 +184,7 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 		}
 	}
 
-	totals, err := l.Totals(r)
+	totals, err := l.OnlineTotals(r) //nolint:typecheck
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
@@ -196,12 +196,12 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 					circulation.elements[1],
 					{
 						round:       r,
-						onlineMoney: totals.Online.Money},
+						onlineMoney: totals},
 				},
 			})
 	}
 
-	return totals.Online.Money, nil
+	return totals, nil
 }
 
 // Seed gives the VRF seed that was agreed on in a given round,
@@ -316,7 +316,7 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 // EnsureValidatedBlock ensures that the block, and associated certificate c, are
 // written to the ledger, or that some other block for the same round is
 // written to the ledger.
-func (l *Ledger) EnsureValidatedBlock(vb *ledger.ValidatedBlock, c agreement.Certificate) {
+func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement.Certificate) {
 	round := vb.Block().Round()
 
 	for l.LastRound() < round {
@@ -325,14 +325,16 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledger.ValidatedBlock, c agreement.Cer
 			break
 		}
 
-		logfn := logging.Base().Errorf
+		logfn := l.log.Errorf
 
 		switch err.(type) {
 		case ledgercore.BlockInLedgerError:
-			logfn = logging.Base().Debugf
+			// If the block is already in the ledger (catchup and agreement might be competing),
+			// reporting this as a debug message is sufficient.
+			logfn = l.log.Debugf
+			// Otherwise, the error is because the block is in the future. Error is logged.
 		}
-
-		logfn("could not write block %d to the ledger: %v", round, err)
+		logfn("data.EnsureValidatedBlock: could not write block %d to the ledger: %v", round, err)
 	}
 }
 
@@ -353,14 +355,16 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 		switch err.(type) {
 		case protocol.Error:
 			if !protocolErrorLogged {
-				logging.Base().Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
+				l.log.Errorf("data.EnsureBlock: unrecoverable protocol error detected at block %d: %v", round, err)
 				protocolErrorLogged = true
 			}
 		case ledgercore.BlockInLedgerError:
-			logging.Base().Debugf("could not write block %d to the ledger: %v", round, err)
-			return // this error implies that l.LastRound() >= round
+			// The block is already in the ledger. Catchup and agreement could be competing
+			// It is sufficient to report this as a Debug message
+			l.log.Debugf("data.EnsureBlock: could not write block %d to the ledger: %v", round, err)
+			return
 		default:
-			logging.Base().Errorf("could not write block %d to the ledger: %v", round, err)
+			l.log.Errorf("data.EnsureBlock: could not write block %d to the ledger: %v", round, err)
 		}
 
 		// If there was an error add a short delay before the next attempt.

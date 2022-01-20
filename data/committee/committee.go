@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ type Selector interface {
 // This struct is used to decouple LedgerReader.AccountData from basics.BalanceRecord.
 //msgp:ignore BalanceRecord
 type BalanceRecord struct {
-	basics.AccountData
+	basics.OnlineAccountData
 	Addr basics.Address
 }
 

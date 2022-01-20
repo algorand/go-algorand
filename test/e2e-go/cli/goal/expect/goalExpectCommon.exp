@@ -934,7 +934,17 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
                 -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
                 -re {Genesis hash: ([A-Za-z0-9+/]+={0,2})} {set GENESIS_HASH $expect_out(1,string); exp_continue }
                 -re {Catchpoint: ([0-9]*#[A-Z2-7]*)} { set CATCHPOINT $expect_out(1,string); exp_continue }
-                eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"} }
+                eof {
+                    catch wait result;
+                    if { [lindex $result 3] != 0 } {
+                        log_user 1
+                        set errLog [exec cat $NODE_DATA_DIR/algod-err.log]
+                        puts "$NODE_DATA_DIR/algod-err.log :\r\n$errLog"
+                        set nodeLog [exec -- tail -n 30 $NODE_DATA_DIR/node.log]
+                        puts "$NODE_DATA_DIR/node.log :\r\n$nodeLog"
+                        ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"
+                    }
+                }
             }
             log_user 1
             if { $BLOCK > -1 } {

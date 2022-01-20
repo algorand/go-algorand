@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,8 +114,8 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agre
 }
 
 // Wrapping error with a LedgerDroppedRoundError when an old round is requested but the ledger has already dropped the entry
-func (l agreementLedger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	record, err := l.Ledger.Lookup(rnd, addr)
+func (l agreementLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	record, err := l.Ledger.LookupAgreement(rnd, addr)
 	var e *ledger.RoundOffsetError
 	if errors.As(err, &e) {
 		err = &agreement.LedgerDroppedRoundError{

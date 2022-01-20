@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -36,7 +37,7 @@ import (
 func TestPutBlockTooOld(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, _, _ := genesis(10)
+	genesisInitState, _, _ := ledgertesting.Genesis(10)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
@@ -67,7 +68,7 @@ func TestPutBlockTooOld(t *testing.T) {
 func TestGetEncodedBlockCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, _, _ := genesis(10)
+	genesisInitState, _, _ := ledgertesting.Genesis(10)
 
 	const inMem = true
 	cfg := config.GetDefaultLocal()

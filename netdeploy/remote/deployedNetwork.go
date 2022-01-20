@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
@@ -487,9 +488,9 @@ func keypair() *crypto.SignatureSecrets {
 	return s
 }
 
-func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrappedNet *netState) (ledger.InitState, error) {
+func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrappedNet *netState) (ledgercore.InitState, error) {
 
-	var initState ledger.InitState
+	var initState ledgercore.InitState
 
 	block := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{

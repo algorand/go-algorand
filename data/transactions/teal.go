@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,9 +37,6 @@ type EvalDelta struct {
 
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 
-	// Intentionally, temporarily wrong - need to decide how to
-	// allocbound properly when structure is recursive.  Even a bound
-	// of 2 would allow arbitrarily large object if deep.
 	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactions"`
 }
 

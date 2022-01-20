@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -152,8 +152,7 @@ type ConsensusParams struct {
 	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
 
-	FastRecoveryLambda    time.Duration // time between fast recovery attempts
-	FastPartitionRecovery bool          // set when fast partition recovery is enabled
+	FastRecoveryLambda time.Duration // time between fast recovery attempts
 
 	// how to commit to the payset: flat or merkle tree
 	PaysetCommit PaysetCommitType
@@ -391,6 +390,13 @@ type ConsensusParams struct {
 	EnableKeyregCoherencyCheck bool
 
 	EnableExtraPagesOnAppUpdate bool
+
+	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
+	// to be taken offline, that would be proposed to be taken offline.
+	MaxProposedExpiredOnlineAccounts int
+
+	// When rewards rate changes, use the new value immediately.
+	RewardsCalculationFix bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -465,6 +471,10 @@ var MaxExtraAppProgramLen int
 //supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
+// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
+// to be taken offline, that would be proposed to be taken offline.
+var MaxProposedExpiredOnlineAccounts int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -501,6 +511,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions, &MaxInnerTransactions)
+	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -699,7 +710,6 @@ func initConsensusProtocols() {
 
 	// v10 introduces fast partition recovery (and also raises NumProposers).
 	v10 := v9
-	v10.FastPartitionRecovery = true
 	v10.NumProposers = 20
 	v10.LateCommitteeSize = 500
 	v10.LateCommitteeThreshold = 320
@@ -1041,6 +1051,13 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// Enable TEAL 6 / AVM 1.1
+	vFuture.LogicSigVersion = 6
+
+	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	vFuture.RewardsCalculationFix = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

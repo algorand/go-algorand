@@ -4,6 +4,7 @@
 # TODO: This needs to be reworked a bit to support Darwin.
 
 set -exo pipefail
+shopt -s nullglob
 
 echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
@@ -100,8 +101,10 @@ for os in "${OS_TYPES[@]}"; do
                     gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
 
                     STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
-                    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
-                    gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
+                    if [[ -f "$STATUSFILE" ]]; then
+                        gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
+                        gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
+                    fi
                 )
                 fi
             fi

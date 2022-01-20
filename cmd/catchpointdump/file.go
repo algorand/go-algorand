@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ var fileCmd = &cobra.Command{
 		if err != nil || len(tarFileBytes) == 0 {
 			reportErrorf("Unable to read '%s' : %v", tarFile, err)
 		}
-		genesisInitState := ledger.InitState{}
+		genesisInitState := ledgercore.InitState{}
 		cfg := config.GetDefaultLocal()
 		l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 		if err != nil {

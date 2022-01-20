@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,9 @@ package agreement
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // The serializedPseudonode is the trivial implementation for the pseudonode interface
@@ -126,7 +129,7 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 				}
 			}
 		default:
-			assert.NoError(t, fmt.Errorf("Unexpected tag %v encountered", ev1.Input.Tag))
+			assert.NoError(t, fmt.Errorf("Unexpected tag '%v' encountered", ev1.Input.Tag))
 		}
 	}
 	return true
@@ -145,7 +148,7 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := simpleKeyManager(accounts)
+	keyManager := makeRecordingKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},
@@ -222,6 +225,8 @@ func TestPseudonode(t *testing.T) {
 		}
 		messageEvent, typeOk := ev.(messageEvent)
 		assert.True(t, true, typeOk)
+		// Verify votes are recorded - everyone is voting and proposing blocks.
+		keyManager.ValidateVoteRound(t, messageEvent.Input.Vote.R.Sender, startRound)
 		events[messageEvent.t()] = append(events[messageEvent.t()], messageEvent)
 	}
 	assert.Subset(t, []int{5, 6, 7, 8, 9, 10}, []int{len(events[voteVerified])})
@@ -390,6 +395,9 @@ func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []a
 	return k.target(votingRound, balanceRound)
 }
 
+func (k *KeyManagerProxy) Record(account basics.Address, round basics.Round, action account.ParticipationAction) {
+}
+
 func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -403,7 +411,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := simpleKeyManager(accounts)
+	keyManager := makeRecordingKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},
@@ -446,4 +454,96 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 		}
 		pb.loadRoundParticipationKeys(basics.Round(rnd))
 	}
+}
+
+type substrServiceLogger struct {
+	logging.Logger
+	looupStrings   []string
+	instancesFound []int
+}
+
+func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
+	for i, str := range ssl.looupStrings {
+		if strings.Contains(s, str) {
+			ssl.instancesFound[i]++
+			return
+		}
+	}
+}
+
+// TestPseudonodeFailedEnqueuedTasks test to see that in the case where we cannot enqueue the verification task to the backlog, we won't be waiting forever - instead,
+// we would generate a warning message and keep going.
+func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	// generate a nice, fixed hash.
+	rootSeed := sha256.Sum256([]byte(t.Name()))
+	accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
+	ledger := makeTestLedger(balances)
+
+	subStrLogger := &substrServiceLogger{
+		Logger:         logging.TestingLog(t),
+		looupStrings:   []string{"pseudonode.makeVotes: failed to enqueue vote verification for", "pseudonode.makeProposals: failed to enqueue vote verification"},
+		instancesFound: []int{0, 0},
+	}
+	sLogger := serviceLogger{
+		Logger: subStrLogger,
+	}
+	sLogger.SetLevel(logging.Warn)
+
+	keyManager := makeRecordingKeyManager(accounts)
+
+	mainPool := execpool.MakePool(t)
+	defer mainPool.Shutdown()
+
+	voteVerifier := MakeAsyncVoteVerifier(&expiredExecPool{mainPool})
+	defer voteVerifier.Quit()
+
+	pb := makePseudonode(pseudonodeParams{
+		factory:      testBlockFactory{Owner: 0},
+		validator:    testBlockValidator{},
+		keys:         keyManager,
+		ledger:       ledger,
+		voteVerifier: voteVerifier,
+		log:          sLogger,
+		monitor:      nil,
+	})
+	defer pb.Quit()
+
+	startRound := ledger.NextRound()
+
+	channels := make([]<-chan externalEvent, 0)
+	var ch <-chan externalEvent
+	var err error
+	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
+		ch, err = pb.MakeProposals(context.Background(), startRound, period(i))
+		if err != nil {
+			require.Subset(t, []int{pseudonodeVerificationBacklog, pseudonodeVerificationBacklog + 1}, []int{i})
+			break
+		}
+		channels = append(channels, ch)
+	}
+	require.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
+	require.True(t, errors.Is(err, errPseudonodeBacklogFull))
+
+	persist := make(chan error)
+	close(persist)
+	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
+		ch, err = pb.MakeVotes(context.Background(), startRound, period(i), step(i%5), makeProposalValue(period(i), accounts[0].Address()), persist)
+		if err != nil {
+			require.Subset(t, []int{pseudonodeVerificationBacklog, pseudonodeVerificationBacklog + 1}, []int{i})
+			break
+		}
+		channels = append(channels, ch)
+	}
+	require.Error(t, err, "MakeVotes did not returned an error when being overflowed with requests")
+
+	// drain output channels.
+	for _, ch := range channels {
+		drainChannel(ch)
+	}
+	require.Equal(t, 330, subStrLogger.instancesFound[0])
+	require.Equal(t, 330, subStrLogger.instancesFound[1])
 }

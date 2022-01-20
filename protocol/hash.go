@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,15 @@ type HashID string
 // Hash IDs for specific object types, in lexicographic order.
 // Hash IDs must be PREFIX-FREE (no hash ID is a prefix of another).
 const (
-	AppIndex          HashID = "appID"
+	AppIndex HashID = "appID"
+
+	// ARCReserved is used to reserve prefixes starting with `arc` to
+	// ARCs-related hashes https://github.com/algorandfoundation/ARCs
+	// The prefix for ARC-XXXX should start with:
+	// "arcXXXX" (where "XXXX" is the 0-padded number of the ARC)
+	// For example ARC-0003 can use any prefix starting with "arc0003"
+	ARCReserved HashID = "arc"
+
 	AuctionBid        HashID = "aB"
 	AuctionDeposit    HashID = "aD"
 	AuctionOutcomes   HashID = "aO"
@@ -49,6 +57,7 @@ const (
 	Program           HashID = "Program"
 	ProgramData       HashID = "ProgData"
 	ProposerSeed      HashID = "PS"
+	ParticipationKeys HashID = "PK"
 	Seed              HashID = "SD"
 	SpecialAddr       HashID = "SpecialAddr"
 	SignedTxnInBlock  HashID = "STIB"

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,10 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 package agreement
-
-import (
-	"github.com/algorand/go-algorand/logging"
-)
 
 // A voteTrackerPeriod is a voteMachinePeriod which indicates whether a
 // next-threshold of votes was observed for a some value in a period.
@@ -82,7 +78,7 @@ func (t *voteTrackerPeriod) handle(r routerHandle, p player, e event) event {
 	case nextThresholdStatusRequest:
 		return t.Cached
 	default:
-		logging.Base().Panicf("voteTrackerPeriod: bad event type: observed an event of type %v", e.t())
+		r.t.log.Panicf("voteTrackerPeriod: bad event type: observed an event of type %v", e.t())
 		panic("not reached")
 	}
 }
@@ -152,7 +148,7 @@ func (t *voteTrackerRound) handle(r routerHandle, p player, e event) event {
 	case freshestBundleRequest:
 		return freshestBundleEvent{Ok: t.Ok, Event: t.Freshest}
 	default:
-		logging.Base().Panicf("voteTrackerRound: bad event type: observed an event of type %v", e.t())
+		r.t.log.Panicf("voteTrackerRound: bad event type: observed an event of type %v", e.t())
 		panic("not reached")
 	}
 }

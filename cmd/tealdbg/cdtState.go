@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -364,7 +364,11 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 			field == int(logic.Accounts) ||
 			field == int(logic.ApplicationArgs) ||
 			field == int(logic.Assets) ||
-			field == int(logic.Applications) {
+			field == int(logic.Applications) ||
+			field == int(logic.CreatedApplicationID) ||
+			field == int(logic.CreatedAssetID) ||
+			field == int(logic.Logs) ||
+			field == int(logic.NumLogs) {
 			continue
 		}
 		var value string

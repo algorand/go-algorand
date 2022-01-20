@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -70,7 +70,6 @@ func BenchmarkAssembleBlock(b *testing.B) {
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
-		//b.Log(addr)
 	}
 
 	genesis[poolAddr] = basics.AccountData{

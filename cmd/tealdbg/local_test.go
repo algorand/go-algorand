@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -984,7 +985,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, accountPath):
 			w.WriteHeader(200)
 			if r.URL.Path[len(accountPath):] == brs.Addr.String() {
-				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, basics.MicroAlgos{Raw: 0})
+				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, &config.ConsensusParams{MinBalance: 100000}, basics.MicroAlgos{Raw: 0})
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
 				response, err := json.Marshal(accountResponse)
@@ -1349,4 +1350,104 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 			}
 		})
 	}
+}
+
+func TestGroupTxnIdx(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ddrBlob := `{
+		"accounts": [
+		  {
+			"address": "FPVVJ7N42QRVP2OWBGZ3XPTQAZFQNBYHJGZ2CJFOATAQNWFA5NWB4MPWBQ",
+			"amount": 3999999999497000,
+			"amount-without-pending-rewards": 3999999999497000,
+			"created-apps": [
+			  {
+				"id": 1,
+				"params": {
+				  "approval-program": "BSABATEQIhJAABExEIEGEkAAByJAAAEAIkMiQ4EAQw==",
+				  "clear-state-program": "BYEBQw==",
+				  "creator": "FPVVJ7N42QRVP2OWBGZ3XPTQAZFQNBYHJGZ2CJFOATAQNWFA5NWB4MPWBQ"
+				}
+			  }
+			],
+			"pending-rewards": 0,
+			"rewards": 0,
+			"round": 2,
+			"status": "Online"
+		  },
+		  {
+			"address": "WCS6TVPJRBSARHLN2326LRU5BYVJZUKI2VJ53CAWKYYHDE455ZGKANWMGM",
+			"amount": 500000,
+			"amount-without-pending-rewards": 500000,
+			"pending-rewards": 0,
+			"rewards": 0,
+			"round": 2,
+			"status": "Offline"
+		  }
+		],
+		"apps": [
+		  {
+			"id": 1,
+			"params": {
+			  "approval-program": "BSABATEQIhJAABExEIEGEkAAByJAAAEAIkMiQ4EAQw==",
+			  "clear-state-program": "BYEBQw==",
+			  "creator": "FPVVJ7N42QRVP2OWBGZ3XPTQAZFQNBYHJGZ2CJFOATAQNWFA5NWB4MPWBQ"
+			}
+		  }
+		],
+		"latest-timestamp": 1634765269,
+		"protocol-version": "future",
+		"round": 2,
+		"sources": null,
+		"txns": [
+		  {
+		"sig": "8Z/ECart3vFBSKp5sFuNRN4coliea4TE+xttZNn9E15DJ8GZ++kgtZKhG4Tiopv7r61Lqh8VBuyuTf9AC3uQBQ==",
+		"txn": {
+		  "amt": 5000,
+		  "fee": 1000,
+		  "fv": 3,
+		  "gen": "sandnet-v1",
+		  "gh": "pjM5GFR9MpNkWIibcfqtu/a2OIZTBy/mSQc++sF1r0Q=",
+		  "grp": "2ca4sSb5aGab0k065qIT3J3AcB5YWYezrRh6bLB0ve8=",
+		  "lv": 1003,
+		  "note": "V+GSPgDmLQo=",
+		  "rcv": "WCS6TVPJRBSARHLN2326LRU5BYVJZUKI2VJ53CAWKYYHDE455ZGKANWMGM",
+		  "snd": "FPVVJ7N42QRVP2OWBGZ3XPTQAZFQNBYHJGZ2CJFOATAQNWFA5NWB4MPWBQ",
+		  "type": "pay"
+		}
+	  },
+		  {
+		"sig": "4/gj+6rllN/Uc55kAJ0BOKTzoUJKJ7gExE3vp7cr5vC9XVStx0QNZq1DFXLhpTZnTQAl3zOrGzIxfS5HOpSyCg==",
+		"txn": {
+		  "apid": 1,
+		  "fee": 1000,
+		  "fv": 3,
+		  "gh": "pjM5GFR9MpNkWIibcfqtu/a2OIZTBy/mSQc++sF1r0Q=",
+		  "grp": "2ca4sSb5aGab0k065qIT3J3AcB5YWYezrRh6bLB0ve8=",
+		  "lv": 1003,
+		  "note": "+fl8jkXqyFc=",
+		  "snd": "FPVVJ7N42QRVP2OWBGZ3XPTQAZFQNBYHJGZ2CJFOATAQNWFA5NWB4MPWBQ",
+		  "type": "appl"
+		}
+	  }
+		]
+	  }`
+
+	ds := DebugParams{
+		Proto:      string(protocol.ConsensusCurrentVersion),
+		DdrBlob:    []byte(ddrBlob),
+		GroupIndex: 0,
+		RunMode:    "application",
+	}
+
+	local := MakeLocalRunner(nil)
+	err := local.Setup(&ds)
+	a.NoError(err)
+
+	pass, err := local.Run()
+	a.NoError(err)
+	a.True(pass)
 }

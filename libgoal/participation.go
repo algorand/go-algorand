@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -166,7 +167,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	// Fill the database with new participation keys
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
 	part = newPart.Participation
-	newPart.Close()
+	partdb.Close()
 	return part, partKeyPath, err
 }
 
@@ -243,8 +244,18 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 }
 
 // ListParticipationKeys returns the available participation keys,
+// as a response object.
+func (c *Client) ListParticipationKeys() (partKeyFiles generated.ParticipationKeysResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		partKeyFiles, err = algod.GetParticipationKeys()
+	}
+	return
+}
+
+// ListParticipationKeyFiles returns the available participation keys,
 // as a map from database filename to Participation key object.
-func (c *Client) ListParticipationKeys() (partKeyFiles map[string]account.Participation, err error) {
+func (c *Client) ListParticipationKeyFiles() (partKeyFiles map[string]account.Participation, err error) {
 	genID, err := c.GenesisID()
 	if err != nil {
 		return
