@@ -212,7 +212,7 @@ func (l *Ledger) reloadLedger() error {
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
+		err = fmt.Errorf("reloadLedger.loadFromDisk %w", err)
 		return err
 	}
 
