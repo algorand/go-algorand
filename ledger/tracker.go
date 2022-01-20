@@ -200,6 +200,9 @@ type deferredCommitRange struct {
 	// it's used in order to reset the catchpointWriting flag from the acctupdates's
 	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
 	catchpointWriting *int32
+
+	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
+	enableGeneratingCatchpointFiles bool
 }
 
 // deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.

@@ -361,7 +361,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0)
+		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
 	})
 	require.NoError(t, err)

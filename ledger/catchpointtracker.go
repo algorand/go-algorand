@@ -316,6 +316,7 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	}
 
 	dcr.catchpointWriting = &ct.catchpointWriting
+	dcr.enableGeneratingCatchpointFiles = ct.enableGeneratingCatchpointFiles
 
 	return dcr
 }
