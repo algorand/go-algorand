@@ -76,6 +76,11 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 		return
 	}
 
+	if !balances.ConsensusParams().Application {
+		err = fmt.Errorf("cannot create app for %s: applications not supported", creator.String())
+		return
+	}
+
 	// Allocate the new app params (+ 1 to match Assets Idx namespace)
 	appIdx = basics.AppIndex(txnCounter + 1)
 
@@ -217,10 +222,6 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 }
 
 func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
-	if !balances.ConsensusParams().Application {
-		return fmt.Errorf("cannot opt in app %d for %s: protocol does not supports applications", appIdx, sender.String())
-	}
-
 	record, err := balances.Get(sender, false)
 	if err != nil {
 		return err
@@ -244,6 +245,9 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
 	if maxAppsOptedIn > 0 && totalAppLocalState >= uint32(maxAppsOptedIn) {
 		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
+	}
+	if !balances.ConsensusParams().Application {
+		return fmt.Errorf("cannot opt in app %d for %s: applications not supported", appIdx, sender.String())
 	}
 
 	// Write an AppLocalState, opting in the user

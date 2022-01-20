@@ -486,9 +486,10 @@ func TestAppCallCreate(t *testing.T) {
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
+	b.SetProto(protocol.ConsensusV18) // pre-application.
 	_, err = createApplication(&ac, b, creator, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "max created apps per acct is")
+	a.Contains(err.Error(), "applications not supported")
 
 	b.SetProto(protocol.ConsensusFuture)
 	ac.ApprovalProgram = []byte{1}
@@ -541,9 +542,10 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b.balances[creator] = basics.AccountData{}
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 
+	b.SetProto(protocol.ConsensusV18) // before applications support
 	err = ApplicationCall(ac, h, b, ad, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "max created apps per acct is 0")
+	a.Contains(err.Error(), "applications not supported")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putAppParams)
 
@@ -684,6 +686,7 @@ func TestAppCallOptIn(t *testing.T) {
 
 	var params basics.AppParams
 
+	b.SetProto(protocol.ConsensusV18) // before applications support.
 	err := optInApplication(b, sender, appIdx, params)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot opt in app")
