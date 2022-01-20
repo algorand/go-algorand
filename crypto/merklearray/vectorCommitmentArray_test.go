@@ -119,8 +119,9 @@ func TestIndexOutOfBounds(t *testing.T) {
 }
 
 func TestVcSizes(t *testing.T) {
-	var vc *vectorCommitmentArray
+	partitiontest.PartitionTest(t)
 
+	var vc *vectorCommitmentArray
 	vc = vcSizeInnerTest(0)
 	require.Equal(t, uint8(1), vc.pathLen)
 	require.Equal(t, uint64(1), vc.paddedLen)
@@ -173,6 +174,8 @@ func TestVcSizes(t *testing.T) {
 }
 
 func TestVcArrayPadding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testArray := make(TestArray, 11)
 	for i := uint64(0); i < 11; i++ {
 		crypto.RandBytes(testArray[i][:])

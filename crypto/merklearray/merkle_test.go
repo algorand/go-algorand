@@ -1008,10 +1008,9 @@ func TestTreeNumOfLeavesField(t *testing.T) {
 }
 
 func TestProveOnSingleLeaf(t *testing.T) {
-	var junk TestData
-	size := uint64(15)
-	crypto.RandBytes(junk[:])
+	partitiontest.PartitionTest(t)
 
+	size := uint64(15)
 	a := make(TestArray, size)
 	for i := uint64(0); i < size; i++ {
 		crypto.RandBytes(a[i][:])
@@ -1037,10 +1036,9 @@ func TestProveOnSingleLeaf(t *testing.T) {
 }
 
 func TestVCProveOnSingleLeaf(t *testing.T) {
-	var junk TestData
-	size := uint64(15)
-	crypto.RandBytes(junk[:])
+	partitiontest.PartitionTest(t)
 
+	size := uint64(15)
 	a := make(TestArray, size)
 	for i := uint64(0); i < size; i++ {
 		crypto.RandBytes(a[i][:])
