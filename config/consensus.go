@@ -398,6 +398,9 @@ type ConsensusParams struct {
 	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
+
+	// When rewards rate changes, use the new value immediately.
+	RewardsCalculationFix bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1075,6 +1078,8 @@ func initConsensusProtocols() {
 
 	// Remove limits on maximum number of apps a single account can opt into
 	vFuture.MaxAppsOptedIn = 0
+
+	vFuture.RewardsCalculationFix = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

@@ -93,7 +93,7 @@ func MakeService(p Parameters) *Service {
 
 	s.parameters = parameters(p)
 
-	s.log = serviceLogger{Logger: p.Logger}
+	s.log = makeServiceLogger(p.Logger)
 
 	// GOAL2-541: tracer is not concurrency safe. It should only ever be
 	// accessed by main state machine loop.
@@ -191,7 +191,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	var err error
 	raw, err := restore(s.log, s.Accessor)
 	if err == nil {
-		clock, router, status, a, err = decode(raw, s.Clock)
+		clock, router, status, a, err = decode(raw, s.Clock, s.log)
 		if err != nil {
 			reset(s.log, s.Accessor)
 		} else {

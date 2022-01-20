@@ -88,6 +88,10 @@ const initializingAccountCachesMessageTimeout = 3 * time.Second
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 
+// forceCatchpointFileGeneration defines the CatchpointTracking mode that would be used to
+// force a node to generate catchpoint files.
+const forceCatchpointFileGenerationTrackingMode = 99
+
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
 // rounds covered by the accountUpdates tracker).
@@ -121,13 +125,6 @@ type modifiedResource struct {
 }
 
 type accountUpdates struct {
-	// constant variables ( initialized on initialize, and never changed afterward )
-
-	// archivalLedger determines whether the associated ledger was configured as archival ledger or not.
-	archivalLedger bool
-
-	// dynamic variables
-
 	// Connection to the database.
 	dbs db.Pair
 
@@ -259,8 +256,6 @@ func (r resourcesUpdates) getForAddress(addr basics.Address) (ret []modifiedReso
 
 // initialize initializes the accountUpdates structure
 func (au *accountUpdates) initialize(cfg config.Local) {
-	au.archivalLedger = cfg.Archival
-
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 
 	// log metrics
@@ -1480,10 +1475,10 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		au.accountsMu.RUnlock()
 
 		// in scheduleCommit, we expect that this function to update the catchpointWriting when
-		// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
+		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
 		// here would prevent us from "forgetting" to update this variable later on.
 		// The same is repeated in commitRound on errors.
-		if dcc.isCatchpointRound && au.archivalLedger {
+		if dcc.isCatchpointRound && dcc.enableGeneratingCatchpointFiles {
 			atomic.StoreInt32(dcc.catchpointWriting, 0)
 		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
@@ -1518,7 +1513,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	defer func() {
 		if err != nil {
-			if dcc.isCatchpointRound && au.archivalLedger {
+			if dcc.isCatchpointRound && dcc.enableGeneratingCatchpointFiles {
 				atomic.StoreInt32(dcc.catchpointWriting, 0)
 			}
 		}

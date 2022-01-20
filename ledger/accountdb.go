@@ -253,6 +253,10 @@ const (
 	// catchpointStateCatchupBalancesRound is the balance round that is associated with the current running catchpoint catchup. Typically it would be
 	// equal to catchpointStateCatchupBlockRound - 320.
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
+	// catchpointStateCatchupHashRound is the round that is associated with the hash of the merkle trie. Normally, it's identical to catchpointStateCatchupBalancesRound,
+	// however, it could differ when we catchup from a catchpoint that was created using a different version : in this case,
+	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
+	catchpointStateCatchupHashRound = catchpointState("catchpointCatchupHashRound")
 )
 
 // normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
@@ -304,7 +308,7 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 		for _, resource := range resources {
 			normalizedAccountBalances[i].resources[resource.aidx] = resource.resourcesData
 		}
-		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
+		normalizedAccountBalances[i].encodedAccountData = protocol.Encode(&normalizedAccountBalances[i].accountData)
 	}
 	return
 }
@@ -871,7 +875,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 
 // applyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
 // tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
-func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round) (err error) {
+func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
 	stmts := []string{
 		"ALTER TABLE accountbase RENAME TO accountbase_old",
 		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
@@ -900,10 +904,12 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('hashbase', ?)", balancesRound)
+
+	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('hashbase', ?)", merkleRootRound)
 	if err != nil {
 		return err
 	}
+
 	return
 }
 
@@ -2518,7 +2524,7 @@ func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
 	}
 
 	if aff != 1 {
-		err = fmt.Errorf("updateAccountsRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
 		return
 	}
 	return

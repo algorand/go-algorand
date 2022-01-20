@@ -91,6 +91,9 @@ type ledgerTracker interface {
 	// effort, and all the trackers contribute to that effort. All the trackers are being handed a
 	// pointer to the deferredCommitRange, and have the ability to either modify it, or return a
 	// nil. If nil is returned, the commit would be skipped.
+	// The contract:
+	// offset must not be greater than the received dcr.offset value of non zero
+	// oldBase must not be modifed if non zero
 	produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange
 
 	// prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
@@ -200,6 +203,9 @@ type deferredCommitRange struct {
 	// it's used in order to reset the catchpointWriting flag from the acctupdates's
 	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
 	catchpointWriting *int32
+
+	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
+	enableGeneratingCatchpointFiles bool
 }
 
 // deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
@@ -273,17 +279,21 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		if err != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
-			return fmt.Errorf("tracker %s failed to loadFromDisk : %v", trackerName, err)
+			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err)
 		}
 	}
 
 	err := tr.initializeTrackerCaches(l)
 	if err != nil {
-		return err
+		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
+
 	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
 	tr.accts.voters = &votersTracker{}
 	err = tr.accts.voters.loadFromDisk(l, tr.accts)
+	if err != nil {
+		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
+	}
 	return err
 }
 
@@ -323,9 +333,17 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	}
 	cdr := &dcc.deferredCommitRange
 	for _, lt := range tr.trackers {
+		base := cdr.oldBase
+		offset := cdr.offset
 		cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
 		if cdr == nil {
 			break
+		}
+		if offset > 0 && cdr.offset > offset {
+			tr.log.Warnf("tracker %T produced offset %d but expected not greater than %d, dbRound %d, latestRound %d", lt, cdr.offset, offset, dbRound, blockqRound)
+		}
+		if base > 0 && base != cdr.oldBase {
+			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
 		}
 	}
 	if cdr != nil {
@@ -507,7 +525,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 	if lastBalancesRound < lastestBlockRound {
 		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
 		if err != nil {
-			return err
+			return fmt.Errorf("unalbe to load block header %d : %w", lastBalancesRound, err)
 		}
 	}
 
@@ -585,6 +603,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		delta, err = l.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
 			close(blockEvalFailed)
+			err = fmt.Errorf("trackerEvalVerified failed : %w", err)
 			return
 		}
 		tr.newBlock(blk, delta)

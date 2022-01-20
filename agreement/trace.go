@@ -497,9 +497,12 @@ type serviceLogger struct {
 	logging.Logger
 }
 
+func makeServiceLogger(log logging.Logger) serviceLogger {
+	return serviceLogger{log.With("Context", "Agreement")}
+}
+
 func (log serviceLogger) with(e logspec.AgreementEvent) serviceLogger {
 	fields := logging.Fields{
-		"Context":      "Agreement",
 		"Type":         e.Type.String(),
 		"Round":        e.Round,
 		"Period":       e.Period,

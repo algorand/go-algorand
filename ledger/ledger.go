@@ -212,7 +212,7 @@ func (l *Ledger) reloadLedger() error {
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
+		err = fmt.Errorf("reloadLedger.loadFromDisk %w", err)
 		return err
 	}
 
@@ -592,6 +592,11 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 
 	updates, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
+		if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
+			return ledgercore.BlockInLedgerError{
+				LastRound: errNSBE.EvaluatorRound,
+				NextRound: errNSBE.LatestRound + 1}
+		}
 		return err
 	}
 	vb := ledgercore.MakeValidatedBlock(blk, updates)
@@ -616,7 +621,7 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 	}
 	l.headerCache.Put(blk.Round(), blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
-	l.log.Debugf("added blk %d", blk.Round())
+	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
 }
 
