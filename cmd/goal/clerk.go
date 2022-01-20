@@ -787,9 +787,16 @@ var signCmd = &cobra.Command{
 
 		for _, group := range groupsOrder {
 			txnGroup := []transactions.SignedTxn{}
-			for _, txn := range txnGroups[group] {
+			for idx, txn := range txnGroups[group] {
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
+				}
+				if signerAddress != "" {
+					addr, err := basics.UnmarshalChecksumAddress(signerAddress)
+					if err != nil {
+						reportErrorf("Signer invalid txn[%d]: %v", idx, err)
+					}
+					txn.AuthAddr = addr
 				}
 				txnGroup = append(txnGroup, *txn)
 			}
