@@ -325,6 +325,22 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			accountDeltas[3].Upsert(addr, ledgercore.AccountData{})
 			return accountDeltas, 2, 2
 		},
+		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+			const numRounds = 6
+			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAppLocalStates: 1}})
+			// opt-in
+			accountDeltas[1].UpsertAppResource(addr, 100, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// clear state
+			accountDeltas[2].UpsertAppResource(addr, 100, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+			// opt-in
+			accountDeltas[3].UpsertAppResource(addr, 100, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// clear state
+			accountDeltas[4].UpsertAppResource(addr, 100, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+			// close the account
+			accountDeltas[5].Upsert(addr, ledgercore.AccountData{})
+			return accountDeltas, 2, 4
+		},
 	}
 
 	for i, test := range tests {

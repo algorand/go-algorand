@@ -1999,31 +1999,31 @@ func TestAcctUpdatesResources(t *testing.T) {
 	au := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
-	var addr1 basics.Address
-	var addr2 basics.Address
+	addresses := make([]basics.Address, 0, len(accts[0]))
 	for addr := range accts[0] {
 		if addr != testSinkAddr && addr != testPoolAddr {
-			if addr1 == (basics.Address{}) {
-				addr1 = addr
-			} else if addr2 == (basics.Address{}) {
-				addr2 = addr
-			} else {
-				break
-			}
+			addresses = append(addresses, addr)
 		}
 	}
+	var addr1 basics.Address = addresses[0]
+	var addr2 basics.Address = addresses[1]
+	var addr3 basics.Address = addresses[2]
+	var addr4 basics.Address = addresses[4]
 
 	aidx := basics.AssetIndex(1)
 	aidx2 := basics.AssetIndex(2)
 	aidx3 := basics.AppIndex(3)
 	aidx4 := basics.AssetIndex(5)
+	aidx5 := basics.AppIndex(5)
+	aidx6 := basics.AppIndex(5)
 
 	rewardLevel := uint64(0)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	// the test 1 requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
 	// the test 2 requires 2 more blocks
-	// the test 2 requires 2 more blocks
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3+2+2); i++ {
+	// the test 3 requires 2 more blocks
+	// the test 4 requires 2 more blocks
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3+2+2+2); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.NewAccountDeltas
@@ -2079,6 +2079,33 @@ func TestAcctUpdatesResources(t *testing.T) {
 			updates.UpsertAppResource(addr1, aidx3, appParams, ledgercore.AppLocalStateDelta{LocalState: nil, Deleted: true})
 			// transfer own holdings
 			updates.UpsertAssetResource(addr1, aidx4, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+		}
+
+		// test 4: opt-in, clear state, opt-in, clear state
+		if i == 8 {
+			updates.Upsert(addr3, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAppLocalStates: 1}})
+			// opt-in
+			updates.UpsertAppResource(addr3, aidx5, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// clear state
+			updates.UpsertAppResource(addr3, aidx5, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+		}
+		if i == 9 {
+			// opt-in
+			updates.UpsertAppResource(addr3, aidx5, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// clear state
+			updates.UpsertAppResource(addr3, aidx5, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+			updates.Upsert(addr3, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
+
+			// the same but within the commit range
+			updates.Upsert(addr4, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAppLocalStates: 1}})
+			// opt-in
+			updates.UpsertAppResource(addr4, aidx6, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// clear state
+			updates.UpsertAppResource(addr4, aidx6, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+			updates.UpsertAppResource(addr4, aidx6, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// clear state
+			updates.UpsertAppResource(addr4, aidx6, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+			updates.Upsert(addr4, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
 		}
 
 		prevTotals, err := au.Totals(basics.Round(i - 1))
@@ -2141,6 +2168,9 @@ func TestAcctUpdatesResources(t *testing.T) {
 		accts = append(accts, newAccts)
 	}
 
+	empty := ledgercore.MakeNewAccountDeltas(0)
+	require.Equal(t, []ledgercore.NewAccountDeltas{empty, empty}, au.deltas) // two empty deltas from loopback
+
 	ad, _, err := au.lookupLatest(addr1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), ad.AssetParams[aidx2].Total)
@@ -2156,6 +2186,37 @@ func TestAcctUpdatesResources(t *testing.T) {
 	ad, _, err = au.lookupLatest(addr2)
 	require.NoError(t, err)
 	require.Equal(t, uint64(99), ad.Assets[aidx2].Amount)
+
+	var appaccts = []struct {
+		addr basics.Address
+		aidx basics.AppIndex
+	}{
+		{addr3, aidx5},
+		{addr4, aidx6},
+	}
+	for _, test := range appaccts {
+		ad, rnd, err := au.lookupLatest(test.addr)
+		require.NoError(t, err)
+		ls, ok := ad.AppLocalStates[test.aidx]
+		require.False(t, ok)
+		require.Empty(t, ls)
+
+		data, _, err := au.LookupWithoutRewards(rnd, test.addr)
+		require.NoError(t, err)
+		require.Empty(t, data.TotalAppLocalStates)
+
+		pad, err := au.accountsq.lookup(test.addr)
+		require.NoError(t, err)
+		require.NotEmpty(t, pad.rowid)
+		require.Equal(t, rnd-basics.Round(protoParams.MaxBalLookback), pad.round)
+		require.Empty(t, pad.accountData.TotalAppLocalStates)
+
+		prd, err := au.accountsq.lookupResources(test.addr, basics.CreatableIndex(test.aidx), basics.AppCreatable)
+		require.NoError(t, err)
+		require.Equal(t, rnd-basics.Round(protoParams.MaxBalLookback), prd.round)
+		require.Empty(t, prd.addrid)
+		require.Empty(t, prd.data)
+	}
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.
