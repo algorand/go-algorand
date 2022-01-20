@@ -229,12 +229,24 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 		runningRequiredBalance += assetCost
 	}
 	if cfg.NumApp > 0 {
-		creationCost := uint64(cfg.NumApp) * proto.AppFlatParamsMinBalance * uint64(proto.MaxAppsCreated)
-		optInCost := uint64(cfg.NumApp) * proto.AppFlatOptInMinBalance * uint64(proto.MaxAppsOptedIn)
+		maxAppsCreated := proto.MaxAppsCreated
+		maxAppsOptedIn := proto.MaxAppsOptedIn
+		// TODO : given that we've added unlimited app support, we should revise this
+		// code so that we'll have control on how many app/account we want to create.
+		// for now, I'm going to keep the previous max values until we have refactored this code.
+		if maxAppsCreated == 0 {
+			maxAppsCreated = 10
+		}
+		if maxAppsOptedIn == 0 {
+			maxAppsOptedIn = 10
+		}
+
+		creationCost := uint64(cfg.NumApp) * proto.AppFlatParamsMinBalance * uint64(maxAppsCreated)
+		optInCost := uint64(cfg.NumApp) * proto.AppFlatOptInMinBalance * uint64(maxAppsOptedIn)
 		maxGlobalSchema := basics.StateSchema{NumUint: proto.MaxGlobalSchemaEntries, NumByteSlice: proto.MaxGlobalSchemaEntries}
 		maxLocalSchema := basics.StateSchema{NumUint: proto.MaxLocalSchemaEntries, NumByteSlice: proto.MaxLocalSchemaEntries}
-		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsCreated) +
-			maxLocalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsOptedIn))
+		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(&proto).Raw*uint64(maxAppsCreated) +
+			maxLocalSchema.MinBalance(&proto).Raw*uint64(maxAppsOptedIn))
 		fundingRequiredBalance += creationCost + optInCost + schemaCost
 		runningRequiredBalance += creationCost + optInCost + schemaCost
 	}

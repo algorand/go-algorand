@@ -77,7 +77,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 
 		totalAssets := record.TotalAssets
 		maxAssetsPerAccount := balances.ConsensusParams().MaxAssetsPerAccount
-		if totalAssets >= uint32(maxAssetsPerAccount) {
+		if maxAssetsPerAccount > 0 && totalAssets >= uint32(maxAssetsPerAccount) {
 			return fmt.Errorf("too many assets in account: %d >= %d", totalAssets, maxAssetsPerAccount)
 		}
 
@@ -289,7 +289,8 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 			totalSndAssets := record.TotalAssets
 			maxAssetsPerAccount := balances.ConsensusParams().MaxAssetsPerAccount
-			if totalSndAssets >= uint32(maxAssetsPerAccount) {
+
+			if maxAssetsPerAccount > 0 && totalSndAssets >= uint32(maxAssetsPerAccount) {
 				return fmt.Errorf("too many assets in account: %d >= %d", totalSndAssets, maxAssetsPerAccount)
 			}
 

@@ -109,6 +109,9 @@ type BenchAppOptInsTxnGenerator struct {
 func (g *BenchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) ([]transactions.SignedTxn, int) {
 	maxLocalSchemaEntries := config.Consensus[g.Proto].MaxLocalSchemaEntries
 	maxAppsOptedIn := config.Consensus[g.Proto].MaxAppsOptedIn
+	if maxAppsOptedIn == 0 {
+		maxAppsOptedIn = 10
+	}
 
 	// this function might create too much transaction even to fit into a single block
 	// estimate number of smaller blocks needed in order to set LastValid properly

@@ -71,7 +71,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Make sure the creator isn't already at the app creation max
 	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
-	if totalAppParams >= uint32(maxAppsCreated) {
+	if maxAppsCreated > 0 && totalAppParams >= uint32(maxAppsCreated) {
 		err = fmt.Errorf("cannot create app for %s: max created apps per acct is %d", creator.String(), maxAppsCreated)
 		return
 	}
@@ -238,7 +238,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 
 	// Make sure the user isn't already at the app opt-in max
 	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
-	if totalAppLocalState >= uint32(maxAppsOptedIn) {
+	if maxAppsOptedIn > 0 && totalAppLocalState >= uint32(maxAppsOptedIn) {
 		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
 	}
 

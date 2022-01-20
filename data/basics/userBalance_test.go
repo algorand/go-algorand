@@ -190,8 +190,11 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		}
 		maxLocalState[maxKey] = maxValue
 	}
-
-	for appCreatorApps := 0; appCreatorApps < currentConsensusParams.MaxAppsCreated; appCreatorApps++ {
+	maxAppsCreate := currentConsensusParams.MaxAppsCreated
+	if maxAppsCreate == 0 {
+		maxAppsCreate = 10
+	}
+	for appCreatorApps := 0; appCreatorApps < maxAppsCreate; appCreatorApps++ {
 		ap := AppParams{
 			ApprovalProgram:   maxProg,
 			ClearStateProgram: maxProg,
@@ -204,7 +207,11 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.AppParams[AppIndex(0x1234123412341234-appCreatorApps)] = ap
 	}
 
-	for appHolderApps := 0; appHolderApps < currentConsensusParams.MaxAppsOptedIn; appHolderApps++ {
+	maxAppsOptedIn := currentConsensusParams.MaxAppsOptedIn
+	if maxAppsOptedIn == 0 {
+		maxAppsOptedIn = 10
+	}
+	for appHolderApps := 0; appHolderApps < maxAppsOptedIn; appHolderApps++ {
 		ls := AppLocalState{
 			KeyValue: maxLocalState,
 			Schema:   maxStateSchema,
@@ -222,13 +229,13 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
 	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
+		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
 			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsCreated > EncodedMaxAppParams {
+		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > EncodedMaxAppParams {
 			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
+		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
 			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
 		}
 		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {

@@ -907,6 +907,7 @@ func TestAppInsMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusV30
 
 	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
@@ -914,11 +915,11 @@ func TestAppInsMinBalance(t *testing.T) {
 
 	const appid basics.AppIndex = 1
 
-	maxAppsOptedIn := config.Consensus[protocol.ConsensusFuture].MaxAppsOptedIn
+	maxAppsOptedIn := config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	require.Greater(t, maxAppsOptedIn, 0)
-	maxAppsCreated := config.Consensus[protocol.ConsensusFuture].MaxAppsCreated
+	maxAppsCreated := config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 	require.Greater(t, maxAppsCreated, 0)
-	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries
+	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusV30].MaxLocalSchemaEntries
 	require.Greater(t, maxLocalSchemaEntries, uint64(0))
 
 	txnsCreate := make([]*txntest.Txn, 0, maxAppsOptedIn)

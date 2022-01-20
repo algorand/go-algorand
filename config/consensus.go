@@ -1064,6 +1064,18 @@ func initConsensusProtocols() {
 	// catchpoint labels prior to this feature being enabled.
 	vFuture.EnableAccountDataResourceSeparation = true
 
+	// Remove limits on MinimumBalance
+	vFuture.MaximumMinimumBalance = 0
+
+	// Remove limits on assets / account.
+	vFuture.MaxAssetsPerAccount = 0
+
+	// Remove limits on maximum number of apps a single account can create
+	vFuture.MaxAppsCreated = 0
+
+	// Remove limits on maximum number of apps a single account can opt into
+	vFuture.MaxAppsOptedIn = 0
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 

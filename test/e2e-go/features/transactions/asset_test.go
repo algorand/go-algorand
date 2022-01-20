@@ -232,9 +232,13 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
 
-	// Create max number of assets
+	// Create max number of assets, or 1000 if the number of assets are unlimitd.
+	maxAssetsCount := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
+	if maxAssetsCount == 0 {
+		maxAssetsCount = 1000
+	}
 	txids := make(map[string]string)
-	for i := 0; i < config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount; i++ {
+	for i := 0; i < maxAssetsCount; i++ {
 		// re-generate wh, since this test takes a while and sometimes
 		// the wallet handle expires.
 		wh, err = client.GetUnencryptedWalletHandle()
@@ -273,7 +277,7 @@ func TestAssetConfig(t *testing.T) {
 	// Check that assets are visible
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount)
+	a.Equal(maxAssetsCount, len(info.AssetParams))
 	var assets []assetIDParams
 	for idx, cp := range info.AssetParams {
 		assets = append(assets, assetIDParams{idx, cp})

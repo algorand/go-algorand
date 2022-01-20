@@ -69,8 +69,12 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 		AuthAddr:           basics.Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
 	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	for assetCreatorAssets := 0; assetCreatorAssets < currentConsensusParams.MaxAssetsPerAccount; assetCreatorAssets++ {
+	maxAssetsPerAccount := currentConsensusParams.MaxAssetsPerAccount
+	// if the number of supported assets is unlimited, create only 1000 for the purpose of this unit test.
+	if maxAssetsPerAccount == 0 {
+		maxAssetsPerAccount = 1000
+	}
+	for assetCreatorAssets := 0; assetCreatorAssets < maxAssetsPerAccount; assetCreatorAssets++ {
 		ap := basics.AssetParams{
 			Total:         0x1234123412341234,
 			Decimals:      0x12341234,
@@ -87,7 +91,7 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 		ad.AssetParams[basics.AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
 	}
 
-	for assetHolderAssets := 0; assetHolderAssets < currentConsensusParams.MaxAssetsPerAccount; assetHolderAssets++ {
+	for assetHolderAssets := 0; assetHolderAssets < maxAssetsPerAccount; assetHolderAssets++ {
 		ah := basics.AssetHolding{
 			Amount: 0x1234123412341234,
 			Frozen: true,
@@ -97,6 +101,12 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 
 	maxApps := currentConsensusParams.MaxAppsCreated
 	maxOptIns := currentConsensusParams.MaxAppsOptedIn
+	if maxApps == 0 {
+		maxApps = 10
+	}
+	if maxOptIns == 0 {
+		maxOptIns = 10
+	}
 	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
 	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens
 
