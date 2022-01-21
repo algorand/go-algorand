@@ -3039,7 +3039,7 @@ func LoadAllFullAccounts(
 
 // accountAddressHash is used by Next to return a single account address and the associated hash.
 type accountAddressHash struct {
-	address basics.Address
+	address []byte // we're using []byte instead of basics.Address to ensure we can store output directly to the buffer.
 	digest  []byte
 }
 
@@ -3168,31 +3168,21 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 
 	if iterator.step == oaiStepIterateOverOrderedTable {
-		acct = make([]accountAddressHash, 0, iterator.accountCount)
-		var addr basics.Address
+		acct = make([]accountAddressHash, iterator.accountCount)
+		acctIdx := 0
 		for iterator.hashesRows.Next() {
-			var addrbuf []byte
-			var hash []byte
-			err = iterator.hashesRows.Scan(&addrbuf, &hash)
+			err = iterator.hashesRows.Scan(&(acct[acctIdx].address), &(acct[acctIdx].digest))
 			if err != nil {
 				iterator.Close(ctx)
 				return
 			}
-
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				iterator.Close(ctx)
-				return
-			}
-
-			copy(addr[:], addrbuf)
-
-			acct = append(acct, accountAddressHash{address: addr, digest: hash})
-			if len(acct) == iterator.accountCount {
+			acctIdx++
+			if acctIdx == iterator.accountCount {
 				// we're done with this iteration.
 				return
 			}
 		}
+		acct = acct[:acctIdx]
 		iterator.step = oaiStepShutdown
 		iterator.hashesRows.Close()
 		iterator.hashesRows = nil
