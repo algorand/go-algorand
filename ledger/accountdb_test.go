@@ -1189,13 +1189,18 @@ func TestResourcesDataApp(t *testing.T) {
 
 	a := require.New(t)
 
+	rd := makeResourcesData(1)
+	a.False(rd.IsApp())
+	a.True(rd.IsEmpty())
+
 	// check empty
 	appParamsEmpty := basics.AppParams{}
-	rd := resourcesData{}
+	rd = resourcesData{}
 	rd.SetAppParams(appParamsEmpty, false)
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 
 	appLocalEmpty := basics.AppLocalState{}
@@ -1203,7 +1208,8 @@ func TestResourcesDataApp(t *testing.T) {
 	rd.SetAppLocalState(appLocalEmpty)
 	a.True(rd.IsApp())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
 	// check both empty
@@ -1213,7 +1219,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1225,7 +1232,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParams, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1234,7 +1242,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParams, rd.GetAppParams())
 	a.Equal(appState, rd.GetAppLocalState())
 
@@ -1243,7 +1252,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParams, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1253,7 +1263,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appState, rd.GetAppLocalState())
 
@@ -1262,7 +1273,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsApp())
 	a.False(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1274,17 +1286,99 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
 	rd = resourcesData{}
 	rd.SetAppLocalState(appLocalEmpty)
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsApp())
+	a.False(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
 	rd.ClearAppLocalState()
-	a.True(rd.IsEmptyApp())
+	a.False(rd.IsApp())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+
+	// check migration flow (accountDataResources)
+	// 1. both exist and empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 2. both exist and not empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 3. both exist: holding not empty, param is empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 4. both exist: holding empty, param is not empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 5. holding does not exist and params is empty
+	rd = makeResourcesData(0)
+	rd.SetAppParams(appParamsEmpty, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 6. holding does not exist and params is not empty
+	rd = makeResourcesData(0)
+	rd.SetAppParams(appParams, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 7. holding exist and not empty and params does not exist
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	a.True(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 8. both do not exist
+	rd = makeResourcesData(0)
+	a.False(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
+
 }
 
 func TestResourcesDataAsset(t *testing.T) {
@@ -1292,13 +1386,18 @@ func TestResourcesDataAsset(t *testing.T) {
 
 	a := require.New(t)
 
+	rd := makeResourcesData(1)
+	a.False(rd.IsAsset())
+	a.True(rd.IsEmpty())
+
 	// check empty
 	assetParamsEmpty := basics.AssetParams{}
-	rd := resourcesData{}
+	rd = resourcesData{}
 	rd.SetAssetParams(assetParamsEmpty, false)
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 
 	assetHoldingEmpty := basics.AssetHolding{}
@@ -1306,7 +1405,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	rd.SetAssetHolding(assetHoldingEmpty)
 	a.True(rd.IsAsset())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
 	// check both empty
@@ -1316,7 +1416,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1328,7 +1429,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParams, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1337,7 +1439,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParams, rd.GetAssetParams())
 	a.Equal(assetHolding, rd.GetAssetHolding())
 
@@ -1346,7 +1449,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParams, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1356,7 +1460,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHolding, rd.GetAssetHolding())
 
@@ -1365,7 +1470,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsAsset())
 	a.False(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1377,17 +1483,98 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
 	rd = resourcesData{}
 	rd.SetAssetHolding(assetHoldingEmpty)
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsAsset())
+	a.False(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsEmptyAsset)
 	rd.ClearAssetHolding()
-	a.True(rd.IsEmptyAsset())
+	a.False(rd.IsAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+
+	// check migration operations (accountDataResources)
+	// 1. both exist and empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 2. both exist and not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 3. both exist: holding not empty, param is empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 4. both exist: holding empty, param is not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 5. holding does not exist and params is empty
+	rd = makeResourcesData(0)
+	rd.SetAssetParams(assetParamsEmpty, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 6. holding does not exist and params is not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetParams(assetParams, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 7. holding exist and not empty and params does not exist
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	a.True(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 8. both do not exist
+	rd = makeResourcesData(0)
+	a.False(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
 }
 
 func TestBaseAccountDataIsEmpty(t *testing.T) {
