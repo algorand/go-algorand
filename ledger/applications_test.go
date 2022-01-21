@@ -49,8 +49,19 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 			break
 		}
 		time.Sleep(time.Millisecond)
-
 	}
+}
+
+func flushRounds(l *Ledger) {
+	l.trackers.mu.RLock()
+	dbRound := l.trackers.dbRound
+	l.trackers.mu.RUnlock()
+
+	l.accts.accountsMu.RLock()
+	offset := uint64(len(l.accts.deltas))
+	l.accts.accountsMu.RUnlock()
+
+	commitRound(offset, dbRound, l)
 }
 
 // test ensures that

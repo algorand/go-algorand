@@ -51,16 +51,21 @@ func main(source string) string {
 // newTestLedger creates a in memory Ledger that is as realistic as
 // possible.  It has Rewards and FeeSink properly configured.
 func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
+	const inMemory = true
+	return newTestLedgerWithParams(t, balances, protocol.ConsensusFuture, inMemory)
+}
+
+func newTestLedgerWithParams(t testing.TB, balances bookkeeping.GenesisBalances, proto protocol.ConsensusVersion, inMemory bool) *Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture, balances, "test", genHash)
+	genBlock, err := bookkeeping.MakeGenesisBlock(proto, balances, "test", genHash)
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
+	l, err := OpenLedger(logging.Base(), dbName, inMemory, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,
@@ -1335,4 +1340,199 @@ nonpart:
 	l.endBlock(t, eval)
 	// Ppaid fee and 1.  Did not get rewards
 	require.Equal(t, 999_998_998, int(l.micros(t, appIndex.Address())))
+}
+
+func TestCloseOuts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedgerWithParams(t, genBalances, protocol.ConsensusCurrentVersion, false)
+	defer l.Close()
+
+	// create an app, asset and prepare an account for tests
+	appCreate := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   "int 1",
+		GlobalStateSchema: basics.StateSchema{NumUint: 10},
+		LocalStateSchema:  basics.StateSchema{NumUint: 10},
+	}
+	assetCreate := txntest.Txn{
+		Type:   protocol.AssetConfigTx,
+		Sender: addrs[0],
+		AssetParams: basics.AssetParams{
+			Total:     1000000,
+			AssetName: "testasa",
+		},
+	}
+	close := txntest.Txn{
+		Type:             protocol.PaymentTx,
+		Sender:           addrs[1],
+		CloseRemainderTo: addrs[0],
+	}
+
+	acctSpawnSeq := func(addr basics.Address) []*txntest.Txn {
+		return []*txntest.Txn{
+			{
+				Type:     protocol.PaymentTx,
+				Sender:   addrs[0],
+				Receiver: addr,
+				Amount:   5000000,
+			},
+			{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        addr,
+				OnCompletion:  transactions.OptInOC,
+				ApplicationID: 1,
+			},
+			{
+				Type:          protocol.AssetTransferTx,
+				Sender:        addr,
+				AssetReceiver: addr,
+				XferAsset:     2,
+				AssetAmount:   0,
+			},
+		}
+	}
+
+	acctCloseSeq := func(addr basics.Address) []*txntest.Txn {
+		return []*txntest.Txn{
+			{
+				Type:         protocol.AssetTransferTx,
+				Sender:       addr,
+				AssetCloseTo: addrs[0],
+				XferAsset:    2,
+			},
+			{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        addr,
+				OnCompletion:  transactions.ClearStateOC,
+				ApplicationID: 1,
+			},
+			{
+				Type:             protocol.PaymentTx,
+				Sender:           addr,
+				CloseRemainderTo: addrs[0],
+			},
+		}
+	}
+
+	// sequence 1: addr1 gets created and opts in
+	seq1 := acctSpawnSeq(addrs[1])
+
+	// sequence 2: addr1 pays
+	seq2 := []*txntest.Txn{
+		{
+			Type:     protocol.PaymentTx,
+			Sender:   addrs[1],
+			Receiver: addrs[0],
+			Amount:   1000000,
+		},
+	}
+
+	// sequence 3: addr2 gets created and opts in
+	seq3 := acctSpawnSeq(addrs[2])
+
+	// sequence 4: addr1 closed out
+	seq4 := acctCloseSeq(addrs[1])
+
+	// sequence 5: addr2 closed out
+	seq5 := acctCloseSeq(addrs[2])
+
+	eval := testingEvaluator{l.nextBlock(t), l}
+	eval.txns(t, &appCreate, &assetCreate, &close)
+	l.endBlock(t, eval)
+
+	for i := 1; i < 1000; i++ {
+
+		eval = testingEvaluator{l.nextBlock(t), l}
+		for _, txn := range seq1 {
+			txn.FirstValid = 0
+			txn.LastValid = 0
+		}
+		err := eval.txgroup(t, seq1...)
+		require.NoError(t, err)
+		l.endBlock(t, eval)
+		// commit all data to start a range from seq2 to seq4
+		flushRounds(l)
+
+		eval = testingEvaluator{l.nextBlock(t), l}
+		for _, txn := range seq2 {
+			txn.FirstValid = 0
+			txn.LastValid = 0
+		}
+		err = eval.txgroup(t, seq2...)
+		require.NoError(t, err)
+		l.endBlock(t, eval)
+
+		eval = testingEvaluator{l.nextBlock(t), l}
+		for _, txn := range seq3 {
+			txn.FirstValid = 0
+			txn.LastValid = 0
+		}
+		err = eval.txgroup(t, seq3...)
+		require.NoError(t, err)
+		l.endBlock(t, eval)
+
+		ad := l.lookup(t, addrs[0])
+		require.NotEmpty(t, ad)
+		ad = l.lookup(t, addrs[2])
+		require.NotEmpty(t, ad)
+		require.NotEmpty(t, ad.AppLocalStates[1])
+		require.Equal(t, uint64(10), ad.AppLocalStates[1].Schema.NumUint)
+
+		from := addrs[crypto.RandUint64()%uint64(len(addrs)-3)+3]
+		to := addrs[crypto.RandUint64()%uint64(len(addrs)-3)+3]
+		pay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   from,
+			Receiver: to,
+			Amount:   1000000,
+		}
+		for j := 0; j <= int(crypto.RandUint64()%10); j++ {
+			pay.FirstValid = 0
+			pay.LastValid = 0
+			eval = testingEvaluator{l.nextBlock(t), l}
+			eval.txn(t, &pay)
+			l.endBlock(t, eval)
+		}
+
+		eval = testingEvaluator{l.nextBlock(t), l}
+		for _, txn := range seq4 {
+			txn.FirstValid = 0
+			txn.LastValid = 0
+		}
+		err = eval.txgroup(t, seq4...)
+		require.NoError(t, err)
+		l.endBlock(t, eval)
+
+		flushRounds(l)
+
+		eval = testingEvaluator{l.nextBlock(t), l}
+		for _, txn := range seq5 {
+			txn.FirstValid = 0
+			txn.LastValid = 0
+		}
+		err = eval.txgroup(t, seq5...)
+		require.NoError(t, err)
+		l.endBlock(t, eval)
+
+		ad = l.lookup(t, addrs[1])
+		ad.RewardsBase = 0 // know bug
+		require.Empty(t, ad)
+		ad = l.lookup(t, addrs[2])
+		ad.RewardsBase = 0 // know bug
+		require.Empty(t, ad)
+
+		if i%100 == 0 {
+			l.trackers.mu.RLock()
+			dbRound := l.trackers.dbRound
+			l.trackers.mu.RUnlock()
+
+			l.accts.accountsMu.RLock()
+			offset := uint64(len(l.accts.deltas))
+			l.accts.accountsMu.RUnlock()
+			fmt.Printf("%d, %d\n", dbRound, offset)
+		}
+	}
 }

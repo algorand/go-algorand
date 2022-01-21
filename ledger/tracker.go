@@ -501,7 +501,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	for _, lt := range tr.trackers {
 		lt.postCommitUnlocked(tr.ctx, dcc)
 	}
-
 }
 
 // initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
