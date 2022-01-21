@@ -2877,7 +2877,10 @@ func processAllResources(
 			if err != nil {
 				return pendingRow{}, err
 			}
-			if addrid != acctRowid {
+			if addrid < acctRowid {
+				err = errors.New("resource table entries mismatches accountbase table entries")
+				return pendingRow{}, err
+			} else if addrid > acctRowid {
 				err = callback(addr, 0, 0, nil, nil)
 				return pendingRow{addrid, aidx, rtype, buf}, err
 			}
