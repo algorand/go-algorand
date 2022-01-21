@@ -389,7 +389,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 			require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
 			require.Equal(t,
-				persistedResourcesData{addrid: 0, aidx: 100, data: makeResourcesData(lastRound - 1), round: basics.Round(lastRound)},
+				persistedResourcesData{addrid: 0, aidx: 100, data: makeResourcesData(0), round: basics.Round(lastRound)},
 				updatesResources[addr][0],
 			)
 		})
