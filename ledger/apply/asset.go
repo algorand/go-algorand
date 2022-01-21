@@ -24,7 +24,8 @@ import (
 )
 
 func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
-	creator, exists, err := balances.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
+	var exists bool
+	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
 		return
 	}
@@ -36,7 +37,8 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 		return
 	}
 
-	params, ok, err := balances.GetAssetParams(creator, aidx)
+	var ok bool
+	params, ok, err = balances.GetAssetParams(creator, aidx)
 	if err != nil {
 		return
 	}
@@ -126,6 +128,14 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		record, err := balances.Get(creator, false)
 		if err != nil {
 			return err
+		}
+
+		if record.TotalAssets == 0 {
+			return fmt.Errorf("cannot destroy asset: account %v holds no assets", creator)
+		}
+
+		if record.TotalAssetParams == 0 {
+			return fmt.Errorf("cannot destroy asset: account %v created no assets", creator)
 		}
 
 		// assetHolding is initialized to the zero value if none was found.
@@ -335,6 +345,10 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		record, err := balances.Get(source, false)
 		if err != nil {
 			return err
+		}
+
+		if record.TotalAssets == 0 {
+			return fmt.Errorf("cannot close asset holding on account %s : account is not opted in asset %d ", source.String(), ct.XferAsset)
 		}
 
 		// Fetch the sender asset data. We will use this to ensure

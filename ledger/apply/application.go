@@ -39,7 +39,8 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 		return
 	}
 
-	params, ok, err := balances.GetAppParams(creator, aidx)
+	var ok bool
+	params, ok, err = balances.GetAppParams(creator, aidx)
 	if err != nil {
 		return
 	}
@@ -58,16 +59,14 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 // and returns the generated application ID
 func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, txnCounter uint64) (appIdx basics.AppIndex, err error) {
 	// Fetch the creator's (sender's) balance record
-	record, err := balances.Get(creator, false)
+	var record ledgercore.AccountData
+	record, err = balances.Get(creator, false)
 	if err != nil {
 		return
 	}
 
 	// look up how many apps they have
 	totalAppParams := record.TotalAppParams
-	if err != nil {
-		return
-	}
 
 	// Make sure the creator isn't already at the app creation max
 	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
@@ -80,7 +79,8 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	appIdx = basics.AppIndex(txnCounter + 1)
 
 	// Sanity check that there isn't an app with this counter value.
-	_, present, err := balances.GetAppParams(creator, appIdx)
+	var present bool
+	_, present, err = balances.GetAppParams(creator, appIdx)
 	if err != nil {
 		return
 	}
@@ -141,7 +141,8 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		return err
 	}
 
-	params, _, err := balances.GetAppParams(creator, appIdx)
+	var params basics.AppParams
+	params, _, err = balances.GetAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
@@ -223,6 +224,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	// If the user has already opted in, fail
+	// future optimization: find a way to avoid testing this in case record.TotalAppLocalStates == 0.
 	ok, err := balances.HasAppLocalState(sender, appIdx)
 	if err != nil {
 		return err
@@ -232,9 +234,6 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	totalAppLocalState := record.TotalAppLocalStates
-	if err != nil {
-		return err
-	}
 
 	// Make sure the user isn't already at the app opt-in max
 	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
@@ -280,6 +279,10 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	record, err := balances.Get(sender, false)
 	if err != nil {
 		return err
+	}
+
+	if record.TotalAppLocalStates == 0 {
+		return fmt.Errorf("account %s is not opted in to any app, and in particular %d", sender.String(), appIdx)
 	}
 
 	// If they haven't opted in, that's an error
