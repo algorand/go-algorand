@@ -226,12 +226,13 @@ func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 
 // CatchpointCatchupAccessorProgress is used by the caller of ProgressStagingBalances to obtain progress information
 type CatchpointCatchupAccessorProgress struct {
-	TotalAccounts     uint64
-	ProcessedAccounts uint64
-	ProcessedBytes    uint64
-	TotalChunks       uint64
-	SeenHeader        bool
-	Version           uint64
+	TotalAccounts      uint64
+	ProcessedAccounts  uint64
+	ProcessedBytes     uint64
+	TotalChunks        uint64
+	SeenHeader         bool
+	Version            uint64
+	TotalAccountHashes uint64
 
 	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
@@ -433,6 +434,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	if err == nil {
 		progress.ProcessedAccounts += uint64(len(normalizedAccountBalances))
 		progress.ProcessedBytes += uint64(len(bytes))
+		for _, acctBal := range normalizedAccountBalances {
+			progress.TotalAccountHashes += uint64(len(acctBal.accountHashes))
+		}
 	}
 
 	// not strictly required, but clean up the pointer in case of either a failure or when we're done.
