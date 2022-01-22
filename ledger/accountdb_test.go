@@ -1578,29 +1578,95 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsEmpty())
 }
 
-// TestResourcesDataSetAssetData checks combinations of old/new values when
+// TestResourcesDataSetData checks combinations of old/new values when
 // updating resourceData from resourceDelta
-func TestResourcesDataSetAssetData(t *testing.T) {
+func TestResourcesDataSetData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
-	triParams := ledgercore.AssetParamsDelta{}
-	triHolding := ledgercore.AssetHoldingDelta{}
-	delParams := ledgercore.AssetParamsDelta{Deleted: true}
-	delHolding := ledgercore.AssetHoldingDelta{Deleted: true}
-	empParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{}}
-	empHolding := ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{}}
-	actParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
-	actHolding := ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 555}}
+	type deltaCode int
+	const (
+		tri deltaCode = iota + 1
+		del
+		emp
+		act
+	)
+
+	// apply deltas encoded as deltaCode to a base resourcesData for both apps and assets
+	apply := func(t *testing.T, base resourcesData, testType basics.CreatableType, pcode, hcode deltaCode) resourcesData {
+		if testType == basics.AssetCreatable {
+			var p ledgercore.AssetParamsDelta
+			var h ledgercore.AssetHoldingDelta
+			switch pcode {
+			case tri:
+				break
+			case del:
+				p = ledgercore.AssetParamsDelta{Deleted: true}
+			case emp:
+				p = ledgercore.AssetParamsDelta{Params: &basics.AssetParams{}}
+			case act:
+				p = ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
+			default:
+				t.Logf("invalid pcode: %d", pcode)
+				t.Fail()
+			}
+			switch hcode {
+			case tri:
+				break
+			case del:
+				h = ledgercore.AssetHoldingDelta{Deleted: true}
+			case emp:
+				h = ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{}}
+			case act:
+				h = ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 555}}
+			default:
+				t.Logf("invalid hcode: %d", hcode)
+				t.Fail()
+			}
+			base.SetAssetData(p, h)
+		} else {
+			var p ledgercore.AppParamsDelta
+			var h ledgercore.AppLocalStateDelta
+			switch pcode {
+			case tri:
+				break
+			case del:
+				p = ledgercore.AppParamsDelta{Deleted: true}
+			case emp:
+				p = ledgercore.AppParamsDelta{Params: &basics.AppParams{}}
+			case act:
+				p = ledgercore.AppParamsDelta{Params: &basics.AppParams{ClearStateProgram: []byte{4, 5, 6}}}
+			default:
+				t.Logf("invalid pcode: %d", pcode)
+				t.Fail()
+			}
+			switch hcode {
+			case tri:
+				break
+			case del:
+				h = ledgercore.AppLocalStateDelta{Deleted: true}
+			case emp:
+				h = ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{}}
+			case act:
+				h = ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumByteSlice: 5}}}
+			default:
+				t.Logf("invalid hcode: %d", hcode)
+				t.Fail()
+			}
+			base.SetAppData(p, h)
+		}
+
+		return base
+	}
 
 	itb := func(i int) (b bool) {
 		return i != 0
 	}
 
 	type testcase struct {
-		p             ledgercore.AssetParamsDelta
-		h             ledgercore.AssetHoldingDelta
+		p             deltaCode
+		h             deltaCode
 		isAsset       int
 		isOwning      int
 		isHolding     int
@@ -1608,282 +1674,353 @@ func TestResourcesDataSetAssetData(t *testing.T) {
 		isEmpty       int
 	}
 
-	emptyRD := makeResourcesData(0)
-
-	emptyParamsNoHoldingRD := makeResourcesData(0)
-	emptyParamsNoHoldingRD.SetAssetParams(basics.AssetParams{}, false)
-
-	emptyParamsEmptyHoldingRD := makeResourcesData(0)
-	emptyParamsEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{})
-	emptyParamsEmptyHoldingRD.SetAssetParams(basics.AssetParams{}, true)
-
-	emptyParamsNotEmptyHoldingRD := makeResourcesData(0)
-	emptyParamsNotEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{Amount: 111})
-	emptyParamsNotEmptyHoldingRD.SetAssetParams(basics.AssetParams{}, true)
-
-	paramsNoHoldingRD := makeResourcesData(0)
-	paramsNoHoldingRD.SetAssetParams(basics.AssetParams{Total: 222}, false)
-
-	paramsEmptyHoldingRD := makeResourcesData(0)
-	paramsEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{})
-	paramsEmptyHoldingRD.SetAssetParams(basics.AssetParams{Total: 222}, true)
-
-	paramsAndHoldingRD := makeResourcesData(0)
-	paramsAndHoldingRD.SetAssetHolding(basics.AssetHolding{Amount: 111})
-	paramsAndHoldingRD.SetAssetParams(basics.AssetParams{Total: 222}, true)
-
-	noParamsEmptyHoldingRD := makeResourcesData(0)
-	noParamsEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{})
-
-	noParamsNotEmptyHoldingRD := makeResourcesData(0)
-	noParamsNotEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{Amount: 111})
+	empty := func(testType basics.CreatableType) resourcesData {
+		return makeResourcesData(0)
+	}
+	emptyParamsNoHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetParams(basics.AssetParams{}, false)
+		} else {
+			rd.SetAppParams(basics.AppParams{}, false)
+		}
+		return rd
+	}
+	emptyParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+			rd.SetAssetParams(basics.AssetParams{}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+			rd.SetAppParams(basics.AppParams{}, true)
+		}
+		return rd
+	}
+	emptyParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+			rd.SetAssetParams(basics.AssetParams{}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+			rd.SetAppParams(basics.AppParams{}, true)
+		}
+		return rd
+	}
+	paramsNoHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, false)
+		} else {
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, false)
+		}
+		return rd
+	}
+	paramsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, true)
+		}
+		return rd
+	}
+	paramsAndHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, true)
+		}
+		return rd
+	}
+	noParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+		}
+		return rd
+	}
+	noParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+		}
+		return rd
+	}
 
 	var tests = []struct {
 		name      string
-		baseRD    resourcesData
+		baseRD    func(testType basics.CreatableType) resourcesData
 		testcases []testcase
 	}{
 		{
-			"empty base", emptyRD,
+			"empty_base", empty,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 0, 0, 0, 1, 1},
-				{delParams, triHolding, 0, 0, 0, 1, 1},
-				{empParams, triHolding, 1, 1, 0, 1, 0},
-				{actParams, triHolding, 1, 1, 0, 0, 0},
+				{tri, tri, 0, 0, 0, 1, 1},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
 
-				{triParams, delHolding, 0, 0, 0, 1, 1},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 0, 1, 1, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 0, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 
 		{
-			"empty_params_no_holding", emptyParamsNoHoldingRD,
+			"empty_params_no_holding", emptyParamsNoHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 1, 0, 1, 0},
-				{delParams, triHolding, 0, 0, 0, 1, 1},
-				{empParams, triHolding, 1, 1, 0, 1, 0},
-				{actParams, triHolding, 1, 1, 0, 0, 0},
+				{tri, tri, 1, 1, 0, 1, 0},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
 
-				{triParams, delHolding, 1, 1, 0, 1, 0},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 1, 1, 1, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 1, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 		{
-			"empty_params_empty_holding", emptyParamsEmptyHoldingRD,
+			"empty_params_empty_holding", emptyParamsEmptyHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 1, 1, 1, 0},
-				{delParams, triHolding, 1, 0, 1, 1, 0},
-				{empParams, triHolding, 1, 1, 1, 1, 0},
-				{actParams, triHolding, 1, 1, 1, 0, 0},
+				{tri, tri, 1, 1, 1, 1, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
 
-				{triParams, delHolding, 1, 1, 0, 1, 0},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 1, 1, 1, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 1, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 		{
-			"empty_params_not_empty_holding", emptyParamsNotEmptyHoldingRD,
+			"empty_params_not_empty_holding", emptyParamsNotEmptyHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 1, 1, 0, 0},
-				{delParams, triHolding, 1, 0, 1, 0, 0},
-				{empParams, triHolding, 1, 1, 1, 0, 0},
-				{actParams, triHolding, 1, 1, 1, 0, 0},
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
 
-				{triParams, delHolding, 1, 1, 0, 1, 0},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 1, 1, 1, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 1, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 		{
-			"params_no_holding", paramsNoHoldingRD,
+			"params_no_holding", paramsNoHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 1, 0, 0, 0},
-				{delParams, triHolding, 0, 0, 0, 1, 1},
-				{empParams, triHolding, 1, 1, 0, 1, 0},
-				{actParams, triHolding, 1, 1, 0, 0, 0},
+				{tri, tri, 1, 1, 0, 0, 0},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
 
-				{triParams, delHolding, 1, 1, 0, 0, 0},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 1, 1, 0, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 1, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 		{
-			"params_empty_holding", paramsEmptyHoldingRD,
+			"params_empty_holding", paramsEmptyHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 1, 1, 0, 0},
-				{delParams, triHolding, 1, 0, 1, 1, 0},
-				{empParams, triHolding, 1, 1, 1, 1, 0},
-				{actParams, triHolding, 1, 1, 1, 0, 0},
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
 
-				{triParams, delHolding, 1, 1, 0, 0, 0},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 1, 1, 0, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 1, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 		{
-			"params_and_holding", paramsAndHoldingRD,
+			"params_and_holding", paramsAndHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 1, 1, 0, 0},
-				{delParams, triHolding, 1, 0, 1, 0, 0},
-				{empParams, triHolding, 1, 1, 1, 0, 0},
-				{actParams, triHolding, 1, 1, 1, 0, 0},
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
 
-				{triParams, delHolding, 1, 1, 0, 0, 0},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 1, 1, 0, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 1, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 		{
-			"no_params_empty_holding", noParamsEmptyHoldingRD,
+			"no_params_empty_holding", noParamsEmptyHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 0, 1, 1, 0},
-				{delParams, triHolding, 1, 0, 1, 1, 0},
-				{empParams, triHolding, 1, 1, 1, 1, 0},
-				{actParams, triHolding, 1, 1, 1, 0, 0},
+				{tri, tri, 1, 0, 1, 1, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
 
-				{triParams, delHolding, 0, 0, 0, 1, 1},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 0, 1, 1, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 0, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 		{
-			"no_params_not_empty_holding", noParamsNotEmptyHoldingRD,
+			"no_params_not_empty_holding", noParamsNotEmptyHolding,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
-				{triParams, triHolding, 1, 0, 1, 0, 0},
-				{delParams, triHolding, 1, 0, 1, 0, 0},
-				{empParams, triHolding, 1, 1, 1, 0, 0},
-				{actParams, triHolding, 1, 1, 1, 0, 0},
+				{tri, tri, 1, 0, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
 
-				{triParams, delHolding, 0, 0, 0, 1, 1},
-				{delParams, delHolding, 0, 0, 0, 1, 1},
-				{empParams, delHolding, 1, 1, 0, 1, 0},
-				{actParams, delHolding, 1, 1, 0, 0, 0},
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
 
-				{triParams, empHolding, 1, 0, 1, 1, 0},
-				{delParams, empHolding, 1, 0, 1, 1, 0},
-				{empParams, empHolding, 1, 1, 1, 1, 0},
-				{actParams, empHolding, 1, 1, 1, 0, 0},
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
 
-				{triParams, actHolding, 1, 0, 1, 0, 0},
-				{delParams, actHolding, 1, 0, 1, 0, 0},
-				{empParams, actHolding, 1, 1, 1, 0, 0},
-				{actParams, actHolding, 1, 1, 1, 0, 0},
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
 			},
 		},
 	}
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("test_%s", test.name), func(t *testing.T) {
-			for i, ts := range test.testcases {
-				t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
-					rd := test.baseRD
-					rd.SetAssetData(ts.p, ts.h)
-					a.Equal(itb(ts.isAsset), rd.IsAsset())
-					a.Equal(itb(ts.isOwning), rd.IsOwning())
-					a.Equal(itb(ts.isHolding), rd.IsHolding())
-					a.Equal(itb(ts.isEmptyFields), rd.IsEmptyAssetFields())
-					a.Equal(itb(ts.isEmpty), rd.IsEmpty())
-				})
+	for _, testType := range []basics.CreatableType{basics.AssetCreatable, basics.AppCreatable} {
+		for _, test := range tests {
+			var testTypeStr string
+			if testType == basics.AssetCreatable {
+				testTypeStr = "asset"
+			} else {
+				testTypeStr = "app"
 			}
-		})
+			t.Run(fmt.Sprintf("test_%s_%s", testTypeStr, test.name), func(t *testing.T) {
+				for i, ts := range test.testcases {
+					t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+						rd := test.baseRD(testType)
+						rd = apply(t, rd, testType, ts.p, ts.h)
+						if testType == basics.AssetCreatable {
+							a.Equal(itb(ts.isAsset), rd.IsAsset())
+							a.Equal(itb(ts.isEmptyFields), rd.IsEmptyAssetFields())
+							a.False(rd.IsApp())
+							a.True(rd.IsEmptyAppFields())
+						} else {
+							a.Equal(itb(ts.isAsset), rd.IsApp())
+							a.Equal(itb(ts.isEmptyFields), rd.IsEmptyAppFields())
+							a.False(rd.IsAsset())
+							a.True(rd.IsEmptyAssetFields())
+						}
+						a.Equal(itb(ts.isOwning), rd.IsOwning())
+						a.Equal(itb(ts.isHolding), rd.IsHolding())
+						a.Equal(itb(ts.isEmpty), rd.IsEmpty())
+					})
+				}
+			})
+		}
 	}
 }
 
