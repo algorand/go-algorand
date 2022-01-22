@@ -274,6 +274,8 @@ type normalizedAccountBalance struct {
 	accountHashes [][]byte
 	// normalizedBalance contains the normalized balance for the account.
 	normalizedBalance uint64
+	// encodedResources provides the encoded form of the resources
+	encodedResources map[basics.CreatableIndex][]byte
 }
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
@@ -304,9 +306,11 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 		if len(resources) > 0 {
 			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(resources))
+			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
 		}
 		for _, resource := range resources {
 			normalizedAccountBalances[i].resources[resource.aidx] = resource.resourcesData
+			normalizedAccountBalances[i].encodedResources[resource.aidx] = protocol.Encode(&resource.resourcesData)
 		}
 		normalizedAccountBalances[i].encodedAccountData = protocol.Encode(&normalizedAccountBalances[i].accountData)
 	}
@@ -330,21 +334,25 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
 		normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
 		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
-		normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
-		resIdx := 0
-		for cidx, res := range balance.Resources {
-			var resData resourcesData
-			err = protocol.Decode(res, &resData)
-			if err != nil {
-				return nil, err
+		if len(balance.Resources) > 0 {
+			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
+			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
+			resIdx := 0
+			for cidx, res := range balance.Resources {
+				var resData resourcesData
+				err = protocol.Decode(res, &resData)
+				if err != nil {
+					return nil, err
+				}
+				ctype := basics.AssetCreatable
+				if resData.IsApp() {
+					ctype = basics.AppCreatable
+				}
+				normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
+				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
+				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
+				resIdx++
 			}
-			ctype := basics.AssetCreatable
-			if resData.IsApp() {
-				ctype = basics.AppCreatable
-			}
-			normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
-			normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
-			resIdx++
 		}
 	}
 	return
@@ -748,7 +756,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			if resData.IsApp() {
 				ctype = basics.AppCreatable
 			}
-			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, ctype, protocol.Encode(&resData))
+			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, ctype, balance.encodedResources[aidx])
 			if err != nil {
 				return err
 			}
@@ -3270,22 +3278,22 @@ func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hash
 	}
 
 	// gather up to accountCount encoded accounts.
-	hashes = make([][]byte, 0, iterator.hashCount)
+	hashes = make([][]byte, iterator.hashCount)
+	hashIdx := 0
 	for iterator.rows.Next() {
-		var hash []byte
-		err = iterator.rows.Scan(&hash)
+		err = iterator.rows.Scan(&hashes[hashIdx])
 		if err != nil {
 			iterator.Close()
 			return
 		}
 
-		hashes = append(hashes, hash)
-		if len(hashes) == iterator.hashCount {
+		hashIdx++
+		if hashIdx == iterator.hashCount {
 			// we're done with this iteration.
 			return
 		}
 	}
-
+	hashes = hashes[:hashIdx]
 	err = iterator.rows.Err()
 	if err != nil {
 		iterator.Close()
