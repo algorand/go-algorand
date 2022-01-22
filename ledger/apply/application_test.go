@@ -1008,7 +1008,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	b.balances[sender] = basics.AccountData{}
 	err = ApplicationCall(ac, h, b, ad, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "is not opted in to app")
+	a.Contains(err.Error(), "is not opted in to any app")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putAppLocalState)
 	a.Equal(0, b.deleteAppLocalState)

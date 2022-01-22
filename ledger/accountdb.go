@@ -2390,7 +2390,7 @@ func accountsNewRound(
 			// as well as non-zero UpdateRound field in a new delta
 			if data.newResource.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
-				entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(data.newResource.UpdateRound), lastUpdateRound}
+				entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(0), lastUpdateRound}
 			} else {
 				// create a new entry.
 				var rtype basics.CreatableType
@@ -2415,7 +2415,7 @@ func accountsNewRound(
 				result, err = deleteResourceStmt.Exec(addrid, aidx)
 				if err == nil {
 					// we deleted the entry successfully.
-					entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(data.newResource.UpdateRound), lastUpdateRound}
+					entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(0), lastUpdateRound}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", addr.String(), addrid, aidx)
@@ -2877,7 +2877,10 @@ func processAllResources(
 			if err != nil {
 				return pendingRow{}, err
 			}
-			if addrid != acctRowid {
+			if addrid < acctRowid {
+				err = errors.New("resource table entries mismatches accountbase table entries")
+				return pendingRow{}, err
+			} else if addrid > acctRowid {
 				err = callback(addr, 0, 0, nil, nil)
 				return pendingRow{addrid, aidx, rtype, buf}, err
 			}
