@@ -1609,12 +1609,12 @@ func TestResourcesDataSetAssetData(t *testing.T) {
 
 	emptyRD := makeResourcesData(0)
 
-	emptyParamsRD := makeResourcesData(0)
-	emptyParamsRD.SetAssetParams(basics.AssetParams{}, false)
+	emptyParamsNoHoldingRD := makeResourcesData(0)
+	emptyParamsNoHoldingRD.SetAssetParams(basics.AssetParams{}, false)
 
-	emptyParamsAndHoldingRD := makeResourcesData(0)
-	emptyParamsAndHoldingRD.SetAssetHolding(basics.AssetHolding{})
-	emptyParamsAndHoldingRD.SetAssetParams(basics.AssetParams{}, true)
+	emptyParamsEmptyHoldingRD := makeResourcesData(0)
+	emptyParamsEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{})
+	emptyParamsEmptyHoldingRD.SetAssetParams(basics.AssetParams{}, true)
 
 	emptyParamsNotEmptyHoldingRD := makeResourcesData(0)
 	emptyParamsNotEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{Amount: 111})
@@ -1631,13 +1631,19 @@ func TestResourcesDataSetAssetData(t *testing.T) {
 	paramsAndHoldingRD.SetAssetHolding(basics.AssetHolding{Amount: 111})
 	paramsAndHoldingRD.SetAssetParams(basics.AssetParams{Total: 222}, true)
 
+	noParamsEmptyHoldingRD := makeResourcesData(0)
+	noParamsEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{})
+
+	noParamsNotEmptyHoldingRD := makeResourcesData(0)
+	noParamsNotEmptyHoldingRD.SetAssetHolding(basics.AssetHolding{Amount: 111})
+
 	var tests = []struct {
 		name      string
 		baseRD    resourcesData
 		testcases []testcase
 	}{
 		{
-			"empty", emptyRD,
+			"empty base", emptyRD,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
 				{triParams, triHolding, 0, 0, 0, 1, 1},
@@ -1663,7 +1669,7 @@ func TestResourcesDataSetAssetData(t *testing.T) {
 		},
 
 		{
-			"empty_params", emptyParamsRD,
+			"empty_params_no_holding", emptyParamsNoHoldingRD,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
 				{triParams, triHolding, 1, 1, 0, 1, 0},
@@ -1688,7 +1694,7 @@ func TestResourcesDataSetAssetData(t *testing.T) {
 			},
 		},
 		{
-			"empty_params_and_holding", emptyParamsAndHoldingRD,
+			"empty_params_empty_holding", emptyParamsEmptyHoldingRD,
 			[]testcase{
 				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
 				{triParams, triHolding, 1, 1, 1, 1, 0},
@@ -1807,6 +1813,56 @@ func TestResourcesDataSetAssetData(t *testing.T) {
 				{actParams, empHolding, 1, 1, 1, 0, 0},
 
 				{triParams, actHolding, 1, 1, 1, 0, 0},
+				{delParams, actHolding, 1, 0, 1, 0, 0},
+				{empParams, actHolding, 1, 1, 1, 0, 0},
+				{actParams, actHolding, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"no_params_empty_holding", noParamsEmptyHoldingRD,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{triParams, triHolding, 1, 0, 1, 1, 0},
+				{delParams, triHolding, 1, 0, 1, 1, 0},
+				{empParams, triHolding, 1, 1, 1, 1, 0},
+				{actParams, triHolding, 1, 1, 1, 0, 0},
+
+				{triParams, delHolding, 0, 0, 0, 1, 1},
+				{delParams, delHolding, 0, 0, 0, 1, 1},
+				{empParams, delHolding, 1, 1, 0, 1, 0},
+				{actParams, delHolding, 1, 1, 0, 0, 0},
+
+				{triParams, empHolding, 1, 0, 1, 1, 0},
+				{delParams, empHolding, 1, 0, 1, 1, 0},
+				{empParams, empHolding, 1, 1, 1, 1, 0},
+				{actParams, empHolding, 1, 1, 1, 0, 0},
+
+				{triParams, actHolding, 1, 0, 1, 0, 0},
+				{delParams, actHolding, 1, 0, 1, 0, 0},
+				{empParams, actHolding, 1, 1, 1, 0, 0},
+				{actParams, actHolding, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"no_params_not_empty_holding", noParamsNotEmptyHoldingRD,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{triParams, triHolding, 1, 0, 1, 0, 0},
+				{delParams, triHolding, 1, 0, 1, 0, 0},
+				{empParams, triHolding, 1, 1, 1, 0, 0},
+				{actParams, triHolding, 1, 1, 1, 0, 0},
+
+				{triParams, delHolding, 0, 0, 0, 1, 1},
+				{delParams, delHolding, 0, 0, 0, 1, 1},
+				{empParams, delHolding, 1, 1, 0, 1, 0},
+				{actParams, delHolding, 1, 1, 0, 0, 0},
+
+				{triParams, empHolding, 1, 0, 1, 1, 0},
+				{delParams, empHolding, 1, 0, 1, 1, 0},
+				{empParams, empHolding, 1, 1, 1, 1, 0},
+				{actParams, empHolding, 1, 1, 1, 0, 0},
+
+				{triParams, actHolding, 1, 0, 1, 0, 0},
 				{delParams, actHolding, 1, 0, 1, 0, 0},
 				{empParams, actHolding, 1, 1, 1, 0, 0},
 				{actParams, actHolding, 1, 1, 1, 0, 0},
