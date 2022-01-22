@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1423,4 +1424,58 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	t.Run("Negative", negativeTesting)
 	t.Run("Structure", structureTesting)
 
+}
+
+func TestLookupAccountAddressFromAddressID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	addrs := make([]basics.Address, 100)
+	for i := range addrs {
+		addrs[i] = ledgertesting.RandomAddress()
+	}
+	addrsids := make(map[basics.Address]int64)
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+
+		for i := range addrs {
+			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
+			if err != nil {
+				return err
+			}
+			rowid, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			addrsids[addrs[i]] = rowid
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		for addr, addrid := range addrsids {
+			retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, addrid)
+			if err != nil {
+				return err
+			}
+			if retAddr != addr {
+				return fmt.Errorf("mismatching addresses")
+			}
+		}
+		// test fail case:
+		retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, -1)
+
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("unexpected error : %w", err)
+		}
+		if !retAddr.IsZero() {
+			return fmt.Errorf("unexpected address; should have been empty")
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }
