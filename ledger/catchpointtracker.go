@@ -991,9 +991,9 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
-		accountsCount := 0
+		trieHashCount := 0
 		lastRebuildTime := startTrieBuildTime
-		pendingAccounts := 0
+		pendingTrieHashes := 0
 		totalOrderedAccounts := 0
 		for {
 			accts, processedRows, err := accountBuilderIt.Next(ctx)
@@ -1005,31 +1005,38 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 			}
 
 			if len(accts) > 0 {
-				accountsCount += len(accts)
-				pendingAccounts += len(accts)
+				trieHashCount += len(accts)
+				pendingTrieHashes += len(accts)
 				for _, acct := range accts {
 					added, err := trie.Add(acct.digest)
 					if err != nil {
 						return fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
 					if !added {
-						ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), acct.address)
+						// we need to transalate the "addrid" into actual account address so that
+						// we can report the failure.
+						addr, err := lookupAccountAddressFromAddressID(ctx, tx, acct.addrid)
+						if err != nil {
+							ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.digest), acct.addrid, err)
+						} else {
+							ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), addr)
+						}
 					}
 				}
 
-				if pendingAccounts >= trieRebuildCommitFrequency {
+				if pendingTrieHashes >= trieRebuildCommitFrequency {
 					// this trie Evict will commit using the current transaction.
 					// if anything goes wrong, it will still get rolled back.
 					_, err = trie.Evict(true)
 					if err != nil {
 						return fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 					}
-					pendingAccounts = 0
+					pendingTrieHashes = 0
 				}
 
 				if time.Since(lastRebuildTime) > 5*time.Second {
 					// let the user know that the trie is still being rebuilt.
-					ct.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
+					ct.log.Infof("accountsInitialize still building the trie, and processed so far %d trie entries", trieHashCount)
 					lastRebuildTime = time.Now()
 				}
 			} else if processedRows > 0 {
@@ -1056,7 +1063,7 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 			return fmt.Errorf("accountsInitialize was unable to update the account hash round to %d: %v", rnd, err)
 		}
 
-		ct.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Since(startTrieBuildTime))
+		ct.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", trieHashCount, time.Since(startTrieBuildTime))
 	}
 	ct.balancesTrie = trie
 	return nil

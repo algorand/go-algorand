@@ -3044,8 +3044,8 @@ func LoadAllFullAccounts(
 
 // accountAddressHash is used by Next to return a single account address and the associated hash.
 type accountAddressHash struct {
-	address basics.Address
-	digest  []byte
+	addrid int64
+	digest []byte
 }
 
 // Next returns an array containing the account address and hash
@@ -3069,7 +3069,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepCreateOrderingTable {
 		// create the temporary table
-		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(addrid INTEGER, hash blob)")
 		if err != nil {
 			return
 		}
@@ -3088,7 +3088,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			return
 		}
 		// prepare the insert statement into the temporary table
-		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(addrid, hash) VALUES(?, ?)")
 		if err != nil {
 			return
 		}
@@ -3096,13 +3096,14 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		return
 	}
 	if iterator.step == oaiStepInsertAccountData {
-
+		var lastAddrID int64
 		baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
 			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
-			_, err = iterator.insertStmt.ExecContext(ctx, addr[:], hash)
+			_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
 			if err != nil {
 				return
 			}
+			lastAddrID = rowid
 			return nil
 		}
 
@@ -3110,7 +3111,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			var err error
 			if resData != nil {
 				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
-				_, err = iterator.insertStmt.ExecContext(ctx, addr[:], hash)
+				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
 			}
 			return err
 		}
@@ -3162,7 +3163,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		iterator.hashesRows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
+		iterator.hashesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, hash FROM accountsiteratorhashes ORDER BY hash")
 
 		if err != nil {
 			iterator.Close(ctx)
@@ -3173,31 +3174,21 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 
 	if iterator.step == oaiStepIterateOverOrderedTable {
-		acct = make([]accountAddressHash, 0, iterator.accountCount)
-		var addr basics.Address
+		acct = make([]accountAddressHash, iterator.accountCount)
+		acctIdx := 0
 		for iterator.hashesRows.Next() {
-			var addrbuf []byte
-			var hash []byte
-			err = iterator.hashesRows.Scan(&addrbuf, &hash)
+			err = iterator.hashesRows.Scan(&(acct[acctIdx].addrid), &(acct[acctIdx].digest))
 			if err != nil {
 				iterator.Close(ctx)
 				return
 			}
-
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				iterator.Close(ctx)
-				return
-			}
-
-			copy(addr[:], addrbuf)
-
-			acct = append(acct, accountAddressHash{address: addr, digest: hash})
-			if len(acct) == iterator.accountCount {
+			acctIdx++
+			if acctIdx == iterator.accountCount {
 				// we're done with this iteration.
 				return
 			}
 		}
+		acct = acct[:acctIdx]
 		iterator.step = oaiStepShutdown
 		iterator.hashesRows.Close()
 		iterator.hashesRows = nil
@@ -3233,6 +3224,24 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 		iterator.insertStmt = nil
 	}
 	_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+	return
+}
+
+// createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
+func lookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid int64) (address basics.Address, err error) {
+	var addrbuf []byte
+	err = tx.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = fmt.Errorf("no matching address could be found for rowid %d: %w", addrid, err)
+		}
+		return
+	}
+	if len(addrbuf) != len(address) {
+		err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(address))
+		return
+	}
+	copy(address[:], addrbuf)
 	return
 }
 
