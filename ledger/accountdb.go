@@ -339,7 +339,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				return nil, err
 			}
 			ctype := basics.AssetCreatable
-			if resData.IsEmptyApp() {
+			if resData.IsApp() {
 				ctype = basics.AppCreatable
 			}
 			normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
@@ -1289,7 +1289,7 @@ func (rd *resourcesData) IsEmpty() bool {
 	return !rd.IsApp() && !rd.IsAsset()
 }
 
-func (rd *resourcesData) IsEmptyApp() bool {
+func (rd *resourcesData) IsEmptyAppFields() bool {
 	return rd.SchemaNumUint == 0 &&
 		rd.SchemaNumByteSlice == 0 &&
 		len(rd.KeyValue) == 0 &&
@@ -1307,10 +1307,10 @@ func (rd *resourcesData) IsApp() bool {
 	if (rd.ResourceFlags & resourceFlagsEmptyApp) == resourceFlagsEmptyApp {
 		return true
 	}
-	return !rd.IsEmptyApp()
+	return !rd.IsEmptyAppFields()
 }
 
-func (rd *resourcesData) IsEmptyAsset() bool {
+func (rd *resourcesData) IsEmptyAssetFields() bool {
 	return rd.Amount == 0 &&
 		!rd.Frozen &&
 		rd.Total == 0 &&
@@ -1330,7 +1330,7 @@ func (rd *resourcesData) IsAsset() bool {
 	if (rd.ResourceFlags & resourceFlagsEmptyAsset) == resourceFlagsEmptyAsset {
 		return true
 	}
-	return !rd.IsEmptyAsset()
+	return !rd.IsEmptyAssetFields()
 }
 
 func (rd *resourcesData) ClearAssetParams() {
@@ -1348,7 +1348,7 @@ func (rd *resourcesData) ClearAssetParams() {
 	hadHolding := (rd.ResourceFlags & resourceFlagsNotHolding) == resourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsOwnership
 	rd.ResourceFlags &= ^resourceFlagsEmptyAsset
-	if rd.IsEmptyAsset() && hadHolding {
+	if rd.IsEmptyAssetFields() && hadHolding {
 		rd.ResourceFlags |= resourceFlagsEmptyAsset
 	}
 }
@@ -1370,7 +1370,7 @@ func (rd *resourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool
 		rd.ResourceFlags |= resourceFlagsNotHolding
 	}
 	rd.ResourceFlags &= ^resourceFlagsEmptyAsset
-	if rd.IsEmptyAsset() {
+	if rd.IsEmptyAssetFields() {
 		rd.ResourceFlags |= resourceFlagsEmptyAsset
 	}
 }
@@ -1396,12 +1396,13 @@ func (rd *resourcesData) ClearAssetHolding() {
 	rd.Amount = 0
 	rd.Frozen = false
 
-	// we might have resourceFlagsEmptyAsset only if resourcesData has empty holding
-	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
-	if rd.ResourceFlags == resourceFlagsEmptyAsset {
+	rd.ResourceFlags |= resourceFlagsNotHolding
+	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+	if hadParams && rd.IsEmptyAssetFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	} else {
 		rd.ResourceFlags &= ^resourceFlagsEmptyAsset
 	}
-	rd.ResourceFlags |= resourceFlagsNotHolding
 }
 
 func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
@@ -1409,7 +1410,7 @@ func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
 	rd.Frozen = ah.Frozen
 	rd.ResourceFlags &= ^(resourceFlagsNotHolding + resourceFlagsEmptyAsset)
 	// resourceFlagsHolding is set implicitly since it is zero
-	if rd.IsEmptyAsset() {
+	if rd.IsEmptyAssetFields() {
 		rd.ResourceFlags |= resourceFlagsEmptyAsset
 	}
 }
@@ -1426,12 +1427,13 @@ func (rd *resourcesData) ClearAppLocalState() {
 	rd.SchemaNumByteSlice = 0
 	rd.KeyValue = nil
 
-	// we might have resourceFlagsEmptyApp only if resourcesData has empty local state
-	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
-	if rd.ResourceFlags == resourceFlagsEmptyApp {
+	rd.ResourceFlags |= resourceFlagsNotHolding
+	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+	if hadParams && rd.IsEmptyAppFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
+	} else {
 		rd.ResourceFlags &= ^resourceFlagsEmptyApp
 	}
-	rd.ResourceFlags |= resourceFlagsNotHolding
 }
 
 func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
@@ -1439,7 +1441,7 @@ func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
 	rd.SchemaNumByteSlice = als.Schema.NumByteSlice
 	rd.KeyValue = als.KeyValue
 	rd.ResourceFlags &= ^(resourceFlagsEmptyApp + resourceFlagsNotHolding)
-	if rd.IsEmptyApp() {
+	if rd.IsEmptyAppFields() {
 		rd.ResourceFlags |= resourceFlagsEmptyApp
 	}
 }
@@ -1466,7 +1468,7 @@ func (rd *resourcesData) ClearAppParams() {
 	hadHolding := (rd.ResourceFlags & resourceFlagsNotHolding) == resourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsOwnership
 	rd.ResourceFlags &= ^resourceFlagsEmptyApp
-	if rd.IsEmptyApp() && hadHolding {
+	if rd.IsEmptyAppFields() && hadHolding {
 		rd.ResourceFlags |= resourceFlagsEmptyApp
 	}
 }
@@ -1485,7 +1487,7 @@ func (rd *resourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
 		rd.ResourceFlags |= resourceFlagsNotHolding
 	}
 	rd.ResourceFlags &= ^resourceFlagsEmptyApp
-	if rd.IsEmptyApp() {
+	if rd.IsEmptyAppFields() {
 		rd.ResourceFlags |= resourceFlagsEmptyApp
 	}
 }
@@ -1870,17 +1872,17 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.deleteCatchpointState, err = r.Prepare("DELETE FROM catchpointstate WHERE id=?")
+	qs.deleteCatchpointState, err = w.Prepare("DELETE FROM catchpointstate WHERE id=?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.insertCatchpointStateUint64, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)")
+	qs.insertCatchpointStateUint64, err = w.Prepare("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.insertCatchpointStateString, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)")
+	qs.insertCatchpointStateString, err = w.Prepare("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)")
 	if err != nil {
 		return nil, err
 	}

@@ -41,15 +41,16 @@ type CatchpointCatchupNodeServices interface {
 
 // CatchpointCatchupStats is used for querying and reporting the current state of the catchpoint catchup process
 type CatchpointCatchupStats struct {
-	CatchpointLabel   string
-	TotalAccounts     uint64
-	ProcessedAccounts uint64
-	VerifiedAccounts  uint64
-	TotalBlocks       uint64
-	AcquiredBlocks    uint64
-	VerifiedBlocks    uint64
-	ProcessedBytes    uint64
-	StartTime         time.Time
+	CatchpointLabel    string
+	TotalAccounts      uint64
+	ProcessedAccounts  uint64
+	VerifiedAccounts   uint64
+	TotalBlocks        uint64
+	AcquiredBlocks     uint64
+	VerifiedBlocks     uint64
+	ProcessedBytes     uint64
+	TotalAccountHashes uint64
+	StartTime          time.Time
 }
 
 // CatchpointCatchupService represents the catchpoint catchup service.
@@ -321,10 +322,12 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 }
 
 // updateVerifiedAccounts update the user's statistics for the given verified accounts
-func (cs *CatchpointCatchupService) updateVerifiedAccounts(verifiedAccounts uint64) {
+func (cs *CatchpointCatchupService) updateVerifiedAccounts(addedTrieHashes uint64) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
-	cs.stats.VerifiedAccounts = verifiedAccounts
+	if cs.stats.TotalAccountHashes > 0 {
+		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * addedTrieHashes / cs.stats.TotalAccountHashes
+	}
 }
 
 // processStageLastestBlockDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
@@ -701,6 +704,7 @@ func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *le
 	cs.stats.TotalAccounts = fetcherStats.TotalAccounts
 	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
 	cs.stats.ProcessedBytes = fetcherStats.ProcessedBytes
+	cs.stats.TotalAccountHashes = fetcherStats.TotalAccountHashes
 }
 
 // GetStatistics returns a copy of the current catchpoint catchup statistics
