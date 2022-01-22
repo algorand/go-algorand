@@ -1402,6 +1402,10 @@ func (rd *resourcesData) ClearAssetHolding() {
 		rd.ResourceFlags &= ^resourceFlagsEmptyAsset
 	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
+	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+	if hadParams && rd.IsEmptyAssetFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	}
 }
 
 func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
@@ -1432,6 +1436,10 @@ func (rd *resourcesData) ClearAppLocalState() {
 		rd.ResourceFlags &= ^resourceFlagsEmptyApp
 	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
+	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+	if hadParams && rd.IsEmptyAppFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
+	}
 }
 
 func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
