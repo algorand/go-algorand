@@ -1013,9 +1013,14 @@ func (ct *catchpointTracker) accountsInitializeHashes(ctx context.Context, tx *s
 						return fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
 					if !added {
-						var addr basics.Address
-						copy(addr[:], acct.address)
-						ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), addr)
+						// we need to transalate the "addrid" into actual account address so that
+						// we can report the failure.
+						addr, err := lookupAccountAddressFromAddressID(ctx, tx, acct.addrid)
+						if err != nil {
+							ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.digest), acct.addrid, err)
+						} else {
+							ct.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), addr)
+						}
 					}
 				}
 
