@@ -339,7 +339,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				return nil, err
 			}
 			ctype := basics.AssetCreatable
-			if resData.IsEmptyAppFields() {
+			if resData.IsApp() {
 				ctype = basics.AppCreatable
 			}
 			normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
@@ -1396,15 +1396,12 @@ func (rd *resourcesData) ClearAssetHolding() {
 	rd.Amount = 0
 	rd.Frozen = false
 
-	// we might have resourceFlagsEmptyAsset only if resourcesData has empty holding
-	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
-	if rd.ResourceFlags == resourceFlagsEmptyAsset {
-		rd.ResourceFlags &= ^resourceFlagsEmptyAsset
-	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
 	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
 	if hadParams && rd.IsEmptyAssetFields() {
 		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	} else {
+		rd.ResourceFlags &= ^resourceFlagsEmptyAsset
 	}
 }
 
@@ -1430,15 +1427,12 @@ func (rd *resourcesData) ClearAppLocalState() {
 	rd.SchemaNumByteSlice = 0
 	rd.KeyValue = nil
 
-	// we might have resourceFlagsEmptyApp only if resourcesData has empty local state
-	// since resourceFlagsHolding == 0 and resourceFlagsOwnership != 0
-	if rd.ResourceFlags == resourceFlagsEmptyApp {
-		rd.ResourceFlags &= ^resourceFlagsEmptyApp
-	}
 	rd.ResourceFlags |= resourceFlagsNotHolding
 	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
 	if hadParams && rd.IsEmptyAppFields() {
 		rd.ResourceFlags |= resourceFlagsEmptyApp
+	} else {
+		rd.ResourceFlags &= ^resourceFlagsEmptyApp
 	}
 }
 
