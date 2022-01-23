@@ -48,15 +48,7 @@ func generateVectorCommitmentArray(innerArray Array) *vectorCommitmentArray {
 	}
 
 	path := uint8(bits.Len64(arrayLen - 1))
-	var fullSize uint64
-	// if only one bit is set then this is a power of 2 number
-	// if not, we round up the number to the closest power of 2
-	if bits.OnesCount64(arrayLen) == 1 {
-		fullSize = arrayLen
-	} else {
-		fullSize = 1 << path
-	}
-
+	fullSize := uint64(1 << path)
 	return &vectorCommitmentArray{array: innerArray, pathLen: path, paddedLen: fullSize}
 }
 
@@ -80,6 +72,8 @@ func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return &bottomElement{}, nil
 }
 
+// merkleTreeToVectorCommitmentIndex Translate an index of an element on a merkle tree to an index on the vector commitment.
+// The given index must be within the range of the elements in the tree (assume this number is 1^pathLen)
 func merkleTreeToVectorCommitmentIndex(msbIndex uint64, pathLen uint8) (uint64, error) {
 	if msbIndex >= (1 << pathLen) {
 		return 0, fmt.Errorf(ErrPosOutOfBound, msbIndex, 1<<pathLen)
