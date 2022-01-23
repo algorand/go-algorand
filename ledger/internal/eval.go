@@ -394,15 +394,14 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block        bookkeeping.Block
-	blockTxBytes int
-	specials     transactions.SpecialAddresses
+	block               bookkeeping.Block
+	blockTxBytes        int
+	specials            transactions.SpecialAddresses
+	maxTxnBytesPerBlock int
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
 	l LedgerForEvaluator
-
-	maxTxnBytesPerBlock int
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
