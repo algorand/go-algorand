@@ -1963,6 +1963,7 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
+		data.data = makeResourcesData(0)
 		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx, ctype).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.aidx = aidx
