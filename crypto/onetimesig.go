@@ -20,11 +20,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/algorand/go-deadlock"
-
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-deadlock"
 )
 
 // A OneTimeSignature is a cryptographic signature that is produced a limited
@@ -432,10 +430,10 @@ type OneTimeSigner struct {
 }
 
 // KeyDilution returns the appropriate key dilution value for a OneTimeSigner.
-func (ots OneTimeSigner) KeyDilution(params config.ConsensusParams) uint64 {
+func (ots OneTimeSigner) KeyDilution(defaultKeyDilution uint64) uint64 {
 	if ots.OptionalKeyDilution != 0 {
 		return ots.OptionalKeyDilution
 	}
 
-	return params.DefaultKeyDilution
+	return defaultKeyDilution
 }

@@ -72,7 +72,7 @@ func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.
 
 	m, _ := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion]))
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution))
 	sig := voting.Sign(ephID, rv)
 
 	return unauthenticatedVote{

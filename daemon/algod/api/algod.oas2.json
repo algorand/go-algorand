@@ -494,7 +494,7 @@
             }
           },
           "404": {
-            "description": "Application Not Found",
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -553,6 +553,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "404": {
+            "description": "Participation Key Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -576,14 +582,14 @@
         "tags": [
           "private"
         ],
-        "description": "Delete a given participation key by id",
+        "description": "Delete a given participation key by ID",
         "produces": [
           "application/json"
         ],
         "schemes": [
           "http"
         ],
-        "summary": "Delete a given participation key by id",
+        "summary": "Delete a given participation key by ID",
         "operationId": "DeleteParticipationKeyByID",
         "responses": {
           "200": {
@@ -597,6 +603,12 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -616,14 +628,14 @@
         "tags": [
           "private"
         ],
-        "description": "Given a participation id, return information about that participation key",
+        "description": "Given a participation ID, return information about that participation key",
         "produces": [
           "application/json"
         ],
         "schemes": [
           "http"
         ],
-        "summary": "Get participation key info by id",
+        "summary": "Get participation key info given a participation ID",
         "operationId": "GetParticipationKeyByID",
         "responses": {
           "200": {
@@ -643,7 +655,69 @@
             }
           },
           "404": {
-            "description": "Application Not Found",
+            "description": "Participation Key Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "private"
+        ],
+        "description": "Given a participation ID, append state proof keys to a particular set of participation keys",
+        "consumes": [
+          "application/msgpack"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "description": "The state proof keys to add to an existing participation ID",
+            "name": "keymap",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Append state proof keys to a participation key",
+        "operationId": "AppendKeys",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/ParticipationKeyResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -934,7 +1008,7 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "produces": [
           "application/json",
           "application/msgpack"
@@ -948,7 +1022,7 @@
           {
             "pattern": "[A-Z0-9]+",
             "type": "string",
-            "description": "A transaction id",
+            "description": "A transaction ID",
             "name": "txid",
             "in": "path",
             "required": true
@@ -959,7 +1033,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
+            "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
             "schema": {
               "$ref": "#/definitions/PendingTransactionResponse"
             }
@@ -998,7 +1072,7 @@
     },
     "/v2/applications/{application-id}": {
       "get": {
-        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
         "produces": [
           "application/json"
         ],
@@ -1061,7 +1135,7 @@
     },
     "/v2/assets/{asset-id}": {
       "get": {
-        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
+        "description": "Given a asset ID, it returns asset information including creator, name, total supply and special addresses.",
         "produces": [
           "application/json"
         ],
@@ -2576,7 +2650,7 @@
       }
     },
     "ParticipationKeyResponse": {
-      "description": "A detailed description of a participation id",
+      "description": "A detailed description of a participation ID",
       "schema": {
         "$ref": "#/definitions/ParticipationKey"
       }
@@ -2593,7 +2667,7 @@
         ],
         "properties": {
           "partId": {
-            "description": "encoding of the participation id.",
+            "description": "encoding of the participation ID.",
             "type": "string"
           }
         }

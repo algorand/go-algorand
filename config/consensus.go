@@ -152,8 +152,7 @@ type ConsensusParams struct {
 	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
 
-	FastRecoveryLambda    time.Duration // time between fast recovery attempts
-	FastPartitionRecovery bool          // set when fast partition recovery is enabled
+	FastRecoveryLambda time.Duration // time between fast recovery attempts
 
 	// how to commit to the payset: flat or merkle tree
 	PaysetCommit PaysetCommitType
@@ -398,6 +397,9 @@ type ConsensusParams struct {
 
 	//EnableBatchVerification enable the use of the batch verification algorithm.
 	EnableBatchVerification bool
+
+	// When rewards rate changes, use the new value immediately.
+	RewardsCalculationFix bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -711,7 +713,6 @@ func initConsensusProtocols() {
 
 	// v10 introduces fast partition recovery (and also raises NumProposers).
 	v10 := v9
-	v10.FastPartitionRecovery = true
 	v10.NumProposers = 20
 	v10.LateCommitteeSize = 500
 	v10.LateCommitteeThreshold = 320
@@ -1060,6 +1061,8 @@ func initConsensusProtocols() {
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
 
 	vFuture.EnableBatchVerification = true
+
+	vFuture.RewardsCalculationFix = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

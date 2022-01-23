@@ -331,3 +331,92 @@ func shutdownClonedNode(nodeDataDir string, f *fixtures.RestClientFixture, t *te
 		os.RemoveAll(nodeDataDir)
 	}
 }
+
+// TestBasicCatchupCompletes confirms the the catchup eventually completes and stops.
+func TestBasicCatchupCompletes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	// Make the network progress faster
+	consensus := make(config.ConsensusProtocols)
+	fastProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+	fastProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	fastProtocol.AgreementFilterTimeoutPeriod0 = 400 * time.Millisecond
+	fastProtocol.AgreementFilterTimeout = 400 * time.Millisecond
+	consensus[protocol.ConsensusCurrentVersion] = fastProtocol
+
+	// Setup the fixture with the modified fast consensus
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(consensus)
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
+	defer fixture.Shutdown()
+
+	// Get 2nd node so we wait until we know they're at target block
+	nc, err := fixture.GetNodeController("Node")
+	a.NoError(err)
+
+	// Let the network make some progress.
+	// Make it long enough so the catchup to it is longer than a single round agreement
+	a.NoError(err)
+	waitForRound := uint64(100)
+
+	// Now prepare a third node
+	cloneDataDir := filepath.Join(fixture.PrimaryDataDir(), "../clone")
+	cloneLedger := false
+	err = fixture.NC.Clone(cloneDataDir, cloneLedger)
+	a.NoError(err)
+
+	// Wait for the network to make some progess.
+	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	a.NoError(err)
+
+	// Start the third node to catchup.
+	startTime := time.Now()
+	cloneClient, err := fixture.StartNode(cloneDataDir)
+	a.NoError(err)
+	defer shutdownClonedNode(cloneDataDir, &fixture, t)
+
+	// Wait for it to catchup
+	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
+	a.NoError(err)
+
+	// Calculate the catchup time
+	catchupTime := time.Since(startTime)
+
+	// Check if curStatus.CatchupTime, the "Time since last block" is less than the catchup time.
+	// - If the catchup has not stopped, this value will keep on growing, and eventually be larger than the time
+	//   of a single round agreement.
+	// - If the catchup stops after it completes, this value will be the time since the last round was
+	//   obtained through the agreement, and be much smaller than the catchup time.
+	client := fixture.GetAlgodClientForController(fixture.LibGoalFixture.GetNodeControllerForDataDir(cloneDataDir))
+
+	// Prevent false positive
+	// - Since obtaining the exact catchup time is not possible, wait catchupTime again, to make sure curStatus.CatchupTime
+	//   will be at least our estimated catchupTime (since it keeps on growing if catchup has not stopped).
+	time.Sleep(catchupTime)
+
+	// Prevent false negative
+	// The network may have made some progress since waitForRound, it could be that the
+	// third node is still catching up even after getting to waitForRound.
+	// Moreover, it takes some time to transition from the catchup to agreement.
+	// Give it some more time and check again..
+	pass := false
+	for x := 0; x < 100; x++ {
+		curStatus, statusErr := client.Status()
+		require.NoError(t, statusErr, "fixture should be able to get node status")
+		currentStateMsec := time.Duration(curStatus.CatchupTime).Milliseconds()
+		catchupMsec := catchupTime.Milliseconds()
+		pass = currentStateMsec < catchupMsec
+		if pass {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	a.True(pass)
+}

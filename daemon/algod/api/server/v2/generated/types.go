@@ -640,7 +640,7 @@ type PendingTransactionsResponse struct {
 // PostParticipationResponse defines model for PostParticipationResponse.
 type PostParticipationResponse struct {
 
-	// encoding of the participation id.
+	// encoding of the participation ID.
 	PartId string `json:"partId"`
 }
 

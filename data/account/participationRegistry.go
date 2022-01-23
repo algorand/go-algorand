@@ -82,16 +82,26 @@ type ParticipationRecord struct {
 	Voting *crypto.OneTimeSignatureSecrets
 }
 
-// StateProofKey is a placeholder for the real state proof key type.
-// PKI TODO: Replace this with a real object.
-type StateProofKey []byte
+type (
+	// StateProofKey is a placeholder for the real state proof key type.
+	// PKI TODO: Replace this with a real object.
+	StateProofKey []byte
 
-// ParticipationRecordForRound adds in the per-round state proof key.
-type ParticipationRecordForRound struct {
-	ParticipationRecord
+	// StateProofKeys are a map of StateProofKeys.
+	//msgp:allocbound StateProofKeys 1000
+	StateProofKeys map[uint64]StateProofKey
 
-	StateProof StateProofKey
-}
+	// SortUint64 implements sorting by uint64 keys for
+	// canonical encoding of maps in msgpack format.
+	SortUint64 = basics.SortUint64
+
+	// ParticipationRecordForRound adds in the per-round state proof key.
+	ParticipationRecordForRound struct {
+		ParticipationRecord
+
+		StateProof StateProofKey
+	}
+)
 
 // IsZero returns true if the object contains zero values.
 func (r ParticipationRecordForRound) IsZero() bool {
@@ -178,7 +188,7 @@ type ParticipationRegistry interface {
 
 	// AppendKeys appends state proof keys to an existing Participation record. Keys can only be appended
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
-	AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error
+	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
@@ -363,7 +373,7 @@ type updatingParticipationRecord struct {
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
-	keys     map[uint64]StateProofKey
+	keys     StateProofKeys
 
 	registerUpdated map[ParticipationID]updatingParticipationRecord
 
@@ -491,7 +501,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 	return err
 }
 
-func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]StateProofKey) error {
+func (db *participationDB) appendKeysInner(id ParticipationID, keys StateProofKeys) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
@@ -690,7 +700,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	return
 }
 
-func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofKey) error {
+func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
@@ -698,7 +708,7 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateP
 		return ErrParticipationIDNotFound
 	}
 
-	keyCopy := make(map[uint64]StateProofKey, len(keys))
+	keyCopy := make(StateProofKeys, len(keys))
 	for k, v := range keys {
 		keyCopy[k] = v // PKI TODO: Deep copy?
 	}
