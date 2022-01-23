@@ -1963,7 +1963,6 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		data.data = makeResourcesData(0)
 		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx, ctype).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.aidx = aidx
@@ -1972,12 +1971,14 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 				data.addrid = rowid.Int64
 				return protocol.Decode(buf, &data.data)
 			}
+			data.data = makeResourcesData(0)
 			// we don't have that account, just return the database round.
 			return nil
 		}
 
 		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
+			data.data = makeResourcesData(0)
 			// Return the zero value of data
 			return fmt.Errorf("unable to query resource data for address %v aidx %v ctype %v : %w", addr, aidx, ctype, err)
 		}
