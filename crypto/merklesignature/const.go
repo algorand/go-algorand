@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import "github.com/algorand/go-algorand/crypto"
 
 // HashType/ hashSize relate to the type of hash this package uses.
 const (
-	KeyStoreHashFunction = crypto.Sumhash
-	KeyStoreRootSize     = crypto.SumhashDigestSize
+	MerkleSignatureSchemeHashFunction = crypto.Sumhash
+	MerkleSignatureSchemeRootSize     = crypto.SumhashDigestSize
 )

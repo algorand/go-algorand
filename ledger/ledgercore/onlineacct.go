@@ -17,7 +17,7 @@
 package ledgercore
 
 import (
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -33,5 +33,5 @@ type OnlineAccount struct {
 	NormalizedOnlineBalance uint64
 	VoteFirstValid          basics.Round
 	VoteLastValid           basics.Round
-	StateProofID            merklekeystore.Verifier
+	StateProofID            merklesignature.Verifier
 }

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"crypto/rand"
@@ -393,7 +393,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 }
 
 //#region Helper Functions
-func makeSig(signer *Keystore, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
+func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := genHashableForTest()
 
 	sig, err := signer.GetSigner(sigRound).Sign(hashable)
@@ -402,20 +402,20 @@ func makeSig(signer *Keystore, sigRound uint64, a *require.Assertions) (crypto.H
 	return hashable, sig
 }
 
-func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Keystore) {
+func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {
 	start, end := uint64(50), uint64(100)
 	signer := generateTestSigner(crypto.FalconType, start, end, 1, a)
 	return start, end, signer
 }
 
-func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval uint64, a *require.Assertions) *Keystore {
+func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval uint64, a *require.Assertions) *Secrets {
 	signer, err := New(firstValid, lastValid, interval, t)
 	a.NoError(err)
 
 	return signer
 }
 
-func length(s *Keystore, a *require.Assertions) int {
+func length(s *Secrets, a *require.Assertions) int {
 	return len(s.ephemeralKeys)
 }
 

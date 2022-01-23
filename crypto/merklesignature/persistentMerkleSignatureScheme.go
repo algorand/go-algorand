@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-/* This file contains every database and persistence related method for the merkle Keystore.
+/* This file contains every database and persistence related method for the merkle Secrets.
  * It is used when generating the State Proof keys (storing them into a database), and for
  * importing those keys from the created database file into the algod participation registry.
  */
 
-package merklekeystore
+package merklesignature
 
 import (
 	"context"
@@ -31,10 +31,10 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-const keystoreSchemaVersion = 1
-const keystoreTableSchemaName = "merklekeystore"
+const merkleSignatureSchemaVersion = 1
+const merkleSignatureTableSchemaName = "merklesignaturescheme"
 
-func keystoreInstallDatabase(tx *sql.Tx) error {
+func merkleSignatureInstallDatabase(tx *sql.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE StateProofKeys (
     	id	  INTEGER PRIMARY KEY, 
     	round INTEGER,	    --*  committed round for this key
@@ -48,19 +48,19 @@ func keystoreInstallDatabase(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", keystoreTableSchemaName, keystoreSchemaVersion)
+	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", merkleSignatureTableSchemaName, merkleSignatureSchemaVersion)
 
 	return err
 }
 
-// Persist dumps the keys into the database and deletes the reference to them in Keystore
-func (s *Keystore) Persist(store db.Accessor) error {
+// Persist dumps the keys into the database and deletes the reference to them in Secrets
+func (s *Secrets) Persist(store db.Accessor) error {
 	if s.ephemeralKeys == nil {
 		return fmt.Errorf("no keys provided (nil)")
 	}
 
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := keystoreInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
+		err := merkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
 			return err
 		}
@@ -82,14 +82,14 @@ func (s *Keystore) Persist(store db.Accessor) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("PersistentKeystore.Persist: %w", err)
+		return fmt.Errorf("Secrets.Persist: %w", err)
 	}
 
 	return nil // Success
 }
 
 // FetchKey returns the SigningKey and round for a specified index from the StateProof DB
-func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
+func (s *Secrets) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
 	var keyB []byte
 	var round uint64
 	key := &crypto.GenericSigningKey{}
@@ -104,19 +104,19 @@ func (s *Keystore) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSignin
 		return nil
 	})
 	if err != nil {
-		return nil, 0, err // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
+		return nil, 0, err
 	}
 
 	err = protocol.Decode(keyB, key)
 	if err != nil {
-		return nil, 0, err // fmt.Errorf("PersistentKeystore.GetKey: %w", err)
+		return nil, 0, err
 	}
 
 	return key, round, nil
 }
 
 // CountKeys counts the number of rows in StateProofKeys table
-func (s *Keystore) CountKeys(store db.Accessor) (int, error) {
+func (s *Secrets) CountKeys(store db.Accessor) (int, error) {
 	var count int
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT COUNT(*) FROM StateProofKeys")

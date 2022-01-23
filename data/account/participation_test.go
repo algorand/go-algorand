@@ -451,7 +451,7 @@ func BenchmarkParticipationKeyRestoration(b *testing.B) {
 	part.Close()
 }
 
-func createKeystoreTestDB(a *require.Assertions) *db.Accessor {
+func createMerkleSignatureSchemeTestDB(a *require.Assertions) *db.Accessor {
 	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
 	store, err := db.MakeAccessor(tmpname, false, true)
 	a.NoError(err)
@@ -471,7 +471,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	var address basics.Address
 	crypto.RandBytes(address[:])
 
-	store := createKeystoreTestDB(a)
+	store := createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid := basics.Round(0)
 	lastValid := basics.Round(maxValidPeriod + 1)
@@ -489,7 +489,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	var address basics.Address
 	crypto.RandBytes(address[:])
 
-	store := createKeystoreTestDB(a)
+	store := createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid := basics.Round(0)
 	lastValid := basics.Round(10000)
@@ -512,7 +512,7 @@ func TestKeyregValidityPeriod(t *testing.T) {
 
 	var address basics.Address
 
-	store := createKeystoreTestDB(a)
+	store := createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid := basics.Round(0)
 	lastValid := basics.Round(maxValidPeriod)
@@ -520,7 +520,7 @@ func TestKeyregValidityPeriod(t *testing.T) {
 	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.NoError(err)
 
-	store = createKeystoreTestDB(a)
+	store = createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid = basics.Round(0)
 	lastValid = basics.Round(maxValidPeriod + 1)

@@ -1092,7 +1092,6 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		a.NoError(err)
 		p, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(frst), basics.Round(lst), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 		signer := p.Participation.StateProofSecrets
-		//signer, err := merklekeystore.New(frst, lst, 1, crypto.Ed25519Type)
 		require.NoError(t, err)
 
 		correctKeyregFields.StateProofPK = *(signer.GetVerifier())

@@ -27,7 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -49,7 +49,7 @@ func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
 }
 
-func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Verifier) []basics.Participant {
+func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklesignature.Verifier) []basics.Participant {
 	parts := make([]basics.Participant, 0, numberOfParticipant)
 
 	for i := 0; i < numberOfParticipant; i++ {
@@ -63,8 +63,8 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
-func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *merklekeystore.Keystore {
-	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.FalconType)
+func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *merklesignature.Secrets {
+	signer, err := merklesignature.New(firstValid, lastValid, interval, crypto.FalconType)
 	a.NoError(err)
 
 	return signer
@@ -99,7 +99,7 @@ func TestBuildVerify(t *testing.T) {
 	// Share the key; we allow the same vote key to appear in multiple accounts..
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 	var parts []basics.Participant
-	var sigs []merklekeystore.Signature
+	var sigs []merklesignature.Signature
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
@@ -239,7 +239,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	}
 
 	var parts []basics.Participant
-	var sigs []merklekeystore.Signature
+	var sigs []merklesignature.Signature
 
 	for i := 0; i < numPart; i++ {
 		key := generateTestSigner(0, uint64(compactCertRoundsForTests)*8, compactCertRoundsForTests, a)
@@ -325,7 +325,7 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 0, 0)
 }
 
-func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklekeystore.Verifier, round uint64, message crypto.Hashable, expectedIndex uint64, expectedPathLen uint8) {
+func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesignature.Verifier, round uint64, message crypto.Hashable, expectedIndex uint64, expectedPathLen uint8) {
 	a.Equal(len(sigBytes), 4366)
 
 	parsedBytes := 0
@@ -410,7 +410,7 @@ func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes i
 	return parsedBytes, falconPK
 }
 
-func findLInCert(a *require.Assertions, signature merklekeystore.Signature, cert *Cert) uint64 {
+func findLInCert(a *require.Assertions, signature merklesignature.Signature, cert *Cert) uint64 {
 	for _, t := range cert.Reveals {
 		if bytes.Compare(t.SigSlot.Sig.Signature.ByteSignature, signature.ByteSignature) == 0 {
 			return t.SigSlot.L
@@ -435,8 +435,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 	}
 
 	var parts []basics.Participant
-	var partkeys []*merklekeystore.Keystore
-	var sigs []merklekeystore.Signature
+	var partkeys []*merklesignature.Secrets
+	var sigs []merklesignature.Signature
 	for i := 0; i < npart; i++ {
 		signer := generateTestSigner(0, compactCertRoundsForTests, compactCertRoundsForTests+1, a)
 		part := basics.Participant{

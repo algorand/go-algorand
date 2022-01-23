@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -387,7 +387,7 @@ func (z *StateProofSigner) MsgIsZero() bool {
 
 // MarshalMsg implements msgp.Marshaler
 func (z *StateProofVerifier) MarshalMsg(b []byte) []byte {
-	return ((*(merklekeystore.Verifier))(z)).MarshalMsg(b)
+	return ((*(merklesignature.Verifier))(z)).MarshalMsg(b)
 }
 func (_ *StateProofVerifier) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofVerifier)
@@ -396,7 +396,7 @@ func (_ *StateProofVerifier) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *StateProofVerifier) UnmarshalMsg(bts []byte) ([]byte, error) {
-	return ((*(merklekeystore.Verifier))(z)).UnmarshalMsg(bts)
+	return ((*(merklesignature.Verifier))(z)).UnmarshalMsg(bts)
 }
 func (_ *StateProofVerifier) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofVerifier)
@@ -405,10 +405,10 @@ func (_ *StateProofVerifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StateProofVerifier) Msgsize() int {
-	return ((*(merklekeystore.Verifier))(z)).Msgsize()
+	return ((*(merklesignature.Verifier))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *StateProofVerifier) MsgIsZero() bool {
-	return ((*(merklekeystore.Verifier))(z)).MsgIsZero()
+	return ((*(merklesignature.Verifier))(z)).MsgIsZero()
 }

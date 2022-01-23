@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"runtime"
@@ -30,7 +30,7 @@ func TestBuilderSanity(t *testing.T) {
 	a := require.New(t)
 
 	numOfKeys := uint64(100)
-	keys, err := KeyStoreBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
 	a.NoError(err)
 	a.Equal(uint64(len(keys)), numOfKeys)
 
@@ -44,7 +44,7 @@ func TestBuilderFitsToCPUs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	numOfKeys := uint64(runtime.NumCPU() * 2)
-	keys, err := KeyStoreBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
 	a.NoError(err)
 	a.Equal(uint64(len(keys)), numOfKeys)
 
@@ -54,7 +54,7 @@ func TestBuilderOneKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	numOfKeys := uint64(1)
-	keys, err := KeyStoreBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
 	a.NoError(err)
 	a.Equal(uint64(len(keys)), numOfKeys)
 }
@@ -63,15 +63,15 @@ func TestBuilderZeroKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	numOfKeys := uint64(0)
-	keys, err := KeyStoreBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
 	a.NoError(err)
 	a.Equal(uint64(len(keys)), numOfKeys)
 }
 
-func BenchmarkMerkleKeyStoreGenFalcon(b *testing.B) {
+func BenchmarkMerkleSignatureSchemeGenFalcon(b *testing.B) {
 	bencKeyGen(b, crypto.FalconType)
 }
-func BenchmarkMerkleKeyStoreGenEd25519(b *testing.B) {
+func BenchmarkMerkleSignatureSchemeGenEd25519(b *testing.B) {
 	bencKeyGen(b, crypto.Ed25519Type)
 }
 

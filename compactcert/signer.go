@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
@@ -34,9 +34,9 @@ import (
 type sigFromAddr struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Signer basics.Address           `codec:"signer"`
-	Round  basics.Round             `codec:"rnd"`
-	Sig    merklekeystore.Signature `codec:"sig"`
+	Signer basics.Address            `codec:"signer"`
+	Round  basics.Round              `codec:"rnd"`
+	Sig    merklesignature.Signature `codec:"sig"`
 }
 
 func (ccw *Worker) signer(latest basics.Round) {
