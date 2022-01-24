@@ -1971,6 +1971,7 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 				data.addrid = rowid.Int64
 				return protocol.Decode(buf, &data.data)
 			}
+			data.data = makeResourcesData(0)
 			// we don't have that account, just return the database round.
 			return nil
 		}
