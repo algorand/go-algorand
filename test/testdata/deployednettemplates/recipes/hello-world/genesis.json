@@ -24,7 +24,7 @@
     {
       "Name": "Wallet4",
       "Stake": 25,
-      "Online": true
+      "Online": false
     }
   ]
 }
