@@ -662,7 +662,7 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 				}
 			}
 			if err != nil {
-				err = fmt.Errorf("unable to create catchpoint : %v", err)
+				err = fmt.Errorf("unable to create catchpoint for round %d: %v", committedRound, err)
 				err2 := catchpointWriter.Abort()
 				if err2 != nil {
 					ct.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)

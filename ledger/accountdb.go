@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -384,6 +385,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 		deltaRound++
 		// assets
 		for _, res := range roundDelta.GetAllAssetResources() {
+			if res.Addr.String() == "ONQ5DR5EGZ6GTC5RCE3RH5RUWUIPCAW4RX74GERWD5NHL5R5HXQ54QBF6M" {
+				logging.Base().Warnf("tsachi3: account ONQ5DR5EGZ6GTC5RCE3RH5RUWUIPCAW4RX74GERWD5NHL5R5HXQ54QBF6M have asset resources")
+			}
 			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := resourceDelta{
@@ -420,6 +424,9 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 
 		// application
 		for _, res := range roundDelta.GetAllAppResources() {
+			if res.Addr.String() == "ONQ5DR5EGZ6GTC5RCE3RH5RUWUIPCAW4RX74GERWD5NHL5R5HXQ54QBF6M" {
+				logging.Base().Warnf("tsachi3: account ONQ5DR5EGZ6GTC5RCE3RH5RUWUIPCAW4RX74GERWD5NHL5R5HXQ54QBF6M have app resources")
+			}
 			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
 				// update existing entry with new data.
 				updEntry := resourceDelta{
@@ -2300,6 +2307,7 @@ func accountsNewRound(
 	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
+	deletedAccount := make(map[int64]basics.Address)
 	for i := 0; i < updates.len(); i++ {
 		data := updates.getByIdx(i)
 		if data.oldAcct.rowid == 0 {
@@ -2318,6 +2326,13 @@ func accountsNewRound(
 					updatedAccounts[updatedAccountIdx].rowid = rowid
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
 					newAddressesRowIDs[data.address] = rowid
+					/*if _, has := deletedAccount[rowid]; has {
+
+						var readrowid int64
+						tx.QueryRow("select rowid from accountbase where address = ?", data.address[:]).Scan(&readrowid)
+						logging.Base().Warnf("tsachi3: reusing the same rowid.")
+					}*/
+					delete(deletedAccount, rowid)
 				}
 			}
 		} else {
@@ -2333,6 +2348,11 @@ func accountsNewRound(
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
 					}
+					deletedAccount[data.oldAcct.rowid] = data.address
+					if _, has := newAddressesRowIDs[data.address]; has {
+						logging.Base().Warnf("tsachi3: deleting account that was created in the same cycle.")
+					}
+					delete(newAddressesRowIDs, data.address)
 				}
 			} else {
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
@@ -2392,6 +2412,8 @@ func accountsNewRound(
 			if addrid == 0 && !inMemEntry {
 				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 				return
+			} else if _, has := deletedAccount[addrid]; has {
+				logging.Base().Warnf("tsachi2: inserting a resource to a deleted row %d", addrid)
 			}
 		}
 		var entry persistedResourcesData
@@ -2417,6 +2439,9 @@ func accountsNewRound(
 				if err == nil {
 					// set the returned persisted account states so that we could store that as the baseResources in commitRound
 					entry = persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
+					if _, has := deletedAccount[addrid]; has {
+						logging.Base().Warnf("tsachi2: inserting a resource to a deleted row %#v", entry)
+					}
 				}
 			}
 		} else {
@@ -2489,6 +2514,18 @@ func accountsNewRound(
 		}
 	}
 
+	// tsachi - verify deleted accounts
+	for addrid, addr := range deletedAccount {
+		var count int64
+		err = tx.QueryRow("select count(*) from resources where addrid = ?", addrid).Scan(&count)
+		if err != nil {
+			return
+		}
+		if count > 0 {
+			err = fmt.Errorf("account deleted without deleting it's corresponding resources. account %v rowid %d left behind %d resources. last update round %d", addr, addrid, count, lastUpdateRound)
+			return
+		}
+	}
 	return
 }
 
@@ -2868,7 +2905,7 @@ func processAllResources(
 				return pr, err
 			}
 			if pr.addrid < acctRowid {
-				err = errors.New("resource table entries mismatches accountbase table entries")
+				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", pr.addrid, acctRowid)
 				return pendingRow{}, err
 			}
 			addrid = pr.addrid
@@ -2889,7 +2926,7 @@ func processAllResources(
 				return pendingRow{}, err
 			}
 			if addrid < acctRowid {
-				err = errors.New("resource table entries mismatches accountbase table entries")
+				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", addrid, acctRowid)
 				return pendingRow{}, err
 			} else if addrid > acctRowid {
 				err = callback(addr, 0, 0, nil, nil)
@@ -2917,6 +2954,7 @@ func processAllBaseAccountRecords(
 	pending pendingRow, accountCount int,
 ) (int, pendingRow, error) {
 	var addr basics.Address
+	var prevAddr basics.Address
 	var err error
 	count := 0
 	for baseRows.Next() {
@@ -2947,6 +2985,7 @@ func processAllBaseAccountRecords(
 
 		pending, err = processAllResources(resRows, addr, &accountData, rowid, pending, resCb)
 		if err != nil {
+			err = fmt.Errorf("failed to gather resources for account %v, addrid %d, prev address %v : %w", addr, rowid, prevAddr, err)
 			return 0, pendingRow{}, err
 		}
 
@@ -2955,6 +2994,7 @@ func processAllBaseAccountRecords(
 			// we're done with this iteration.
 			return count, pending, nil
 		}
+		prevAddr = addr
 	}
 
 	return count, pending, nil
