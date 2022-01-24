@@ -98,7 +98,10 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 }
 
 // BuildVectorCommitmentTree constructs a Merkle tree given an array.
-// the tree returned from this function can function as a vector commitment (has position binding property)
+// the tree returned from this function can function as a vector commitment which has position binding property.
+// (having a position binding means that an adversary can not create a commitment and open
+// its entry i = 1 in two different ways, using proofs of different ‘depths.’)
+//
 // In addition, the tree will also extend the array to have a length of 2^X leaves.
 // i.e we always create a full tree
 func BuildVectorCommitmentTree(array Array, factory crypto.HashFactory) (*Tree, error) {

@@ -669,7 +669,7 @@ type ProofResponse struct {
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
 
-	// represents the depth of the tree that is being proven. the root level is not included.
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
 }
 

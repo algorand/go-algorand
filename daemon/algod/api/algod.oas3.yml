@@ -578,7 +578,7 @@
                   "type": "string"
                 },
                 "treedepth": {
-                  "description": "represents the depth of the tree that is being proven. the root level is not included.",
+                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
                   "type": "integer"
                 }
               },
@@ -2276,7 +2276,7 @@
                       "type": "string"
                     },
                     "treedepth": {
-                      "description": "represents the depth of the tree that is being proven. the root level is not included.",
+                      "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
                       "type": "integer"
                     }
                   },
