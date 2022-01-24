@@ -272,7 +272,11 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 		return nil
 	}
 
-	dcr.offset = uint64(newBase - dcr.oldBase)
+	newOffset := uint64(newBase - dcr.oldBase)
+	// trackers are not allowed to increase offsets, only descease
+	if newOffset < dcr.offset {
+		dcr.offset = newOffset
+	}
 
 	// check to see if this is a catchpoint round
 	dcr.isCatchpointRound = ct.isCatchpointRound(dcr.offset, dcr.oldBase, dcr.lookback)
