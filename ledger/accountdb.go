@@ -1978,7 +1978,6 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 
 		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
-			data.data = makeResourcesData(0)
 			// Return the zero value of data
 			return fmt.Errorf("unable to query resource data for address %v aidx %v ctype %v : %w", addr, aidx, ctype, err)
 		}
