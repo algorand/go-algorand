@@ -70,7 +70,7 @@ def parse_metrics(fin):
                 ab = line.split()
                 out[ab[0]] = num(ab[1])
     except:
-        print(f'An exception occurred in parse_metrics {sys.exc_info()[0]}')
+        print(f'An exception occurred in parse_metrics: {sys.exc_info()}')
         pass
     return out
 
@@ -197,9 +197,6 @@ class summary:
                 continue
             # skip the first two while the system could still count as warming up
             txp = ns.txPool[2:]
-            print(f'txp: {txp}')
-            if txp is None:
-                continue
             mins.append(min(txp))
             maxs.append(max(txp))
             means.append(statistics.mean(txp))
@@ -403,7 +400,6 @@ class nodestats:
         prevbi = None
 
         for path in sorted(metrics_files):
-            print("processing file: ",  path)
             with open(path, 'rt', encoding="utf-8") as fin:
                 cur = parse_metrics(fin)
             bijsonpath = path.replace('.metrics', '.blockinfo.json')
