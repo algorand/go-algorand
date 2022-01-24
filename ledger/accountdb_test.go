@@ -1190,8 +1190,14 @@ func TestResourcesDataApp(t *testing.T) {
 
 	a := require.New(t)
 
-	rd := makeResourcesData(1)
+	rd := resourcesData{}
 	a.False(rd.IsApp())
+	a.True(rd.IsEmpty())
+
+	rd = makeResourcesData(1)
+	a.False(rd.IsApp())
+	a.False(rd.IsHolding())
+	a.False(rd.IsOwning())
 	a.True(rd.IsEmpty())
 
 	// check empty
@@ -1387,8 +1393,14 @@ func TestResourcesDataAsset(t *testing.T) {
 
 	a := require.New(t)
 
-	rd := makeResourcesData(1)
+	rd := resourcesData{}
 	a.False(rd.IsAsset())
+	a.True(rd.IsEmpty())
+
+	rd = makeResourcesData(1)
+	a.False(rd.IsAsset())
+	a.False(rd.IsHolding())
+	a.False(rd.IsOwning())
 	a.True(rd.IsEmpty())
 
 	// check empty
