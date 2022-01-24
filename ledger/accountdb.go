@@ -2401,7 +2401,9 @@ func accountsNewRound(
 			// as well as non-zero UpdateRound field in a new delta
 			if data.newResource.IsEmpty() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
-				entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(0), lastUpdateRound}
+				// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+				// because the base account might gone.
+				entry = persistedResourcesData{addrid: 0, aidx: aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
 			} else {
 				// create a new entry.
 				var rtype basics.CreatableType
@@ -2416,7 +2418,7 @@ func accountsNewRound(
 				_, err = insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data.newResource))
 				if err == nil {
 					// set the returned persisted account states so that we could store that as the baseResources in commitRound
-					entry = persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
+					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
 				}
 			}
 		} else {
@@ -2426,7 +2428,9 @@ func accountsNewRound(
 				result, err = deleteResourceStmt.Exec(addrid, aidx)
 				if err == nil {
 					// we deleted the entry successfully.
-					entry = persistedResourcesData{addrid, aidx, 0, makeResourcesData(0), lastUpdateRound}
+					// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+					// because the base account might gone.
+					entry = persistedResourcesData{addrid: 0, aidx: aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", addr.String(), addrid, aidx)
@@ -2446,7 +2450,7 @@ func accountsNewRound(
 				result, err = updateResourceStmt.Exec(protocol.Encode(&data.newResource), addrid, aidx)
 				if err == nil {
 					// rowid doesn't change on update.
-					entry = persistedResourcesData{addrid, aidx, rtype, data.newResource, lastUpdateRound}
+					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)

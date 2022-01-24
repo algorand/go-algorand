@@ -1001,8 +1001,10 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// we don't technically need this, since it's already in the baseResources, however, writing this over
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
-				if err := addResource(prd.aidx, rnd, prd.AccountResource()); err != nil {
-					return basics.AccountData{}, basics.Round(0), err
+				if prd.addrid != 0 {
+					if err := addResource(prd.aidx, rnd, prd.AccountResource()); err != nil {
+						return basics.AccountData{}, basics.Round(0), err
+					}
 				}
 			}
 		}
