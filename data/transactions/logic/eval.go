@@ -343,13 +343,12 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	txgroup := transactions.WrapSignedTxnsWithAD(txg)
 
 	minTealVersion := ComputeMinTealVersion(txgroup, true)
-	// Can't happen now, since innerAppsEnabledVersion > than any minimum
-	// imposed otherwise.  But is correct to check.
+	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
+	// imposed otherwise.  But is correct to check, in case of future restriction.
 	if minTealVersion < *caller.MinTealVersion {
 		minTealVersion = *caller.MinTealVersion
 	}
-	credit, _ := transactions.FeeCredit(txgroup, caller.Proto.MinTxnFee)
-	*caller.FeeCredit = basics.AddSaturate(*caller.FeeCredit, credit)
+	// Unlike NewEvalParams, do not add credit here. opTxSubmit has already done so.
 
 	if caller.Proto.EnableAppCostPooling {
 		for _, tx := range txgroup {

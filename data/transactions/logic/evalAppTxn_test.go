@@ -622,7 +622,7 @@ txn Sender; itxn_field Receiver;
 		pay+
 		"itxn_submit; itxn Fee; int 1999; ==", ep)
 
-	// Same first, but force the second too low
+	// Same as first, but force the second too low
 	TestApp(t, "itxn_begin"+
 		pay+
 		"int 3; itxn_field Fee;"+
@@ -647,6 +647,25 @@ txn Sender; itxn_field Receiver;
 		pay+
 		"int 1; itxn_field Fee;"+
 		"itxn_submit; itxn Fee; int 1", ep, "fee too small")
+
+	// Test that overpay in first inner group is available in second inner group
+	// also ensure only exactly the _right_ amount of credit is available.
+	TestApp(t, "itxn_begin"+
+		pay+
+		"int 2002; itxn_field Fee;"+ // double pay
+		"itxn_next"+
+		pay+
+		"int 1001; itxn_field Fee;"+ // regular pay
+		"itxn_submit;"+
+		// At beginning of second group, we should have 1 minfee of credit
+		"itxn_begin"+
+		pay+
+		"int 0; itxn_field Fee;"+ // free, due to credit
+		"itxn_next"+
+		pay+
+		"itxn_submit; itxn Fee; int 1001; ==", // second one should have to pay
+		ep)
+
 }
 
 // TestApplCreation is only determining what appl transactions can be
