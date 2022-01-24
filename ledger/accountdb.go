@@ -2872,7 +2872,7 @@ func processAllResources(
 				return pr, err
 			}
 			if pr.addrid < acctRowid {
-				err = errors.New("resource table entries mismatches accountbase table entries")
+				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", pr.addrid, acctRowid)
 				return pendingRow{}, err
 			}
 			addrid = pr.addrid
@@ -2893,7 +2893,7 @@ func processAllResources(
 				return pendingRow{}, err
 			}
 			if addrid < acctRowid {
-				err = errors.New("resource table entries mismatches accountbase table entries")
+				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", addrid, acctRowid)
 				return pendingRow{}, err
 			} else if addrid > acctRowid {
 				err = callback(addr, 0, 0, nil, nil)
@@ -2921,6 +2921,7 @@ func processAllBaseAccountRecords(
 	pending pendingRow, accountCount int,
 ) (int, pendingRow, error) {
 	var addr basics.Address
+	var prevAddr basics.Address
 	var err error
 	count := 0
 	for baseRows.Next() {
@@ -2951,6 +2952,7 @@ func processAllBaseAccountRecords(
 
 		pending, err = processAllResources(resRows, addr, &accountData, rowid, pending, resCb)
 		if err != nil {
+			err = fmt.Errorf("failed to gather resources for account %v, addrid %d, prev address %v : %w", addr, rowid, prevAddr, err)
 			return 0, pendingRow{}, err
 		}
 
@@ -2959,6 +2961,7 @@ func processAllBaseAccountRecords(
 			// we're done with this iteration.
 			return count, pending, nil
 		}
+		prevAddr = addr
 	}
 
 	return count, pending, nil
