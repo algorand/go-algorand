@@ -60,6 +60,12 @@ const MaxLogSize = 1024
 // MaxLogCalls is the limit of total log calls during a program execution
 const MaxLogCalls = 32
 
+// maxAppCallDepth is the limit on inner appl call depth
+// To be clear, 0 would prevent inner appls, 1 would mean inner app calls cannot
+// make inner appls. So the total app depth can be 1 higher than this number, if
+// you count the top-level app call.
+const maxAppCallDepth = 8
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -1863,7 +1869,7 @@ func opDup2(cx *EvalContext) {
 }
 
 func opDig(cx *EvalContext) {
-	depth := int(uint(cx.program[cx.pc+1]))
+	depth := int(cx.program[cx.pc+1])
 	idx := len(cx.stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
 	// so we can't expect our stack to be prechecked.
@@ -2326,7 +2332,7 @@ func opGtxna(cx *EvalContext) {
 func opGtxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	gi := int(cx.program[cx.pc+1])
+	gi := cx.program[cx.pc+1]
 	if int(gi) >= len(cx.TxnGroup) {
 		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
 		return
@@ -2338,7 +2344,7 @@ func opGtxnas(cx *EvalContext) {
 	}
 	arrayFieldIdx := cx.stack[last].Uint
 	tx := &cx.TxnGroup[gi]
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gi, false)
+	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, int(gi), false)
 	if err != nil {
 		cx.err = err
 		return
@@ -2503,7 +2509,7 @@ func opGitxn(cx *EvalContext) {
 
 func opGitxna(cx *EvalContext) {
 	lastInnerGroup := cx.getLastInnerGroup()
-	gi := int(uint(cx.program[cx.pc+1]))
+	gi := int(cx.program[cx.pc+1])
 	if gi >= len(lastInnerGroup) {
 		cx.err = fmt.Errorf("gitxna %d ... but last group has %d", gi, len(lastInnerGroup))
 		return
@@ -2524,24 +2530,24 @@ func opGitxna(cx *EvalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
+func opGaidImpl(cx *EvalContext, gi int, opName string) (sv stackValue, err error) {
+	if gi >= len(cx.TxnGroup) {
+		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
 		return
-	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, groupIdx)
+	} else if gi > cx.GroupIndex {
+		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, gi)
 		return
-	} else if groupIdx == cx.GroupIndex {
+	} else if gi == cx.GroupIndex {
 		err = fmt.Errorf("%s is only for accessing creatable IDs of previous txns, use `global CurrentApplicationID` instead to access the current app's creatable ID", opName)
 		return
-	} else if txn := cx.TxnGroup[groupIdx].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
-		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, groupIdx)
+	} else if txn := cx.TxnGroup[gi].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
+		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, gi)
 		return
 	}
 
-	cid, err := cx.getCreatableID(groupIdx)
+	cid, err := cx.getCreatableID(gi)
 	if cid == 0 {
-		err = fmt.Errorf("%s can't read creatable ID from txn with group index %d because the txn did not create anything", opName, groupIdx)
+		err = fmt.Errorf("%s can't read creatable ID from txn with group index %d because the txn did not create anything", opName, gi)
 		return
 	}
 
@@ -2552,8 +2558,8 @@ func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, er
 }
 
 func opGaid(cx *EvalContext) {
-	groupIdx := int(cx.program[cx.pc+1])
-	sv, err := opGaidImpl(cx, groupIdx, "gaid")
+	gi := int(cx.program[cx.pc+1])
+	sv, err := opGaidImpl(cx, gi, "gaid")
 	if err != nil {
 		cx.err = err
 		return
@@ -2944,31 +2950,31 @@ func opStores(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx byte, opName string) (stackValue, error) {
+func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stackValue, error) {
 	var none stackValue
-	if groupIdx >= len(cx.TxnGroup) {
-		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
+	if gi >= len(cx.TxnGroup) {
+		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
 	}
 	if int(scratchIdx) >= len(cx.scratch) {
 		return none, fmt.Errorf("invalid Scratch index %d", scratchIdx)
 	}
-	if cx.TxnGroup[groupIdx].Txn.Type != protocol.ApplicationCallTx {
-		return none, fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
+	if cx.TxnGroup[gi].Txn.Type != protocol.ApplicationCallTx {
+		return none, fmt.Errorf("can't use %s on non-app call txn with index %d", opName, gi)
 	}
-	if groupIdx == cx.GroupIndex {
+	if gi == cx.GroupIndex {
 		return none, fmt.Errorf("can't use %s on self, use load instead", opName)
 	}
-	if groupIdx > cx.GroupIndex {
-		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
+	if gi > cx.GroupIndex {
+		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, gi)
 	}
 
-	return cx.pastScratch[groupIdx][scratchIdx], nil
+	return cx.pastScratch[gi][scratchIdx], nil
 }
 
 func opGload(cx *EvalContext) {
-	groupIdx := int(cx.program[cx.pc+1])
+	gi := int(cx.program[cx.pc+1])
 	scratchIdx := cx.program[cx.pc+2]
-	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
+	scratchValue, err := opGloadImpl(cx, gi, scratchIdx, "gload")
 	if err != nil {
 		cx.err = err
 		return
@@ -3650,7 +3656,7 @@ func opAppGlobalDel(cx *EvalContext) {
 
 // We have a difficult naming problem here. In some opcodes, TEAL
 // allows (and used to require) ASAs and Apps to to be referenced by
-// their "index" in an app call txn's foeign-apps or foreign-assets
+// their "index" in an app call txn's foreign-apps or foreign-assets
 // arrays.  That was a small integer, no more than 2 or so, and was
 // often called an "index".  But it was not a basics.AssetIndex or
 // basics.ApplicationIndex.
@@ -3686,7 +3692,7 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 		}
 	} else {
 		// Old rules
-		if ref == 0 {
+		if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
 			return cx.appID, nil
 		}
 		if foreign {
@@ -4393,17 +4399,23 @@ func opTxSubmit(cx *EvalContext) {
 			return
 		}
 
-		// Disallow re-entrancy
+		// Disallow reentrancy and limit inner app call depth
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
 			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
 				cx.err = fmt.Errorf("attempt to self-call")
 				return
 			}
+			depth := 0
 			for parent := cx.caller; parent != nil; parent = parent.caller {
 				if parent.appID == cx.subtxns[itx].Txn.ApplicationID {
 					cx.err = fmt.Errorf("attempt to re-enter %d", parent.appID)
 					return
 				}
+				depth++
+			}
+			if depth >= maxAppCallDepth {
+				cx.err = fmt.Errorf("appl depth (%d) exceeded", depth)
+				return
 			}
 		}
 

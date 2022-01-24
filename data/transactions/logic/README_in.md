@@ -1,7 +1,7 @@
 # The Algorand Virtual Machine (AVM) and TEAL.
 
 The AVM is a bytecode based stack interpreter that executes programs
-asscoiated with Algorand transactions. TEAL is an assembly language
+associated with Algorand transactions. TEAL is an assembly language
 syntax for specifying a program that is ultimately converted to AVM
 bytecode. These programs can be used to check the parameters of the
 transaction and approve the transaction as if by a signature. This use
@@ -34,8 +34,8 @@ exceeded or if a byte-array element exceed 4096 bytes, the program fails.
 
 In addition to the stack there are 256 positions of scratch
 space. Like stack values, scratch locations may be uint64s or
-byte-arrays. Scratch locations are intialized as uint64 zero. Scratch
-space is acccsed by the `load(s)` and `store(s)` opcodes which move
+byte-arrays. Scratch locations are initialized as uint64 zero. Scratch
+space is accessed by the `load(s)` and `store(s)` opcodes which move
 data from or to scratch space, respectively.
 
 ## Versions
@@ -94,7 +94,7 @@ The bytecode plus the length of all Args must add up to no more than 1000 bytes 
 
 Smart Contracts are executed in ApplicationCall transactions. Like
 Smart Signatures, contracts indicate success by leaving a single
-non-zero integer on the stack.  A failed smart contract call is not a
+non-zero integer on the stack.  A failed Smart Contract call is not a
 valid transaction, thus not written to the blockchain. Nodes maintain
 a list of transactions that would succeed, given the current state of
 the blockchain, called the transaction pool. Nodes draw from the pool
@@ -285,7 +285,7 @@ the the array, rather than setting the entire array at once.
 
 `itxn_field` fails immediately for unsupported fields, unsupported
 transaction types, or improperly typed values for a particular
-field. `itxn_field` makes aceptance decisions entirely from the field
+field. `itxn_field` makes acceptance decisions entirely from the field
 and value provided, never considering previously set fields. Illegal
 interactions between fields, such as setting fields that belong to two
 different transaction types, are rejected by `itxn_submit`.

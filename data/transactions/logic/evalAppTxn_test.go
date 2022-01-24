@@ -1603,3 +1603,65 @@ int 1
 `, ep, "assert failed")
 
 }
+
+// TestInnerCallDepth ensures that inner calls are limited in depth
+func TestInnerCallDepth(t *testing.T) {
+	ep, tx, ledger := MakeSampleEnv()
+	// Allow a lot to make the test viable
+	ep.Proto.MaxAppTxnForeignApps = 50
+	ep.Proto.MaxAppTotalTxnReferences = 50
+
+	var apps []basics.AppIndex
+	// 200 will be a simple app that always approves
+	yes := TestProg(t, `int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 200, basics.AppParams{
+		ApprovalProgram: yes.Program,
+	})
+	apps = append(apps, basics.AppIndex(200))
+
+	// 201-210 will be apps that call the next lower one.
+	for i := 0; i < 10; i++ {
+		source := main(`
+ global CurrentApplicationID
+ itob
+ log
+ itxn_begin
+ int appl;                    itxn_field TypeEnum
+ txn NumApplications
+loop:
+ dup
+ bz done
+ dup
+ txnas Applications
+ itxn_field Applications
+ int 1
+ -
+ b loop
+
+done:
+ pop
+ ` + fmt.Sprintf("int %d", 200+i) + `; itxn_field ApplicationID
+ itxn_submit
+`)
+		idx := basics.AppIndex(200 + i + 1)
+		ledger.NewApp(tx.Receiver, idx, basics.AppParams{
+			ApprovalProgram: TestProg(t, source, AssemblerMaxVersion).Program,
+		})
+		ledger.NewAccount(appAddr(int(idx)), 10_000)
+		apps = append(apps, idx)
+	}
+	tx.ForeignApps = apps
+	ledger.NewAccount(appAddr(888), 100_000)
+
+	app, _, err := ledger.AppParams(202)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep)
+
+	app, _, err = ledger.AppParams(208)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep)
+
+	app, _, err = ledger.AppParams(209)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep, "appl depth")
+}
