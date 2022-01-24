@@ -18,6 +18,8 @@ package logic
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -2663,7 +2665,7 @@ func opEcdsaVerify(cx *EvalContext) {
 		return
 	}
 
-	if fs.field != Secp256k1 {
+	if fs.field != Secp256k1 && fs.field != Secp256r1 {
 		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
 		return
 	}
@@ -2682,13 +2684,26 @@ func opEcdsaVerify(cx *EvalContext) {
 
 	x := new(big.Int).SetBytes(pkX)
 	y := new(big.Int).SetBytes(pkY)
-	pubkey := secp256k1.S256().Marshal(x, y)
 
-	signature := make([]byte, 0, len(sigR)+len(sigS))
-	signature = append(signature, sigR...)
-	signature = append(signature, sigS...)
+	var result bool
+	if fs.field == Secp256k1 {
+		signature := make([]byte, 0, len(sigR)+len(sigS))
+		signature = append(signature, sigR...)
+		signature = append(signature, sigS...)
 
-	result := secp256k1.VerifySignature(pubkey, msg, signature)
+		pubkey := secp256k1.S256().Marshal(x, y)
+		result = secp256k1.VerifySignature(pubkey, msg, signature)
+	} else if fs.field == Secp256r1 {
+		r := new(big.Int).SetBytes(sigR)
+		s := new(big.Int).SetBytes(sigS)
+
+		pubkey := ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     x,
+			Y:     y,
+		}
+		result = ecdsa.Verify(&pubkey, msg, r, s)
+	}
 
 	if result {
 		cx.stack[fifth].Uint = 1
@@ -2707,7 +2722,7 @@ func opEcdsaPkDecompress(cx *EvalContext) {
 		return
 	}
 
-	if fs.field != Secp256k1 {
+	if fs.field != Secp256k1 && fs.field != Secp256r1 {
 		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
 		return
 	}
@@ -2715,10 +2730,19 @@ func opEcdsaPkDecompress(cx *EvalContext) {
 	last := len(cx.stack) - 1 // compressed PK
 
 	pubkey := cx.stack[last].Bytes
-	x, y := secp256k1.DecompressPubkey(pubkey)
-	if x == nil {
-		cx.err = fmt.Errorf("invalid pubkey")
-		return
+	var x, y *big.Int
+	if fs.field == Secp256k1 {
+		x, y = secp256k1.DecompressPubkey(pubkey)
+		if x == nil {
+			cx.err = fmt.Errorf("invalid pubkey")
+			return
+		}
+	} else if fs.field == Secp256r1 {
+		x, y = elliptic.UnmarshalCompressed(elliptic.P256(), pubkey)
+		if x == nil {
+			cx.err = fmt.Errorf("invalid compressed pubkey")
+			return
+		}
 	}
 
 	var err error

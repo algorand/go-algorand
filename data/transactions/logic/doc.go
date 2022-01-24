@@ -541,4 +541,5 @@ func AppParamsFieldDocs() map[string]string {
 // EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes
 var EcdsaCurveDocs = map[string]string{
 	"Secp256k1": "secp256k1 curve",
+	"Secp256r1": "secp256r1 curve",
 }

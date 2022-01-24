@@ -345,6 +345,18 @@ itxna Logs 3
 const v6Nonsense = v5Nonsense + `
 itxn_next
 base64_decode URLEncoding
+int 32
+bzero
+ecdsa_pk_decompress Secp256r1
+byte 0x0123456789abcd
+dup
+dup
+ecdsa_verify Secp256r1
+byte 0x0123456789abcd
+dup
+dup
+ecdsa_pk_recover Secp256k1
+itxna Logs 3
 `
 
 var nonsense = map[uint64]string{
