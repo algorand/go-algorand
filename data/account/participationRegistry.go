@@ -95,12 +95,15 @@ type (
 	//msgp:allocbound StateProofKeys 1000
 	StateProofKeys map[uint64]StateProofSigner
 
-	// ParticipationRecordForRound r
+	// ParticipationRecordForRound contains participant's secrets that corresponds to
+	// one specific round. In Addition, it also returns the participation metadata
 	ParticipationRecordForRound struct {
 		ParticipationRecord
 	}
 
-	// StateProofRecordForRound adds in the per-round state proof key.
+	// StateProofRecordForRound contains participant's state proof secrets that corresponds to
+	// one specific round. In Addition, it also returns the participation metadata.
+	// If there are no secrets for the round a nil is returned in Stateproof field.
 	StateProofRecordForRound struct {
 		ParticipationRecord
 

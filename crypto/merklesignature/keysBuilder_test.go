@@ -78,6 +78,6 @@ func BenchmarkMerkleSignatureSchemeGenEd25519(b *testing.B) {
 func bencKeyGen(b *testing.B, algoType crypto.AlgorithmType) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		New(0, 3000000, 128, algoType)
+		New(0, 3000000, 256, algoType)
 	}
 }

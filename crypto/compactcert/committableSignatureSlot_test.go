@@ -36,7 +36,7 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 
 	message := testMessage("hello world")
-	sig, err := key.GetSigner(uint64(128)).Sign(message)
+	sig, err := key.GetSigner(uint64(256)).Sign(message)
 	a.NoError(err)
 
 	sigs[0] = sigslot{

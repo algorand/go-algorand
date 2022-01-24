@@ -243,12 +243,12 @@ func TestSigning(t *testing.T) {
 		}
 	}
 
-	signer = generateTestSigner(crypto.FalconType, 234, 4634, 128, a)
-	key := signer.GetKey(256)
+	signer = generateTestSigner(crypto.FalconType, 234, 4634, 256, a)
+	key := signer.GetKey(512)
 	a.NotNil(key)
 	key = signer.GetKey(4096)
 	a.NotNil(key)
-	key = signer.GetKey(234 + 128)
+	key = signer.GetKey(234 + 256)
 	a.Nil(key)
 }
 
@@ -369,7 +369,7 @@ func TestMarshal(t *testing.T) {
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(128)
+	interval := uint64(256)
 	validPeriod := uint64((1<<8)*interval - 1)
 
 	firstValid := uint64(1000)

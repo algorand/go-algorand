@@ -1055,7 +1055,7 @@ func initConsensusProtocols() {
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
 	// Enable compact certificates.
-	vFuture.CompactCertRounds = 128
+	vFuture.CompactCertRounds = 256
 	vFuture.CompactCertTopVoters = 1024 * 1024
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
@@ -1072,7 +1072,7 @@ func initConsensusProtocols() {
 	vFuture.EnableStateProofKeyregCheck = true
 
 	// Maximum validity period for key registration, to prevent generating too many StateProof keys
-	vFuture.MaxKeyregValidPeriod = 128*(1<<16) - 1
+	vFuture.MaxKeyregValidPeriod = 256*(1<<16) - 1
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

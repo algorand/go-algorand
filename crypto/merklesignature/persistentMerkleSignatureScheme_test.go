@@ -35,7 +35,7 @@ func TestFetchKey(t *testing.T) {
 	store := createTestDB(a)
 	defer store.Close()
 
-	interval := uint64(128)
+	interval := uint64(256)
 	mss, err := New(1, 1000, interval, crypto.FalconType)
 	a.NoError(err)
 	a.NoError(mss.Persist(*store))

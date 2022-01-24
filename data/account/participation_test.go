@@ -399,7 +399,7 @@ func BenchmarkFillDB(b *testing.B) {
 
 	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
 	cpy := config.Consensus[protocol.ConsensusCurrentVersion]
-	cpy.CompactCertRounds = 128
+	cpy.CompactCertRounds = 256
 	config.Consensus[protocol.ConsensusCurrentVersion] = cpy
 	defer func() { config.Consensus[protocol.ConsensusCurrentVersion] = tmp }()
 

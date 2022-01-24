@@ -230,7 +230,7 @@ func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipat
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].CompactCertRounds), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
 
 	return part

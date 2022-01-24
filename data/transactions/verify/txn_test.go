@@ -178,7 +178,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	proto.CompactCertRounds = 128
+	proto.CompactCertRounds = 256
 	config.Consensus[ccProto] = proto
 
 	stxn := transactions.SignedTxn{

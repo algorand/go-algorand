@@ -848,7 +848,7 @@ func TestAddingSecretTwice(t *testing.T) {
 		panic(err)
 	}
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, 200, 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
 	access.Close()
 	a.NoError(err)
 
@@ -885,7 +885,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 		panic(err)
 	}
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, 200, 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
 	access.Close()
 	a.NoError(err)
 
