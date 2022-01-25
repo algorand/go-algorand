@@ -153,7 +153,7 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 	}
 
 	index := s.getMerkleTreeIndex(s.Round)
-	proof, err := s.Tree.ProveOnSingleLeaf(index)
+	proof, err := s.Tree.ProveSingleLeaf(index)
 	if err != nil {
 		return Signature{}, err
 	}

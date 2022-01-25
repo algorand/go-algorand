@@ -188,7 +188,7 @@ func TestMerkleBuildEdgeCases(t *testing.T) {
 	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
 	a.Len(tree.Levels, 0)
-	a.Equal(tree.NumOfLeaves, uint64(0))
+	a.Equal(tree.NumOfElements, uint64(0))
 
 	root := tree.Root()
 
@@ -208,7 +208,7 @@ func TestMerkleVCBuildEdgeCases(t *testing.T) {
 	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
 	a.Len(tree.Levels, 1)
-	a.Equal(tree.NumOfLeaves, uint64(0))
+	a.Equal(tree.NumOfElements, uint64(0))
 
 	rootHash := tree.Root()
 	require.Equal(t, []byte(rootHash), root2)
@@ -492,8 +492,8 @@ func TestSizeLimitsMerkle(t *testing.T) {
 			bytes := protocol.Encode(proof)
 			var outProof Proof
 			err := protocol.Decode(bytes, &outProof)
-			if depth > MaxTreeDepth && (eltCoefficient == 1 || eltCoefficient == 2) {
-				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves/2)
+			if depth > MaxEncodedTreeDepth && (eltCoefficient == 1 || eltCoefficient == 2) {
+				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeavesOnEncodedTree/2)
 				require.Contains(t, err.Error(), errmsg)
 			} else {
 				require.NoError(t, err)
@@ -503,7 +503,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 			bytes = protocol.Encode(tree)
 			var outTree Tree
 			err = protocol.Decode(bytes, &outTree)
-			if depth > MaxTreeDepth {
+			if depth > MaxEncodedTreeDepth {
 				require.Contains(t, err.Error(), "> 17 at Levels")
 			} else {
 				require.NoError(t, err)
@@ -525,19 +525,19 @@ func TestSizeLimitsMerkle(t *testing.T) {
 			_, proof := testMerkelSizeLimits(t, crypto.Sha512_256, size, positions)
 			require.GreaterOrEqual(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
 
-			if len(proof.Path) > MaxNumLeaves {
+			if len(proof.Path) > MaxNumLeavesOnEncodedTree {
 				// encode/decode
 				bytes := protocol.Encode(proof)
 				var outProof Proof
 				err := protocol.Decode(bytes, &outProof)
-				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeaves)
+				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeavesOnEncodedTree)
 				require.Contains(t, err.Error(), errmsg)
 			}
 		}
 	}
 
 	// case of a tree with leaves 2^16 + 1
-	size := (uint64(1) << MaxTreeDepth) + 1
+	size := (uint64(1) << MaxEncodedTreeDepth) + 1
 	tree, _ := testMerkelSizeLimits(t, crypto.Sha512_256, size, []uint64{})
 	bytes := protocol.Encode(tree)
 	var outTree Tree
@@ -875,33 +875,6 @@ func TestVCOneLeaf(t *testing.T) {
 	require.Equal(t, rootHash, []byte(root2))
 }
 
-func TestTreeTooDeep(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	size := uint64(10)
-	arr := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
-		crypto.RandBytes(arr[i][:])
-	}
-
-	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
-	a.NoError(err)
-	proof, err := tree.Prove([]uint64{1})
-	require.NoError(t, err)
-	proof.TreeDepth = 65
-	err = VerifyVectorCommitment(tree.Root(), map[uint64]crypto.Hashable{1: arr[1]}, proof)
-	require.ErrorIs(t, err, ErrTreeTooDeep)
-
-	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
-	a.NoError(err)
-	proof, err = tree.Prove([]uint64{1})
-	require.NoError(t, err)
-	proof.TreeDepth = 65
-	err = Verify(tree.Root(), map[uint64]crypto.Hashable{1: arr[1]}, proof)
-	require.ErrorIs(t, err, ErrTreeTooDeep)
-}
-
 func TestTreeDepthField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -968,14 +941,14 @@ func TestTreeNumOfLeavesField(t *testing.T) {
 	crypto.RandBytes(arr[0][:])
 	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal(tree.NumOfLeaves, uint64(1))
+	a.Equal(tree.NumOfElements, uint64(1))
 
 	arr = make(TestArray, 2)
 	crypto.RandBytes(arr[0][:])
 	crypto.RandBytes(arr[1][:])
 	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal(tree.NumOfLeaves, uint64(2))
+	a.Equal(tree.NumOfElements, uint64(2))
 
 	arr = make(TestArray, 3)
 	crypto.RandBytes(arr[0][:])
@@ -983,20 +956,20 @@ func TestTreeNumOfLeavesField(t *testing.T) {
 	crypto.RandBytes(arr[2][:])
 	tree, err = Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal(tree.NumOfLeaves, uint64(3))
+	a.Equal(tree.NumOfElements, uint64(3))
 
 	arr = make(TestArray, 1)
 	crypto.RandBytes(arr[0][:])
 	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal(tree.NumOfLeaves, uint64(1))
+	a.Equal(tree.NumOfElements, uint64(1))
 
 	arr = make(TestArray, 2)
 	crypto.RandBytes(arr[0][:])
 	crypto.RandBytes(arr[1][:])
 	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal(tree.NumOfLeaves, uint64(2))
+	a.Equal(tree.NumOfElements, uint64(2))
 
 	arr = make(TestArray, 3)
 	crypto.RandBytes(arr[0][:])
@@ -1004,10 +977,10 @@ func TestTreeNumOfLeavesField(t *testing.T) {
 	crypto.RandBytes(arr[2][:])
 	tree, err = BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal(tree.NumOfLeaves, uint64(3))
+	a.Equal(tree.NumOfElements, uint64(3))
 }
 
-func TestProveOnSingleLeaf(t *testing.T) {
+func TestProveSingleLeaf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	size := uint64(15)
@@ -1025,7 +998,7 @@ func TestProveOnSingleLeaf(t *testing.T) {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
-		singleLeafproof, err := tree.ProveOnSingleLeaf(i)
+		singleLeafproof, err := tree.ProveSingleLeaf(i)
 		require.NoError(t, err)
 
 		require.Equal(t, singleLeafproof.ToProof(), proof)
@@ -1035,7 +1008,7 @@ func TestProveOnSingleLeaf(t *testing.T) {
 	}
 }
 
-func TestVCProveOnSingleLeaf(t *testing.T) {
+func TestVCProveSingleLeaf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	size := uint64(15)
@@ -1053,7 +1026,7 @@ func TestVCProveOnSingleLeaf(t *testing.T) {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
-		singleLeafproof, err := tree.ProveOnSingleLeaf(i)
+		singleLeafproof, err := tree.ProveSingleLeaf(i)
 		require.NoError(t, err)
 
 		require.Equal(t, singleLeafproof.ToProof(), proof)

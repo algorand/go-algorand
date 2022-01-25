@@ -185,7 +185,7 @@ func TestSignatureStructure(t *testing.T) {
 
 	a.Equal(sig.VerifyingKey, *key.GetSigner().GetVerifyingKey())
 
-	proof, err := signer.Tree.ProveOnSingleLeaf(1)
+	proof, err := signer.Tree.ProveSingleLeaf(1)
 	a.NoError(err)
 	a.Equal(*proof, sig.Proof)
 

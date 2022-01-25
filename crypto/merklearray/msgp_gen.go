@@ -72,8 +72,8 @@ func (z *Layer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0002 > MaxNumLeaves {
-		err = msgp.ErrOverflow(uint64(zb0002), uint64(MaxNumLeaves))
+	if zb0002 > MaxNumLeavesOnEncodedTree {
+		err = msgp.ErrOverflow(uint64(zb0002), uint64(MaxNumLeavesOnEncodedTree))
 		err = msgp.WrapError(err)
 		return
 	}
@@ -188,8 +188,8 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Path")
 				return
 			}
-			if zb0004 > MaxNumLeaves/2 {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeaves/2))
+			if zb0004 > MaxNumLeavesOnEncodedTree/2 {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeavesOnEncodedTree/2))
 				err = msgp.WrapError(err, "struct-from-array", "Path")
 				return
 			}
@@ -255,8 +255,8 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Path")
 					return
 				}
-				if zb0006 > MaxNumLeaves/2 {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeaves/2))
+				if zb0006 > MaxNumLeavesOnEncodedTree/2 {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeavesOnEncodedTree/2))
 					err = msgp.WrapError(err, "Path")
 					return
 				}
@@ -393,8 +393,8 @@ func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Path")
 				return
 			}
-			if zb0004 > MaxNumLeaves/2 {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeaves/2))
+			if zb0004 > MaxNumLeavesOnEncodedTree/2 {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeavesOnEncodedTree/2))
 				err = msgp.WrapError(err, "struct-from-array", "Path")
 				return
 			}
@@ -460,8 +460,8 @@ func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Path")
 					return
 				}
-				if zb0006 > MaxNumLeaves/2 {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeaves/2))
+				if zb0006 > MaxNumLeavesOnEncodedTree/2 {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeavesOnEncodedTree/2))
 					err = msgp.WrapError(err, "Path")
 					return
 				}
@@ -538,11 +538,11 @@ func (z *Tree) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
-	if (*z).NumOfLeaves == 0 {
+	if (*z).NumOfElements == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x8
 	}
-	if (*z).VectorCommitment == false {
+	if (*z).IsVectorCommitment == false {
 		zb0003Len--
 		zb0003Mask |= 0x10
 	}
@@ -576,12 +576,12 @@ func (z *Tree) MarshalMsg(b []byte) (o []byte) {
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "nl"
 			o = append(o, 0xa2, 0x6e, 0x6c)
-			o = msgp.AppendUint64(o, (*z).NumOfLeaves)
+			o = msgp.AppendUint64(o, (*z).NumOfElements)
 		}
 		if (zb0003Mask & 0x10) == 0 { // if not empty
 			// string "vc"
 			o = append(o, 0xa2, 0x76, 0x63)
-			o = msgp.AppendBool(o, (*z).VectorCommitment)
+			o = msgp.AppendBool(o, (*z).IsVectorCommitment)
 		}
 	}
 	return
@@ -614,8 +614,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Levels")
 				return
 			}
-			if zb0005 > MaxTreeDepth+1 {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(MaxTreeDepth+1))
+			if zb0005 > MaxEncodedTreeDepth+1 {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(MaxEncodedTreeDepth+1))
 				err = msgp.WrapError(err, "struct-from-array", "Levels")
 				return
 			}
@@ -634,8 +634,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001)
 					return
 				}
-				if zb0007 > MaxNumLeaves {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxNumLeaves))
+				if zb0007 > MaxNumLeavesOnEncodedTree {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxNumLeavesOnEncodedTree))
 					err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001)
 					return
 				}
@@ -657,9 +657,9 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).NumOfLeaves, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).NumOfElements, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NumOfLeaves")
+				err = msgp.WrapError(err, "struct-from-array", "NumOfElements")
 				return
 			}
 		}
@@ -673,9 +673,9 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).VectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).IsVectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VectorCommitment")
+				err = msgp.WrapError(err, "struct-from-array", "IsVectorCommitment")
 				return
 			}
 		}
@@ -710,8 +710,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Levels")
 					return
 				}
-				if zb0009 > MaxTreeDepth+1 {
-					err = msgp.ErrOverflow(uint64(zb0009), uint64(MaxTreeDepth+1))
+				if zb0009 > MaxEncodedTreeDepth+1 {
+					err = msgp.ErrOverflow(uint64(zb0009), uint64(MaxEncodedTreeDepth+1))
 					err = msgp.WrapError(err, "Levels")
 					return
 				}
@@ -730,8 +730,8 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "Levels", zb0001)
 						return
 					}
-					if zb0011 > MaxNumLeaves {
-						err = msgp.ErrOverflow(uint64(zb0011), uint64(MaxNumLeaves))
+					if zb0011 > MaxNumLeavesOnEncodedTree {
+						err = msgp.ErrOverflow(uint64(zb0011), uint64(MaxNumLeavesOnEncodedTree))
 						err = msgp.WrapError(err, "Levels", zb0001)
 						return
 					}
@@ -751,9 +751,9 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "nl":
-				(*z).NumOfLeaves, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).NumOfElements, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "NumOfLeaves")
+					err = msgp.WrapError(err, "NumOfElements")
 					return
 				}
 			case "hsh":
@@ -763,9 +763,9 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "vc":
-				(*z).VectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
+				(*z).IsVectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "VectorCommitment")
+					err = msgp.WrapError(err, "IsVectorCommitment")
 					return
 				}
 			default:
@@ -801,5 +801,5 @@ func (z *Tree) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Tree) MsgIsZero() bool {
-	return (len((*z).Levels) == 0) && ((*z).NumOfLeaves == 0) && ((*z).Hash.MsgIsZero()) && ((*z).VectorCommitment == false)
+	return (len((*z).Levels) == 0) && ((*z).NumOfElements == 0) && ((*z).Hash.MsgIsZero()) && ((*z).IsVectorCommitment == false)
 }

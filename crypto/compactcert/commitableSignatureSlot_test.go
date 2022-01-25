@@ -92,7 +92,7 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	hash := crypto.HashFactory{HashType: HashType}.NewHash()
 	zeroDigest := make([]byte, hash.BlockSize())
-	for ; i < merklearray.MaxTreeDepth; i++ {
+	for ; i < merklearray.MaxEncodedTreeDepth; i++ {
 		sigCommitment = append(sigCommitment, zeroDigest...)
 	}
 
