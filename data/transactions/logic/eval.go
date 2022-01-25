@@ -562,10 +562,6 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if cx.PooledApplicationBudget != nil {
 		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
 	}
-	// update allowed inner transactions (shouldn't overflow, but it's an int, so safe anyway)
-	if cx.pooledAllowedInners != nil {
-		*cx.pooledAllowedInners -= len(cx.Txn.EvalDelta.InnerTxns)
-	}
 	// update side effects
 	cx.pastScratch[cx.GroupIndex] = &scratchSpace{}
 	*cx.pastScratch[cx.GroupIndex] = cx.scratch
@@ -810,11 +806,15 @@ func (cx *EvalContext) budget() int {
 	return cx.Proto.MaxAppProgramCost
 }
 
-func (cx *EvalContext) allowedInners() int {
+func (cx *EvalContext) remainingInners() int {
 	if cx.Proto.EnableInnerTransactionPooling && cx.pooledAllowedInners != nil {
 		return *cx.pooledAllowedInners
 	}
-	return cx.Proto.MaxInnerTransactions
+	// Before EnableInnerTransactionPooling, MaxInnerTransactions was the amount
+	// allowed in a single txn. No consensus version should enable inner app
+	// calls without turning on EnableInnerTransactionPoolin, else inner calls
+	// could keep branching with "width" MaxInnerTransactions
+	return cx.Proto.MaxInnerTransactions - len(cx.Txn.EvalDelta.InnerTxns)
 }
 
 func (cx *EvalContext) step() {
@@ -3962,8 +3962,8 @@ func addInnerTxn(cx *EvalContext) error {
 	// unbounded.)  The MaxTxGroupSize check can be, and is, precise. (That is,
 	// if we are at max group size, we can panic now, since we are trying to add
 	// too many)
-	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.allowedInners() || len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
-		return fmt.Errorf("too many inner transactions %d", len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns))
+	if len(cx.subtxns) > cx.remainingInners() || len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
+		return fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 	}
 
 	stxn := transactions.SignedTxn{}
@@ -4341,8 +4341,8 @@ func opTxSubmit(cx *EvalContext) {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
-	if len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns) > cx.allowedInners() || len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
-		cx.err = fmt.Errorf("too many inner transactions %d", len(cx.Txn.EvalDelta.InnerTxns)+len(cx.subtxns))
+	if len(cx.subtxns) > cx.remainingInners() || len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
+		cx.err = fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 		return
 	}
 
@@ -4430,6 +4430,12 @@ func opTxSubmit(cx *EvalContext) {
 		for itx := range cx.subtxns {
 			cx.subtxns[itx].Txn.Group = groupID
 		}
+	}
+
+	// Decrement allowed inners *before* execution, else runaway recursion is
+	// not noticed.
+	if cx.pooledAllowedInners != nil {
+		*cx.pooledAllowedInners -= len(cx.subtxns)
 	}
 
 	ep := NewInnerEvalParams(cx.subtxns, cx)

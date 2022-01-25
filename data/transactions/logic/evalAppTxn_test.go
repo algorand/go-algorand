@@ -1625,6 +1625,8 @@ int 1
 
 // TestInnerCallDepth ensures that inner calls are limited in depth
 func TestInnerCallDepth(t *testing.T) {
+	t.Parallel()
+
 	ep, tx, ledger := MakeSampleEnv()
 	// Allow a lot to make the test viable
 	ep.Proto.MaxAppTxnForeignApps = 50
@@ -1683,4 +1685,35 @@ done:
 	app, _, err = ledger.AppParams(209)
 	require.NoError(t, err)
 	TestAppBytes(t, app.ApprovalProgram, ep, "appl depth")
+}
+
+func TestInfiniteRecursion(t *testing.T) {
+	ep, tx, ledger := MakeSampleEnv()
+	source := `
+itxn_begin
+int appl; itxn_field TypeEnum
+int 0; app_params_get AppApprovalProgram
+assert
+itxn_field ApprovalProgram
+
+int 0; app_params_get AppClearStateProgram
+assert
+itxn_field ClearStateProgram
+
+itxn_submit
+`
+	// This app looks itself up in the ledger, so we need to put it in there.
+	ledger.NewApp(tx.Sender, 888, basics.AppParams{
+		ApprovalProgram:   TestProg(t, source, AssemblerMaxVersion).Program,
+		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
+	})
+	// We're testing if this can recur forever. It's hard to fund all these
+	// apps, but we can put a huge credit in the ep.
+	*ep.FeeCredit = 1_000_000_000
+
+	// This has been tested by hand, by setting maxAppCallDepth to 10_000_000
+	// but without that, the depth limiter stops it first.
+	// TestApp(t, source, ep, "too many inner transactions 1 with 0 left")
+
+	TestApp(t, source, ep, "appl depth (8) exceeded")
 }
