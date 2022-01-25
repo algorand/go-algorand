@@ -26,7 +26,7 @@ import (
 )
 
 // bigIntToBytes casts non-negative big integer to byte slice with specific byte length
-// NOTE: THIS IS A WORKAROUND FOR `fillBytes` METHOD BEFOER GOLANG 1.15+
+// NOTE: THIS IS A WORKAROUND FOR `fillBytes` METHOD BEFORE GOLANG 1.15+
 //       SHOULD BE REMOVED AFTER WE MOVE TO HIGHER VERSION
 func bigIntToBytes(x *big.Int, byteLen uint) ([]byte, error) {
 	if x.Cmp(big.NewInt(0)) < 0 {
