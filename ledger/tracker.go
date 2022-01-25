@@ -91,6 +91,9 @@ type ledgerTracker interface {
 	// effort, and all the trackers contribute to that effort. All the trackers are being handed a
 	// pointer to the deferredCommitRange, and have the ability to either modify it, or return a
 	// nil. If nil is returned, the commit would be skipped.
+	// The contract:
+	// offset must not be greater than the received dcr.offset value of non zero
+	// oldBase must not be modifed if non zero
 	produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange
 
 	// prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
@@ -321,9 +324,17 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	}
 	cdr := &dcc.deferredCommitRange
 	for _, lt := range tr.trackers {
+		base := cdr.oldBase
+		offset := cdr.offset
 		cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
 		if cdr == nil {
 			break
+		}
+		if offset > 0 && cdr.offset > offset {
+			tr.log.Warnf("tracker %T produced offset %d but expected not greater than %d, dbRound %d, latestRound %d", lt, cdr.offset, offset, dbRound, blockqRound)
+		}
+		if base > 0 && base != cdr.oldBase {
+			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
 		}
 	}
 	if cdr != nil {
