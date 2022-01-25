@@ -318,7 +318,7 @@ func (dl *dryrunLedger) LookupResource(rnd basics.Round, addr basics.Address, ai
 	if err != nil {
 		return ledgercore.AccountResource{}, err
 	}
-	result := ledgercore.AccountResource{CreatableIndex: aidx, CreatableType: ctype}
+	var result ledgercore.AccountResource
 	if ctype == basics.AppCreatable {
 		if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
 			result.AppParams = &p

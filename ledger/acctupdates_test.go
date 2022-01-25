@@ -373,8 +373,6 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			entry, _ := resources.get(key)
 			entry.resource.AppLocalState = rec.State.LocalState
 			entry.resource.AppParams = rec.Params.Params
-			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
-			entry.resource.CreatableType = basics.AppCreatable
 			entry.ndeltas++
 			resources[key] = entry
 		}
@@ -383,8 +381,6 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 			entry, _ := resources.get(key)
 			entry.resource.AssetHolding = rec.Holding.Holding
 			entry.resource.AssetParams = rec.Params.Params
-			entry.resource.CreatableIndex = basics.CreatableIndex(rec.Aidx)
-			entry.resource.CreatableType = basics.AssetCreatable
 			entry.ndeltas++
 			resources[key] = entry
 		}

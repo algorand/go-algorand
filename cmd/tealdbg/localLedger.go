@@ -290,7 +290,7 @@ func (l *localLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx
 	if !ok {
 		return ledgercore.AccountResource{}, nil
 	}
-	result := ledgercore.AccountResource{CreatableIndex: aidx, CreatableType: ctype}
+	var result ledgercore.AccountResource
 	if ctype == basics.AppCreatable {
 		if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
 			result.AppParams = &p

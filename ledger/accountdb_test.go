@@ -2277,8 +2277,6 @@ func (m *mockAccountWriter) insertResource(addrid int64, aidx basics.CreatableIn
 	// use persistedResourcesData.AccountResource for conversion
 	prd := persistedResourcesData{data: data}
 	new := prd.AccountResource()
-	new.CreatableIndex = 0
-	new.CreatableType = 0
 	m.resources[key] = new
 	return 1, nil
 }
@@ -2301,8 +2299,6 @@ func (m *mockAccountWriter) updateResource(addrid int64, aidx basics.CreatableIn
 	// use persistedResourcesData.AccountResource for conversion
 	prd := persistedResourcesData{data: data}
 	new := prd.AccountResource()
-	new.CreatableIndex = 0
-	new.CreatableType = 0
 	if new == old {
 		return 0, nil
 	}

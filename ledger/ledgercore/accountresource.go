@@ -22,44 +22,37 @@ import (
 
 // AccountResource used to retrieve a generic resource information from the data tier
 type AccountResource struct {
-	CreatableIndex basics.CreatableIndex
-	CreatableType  basics.CreatableType
-
 	AssetParams   *basics.AssetParams
 	AssetHolding  *basics.AssetHolding
 	AppLocalState *basics.AppLocalState
 	AppParams     *basics.AppParams
 }
 
-// AssignAccountData assigned the Asset/App params/holdings contained in the AccountResource
-// to the given basics.AccountData, creating maps if necessary.
-func (r *AccountResource) AssignAccountData(ad *basics.AccountData) {
-	switch r.CreatableType {
-	case basics.AssetCreatable:
-		if r.AssetParams != nil {
-			if ad.AssetParams == nil {
-				ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-			}
-			ad.AssetParams[basics.AssetIndex(r.CreatableIndex)] = *r.AssetParams
+// AssignAccountResourceToAccountData assignes the Asset/App params/holdings contained
+// in the AccountResource to the given basics.AccountData, creating maps if necessary.
+func AssignAccountResourceToAccountData(cindex basics.CreatableIndex, resource AccountResource, ad *basics.AccountData) {
+	if resource.AssetParams != nil {
+		if ad.AssetParams == nil {
+			ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 		}
-		if r.AssetHolding != nil {
-			if ad.Assets == nil {
-				ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-			}
-			ad.Assets[basics.AssetIndex(r.CreatableIndex)] = *r.AssetHolding
+		ad.AssetParams[basics.AssetIndex(cindex)] = *resource.AssetParams
+	}
+	if resource.AssetHolding != nil {
+		if ad.Assets == nil {
+			ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		}
-	case basics.AppCreatable:
-		if r.AppParams != nil {
-			if ad.AppParams == nil {
-				ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
-			}
-			ad.AppParams[basics.AppIndex(r.CreatableIndex)] = *r.AppParams
+		ad.Assets[basics.AssetIndex(cindex)] = *resource.AssetHolding
+	}
+	if resource.AppParams != nil {
+		if ad.AppParams == nil {
+			ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
 		}
-		if r.AppLocalState != nil {
-			if ad.AppLocalStates == nil {
-				ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-			}
-			ad.AppLocalStates[basics.AppIndex(r.CreatableIndex)] = *r.AppLocalState
+		ad.AppParams[basics.AppIndex(cindex)] = *resource.AppParams
+	}
+	if resource.AppLocalState != nil {
+		if ad.AppLocalStates == nil {
+			ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 		}
+		ad.AppLocalStates[basics.AppIndex(cindex)] = *resource.AppLocalState
 	}
 }
