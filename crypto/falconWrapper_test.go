@@ -17,7 +17,7 @@
 package crypto
 
 import (
-	"github.com/algoidan/falcon"
+	"github.com/algorand/falcon"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"

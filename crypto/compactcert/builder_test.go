@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/algoidan/falcon"
+	"github.com/algorand/falcon"
 	"hash"
 	"math/bits"
 	"testing"

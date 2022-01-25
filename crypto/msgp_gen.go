@@ -7,7 +7,7 @@ import (
 	_ "runtime/cgo"
 	_ "unsafe"
 
-	cfalcon "github.com/algoidan/falcon"
+	cfalcon "github.com/algorand/falcon"
 	"github.com/algorand/msgp/msgp"
 )
 
