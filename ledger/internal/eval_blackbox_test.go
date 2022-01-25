@@ -63,6 +63,7 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
@@ -210,16 +211,16 @@ func TestBlockEvaluator(t *testing.T) {
 
 	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 
-	bal0new, err := l.Lookup(newBlock.Round(), addrs[0])
+	bal0new, err := l.LookupAgreement(newBlock.Round(), addrs[0])
 	require.NoError(t, err)
-	bal1new, err := l.Lookup(newBlock.Round(), addrs[1])
+	bal1new, err := l.LookupAgreement(newBlock.Round(), addrs[1])
 	require.NoError(t, err)
-	bal2new, err := l.Lookup(newBlock.Round(), addrs[2])
+	bal2new, err := l.LookupAgreement(newBlock.Round(), addrs[2])
 	require.NoError(t, err)
 
-	require.Equal(t, bal0new.MicroAlgos.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
-	require.Equal(t, bal1new.MicroAlgos.Raw, bal1.MicroAlgos.Raw+100)
-	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
+	require.Equal(t, bal0new.MicroAlgosWithRewards.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
+	require.Equal(t, bal1new.MicroAlgosWithRewards.Raw, bal1.MicroAlgos.Raw+100)
+	require.Equal(t, bal2new.MicroAlgosWithRewards.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
 }
 
 func TestRekeying(t *testing.T) {
@@ -446,8 +447,8 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	deltas := vb.Delta()
 
-	ad, _ := deltas.Accts.Get(addr)
-	state := ad.AppParams[1].GlobalState
+	params, _ := deltas.NewAccts.GetAppParams(addr, 1)
+	state := params.Params.GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
@@ -676,18 +677,18 @@ func TestMinBalanceChanges(t *testing.T) {
 		AssetReceiver: addrs[5],
 	}
 
-	ad0init, err := l.Lookup(l.Latest(), addrs[0])
+	ad0init, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5init, err := l.Lookup(l.Latest(), addrs[5])
+	ad5init, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	eval := nextBlock(t, l, true, nil)
 	txns(t, l, eval, &createTxn, &optInTxn)
 	endBlock(t, l, eval)
 
-	ad0new, err := l.Lookup(l.Latest(), addrs[0])
+	ad0new, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5new, err := l.Lookup(l.Latest(), addrs[5])
+	ad5new, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	proto := l.GenesisProto()
@@ -715,9 +716,9 @@ func TestMinBalanceChanges(t *testing.T) {
 	txns(t, l, eval, &optOutTxn, &closeTxn)
 	endBlock(t, l, eval)
 
-	ad0final, err := l.Lookup(l.Latest(), addrs[0])
+	ad0final, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5final, err := l.Lookup(l.Latest(), addrs[5])
+	ad5final, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
 	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
@@ -860,6 +861,14 @@ func TestModifiedAppLocalStates(t *testing.T) {
 		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
 		require.True(t, ok)
 		assert.True(t, created)
+
+		state, ok := vb.Delta().NewAccts.GetAppLocalState(addrs[1], appid)
+		require.True(t, ok)
+		require.NotNil(t, state)
+
+		params, ok := vb.Delta().NewAccts.GetAppParams(addrs[0], appid)
+		require.True(t, ok)
+		require.NotNil(t, params)
 	}
 
 	optOutTxn := txntest.Txn{

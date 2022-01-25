@@ -21,29 +21,35 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 type mockBalances struct {
 	protocol.ConsensusVersion
 	b map[basics.Address]basics.AccountData
+	mockCreatableBalances
 }
 
 // makeMockBalances takes a ConsensusVersion and returns a mocked balances with an Address to AccountData map
 func makeMockBalances(cv protocol.ConsensusVersion) *mockBalances {
-	return &mockBalances{
+	ret := &mockBalances{
 		ConsensusVersion: cv,
 		b:                map[basics.Address]basics.AccountData{},
 	}
+	ret.mockCreatableBalances = mockCreatableBalances{access: ret}
+	return ret
 }
 
 // makeMockBalancesWithAccounts takes a ConsensusVersion and a map of Address to AccountData and returns a mocked
 // balances.
 func makeMockBalancesWithAccounts(cv protocol.ConsensusVersion, b map[basics.Address]basics.AccountData) *mockBalances {
-	return &mockBalances{
+	ret := &mockBalances{
 		ConsensusVersion: cv,
 		b:                b,
 	}
+	ret.mockCreatableBalances = mockCreatableBalances{access: ret}
+	return ret
 }
 
 func (balances mockBalances) Round() basics.Round {
@@ -70,7 +76,12 @@ func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []b
 	return false, transactions.EvalDelta{}, nil
 }
 
-func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
+	acct, err := balances.getAccount(addr, withPendingRewards)
+	return ledgercore.ToAccountData(acct), err
+}
+
+func (balances mockBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	return balances.b[addr], nil
 }
 
@@ -78,9 +89,19 @@ func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) Put(addr basics.Address, ad basics.AccountData) error {
+func (balances mockBalances) Put(addr basics.Address, acct ledgercore.AccountData) error {
+	a := balances.b[addr]
+	ledgercore.AssignAccountData(&a, acct)
+	return balances.putAccount(addr, a)
+}
+
+func (balances mockBalances) putAccount(addr basics.Address, ad basics.AccountData) error {
 	balances.b[addr] = ad
 	return nil
+}
+
+func (balances mockBalances) CloseAccount(addr basics.Address) error {
+	return balances.putAccount(addr, basics.AccountData{})
 }
 
 func (balances mockBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
@@ -89,4 +110,214 @@ func (balances mockBalances) Move(src, dst basics.Address, amount basics.MicroAl
 
 func (balances mockBalances) ConsensusParams() config.ConsensusParams {
 	return config.Consensus[balances.ConsensusVersion]
+}
+
+// mockCreatableBalances provides extra creatable access methods for the
+// testBalances, testBalancesPass, and mockBalances implementations of apply.Balances
+type mockCreatableBalances struct {
+	access accountDataAccessor
+
+	putAppParams, deleteAppParams         int
+	putAppLocalState, deleteAppLocalState int
+	putAssetHolding, deleteAssetHolding   int
+	putAssetParams, deleteAssetParams     int
+}
+
+type accountDataAccessor interface {
+	putAccount(addr basics.Address, ad basics.AccountData) error
+	getAccount(addr basics.Address, withRewards bool) (basics.AccountData, error)
+}
+
+func (b *mockCreatableBalances) CountAppParams(addr basics.Address) (int, error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return 0, err
+	}
+	return len(acct.AppParams), nil
+}
+func (b *mockCreatableBalances) CountAppLocalState(addr basics.Address) (int, error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return 0, err
+	}
+	return len(acct.AppLocalStates), nil
+}
+func (b *mockCreatableBalances) CountAssetHolding(addr basics.Address) (int, error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return 0, err
+	}
+	return len(acct.Assets), nil
+}
+func (b *mockCreatableBalances) CountAssetParams(addr basics.Address) (int, error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return 0, err
+	}
+	return len(acct.AssetParams), nil
+}
+
+func (b *mockCreatableBalances) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.AppParams[aidx]
+	return
+}
+func (b *mockCreatableBalances) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (ret basics.AppLocalState, ok bool, err error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.AppLocalStates[aidx]
+	return
+}
+func (b *mockCreatableBalances) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.Assets[aidx]
+	return
+}
+func (b *mockCreatableBalances) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.AssetParams[aidx]
+	return
+}
+
+func (b *mockCreatableBalances) PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error {
+	b.putAppParams++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AppIndex]basics.AppParams, len(acct.AppParams))
+	for k, v := range acct.AppParams {
+		m[k] = v
+	}
+	m[aidx] = params
+	acct.AppParams = m
+	return b.access.putAccount(addr, acct)
+}
+func (b *mockCreatableBalances) PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error {
+	b.putAppLocalState++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AppIndex]basics.AppLocalState, len(acct.AppLocalStates))
+	for k, v := range acct.AppLocalStates {
+		m[k] = v
+	}
+	m[aidx] = state
+	acct.AppLocalStates = m
+	return b.access.putAccount(addr, acct)
+}
+func (b *mockCreatableBalances) PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error {
+	b.putAssetHolding++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AssetIndex]basics.AssetHolding, len(acct.Assets))
+	for k, v := range acct.Assets {
+		m[k] = v
+	}
+	m[aidx] = data
+	acct.Assets = m
+	return b.access.putAccount(addr, acct)
+}
+func (b *mockCreatableBalances) PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error {
+	b.putAssetParams++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AssetIndex]basics.AssetParams, len(acct.AssetParams))
+	for k, v := range acct.AssetParams {
+		m[k] = v
+	}
+	m[aidx] = data
+	acct.AssetParams = m
+	return b.access.putAccount(addr, acct)
+}
+
+func (b *mockCreatableBalances) DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error {
+	b.deleteAppParams++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AppIndex]basics.AppParams, len(acct.AppParams))
+	for k, v := range acct.AppParams {
+		m[k] = v
+	}
+	delete(m, aidx)
+	acct.AppParams = m
+	return b.access.putAccount(addr, acct)
+}
+func (b *mockCreatableBalances) DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error {
+	b.deleteAppLocalState++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AppIndex]basics.AppLocalState, len(acct.AppLocalStates))
+	for k, v := range acct.AppLocalStates {
+		m[k] = v
+	}
+	delete(m, aidx)
+	acct.AppLocalStates = m
+	return b.access.putAccount(addr, acct)
+}
+func (b *mockCreatableBalances) DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error {
+	b.deleteAssetHolding++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AssetIndex]basics.AssetHolding, len(acct.Assets))
+	for k, v := range acct.Assets {
+		m[k] = v
+	}
+	delete(m, aidx)
+	acct.Assets = m
+	return b.access.putAccount(addr, acct)
+}
+func (b *mockCreatableBalances) DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error {
+	b.deleteAssetParams++
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return err
+	}
+	m := make(map[basics.AssetIndex]basics.AssetParams, len(acct.AssetParams))
+	for k, v := range acct.AssetParams {
+		m[k] = v
+	}
+	delete(m, aidx)
+	acct.AssetParams = m
+	return b.access.putAccount(addr, acct)
+}
+
+func (b *mockCreatableBalances) HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (ok bool, err error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	_, ok = acct.AppLocalStates[aidx]
+	return
+}
+
+func (b *mockCreatableBalances) HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (ok bool, err error) {
+	acct, err := b.access.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	_, ok = acct.AssetParams[aidx]
+	return
 }

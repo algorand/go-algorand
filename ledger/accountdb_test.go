@@ -21,6 +21,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -42,6 +44,22 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool) {
+	newDB, err := accountsInit(tx, initAccounts, proto)
+	require.NoError(tb, err)
+
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(tb, err)
+
+	err = accountsCreateResourceTable(context.Background(), tx)
+	require.NoError(tb, err)
+
+	err = performResourceTableMigration(context.Background(), tx, nil)
+	require.NoError(tb, err)
+
+	return newDB
+}
+
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
 	r, err := accountsRound(tx)
 	require.NoError(t, err)
@@ -51,17 +69,14 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	defer aq.close()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	err = accountsAddNormalizedBalance(tx, proto)
-	require.NoError(t, err)
-
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
+		expected := ledgercore.ToAccountData(data)
 		pad, err := aq.lookup(addr)
-		d := pad.accountData
 		require.NoError(t, err)
-		require.Equal(t, d, data)
+		d := pad.accountData.GetLedgerCoreAccountData()
+		require.Equal(t, d, expected)
 
 		switch d.Status {
 		case basics.Online:
@@ -90,12 +105,15 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	d, err := aq.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
 	require.Equal(t, rnd, d.round)
-	require.Equal(t, d.accountData, basics.AccountData{})
+	require.Equal(t, d.accountData, baseAccountData{})
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	onlineAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
 	for addr, data := range accts {
 		if data.Status == basics.Online {
-			onlineAccounts[addr] = accountDataToOnline(addr, &data, proto)
+			ad := ledgercore.ToAccountData(data)
+			onlineAccounts[addr] = accountDataToOnline(addr, ad, proto)
 		}
 	}
 
@@ -147,9 +165,9 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	newDB, err := accountsInit(tx, accts, proto)
-	require.NoError(t, err)
+	newDB := accountsInitTest(t, tx, accts, proto)
 	require.True(t, newDB)
+
 	checkAccounts(t, tx, 0, accts)
 
 	newDB, err = accountsInit(tx, accts, proto)
@@ -159,71 +177,39 @@ func TestAccountDBInit(t *testing.T) {
 }
 
 // creatablesFromUpdates calculates creatables from updates
-func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
-	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	for i := 0; i < updates.Len(); i++ {
-		addr, update := updates.GetByIdx(i)
-		// no sets in Go, so iterate over
-		if ad, ok := base[addr]; ok {
-			for idx := range ad.Assets {
-				if _, ok := update.Assets[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-						Ctype:   basics.AssetCreatable,
-						Created: false, // exists in base, not in new => deleted
-						Creator: addr,
-					}
-				}
-			}
-			for idx := range ad.AppParams {
-				if _, ok := update.AppParams[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-						Ctype:   basics.AppCreatable,
-						Created: false, // exists in base, not in new => deleted
-						Creator: addr,
-					}
-				}
-			}
+func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.NewAccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
+	known := make(map[basics.CreatableIndex]struct{}, len(seen))
+	for aidx := range seen {
+		known[aidx] = struct{}{}
+	}
+	for _, ad := range base {
+		for aidx := range ad.AppParams {
+			known[basics.CreatableIndex(aidx)] = struct{}{}
 		}
-		for idx := range update.Assets {
-			if seen[basics.CreatableIndex(idx)] {
-				continue
-			}
-			ad, found := base[addr]
-			if found {
-				if _, ok := ad.Assets[idx]; !ok {
-					found = false
-				}
-			}
-			if !found {
-				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-					Ctype:   basics.AssetCreatable,
-					Created: true, // exists in new, not in base => created
-					Creator: addr,
-				}
-			}
-			seen[basics.CreatableIndex(idx)] = true
-		}
-		for idx := range update.AppParams {
-			if seen[basics.CreatableIndex(idx)] {
-				continue
-			}
-			ad, found := base[addr]
-			if found {
-				if _, ok := ad.AppParams[idx]; !ok {
-					found = false
-				}
-			}
-			if !found {
-				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
-					Ctype:   basics.AppCreatable,
-					Created: true, // exists in new, not in base => created
-					Creator: addr,
-				}
-			}
-			seen[basics.CreatableIndex(idx)] = true
+		for aidx := range ad.AssetParams {
+			known[basics.CreatableIndex(aidx)] = struct{}{}
 		}
 	}
-	return creatables
+	return updates.ToModifiedCreatables(known)
+}
+
+func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.NewAccountDeltas) map[basics.Address]basics.AccountData {
+	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
+	for addr, ad := range base {
+		result[addr] = ad
+	}
+
+	for i := 0; i < deltas.Len(); i++ {
+		addr, _ := deltas.GetByIdx(i)
+		ad, ok := result[addr]
+		if !ok {
+			ad, _ = deltas.GetBasicsAccountData(addr)
+		} else {
+			ad = deltas.ApplyToBasicsAccountData(addr, ad)
+		}
+		result[addr] = ad
+	}
+	return result
 }
 
 func TestAccountDBRound(t *testing.T) {
@@ -240,46 +226,65 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	_, err = accountsInit(tx, accts, proto)
-	require.NoError(t, err)
+	accountsInitTest(t, tx, accts, proto)
 	checkAccounts(t, tx, 0, accts)
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 
 	// used to determine how many creatables element will be in the test per iteration
-	numElementsPerSegement := 10
+	numElementsPerSegment := 10
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
-	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+	ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
-	var newaccts map[basics.Address]basics.AccountData
+	var baseResources lruResources
+	var newacctsTotals map[basics.Address]ledgercore.AccountData
 	baseAccounts.init(nil, 100, 80)
+	baseResources.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
-		var updates ledgercore.AccountDeltas
-		updates, newaccts, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
+		var updates ledgercore.NewAccountDeltas
+		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
 		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
-		accts = newaccts
+		accts = applyPartialDeltas(accts, updates)
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
+			expectedDbImage, numElementsPerSegment)
 
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), true, baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
+
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
+
+		knownAddresses := make(map[basics.Address]int64)
+		for _, delta := range updatesCnt.deltas {
+			knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
+		}
+
+		err = resourceUpdatesCnt.resourcesLoadOld(tx, knownAddresses)
+		require.NoError(t, err)
+
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
+		require.Equal(t, updatesCnt.len(), len(updatedAccts))
+		numResUpdates := 0
+		for _, rs := range updatesResources {
+			numResUpdates += len(rs)
+		}
+		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
+
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
 	}
 
 	// test the accounts totals
-	var updates ledgercore.AccountDeltas
-	for addr, acctData := range newaccts {
+	var updates ledgercore.NewAccountDeltas
+	for addr, acctData := range newacctsTotals {
 		updates.Upsert(addr, acctData)
 	}
 
@@ -289,7 +294,110 @@ func TestAccountDBRound(t *testing.T) {
 	require.Equal(t, expectedTotals, actualTotals)
 }
 
-// checkCreatables compares the expected database image to the actual databse content
+// TestAccountDBInMemoryAcct checks in-memory only account modifications are handled correctly by
+// makeCompactAccountDeltas, makeCompactResourceDeltas and accountsNewRound
+func TestAccountDBInMemoryAcct(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	type testfunc func(basics.Address) ([]ledgercore.NewAccountDeltas, int, int)
+	var tests = []testfunc{
+		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+			const numRounds = 4
+			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
+			accountDeltas[0].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+			// transfer some asset
+			accountDeltas[1].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+			// close out the asset
+			accountDeltas[2].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+			// close the account
+			accountDeltas[3].Upsert(addr, ledgercore.AccountData{})
+			return accountDeltas, 2, 3
+		},
+		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+			const numRounds = 4
+			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
+			accountDeltas[1].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+			// close out the asset
+			accountDeltas[2].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+			// close the account
+			accountDeltas[3].Upsert(addr, ledgercore.AccountData{})
+			return accountDeltas, 2, 2
+		},
+	}
+
+	for i, test := range tests {
+
+		dbs, _ := dbOpenTest(t, true)
+		setDbLogging(t, dbs)
+		defer dbs.Close()
+
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+		defer tx.Rollback()
+
+		accts := ledgertesting.RandomAccounts(1, true)
+		accountsInitTest(t, tx, accts, proto)
+		addr := ledgertesting.RandomAddress()
+
+		// lastCreatableID stores asset or app max used index to get rid of conflicts
+		var baseAccounts lruAccounts
+		var baseResources lruResources
+		baseAccounts.init(nil, 100, 80)
+		baseResources.init(nil, 100, 80)
+
+		t.Run(fmt.Sprintf("test%d", i), func(t *testing.T) {
+
+			accountDeltas, numAcctDeltas, numResDeltas := test(addr)
+			lastRound := uint64(len(accountDeltas) + 1)
+
+			outAccountDeltas := makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
+			require.Equal(t, 1, len(outAccountDeltas.deltas))
+			require.Equal(t, accountDelta{newAcct: baseAccountData{UpdateRound: lastRound}, nAcctDeltas: numAcctDeltas, address: addr}, outAccountDeltas.deltas[0])
+			require.Equal(t, 1, len(outAccountDeltas.misses))
+
+			outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+			require.Equal(t, 1, len(outResourcesDeltas.deltas))
+			require.Equal(t,
+				resourceDelta{
+					oldResource: persistedResourcesData{aidx: 100}, newResource: makeResourcesData(lastRound - 1),
+					nAcctDeltas: numResDeltas, address: addr,
+				},
+				outResourcesDeltas.deltas[0],
+			)
+			require.Equal(t, 1, len(outAccountDeltas.misses))
+
+			err = outAccountDeltas.accountsLoadOld(tx)
+			require.NoError(t, err)
+
+			knownAddresses := make(map[basics.Address]int64)
+			for _, delta := range outAccountDeltas.deltas {
+				knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
+			}
+
+			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
+			require.NoError(t, err)
+
+			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(lastRound))
+			require.NoError(t, err)
+			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
+			require.Equal(t,
+				persistedAccountData{addr: addr, round: basics.Round(lastRound)},
+				updatedAccts[0],
+			)
+
+			require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
+			require.Equal(t,
+				persistedResourcesData{addrid: 0, aidx: 100, data: makeResourcesData(0), round: basics.Round(lastRound)},
+				updatesResources[addr][0],
+			)
+		})
+	}
+}
+
+// checkCreatables compares the expected database image to the actual database content
 func checkCreatables(t *testing.T,
 	tx *sql.Tx, iteration int,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
@@ -349,7 +457,7 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 		if ctb.Created &&
 			// Always delete the first element, to make sure at least one
 			// element is always deleted.
-			(i == delSegmentStart || 1 == (crypto.RandUint64()%2)) {
+			(i == delSegmentStart || (crypto.RandUint64()%2) == 1) {
 			ctb.Created = false
 			newSample[crtbsList[i]] = ctb
 			delete(expectedDbImage, crtbsList[i])
@@ -461,10 +569,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	_, err = accountsInit(tx, updates, proto)
-	require.NoError(b, err)
-	err = accountsAddNormalizedBalance(tx, proto)
-	require.NoError(b, err)
+	accountsInitTest(b, tx, updates, proto)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
@@ -592,6 +697,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 
 		// read all the accounts to obtain the addrs.
 		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
+		require.NoError(b, err)
 		defer rows.Close()
 		for rows.Next() {
 			var addrbuf []byte
@@ -634,7 +740,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 			}
 
 		}
-		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+		b.ReportMetric(float64(int(time.Since(startTime))/b.N), "ns/acct_update")
 	})
 
 	b.Run("ByRowID", func(b *testing.B) {
@@ -660,7 +766,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 				}
 			}
 		}
-		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+		b.ReportMetric(float64(int(time.Since(startTime))/b.N), "ns/acct_update")
 
 	})
 
@@ -684,10 +790,7 @@ func TestAccountsReencoding(t *testing.T) {
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
-		if err != nil {
-			return err
-		}
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 
 		for _, oldAccData := range oldEncodedAccountsData {
 			addr := ledgertesting.RandomAddress()
@@ -764,10 +867,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
-		if err != nil {
-			return err
-		}
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		return nil
 	})
 	require.NoError(t, err)
@@ -820,11 +920,11 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KSize = chunkSize
 			last64KAccountCreationTime = time.Duration(0)
 		}
-		var balances catchpointFileBalancesChunk
-		balances.Balances = make([]encodedBalanceRecord, chunkSize)
+		var balances catchpointFileBalancesChunkV6
+		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
-			var randomAccount encodedBalanceRecord
-			accountData := basics.AccountData{RewardsBase: accountsLoaded + i}
+			var randomAccount encodedBalanceRecordV6
+			accountData := baseAccountData{RewardsBase: accountsLoaded + i}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
@@ -833,11 +933,12 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			}
 			balances.Balances[i] = randomAccount
 		}
-		balanceLoopDuration := time.Now().Sub(balancesLoopStart)
+		balanceLoopDuration := time.Since(balancesLoopStart)
 		last64KAccountCreationTime += balanceLoopDuration
 		accountsGenerationDuration += balanceLoopDuration
 
-		normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, proto)
+		normalizedAccountBalances, err := prepareNormalizedBalancesV6(balances.Balances, proto)
+		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
@@ -848,13 +949,13 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		accountsLoaded += chunkSize
 	}
 	if !last64KStart.IsZero() {
-		last64KDuration := time.Now().Sub(last64KStart) - last64KAccountCreationTime
+		last64KDuration := time.Since(last64KStart) - last64KAccountCreationTime
 		fmt.Printf("%-82s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
 	stats, err := l.trackerDBs.Wdb.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-82sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
-	b.ReportMetric(float64(b.N)/float64((time.Now().Sub(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
+	b.ReportMetric(float64(b.N)/float64((time.Since(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
 }
 
 func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
@@ -873,6 +974,33 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 	}
 }
 
+// upsert updates existing or inserts a new entry
+func (a *compactResourcesDeltas) upsert(delta resourceDelta) {
+	if idx, exist := a.cache[accountCreatable{address: delta.address, index: delta.oldResource.aidx}]; exist {
+		a.deltas[idx] = delta
+		return
+	}
+	a.insert(delta)
+}
+
+// upsertOld updates existing or inserts a new partial entry with only old field filled
+func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
+	addr := old.addr
+	if idx, exist := a.cache[addr]; exist {
+		a.deltas[idx].oldAcct = old
+		return
+	}
+	a.insert(accountDelta{oldAcct: old, address: old.addr})
+}
+
+// upsert updates existing or inserts a new entry
+func (a *compactAccountDeltas) upsert(addr basics.Address, delta accountDelta) {
+	if idx, exist := a.cache[addr]; exist { // nil map lookup is OK
+		a.deltas[idx] = delta
+		return
+	}
+	a.insert(delta)
+}
 func TestCompactAccountDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -891,26 +1019,26 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(0, ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
-	sample1 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
+	sample1 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}, address: addr}
 	ad.upsert(addr, sample1)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
 	a.Equal(sample1, data)
 
 	a.Equal(1, ad.len())
-	address, data := ad.getByIdx(0)
-	a.Equal(addr, address)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
 	a.Equal(sample1, data)
 
-	sample2 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
+	sample2 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}, address: addr}
 	ad.upsert(addr, sample2)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
 	a.Equal(sample2, data)
 
 	a.Equal(1, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
 	a.Equal(sample2, data)
 
 	ad.update(idx, sample2)
@@ -919,40 +1047,1080 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(sample2, data)
 
 	a.Equal(1, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
 	a.Equal(sample2, data)
 
-	old1 := persistedAccountData{addr: addr, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old1 := persistedAccountData{addr: addr, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old1)
 	a.Equal(1, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
-	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1, address: addr}, data)
 
 	addr1 := ledgertesting.RandomAddress()
-	old2 := persistedAccountData{addr: addr1, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old2 := persistedAccountData{addr: addr1, accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old2)
 	a.Equal(2, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
-	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old1, address: addr}, data)
 
-	address, data = ad.getByIdx(1)
-	a.Equal(addr1, address)
-	a.Equal(accountDelta{old: old2}, data)
+	data = ad.getByIdx(1)
+	a.Equal(addr1, data.oldAcct.addr)
+	a.Equal(accountDelta{oldAcct: old2, address: addr1}, data)
+
+	// apply old on empty delta object, expect no changes
+	ad.updateOld(0, old2)
+	a.Equal(2, ad.len())
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(accountDelta{newAcct: sample2.newAcct, oldAcct: old2, address: addr}, data)
+
+	addr2 := ledgertesting.RandomAddress()
+	sample2.address = addr2
+	idx = ad.insert(sample2)
+	a.Equal(3, ad.len())
+	a.Equal(2, idx)
+	data = ad.getByIdx(idx)
+	a.Equal(addr2, data.address)
+	a.Equal(sample2, data)
+}
+
+// upsertOld updates existing or inserts a new partial entry with only old field filled
+func (a *compactResourcesDeltas) upsertOld(addr basics.Address, old persistedResourcesData) {
+	if idx, exist := a.cache[accountCreatable{address: addr, index: old.aidx}]; exist {
+		a.deltas[idx].oldResource = old
+		return
+	}
+	idx := a.insert(resourceDelta{oldResource: old, address: addr})
+	a.deltas[idx].address = addr
+}
+func TestCompactResourceDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	ad := compactResourcesDeltas{}
+	data, idx := ad.get(basics.Address{}, 0)
+	a.Equal(-1, idx)
+	a.Equal(resourceDelta{}, data)
+
+	addr := ledgertesting.RandomAddress()
+	data, idx = ad.get(addr, 0)
+	a.Equal(-1, idx)
+	a.Equal(resourceDelta{}, data)
+
+	a.Equal(0, ad.len())
+	a.Panics(func() { ad.getByIdx(0) })
+
+	sample1 := resourceDelta{newResource: resourcesData{Total: 123}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
+	ad.upsert(sample1)
+	data, idx = ad.get(addr, 1)
+	a.NotEqual(-1, idx)
+	a.Equal(sample1, data)
+
+	a.Equal(1, ad.len())
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(sample1, data)
+
+	sample2 := resourceDelta{newResource: resourcesData{Total: 456}, address: addr, oldResource: persistedResourcesData{aidx: 1}}
+	ad.upsert(sample2)
+	data, idx = ad.get(addr, 1)
+	a.NotEqual(-1, idx)
+	a.Equal(sample2, data)
+
+	a.Equal(1, ad.len())
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(sample2, data)
+
+	ad.update(idx, sample2)
+	data, idx2 := ad.get(addr, 1)
+	a.Equal(idx, idx2)
+	a.Equal(sample2, data)
+
+	a.Equal(1, ad.len())
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(sample2, data)
+
+	old1 := persistedResourcesData{addrid: 111, aidx: 1, data: resourcesData{Total: 789}}
+	ad.upsertOld(addr, old1)
+	a.Equal(1, ad.len())
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
+
+	addr1 := ledgertesting.RandomAddress()
+	old2 := persistedResourcesData{addrid: 222, aidx: 2, data: resourcesData{Total: 789}}
+	ad.upsertOld(addr1, old2)
+	a.Equal(2, ad.len())
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
+
+	data = ad.getByIdx(1)
+	a.Equal(addr1, data.address)
+	a.Equal(resourceDelta{oldResource: old2, address: addr1}, data)
 
 	ad.updateOld(0, old2)
 	a.Equal(2, ad.len())
-	address, data = ad.getByIdx(0)
-	a.Equal(addr, address)
-	a.Equal(accountDelta{new: sample2.new, old: old2}, data)
+	data = ad.getByIdx(0)
+	a.Equal(addr, data.address)
+	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old2, address: addr}, data)
 
 	addr2 := ledgertesting.RandomAddress()
-	idx = ad.insert(addr2, sample2)
+	sample2.oldResource.aidx = 2
+	sample2.address = addr2
+	idx = ad.insert(sample2)
 	a.Equal(3, ad.len())
 	a.Equal(2, idx)
-	address, data = ad.getByIdx(idx)
-	a.Equal(addr2, address)
+	data = ad.getByIdx(idx)
+	a.Equal(addr2, data.address)
+	cachedData, pos := ad.get(addr2, 2)
+	a.Equal(2, pos)
+	a.Equal(data, cachedData)
 	a.Equal(sample2, data)
+}
+
+func TestResourcesDataApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	rd := resourcesData{}
+	a.False(rd.IsApp())
+	a.True(rd.IsEmpty())
+
+	rd = makeResourcesData(1)
+	a.False(rd.IsApp())
+	a.False(rd.IsHolding())
+	a.False(rd.IsOwning())
+	a.True(rd.IsEmpty())
+
+	// check empty
+	appParamsEmpty := basics.AppParams{}
+	rd = resourcesData{}
+	rd.SetAppParams(appParamsEmpty, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+
+	appLocalEmpty := basics.AppLocalState{}
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	a.True(rd.IsApp())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check both empty
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check empty states + non-empty params
+	appParams := ledgertesting.RandomAppParams()
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParams, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	appState := ledgertesting.RandomAppLocalState()
+	rd.SetAppLocalState(appState)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParams, rd.GetAppParams())
+	a.Equal(appState, rd.GetAppLocalState())
+
+	// check ClearAppLocalState
+	rd.ClearAppLocalState()
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParams, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check ClearAppParams
+	rd.SetAppLocalState(appState)
+	rd.ClearAppParams()
+	a.True(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appState, rd.GetAppLocalState())
+
+	// check both clear
+	rd.ClearAppLocalState()
+	a.False(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	// check params clear when non-empty params and empty holding
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParams, true)
+	rd.ClearAppParams()
+	a.True(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+	a.Equal(appParamsEmpty, rd.GetAppParams())
+	a.Equal(appLocalEmpty, rd.GetAppLocalState())
+
+	rd = resourcesData{}
+	rd.SetAppLocalState(appLocalEmpty)
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsApp())
+	a.False(rd.IsEmpty())
+	a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
+	rd.ClearAppLocalState()
+	a.False(rd.IsApp())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
+	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+
+	// check migration flow (accountDataResources)
+	// 1. both exist and empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 2. both exist and not empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 3. both exist: holding not empty, param is empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 4. both exist: holding empty, param is not empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 5. holding does not exist and params is empty
+	rd = makeResourcesData(0)
+	rd.SetAppParams(appParamsEmpty, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 6. holding does not exist and params is not empty
+	rd = makeResourcesData(0)
+	rd.SetAppParams(appParams, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 7. holding exist and not empty and params does not exist
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	a.True(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 8. both do not exist
+	rd = makeResourcesData(0)
+	a.False(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
+
+}
+
+func TestResourcesDataAsset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	rd := resourcesData{}
+	a.False(rd.IsAsset())
+	a.True(rd.IsEmpty())
+
+	rd = makeResourcesData(1)
+	a.False(rd.IsAsset())
+	a.False(rd.IsHolding())
+	a.False(rd.IsOwning())
+	a.True(rd.IsEmpty())
+
+	// check empty
+	assetParamsEmpty := basics.AssetParams{}
+	rd = resourcesData{}
+	rd.SetAssetParams(assetParamsEmpty, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+
+	assetHoldingEmpty := basics.AssetHolding{}
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	a.True(rd.IsAsset())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check both empty
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check empty states + non-empty params
+	assetParams := ledgertesting.RandomAssetParams()
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetParams, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	assetHolding := ledgertesting.RandomAssetHolding(true)
+	rd.SetAssetHolding(assetHolding)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetParams, rd.GetAssetParams())
+	a.Equal(assetHolding, rd.GetAssetHolding())
+
+	// check ClearAssetHolding
+	rd.ClearAssetHolding()
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetParams, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check ClearAssetParams
+	rd.SetAssetHolding(assetHolding)
+	rd.ClearAssetParams()
+	a.True(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHolding, rd.GetAssetHolding())
+
+	// check both clear
+	rd.ClearAssetHolding()
+	a.False(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	// check params clear when non-empty params and empty holding
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParams, true)
+	rd.ClearAssetParams()
+	a.True(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+	a.Equal(assetParamsEmpty, rd.GetAssetParams())
+	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
+
+	rd = resourcesData{}
+	rd.SetAssetHolding(assetHoldingEmpty)
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsAsset())
+	a.False(rd.IsEmpty())
+	a.Equal(rd.ResourceFlags, resourceFlagsEmptyAsset)
+	rd.ClearAssetHolding()
+	a.False(rd.IsAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
+	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+
+	// check migration operations (accountDataResources)
+	// 1. both exist and empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 2. both exist and not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 3. both exist: holding not empty, param is empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 4. both exist: holding empty, param is not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 5. holding does not exist and params is empty
+	rd = makeResourcesData(0)
+	rd.SetAssetParams(assetParamsEmpty, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 6. holding does not exist and params is not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetParams(assetParams, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 7. holding exist and not empty and params does not exist
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	a.True(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 8. both do not exist
+	rd = makeResourcesData(0)
+	a.False(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
+}
+
+// TestResourcesDataSetData checks combinations of old/new values when
+// updating resourceData from resourceDelta
+func TestResourcesDataSetData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	type deltaCode int
+	const (
+		tri deltaCode = iota + 1
+		del
+		emp
+		act
+	)
+
+	// apply deltas encoded as deltaCode to a base resourcesData for both apps and assets
+	apply := func(t *testing.T, base resourcesData, testType basics.CreatableType, pcode, hcode deltaCode) resourcesData {
+		if testType == basics.AssetCreatable {
+			var p ledgercore.AssetParamsDelta
+			var h ledgercore.AssetHoldingDelta
+			switch pcode {
+			case tri:
+				break
+			case del:
+				p = ledgercore.AssetParamsDelta{Deleted: true}
+			case emp:
+				p = ledgercore.AssetParamsDelta{Params: &basics.AssetParams{}}
+			case act:
+				p = ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
+			default:
+				t.Logf("invalid pcode: %d", pcode)
+				t.Fail()
+			}
+			switch hcode {
+			case tri:
+				break
+			case del:
+				h = ledgercore.AssetHoldingDelta{Deleted: true}
+			case emp:
+				h = ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{}}
+			case act:
+				h = ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 555}}
+			default:
+				t.Logf("invalid hcode: %d", hcode)
+				t.Fail()
+			}
+			base.SetAssetData(p, h)
+		} else {
+			var p ledgercore.AppParamsDelta
+			var h ledgercore.AppLocalStateDelta
+			switch pcode {
+			case tri:
+				break
+			case del:
+				p = ledgercore.AppParamsDelta{Deleted: true}
+			case emp:
+				p = ledgercore.AppParamsDelta{Params: &basics.AppParams{}}
+			case act:
+				p = ledgercore.AppParamsDelta{Params: &basics.AppParams{ClearStateProgram: []byte{4, 5, 6}}}
+			default:
+				t.Logf("invalid pcode: %d", pcode)
+				t.Fail()
+			}
+			switch hcode {
+			case tri:
+				break
+			case del:
+				h = ledgercore.AppLocalStateDelta{Deleted: true}
+			case emp:
+				h = ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{}}
+			case act:
+				h = ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumByteSlice: 5}}}
+			default:
+				t.Logf("invalid hcode: %d", hcode)
+				t.Fail()
+			}
+			base.SetAppData(p, h)
+		}
+
+		return base
+	}
+
+	itb := func(i int) (b bool) {
+		return i != 0
+	}
+
+	type testcase struct {
+		p             deltaCode
+		h             deltaCode
+		isAsset       int
+		isOwning      int
+		isHolding     int
+		isEmptyFields int
+		isEmpty       int
+	}
+
+	empty := func(testType basics.CreatableType) resourcesData {
+		return makeResourcesData(0)
+	}
+	emptyParamsNoHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetParams(basics.AssetParams{}, false)
+		} else {
+			rd.SetAppParams(basics.AppParams{}, false)
+		}
+		return rd
+	}
+	emptyParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+			rd.SetAssetParams(basics.AssetParams{}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+			rd.SetAppParams(basics.AppParams{}, true)
+		}
+		return rd
+	}
+	emptyParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+			rd.SetAssetParams(basics.AssetParams{}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+			rd.SetAppParams(basics.AppParams{}, true)
+		}
+		return rd
+	}
+	paramsNoHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, false)
+		} else {
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, false)
+		}
+		return rd
+	}
+	paramsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, true)
+		}
+		return rd
+	}
+	paramsAndHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, true)
+		}
+		return rd
+	}
+	noParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+		}
+		return rd
+	}
+	noParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+		}
+		return rd
+	}
+
+	var tests = []struct {
+		name      string
+		baseRD    func(testType basics.CreatableType) resourcesData
+		testcases []testcase
+	}{
+		{
+			"empty_base", empty,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 0, 0, 0, 1, 1},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
+
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+
+		{
+			"empty_params_no_holding", emptyParamsNoHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 0, 1, 0},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
+
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"empty_params_empty_holding", emptyParamsEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 1, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"empty_params_not_empty_holding", emptyParamsNotEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"params_no_holding", paramsNoHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 0, 0, 0},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
+
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"params_empty_holding", paramsEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"params_and_holding", paramsAndHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"no_params_empty_holding", noParamsEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 0, 1, 1, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"no_params_not_empty_holding", noParamsNotEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 0, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+	}
+	for _, testType := range []basics.CreatableType{basics.AssetCreatable, basics.AppCreatable} {
+		for _, test := range tests {
+			var testTypeStr string
+			if testType == basics.AssetCreatable {
+				testTypeStr = "asset"
+			} else {
+				testTypeStr = "app"
+			}
+			t.Run(fmt.Sprintf("test_%s_%s", testTypeStr, test.name), func(t *testing.T) {
+				for i, ts := range test.testcases {
+					t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+						rd := test.baseRD(testType)
+						rd = apply(t, rd, testType, ts.p, ts.h)
+						if testType == basics.AssetCreatable {
+							a.Equal(itb(ts.isAsset), rd.IsAsset())
+							a.Equal(itb(ts.isEmptyFields), rd.IsEmptyAssetFields())
+							a.False(rd.IsApp())
+							a.True(rd.IsEmptyAppFields())
+						} else {
+							a.Equal(itb(ts.isAsset), rd.IsApp())
+							a.Equal(itb(ts.isEmptyFields), rd.IsEmptyAppFields())
+							a.False(rd.IsAsset())
+							a.True(rd.IsEmptyAssetFields())
+						}
+						a.Equal(itb(ts.isOwning), rd.IsOwning())
+						a.Equal(itb(ts.isHolding), rd.IsHolding())
+						a.Equal(itb(ts.isEmpty), rd.IsEmpty())
+					})
+				}
+			})
+		}
+	}
+}
+
+func TestBaseAccountDataIsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	positiveTesting := func(t *testing.T) {
+		var ba baseAccountData
+		require.True(t, ba.IsEmpty())
+		for i := 0; i < 20; i++ {
+			h := crypto.Hash([]byte{byte(i)})
+			rnd := binary.BigEndian.Uint64(h[:])
+			ba.UpdateRound = rnd
+			require.True(t, ba.IsEmpty())
+		}
+	}
+	var empty baseAccountData
+	negativeTesting := func(t *testing.T) {
+		for i := 0; i < 10000; i++ {
+			randObj, _ := protocol.RandomizeObjectField(&baseAccountData{})
+			ba := randObj.(*baseAccountData)
+			if *ba == empty || ba.UpdateRound != 0 {
+				continue
+			}
+			require.False(t, ba.IsEmpty(), "base account : %v", ba)
+		}
+	}
+	structureTesting := func(t *testing.T) {
+		encoding, err := json.Marshal(&empty)
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"UpdateRound":0}`
+		require.NoError(t, err)
+		require.Equal(t, expectedEncoding, string(encoding))
+	}
+	t.Run("Positive", positiveTesting)
+	t.Run("Negative", negativeTesting)
+	t.Run("Structure", structureTesting)
+
+}
+
+func TestLookupAccountAddressFromAddressID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	addrs := make([]basics.Address, 100)
+	for i := range addrs {
+		addrs[i] = ledgertesting.RandomAddress()
+	}
+	addrsids := make(map[basics.Address]int64)
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+
+		for i := range addrs {
+			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
+			if err != nil {
+				return err
+			}
+			rowid, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			addrsids[addrs[i]] = rowid
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		for addr, addrid := range addrsids {
+			retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, addrid)
+			if err != nil {
+				return err
+			}
+			if retAddr != addr {
+				return fmt.Errorf("mismatching addresses")
+			}
+		}
+		// test fail case:
+		retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, -1)
+
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("unexpected error : %w", err)
+		}
+		if !retAddr.IsZero() {
+			return fmt.Errorf("unexpected address; should have been empty")
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }

@@ -260,8 +260,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	}
 
 	myLedger := v2.Node.Ledger()
-	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, addr)
+	record, lastRound, err := myLedger.LookupLatest(addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -855,15 +854,16 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	}
 
 	lastRound := ledger.Latest()
-	record, _, err := ledger.LookupWithoutRewards(lastRound, creator)
+
+	record, err := ledger.LookupResource(lastRound, creator, basics.CreatableIndex(applicationID), basics.AppCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	appParams, ok := record.AppParams[appIdx]
-	if !ok {
+	if record.AppParams == nil {
 		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
 	}
+	appParams := *record.AppParams
 	app := AppParamsToApplication(creator.String(), appIdx, &appParams)
 	response := generated.ApplicationResponse(app)
 	return ctx.JSON(http.StatusOK, response)
@@ -883,16 +883,15 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	}
 
 	lastRound := ledger.Latest()
-	record, _, err := ledger.LookupWithoutRewards(lastRound, creator)
+	record, err := ledger.LookupResource(lastRound, creator, basics.CreatableIndex(assetID), basics.AssetCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	assetParams, ok := record.AssetParams[assetIdx]
-	if !ok {
+	if record.AssetParams == nil {
 		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 	}
-
+	assetParams := *record.AssetParams
 	asset := AssetParamsToAsset(creator.String(), assetIdx, &assetParams)
 	response := generated.AssetResponse(asset)
 	return ctx.JSON(http.StatusOK, response)

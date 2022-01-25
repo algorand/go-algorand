@@ -158,7 +158,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
-		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && len(fileBytes) > 0 {
+		if time.Since(lastProgressUpdate) > 50*time.Millisecond && len(fileBytes) > 0 {
 			lastProgressUpdate = time.Now()
 			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(len(fileBytes))), 50, int64(progress))
 		}
@@ -230,8 +230,10 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		}
 
 		balancesTable := "accountbase"
+		resourcesTable := "resources"
 		if fileHeader.Version != 0 {
 			balancesTable = "catchpointbalances"
+			resourcesTable = "catchpointresources"
 		}
 
 		var rowsCount int64
@@ -240,32 +242,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			return
 		}
 
-		rows, err := tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
-		if err != nil {
-			return
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var addrbuf []byte
-			var buf []byte
-			err = rows.Scan(&addrbuf, &buf)
-			if err != nil {
-				return
-			}
-
-			var data basics.AccountData
-			err = protocol.Decode(buf, &data)
-			if err != nil {
-				return
-			}
-
-			var addr basics.Address
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				return
-			}
-			copy(addr[:], addrbuf)
+		printer := func(addr basics.Address, data interface{}, progress uint64) (err error) {
 			jsonData, err := json.Marshal(data)
 			if err != nil {
 				return err
@@ -273,16 +250,71 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 			fmt.Fprintf(fileWriter, "%v : %s\n", addr, string(jsonData))
 
-			if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
+			if time.Since(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
 				lastProgressUpdate = time.Now()
 				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
 			}
-			progress++
+			return nil
 		}
 
-		err = rows.Err()
+		if fileHeader.Version < ledger.CatchpointFileVersionV6 {
+			var rows *sql.Rows
+			rows, err = tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
+			if err != nil {
+				return
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var addrbuf []byte
+				var buf []byte
+				err = rows.Scan(&addrbuf, &buf)
+				if err != nil {
+					return
+				}
+
+				var addr basics.Address
+				if len(addrbuf) != len(addr) {
+					err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+					return
+				}
+				copy(addr[:], addrbuf)
+
+				var data basics.AccountData
+				err = protocol.Decode(buf, &data)
+				if err != nil {
+					return
+				}
+
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+
+				progress++
+			}
+			err = rows.Err()
+		} else {
+			acctCount := 0
+			acctCb := func(addr basics.Address, data basics.AccountData) {
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+				progress++
+				acctCount++
+			}
+			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			if err != nil {
+				return
+			}
+			if acctCount != int(rowsCount) {
+				return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
+			}
+		}
+
 		// increase the deadline warning to disable the warning message.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
-		return nil
+		return err
 	})
 }

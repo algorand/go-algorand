@@ -395,6 +395,10 @@ type ConsensusParams struct {
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
 
+	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
+	// in a separate table.
+	EnableAccountDataResourceSeparation bool
+
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 }
@@ -1056,6 +1060,12 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 6
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	// Enable extended application storage; binaries that contain support for this
+	// flag would already be restructuring their internal storage for extended
+	// application storage, and therefore would not produce catchpoints and/or
+	// catchpoint labels prior to this feature being enabled.
+	vFuture.EnableAccountDataResourceSeparation = true
 
 	vFuture.RewardsCalculationFix = true
 

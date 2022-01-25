@@ -20,12 +20,16 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -37,6 +41,8 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt          *sql.Stmt
 	lookupStmt                  *sql.Stmt
+	lookupResourcesStmt         *sql.Stmt
+	lookupAllResourcesStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
 	deleteStoredCatchpoint      *sql.Stmt
 	insertStoredCatchpoint      *sql.Stmt
@@ -101,6 +107,15 @@ var createOnlineAccountIndex = []string{
 	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
+var createResourcesTable = []string{
+	`CREATE TABLE IF NOT EXISTS resources (
+		addrid INTEGER NOT NULL,
+		aidx INTEGER NOT NULL,
+		rtype INTEGER NOT NULL,
+		data BLOB NOT NULL,
+		PRIMARY KEY (addrid, aidx, rtype) ) WITHOUT ROWID`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -114,7 +129,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(5)
+var accountDBVersion = int32(6)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -124,7 +139,7 @@ type persistedAccountData struct {
 	// data structure in queues directly, without "attaching" the address as the address as the map key.
 	addr basics.Address
 	// The underlaying account data
-	accountData basics.AccountData
+	accountData baseAccountData
 	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
 	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
 	rowid int64
@@ -137,24 +152,86 @@ type persistedAccountData struct {
 	round basics.Round
 }
 
-// compactAccountDeltas and accountDelta is an extension to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
+//msgp:ignore persistedResourcesData
+type persistedResourcesData struct {
+	// addrid is the rowid of the account address that holds this resource.
+	addrid int64
+	// creatable index
+	aidx basics.CreatableIndex
+	// rtype is the resource type ( asset / app )
+	rtype basics.CreatableType
+	// actual resource data
+	data resourcesData
+	// the round number that is associated with the resourcesData. This field is the corresponding one to the round field
+	// in persistedAccountData, and serves the same purpose.
+	round basics.Round
+}
+
+func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource {
+	ret := ledgercore.AccountResource{
+		CreatableIndex: prd.aidx,
+		CreatableType:  prd.rtype,
+	}
+	if prd.data.IsAsset() {
+		if prd.data.IsHolding() {
+			holding := prd.data.GetAssetHolding()
+			ret.AssetHolding = &holding
+		}
+		if prd.data.IsOwning() {
+			assetParams := prd.data.GetAssetParams()
+			ret.AssetParams = &assetParams
+		}
+	}
+	if prd.data.IsApp() {
+		if prd.data.IsHolding() {
+			localState := prd.data.GetAppLocalState()
+			ret.AppLocalState = &localState
+		}
+		if prd.data.IsOwning() {
+			appParams := prd.data.GetAppParams()
+			ret.AppParams = &appParams
+		}
+	}
+	return ret
+}
+
+// resourceDelta is used as part of the compactResourcesDeltas to describe a change to a single resource.
+type resourceDelta struct {
+	oldResource persistedResourcesData
+	newResource resourcesData
+	nAcctDeltas int
+	address     basics.Address
+}
+
+// compactResourcesDeltas and resourceDelta are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
 // number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
 // all the pending changes were written and that there are no outstanding writes missing.
-type compactAccountDeltas struct {
-	// actual data
-	deltas []accountDelta
-	// addresses for deltas
-	addresses []basics.Address
+type compactResourcesDeltas struct {
+	// actual account deltas
+	deltas []resourceDelta
 	// cache for addr to deltas index resolution
-	cache map[basics.Address]int
+	cache map[accountCreatable]int
 	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
 	misses []int
 }
 
 type accountDelta struct {
-	old     persistedAccountData
-	new     basics.AccountData
-	ndeltas int
+	oldAcct     persistedAccountData
+	newAcct     baseAccountData
+	nAcctDeltas int
+	address     basics.Address
+}
+
+// compactAccountDeltas and accountDelta are extensions to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
+// number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
+// all the pending changes were written and that there are no outstanding writes missing.
+type compactAccountDeltas struct {
+	// actual account deltas
+	deltas []accountDelta
+	// cache for addr to deltas index resolution
+	cache map[basics.Address]int
+	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
+	misses []int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -176,37 +253,330 @@ const (
 	// catchpointStateCatchupBalancesRound is the balance round that is associated with the current running catchpoint catchup. Typically it would be
 	// equal to catchpointStateCatchupBlockRound - 320.
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
+	// catchpointStateCatchupHashRound is the round that is associated with the hash of the merkle trie. Normally, it's identical to catchpointStateCatchupBalancesRound,
+	// however, it could differ when we catchup from a catchpoint that was created using a different version : in this case,
+	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
+	catchpointStateCatchupHashRound = catchpointState("catchpointCatchupHashRound")
 )
 
 // normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
 type normalizedAccountBalance struct {
-	address            basics.Address
-	accountData        basics.AccountData
+	// The public key address to which the account belongs.
+	address basics.Address
+	// accountData contains the baseAccountData for that account.
+	accountData baseAccountData
+	// resources is a map, where the key is the creatable index, and the value is the resource data.
+	resources map[basics.CreatableIndex]resourcesData
+	// encodedAccountData contains the baseAccountData encoded bytes that are going to be written to the accountbase table.
 	encodedAccountData []byte
-	accountHash        []byte
-	normalizedBalance  uint64
+	// accountHashes contains a list of all the hashes that would need to be added to the merkle trie for that account.
+	// on V6, we could have multiple hashes, since we have separate account/resource hashes.
+	accountHashes [][]byte
+	// normalizedBalance contains the normalized balance for the account.
+	normalizedBalance uint64
+	// encodedResources provides the encoded form of the resources
+	encodedResources map[basics.CreatableIndex][]byte
 }
 
-// prepareNormalizedBalances converts an array of encodedBalanceRecord into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
+// prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
+func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
+	for i, balance := range bals {
+		normalizedAccountBalances[i].address = balance.Address
+		var accountDataV5 basics.AccountData
+		err = protocol.Decode(balance.AccountData, &accountDataV5)
+		if err != nil {
+			return nil, err
+		}
+		normalizedAccountBalances[i].accountData.SetAccountData(&accountDataV5)
+		normalizedAccountBalances[i].normalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
+		type resourcesRow struct {
+			aidx basics.CreatableIndex
+			resourcesData
+		}
+		var resources []resourcesRow
+		addResourceRow := func(_ context.Context, _ int64, aidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error {
+			resources = append(resources, resourcesRow{aidx: aidx, resourcesData: *rd})
+			return nil
+		}
+		if err = accountDataResources(context.Background(), &accountDataV5, 0, addResourceRow); err != nil {
+			return nil, err
+		}
+		normalizedAccountBalances[i].accountHashes = make([][]byte, 1)
+		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+		if len(resources) > 0 {
+			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(resources))
+			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
+		}
+		for _, resource := range resources {
+			normalizedAccountBalances[i].resources[resource.aidx] = resource.resourcesData
+			normalizedAccountBalances[i].encodedResources[resource.aidx] = protocol.Encode(&resource.resourcesData)
+		}
+		normalizedAccountBalances[i].encodedAccountData = protocol.Encode(&normalizedAccountBalances[i].accountData)
+	}
+	return
+}
+
+// prepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV6 into an equal size array of normalizedAccountBalances.
+func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
 		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].normalizedBalance = normalizedAccountBalances[i].accountData.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].normalizedBalance = basics.NormalizedOnlineAccountBalance(
+			normalizedAccountBalances[i].accountData.Status,
+			normalizedAccountBalances[i].accountData.RewardsBase,
+			normalizedAccountBalances[i].accountData.MicroAlgos,
+			proto)
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
+		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+		if len(balance.Resources) > 0 {
+			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]resourcesData, len(balance.Resources))
+			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
+			resIdx := 0
+			for cidx, res := range balance.Resources {
+				var resData resourcesData
+				err = protocol.Decode(res, &resData)
+				if err != nil {
+					return nil, err
+				}
+				ctype := basics.AssetCreatable
+				if resData.IsApp() {
+					ctype = basics.AppCreatable
+				}
+				normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
+				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
+				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
+				resIdx++
+			}
+		}
 	}
 	return
 }
 
+// makeCompactResourceDeltas takes an array of NewAccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
+// data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
+// It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
+func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+	if len(accountDeltas) == 0 {
+		return
+	}
+
+	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
+	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	outResourcesDeltas.cache = make(map[accountCreatable]int, size)
+	outResourcesDeltas.deltas = make([]resourceDelta, 0, size)
+	outResourcesDeltas.misses = make([]int, 0, size)
+
+	deltaRound := uint64(baseRound)
+	// the updateRoundMultiplier is used when setting the UpdateRound, so that we can set the
+	// value without creating any branching. Avoiding branching in the code provides (marginal)
+	// performance gain since CPUs can speculate ahead more efficiently.
+	updateRoundMultiplier := uint64(0)
+	if setUpdateRound {
+		updateRoundMultiplier = 1
+	}
+	for _, roundDelta := range accountDeltas {
+		deltaRound++
+		// assets
+		for _, res := range roundDelta.GetAllAssetResources() {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
+				// update existing entry with new data.
+				updEntry := resourceDelta{
+					oldResource: prev.oldResource,
+					newResource: prev.newResource,
+					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
+				}
+				updEntry.newResource.SetAssetData(res.Params, res.Holding)
+				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
+				outResourcesDeltas.update(idx, updEntry)
+			} else {
+				// it's a new entry.
+				newEntry := resourceDelta{
+					nAcctDeltas: 1,
+					address:     res.Addr,
+					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
+				}
+				newEntry.newResource.SetAssetData(res.Params, res.Holding)
+				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
+					newEntry.oldResource = baseResourceData
+					outResourcesDeltas.insert(newEntry)
+				} else {
+					if pad, has := baseAccounts.read(res.Addr); has {
+						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
+					}
+					newEntry.oldResource.aidx = basics.CreatableIndex(res.Aidx)
+					outResourcesDeltas.insertMissing(newEntry)
+				}
+			}
+		}
+
+		// application
+		for _, res := range roundDelta.GetAllAppResources() {
+			if prev, idx := outResourcesDeltas.get(res.Addr, basics.CreatableIndex(res.Aidx)); idx != -1 {
+				// update existing entry with new data.
+				updEntry := resourceDelta{
+					oldResource: prev.oldResource,
+					newResource: prev.newResource,
+					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
+				}
+				updEntry.newResource.SetAppData(res.Params, res.State)
+				updEntry.newResource.UpdateRound = deltaRound * updateRoundMultiplier
+				outResourcesDeltas.update(idx, updEntry)
+			} else {
+				// it's a new entry.
+				newEntry := resourceDelta{
+					nAcctDeltas: 1,
+					address:     res.Addr,
+					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
+				}
+				newEntry.newResource.SetAppData(res.Params, res.State)
+				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
+				existingAcctCacheEntry := has && baseResourceData.addrid != 0
+				if existingAcctCacheEntry {
+					newEntry.oldResource = baseResourceData
+					outResourcesDeltas.insert(newEntry)
+				} else {
+					if pad, has := baseAccounts.read(res.Addr); has {
+						newEntry.oldResource = persistedResourcesData{addrid: pad.rowid}
+					}
+					newEntry.oldResource.aidx = basics.CreatableIndex(res.Aidx)
+					outResourcesDeltas.insertMissing(newEntry)
+				}
+			}
+		}
+	}
+	return
+}
+
+// resourcesLoadOld updates the entries on the deltas.oldResource map that matches the provided addresses.
+// The round number of the persistedAccountData is not updated by this function, and the caller is responsible
+// for populating this field.
+func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map[basics.Address]int64) (err error) {
+	if len(a.misses) == 0 {
+		return nil
+	}
+	selectStmt, err := tx.Prepare("SELECT rtype, data FROM resources WHERE addrid = ? AND aidx = ?")
+	if err != nil {
+		return
+	}
+	defer selectStmt.Close()
+
+	addrRowidStmt, err := tx.Prepare("SELECT rowid FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+	defer addrRowidStmt.Close()
+
+	defer func() {
+		a.misses = nil
+	}()
+	var addrid int64
+	var aidx basics.CreatableIndex
+	var resDataBuf []byte
+	var rtype sql.NullInt64
+	var ok bool
+	for _, missIdx := range a.misses {
+		delta := a.deltas[missIdx]
+		addr := delta.address
+		aidx = delta.oldResource.aidx
+		if delta.oldResource.addrid != 0 {
+			addrid = delta.oldResource.addrid
+		} else if addrid, ok = knownAddresses[addr]; !ok {
+			err = addrRowidStmt.QueryRow(addr[:]).Scan(&addrid)
+			if err != nil {
+				if err != sql.ErrNoRows {
+					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
+					return err
+
+				}
+				// not having an account could be legit : the account might not have been created yet, which is why it won't
+				// have a rowid. We will be able to re-test that after all the baseAccountData would be written to disk.
+				err = nil
+				continue
+			}
+		}
+		err = selectStmt.QueryRow(addrid, aidx).Scan(&rtype, &resDataBuf)
+		switch err {
+		case nil:
+			if len(resDataBuf) > 0 {
+				persistedResData := persistedResourcesData{addrid: addrid, aidx: aidx, rtype: basics.CreatableType(rtype.Int64)}
+				err = protocol.Decode(resDataBuf, &persistedResData.data)
+				if err != nil {
+					return err
+				}
+				a.updateOld(missIdx, persistedResData)
+			} else {
+				err = fmt.Errorf("empty resource record: addrid=%d, aidx=%d", addrid, aidx)
+				return err
+			}
+		case sql.ErrNoRows:
+			// we don't have that account, just return an empty record.
+			a.updateOld(missIdx, persistedResourcesData{addrid: addrid, aidx: aidx})
+			err = nil
+		default:
+			// unexpected error - let the caller know that we couldn't complete the operation.
+			return err
+		}
+	}
+	return
+}
+
+// get returns accountDelta by address and its position.
+// if no such entry -1 returned
+func (a *compactResourcesDeltas) get(addr basics.Address, index basics.CreatableIndex) (resourceDelta, int) {
+	idx, ok := a.cache[accountCreatable{address: addr, index: index}]
+	if !ok {
+		return resourceDelta{}, -1
+	}
+	return a.deltas[idx], idx
+}
+
+func (a *compactResourcesDeltas) len() int {
+	return len(a.deltas)
+}
+
+func (a *compactResourcesDeltas) getByIdx(i int) resourceDelta {
+	return a.deltas[i]
+}
+
+// update replaces specific entry by idx
+func (a *compactResourcesDeltas) update(idx int, delta resourceDelta) {
+	a.deltas[idx] = delta
+}
+
+func (a *compactResourcesDeltas) insert(delta resourceDelta) int {
+	last := len(a.deltas)
+	a.deltas = append(a.deltas, delta)
+
+	if a.cache == nil {
+		a.cache = make(map[accountCreatable]int)
+	}
+	a.cache[accountCreatable{address: delta.address, index: delta.oldResource.aidx}] = last
+	return last
+}
+
+func (a *compactResourcesDeltas) insertMissing(delta resourceDelta) {
+	a.misses = append(a.misses, a.insert(delta))
+}
+
+// updateOld updates existing or inserts a new partial entry with only old field filled
+func (a *compactResourcesDeltas) updateOld(idx int, old persistedResourcesData) {
+	a.deltas[idx].oldResource = old
+}
+
 // makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
-// It counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+// It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
+func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -217,26 +587,42 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 	outAccountDeltas.deltas = make([]accountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
 
+	deltaRound := uint64(baseRound)
+	// the updateRoundMultiplier is used when setting the UpdateRound, so that we can set the
+	// value without creating any branching. Avoiding branching in the code provides (marginal)
+	// performance gain since CPUs can speculate ahead more efficiently.
+	updateRoundMultiplier := uint64(0)
+	if setUpdateRound {
+		updateRoundMultiplier = 1
+	}
 	for _, roundDelta := range accountDeltas {
+		deltaRound++
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
-				outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
-					old:     prev.old,
-					new:     acctDelta,
-					ndeltas: prev.ndeltas + 1,
-				})
+				updEntry := accountDelta{
+					oldAcct:     prev.oldAcct,
+					nAcctDeltas: prev.nAcctDeltas + 1,
+					address:     prev.address,
+				}
+				updEntry.newAcct.SetCoreAccountData(&acctDelta)
+				updEntry.newAcct.UpdateRound = deltaRound * updateRoundMultiplier
+				outAccountDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
 				newEntry := accountDelta{
-					new:     acctDelta,
-					ndeltas: 1,
+					nAcctDeltas: 1,
+					newAcct: baseAccountData{
+						UpdateRound: deltaRound * updateRoundMultiplier,
+					},
+					address: addr,
 				}
+				newEntry.newAcct.SetCoreAccountData(&acctDelta)
 				if baseAccountData, has := baseAccounts.read(addr); has {
-					newEntry.old = baseAccountData
-					outAccountDeltas.insert(addr, newEntry) // insert instead of upsert economizes one map lookup
+					newEntry.oldAcct = baseAccountData
+					outAccountDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
 				} else {
-					outAccountDeltas.insertMissing(addr, newEntry)
+					outAccountDeltas.insertMissing(newEntry)
 				}
 			}
 		}
@@ -262,7 +648,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
-		addr := a.addresses[idx]
+		addr := a.deltas[idx].address
 		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
 		switch err {
 		case nil:
@@ -303,17 +689,8 @@ func (a *compactAccountDeltas) len() int {
 	return len(a.deltas)
 }
 
-func (a *compactAccountDeltas) getByIdx(i int) (basics.Address, accountDelta) {
-	return a.addresses[i], a.deltas[i]
-}
-
-// upsert updates existing or inserts a new entry
-func (a *compactAccountDeltas) upsert(addr basics.Address, delta accountDelta) {
-	if idx, exist := a.cache[addr]; exist { // nil map lookup is OK
-		a.deltas[idx] = delta
-		return
-	}
-	a.insert(addr, delta)
+func (a *compactAccountDeltas) getByIdx(i int) accountDelta {
+	return a.deltas[i]
 }
 
 // update replaces specific entry by idx
@@ -321,36 +698,25 @@ func (a *compactAccountDeltas) update(idx int, delta accountDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *compactAccountDeltas) insert(addr basics.Address, delta accountDelta) int {
+func (a *compactAccountDeltas) insert(delta accountDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
-	a.addresses = append(a.addresses, addr)
 
 	if a.cache == nil {
 		a.cache = make(map[basics.Address]int)
 	}
-	a.cache[addr] = last
+	a.cache[delta.address] = last
 	return last
 }
 
-func (a *compactAccountDeltas) insertMissing(addr basics.Address, delta accountDelta) {
-	idx := a.insert(addr, delta)
+func (a *compactAccountDeltas) insertMissing(delta accountDelta) {
+	idx := a.insert(delta)
 	a.misses = append(a.misses, idx)
-}
-
-// upsertOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
-	addr := old.addr
-	if idx, exist := a.cache[addr]; exist {
-		a.deltas[idx].old = old
-		return
-	}
-	a.insert(addr, accountDelta{old: old})
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
 func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
-	a.deltas[idx].old = old
+	a.deltas[idx].oldAcct = old
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
@@ -360,8 +726,16 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 		return err
 	}
 
+	var insertRscStmt *sql.Stmt
+	insertRscStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+
+	var result sql.Result
+	var rowID int64
 	for _, balance := range bals {
-		result, err := insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
+		result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
 		if err != nil {
 			return err
 		}
@@ -371,6 +745,28 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 		}
 		if aff != 1 {
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+		}
+		rowID, err = result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		// write resources
+		for aidx, resData := range balance.resources {
+			ctype := basics.AssetCreatable
+			if resData.IsApp() {
+				ctype = basics.AppCreatable
+			}
+			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, ctype, balance.encodedResources[aidx])
+			if err != nil {
+				return err
+			}
+			aff, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
 		}
 	}
 	return nil
@@ -384,17 +780,19 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	}
 
 	for _, balance := range bals {
-		result, err := insertStmt.ExecContext(ctx, balance.accountHash[:])
-		if err != nil {
-			return err
-		}
+		for _, hash := range balance.accountHashes {
+			result, err := insertStmt.ExecContext(ctx, hash[:])
+			if err != nil {
+				return err
+			}
 
-		aff, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if aff != 1 {
-			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			aff, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
 		}
 	}
 	return nil
@@ -410,28 +808,33 @@ func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err er
 }
 
 // writeCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
+// note that we cannot insert the resources here : in order to insert the resources, we need the rowid of the accountbase entry. This is being inserted by
+// writeCatchpointStagingBalances via a separate go-routine.
 func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
+	var insertCreatorsStmt *sql.Stmt
+	var err error
+	insertCreatorsStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
+	defer insertCreatorsStmt.Close()
 
 	for _, balance := range bals {
-		// if the account has any asset params, it means that it's the creator of an asset.
-		if len(balance.accountData.AssetParams) > 0 {
-			for aidx := range balance.accountData.AssetParams {
-				_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
-				if err != nil {
-					return err
+		for aidx, resData := range balance.resources {
+			if resData.IsOwning() {
+				// determine if it's an asset
+				if resData.IsAsset() {
+					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
+					if err != nil {
+						return err
+					}
 				}
-			}
-		}
-
-		if len(balance.accountData.AppParams) > 0 {
-			for aidx := range balance.accountData.AppParams {
-				_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
-				if err != nil {
-					return err
+				// determine if it's an application
+				if resData.IsApp() {
+					_, err := insertCreatorsStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -445,6 +848,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointassetcreators",
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
+		"DROP TABLE IF EXISTS catchpointresources",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -459,9 +863,10 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
-			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
+			"CREATE TABLE IF NOT EXISTS catchpointbalances (addrid INTEGER PRIMARY KEY NOT NULL, address blob NOT NULL, data blob, normalizedonlinebalance INTEGER)",
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, rtype INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx, rtype) ) WITHOUT ROWID",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
 		)
 	}
@@ -478,19 +883,22 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 
 // applyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
 // tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
-func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round) (err error) {
+func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
 	stmts := []string{
 		"ALTER TABLE accountbase RENAME TO accountbase_old",
 		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
 		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
+		"ALTER TABLE resources RENAME TO resources_old",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
+		"ALTER TABLE catchpointresources RENAME TO resources",
 
 		"DROP TABLE IF EXISTS accountbase_old",
 		"DROP TABLE IF EXISTS assetcreators_old",
 		"DROP TABLE IF EXISTS accounthashes_old",
+		"DROP TABLE IF EXISTS resources_old",
 	}
 
 	for _, stmt := range stmts {
@@ -504,10 +912,12 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('hashbase', ?)", balancesRound)
+
+	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('hashbase', ?)", merkleRootRound)
 	if err != nil {
 		return err
 	}
+
 	return
 }
 
@@ -556,7 +966,8 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 				return true, err
 			}
 
-			totals.AddAccount(proto, data, &ot)
+			ad := ledgercore.ToAccountData(data)
+			totals.AddAccount(proto, ad, &ot)
 		}
 
 		if ot.Overflowed {
@@ -633,6 +1044,695 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 	return rows.Err()
 }
 
+// accountsCreateResourceTable creates the resource table in the database.
+func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
+	var exists bool
+	err := tx.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('resources') WHERE name='addrid'").Scan(&exists)
+	if err == nil {
+		// Already exists.
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	for _, stmt := range createResourcesTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type baseOnlineAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	VoteID          crypto.OneTimeSignatureVerifier `codec:"A"`
+	SelectionID     crypto.VRFVerifier              `codec:"B"`
+	VoteFirstValid  basics.Round                    `codec:"C"`
+	VoteLastValid   basics.Round                    `codec:"D"`
+	VoteKeyDilution uint64                          `codec:"E"`
+}
+
+type baseAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Status                     basics.Status     `codec:"a"`
+	MicroAlgos                 basics.MicroAlgos `codec:"b"`
+	RewardsBase                uint64            `codec:"c"`
+	RewardedMicroAlgos         basics.MicroAlgos `codec:"d"`
+	AuthAddr                   basics.Address    `codec:"e"`
+	TotalAppSchemaNumUint      uint64            `codec:"f"`
+	TotalAppSchemaNumByteSlice uint64            `codec:"g"`
+	TotalExtraAppPages         uint32            `codec:"h"`
+	TotalAssetParams           uint32            `codec:"i"`
+	TotalAssets                uint32            `codec:"j"`
+	TotalAppParams             uint32            `codec:"k"`
+	TotalAppLocalStates        uint32            `codec:"l"`
+
+	baseOnlineAccountData
+
+	// UpdateRound is the round that modified this account data last. Since we want all the nodes to have the exact same
+	// value for this field, we'll be setting the value of this field to zero *before* the EnableAccountDataResourceSeparation
+	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the
+	// correct round number.
+	UpdateRound uint64 `codec:"z"`
+}
+
+// IsEmpty return true if any of the fields other then the UpdateRound are non-zero.
+func (ba *baseAccountData) IsEmpty() bool {
+	return ba.Status == 0 &&
+		ba.MicroAlgos.Raw == 0 &&
+		ba.RewardsBase == 0 &&
+		ba.RewardedMicroAlgos.Raw == 0 &&
+		ba.AuthAddr.IsZero() &&
+		ba.TotalAppSchemaNumUint == 0 &&
+		ba.TotalAppSchemaNumByteSlice == 0 &&
+		ba.TotalExtraAppPages == 0 &&
+		ba.TotalAssetParams == 0 &&
+		ba.TotalAssets == 0 &&
+		ba.TotalAppParams == 0 &&
+		ba.TotalAppLocalStates == 0 &&
+		ba.VoteID.MsgIsZero() &&
+		ba.SelectionID.MsgIsZero() &&
+		ba.VoteFirstValid == 0 &&
+		ba.VoteLastValid == 0 &&
+		ba.VoteKeyDilution == 0
+}
+
+func (ba *baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
+	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
+}
+
+func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
+	ba.Status = ad.Status
+	ba.MicroAlgos = ad.MicroAlgos
+	ba.RewardsBase = ad.RewardsBase
+	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
+	ba.VoteID = ad.VoteID
+	ba.SelectionID = ad.SelectionID
+	ba.VoteFirstValid = ad.VoteFirstValid
+	ba.VoteLastValid = ad.VoteLastValid
+	ba.VoteKeyDilution = ad.VoteKeyDilution
+	ba.AuthAddr = ad.AuthAddr
+	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
+	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
+	ba.TotalExtraAppPages = ad.TotalExtraAppPages
+	ba.TotalAssetParams = ad.TotalAssetParams
+	ba.TotalAssets = ad.TotalAssets
+	ba.TotalAppParams = ad.TotalAppParams
+	ba.TotalAppLocalStates = ad.TotalAppLocalStates
+}
+
+func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
+	ba.Status = ad.Status
+	ba.MicroAlgos = ad.MicroAlgos
+	ba.RewardsBase = ad.RewardsBase
+	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
+	ba.VoteID = ad.VoteID
+	ba.SelectionID = ad.SelectionID
+	ba.VoteFirstValid = ad.VoteFirstValid
+	ba.VoteLastValid = ad.VoteLastValid
+	ba.VoteKeyDilution = ad.VoteKeyDilution
+	ba.AuthAddr = ad.AuthAddr
+	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
+	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
+	ba.TotalExtraAppPages = ad.TotalExtraAppPages
+	ba.TotalAssetParams = uint32(len(ad.AssetParams))
+	ba.TotalAssets = uint32(len(ad.Assets))
+	ba.TotalAppParams = uint32(len(ad.AppParams))
+	ba.TotalAppLocalStates = uint32(len(ad.AppLocalStates))
+}
+
+func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
+	return ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			Status:             ba.Status,
+			MicroAlgos:         ba.MicroAlgos,
+			RewardsBase:        ba.RewardsBase,
+			RewardedMicroAlgos: ba.RewardedMicroAlgos,
+			AuthAddr:           ba.AuthAddr,
+			TotalAppSchema: basics.StateSchema{
+				NumUint:      ba.TotalAppSchemaNumUint,
+				NumByteSlice: ba.TotalAppSchemaNumByteSlice,
+			},
+			TotalExtraAppPages:  ba.TotalExtraAppPages,
+			TotalAppParams:      ba.TotalAppParams,
+			TotalAppLocalStates: ba.TotalAppLocalStates,
+			TotalAssetParams:    ba.TotalAssetParams,
+			TotalAssets:         ba.TotalAssets,
+		},
+		VotingData: ledgercore.VotingData{
+			VoteID:          ba.VoteID,
+			SelectionID:     ba.SelectionID,
+			VoteFirstValid:  ba.VoteFirstValid,
+			VoteLastValid:   ba.VoteLastValid,
+			VoteKeyDilution: ba.VoteKeyDilution,
+		},
+	}
+}
+
+func (ba *baseAccountData) GetAccountData() basics.AccountData {
+	return basics.AccountData{
+		Status:             ba.Status,
+		MicroAlgos:         ba.MicroAlgos,
+		RewardsBase:        ba.RewardsBase,
+		RewardedMicroAlgos: ba.RewardedMicroAlgos,
+		VoteID:             ba.VoteID,
+		SelectionID:        ba.SelectionID,
+		VoteFirstValid:     ba.VoteFirstValid,
+		VoteLastValid:      ba.VoteLastValid,
+		VoteKeyDilution:    ba.VoteKeyDilution,
+		AuthAddr:           ba.AuthAddr,
+		TotalAppSchema: basics.StateSchema{
+			NumUint:      ba.TotalAppSchemaNumUint,
+			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
+		},
+		TotalExtraAppPages: ba.TotalExtraAppPages,
+	}
+}
+
+type resourceFlags uint8
+
+const (
+	resourceFlagsHolding    resourceFlags = 0 //nolint:deadcode,varcheck
+	resourceFlagsNotHolding resourceFlags = 1
+	resourceFlagsOwnership  resourceFlags = 2
+	resourceFlagsEmptyAsset resourceFlags = 4
+	resourceFlagsEmptyApp   resourceFlags = 8
+)
+
+//
+// Resource flags interpretation:
+//
+// resourceFlagsHolding - the resource contains the holding of asset/app.
+// resourceFlagsNotHolding - the resource is completely empty. This state should not be persisted.
+// resourceFlagsOwnership - the resource contains the asset parameter or application parameters.
+// resourceFlagsEmptyAsset - this is an asset resource, and it is empty.
+// resourceFlagsEmptyApp - this is an app resource, and it is empty.
+
+type resourcesData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// asset parameters ( basics.AssetParams )
+	Total         uint64         `codec:"a"`
+	Decimals      uint32         `codec:"b"`
+	DefaultFrozen bool           `codec:"c"`
+	UnitName      string         `codec:"d"`
+	AssetName     string         `codec:"e"`
+	URL           string         `codec:"f"`
+	MetadataHash  [32]byte       `codec:"g"`
+	Manager       basics.Address `codec:"h"`
+	Reserve       basics.Address `codec:"i"`
+	Freeze        basics.Address `codec:"j"`
+	Clawback      basics.Address `codec:"k"`
+
+	// asset holding ( basics.AssetHolding )
+	Amount uint64 `codec:"l"`
+	Frozen bool   `codec:"m"`
+
+	// application local state ( basics.AppLocalState )
+	SchemaNumUint      uint64              `codec:"n"`
+	SchemaNumByteSlice uint64              `codec:"o"`
+	KeyValue           basics.TealKeyValue `codec:"p"`
+
+	// application global params ( basics.AppParams )
+	ApprovalProgram               []byte              `codec:"q,allocbound=config.MaxAvailableAppProgramLen"`
+	ClearStateProgram             []byte              `codec:"r,allocbound=config.MaxAvailableAppProgramLen"`
+	GlobalState                   basics.TealKeyValue `codec:"s"`
+	LocalStateSchemaNumUint       uint64              `codec:"t"`
+	LocalStateSchemaNumByteSlice  uint64              `codec:"u"`
+	GlobalStateSchemaNumUint      uint64              `codec:"v"`
+	GlobalStateSchemaNumByteSlice uint64              `codec:"w"`
+	ExtraProgramPages             uint32              `codec:"x"`
+
+	// ResourceFlags helps to identify which portions of this structure should be used; in particular, it
+	// helps to provide a marker - i.e. whether the account was, for instance, opted-in for the asset compared
+	// to just being the owner of the asset. A comparison against the empty structure doesn't work here -
+	// since both the holdings and the parameters are allowed to be all at their default values.
+	ResourceFlags resourceFlags `codec:"y"`
+	// UpdateRound is the round that modified this resource last. Since we want all the nodes to have the exact same
+	// value for this field, we'll be setting the value of this field to zero *before* the EnableAccountDataResourceSeparation
+	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the
+	// correct round number.
+	UpdateRound uint64 `codec:"z"`
+}
+
+// makeResourcesData returns a new empty instance of resourcesData.
+// Using this constructor method is necessary because of the ResourceFlags field.
+// An optional rnd args sets UpdateRound
+func makeResourcesData(rnd uint64) resourcesData {
+	return resourcesData{ResourceFlags: resourceFlagsNotHolding, UpdateRound: rnd}
+}
+
+func (rd *resourcesData) IsHolding() bool {
+	return (rd.ResourceFlags & resourceFlagsNotHolding) == resourceFlagsHolding
+}
+
+func (rd *resourcesData) IsOwning() bool {
+	return (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+}
+
+func (rd *resourcesData) IsEmpty() bool {
+	return !rd.IsApp() && !rd.IsAsset()
+}
+
+func (rd *resourcesData) IsEmptyAppFields() bool {
+	return rd.SchemaNumUint == 0 &&
+		rd.SchemaNumByteSlice == 0 &&
+		len(rd.KeyValue) == 0 &&
+		len(rd.ApprovalProgram) == 0 &&
+		len(rd.ClearStateProgram) == 0 &&
+		len(rd.GlobalState) == 0 &&
+		rd.LocalStateSchemaNumUint == 0 &&
+		rd.LocalStateSchemaNumByteSlice == 0 &&
+		rd.GlobalStateSchemaNumUint == 0 &&
+		rd.GlobalStateSchemaNumByteSlice == 0 &&
+		rd.ExtraProgramPages == 0
+}
+
+func (rd *resourcesData) IsApp() bool {
+	if (rd.ResourceFlags & resourceFlagsEmptyApp) == resourceFlagsEmptyApp {
+		return true
+	}
+	return !rd.IsEmptyAppFields()
+}
+
+func (rd *resourcesData) IsEmptyAssetFields() bool {
+	return rd.Amount == 0 &&
+		!rd.Frozen &&
+		rd.Total == 0 &&
+		rd.Decimals == 0 &&
+		!rd.DefaultFrozen &&
+		rd.UnitName == "" &&
+		rd.AssetName == "" &&
+		rd.URL == "" &&
+		rd.MetadataHash == [32]byte{} &&
+		rd.Manager.IsZero() &&
+		rd.Reserve.IsZero() &&
+		rd.Freeze.IsZero() &&
+		rd.Clawback.IsZero()
+}
+
+func (rd *resourcesData) IsAsset() bool {
+	if (rd.ResourceFlags & resourceFlagsEmptyAsset) == resourceFlagsEmptyAsset {
+		return true
+	}
+	return !rd.IsEmptyAssetFields()
+}
+
+func (rd *resourcesData) ClearAssetParams() {
+	rd.Total = 0
+	rd.Decimals = 0
+	rd.DefaultFrozen = false
+	rd.UnitName = ""
+	rd.AssetName = ""
+	rd.URL = ""
+	rd.MetadataHash = basics.Address{}
+	rd.Manager = basics.Address{}
+	rd.Reserve = basics.Address{}
+	rd.Freeze = basics.Address{}
+	rd.Clawback = basics.Address{}
+	hadHolding := (rd.ResourceFlags & resourceFlagsNotHolding) == resourceFlagsHolding
+	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsOwnership
+	rd.ResourceFlags &= ^resourceFlagsEmptyAsset
+	if rd.IsEmptyAssetFields() && hadHolding {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	}
+}
+
+func (rd *resourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool) {
+	rd.Total = ap.Total
+	rd.Decimals = ap.Decimals
+	rd.DefaultFrozen = ap.DefaultFrozen
+	rd.UnitName = ap.UnitName
+	rd.AssetName = ap.AssetName
+	rd.URL = ap.URL
+	rd.MetadataHash = ap.MetadataHash
+	rd.Manager = ap.Manager
+	rd.Reserve = ap.Reserve
+	rd.Freeze = ap.Freeze
+	rd.Clawback = ap.Clawback
+	rd.ResourceFlags |= resourceFlagsOwnership
+	if !haveHoldings {
+		rd.ResourceFlags |= resourceFlagsNotHolding
+	}
+	rd.ResourceFlags &= ^resourceFlagsEmptyAsset
+	if rd.IsEmptyAssetFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	}
+}
+
+func (rd *resourcesData) GetAssetParams() basics.AssetParams {
+	ap := basics.AssetParams{
+		Total:         rd.Total,
+		Decimals:      rd.Decimals,
+		DefaultFrozen: rd.DefaultFrozen,
+		UnitName:      rd.UnitName,
+		AssetName:     rd.AssetName,
+		URL:           rd.URL,
+		MetadataHash:  rd.MetadataHash,
+		Manager:       rd.Manager,
+		Reserve:       rd.Reserve,
+		Freeze:        rd.Freeze,
+		Clawback:      rd.Clawback,
+	}
+	return ap
+}
+
+func (rd *resourcesData) ClearAssetHolding() {
+	rd.Amount = 0
+	rd.Frozen = false
+
+	rd.ResourceFlags |= resourceFlagsNotHolding
+	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+	if hadParams && rd.IsEmptyAssetFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	} else {
+		rd.ResourceFlags &= ^resourceFlagsEmptyAsset
+	}
+}
+
+func (rd *resourcesData) SetAssetHolding(ah basics.AssetHolding) {
+	rd.Amount = ah.Amount
+	rd.Frozen = ah.Frozen
+	rd.ResourceFlags &= ^(resourceFlagsNotHolding + resourceFlagsEmptyAsset)
+	// resourceFlagsHolding is set implicitly since it is zero
+	if rd.IsEmptyAssetFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyAsset
+	}
+}
+
+func (rd *resourcesData) GetAssetHolding() basics.AssetHolding {
+	return basics.AssetHolding{
+		Amount: rd.Amount,
+		Frozen: rd.Frozen,
+	}
+}
+
+func (rd *resourcesData) ClearAppLocalState() {
+	rd.SchemaNumUint = 0
+	rd.SchemaNumByteSlice = 0
+	rd.KeyValue = nil
+
+	rd.ResourceFlags |= resourceFlagsNotHolding
+	hadParams := (rd.ResourceFlags & resourceFlagsOwnership) == resourceFlagsOwnership
+	if hadParams && rd.IsEmptyAppFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
+	} else {
+		rd.ResourceFlags &= ^resourceFlagsEmptyApp
+	}
+}
+
+func (rd *resourcesData) SetAppLocalState(als basics.AppLocalState) {
+	rd.SchemaNumUint = als.Schema.NumUint
+	rd.SchemaNumByteSlice = als.Schema.NumByteSlice
+	rd.KeyValue = als.KeyValue
+	rd.ResourceFlags &= ^(resourceFlagsEmptyApp + resourceFlagsNotHolding)
+	if rd.IsEmptyAppFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
+	}
+}
+
+func (rd *resourcesData) GetAppLocalState() basics.AppLocalState {
+	return basics.AppLocalState{
+		Schema: basics.StateSchema{
+			NumUint:      rd.SchemaNumUint,
+			NumByteSlice: rd.SchemaNumByteSlice,
+		},
+		KeyValue: rd.KeyValue,
+	}
+}
+
+func (rd *resourcesData) ClearAppParams() {
+	rd.ApprovalProgram = nil
+	rd.ClearStateProgram = nil
+	rd.GlobalState = nil
+	rd.LocalStateSchemaNumUint = 0
+	rd.LocalStateSchemaNumByteSlice = 0
+	rd.GlobalStateSchemaNumUint = 0
+	rd.GlobalStateSchemaNumByteSlice = 0
+	rd.ExtraProgramPages = 0
+	hadHolding := (rd.ResourceFlags & resourceFlagsNotHolding) == resourceFlagsHolding
+	rd.ResourceFlags -= rd.ResourceFlags & resourceFlagsOwnership
+	rd.ResourceFlags &= ^resourceFlagsEmptyApp
+	if rd.IsEmptyAppFields() && hadHolding {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
+	}
+}
+
+func (rd *resourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
+	rd.ApprovalProgram = ap.ApprovalProgram
+	rd.ClearStateProgram = ap.ClearStateProgram
+	rd.GlobalState = ap.GlobalState
+	rd.LocalStateSchemaNumUint = ap.LocalStateSchema.NumUint
+	rd.LocalStateSchemaNumByteSlice = ap.LocalStateSchema.NumByteSlice
+	rd.GlobalStateSchemaNumUint = ap.GlobalStateSchema.NumUint
+	rd.GlobalStateSchemaNumByteSlice = ap.GlobalStateSchema.NumByteSlice
+	rd.ExtraProgramPages = ap.ExtraProgramPages
+	rd.ResourceFlags |= resourceFlagsOwnership
+	if !haveHoldings {
+		rd.ResourceFlags |= resourceFlagsNotHolding
+	}
+	rd.ResourceFlags &= ^resourceFlagsEmptyApp
+	if rd.IsEmptyAppFields() {
+		rd.ResourceFlags |= resourceFlagsEmptyApp
+	}
+}
+
+func (rd *resourcesData) GetAppParams() basics.AppParams {
+	return basics.AppParams{
+		ApprovalProgram:   rd.ApprovalProgram,
+		ClearStateProgram: rd.ClearStateProgram,
+		GlobalState:       rd.GlobalState,
+		StateSchemas: basics.StateSchemas{
+			LocalStateSchema: basics.StateSchema{
+				NumUint:      rd.LocalStateSchemaNumUint,
+				NumByteSlice: rd.LocalStateSchemaNumByteSlice,
+			},
+			GlobalStateSchema: basics.StateSchema{
+				NumUint:      rd.GlobalStateSchemaNumUint,
+				NumByteSlice: rd.GlobalStateSchemaNumByteSlice,
+			},
+		},
+		ExtraProgramPages: rd.ExtraProgramPages,
+	}
+}
+
+func (rd *resourcesData) SetAssetData(ap ledgercore.AssetParamsDelta, ah ledgercore.AssetHoldingDelta) {
+	if ah.Holding != nil {
+		rd.SetAssetHolding(*ah.Holding)
+	} else if ah.Deleted {
+		rd.ClearAssetHolding()
+	}
+	if ap.Params != nil {
+		rd.SetAssetParams(*ap.Params, rd.IsHolding())
+	} else if ap.Deleted {
+		rd.ClearAssetParams()
+	}
+}
+
+func (rd *resourcesData) SetAppData(ap ledgercore.AppParamsDelta, al ledgercore.AppLocalStateDelta) {
+	if al.LocalState != nil {
+		rd.SetAppLocalState(*al.LocalState)
+	} else if al.Deleted {
+		rd.ClearAppLocalState()
+	}
+	if ap.Params != nil {
+		rd.SetAppParams(*ap.Params, rd.IsHolding())
+	} else if ap.Deleted {
+		rd.ClearAppParams()
+	}
+}
+
+func accountDataResources(
+	ctx context.Context,
+	accountData *basics.AccountData, rowid int64,
+	cb func(ctx context.Context, rowid int64, cidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error,
+) error {
+	// does this account have any assets ?
+	if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
+		for aidx, holding := range accountData.Assets {
+			var rd resourcesData
+			rd.SetAssetHolding(holding)
+			if ap, has := accountData.AssetParams[aidx]; has {
+				rd.SetAssetParams(ap, true)
+				delete(accountData.AssetParams, aidx)
+			}
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+		for aidx, aparams := range accountData.AssetParams {
+			var rd resourcesData
+			rd.SetAssetParams(aparams, false)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// does this account have any applications ?
+	if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
+		for aidx, localState := range accountData.AppLocalStates {
+			var rd resourcesData
+			rd.SetAppLocalState(localState)
+			if ap, has := accountData.AppParams[aidx]; has {
+				rd.SetAppParams(ap, true)
+				delete(accountData.AppParams, aidx)
+			}
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+		for aidx, aparams := range accountData.AppParams {
+			var rd resourcesData
+			rd.SetAppParams(aparams, false)
+			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// performResourceTableMigration migrate the database to use the resources table.
+func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
+	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
+
+	createNewAcctBase := []string{
+		`CREATE TABLE IF NOT EXISTS accountbase_resources_migration (
+		addrid INTEGER PRIMARY KEY NOT NULL,
+		address blob NOT NULL,
+		data blob,
+		normalizedonlinebalance INTEGER )`,
+		createNormalizedOnlineBalanceIndex(idxnameBalances, "accountbase_resources_migration"),
+		fmt.Sprintf(`CREATE UNIQUE INDEX accountbase_resources_migration_address_idx_%d ON accountbase_resources_migration(address)`, time.Now().UnixNano()),
+	}
+
+	applyNewAcctBase := []string{
+		`ALTER TABLE accountbase RENAME TO accountbase_old`,
+		`ALTER TABLE accountbase_resources_migration RENAME TO accountbase`,
+		`DROP TABLE IF EXISTS accountbase_old`,
+	}
+
+	for _, stmt := range createNewAcctBase {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	var insertNewAcctBase *sql.Stmt
+	var insertResources *sql.Stmt
+	var insertNewAcctBaseNormBal *sql.Stmt
+	insertNewAcctBase, err = tx.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertNewAcctBase.Close()
+
+	insertNewAcctBaseNormBal, err = tx.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data, normalizedonlinebalance) VALUES(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertNewAcctBaseNormBal.Close()
+
+	insertResources, err = tx.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertResources.Close()
+
+	var rows *sql.Rows
+	rows, err = tx.QueryContext(ctx, "SELECT address, data, normalizedonlinebalance FROM accountbase ORDER BY address")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var insertRes sql.Result
+	var rowID int64
+	var rowsAffected int64
+	var processedAccounts uint64
+	var totalBaseAccounts uint64
+
+	totalBaseAccounts, err = totalAccounts(ctx, tx)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var addrbuf []byte
+		var encodedAcctData []byte
+		var normBal sql.NullInt64
+		err = rows.Scan(&addrbuf, &encodedAcctData, &normBal)
+		if err != nil {
+			return err
+		}
+
+		var accountData basics.AccountData
+		err = protocol.Decode(encodedAcctData, &accountData)
+		if err != nil {
+			return err
+		}
+		var newAccountData baseAccountData
+		newAccountData.SetAccountData(&accountData)
+		encodedAcctData = protocol.Encode(&newAccountData)
+
+		if normBal.Valid {
+			insertRes, err = insertNewAcctBaseNormBal.ExecContext(ctx, addrbuf, encodedAcctData, normBal.Int64)
+		} else {
+			insertRes, err = insertNewAcctBase.ExecContext(ctx, addrbuf, encodedAcctData)
+		}
+
+		if err != nil {
+			return err
+		}
+		rowsAffected, err = insertRes.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rowsAffected != 1 {
+			return fmt.Errorf("number of affected rows is not 1 - %d", rowsAffected)
+		}
+		rowID, err = insertRes.LastInsertId()
+		if err != nil {
+			return err
+		}
+		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error {
+			var err error
+			if rd != nil {
+				encodedData := protocol.Encode(rd)
+				_, err = insertResources.ExecContext(ctx, rowID, cidx, ctype, encodedData)
+			}
+			return err
+		}
+		err = accountDataResources(ctx, &accountData, rowID, insertResourceCallback)
+		if err != nil {
+			return err
+		}
+		processedAccounts++
+		if log != nil {
+			log(processedAccounts, totalBaseAccounts)
+		}
+	}
+
+	// if the above loop was abrupt by an error, test it now.
+	if err = rows.Err(); err != nil {
+		return err
+	}
+
+	for _, stmt := range applyNewAcctBase {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
 // and optionally returns list of addresses that were eliminated
 func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
@@ -651,7 +1751,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 			}
 			var addr basics.Address
 			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 				return 0, nil, err
 			}
 			copy(addr[:], addrbuf)
@@ -682,7 +1782,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // the full AccountData because we need to store a large number of these
 // in memory (say, 1M), and storing that many AccountData could easily
 // cause us to run out of memory.
-func accountDataToOnline(address basics.Address, ad *basics.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
+func accountDataToOnline(address basics.Address, ad ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
@@ -745,6 +1845,16 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
+	qs.lookupResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid AND resources.aidx = ? AND resources.rtype = ? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupAllResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.aidx, resources.rtype, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -770,17 +1880,17 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.deleteCatchpointState, err = r.Prepare("DELETE FROM catchpointstate WHERE id=?")
+	qs.deleteCatchpointState, err = w.Prepare("DELETE FROM catchpointstate WHERE id=?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.insertCatchpointStateUint64, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)")
+	qs.insertCatchpointStateUint64, err = w.Prepare("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.insertCatchpointStateString, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)")
+	qs.insertCatchpointStateString, err = w.Prepare("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)")
 	if err != nil {
 		return nil, err
 	}
@@ -849,6 +1959,79 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
+func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data persistedResourcesData, err error) {
+	err = db.Retry(func() error {
+		var buf []byte
+		var rowid sql.NullInt64
+		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx, ctype).Scan(&rowid, &data.round, &buf)
+		if err == nil {
+			data.aidx = aidx
+			data.rtype = ctype
+			if len(buf) > 0 && rowid.Valid {
+				data.addrid = rowid.Int64
+				return protocol.Decode(buf, &data.data)
+			}
+			data.data = makeResourcesData(0)
+			// we don't have that account, just return the database round.
+			return nil
+		}
+
+		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
+		if err == sql.ErrNoRows {
+			// Return the zero value of data
+			return fmt.Errorf("unable to query resource data for address %v aidx %v ctype %v : %w", addr, aidx, ctype, err)
+		}
+		return err
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []persistedResourcesData, rnd basics.Round, err error) {
+	err = db.Retry(func() error {
+		// Query for all resources
+		rows, err := qs.lookupAllResourcesStmt.Query(addr[:])
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var addrid, aidx, rtype sql.NullInt64
+		var dbRound basics.Round
+		data = nil
+		var buf []byte
+		for rows.Next() {
+			err := rows.Scan(&addrid, &dbRound, &aidx, &rtype, &buf)
+			if err != nil {
+				return err
+			}
+			if !addrid.Valid || !aidx.Valid || !rtype.Valid {
+				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
+				// ensure this is the first entry, set the round and return
+				if len(data) != 0 {
+					return fmt.Errorf("lookupAllResources: unexpected invalid result on non-first resource record: (%v, %v, %v)", addrid.Valid, aidx.Valid, rtype.Valid)
+				}
+				rnd = dbRound
+				break
+			}
+			var resData resourcesData
+			err = protocol.Decode(buf, &resData)
+			if err != nil {
+				return err
+			}
+			data = append(data, persistedResourcesData{
+				addrid: addrid.Int64,
+				aidx:   basics.CreatableIndex(aidx.Int64),
+				rtype:  basics.CreatableType(rtype.Int64),
+				data:   resData,
+				round:  dbRound,
+			})
+			rnd = dbRound
+		}
+		return nil
+	})
+	return
+}
+
 // lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
@@ -861,7 +2044,8 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountD
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
 				data.rowid = rowid.Int64
-				return protocol.Decode(buf, &data.accountData)
+				err = protocol.Decode(buf, &data.accountData)
+				return err
 			}
 			// we don't have that account, just return the database round.
 			return nil
@@ -923,7 +2107,7 @@ func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stat
 	var val sql.NullInt64
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateUint64.QueryRowContext(ctx, stateName).Scan(&val)
-		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+		if err == sql.ErrNoRows || (err == nil && !val.Valid) {
 			val.Int64 = 0 // default to zero.
 			err = nil
 			def = true
@@ -955,7 +2139,7 @@ func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stat
 	var val sql.NullString
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateString.QueryRowContext(ctx, stateName).Scan(&val)
-		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+		if err == sql.ErrNoRows || (err == nil && !val.Valid) {
 			val.String = "" // default to empty string
 			err = nil
 			def = true
@@ -986,6 +2170,8 @@ func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
 		&qs.lookupStmt,
+		&qs.lookupResourcesStmt,
+		&qs.lookupAllResourcesStmt,
 		&qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,
@@ -1029,7 +2215,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 			return nil, err
 		}
 
-		var data basics.AccountData
+		var data baseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return nil, err
@@ -1037,12 +2223,13 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return nil, err
 		}
 
 		copy(addr[:], addrbuf)
-		res[addr] = accountDataToOnline(addr, &data, proto)
+		ad := data.GetLedgerCoreAccountData()
+		res[addr] = accountDataToOnline(addr, ad, proto)
 	}
 
 	return res, rows.Err()
@@ -1078,9 +2265,17 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
+func accountsNewRound(
+	tx *sql.Tx,
+	updates compactAccountDeltas, resources compactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	proto config.ConsensusParams, lastUpdateRound basics.Round,
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
 
-	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
+	var (
+		insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
+		deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
+		deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
+	)
 
 	deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
 	if err != nil {
@@ -1099,49 +2294,56 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 		return
 	}
 	defer updateStmt.Close()
+
 	var result sql.Result
 	var rowsAffected int64
 	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
+	newAddressesRowIDs := make(map[basics.Address]int64)
 	for i := 0; i < updates.len(); i++ {
-		addr, data := updates.getByIdx(i)
-		if data.old.rowid == 0 {
+		data := updates.getByIdx(i)
+		if data.oldAcct.rowid == 0 {
 			// zero rowid means we don't have a previous value.
-			if data.new.IsZero() {
+			if data.newAcct.IsEmpty() {
+				// IsEmpty means we don't have a previous value. Note, can't use newAcct.MsgIsZero
+				// because of non-zero UpdateRound field in a new delta
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
-				normBalance := data.new.NormalizedOnlineBalance(proto)
-				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				result, err = insertStmt.Exec(data.address[:], normBalance, protocol.Encode(&data.newAcct))
 				if err == nil {
-					updatedAccounts[updatedAccountIdx].rowid, err = result.LastInsertId()
-					updatedAccounts[updatedAccountIdx].accountData = data.new
+					var rowid int64
+					rowid, err = result.LastInsertId()
+					updatedAccounts[updatedAccountIdx].rowid = rowid
+					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
+					newAddressesRowIDs[data.address] = rowid
 				}
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
-			if data.new.IsZero() {
+			if data.newAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
-				result, err = deleteByRowIDStmt.Exec(data.old.rowid)
+				result, err = deleteByRowIDStmt.Exec(data.oldAcct.rowid)
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].rowid = 0
-					updatedAccounts[updatedAccountIdx].accountData = basics.AccountData{}
+					updatedAccounts[updatedAccountIdx].accountData = baseAccountData{}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.old.rowid)
+						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
 					}
 				}
 			} else {
-				normBalance := data.new.NormalizedOnlineBalance(proto)
-				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), data.old.rowid)
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.newAcct), data.oldAcct.rowid)
 				if err == nil {
 					// rowid doesn't change on update.
-					updatedAccounts[updatedAccountIdx].rowid = data.old.rowid
-					updatedAccounts[updatedAccountIdx].accountData = data.new
+					updatedAccounts[updatedAccountIdx].rowid = data.oldAcct.rowid
+					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.old.rowid)
+						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
 					}
 				}
 			}
@@ -1153,8 +2355,117 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 
 		// set the returned persisted account states so that we could store that as the baseAccounts in commitRound
 		updatedAccounts[updatedAccountIdx].round = lastUpdateRound
-		updatedAccounts[updatedAccountIdx].addr = addr
+		updatedAccounts[updatedAccountIdx].addr = data.address
 		updatedAccountIdx++
+	}
+
+	deleteResourceStmt, err = tx.Prepare("DELETE FROM resources WHERE addrid = ? AND aidx = ?")
+	if err != nil {
+		return
+	}
+	defer deleteResourceStmt.Close()
+
+	insertResourceStmt, err = tx.Prepare("INSERT INTO resources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+	if err != nil {
+		return
+	}
+	defer insertResourceStmt.Close()
+
+	updateResourceStmt, err = tx.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
+	if err != nil {
+		return
+	}
+	defer updateResourceStmt.Close()
+
+	updatedResources = make(map[basics.Address][]persistedResourcesData)
+	for i := 0; i < resources.len(); i++ {
+		data := resources.getByIdx(i)
+		addr := data.address
+		aidx := data.oldResource.aidx
+		addrid := data.oldResource.addrid
+		if addrid == 0 {
+			// new entry, data.oldResource does not have addrid
+			// check if this delta is part of in-memory only account
+			// that is created, funded, transferred, and closed within a commit range
+			inMemEntry := data.oldResource.data.IsEmpty() && data.newResource.IsEmpty()
+			addrid = newAddressesRowIDs[addr]
+			if addrid == 0 && !inMemEntry {
+				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+				return
+			}
+		}
+		var entry persistedResourcesData
+		if data.oldResource.data.IsEmpty() {
+			// IsEmpty means we don't have a previous value. Note, can't use oldResource.data.MsgIsZero
+			// because of possibility of empty asset holdings or app local state after opting in,
+			// as well as non-zero UpdateRound field in a new delta
+			if data.newResource.IsEmpty() {
+				// if we didn't had it before, and we don't have anything now, just skip it.
+				// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+				// because the base account might gone.
+				entry = persistedResourcesData{addrid: 0, aidx: aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
+			} else {
+				// create a new entry.
+				var rtype basics.CreatableType
+				if data.newResource.IsApp() {
+					rtype = basics.AppCreatable
+				} else if data.newResource.IsAsset() {
+					rtype = basics.AssetCreatable
+				} else {
+					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+					return
+				}
+				_, err = insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data.newResource))
+				if err == nil {
+					// set the returned persisted account states so that we could store that as the baseResources in commitRound
+					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+				}
+			}
+		} else {
+			// non-zero rowid means we had a previous value.
+			if data.newResource.IsEmpty() {
+				// new value is zero, which means we need to delete the current value.
+				result, err = deleteResourceStmt.Exec(addrid, aidx)
+				if err == nil {
+					// we deleted the entry successfully.
+					// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+					// because the base account might gone.
+					entry = persistedResourcesData{addrid: 0, aidx: aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
+					rowsAffected, err = result.RowsAffected()
+					if rowsAffected != 1 {
+						err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", addr.String(), addrid, aidx)
+					}
+				}
+			} else {
+				var rtype basics.CreatableType
+				if data.newResource.IsApp() {
+					rtype = basics.AppCreatable
+				} else if data.newResource.IsAsset() {
+					rtype = basics.AssetCreatable
+				} else {
+					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+					return
+				}
+
+				result, err = updateResourceStmt.Exec(protocol.Encode(&data.newResource), addrid, aidx)
+				if err == nil {
+					// rowid doesn't change on update.
+					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+					rowsAffected, err = result.RowsAffected()
+					if rowsAffected != 1 {
+						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
+					}
+				}
+			}
+		}
+
+		if err != nil {
+			return
+		}
+
+		deltas := updatedResources[addr]
+		deltas = append(deltas, entry)
+		updatedResources[addr] = deltas
 	}
 
 	if len(creatables) > 0 {
@@ -1283,7 +2594,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		}
 
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
 		copy(addr[:], addrbuf[:])
@@ -1296,7 +2607,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 			return
 		}
 		reencodedAccountData := protocol.Encode(&decodedAccountData)
-		if bytes.Compare(preencodedAccountData, reencodedAccountData) == 0 {
+		if bytes.Equal(preencodedAccountData, reencodedAccountData) {
 			// these are identical, no need to store re-encoded account data
 			continue
 		}
@@ -1321,7 +2632,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	return
 }
 
-// MerkleCommitter todo
+// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
 //msgp:ignore MerkleCommitter
 type MerkleCommitter struct {
 	tx         *sql.Tx
@@ -1378,46 +2689,95 @@ func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
 type encodedAccountsBatchIter struct {
-	rows *sql.Rows
+	accountsRows  *sql.Rows
+	resourcesRows *sql.Rows
+	nextRow       pendingRow
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
-	if iterator.rows == nil {
-		iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecordV6, err error) {
+	if iterator.accountsRows == nil {
+		iterator.accountsRows, err = tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		if err != nil {
+			return
+		}
+	}
+	if iterator.resourcesRows == nil {
+		iterator.resourcesRows, err = tx.QueryContext(ctx, "SELECT addrid, aidx, rtype, data FROM resources ORDER BY addrid, aidx, rtype")
 		if err != nil {
 			return
 		}
 	}
 
 	// gather up to accountCount encoded accounts.
-	bals = make([]encodedBalanceRecord, 0, accountCount)
-	var addr basics.Address
-	for iterator.rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		err = iterator.rows.Scan(&addrbuf, &buf)
-		if err != nil {
-			iterator.Close()
-			return
-		}
-
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-
-		copy(addr[:], addrbuf)
-
-		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
-		if len(bals) == accountCount {
-			// we're done with this iteration.
-			return
-		}
+	bals = make([]encodedBalanceRecordV6, 0, accountCount)
+	var encodedRecord encodedBalanceRecordV6
+	var baseAcct baseAccountData
+	var numAcct int
+	baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+		encodedRecord = encodedBalanceRecordV6{Address: addr, AccountData: encodedAccountData}
+		baseAcct = *accountData
+		numAcct++
+		return nil
 	}
 
-	err = iterator.rows.Err()
+	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint32
+	// emptyCount := 0
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
+		if !emptyBaseAcct && resData != nil {
+			if encodedRecord.Resources == nil {
+				encodedRecord.Resources = make(map[uint64]msgp.Raw)
+			}
+			encodedRecord.Resources[uint64(cidx)] = encodedResourceData
+			if resData.IsApp() && resData.IsOwning() {
+				totalAppParams++
+			}
+			if resData.IsApp() && resData.IsHolding() {
+				totalAppLocalStates++
+			}
+
+			if resData.IsAsset() && resData.IsOwning() {
+				totalAssetParams++
+			}
+			if resData.IsAsset() && resData.IsHolding() {
+				totalAssets++
+			}
+
+		}
+
+		if baseAcct.TotalAppParams == totalAppParams &&
+			baseAcct.TotalAppLocalStates == totalAppLocalStates &&
+			baseAcct.TotalAssetParams == totalAssetParams &&
+			baseAcct.TotalAssets == totalAssets {
+
+			bals = append(bals, encodedRecord)
+			totalAppParams = 0
+			totalAppLocalStates = 0
+			totalAssetParams = 0
+			totalAssets = 0
+		}
+
+		return nil
+	}
+
+	_, iterator.nextRow, err = processAllBaseAccountRecords(
+		iterator.accountsRows, iterator.resourcesRows,
+		baseCb, resCb,
+		iterator.nextRow, accountCount,
+	)
+	if err != nil {
+		iterator.Close()
+		return
+	}
+
+	if len(bals) == accountCount {
+		// we're done with this iteration.
+		return
+	}
+
+	err = iterator.accountsRows.Err()
 	if err != nil {
 		iterator.Close()
 		return
@@ -1429,9 +2789,9 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 // Close shuts down the encodedAccountsBatchIter, releasing database resources.
 func (iterator *encodedAccountsBatchIter) Close() {
-	if iterator.rows != nil {
-		iterator.rows.Close()
-		iterator.rows = nil
+	if iterator.accountsRows != nil {
+		iterator.accountsRows.Close()
+		iterator.accountsRows = nil
 	}
 }
 
@@ -1464,11 +2824,14 @@ const (
 
 // orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
 type orderedAccountsIter struct {
-	step         orderedAccountsIterStep
-	rows         *sql.Rows
-	tx           *sql.Tx
-	accountCount int
-	insertStmt   *sql.Stmt
+	step            orderedAccountsIterStep
+	accountBaseRows *sql.Rows
+	hashesRows      *sql.Rows
+	resourcesRows   *sql.Rows
+	tx              *sql.Tx
+	pendingRow      pendingRow
+	accountCount    int
+	insertStmt      *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
@@ -1481,10 +2844,224 @@ func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter 
 	}
 }
 
+type pendingRow struct {
+	addrid int64
+	aidx   basics.CreatableIndex
+	rtype  basics.CreatableType
+	buf    []byte
+}
+
+func processAllResources(
+	resRows *sql.Rows,
+	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingRow,
+	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
+) (pendingRow, error) {
+	var err error
+	for {
+		var buf []byte
+		var addrid int64
+		var aidx basics.CreatableIndex
+		var rtype basics.CreatableType
+		if pr.addrid != 0 {
+			// some accounts may not have resources, consider the following case:
+			// acct 1 and 3 has resources, account 2 does not
+			// in this case addrid = 3 after processing resources from 1, but acctRowid = 2
+			// and we need to skip accounts without resources
+			if pr.addrid > acctRowid {
+				err = callback(addr, 0, 0, nil, nil)
+				return pr, err
+			}
+			if pr.addrid < acctRowid {
+				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", pr.addrid, acctRowid)
+				return pendingRow{}, err
+			}
+			addrid = pr.addrid
+			buf = pr.buf
+			aidx = pr.aidx
+			rtype = pr.rtype
+			pr = pendingRow{}
+		} else {
+			if !resRows.Next() {
+				err = callback(addr, 0, 0, nil, nil)
+				if err != nil {
+					return pendingRow{}, err
+				}
+				break
+			}
+			err = resRows.Scan(&addrid, &aidx, &rtype, &buf)
+			if err != nil {
+				return pendingRow{}, err
+			}
+			if addrid < acctRowid {
+				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", addrid, acctRowid)
+				return pendingRow{}, err
+			} else if addrid > acctRowid {
+				err = callback(addr, 0, 0, nil, nil)
+				return pendingRow{addrid, aidx, rtype, buf}, err
+			}
+		}
+		var resData resourcesData
+		err = protocol.Decode(buf, &resData)
+		if err != nil {
+			return pendingRow{}, err
+		}
+		err = callback(addr, aidx, rtype, &resData, buf)
+		if err != nil {
+			return pendingRow{}, err
+		}
+	}
+	return pendingRow{}, nil
+}
+
+func processAllBaseAccountRecords(
+	baseRows *sql.Rows,
+	resRows *sql.Rows,
+	baseCb func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) error,
+	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
+	pending pendingRow, accountCount int,
+) (int, pendingRow, error) {
+	var addr basics.Address
+	var prevAddr basics.Address
+	var err error
+	count := 0
+	for baseRows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid int64
+		err = baseRows.Scan(&rowid, &addrbuf, &buf)
+		if err != nil {
+			return 0, pendingRow{}, err
+		}
+
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return 0, pendingRow{}, err
+		}
+
+		copy(addr[:], addrbuf)
+
+		var accountData baseAccountData
+		err = protocol.Decode(buf, &accountData)
+		if err != nil {
+			return 0, pendingRow{}, err
+		}
+		err = baseCb(addr, rowid, &accountData, buf)
+		if err != nil {
+			return 0, pendingRow{}, err
+		}
+
+		pending, err = processAllResources(resRows, addr, &accountData, rowid, pending, resCb)
+		if err != nil {
+			err = fmt.Errorf("failed to gather resources for account %v, addrid %d, prev address %v : %w", addr, rowid, prevAddr, err)
+			return 0, pendingRow{}, err
+		}
+
+		count++
+		if accountCount > 0 && count == accountCount {
+			// we're done with this iteration.
+			return count, pending, nil
+		}
+		prevAddr = addr
+	}
+
+	return count, pending, nil
+}
+
+// LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
+// On every account full load it invokes acctCb callback to report progress and data.
+func LoadAllFullAccounts(
+	ctx context.Context, tx *sql.Tx,
+	balancesTable string, resourcesTable string,
+	acctCb func(basics.Address, basics.AccountData),
+) (count int, err error) {
+	baseRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT rowid, address, data FROM %s ORDER BY rowid", balancesTable))
+	if err != nil {
+		return
+	}
+	defer baseRows.Close()
+
+	// iterate over the existing resources
+	resRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT addrid, aidx, rtype, data FROM %s ORDER BY addrid, aidx, rtype", resourcesTable))
+	if err != nil {
+		return
+	}
+	defer resRows.Close()
+
+	var address basics.Address
+	var baseAcct baseAccountData
+	var ad basics.AccountData
+
+	baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+		baseAcct = *accountData
+		ad = baseAcct.GetAccountData()
+		copy(address[:], addr[:])
+		return nil
+	}
+
+	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint32
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+		if resData != nil {
+			// resData can be nil if a base account does not have resources
+			// or there is a pending resource row from a next account
+			if resData.IsApp() && resData.IsOwning() {
+				if ad.AppParams == nil {
+					ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
+				}
+				ad.AppParams[basics.AppIndex(cidx)] = resData.GetAppParams()
+				totalAppParams++
+			}
+			if resData.IsApp() && resData.IsHolding() {
+				if ad.AppLocalStates == nil {
+					ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+				}
+				ad.AppLocalStates[basics.AppIndex(cidx)] = resData.GetAppLocalState()
+				totalAppLocalStates++
+			}
+
+			if resData.IsAsset() && resData.IsOwning() {
+				if ad.AssetParams == nil {
+					ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+				}
+				ad.AssetParams[basics.AssetIndex(cidx)] = resData.GetAssetParams()
+				totalAssetParams++
+			}
+			if resData.IsAsset() && resData.IsHolding() {
+				if ad.Assets == nil {
+					ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+				}
+				ad.Assets[basics.AssetIndex(cidx)] = resData.GetAssetHolding()
+				totalAssets++
+			}
+		}
+
+		if baseAcct.TotalAppParams == totalAppParams &&
+			baseAcct.TotalAppLocalStates == totalAppLocalStates &&
+			baseAcct.TotalAssetParams == totalAssetParams &&
+			baseAcct.TotalAssets == totalAssets {
+			acctCb(address, ad)
+			ad = basics.AccountData{}
+			totalAppParams = 0
+			totalAppLocalStates = 0
+			totalAssetParams = 0
+			totalAssets = 0
+			address = basics.Address{}
+		}
+
+		return nil
+	}
+
+	count, _, err = processAllBaseAccountRecords(baseRows, resRows, baseCb, resCb, pendingRow{}, 0)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 // accountAddressHash is used by Next to return a single account address and the associated hash.
 type accountAddressHash struct {
-	address basics.Address
-	digest  []byte
+	addrid int64
+	digest []byte
 }
 
 // Next returns an array containing the account address and hash
@@ -1508,7 +3085,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepCreateOrderingTable {
 		// create the temporary table
-		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(addrid INTEGER, hash blob)")
 		if err != nil {
 			return
 		}
@@ -1517,12 +3094,17 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		iterator.accountBaseRows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		if err != nil {
+			return
+		}
+		// iterate over the existing resources
+		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, aidx, rtype, data FROM resources ORDER BY addrid, aidx, rtype")
 		if err != nil {
 			return
 		}
 		// prepare the insert statement into the temporary table
-		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(addrid, hash) VALUES(?, ?)")
 		if err != nil {
 			return
 		}
@@ -1530,48 +3112,55 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		return
 	}
 	if iterator.step == oaiStepInsertAccountData {
-		var addr basics.Address
-		count := 0
-		for iterator.rows.Next() {
-			var addrbuf []byte
-			var buf []byte
-			err = iterator.rows.Scan(&addrbuf, &buf)
+		var lastAddrID int64
+		baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
+			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
+			_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
 			if err != nil {
-				iterator.Close(ctx)
 				return
 			}
-
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				iterator.Close(ctx)
-				return
-			}
-
-			copy(addr[:], addrbuf)
-
-			var accountData basics.AccountData
-			err = protocol.Decode(buf, &accountData)
-			if err != nil {
-				iterator.Close(ctx)
-				return
-			}
-			hash := accountHashBuilder(addr, accountData, buf)
-			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
-			if err != nil {
-				iterator.Close(ctx)
-				return
-			}
-
-			count++
-			if count == iterator.accountCount {
-				// we're done with this iteration.
-				processedRecords = count
-				return
-			}
+			lastAddrID = rowid
+			return nil
 		}
+
+		resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+			var err error
+			if resData != nil {
+				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
+				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
+			}
+			return err
+		}
+
+		count := 0
+		count, iterator.pendingRow, err = processAllBaseAccountRecords(
+			iterator.accountBaseRows, iterator.resourcesRows,
+			baseCb, resCb,
+			iterator.pendingRow, iterator.accountCount,
+		)
+		if err != nil {
+			iterator.Close(ctx)
+			return
+		}
+
+		if count == iterator.accountCount {
+			// we're done with this iteration.
+			processedRecords = count
+			return
+		}
+
+		// make sure the resource iterator has no more entries.
+		if iterator.resourcesRows.Next() {
+			iterator.Close(ctx)
+			err = errors.New("resource table entries exceed the ones specified in the accountbase table")
+			return
+		}
+
 		processedRecords = count
-		iterator.rows.Close()
-		iterator.rows = nil
+		iterator.accountBaseRows.Close()
+		iterator.accountBaseRows = nil
+		iterator.resourcesRows.Close()
+		iterator.resourcesRows = nil
 		iterator.insertStmt.Close()
 		iterator.insertStmt = nil
 		iterator.step = oaiStepCreateOrderingAccountIndex
@@ -1590,7 +3179,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
+		iterator.hashesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, hash FROM accountsiteratorhashes ORDER BY hash")
 
 		if err != nil {
 			iterator.Close(ctx)
@@ -1601,34 +3190,24 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 
 	if iterator.step == oaiStepIterateOverOrderedTable {
-		acct = make([]accountAddressHash, 0, iterator.accountCount)
-		var addr basics.Address
-		for iterator.rows.Next() {
-			var addrbuf []byte
-			var hash []byte
-			err = iterator.rows.Scan(&addrbuf, &hash)
+		acct = make([]accountAddressHash, iterator.accountCount)
+		acctIdx := 0
+		for iterator.hashesRows.Next() {
+			err = iterator.hashesRows.Scan(&(acct[acctIdx].addrid), &(acct[acctIdx].digest))
 			if err != nil {
 				iterator.Close(ctx)
 				return
 			}
-
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				iterator.Close(ctx)
-				return
-			}
-
-			copy(addr[:], addrbuf)
-
-			acct = append(acct, accountAddressHash{address: addr, digest: hash})
-			if len(acct) == iterator.accountCount {
+			acctIdx++
+			if acctIdx == iterator.accountCount {
 				// we're done with this iteration.
 				return
 			}
 		}
+		acct = acct[:acctIdx]
 		iterator.step = oaiStepShutdown
-		iterator.rows.Close()
-		iterator.rows = nil
+		iterator.hashesRows.Close()
+		iterator.hashesRows = nil
 		return
 	}
 	if iterator.step == oaiStepShutdown {
@@ -1644,15 +3223,41 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 // Close shuts down the orderedAccountsBuilderIter, releasing database resources.
 func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
-	if iterator.rows != nil {
-		iterator.rows.Close()
-		iterator.rows = nil
+	if iterator.accountBaseRows != nil {
+		iterator.accountBaseRows.Close()
+		iterator.accountBaseRows = nil
+	}
+	if iterator.resourcesRows != nil {
+		iterator.resourcesRows.Close()
+		iterator.resourcesRows = nil
+	}
+	if iterator.hashesRows != nil {
+		iterator.hashesRows.Close()
+		iterator.hashesRows = nil
 	}
 	if iterator.insertStmt != nil {
 		iterator.insertStmt.Close()
 		iterator.insertStmt = nil
 	}
 	_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+	return
+}
+
+// createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
+func lookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid int64) (address basics.Address, err error) {
+	var addrbuf []byte
+	err = tx.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = fmt.Errorf("no matching address could be found for rowid %d: %w", addrid, err)
+		}
+		return
+	}
+	if len(addrbuf) != len(address) {
+		err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(address))
+		return
+	}
+	copy(address[:], addrbuf)
 	return
 }
 
@@ -1681,22 +3286,22 @@ func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hash
 	}
 
 	// gather up to accountCount encoded accounts.
-	hashes = make([][]byte, 0, iterator.hashCount)
+	hashes = make([][]byte, iterator.hashCount)
+	hashIdx := 0
 	for iterator.rows.Next() {
-		var hash []byte
-		err = iterator.rows.Scan(&hash)
+		err = iterator.rows.Scan(&hashes[hashIdx])
 		if err != nil {
 			iterator.Close()
 			return
 		}
 
-		hashes = append(hashes, hash)
-		if len(hashes) == iterator.hashCount {
+		hashIdx++
+		if hashIdx == iterator.hashCount {
 			// we're done with this iteration.
 			return
 		}
 	}
-
+	hashes = hashes[:hashIdx]
 	err = iterator.rows.Err()
 	if err != nil {
 		iterator.Close()
@@ -1719,4 +3324,10 @@ func (iterator *catchpointPendingHashesIterator) Close() {
 // happened before the other.
 func (pac *persistedAccountData) before(other *persistedAccountData) bool {
 	return pac.round < other.round
+}
+
+// before compares the round numbers of two persistedResourcesData and determines if the current persistedResourcesData
+// happened before the other.
+func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
+	return prd.round < other.round
 }

@@ -22,8 +22,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -47,12 +49,50 @@ type mockCowForLogicLedger struct {
 	txc    uint64
 }
 
-func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
+	acct, err := c.getAccount(addr, withPendingRewards)
+	return ledgercore.ToAccountData(acct), err
+}
+
+func (c *mockCowForLogicLedger) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	br, ok := c.brs[addr]
 	if !ok {
 		return basics.AccountData{}, fmt.Errorf("addr %s not in mock cow", addr.String())
 	}
 	return br, nil
+}
+
+func (c *mockCowForLogicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
+	br, ok := c.brs[addr]
+	if !ok {
+		return basics.MicroAlgos{}, fmt.Errorf("addr %s not in mock cow", addr.String())
+	}
+	return br.MinBalance(proto), nil
+}
+
+func (c *mockCowForLogicLedger) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
+	acct, err := c.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.AppParams[aidx]
+	return
+}
+func (c *mockCowForLogicLedger) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetParams, ok bool, err error) {
+	acct, err := c.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.AssetParams[aidx]
+	return
+}
+func (c *mockCowForLogicLedger) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
+	acct, err := c.getAccount(addr, false)
+	if err != nil {
+		return
+	}
+	ret, ok = acct.Assets[aidx]
+	return
 }
 
 func (c *mockCowForLogicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {

@@ -92,8 +92,7 @@ func (ledger *Ledger) endBlock(t testing.TB, eval testingEvaluator) *ledgercore.
 
 // lookup gets the current accountdata for an address
 func (ledger *Ledger) lookup(t testing.TB, addr basics.Address) basics.AccountData {
-	rnd := ledger.Latest()
-	ad, err := ledger.Lookup(rnd, addr)
+	ad, _, err := ledger.LookupLatest(addr)
 	require.NoError(t, err)
 	return ad
 }
@@ -264,7 +263,7 @@ func TestPayAction(t *testing.T) {
 	vb = l.endBlock(t, eval)
 
 	deltas := vb.Delta()
-	for _, addr := range deltas.Accts.ModifiedAccounts() {
+	for _, addr := range deltas.NewAccts.ModifiedAccounts() {
 		if addr == addrs[2] {
 			found = true
 		}
@@ -440,7 +439,7 @@ submit:  itxn_submit
 	require.True(t, in)
 	require.Equal(t, amount, uint64(0))
 
-	// Now, suceed, because opted in.
+	// Now, succeed, because opted in.
 	eval = testingEvaluator{l.nextBlock(t), l}
 	eval.txn(t, &fundgold)
 	l.endBlock(t, eval)

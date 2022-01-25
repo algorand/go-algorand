@@ -41,12 +41,16 @@ import (
 type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
+	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
+	LookupResource(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.AccountResource, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
+
+// ErrNotInCowCache is returned when a lookup method requests a cached value, but it can't be found
+var ErrNotInCowCache = errors.New("can't find object in roundCowBase")
 
 // averageEncodedTxnSizeHint is an estimation for the encoded transaction size
 // which is used for preallocating memory upfront in the payset. Preallocating
@@ -71,6 +75,30 @@ type foundAddress struct {
 	exists  bool
 }
 
+// cachedAppParams contains cached value and existence flag for app params
+type cachedAppParams struct {
+	value  basics.AppParams
+	exists bool
+}
+
+// cachedAssetParams contains cached value and existence flag for asset params
+type cachedAssetParams struct {
+	value  basics.AssetParams
+	exists bool
+}
+
+// cachedAppLocalState contains cached value and existence flag for app local state
+type cachedAppLocalState struct {
+	value  basics.AppLocalState
+	exists bool
+}
+
+// cachedAssetHolding contains cached value and existence flag for asset holding
+type cachedAssetHolding struct {
+	value  basics.AssetHolding
+	exists bool
+}
+
 type roundCowBase struct {
 	l LedgerForCowBase
 
@@ -92,10 +120,16 @@ type roundCowBase struct {
 	// The accounts that we're already accessed during this round evaluation. This is a caching
 	// buffer used to avoid looking up the same account data more than once during a single evaluator
 	// execution. The AccountData is always an historical one, then therefore won't be changing.
-	// The underlying (accountupdates) infrastucture may provide additional cross-round caching which
+	// The underlying (accountupdates) infrastructure may provide additional cross-round caching which
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
-	accounts map[basics.Address]basics.AccountData
+	accounts map[basics.Address]ledgercore.AccountData
+
+	// Similarly to accounts cache that stores base account data, there are caches for params, states, holdings.
+	appParams      map[ledgercore.AccountApp]cachedAppParams
+	assetParams    map[ledgercore.AccountAsset]cachedAssetParams
+	appLocalStates map[ledgercore.AccountApp]cachedAppLocalState
+	assets         map[ledgercore.AccountAsset]cachedAssetHolding
 
 	// Similar cache for asset/app creators.
 	creators map[creatable]foundAddress
@@ -108,7 +142,11 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, com
 		txnCount:           txnCount,
 		compactCertNextRnd: compactCertNextRnd,
 		proto:              proto,
-		accounts:           make(map[basics.Address]basics.AccountData),
+		accounts:           make(map[basics.Address]ledgercore.AccountData),
+		appParams:          make(map[ledgercore.AccountApp]cachedAppParams),
+		assetParams:        make(map[ledgercore.AccountAsset]cachedAssetParams),
+		appLocalStates:     make(map[ledgercore.AccountApp]cachedAppLocalState),
+		assets:             make(map[ledgercore.AccountAsset]cachedAssetHolding),
 		creators:           make(map[creatable]foundAddress),
 	}
 }
@@ -133,16 +171,150 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 // lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
 // first, and if it cannot find it there, it would defer to the underlaying implementation.
 // note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
-func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
+func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, error) {
 	if accountData, found := x.accounts[addr]; found {
 		return accountData, nil
 	}
 
-	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
-	if err == nil {
-		x.accounts[addr] = accountData
+	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return ledgercore.AccountData{}, err
 	}
-	return accountData, err
+
+	x.accounts[addr] = ad
+	return ad, err
+}
+
+func (x *roundCowBase) updateAssetResourceCache(aa ledgercore.AccountAsset, r ledgercore.AccountResource) {
+	// cache AssetParams and AssetHolding returned by LookupResource
+	if r.AssetParams == nil {
+		x.assetParams[aa] = cachedAssetParams{exists: false}
+	} else {
+		x.assetParams[aa] = cachedAssetParams{value: *r.AssetParams, exists: true}
+	}
+	if r.AssetHolding == nil {
+		x.assets[aa] = cachedAssetHolding{exists: false}
+	} else {
+		x.assets[aa] = cachedAssetHolding{value: *r.AssetHolding, exists: true}
+	}
+}
+
+func (x *roundCowBase) updateAppResourceCache(aa ledgercore.AccountApp, r ledgercore.AccountResource) {
+	// cache AppParams and AppLocalState returned by LookupResource
+	if r.AppParams == nil {
+		x.appParams[aa] = cachedAppParams{exists: false}
+	} else {
+		x.appParams[aa] = cachedAppParams{value: *r.AppParams, exists: true}
+	}
+	if r.AppLocalState == nil {
+		x.appLocalStates[aa] = cachedAppLocalState{exists: false}
+	} else {
+		x.appLocalStates[aa] = cachedAppLocalState{value: *r.AppLocalState, exists: true}
+	}
+}
+
+func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
+	aa := ledgercore.AccountApp{Address: addr, App: aidx}
+	if result, ok := x.appParams[aa]; ok {
+		if !result.exists {
+			return ledgercore.AppParamsDelta{}, false, nil
+		}
+		return ledgercore.AppParamsDelta{Params: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AppParamsDelta{}, false, fmt.Errorf("lookupAppParams couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
+	}
+
+	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	if err != nil {
+		return ledgercore.AppParamsDelta{}, false, err
+	}
+
+	x.updateAppResourceCache(aa, resourceData)
+
+	if resourceData.AppParams == nil {
+		return ledgercore.AppParamsDelta{}, false, nil
+	}
+	return ledgercore.AppParamsDelta{Params: resourceData.AppParams}, true, nil
+}
+
+func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
+	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
+	if result, ok := x.assetParams[aa]; ok {
+		if !result.exists {
+			return ledgercore.AssetParamsDelta{}, false, nil
+		}
+		return ledgercore.AssetParamsDelta{Params: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AssetParamsDelta{}, false, fmt.Errorf("lookupAssetParams couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
+	}
+
+	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	if err != nil {
+		return ledgercore.AssetParamsDelta{}, false, err
+	}
+
+	x.updateAssetResourceCache(aa, resourceData)
+
+	if resourceData.AssetParams == nil {
+		return ledgercore.AssetParamsDelta{}, false, nil
+	}
+	return ledgercore.AssetParamsDelta{Params: resourceData.AssetParams}, true, nil
+}
+
+func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
+	aa := ledgercore.AccountApp{Address: addr, App: aidx}
+	if result, ok := x.appLocalStates[aa]; ok {
+		if !result.exists {
+			return ledgercore.AppLocalStateDelta{}, false, nil
+		}
+		return ledgercore.AppLocalStateDelta{LocalState: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AppLocalStateDelta{}, false, fmt.Errorf("lookupAppLocalState couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
+	}
+
+	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	if err != nil {
+		return ledgercore.AppLocalStateDelta{}, false, err
+	}
+
+	x.updateAppResourceCache(aa, resourceData)
+
+	if resourceData.AppLocalState == nil {
+		return ledgercore.AppLocalStateDelta{}, false, nil
+	}
+	return ledgercore.AppLocalStateDelta{LocalState: resourceData.AppLocalState}, true, nil
+}
+
+func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
+	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
+	if result, ok := x.assets[aa]; ok {
+		if !result.exists {
+			return ledgercore.AssetHoldingDelta{}, false, nil
+		}
+		return ledgercore.AssetHoldingDelta{Holding: &result.value}, true, nil
+	}
+
+	if fromCache { // hasn't been found yet; we were asked not to query DB
+		return ledgercore.AssetHoldingDelta{}, false, fmt.Errorf("lookupAssetHolding couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
+	}
+
+	resourceData, err := x.l.LookupResource(x.rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	if err != nil {
+		return ledgercore.AssetHoldingDelta{}, false, err
+	}
+
+	x.updateAssetResourceCache(aa, resourceData)
+
+	if resourceData.AssetHolding == nil {
+		return ledgercore.AssetHoldingDelta{}, false, nil
+	}
+	return ledgercore.AssetHoldingDelta{Holding: resourceData.AssetHolding}, true, nil
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -162,41 +334,47 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, err := x.lookup(addr)
-	if err != nil {
-		return false, err
-	}
-
 	// For global, check if app params exist
 	if global {
-		_, ok := acct.AppParams[aidx]
-		return ok, nil
+		_, ok, err := x.lookupAppParams(addr, aidx, false)
+		return ok, err
 	}
 
 	// Otherwise, check app local states
-	_, ok := acct.AppLocalStates[aidx]
-	return ok, nil
+	_, ok, err := x.lookupAppLocalState(addr, aidx, false)
+	return ok, err
 }
 
 // getKey gets the value for a particular key in some storage
 // associated with an application globally or locally
 func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	ad, err := x.lookup(addr)
-	if err != nil {
-		return basics.TealValue{}, false, err
-	}
-
+	var err error
 	exist := false
 	kv := basics.TealKeyValue{}
 	if global {
-		var app basics.AppParams
-		if app, exist = ad.AppParams[aidx]; exist {
-			kv = app.GlobalState
+		var app ledgercore.AppParamsDelta
+		app, exist, err = x.lookupAppParams(addr, aidx, false)
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+		if app.Deleted {
+			return basics.TealValue{}, false, fmt.Errorf("getKey: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
+		if exist {
+			kv = app.Params.GlobalState
 		}
 	} else {
-		var ls basics.AppLocalState
-		if ls, exist = ad.AppLocalStates[aidx]; exist {
-			kv = ls.KeyValue
+		var ls ledgercore.AppLocalStateDelta
+		ls, exist, err = x.lookupAppLocalState(addr, aidx, false)
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+		if ls.Deleted {
+			return basics.TealValue{}, false, fmt.Errorf("getKey: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
+
+		if exist {
+			kv = ls.LocalState.KeyValue
 		}
 	}
 	if !exist {
@@ -211,23 +389,33 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	ad, err := x.lookup(addr)
-	if err != nil {
-		return basics.StateSchema{}, err
-	}
-
+	var err error
 	count := basics.StateSchema{}
 	exist := false
 	kv := basics.TealKeyValue{}
 	if global {
-		var app basics.AppParams
-		if app, exist = ad.AppParams[aidx]; exist {
-			kv = app.GlobalState
+		var app ledgercore.AppParamsDelta
+		app, exist, err = x.lookupAppParams(addr, aidx, false)
+		if err != nil {
+			return basics.StateSchema{}, err
+		}
+		if app.Deleted {
+			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
+		if exist {
+			kv = app.Params.GlobalState
 		}
 	} else {
-		var ls basics.AppLocalState
-		if ls, exist = ad.AppLocalStates[aidx]; exist {
-			kv = ls.KeyValue
+		var ls ledgercore.AppLocalStateDelta
+		ls, exist, err = x.lookupAppLocalState(addr, aidx, false)
+		if err != nil {
+			return basics.StateSchema{}, err
+		}
+		if ls.Deleted {
+			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+		}
+		if exist {
+			kv = ls.LocalState.KeyValue
 		}
 	}
 	if !exist {
@@ -255,12 +443,13 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 		return basics.StateSchema{}, nil
 	}
 
-	record, err := x.lookup(creator)
+	params, ok, err := x.lookupAppParams(creator, aidx, false)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
-
-	params, ok := record.AppParams[aidx]
+	if params.Deleted {
+		return basics.StateSchema{}, fmt.Errorf("getStorageLimits: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
+	}
 	if !ok {
 		// This should never happen. If app exists then we should have
 		// found the creator successfully.
@@ -269,16 +458,16 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 	}
 
 	if global {
-		return params.GlobalStateSchema, nil
+		return params.Params.GlobalStateSchema, nil
 	}
-	return params.LocalStateSchema, nil
+	return params.Params.LocalStateSchema, nil
 }
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
-func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
-		return basics.AccountData{}, err
+		return ledgercore.AccountData{}, err
 	}
 	if withPendingRewards {
 		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
@@ -294,9 +483,25 @@ func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cs.getCreator(cidx, ctype)
 }
 
-func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error {
-	cs.mods.Accts.Upsert(addr, acct)
+func (cs *roundCowState) Put(addr basics.Address, acct ledgercore.AccountData) error {
+	return cs.putAccount(addr, acct)
+}
+
+func (cs *roundCowState) CloseAccount(addr basics.Address) error {
+	return cs.putAccount(addr, ledgercore.AccountData{})
+}
+
+func (cs *roundCowState) putAccount(addr basics.Address, acct ledgercore.AccountData) error {
+	cs.mods.NewAccts.Upsert(addr, acct)
 	return nil
+}
+
+func (cs *roundCowState) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
+	acct, err := cs.lookup(addr) // pending rewards unneeded
+	if err != nil {
+		return
+	}
+	return acct.MinBalance(proto), nil
 }
 
 func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics.MicroAlgos, fromRewards *basics.MicroAlgos, toRewards *basics.MicroAlgos) error {
@@ -322,7 +527,10 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.Put(from, fromBalNew)
+	err = cs.putAccount(from, fromBalNew)
+	if err != nil {
+		return err
+	}
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -343,7 +551,10 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.Put(to, toBalNew)
+	err = cs.putAccount(to, toBalNew)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -591,7 +802,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
 // hotfix for testnet stall 11/07/2019; do the same thing
-func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.AccountData, headerRound basics.Round) (poolOld basics.AccountData, err error) {
+func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance ledgercore.AccountData, headerRound basics.Round) (poolOld ledgercore.AccountData, err error) {
 	// verify that we patch the correct round.
 	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
@@ -865,7 +1076,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
-				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
+				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, dataNew.TotalAssets)
 		}
 
 		// Check if we have exceeded the maximum minimum balance
@@ -1011,7 +1222,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		}
 
 	default:
-		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
+		err = fmt.Errorf("unknown transaction type %v", tx.Type)
 	}
 
 	// If the protocol does not support rewards in ApplyData,
@@ -1154,14 +1365,14 @@ func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
 	// Then we are going to go through each modified account and
 	// see if it meets the criteria for adding it to the expired
 	// participation accounts list.
-	modifiedAccounts := eval.state.mods.Accts.ModifiedAccounts()
+	modifiedAccounts := eval.state.modifiedAccounts()
 	currentRound := eval.Round()
 
 	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
 
 	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
 		accountAddr := modifiedAccounts[i]
-		acctDelta, found := eval.state.mods.Accts.Get(accountAddr)
+		acctDelta, found := eval.state.mods.NewAccts.GetData(accountAddr)
 		if !found {
 			continue
 		}
@@ -1255,7 +1466,7 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 		acctData.ClearOnlineState()
 
 		// Update the account information
-		err = eval.state.Put(accountAddr, acctData)
+		err = eval.state.putAccount(accountAddr, acctData)
 		if err != nil {
 			return err
 		}
@@ -1408,6 +1619,7 @@ transactionGroupLoop:
 
 			for _, br := range txgroup.balances {
 				base.accounts[br.Addr] = br.AccountData
+				// TODO: pull needed resources into cache?
 			}
 			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {
@@ -1453,7 +1665,7 @@ type loadedTransactionGroup struct {
 	// group is the transaction group
 	group []transactions.SignedTxnWithAD
 	// balances is a list of all the balances that the transaction group refer to and are needed.
-	balances []basics.BalanceRecord
+	balances []ledgercore.NewBalanceRecord
 	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
 	// one of the entries in the balances would be uninitialized.
 	err error
@@ -1472,7 +1684,7 @@ func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, g
 		// groupTask helps to organize the account loading for each transaction group.
 		type groupTask struct {
 			// balances contains the loaded balances each transaction group have
-			balances []basics.BalanceRecord
+			balances []ledgercore.NewBalanceRecord
 			// balancesCount is the number of balances that nees to be loaded per transaction group
 			balancesCount int
 			// done is a waiting channel for all the account data for the transaction group to be loaded
@@ -1554,7 +1766,7 @@ func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, g
 		// updata all the groups task :
 		// allocate the correct number of balances, as well as
 		// enough space on the "done" channel.
-		allBalances := make([]basics.BalanceRecord, totalBalances)
+		allBalances := make([]ledgercore.NewBalanceRecord, totalBalances)
 		usedBalances := 0
 		for _, gr := range groupsReady {
 			gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
@@ -1575,7 +1787,7 @@ func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, g
 						}
 						// lookup the account data directly from the ledger.
 						acctData, _, err := l.LookupWithoutRewards(rnd, task.address)
-						br := basics.BalanceRecord{
+						br := ledgercore.NewBalanceRecord{
 							Addr:        task.address,
 							AccountData: acctData,
 						}

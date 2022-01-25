@@ -48,8 +48,8 @@ func makeString(len int) string {
 	return s
 }
 
-func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
-	er := encodedBalanceRecord{}
+func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
+	er := encodedBalanceRecordV5{}
 	hash := crypto.Hash([]byte{1, 2, 3})
 	copy(er.Address[:], hash[:])
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
@@ -143,10 +143,10 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	er := makeTestEncodedBalanceRecord(t)
+	er := makeTestEncodedBalanceRecordV5(t)
 	encodedBr := er.MarshalMsg(nil)
 
-	var er2 encodedBalanceRecord
+	var er2 encodedBalanceRecordV5
 	_, err := er2.UnmarshalMsg(encodedBr)
 	require.NoError(t, err)
 
@@ -156,13 +156,13 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fbc := catchpointFileBalancesChunk{}
+	fbc := catchpointFileBalancesChunkV5{}
 	for i := 0; i < 512; i++ {
-		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
+		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecordV5(t))
 	}
 	encodedFbc := fbc.MarshalMsg(nil)
 
-	var fbc2 catchpointFileBalancesChunk
+	var fbc2 catchpointFileBalancesChunkV5
 	_, err := fbc2.UnmarshalMsg(encodedFbc)
 	require.NoError(t, err)
 
@@ -179,7 +179,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
+	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectroy)
@@ -257,7 +257,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
 			require.Equal(t, uint64(len(accts)), fileHeader.TotalAccounts)
 		} else if header.Name == "balances.1.1.msgpack" {
-			var balances catchpointFileBalancesChunk
+			var balances catchpointFileBalancesChunkV6
 			err = protocol.Decode(balancesBlockBytes, &balances)
 			require.NoError(t, err)
 			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
@@ -277,7 +277,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
+	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectroy)
@@ -361,15 +361,15 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0)
+		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
 		return err
 	})
 	require.NoError(t, err)
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
-		require.NoError(t, err)
+		acctData, validThrough, err := l.LookupLatest(addr)
+		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)
 	}

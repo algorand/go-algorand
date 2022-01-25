@@ -261,7 +261,7 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
 	any := false
 	out := basics.AccountData{}
@@ -303,6 +303,38 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 		return basics.AccountData{}, 0, fmt.Errorf("no account for addr %s", addr.String())
 	}
 	return out, rnd, nil
+}
+
+func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	ad, rnd, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return ledgercore.AccountData{}, 0, err
+	}
+	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+func (dl *dryrunLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	ad, _, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return ledgercore.AccountResource{}, err
+	}
+	result := ledgercore.AccountResource{CreatableIndex: aidx, CreatableType: ctype}
+	if ctype == basics.AppCreatable {
+		if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+			result.AppParams = &p
+		}
+		if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+			result.AppLocalState = &s
+		}
+	} else if ctype == basics.AssetCreatable {
+		if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+			result.AssetParams = &p
+		}
+		if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+			result.AssetHolding = &p
+		}
+	}
+	return result, nil
 }
 
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

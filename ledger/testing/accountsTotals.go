@@ -27,13 +27,14 @@ import (
 )
 
 // CalculateNewRoundAccountTotals calculates the accounts totals for a given round
-func CalculateNewRoundAccountTotals(t *gotesting.T, newRoundDeltas ledgercore.AccountDeltas, newRoundRewardLevel uint64, newRoundConsensusParams config.ConsensusParams, prevRoundBalances map[basics.Address]basics.AccountData, prevRoundTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
+func CalculateNewRoundAccountTotals(t *gotesting.T, newRoundDeltas ledgercore.NewAccountDeltas, newRoundRewardLevel uint64, newRoundConsensusParams config.ConsensusParams, prevRoundBalances map[basics.Address]basics.AccountData, prevRoundTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
 	newTotals = prevRoundTotals
 	var ot basics.OverflowTracker
 	newTotals.ApplyRewards(newRoundRewardLevel, &ot)
 	for i := 0; i < newRoundDeltas.Len(); i++ {
 		addr, ad := newRoundDeltas.GetByIdx(i)
-		newTotals.DelAccount(newRoundConsensusParams, prevRoundBalances[addr], &ot)
+		prevBal := ledgercore.ToAccountData(prevRoundBalances[addr])
+		newTotals.DelAccount(newRoundConsensusParams, prevBal, &ot)
 		newTotals.AddAccount(newRoundConsensusParams, ad, &ot)
 	}
 	require.False(t, ot.Overflowed)
