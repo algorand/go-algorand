@@ -39,10 +39,9 @@ func TestRandomAddressEquality(t *testing.T) {
 
 		expected, err := bigIntToBytes(randomAddrInt, uint(addressByteSize))
 		require.NoError(t, err, "big int to byte conversion error")
-		for i := 0; i < addressByteSize; i++ {
-			addrBasics[i] = expected[i]
-			addrABI[i] = expected[i]
-		}
+
+		copy(addrABI[:], expected)
+		copy(addrBasics[:], expected)
 
 		checkSumBasics := addrBasics.GetChecksum()
 		checkSumABI, err := addressCheckSum(addrABI)

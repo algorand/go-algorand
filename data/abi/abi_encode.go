@@ -38,9 +38,7 @@ func bigIntToBytes(x *big.Int, byteLen uint) ([]byte, error) {
 
 	buffer := make([]byte, byteLen)
 	intBytes := x.Bytes()
-	for i := 0; i < len(intBytes); i++ {
-		buffer[len(buffer)-1-i] = intBytes[len(intBytes)-1-i]
-	}
+	copy(buffer[int(byteLen)-len(intBytes):], intBytes)
 	return buffer, nil
 }
 
