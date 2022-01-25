@@ -736,7 +736,8 @@ return`
 	prd, err := l.accts.accountsq.lookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Zero(prd.addrid)
-	a.Empty(prd.data)
+	emptyResourceData := makeResourcesData(0)
+	a.Equal(emptyResourceData, prd.data)
 }
 
 func TestAppEmptyAccountsGlobal(t *testing.T) {
@@ -871,7 +872,8 @@ return`
 	prd, err := l.accts.accountsq.lookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Zero(prd.addrid)
-	a.Empty(prd.data)
+	emptyResourceData := makeResourcesData(0)
+	a.Equal(emptyResourceData, prd.data)
 }
 
 func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {

@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1189,13 +1190,24 @@ func TestResourcesDataApp(t *testing.T) {
 
 	a := require.New(t)
 
+	rd := resourcesData{}
+	a.False(rd.IsApp())
+	a.True(rd.IsEmpty())
+
+	rd = makeResourcesData(1)
+	a.False(rd.IsApp())
+	a.False(rd.IsHolding())
+	a.False(rd.IsOwning())
+	a.True(rd.IsEmpty())
+
 	// check empty
 	appParamsEmpty := basics.AppParams{}
-	rd := resourcesData{}
+	rd = resourcesData{}
 	rd.SetAppParams(appParamsEmpty, false)
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 
 	appLocalEmpty := basics.AppLocalState{}
@@ -1203,7 +1215,8 @@ func TestResourcesDataApp(t *testing.T) {
 	rd.SetAppLocalState(appLocalEmpty)
 	a.True(rd.IsApp())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
 	// check both empty
@@ -1213,7 +1226,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1225,7 +1239,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParams, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1234,7 +1249,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParams, rd.GetAppParams())
 	a.Equal(appState, rd.GetAppLocalState())
 
@@ -1243,7 +1259,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.True(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParams, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1253,7 +1270,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyApp())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appState, rd.GetAppLocalState())
 
@@ -1262,7 +1280,8 @@ func TestResourcesDataApp(t *testing.T) {
 	a.False(rd.IsApp())
 	a.False(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
@@ -1274,17 +1293,99 @@ func TestResourcesDataApp(t *testing.T) {
 	a.True(rd.IsApp())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
 	a.Equal(appParamsEmpty, rd.GetAppParams())
 	a.Equal(appLocalEmpty, rd.GetAppLocalState())
 
 	rd = resourcesData{}
 	rd.SetAppLocalState(appLocalEmpty)
-	a.True(rd.IsEmptyApp())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsApp())
+	a.False(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsEmptyApp)
 	rd.ClearAppLocalState()
-	a.True(rd.IsEmptyApp())
+	a.False(rd.IsApp())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+
+	// check migration flow (accountDataResources)
+	// 1. both exist and empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 2. both exist and not empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 3. both exist: holding not empty, param is empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	rd.SetAppParams(appParamsEmpty, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 4. both exist: holding empty, param is not empty
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appLocalEmpty)
+	rd.SetAppParams(appParams, true)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 5. holding does not exist and params is empty
+	rd = makeResourcesData(0)
+	rd.SetAppParams(appParamsEmpty, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 6. holding does not exist and params is not empty
+	rd = makeResourcesData(0)
+	rd.SetAppParams(appParams, false)
+	a.True(rd.IsApp())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 7. holding exist and not empty and params does not exist
+	rd = makeResourcesData(0)
+	rd.SetAppLocalState(appState)
+	a.True(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAppFields())
+	a.False(rd.IsEmpty())
+
+	// 8. both do not exist
+	rd = makeResourcesData(0)
+	a.False(rd.IsApp())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAppFields())
+	a.True(rd.IsEmpty())
+
 }
 
 func TestResourcesDataAsset(t *testing.T) {
@@ -1292,13 +1393,24 @@ func TestResourcesDataAsset(t *testing.T) {
 
 	a := require.New(t)
 
+	rd := resourcesData{}
+	a.False(rd.IsAsset())
+	a.True(rd.IsEmpty())
+
+	rd = makeResourcesData(1)
+	a.False(rd.IsAsset())
+	a.False(rd.IsHolding())
+	a.False(rd.IsOwning())
+	a.True(rd.IsEmpty())
+
 	// check empty
 	assetParamsEmpty := basics.AssetParams{}
-	rd := resourcesData{}
+	rd = resourcesData{}
 	rd.SetAssetParams(assetParamsEmpty, false)
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 
 	assetHoldingEmpty := basics.AssetHolding{}
@@ -1306,7 +1418,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	rd.SetAssetHolding(assetHoldingEmpty)
 	a.True(rd.IsAsset())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
 	// check both empty
@@ -1316,7 +1429,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1328,7 +1442,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParams, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1337,7 +1452,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParams, rd.GetAssetParams())
 	a.Equal(assetHolding, rd.GetAssetHolding())
 
@@ -1346,7 +1462,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.True(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParams, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1356,7 +1473,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.False(rd.IsEmptyAsset())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHolding, rd.GetAssetHolding())
 
@@ -1365,7 +1483,8 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.False(rd.IsAsset())
 	a.False(rd.IsOwning())
 	a.False(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
@@ -1377,17 +1496,544 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsAsset())
 	a.False(rd.IsOwning())
 	a.True(rd.IsHolding())
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
 	a.Equal(assetParamsEmpty, rd.GetAssetParams())
 	a.Equal(assetHoldingEmpty, rd.GetAssetHolding())
 
 	rd = resourcesData{}
 	rd.SetAssetHolding(assetHoldingEmpty)
-	a.True(rd.IsEmptyAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsAsset())
+	a.False(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsEmptyAsset)
 	rd.ClearAssetHolding()
-	a.True(rd.IsEmptyAsset())
+	a.False(rd.IsAsset())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, resourceFlagsNotHolding)
+
+	// check migration operations (accountDataResources)
+	// 1. both exist and empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 2. both exist and not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 3. both exist: holding not empty, param is empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	rd.SetAssetParams(assetParamsEmpty, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 4. both exist: holding empty, param is not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHoldingEmpty)
+	rd.SetAssetParams(assetParams, true)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 5. holding does not exist and params is empty
+	rd = makeResourcesData(0)
+	rd.SetAssetParams(assetParamsEmpty, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 6. holding does not exist and params is not empty
+	rd = makeResourcesData(0)
+	rd.SetAssetParams(assetParams, false)
+	a.True(rd.IsAsset())
+	a.True(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 7. holding exist and not empty and params does not exist
+	rd = makeResourcesData(0)
+	rd.SetAssetHolding(assetHolding)
+	a.True(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.True(rd.IsHolding())
+	a.False(rd.IsEmptyAssetFields())
+	a.False(rd.IsEmpty())
+
+	// 8. both do not exist
+	rd = makeResourcesData(0)
+	a.False(rd.IsAsset())
+	a.False(rd.IsOwning())
+	a.False(rd.IsHolding())
+	a.True(rd.IsEmptyAssetFields())
+	a.True(rd.IsEmpty())
+}
+
+// TestResourcesDataSetData checks combinations of old/new values when
+// updating resourceData from resourceDelta
+func TestResourcesDataSetData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	type deltaCode int
+	const (
+		tri deltaCode = iota + 1
+		del
+		emp
+		act
+	)
+
+	// apply deltas encoded as deltaCode to a base resourcesData for both apps and assets
+	apply := func(t *testing.T, base resourcesData, testType basics.CreatableType, pcode, hcode deltaCode) resourcesData {
+		if testType == basics.AssetCreatable {
+			var p ledgercore.AssetParamsDelta
+			var h ledgercore.AssetHoldingDelta
+			switch pcode {
+			case tri:
+				break
+			case del:
+				p = ledgercore.AssetParamsDelta{Deleted: true}
+			case emp:
+				p = ledgercore.AssetParamsDelta{Params: &basics.AssetParams{}}
+			case act:
+				p = ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
+			default:
+				t.Logf("invalid pcode: %d", pcode)
+				t.Fail()
+			}
+			switch hcode {
+			case tri:
+				break
+			case del:
+				h = ledgercore.AssetHoldingDelta{Deleted: true}
+			case emp:
+				h = ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{}}
+			case act:
+				h = ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 555}}
+			default:
+				t.Logf("invalid hcode: %d", hcode)
+				t.Fail()
+			}
+			base.SetAssetData(p, h)
+		} else {
+			var p ledgercore.AppParamsDelta
+			var h ledgercore.AppLocalStateDelta
+			switch pcode {
+			case tri:
+				break
+			case del:
+				p = ledgercore.AppParamsDelta{Deleted: true}
+			case emp:
+				p = ledgercore.AppParamsDelta{Params: &basics.AppParams{}}
+			case act:
+				p = ledgercore.AppParamsDelta{Params: &basics.AppParams{ClearStateProgram: []byte{4, 5, 6}}}
+			default:
+				t.Logf("invalid pcode: %d", pcode)
+				t.Fail()
+			}
+			switch hcode {
+			case tri:
+				break
+			case del:
+				h = ledgercore.AppLocalStateDelta{Deleted: true}
+			case emp:
+				h = ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{}}
+			case act:
+				h = ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumByteSlice: 5}}}
+			default:
+				t.Logf("invalid hcode: %d", hcode)
+				t.Fail()
+			}
+			base.SetAppData(p, h)
+		}
+
+		return base
+	}
+
+	itb := func(i int) (b bool) {
+		return i != 0
+	}
+
+	type testcase struct {
+		p             deltaCode
+		h             deltaCode
+		isAsset       int
+		isOwning      int
+		isHolding     int
+		isEmptyFields int
+		isEmpty       int
+	}
+
+	empty := func(testType basics.CreatableType) resourcesData {
+		return makeResourcesData(0)
+	}
+	emptyParamsNoHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetParams(basics.AssetParams{}, false)
+		} else {
+			rd.SetAppParams(basics.AppParams{}, false)
+		}
+		return rd
+	}
+	emptyParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+			rd.SetAssetParams(basics.AssetParams{}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+			rd.SetAppParams(basics.AppParams{}, true)
+		}
+		return rd
+	}
+	emptyParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+			rd.SetAssetParams(basics.AssetParams{}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+			rd.SetAppParams(basics.AppParams{}, true)
+		}
+		return rd
+	}
+	paramsNoHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, false)
+		} else {
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, false)
+		}
+		return rd
+	}
+	paramsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, true)
+		}
+		return rd
+	}
+	paramsAndHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+			rd.SetAssetParams(basics.AssetParams{Total: 222}, true)
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+			rd.SetAppParams(basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}, true)
+		}
+		return rd
+	}
+	noParamsEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{})
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{})
+		}
+		return rd
+	}
+	noParamsNotEmptyHolding := func(testType basics.CreatableType) resourcesData {
+		rd := makeResourcesData(0)
+		if testType == basics.AssetCreatable {
+			rd.SetAssetHolding(basics.AssetHolding{Amount: 111})
+		} else {
+			rd.SetAppLocalState(basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}})
+		}
+		return rd
+	}
+
+	var tests = []struct {
+		name      string
+		baseRD    func(testType basics.CreatableType) resourcesData
+		testcases []testcase
+	}{
+		{
+			"empty_base", empty,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 0, 0, 0, 1, 1},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
+
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+
+		{
+			"empty_params_no_holding", emptyParamsNoHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 0, 1, 0},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
+
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"empty_params_empty_holding", emptyParamsEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 1, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"empty_params_not_empty_holding", emptyParamsNotEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 1, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"params_no_holding", paramsNoHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 0, 0, 0},
+				{del, tri, 0, 0, 0, 1, 1},
+				{emp, tri, 1, 1, 0, 1, 0},
+				{act, tri, 1, 1, 0, 0, 0},
+
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"params_empty_holding", paramsEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"params_and_holding", paramsAndHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 1, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 1, 1, 0, 0, 0},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 1, 1, 0, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 1, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"no_params_empty_holding", noParamsEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 0, 1, 1, 0},
+				{del, tri, 1, 0, 1, 1, 0},
+				{emp, tri, 1, 1, 1, 1, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+		{
+			"no_params_not_empty_holding", noParamsNotEmptyHolding,
+			[]testcase{
+				// IsAsset, IsOwning, IsHolding, IsEmptyAssetFields, IsEmpty
+				{tri, tri, 1, 0, 1, 0, 0},
+				{del, tri, 1, 0, 1, 0, 0},
+				{emp, tri, 1, 1, 1, 0, 0},
+				{act, tri, 1, 1, 1, 0, 0},
+
+				{tri, del, 0, 0, 0, 1, 1},
+				{del, del, 0, 0, 0, 1, 1},
+				{emp, del, 1, 1, 0, 1, 0},
+				{act, del, 1, 1, 0, 0, 0},
+
+				{tri, emp, 1, 0, 1, 1, 0},
+				{del, emp, 1, 0, 1, 1, 0},
+				{emp, emp, 1, 1, 1, 1, 0},
+				{act, emp, 1, 1, 1, 0, 0},
+
+				{tri, act, 1, 0, 1, 0, 0},
+				{del, act, 1, 0, 1, 0, 0},
+				{emp, act, 1, 1, 1, 0, 0},
+				{act, act, 1, 1, 1, 0, 0},
+			},
+		},
+	}
+	for _, testType := range []basics.CreatableType{basics.AssetCreatable, basics.AppCreatable} {
+		for _, test := range tests {
+			var testTypeStr string
+			if testType == basics.AssetCreatable {
+				testTypeStr = "asset"
+			} else {
+				testTypeStr = "app"
+			}
+			t.Run(fmt.Sprintf("test_%s_%s", testTypeStr, test.name), func(t *testing.T) {
+				for i, ts := range test.testcases {
+					t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+						rd := test.baseRD(testType)
+						rd = apply(t, rd, testType, ts.p, ts.h)
+						if testType == basics.AssetCreatable {
+							a.Equal(itb(ts.isAsset), rd.IsAsset())
+							a.Equal(itb(ts.isEmptyFields), rd.IsEmptyAssetFields())
+							a.False(rd.IsApp())
+							a.True(rd.IsEmptyAppFields())
+						} else {
+							a.Equal(itb(ts.isAsset), rd.IsApp())
+							a.Equal(itb(ts.isEmptyFields), rd.IsEmptyAppFields())
+							a.False(rd.IsAsset())
+							a.True(rd.IsEmptyAssetFields())
+						}
+						a.Equal(itb(ts.isOwning), rd.IsOwning())
+						a.Equal(itb(ts.isHolding), rd.IsHolding())
+						a.Equal(itb(ts.isEmpty), rd.IsEmpty())
+					})
+				}
+			})
+		}
+	}
 }
 
 func TestBaseAccountDataIsEmpty(t *testing.T) {
@@ -1423,4 +2069,58 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	t.Run("Negative", negativeTesting)
 	t.Run("Structure", structureTesting)
 
+}
+
+func TestLookupAccountAddressFromAddressID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	addrs := make([]basics.Address, 100)
+	for i := range addrs {
+		addrs[i] = ledgertesting.RandomAddress()
+	}
+	addrsids := make(map[basics.Address]int64)
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+
+		for i := range addrs {
+			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
+			if err != nil {
+				return err
+			}
+			rowid, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			addrsids[addrs[i]] = rowid
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		for addr, addrid := range addrsids {
+			retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, addrid)
+			if err != nil {
+				return err
+			}
+			if retAddr != addr {
+				return fmt.Errorf("mismatching addresses")
+			}
+		}
+		// test fail case:
+		retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, -1)
+
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("unexpected error : %w", err)
+		}
+		if !retAddr.IsZero() {
+			return fmt.Errorf("unexpected address; should have been empty")
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }
