@@ -432,10 +432,10 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 55 | LocalNumByteSlice | uint64 | v3  | Number of local state byteslices in ApplicationCall |
 | 56 | ExtraProgramPages | uint64 | v4  | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. |
 | 57 | Nonparticipation | uint64 | v5  | Marks an account nonparticipating for rewards |
-| 58 | Logs | []byte | v5  | Log messages emitted by an application call (`itxn` only until v6). Application mode only |
-| 59 | NumLogs | uint64 | v5  | Number of Logs (`itxn` only until v6). Application mode only |
-| 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (`itxn` only until v6). Application mode only |
-| 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (`itxn` only until v6). Application mode only |
+| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
+| 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
+| 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
+| 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 
 
 TypeEnum mapping:
@@ -623,7 +623,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 - Opcode: 0x44
 - Stack: ..., A: uint64 &rarr; ...
-- immediately fail unless X is a non-zero number
+- immediately fail unless A is a non-zero number
 - Availability: v3
 
 ## pop
@@ -956,10 +956,19 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 ## acct_params_get f
 
 - Opcode: 0x73 {uint8 account params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
+- Stack: ..., A &rarr; ..., X: any, Y: uint64
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
 - Availability: v6
 - Mode: Application
+
+`acct_params_get` Fields:
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | AcctBalance | uint64 | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+
 
 ## min_balance
 
@@ -1210,7 +1219,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Availability: v5
 - Mode: Application
 
-`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_. (Addresses set into asset params of acfg transactions need not be _available_.)
+`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)
 
 ## itxn_submit
 

@@ -151,7 +151,7 @@ var opDocByName = map[string]string{
 	"asset_params_get":  "X is field F from asset A. Y is 1 if A exists, else 0",
 	"app_params_get":    "X is field F from app A. Y is 1 if A exists, else 0",
 	"acct_params_get":   "X is field F from account A. Y is 1 if A owns positive algos, else 0",
-	"assert":            "immediately fail unless X is a non-zero number",
+	"assert":            "immediately fail unless A is a non-zero number",
 	"callsub":           "branch unconditionally to TARGET, saving the next instruction on the call stack",
 	"retsub":            "pop the top instruction from the call stack and branch to it",
 
@@ -308,7 +308,7 @@ var opDocExtras = map[string]string{
 	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
 	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.",
 	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
-	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_. (Addresses set into asset params of acfg transactions need not be _available_.)",
+	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode":       "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 }
@@ -463,10 +463,10 @@ var txnFieldDocs = map[string]string{
 	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
 	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
 
-	"Logs":                 "Log messages emitted by an application call (`itxn` only until v6)",
-	"NumLogs":              "Number of Logs (`itxn` only until v6)",
-	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (`itxn` only until v6)",
-	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (`itxn` only until v6)",
+	"Logs":                 "Log messages emitted by an application call (only with `itxn` in v5)",
+	"NumLogs":              "Number of Logs (only with `itxn` in v5)",
+	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (only with `itxn` in v5)",
+	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (only with `itxn` in v5)",
 }
 
 var globalFieldDocs = map[string]string{
