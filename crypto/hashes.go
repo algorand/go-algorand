@@ -110,11 +110,10 @@ func (z *HashFactory) IsValid() error {
 // GenereicHashObj Makes it easier to sum using hash interface and Hashable interface
 func GenereicHashObj(hsh hash.Hash, h Hashable) []byte {
 	rep := HashRep(h)
-	return HashBytes(hsh, rep)
+	return hashBytes(hsh, rep)
 }
 
-// HashBytes Makes it easier to sum using hash interface.
-func HashBytes(hash hash.Hash, m []byte) []byte {
+func hashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Reset()
 	hash.Write(m)
 	outhash := hash.Sum(nil)

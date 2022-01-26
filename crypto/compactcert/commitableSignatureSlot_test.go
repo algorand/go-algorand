@@ -48,7 +48,7 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	tree, err := merklearray.Build(committableSignatureSlotArray(sigs), hfactory)
 
 	leftLeafHash := calculateHashOnSigLeaf(t, sig, 60)
-	rightLeafHash := crypto.HashBytes(hfactory.NewHash(), []byte(protocol.CompactCertSig))
+	rightLeafHash := hashBytes(hfactory.NewHash(), []byte(protocol.CompactCertSig))
 
 	a.Equal([]byte(tree.Root()), calculateHashOnInternalNode(leftLeafHash, rightLeafHash))
 }
@@ -92,10 +92,10 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue u
 
 	hash := crypto.HashFactory{HashType: HashType}.NewHash()
 	zeroDigest := make([]byte, hash.BlockSize())
-	for ; i < merklearray.MaxTreeDepth; i++ {
+	for ; i < merklearray.MaxEncodedTreeDepth; i++ {
 		sigCommitment = append(sigCommitment, zeroDigest...)
 	}
 
-	hashValue := crypto.HashBytes(hash, sigCommitment)
+	hashValue := hashBytes(hash, sigCommitment)
 	return hashValue
 }

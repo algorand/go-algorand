@@ -18,6 +18,7 @@ package merklekeystore
 
 import (
 	"encoding/binary"
+	"hash"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+func hashBytes(hash hash.Hash, m []byte) []byte {
+	hash.Reset()
+	hash.Write(m)
+	outhash := hash.Sum(nil)
+	return outhash
+}
 
 func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte {
 	binaryRound := make([]byte, 8)
@@ -43,7 +51,8 @@ func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte 
 	keyCommitment = append(keyCommitment, verifyingRawKey...)
 
 	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
-	hashValue := crypto.HashBytes(factory.NewHash(), keyCommitment)
+
+	hashValue := hashBytes(factory.NewHash(), keyCommitment)
 	return hashValue
 }
 
@@ -54,7 +63,7 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	copy(buf[len(protocol.MerkleArrayNode)+len(leftNode):], rightNode[:])
 
 	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
-	hashValue := crypto.HashBytes(factory.NewHash(), buf)
+	hashValue := hashBytes(factory.NewHash(), buf)
 	return hashValue
 }
 

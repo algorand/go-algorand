@@ -401,10 +401,11 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			stibhash := block.Payset[idx].Hash()
 
 			response := generated.ProofResponse{
-				Proof:    proofconcat,
-				Stibhash: stibhash[:],
-				Idx:      uint64(idx),
-				Hashtype: proof.HashFactory.HashType.String(),
+				Proof:     proofconcat,
+				Stibhash:  stibhash[:],
+				Idx:       uint64(idx),
+				Treedepth: uint64(proof.TreeDepth),
+				Hashtype:  proof.HashFactory.HashType.String(),
 			}
 
 			return ctx.JSON(http.StatusOK, response)

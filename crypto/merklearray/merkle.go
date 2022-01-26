@@ -18,6 +18,7 @@ package merklearray
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"hash"
 	"sort"
@@ -26,11 +27,23 @@ import (
 )
 
 const (
-	// MaxTreeDepth is the maximum tree depth (root only depth 0)
-	MaxTreeDepth = 16
+	// MaxEncodedTreeDepth is the maximum tree depth (root only depth 0) for a tree which
+	// is being encoded (either by msbpack or by the fixed length encoding)
+	MaxEncodedTreeDepth = 16
 
-	// MaxNumLeaves is the maximum number of leaves allowed in the tree
-	MaxNumLeaves = 65536 // 2^MaxTreeDepth
+	// MaxNumLeavesOnEncodedTree is the maximum number of leaves allowed for a tree which
+	// is being encoded (either by msbpack or by the fixed length encoding)
+	MaxNumLeavesOnEncodedTree = 65536 // 2^MaxEncodedTreeDepth
+)
+
+// Merkle tree errors
+var (
+	ErrRootMismatch                  = errors.New("root mismatch")
+	ErrProvingZeroCommitment         = errors.New("proving in zero-length commitment")
+	ErrProofIsNil                    = errors.New("proof should not be nil")
+	ErrNonEmptyProofForEmptyElements = errors.New("non-empty proof for empty set of elements")
+	ErrUnexpectedTreeDepth           = errors.New("unexpected tree depth")
+	ErrPosOutOfBound                 = "pos %d larger than leaf count %d"
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -38,9 +51,19 @@ const (
 type Tree struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Level 0 is the leaves.
-	Levels []Layer            `codec:"lvls,allocbound=MaxTreeDepth+1"`
-	Hash   crypto.HashFactory `codec:"hsh"`
+	// Levels represents the tree in layers. layer[0] contains the leaves.
+	Levels []Layer `codec:"lvls,allocbound=MaxEncodedTreeDepth+1"`
+
+	// NumOfElements represents the number of the elements in the array which the tree is built on.
+	// notice that the number of leaves might be larger in case of a vector commitment
+	// In addition, the code will not generate proofs on indexes larger than NumOfElements.
+	NumOfElements uint64 `codec:"nl"`
+
+	// Hash represents the hash function which is being used on elements in this tree.
+	Hash crypto.HashFactory `codec:"hsh"`
+
+	// IsVectorCommitment determines whether the tree was built as a vector commitment
+	IsVectorCommitment bool `codec:"vc"`
 }
 
 func (tree *Tree) topLayer() Layer {
@@ -75,14 +98,33 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 				errs.nonBlockingSend(err)
 				return
 			}
-			leaves[i] = crypto.HashBytes(hash, m)
+			leaves[i] = crypto.GenereicHashObj(hash, m)
 		}
 
 		batchSize++
 	}
 }
 
-// Build constructs a Merkle tree given an array.
+// BuildVectorCommitmentTree constructs a Merkle tree given an array.
+// the tree returned from this function can function as a vector commitment which has position binding property.
+// (having a position binding means that an adversary can not create a commitment and open
+// its entry i = 1 in two different ways, using proofs of different ‘depths.’)
+//
+// In addition, the tree will also extend the array to have a length of 2^X leaves.
+// i.e we always create a full tree
+func BuildVectorCommitmentTree(array Array, factory crypto.HashFactory) (*Tree, error) {
+	t, err := Build(generateVectorCommitmentArray(array), factory)
+	if err != nil {
+		return nil, err
+	}
+	t.IsVectorCommitment = true
+	t.NumOfElements = array.Length()
+	return t, nil
+}
+
+// Build constructs a Merkle tree given an array. The tree can be used to generate
+// proofs of membership on element. If a proof of position is require, a Vector Commitments
+// is required
 func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	arraylen := array.Length()
 	leaves := make(Layer, arraylen)
@@ -101,8 +143,10 @@ func Build(array Array, factory crypto.HashFactory) (*Tree, error) {
 	}
 
 	tree := &Tree{
-		Levels: nil,
-		Hash:   factory,
+		Levels:             nil,
+		NumOfElements:      array.Length(),
+		Hash:               factory,
+		IsVectorCommitment: false,
 	}
 
 	tree.buildLayers(leaves)
@@ -120,6 +164,7 @@ func (tree *Tree) buildLayers(leaves Layer) {
 }
 
 // Root returns the root hash of the tree.
+// In case the tree is empty, the return value is an empty GenericDigest.
 func (tree *Tree) Root() crypto.GenericDigest {
 	// Special case: commitment to zero-length array
 	if len(tree.Levels) == 0 {
@@ -132,28 +177,59 @@ func (tree *Tree) Root() crypto.GenericDigest {
 // TODO: change into something global and more configurable
 const validateProof = false
 
+// ProveSingleLeaf constructs a proof for a leaf in a specific position in the array that was
+// used to construct the tree.
+func (tree *Tree) ProveSingleLeaf(idx uint64) (*SingleLeafProof, error) {
+	proof, err := tree.Prove([]uint64{idx})
+	if err != nil {
+		return nil, err
+	}
+	return &SingleLeafProof{Proof: *proof}, err
+}
+
 // Prove constructs a proof for some set of positions in the array that was
 // used to construct the tree.
+//
+// this function defines the following behavior:
+// Tree is empty AND idxs list is empty results with an empty proof
+// Tree is not empty AND idxs list is empty results with an empty proof
+// Tree is empty AND idxs list not is empty results with an error
+// Tree is not empty AND idxs list is not empty results with a proof
 func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
+	// Special case: empty proof when trying to prove on 0 elements (nothing)
 	if len(idxs) == 0 {
-		return &Proof{
-			HashFactory: tree.Hash,
-		}, nil
+		return tree.createEmptyProof()
 	}
 
-	// Special case: commitment to zero-length array
-	if len(tree.Levels) == 0 {
-		return nil, fmt.Errorf("proving in zero-length commitment")
+	// Special case: error when trying to prove on elements when the tree is empty
+	// (i.e no elements in the underlying array)
+	if tree.NumOfElements == 0 {
+		return nil, ErrProvingZeroCommitment
+	}
+
+	// verify that all positions where part of the original array
+	for i := 0; i < len(idxs); i++ {
+		if idxs[i] >= tree.NumOfElements {
+			return nil, fmt.Errorf(ErrPosOutOfBound, idxs[i], tree.NumOfElements)
+		}
+	}
+
+	if tree.IsVectorCommitment {
+		VcIdxs, err := tree.convertLeavesIndexes(idxs)
+		if err != nil {
+			return nil, err
+		}
+		idxs = VcIdxs
 	}
 
 	sort.Slice(idxs, func(i, j int) bool { return idxs[i] < idxs[j] })
 
+	return tree.createProof(idxs)
+}
+
+func (tree *Tree) createProof(idxs []uint64) (*Proof, error) {
 	pl := make(partialLayer, 0, len(idxs))
 	for _, pos := range idxs {
-		if pos >= uint64(len(tree.Levels[0])) {
-			return nil, fmt.Errorf("pos %d larger than leaf count %d", pos, len(tree.Levels[0]))
-		}
-
 		// Discard duplicates
 		if len(pl) > 0 && pl[len(pl)-1].pos == pos {
 			continue
@@ -192,6 +268,30 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	return &Proof{
 		Path:        s.hints,
 		HashFactory: tree.Hash,
+		TreeDepth:   uint8(len(tree.Levels) - 1),
+	}, nil
+}
+
+func (tree *Tree) convertLeavesIndexes(idxs []uint64) ([]uint64, error) {
+	vcIdxs := make([]uint64, len(idxs))
+	for i := 0; i < len(idxs); i++ {
+		idx, err := merkleTreeToVectorCommitmentIndex(idxs[i], uint8(len(tree.Levels)-1))
+		if err != nil {
+			return nil, err
+		}
+		vcIdxs[i] = idx
+	}
+	return vcIdxs, nil
+}
+
+func (tree *Tree) createEmptyProof() (*Proof, error) {
+	treeDepth := uint8(0)
+	if len(tree.Levels) != 0 {
+		treeDepth = uint8(len(tree.Levels)) - 1
+	}
+	return &Proof{
+		HashFactory: tree.Hash,
+		TreeDepth:   treeDepth,
 	}, nil
 }
 
@@ -208,38 +308,41 @@ func (tree *Tree) buildNextLayer() {
 	tree.Levels = append(tree.Levels, newLayer)
 }
 
-func hashLeaves(elems map[uint64]crypto.Hashable, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
-
-	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
-	for i, element := range elems {
-		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
+// VerifyVectorCommitment verifies a vector commitment proof against a given root.
+func VerifyVectorCommitment(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
+	if proof == nil {
+		return ErrProofIsNil
 	}
 
-	return hashedLeaves, nil
+	msbIndexedElements, err := convertIndexes(elems, proof.TreeDepth)
+	if err != nil {
+		return err
+	}
+
+	return Verify(root, msbIndexedElements, proof)
 }
 
 // Verify ensures that the positions in elems correspond to the respective hashes
 // in a tree with the given root hash.  The proof is expected to be the proof
 // returned by Prove().
 func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *Proof) error {
-
 	if proof == nil {
-		return fmt.Errorf("proof should not be nil")
+		return ErrProofIsNil
 	}
 
 	if len(elems) == 0 {
 		if len(proof.Path) != 0 {
-			return fmt.Errorf("non-empty proof for empty set of elements")
+			return ErrNonEmptyProofForEmptyElements
 		}
 		return nil
 	}
 
-	hashedLeaves, err := hashLeaves(elems, proof.HashFactory.NewHash())
+	hashedLeaves, err := hashLeaves(elems, proof.TreeDepth, proof.HashFactory.NewHash())
 	if err != nil {
 		return err
 	}
 
-	pl := buildPartialLayer(hashedLeaves)
+	pl := buildFirstPartialLayer(hashedLeaves)
 	return verifyPath(root, proof, pl)
 }
 
@@ -256,16 +359,36 @@ func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error 
 		if pl, err = pl.up(s, l, true, hsh); err != nil {
 			return err
 		}
-
-		if l > 64 {
-			return fmt.Errorf("Verify exceeded 64 Levels, more than 2^64 leaves not supported")
-		}
 	}
 
 	return inspectRoot(root, pl)
 }
 
-func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
+func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Hash) (map[uint64]crypto.GenericDigest, error) {
+	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
+	for i, element := range elems {
+		if i >= (1 << treeDepth) {
+			return nil, fmt.Errorf(ErrPosOutOfBound, i, 1<<treeDepth)
+		}
+		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
+	}
+
+	return hashedLeaves, nil
+}
+
+func convertIndexes(elems map[uint64]crypto.Hashable, treeDepth uint8) (map[uint64]crypto.Hashable, error) {
+	msbIndexedElements := make(map[uint64]crypto.Hashable, len(elems))
+	for i, e := range elems {
+		idx, err := merkleTreeToVectorCommitmentIndex(i, treeDepth)
+		if err != nil {
+			return nil, err
+		}
+		msbIndexedElements[idx] = e
+	}
+	return msbIndexedElements, nil
+}
+
+func buildFirstPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 	pl := make(partialLayer, 0, len(elems))
 	for pos, elem := range elems {
 		pl = append(pl, layerItem{
@@ -281,7 +404,7 @@ func buildPartialLayer(elems map[uint64]crypto.GenericDigest) partialLayer {
 func inspectRoot(root crypto.GenericDigest, pl partialLayer) error {
 	computedroot := pl[0]
 	if computedroot.pos != 0 || !bytes.Equal(computedroot.hash, root) {
-		return fmt.Errorf("root mismatch")
+		return ErrRootMismatch
 	}
 	return nil
 }

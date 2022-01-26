@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/algoidan/falcon"
+	"hash"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -35,6 +36,13 @@ import (
 type testMessage string
 
 const compactCertRoundsForTests = 128
+
+func hashBytes(hash hash.Hash, m []byte) []byte {
+	hash.Reset()
+	hash.Write(m)
+	outhash := hash.Sum(nil)
+	return outhash
+}
 
 func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
@@ -168,7 +176,7 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 
 	factory := crypto.HashFactory{HashType: HashType}
-	hashValue := crypto.HashBytes(factory.NewHash(), partCommitment)
+	hashValue := hashBytes(factory.NewHash(), partCommitment)
 	return hashValue
 }
 
@@ -179,7 +187,7 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	copy(buf[len(protocol.MerkleArrayNode)+len(leftNode):], rightNode[:])
 
 	factory := crypto.HashFactory{HashType: HashType}
-	hashValue := crypto.HashBytes(factory.NewHash(), buf)
+	hashValue := hashBytes(factory.NewHash(), buf)
 	return hashValue
 }
 
@@ -364,7 +372,7 @@ func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int,
 			innerNodeBytes = append(innerNodeBytes, siblingHash...)
 		}
 		idxDirection = idxDirection >> 1
-		leafHash = crypto.HashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), innerNodeBytes)
+		leafHash = hashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), innerNodeBytes)
 	}
 	return leafHash
 }
@@ -378,7 +386,7 @@ func hashEphemeralPublicKeyLeaf(round uint64, falconPK [falcon.PublicKeySize]byt
 	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, []byte{0, 0}...)
 	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, sigRoundAsBytes[:]...)
 	ephemeralPublicKeyBytes = append(ephemeralPublicKeyBytes, falconPK[:]...)
-	leafHash := crypto.HashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), ephemeralPublicKeyBytes)
+	leafHash := hashBytes(crypto.HashFactory{HashType: HashType}.NewHash(), ephemeralPublicKeyBytes)
 	return leafHash
 }
 
@@ -398,6 +406,7 @@ func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes i
 	a.NoError(err)
 	return parsedBytes, falconPK
 }
+
 func findLInCert(a *require.Assertions, signature merklekeystore.Signature, cert *Cert) uint64 {
 	for _, t := range cert.Reveals {
 		if bytes.Compare(t.SigSlot.Sig.Signature.ByteSignature, signature.ByteSignature) == 0 {

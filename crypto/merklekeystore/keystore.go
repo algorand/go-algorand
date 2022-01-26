@@ -37,9 +37,9 @@ type (
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
 
-		MerkleArrayIndex uint64                     `codec:"idx"`
-		Proof            merklearray.Proof          `codec:"prf"`
-		VerifyingKey     crypto.GenericVerifyingKey `codec:"vkey"`
+		MerkleArrayIndex uint64                      `codec:"idx"`
+		Proof            merklearray.SingleLeafProof `codec:"prf"`
+		VerifyingKey     crypto.GenericVerifyingKey  `codec:"vkey"`
 	}
 
 	// Keystore will generate all keys in the range [A,Z] that are divisible by some divisor d.
@@ -153,7 +153,7 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 	}
 
 	index := s.getMerkleTreeIndex(s.Round)
-	proof, err := s.Tree.Prove([]uint64{index})
+	proof, err := s.Tree.ProveSingleLeaf(index)
 	if err != nil {
 		return Signature{}, err
 	}
@@ -213,7 +213,7 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 	err := merklearray.Verify(
 		v[:],
 		map[uint64]crypto.Hashable{sig.MerkleArrayIndex: &ephkey},
-		&sig.Proof,
+		sig.Proof.ToProof(),
 	)
 	if err != nil {
 		return err
@@ -238,7 +238,7 @@ func (s *Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 	binaryMerkleIndex := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.MerkleArrayIndex)
 
-	proofBytes := s.Proof.GetSerializedProof()
+	proofBytes := s.Proof.GetFixedLengthHashableRepresentation()
 
 	merkleSignatureBytes := make([]byte, 0, len(schemeType)+len(sigBytes)+len(verifierBytes)+len(binaryMerkleIndex)+len(proofBytes))
 	merkleSignatureBytes = append(merkleSignatureBytes, schemeType...)

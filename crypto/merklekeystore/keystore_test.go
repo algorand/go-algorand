@@ -185,7 +185,7 @@ func TestSignatureStructure(t *testing.T) {
 
 	a.Equal(sig.VerifyingKey, *key.GetSigner().GetVerifyingKey())
 
-	proof, err := signer.Tree.Prove([]uint64{1})
+	proof, err := signer.Tree.ProveSingleLeaf(1)
 	a.NoError(err)
 	a.Equal(*proof, sig.Proof)
 
@@ -417,16 +417,16 @@ func length(s *Keystore, a *require.Assertions) int {
 	return len(s.ephemeralKeys)
 }
 
-func copyProof(proof merklearray.Proof) merklearray.Proof {
+func copyProof(proof merklearray.SingleLeafProof) merklearray.SingleLeafProof {
 	path := make([]crypto.GenericDigest, len(proof.Path))
 	for i, digest := range proof.Path {
 		path[i] = make([]byte, len(digest))
 		copy(path[i], digest)
 	}
-	return merklearray.Proof{
+	p := merklearray.Proof{
 		Path:        path,
-		HashFactory: proof.HashFactory,
-	}
+		HashFactory: proof.HashFactory}
+	return merklearray.SingleLeafProof{Proof: p}
 }
 
 //#endregion

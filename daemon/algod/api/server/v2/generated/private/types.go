@@ -668,6 +668,9 @@ type ProofResponse struct {
 
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // SupplyResponse defines model for SupplyResponse.

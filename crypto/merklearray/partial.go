@@ -107,6 +107,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool, hsh hash.Hash) (pa
 
 		if doHash {
 			var p pair
+			p.hashDigestSize = hsh.Size()
 			if pos&1 == 0 {
 				// We are left
 				p.l = posHash

@@ -51,7 +51,7 @@ func (k *CommittablePublicKeyArray) Length() uint64 {
 
 // Marshal Gets []byte to represent a GenericVerifyingKey tied to the signatureAlgorithm in a pos.
 // used to implement the merklearray.Array interface needed to build a tree.
-func (k *CommittablePublicKeyArray) Marshal(pos uint64) ([]byte, error) {
+func (k *CommittablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(k.keys)) {
 		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(k.keys))
 	}
@@ -62,7 +62,7 @@ func (k *CommittablePublicKeyArray) Marshal(pos uint64) ([]byte, error) {
 		Round:        indexToRound(k.firstValid, k.interval, pos),
 	}
 
-	return crypto.HashRep(&ephPK), nil
+	return &ephPK, nil
 }
 
 // ToBeHashed returns the sequence of bytes that would be used as an input for the hash function when creating a merkle tree.

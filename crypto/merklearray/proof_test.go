@@ -38,25 +38,26 @@ func TestProofSerialization(t *testing.T) {
 	require.NoError(t, err)
 
 	// creates a proof with missing child
-	p, err := tree.Prove([]uint64{2})
+	p, err := tree.ProveSingleLeaf(2)
 	require.NoError(t, err)
 
-	data := p.GetSerializedProof()
-	require.Equal(t, len(data), 1+(MaxTreeDepth*crypto.Sha512_256Size))
+	data := p.GetFixedLengthHashableRepresentation()
+	require.Equal(t, len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
 
 	// check the padded results
 	zeroDigest := make([]byte, crypto.Sha512_256Size)
-	require.Equal(t, data[1+((MaxTreeDepth-1)*crypto.Sha512_256Size):], zeroDigest)
+	require.Equal(t, data[1+((MaxEncodedTreeDepth-1)*crypto.Sha512_256Size):], zeroDigest)
 
 	var newPath []crypto.GenericDigest
-	for i := 0; i < MaxTreeDepth+1; i++ {
+	for i := 0; i < MaxEncodedTreeDepth+1; i++ {
 		var junkDigest [crypto.Sha512_256Size]byte
 		crypto.RandBytes(junkDigest[:])
 		newPath = append(newPath, junkDigest[:])
 	}
 
 	p.Path = newPath
-	data = p.GetSerializedProof()
-	require.Equal(t, len(data), 1+(MaxTreeDepth*crypto.Sha512_256Size))
-	require.Equal(t, data[1+((MaxTreeDepth-1)*crypto.Sha512_256Size):], []byte(p.Path[MaxTreeDepth-1]))
+	p.TreeDepth = uint8(len(newPath))
+	data = p.GetFixedLengthHashableRepresentation()
+	require.Equal(t, len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
+	require.Equal(t, data[1+((MaxEncodedTreeDepth-1)*crypto.Sha512_256Size):], []byte(p.Path[MaxEncodedTreeDepth-1]))
 }
