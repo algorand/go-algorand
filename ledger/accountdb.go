@@ -865,7 +865,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		// Apply the same logic to
 		now := time.Now().UnixNano()
 		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
-		idxnameAddress := fmt.Sprintf("accountbase_resources_migration_address_idx_%d", now)
+		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
@@ -1610,7 +1610,7 @@ func accountDataResources(
 func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 	now := time.Now().UnixNano()
 	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
-	idxnameAddress := fmt.Sprintf("accountbase_resources_migration_address_idx_%d", now)
+	idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
 
 	createNewAcctBase := []string{
 		`CREATE TABLE IF NOT EXISTS accountbase_resources_migration (
