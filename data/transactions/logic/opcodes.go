@@ -23,6 +23,7 @@ import (
 // LogicVersion defines default assembler and max eval versions
 const LogicVersion = 6
 
+// LogicVersionInConsideration defines experimental assembler versions that are under consideration
 const LogicVersionInConsideration = 42
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
