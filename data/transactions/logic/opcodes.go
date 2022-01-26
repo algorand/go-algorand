@@ -23,6 +23,7 @@ import (
 // LogicVersion defines default assembler and max eval versions
 const LogicVersion = 6
 
+// TODO: remove this experimental constant when FIDO2 strategy finalized
 // LogicVersionInConsideration defines experimental assembler versions that are under consideration
 const LogicVersionInConsideration = 42
 
