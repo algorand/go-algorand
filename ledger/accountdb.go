@@ -2380,35 +2380,30 @@ func accountsNewRound(
 
 	updatedResources = make(map[basics.Address][]persistedResourcesData)
 
-	// the resources update is going to be made in two parts:
-	// on the first loop, we will perform only deletion of old entries.
-	// on the second loop, we will perform update/insertion.
+	// the resources update is going to be made in three parts:
+	// on the first loop, we will find out all the entries that need to be deleted, and parepare a pendingResourcesDeletion map.
+	// on the second loop, we will perform update/insertion. when considering inserting, we would test the pendingResourcesDeletion to see
+	// if the said entry was scheduled to be deleted. If so, we would "upgrade" the insert operation into an update operation.
+	// on the last loop, we would delete the remainder of the resource entries that were detected in loop #1 and were not upgraded in loop #2.
 	// the rationale behind this is that addrid might get reused, and we need to ensure
-	// that the corresponding resource entries are being dropped before new
-	// ones would be inserted that would "consume" the same addrid space.
+	// that at all times there are no two representations of the same entry in the resources table.
+	// ( which would trigger a constrain violation )
+	type resourceKey struct {
+		addrid int64
+		aidx   basics.CreatableIndex
+	}
+	var pendingResourcesDeletion map[resourceKey]struct{} // map to indicate which resources need to be deleted
 	for i := 0; i < resources.len(); i++ {
 		data := resources.getByIdx(i)
 		if data.oldResource.addrid == 0 || data.oldResource.data.IsEmpty() || !data.newResource.IsEmpty() {
 			continue
 		}
-		var entry persistedResourcesData
-
-		// new value is zero, which means we need to delete the current value.
-		result, err = deleteResourceStmt.Exec(data.oldResource.addrid, data.oldResource.aidx)
-
-		if err == nil {
-			// we deleted the entry successfully.
-			// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
-			// because the base account might gone.
-			entry = persistedResourcesData{addrid: 0, aidx: data.oldResource.aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
-			rowsAffected, err = result.RowsAffected()
-			if rowsAffected != 1 {
-				err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", data.address.String(), data.oldResource.addrid, data.oldResource.aidx)
-			}
+		if pendingResourcesDeletion == nil {
+			pendingResourcesDeletion = make(map[resourceKey]struct{})
 		}
-		if err != nil {
-			return
-		}
+		pendingResourcesDeletion[resourceKey{addrid: data.oldResource.addrid, aidx: data.oldResource.aidx}] = struct{}{}
+
+		entry := persistedResourcesData{addrid: 0, aidx: data.oldResource.aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
 		deltas := updatedResources[data.address]
 		deltas = append(deltas, entry)
 		updatedResources[data.address] = deltas
@@ -2451,10 +2446,28 @@ func accountsNewRound(
 					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 					return
 				}
-				_, err = insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data.newResource))
-				if err == nil {
-					// set the returned persisted account states so that we could store that as the baseResources in commitRound
-					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+				encodedNewResource := protocol.Encode(&data.newResource)
+				// check if we need to "upgrade" this insert operation into an update operation due to a scheduled
+				// delete operation of the same resource.
+				if _, pendingDeletion := pendingResourcesDeletion[resourceKey{addrid: addrid, aidx: aidx}]; pendingDeletion {
+					// yes - we've had this entry being deleted and re-created in the same commit range. This means that we can safely
+					// update the database entry instead of deleting + inserting.
+					delete(pendingResourcesDeletion, resourceKey{addrid: addrid, aidx: aidx})
+					result, err = updateResourceStmt.Exec(encodedNewResource, addrid, aidx)
+					if err == nil {
+						// rowid doesn't change on update.
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+						rowsAffected, err = result.RowsAffected()
+						if rowsAffected != 1 {
+							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
+						}
+					}
+				} else {
+					_, err = insertResourceStmt.Exec(addrid, aidx, rtype, encodedNewResource)
+					if err == nil {
+						// set the returned persisted account states so that we could store that as the baseResources in commitRound
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+					}
 				}
 			}
 		} else {
@@ -2493,6 +2506,24 @@ func accountsNewRound(
 		deltas := updatedResources[addr]
 		deltas = append(deltas, entry)
 		updatedResources[addr] = deltas
+	}
+
+	// last, we want to delete the resource table entries that are no longer needed.
+	for delRes := range pendingResourcesDeletion {
+		// new value is zero, which means we need to delete the current value.
+		result, err = deleteResourceStmt.Exec(delRes.addrid, delRes.aidx)
+		if err == nil {
+			// we deleted the entry successfully.
+			// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+			// because the base account might gone.
+			rowsAffected, err = result.RowsAffected()
+			if rowsAffected != 1 {
+				err = fmt.Errorf("failed to delete resources row (%d), aidx %d", delRes.addrid, delRes.aidx)
+			}
+		}
+		if err != nil {
+			return
+		}
 	}
 
 	if len(creatables) > 0 {
