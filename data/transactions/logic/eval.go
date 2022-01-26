@@ -2682,6 +2682,11 @@ func opEcdsaVerify(cx *EvalContext) {
 	sigR := cx.stack[fourth].Bytes
 	msg := cx.stack[fifth].Bytes
 
+	if len(msg) != 32 {
+		cx.err = fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
+		return
+	}
+
 	x := new(big.Int).SetBytes(pkX)
 	y := new(big.Int).SetBytes(pkY)
 
