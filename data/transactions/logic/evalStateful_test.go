@@ -496,8 +496,13 @@ func TestAppCheckOptedIn(t *testing.T) {
 
 	// Receiver is not opted in
 	testApp(t, "int 1; int 100; app_opted_in; int 0; ==", now)
-	//testApp(t, "int 1; int 3; app_opted_in; int 0; ==", now)
-	//testApp(t, "int 1; int 3; app_opted_in; int 0; ==", pre) // not an indirect reference though: app 3
+	testApp(t, "int 1; int 0; app_opted_in; int 0; ==", now)
+	// These two give the same result, for different reasons
+	testApp(t, "int 1; int 3; app_opted_in; int 0; ==", now) // refers to tx.ForeignApps[2], which is 111
+	testApp(t, "int 1; int 3; app_opted_in; int 0; ==", pre) // not an indirect reference: actually app 3
+	// 0 is a legal way to refer to the current app, even in pre (though not in spec)
+	// but current app is 888 - not opted in
+	testApp(t, "int 1; int 0; app_opted_in; int 0; ==", pre)
 
 	// Sender is not opted in
 	testApp(t, "int 0; int 100; app_opted_in; int 0; ==", now)
@@ -505,11 +510,18 @@ func TestAppCheckOptedIn(t *testing.T) {
 	// Receiver opted in
 	ledger.NewLocals(txn.Txn.Receiver, 100)
 	testApp(t, "int 1; int 100; app_opted_in; int 1; ==", now)
-	testApp(t, "int 1; int 2; app_opted_in; int 1; ==", now)
+	testApp(t, "int 1; int 2; app_opted_in; int 1; ==", now) // tx.ForeignApps[1] == 100
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
 	testApp(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", now)
 	testProg(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", directRefEnabledVersion-1,
 		Expect{3, "app_opted_in arg 0 wanted type uint64..."})
+
+	// Receiver opts into 888, the current app in testApp
+	ledger.NewLocals(txn.Txn.Receiver, 888)
+	// int 0 is current app (888) even in pre
+	testApp(t, "int 1; int 0; app_opted_in; int 1; ==", pre)
+	// Here it is "obviously" allowed, because indexes became legal
+	testApp(t, "int 1; int 0; app_opted_in; int 1; ==", now)
 
 	// Sender opted in
 	ledger.NewLocals(txn.Txn.Sender, 100)
@@ -552,11 +564,11 @@ err
 exit:
 int 1`
 
-	testApp(t, text, now, "no app for account")
+	testApp(t, text, now, "is not opted into")
 
 	// Make a different app (not 100)
 	ledger.NewApp(now.TxnGroup[0].Txn.Receiver, 9999, basics.AppParams{})
-	testApp(t, text, now, "no app for account")
+	testApp(t, text, now, "is not opted into")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.NewApp(now.TxnGroup[0].Txn.Receiver, 100, basics.AppParams{})
@@ -580,14 +592,27 @@ byte 0x414c474f
 		Expect{4, "app_local_get_ex arg 0 wanted type uint64..."})
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), now)
 	// Next we're testing if the use of the current app's id works
-	// as a direct reference. The error is because the sender
+	// as a direct reference. The error is because the receiver
 	// account is not opted into 123.
 	now.TxnGroup[0].Txn.ApplicationID = 123
-	testApp(t, strings.Replace(text, "int 100 // app id", "int 123", -1), now, "no app for account")
-	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), pre, "no app for account")
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 123", -1), now, "is not opted into")
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), pre, "is not opted into")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 9", -1), now, "invalid App reference 9")
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now,
 		"no such address")
+
+	// opt into 123, and try again
+	ledger.NewApp(now.TxnGroup[0].Txn.Receiver, 123, basics.AppParams{})
+	ledger.NewLocals(now.TxnGroup[0].Txn.Receiver, 123)
+	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 123, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 123", -1), now)
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 0", -1), now)
+
+	// Somewhat surprising, but in `pre` when the app argument was expected to be
+	// an actual app id (not an index in foreign apps), 0 was *still* treated
+	// like current app.
+	pre.TxnGroup[0].Txn.ApplicationID = 123
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 0", -1), pre)
 
 	// check special case account idx == 0 => sender
 	ledger.NewApp(now.TxnGroup[0].Txn.Sender, 100, basics.AppParams{})
@@ -1180,7 +1205,7 @@ intc_1
 			ops.Program[firstCmdOffset] = saved
 			_, err = EvalApp(ops.Program, 0, 100, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "no app for account")
+			require.Contains(t, err.Error(), "is not opted into")
 
 			ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 			ledger.NewLocals(txn.Txn.Sender, 100)

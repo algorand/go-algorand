@@ -147,6 +147,11 @@ func appParamsFieldsMarkdown(out io.Writer) {
 	fieldSpecsMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
 }
 
+func acctParamsFieldsMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`acct_params_get` Fields:\n\n")
+	fieldSpecsMarkdown(out, logic.AcctParamsFieldNames, logic.AcctParamsFieldSpecByName)
+}
+
 func ecDsaCurvesMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`ECDSA` Curves:\n\n")
 	fieldSpecsMarkdown(out, logic.EcdsaCurveNames, logic.EcdsaCurveSpecByName)
@@ -239,6 +244,8 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		assetParamsFieldsMarkdown(out)
 	} else if op.Name == "app_params_get" {
 		appParamsFieldsMarkdown(out)
+	} else if op.Name == "acct_params_get" {
+		acctParamsFieldsMarkdown(out)
 	} else if strings.HasPrefix(op.Name, "ecdsa") {
 		ecDsaCurvesMarkdown(out)
 	}

@@ -622,7 +622,7 @@ txn Sender; itxn_field Receiver;
 		pay+
 		"itxn_submit; itxn Fee; int 1999; ==", ep)
 
-	// Same first, but force the second too low
+	// Same as first, but force the second too low
 	TestApp(t, "itxn_begin"+
 		pay+
 		"int 3; itxn_field Fee;"+
@@ -647,6 +647,25 @@ txn Sender; itxn_field Receiver;
 		pay+
 		"int 1; itxn_field Fee;"+
 		"itxn_submit; itxn Fee; int 1", ep, "fee too small")
+
+	// Test that overpay in first inner group is available in second inner group
+	// also ensure only exactly the _right_ amount of credit is available.
+	TestApp(t, "itxn_begin"+
+		pay+
+		"int 2002; itxn_field Fee;"+ // double pay
+		"itxn_next"+
+		pay+
+		"int 1001; itxn_field Fee;"+ // regular pay
+		"itxn_submit;"+
+		// At beginning of second group, we should have 1 minfee of credit
+		"itxn_begin"+
+		pay+
+		"int 0; itxn_field Fee;"+ // free, due to credit
+		"itxn_next"+
+		pay+
+		"itxn_submit; itxn Fee; int 1001; ==", // second one should have to pay
+		ep)
+
 }
 
 // TestApplCreation is only determining what appl transactions can be
@@ -1602,4 +1621,99 @@ assert
 int 1
 `, ep, "assert failed")
 
+}
+
+// TestInnerCallDepth ensures that inner calls are limited in depth
+func TestInnerCallDepth(t *testing.T) {
+	t.Parallel()
+
+	ep, tx, ledger := MakeSampleEnv()
+	// Allow a lot to make the test viable
+	ep.Proto.MaxAppTxnForeignApps = 50
+	ep.Proto.MaxAppTotalTxnReferences = 50
+
+	var apps []basics.AppIndex
+	// 200 will be a simple app that always approves
+	yes := TestProg(t, `int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 200, basics.AppParams{
+		ApprovalProgram: yes.Program,
+	})
+	apps = append(apps, basics.AppIndex(200))
+
+	// 201-210 will be apps that call the next lower one.
+	for i := 0; i < 10; i++ {
+		source := main(`
+ global CurrentApplicationID
+ itob
+ log
+ itxn_begin
+ int appl;                    itxn_field TypeEnum
+ txn NumApplications
+loop:
+ dup
+ bz done
+ dup
+ txnas Applications
+ itxn_field Applications
+ int 1
+ -
+ b loop
+
+done:
+ pop
+ ` + fmt.Sprintf("int %d", 200+i) + `; itxn_field ApplicationID
+ itxn_submit
+`)
+		idx := basics.AppIndex(200 + i + 1)
+		ledger.NewApp(tx.Receiver, idx, basics.AppParams{
+			ApprovalProgram: TestProg(t, source, AssemblerMaxVersion).Program,
+		})
+		ledger.NewAccount(appAddr(int(idx)), 10_000)
+		apps = append(apps, idx)
+	}
+	tx.ForeignApps = apps
+	ledger.NewAccount(appAddr(888), 100_000)
+
+	app, _, err := ledger.AppParams(202)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep)
+
+	app, _, err = ledger.AppParams(208)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep)
+
+	app, _, err = ledger.AppParams(209)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep, "appl depth")
+}
+
+func TestInfiniteRecursion(t *testing.T) {
+	ep, tx, ledger := MakeSampleEnv()
+	source := `
+itxn_begin
+int appl; itxn_field TypeEnum
+int 0; app_params_get AppApprovalProgram
+assert
+itxn_field ApprovalProgram
+
+int 0; app_params_get AppClearStateProgram
+assert
+itxn_field ClearStateProgram
+
+itxn_submit
+`
+	// This app looks itself up in the ledger, so we need to put it in there.
+	ledger.NewApp(tx.Sender, 888, basics.AppParams{
+		ApprovalProgram:   TestProg(t, source, AssemblerMaxVersion).Program,
+		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
+	})
+	// We're testing if this can recur forever. It's hard to fund all these
+	// apps, but we can put a huge credit in the ep.
+	*ep.FeeCredit = 1_000_000_000
+
+	// This has been tested by hand, by setting maxAppCallDepth to 10_000_000
+	// but without that, the depth limiter stops it first.
+	// TestApp(t, source, ep, "too many inner transactions 1 with 0 left")
+
+	TestApp(t, source, ep, "appl depth (8) exceeded")
 }

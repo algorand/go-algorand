@@ -340,7 +340,7 @@ func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 	}
 	tkvd, ok := br.locals[appIdx]
 	if !ok {
-		return basics.TealValue{}, false, fmt.Errorf("no app for account")
+		return basics.TealValue{}, false, fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 
 	// check deltas first
@@ -366,7 +366,7 @@ func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
-		return fmt.Errorf("no app for account")
+		return fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 
 	// if writing the same value, return
@@ -394,7 +394,7 @@ func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
-		return fmt.Errorf("no app for account")
+		return fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 	exist := false
 	if _, ok := tkv[key]; ok {
