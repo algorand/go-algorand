@@ -504,6 +504,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 				continue
 			}
 		}
+		resDataBuf = nil
 		err = selectStmt.QueryRow(addrid, aidx).Scan(&rtype, &resDataBuf)
 		switch err {
 		case nil:
@@ -2378,6 +2379,41 @@ func accountsNewRound(
 	defer updateResourceStmt.Close()
 
 	updatedResources = make(map[basics.Address][]persistedResourcesData)
+
+	// the resources update is going to be made in two parts:
+	// on the first loop, we will perform only deletion of old entries.
+	// on the second loop, we will perform update/insertion.
+	// the rationale behind this is that addrid might get reused, and we need to ensure
+	// that the corresponding resource entries are being dropped before new
+	// ones would be inserted that would "consume" the same addrid space.
+	for i := 0; i < resources.len(); i++ {
+		data := resources.getByIdx(i)
+		if data.oldResource.addrid == 0 || data.oldResource.data.IsEmpty() || !data.newResource.IsEmpty() {
+			continue
+		}
+		var entry persistedResourcesData
+
+		// new value is zero, which means we need to delete the current value.
+		result, err = deleteResourceStmt.Exec(data.oldResource.addrid, data.oldResource.aidx)
+
+		if err == nil {
+			// we deleted the entry successfully.
+			// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+			// because the base account might gone.
+			entry = persistedResourcesData{addrid: 0, aidx: data.oldResource.aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
+			rowsAffected, err = result.RowsAffected()
+			if rowsAffected != 1 {
+				err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", data.address.String(), data.oldResource.addrid, data.oldResource.aidx)
+			}
+		}
+		if err != nil {
+			return
+		}
+		deltas := updatedResources[data.address]
+		deltas = append(deltas, entry)
+		updatedResources[data.address] = deltas
+	}
+
 	for i := 0; i < resources.len(); i++ {
 		data := resources.getByIdx(i)
 		addr := data.address
@@ -2425,17 +2461,8 @@ func accountsNewRound(
 			// non-zero rowid means we had a previous value.
 			if data.newResource.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
-				result, err = deleteResourceStmt.Exec(addrid, aidx)
-				if err == nil {
-					// we deleted the entry successfully.
-					// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
-					// because the base account might gone.
-					entry = persistedResourcesData{addrid: 0, aidx: aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
-					rowsAffected, err = result.RowsAffected()
-					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", addr.String(), addrid, aidx)
-					}
-				}
+				// this case was already handled in the first loop.
+				continue
 			} else {
 				var rtype basics.CreatableType
 				if data.newResource.IsApp() {
