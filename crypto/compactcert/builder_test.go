@@ -359,6 +359,8 @@ func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int,
 	// todo when change to vector commitment this needs to be changed.
 	idxDirection := bits.Reverse64(idx) >> (64 - pathLe)
 	// use the verification path to hash siblings up to the root
+
+	parsedBytes += (16 - int(pathLe)) * 64
 	for i := uint8(0); i < pathLe; i++ {
 		var innerNodeBytes []byte
 

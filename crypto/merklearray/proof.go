@@ -48,8 +48,8 @@ type SingleLeafProof struct {
 // it basically concatenates the elements of the verification path one after another.
 // The function returns a fixed length array for each hash function. which is 1 + MaxEncodedTreeDepth * digestsize
 //
-// the path is guaranteed to be less than MaxEncodedTreeDepth and if the path length is less
-// than MaxEncodedTreeDepth, array is padded with zeros.
+// the path is guaranteed to be less than MaxTreeDepth and if the path length is less
+// than MaxTreeDepth, array will have leading zeros (to fill the array to MaxTreeDepth * digestsize).
 // more details could be found in the Algorand's spec.
 func (p *SingleLeafProof) GetFixedLengthHashableRepresentation() []byte {
 	hash := p.HashFactory.NewHash()
@@ -60,7 +60,12 @@ func (p *SingleLeafProof) GetFixedLengthHashableRepresentation() []byte {
 	binProof = append(binProof, proofLenByte)
 
 	zeroDigest := make([]byte, hash.Size())
-	for i := uint8(0); i < MaxEncodedTreeDepth; i++ {
+
+	for i := uint8(0); i < (MaxEncodedTreeDepth - proofLenByte); i++ {
+		binProof = append(binProof, zeroDigest...)
+	}
+
+	for i := uint8(0); i < proofLenByte; i++ {
 		if i < proofLenByte && p.Path[i] != nil {
 			binProof = append(binProof, p.Path[i]...)
 		} else {
