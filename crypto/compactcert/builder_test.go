@@ -275,7 +275,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	leaf2 := calculateHashOnSigLeaf(t, sigs[2], findLInCert(a, sigs[2], cert))
 	leaf3 := calculateHashOnSigLeaf(t, sigs[3], findLInCert(a, sigs[3], cert))
 
-	// hash internal node according to the vector commitment according to reverse order indexes
+	// hash internal node according to the vector commitment indices
 	inner1 := calculateHashOnInternalNode(leaf0, leaf2)
 	inner2 := calculateHashOnInternalNode(leaf1, leaf3)
 
@@ -355,11 +355,10 @@ func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklekeys
 }
 
 func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int, leafHash []byte) []byte {
-	// idxDirection will indicate which sibling we should fetch LSB to MSB leaf-to-root
-	// todo when change to vector commitment this needs to be changed.
+	// idxDirection will indicate which sibling we should fetch MSB to LSB leaf-to-root
 	idxDirection := bits.Reverse64(idx) >> (64 - pathLe)
-	// use the verification path to hash siblings up to the root
 
+	// use the verification path to hash siblings up to the root
 	parsedBytes += (16 - int(pathLe)) * 64
 	for i := uint8(0); i < pathLe; i++ {
 		var innerNodeBytes []byte
