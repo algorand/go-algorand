@@ -290,11 +290,11 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		start := time.Now()
 		err = ledgerFetcher.downloadLedger(cs.ctx, peer, round)
 		if err == nil {
-			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start) / time.Second)
+			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
 			start = time.Now()
 			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
 			if err == nil {
-				cs.log.Infof("built merkle trie in %d seconds", time.Since(start) / time.Second)
+				cs.log.Infof("built merkle trie in %d seconds", time.Since(start)/time.Second)
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.

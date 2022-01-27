@@ -146,7 +146,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			if err == io.EOF {
 				lf.log.Infof(
 					"writing catchpoint balances to disk took %d seconds",
-					writeDuration / time.Second)
+					writeDuration/time.Second)
 				return nil
 			}
 			return err
