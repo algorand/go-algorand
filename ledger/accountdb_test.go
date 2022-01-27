@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2150,6 +2151,28 @@ func makeMockAccountWriter() (m mockAccountWriter) {
 	return
 }
 
+func (m mockAccountWriter) clone() (m2 mockAccountWriter) {
+	m2.accounts = make(map[int64]ledgercore.AccountData, len(m.accounts))
+	m2.resources = make(map[mockResourcesKey]ledgercore.AccountResource, len(m.resources))
+	m2.addresses = make(map[basics.Address]int64, len(m.resources))
+	m2.rowids = make(map[int64]basics.Address, len(m.rowids))
+	for k, v := range m.accounts {
+		m2.accounts[k] = v
+	}
+	for k, v := range m.resources {
+		m2.resources[k] = v
+	}
+	for k, v := range m.addresses {
+		m2.addresses[k] = v
+	}
+	for k, v := range m.rowids {
+		m2.rowids[k] = v
+	}
+	m2.lastRowid = m.lastRowid
+	m2.availRowIds = m.availRowIds
+	return m2
+}
+
 func (m *mockAccountWriter) nextRowid() (rowid int64) {
 	if len(m.availRowIds) > 0 {
 		rowid = m.availRowIds[len(m.availRowIds)-1]
@@ -2318,7 +2341,141 @@ func (m *mockAccountWriter) deleteCreatable(cidx basics.CreatableIndex, ctype ba
 	return 0, fmt.Errorf("deleteCreatable: not implemented")
 }
 
-func (m *mockAccountWriter) close() {}
+func (m *mockAccountWriter) close() {
+}
+
+func factorial(n int) int {
+	res := 1
+	for i := 1; i <= n; i++ {
+		res = res * i
+	}
+	return res
+}
+
+// permHeap generates all permutations for an integer array from 0 to n-1 inclusive
+// uses Heap's non-recursive algorithm
+func permHeap(n int) (result [][]int) {
+	numResults := factorial(n)
+	result = make([][]int, 0, numResults)
+	input := make([]int, n)
+	for i := 0; i < n; i++ {
+		input[i] = i
+	}
+	temp := make([]int, n)
+	copy(temp, input)
+	result = append(result, temp)
+
+	c := make([]int, n)
+
+	i := 0
+	for i < n {
+		if c[i] < i {
+			if i%2 == 0 {
+				input[0], input[i] = input[i], input[0]
+			} else {
+				input[c[i]], input[i] = input[i], input[c[i]]
+			}
+			temp := make([]int, n)
+			copy(temp, input)
+			result = append(result, temp)
+			c[i]++
+			i = 0
+		} else {
+			c[i] = 0
+			i++
+		}
+	}
+	return
+}
+
+func TestFactorialPerm(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	a.Equal(1, factorial(0))
+	a.Equal(1, factorial(1))
+	a.Equal(2, factorial(2))
+	a.Equal(6, factorial(3))
+	a.Equal(120, factorial(5))
+
+	perms := permHeap(5)
+	dict := make(map[string]struct{}, len(perms))
+	for _, perm := range perms {
+		var key string
+		for _, i := range perm {
+			key += strconv.Itoa(i)
+		}
+		dict[key] = struct{}{}
+	}
+	a.Equal(len(perms), len(dict))
+}
+
+func compactAccountDeltasPermutations(a *require.Assertions, cad compactAccountDeltas) []compactAccountDeltas {
+	a.Empty(cad.misses)
+
+	size := cad.len()
+	result := make([]compactAccountDeltas, 0, factorial(size))
+
+	perms := permHeap(size)
+	// remap existing deltas to permutated one
+	for _, perm := range perms {
+		new := compactAccountDeltas{}
+		new.cache = make(map[basics.Address]int, size)
+		new.deltas = make([]accountDelta, size)
+		for i, k := range perm {
+			new.deltas[k] = cad.deltas[i]
+		}
+		for key, i := range cad.cache {
+			new.cache[key] = perm[i]
+		}
+		result = append(result, new)
+	}
+
+	// ensure remapping
+	for _, new := range result {
+		for key, idx := range new.cache {
+			d1 := cad.getByIdx(cad.cache[key])
+			d2 := new.getByIdx(idx)
+			a.Equal(d1, d2)
+		}
+	}
+
+	return result
+}
+
+func compactResourcesDeltasPermutations(a *require.Assertions, crd compactResourcesDeltas) []compactResourcesDeltas {
+
+	size := crd.len()
+	result := make([]compactResourcesDeltas, 0, factorial(size))
+
+	perms := permHeap(size)
+	// remap existing deltas to permutated one
+	for _, perm := range perms {
+		new := compactResourcesDeltas{}
+		new.cache = make(map[accountCreatable]int, size)
+		new.deltas = make([]resourceDelta, size)
+		new.misses = make([]int, len(crd.misses))
+		for i, k := range perm {
+			new.deltas[k] = crd.deltas[i]
+		}
+		for key, i := range crd.cache {
+			new.cache[key] = perm[i]
+		}
+		copy(new.misses, crd.misses)
+		result = append(result, new)
+	}
+
+	// ensure remapping
+	for _, new := range result {
+		for key, idx := range new.cache {
+			d1 := crd.getByIdx(crd.cache[key])
+			d2 := new.getByIdx(idx)
+			a.Equal(d1, d2)
+		}
+	}
+
+	return result
+}
 
 // TestAccountUnorderedUpdates ensures rowid reuse in accountbase does not lead to
 // resources insertion problems.
@@ -2355,7 +2512,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	err = mock.setResource(addr1, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppLocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
 	a.NoError(err)
 
-	updates := make([]ledgercore.NewAccountDeltas, 3)
+	updates := make([]ledgercore.NewAccountDeltas, 4)
 	// payment addr1 -> observer
 	updates[0].Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 9000000}, TotalAppLocalStates: 1}})
 	updates[0].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 11000000}, TotalAppParams: 1}})
@@ -2369,6 +2526,10 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	updates[2].UpsertAppResource(addr1, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
 	updates[2].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 19000000}, TotalAppParams: 1}})
 	updates[2].Upsert(addr1, ledgercore.AccountData{})
+
+	// this is not required but adds one more resource entry and helps in combinations testing
+	// update the app
+	updates[3].UpsertAppResource(observer, aidx, ledgercore.AppParamsDelta{Params: &basics.AppParams{ApprovalProgram: []byte{4, 5, 6}}}, ledgercore.AppLocalStateDelta{})
 
 	dbRound := basics.Round(16541781)
 	latestRound := basics.Round(16541801)
@@ -2392,7 +2553,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	a.Empty(acctDeltas.misses)
 	a.Equal(3, acctDeltas.len())
 
-	// we want to have (addr1, aidx)
+	// we want to have (addr1, aidx) and (observer, aidx)
 	var baseResources lruResources
 	baseResources.init(nil, 100, 80)
 
@@ -2400,15 +2561,29 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	a.NoError(err)
 	a.True(ok)
 	baseResources.write(prd, addr1)
+	prd, ok, err = mock.lookupResource(observer, basics.CreatableIndex(aidx))
+	a.NoError(err)
+	a.True(ok)
+	baseResources.write(prd, observer)
 
 	resDeltas := makeCompactResourceDeltas(updates, dbRound, false, baseAccounts, baseResources)
 	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
-	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
+	a.Equal(3, resDeltas.len())       // (addr1, aidx), (observer, aidx) found
 
-	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
-	)
-	a.NoError(err)
-	a.Equal(3, len(updatedAccounts))
-	a.Equal(2, len(updatedResources))
+	acctVariants := compactAccountDeltasPermutations(a, acctDeltas)
+	resVariants := compactResourcesDeltasPermutations(a, resDeltas)
+	for i, acctVariant := range acctVariants {
+		for j, resVariant := range resVariants {
+			t.Run(fmt.Sprintf("acct-perm-%d|res-perm-%d", i, j), func(t *testing.T) {
+				a := require.New(t)
+				mock2 := mock.clone()
+				updatedAccounts, updatedResources, err := accountsNewRoundImpl(
+					&mock2, acctVariant, resVariant, nil, config.ConsensusParams{}, latestRound,
+				)
+				a.NoError(err)
+				a.Equal(3, len(updatedAccounts))
+				a.Equal(3, len(updatedResources))
+			})
+		}
+	}
 }
