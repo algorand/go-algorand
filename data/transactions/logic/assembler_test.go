@@ -2323,7 +2323,13 @@ func TestTxTypes(t *testing.T) {
 }
 
 func TestJsonRefAsm(t *testing.T) {
-	testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref JSONUint64;`, 5, expect{3, "json_ref opcode was introduced in TEAL v6"})
-	testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref 2 JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref expects one argument"})
-	testProg(t, `byte  "{\"key0\": [1]}"; byte \"key0\"; json_ref JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref unsupported JSON value type: \"JSONArray\""})
+	expectedMsg := fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
+	if fidoVersion > LogicVersion {
+		expectedMsg = "unknown opcode: json_ref"
+	}
+	testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref JSONUint64;`, 5, expect{3, expectedMsg})
+	if fidoVersion <= AssemblerMaxVersion {
+		testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref 2 JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref expects one argument"})
+		testProg(t, `byte  "{\"key0\": [1]}"; byte \"key0\"; json_ref JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref unsupported JSON value type: \"JSONArray\""})
+	}
 }
