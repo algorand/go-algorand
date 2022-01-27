@@ -113,6 +113,7 @@ type accountCreatable struct {
 	index   basics.CreatableIndex
 }
 
+//msgp:ignore modifiedResource
 type modifiedResource struct {
 	// resource stores concrete information about this particular resource
 	resource ledgercore.AccountResource
@@ -233,6 +234,7 @@ func (e *MismatchingDatabaseRoundError) Error() string {
 // ErrLookupLatestResources is returned if there is an error retrieving an account along with its resources.
 var ErrLookupLatestResources = errors.New("couldn't find latest resources")
 
+//msgp:ignore resourcesUpdates
 type resourcesUpdates map[accountCreatable]modifiedResource
 
 func (r resourcesUpdates) set(ac accountCreatable, m modifiedResource) { r[ac] = m }
