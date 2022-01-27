@@ -18,7 +18,7 @@ package transactions
 
 import (
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -28,7 +28,7 @@ type KeyregTxnFields struct {
 
 	VotePK           crypto.OneTimeSignatureVerifier `codec:"votekey"`
 	SelectionPK      crypto.VRFVerifier              `codec:"selkey"`
-	StateProofPK     merklekeystore.Verifier         `codec:"sprfkey"`
+	StateProofPK     merklesignature.Verifier        `codec:"sprfkey"`
 	VoteFirst        basics.Round                    `codec:"votefst"`
 	VoteLast         basics.Round                    `codec:"votelst"`
 	VoteKeyDilution  uint64                          `codec:"votekd"`

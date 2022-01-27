@@ -22,9 +22,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
-
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -186,7 +185,7 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	if len(rawStateProof) == 0 {
 		return acc, nil
 	}
-	acc.StateProofSecrets = &merklekeystore.Keystore{}
+	acc.StateProofSecrets = &merklesignature.Secrets{}
 	// only the state proof data is decoded here (the keys are stored in a different DB table and are fetched separately)
 	if err = protocol.Decode(rawStateProof, acc.StateProofSecrets); err != nil {
 		return PersistedParticipation{}, err

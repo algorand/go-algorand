@@ -20,7 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -42,7 +42,7 @@ type Participant struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// PK is the identifier used to verify the signature for a specific participant
-	PK merklekeystore.Verifier `codec:"p"`
+	PK merklesignature.Verifier `codec:"p"`
 
 	// Weight is AccountData.MicroAlgos.
 	Weight uint64 `codec:"w"`

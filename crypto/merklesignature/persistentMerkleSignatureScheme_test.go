@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"context"
@@ -35,19 +35,19 @@ func TestFetchKey(t *testing.T) {
 	store := createTestDB(a)
 	defer store.Close()
 
-	interval := uint64(128)
-	keystore, err := New(1, 1000, interval, crypto.FalconType)
+	interval := uint64(256)
+	mss, err := New(1, 1000, interval, crypto.FalconType)
 	a.NoError(err)
-	a.NoError(keystore.Persist(*store))
+	a.NoError(mss.Persist(*store))
 
-	key, rnd, err := keystore.FetchKey(interval*1, *store)
-	a.Equal(keystore.GetKey(rnd), key)
+	key, rnd, err := mss.FetchKey(interval*1, *store)
+	a.Equal(mss.GetKey(rnd), key)
 
-	key, rnd, err = keystore.FetchKey(interval*2, *store)
-	a.Equal(keystore.GetKey(rnd), key)
+	key, rnd, err = mss.FetchKey(interval*2, *store)
+	a.Equal(mss.GetKey(rnd), key)
 
-	key, rnd, err = keystore.FetchKey(interval*5, *store)
-	a.Equal(keystore.GetKey(rnd), key)
+	key, rnd, err = mss.FetchKey(interval*5, *store)
+	a.Equal(mss.GetKey(rnd), key)
 
 }
 

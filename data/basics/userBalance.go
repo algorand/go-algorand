@@ -19,11 +19,11 @@ package basics
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"reflect"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -163,7 +163,7 @@ type AccountData struct {
 
 	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID  crypto.VRFVerifier              `codec:"sel"`
-	StateProofID merklekeystore.Verifier         `codec:"stprf"`
+	StateProofID merklesignature.Verifier        `codec:"stprf"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`

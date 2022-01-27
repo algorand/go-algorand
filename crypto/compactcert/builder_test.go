@@ -20,14 +20,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/algoidan/falcon"
 	"hash"
 	"math/bits"
 	"testing"
 
+	"github.com/algorand/falcon"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -36,7 +37,8 @@ import (
 
 type testMessage string
 
-const compactCertRoundsForTests = 128
+const compactCertRoundsForTests = 256
+const compactCertSecKQForTests = 128
 
 func hashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Reset()
@@ -49,7 +51,7 @@ func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
 }
 
-func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklekeystore.Verifier) []basics.Participant {
+func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklesignature.Verifier) []basics.Participant {
 	parts := make([]basics.Participant, 0, numberOfParticipant)
 
 	for i := 0; i < numberOfParticipant; i++ {
@@ -63,8 +65,8 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 	return parts
 }
 
-func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *merklekeystore.Keystore {
-	signer, err := merklekeystore.New(firstValid, lastValid, interval, crypto.FalconType)
+func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *merklesignature.Secrets {
+	signer, err := merklesignature.New(firstValid, lastValid, interval, crypto.FalconType)
 	a.NoError(err)
 
 	return signer
@@ -74,7 +76,7 @@ func TestBuildVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	currentRound := basics.Round(128)
+	currentRound := basics.Round(compactCertRoundsForTests)
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
@@ -93,13 +95,13 @@ func TestBuildVerify(t *testing.T) {
 		Msg:          testMessage("hello world"),
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     currentRound,
-		SecKQ:        128,
+		SecKQ:        compactCertSecKQForTests,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 	var parts []basics.Participant
-	var sigs []merklekeystore.Signature
+	var sigs []merklesignature.Signature
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
@@ -227,7 +229,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 
 	a := require.New(t)
 
-	currentRound := basics.Round(128)
+	currentRound := basics.Round(compactCertRoundsForTests)
 	totalWeight := 10000000
 	numPart := 4
 
@@ -235,11 +237,11 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		Msg:          testMessage("test!"),
 		ProvenWeight: uint64(totalWeight / (2 * numPart)),
 		SigRound:     currentRound,
-		SecKQ:        128,
+		SecKQ:        compactCertSecKQForTests,
 	}
 
 	var parts []basics.Participant
-	var sigs []merklekeystore.Signature
+	var sigs []merklesignature.Signature
 
 	for i := 0; i < numPart; i++ {
 		key := generateTestSigner(0, uint64(compactCertRoundsForTests)*8, compactCertRoundsForTests, a)
@@ -312,9 +314,9 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	a := require.New(t)
 
 	// we create one ephemeral key so the signature's proof should be with len 0
-	signer := generateTestSigner(1, 128, 128, a)
+	signer := generateTestSigner(1, compactCertRoundsForTests, compactCertRoundsForTests, a)
 
-	sigRound := uint64(128)
+	sigRound := uint64(compactCertRoundsForTests)
 	hashable := testMessage("testMessage")
 	sig, err := signer.GetSigner(sigRound).Sign(hashable)
 	a.NoError(err)
@@ -325,7 +327,7 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 0, 0)
 }
 
-func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklekeystore.Verifier, round uint64, message crypto.Hashable, expectedIndex uint64, expectedPathLen uint8) {
+func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesignature.Verifier, round uint64, message crypto.Hashable, expectedIndex uint64, expectedPathLen uint8) {
 	a.Equal(len(sigBytes), 4366)
 
 	parsedBytes := 0
@@ -410,7 +412,7 @@ func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes i
 	return parsedBytes, falconPK
 }
 
-func findLInCert(a *require.Assertions, signature merklekeystore.Signature, cert *Cert) uint64 {
+func findLInCert(a *require.Assertions, signature merklesignature.Signature, cert *Cert) uint64 {
 	for _, t := range cert.Reveals {
 		if bytes.Compare(t.SigSlot.Sig.Signature.ByteSignature, signature.ByteSignature) == 0 {
 			return t.SigSlot.L
@@ -424,19 +426,19 @@ func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 10000
 
-	currentRound := basics.Round(128)
+	currentRound := basics.Round(compactCertRoundsForTests)
 	a := require.New(b)
 
 	param := Params{
 		Msg:          testMessage("hello world"),
 		ProvenWeight: uint64(totalWeight / 2),
-		SigRound:     128,
-		SecKQ:        128,
+		SigRound:     compactCertRoundsForTests,
+		SecKQ:        compactCertSecKQForTests,
 	}
 
 	var parts []basics.Participant
-	var partkeys []*merklekeystore.Keystore
-	var sigs []merklekeystore.Signature
+	var partkeys []*merklesignature.Secrets
+	var sigs []merklesignature.Signature
 	for i := 0; i < npart; i++ {
 		signer := generateTestSigner(0, compactCertRoundsForTests, compactCertRoundsForTests+1, a)
 		part := basics.Participant{

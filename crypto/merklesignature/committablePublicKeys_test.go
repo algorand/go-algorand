@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"encoding/binary"
@@ -43,14 +43,14 @@ func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte 
 	binary.LittleEndian.PutUint16(schemeBytes, uint16(key.Type))
 
 	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetFixedLengthHashableRepresentation()
-	keyCommitment := make([]byte, 0, len(protocol.KeystorePK)+len(verifyingRawKey)+len(binaryRound))
+	keyCommitment := make([]byte, 0, len(protocol.KeysInMSS)+len(verifyingRawKey)+len(binaryRound))
 
-	keyCommitment = append(keyCommitment, protocol.KeystorePK...)
+	keyCommitment = append(keyCommitment, protocol.KeysInMSS...)
 	keyCommitment = append(keyCommitment, schemeBytes...)
 	keyCommitment = append(keyCommitment, binaryRound...)
 	keyCommitment = append(keyCommitment, verifyingRawKey...)
 
-	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
+	factory := crypto.HashFactory{HashType: MerkleSignatureSchemeHashFunction}
 
 	hashValue := hashBytes(factory.NewHash(), keyCommitment)
 	return hashValue
@@ -62,7 +62,7 @@ func calculateHashOnInternalNode(leftNode, rightNode []byte) []byte {
 	copy(buf[len(protocol.MerkleArrayNode):], leftNode[:])
 	copy(buf[len(protocol.MerkleArrayNode)+len(leftNode):], rightNode[:])
 
-	factory := crypto.HashFactory{HashType: KeyStoreHashFunction}
+	factory := crypto.HashFactory{HashType: MerkleSignatureSchemeHashFunction}
 	hashValue := hashBytes(factory.NewHash(), buf)
 	return hashValue
 }

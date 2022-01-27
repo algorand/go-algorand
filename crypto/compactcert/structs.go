@@ -19,7 +19,7 @@ package compactcert
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -34,7 +34,7 @@ type Params struct {
 // CompactOneTimeSignature is crypto.OneTimeSignature with omitempty
 type CompactOneTimeSignature struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	merklekeystore.Signature
+	merklesignature.Signature
 }
 
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.

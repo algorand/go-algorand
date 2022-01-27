@@ -95,15 +95,22 @@ func TestMerkle(t *testing.T) {
 	}
 
 	for i := uint64(1); i < 1024; i = i + increment {
-		testMerkle(t, crypto.Sha512_256, i)
+		t.Run(fmt.Sprintf("hash#%s/Size#%d", crypto.Sha512_256.String(), i), func(t *testing.T) {
+			testMerkle(t, crypto.Sha512_256, i)
+		})
 	}
 
 	if !testing.Short() {
 		for i := uint64(1); i < 10; i++ {
-			testMerkle(t, crypto.Sumhash, i)
+			t.Run(fmt.Sprintf("hash#%s/Size#%d", crypto.Sumhash.String(), i), func(t *testing.T) {
+				testMerkle(t, crypto.Sumhash, i)
+			})
 		}
 	} else {
-		testMerkle(t, crypto.Sumhash, 10)
+		t.Run(fmt.Sprintf("hash#%s/Size#%d", crypto.Sha512_256.String(), 10), func(t *testing.T) {
+			testMerkle(t, crypto.Sumhash, 10)
+		})
+
 	}
 }
 
@@ -482,57 +489,62 @@ func TestSizeLimitsMerkle(t *testing.T) {
 
 		// regular spaced elets
 		for eltCoefficient := uint64(0); eltCoefficient <= depth; {
-			numElts := uint64(1) << (depth - eltCoefficient)
-			positions := getRegularPositions(numElts, uint64(1)<<depth)
+			t.Run(fmt.Sprintf("regular-elemetns/Depth#%d/Coefficient#%d", depth, eltCoefficient), func(t *testing.T) {
+				numElts := uint64(1) << (depth - eltCoefficient)
+				positions := getRegularPositions(numElts, uint64(1)<<depth)
 
-			tree, proof := testMerkelSizeLimits(t, crypto.Sha512_256, size, positions)
-			require.Equal(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
+				tree, proof := testMerkelSizeLimits(t, crypto.Sha512_256, size, positions)
+				require.Equal(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
 
-			// encode/decode
-			bytes := protocol.Encode(proof)
-			var outProof Proof
-			err := protocol.Decode(bytes, &outProof)
-			if depth > MaxEncodedTreeDepth && (eltCoefficient == 1 || eltCoefficient == 2) {
-				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeavesOnEncodedTree/2)
-				require.Contains(t, err.Error(), errmsg)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, *proof, outProof)
-			}
-
-			bytes = protocol.Encode(tree)
-			var outTree Tree
-			err = protocol.Decode(bytes, &outTree)
-			if depth > MaxEncodedTreeDepth {
-				require.Contains(t, err.Error(), "> 17 at Levels")
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, *tree, outTree)
-			}
-
-			if eltCoefficient == 0 {
-				eltCoefficient = 1
-			} else {
-				eltCoefficient = eltCoefficient << increment
-			}
-		}
-
-		// randomly positioned elts
-		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << increment {
-			numElts := uint64(1) << (depth - eltCoefficient)
-			positions := getRandomPositions(numElts, numElts)
-
-			_, proof := testMerkelSizeLimits(t, crypto.Sha512_256, size, positions)
-			require.GreaterOrEqual(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
-
-			if len(proof.Path) > MaxNumLeavesOnEncodedTree {
 				// encode/decode
 				bytes := protocol.Encode(proof)
 				var outProof Proof
 				err := protocol.Decode(bytes, &outProof)
-				errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeavesOnEncodedTree)
-				require.Contains(t, err.Error(), errmsg)
-			}
+				if depth > MaxEncodedTreeDepth && (eltCoefficient == 1 || eltCoefficient == 2) {
+					errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeavesOnEncodedTree/2)
+					require.Contains(t, err.Error(), errmsg)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, *proof, outProof)
+				}
+
+				bytes = protocol.Encode(tree)
+				var outTree Tree
+				err = protocol.Decode(bytes, &outTree)
+				if depth > MaxEncodedTreeDepth {
+					require.Contains(t, err.Error(), "> 17 at Levels")
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, *tree, outTree)
+				}
+
+				if eltCoefficient == 0 {
+					eltCoefficient = 1
+				} else {
+					eltCoefficient = eltCoefficient << increment
+				}
+			})
+		}
+
+		// randomly positioned elts
+		for eltCoefficient := uint64(1); eltCoefficient <= depth; eltCoefficient = eltCoefficient << increment {
+			t.Run(fmt.Sprintf("random-elemetns/Depth#%d/Coefficient#%d", depth, eltCoefficient), func(t *testing.T) {
+				numElts := uint64(1) << (depth - eltCoefficient)
+				positions := getRandomPositions(numElts, numElts)
+
+				_, proof := testMerkelSizeLimits(t, crypto.Sha512_256, size, positions)
+				require.GreaterOrEqual(t, (uint64(1)<<(depth-eltCoefficient))*eltCoefficient, uint64(len(proof.Path)))
+
+				if len(proof.Path) > MaxNumLeavesOnEncodedTree {
+					// encode/decode
+					bytes := protocol.Encode(proof)
+					var outProof Proof
+					err := protocol.Decode(bytes, &outProof)
+					errmsg := fmt.Sprintf("%d > %d at Path", len(proof.Path), MaxNumLeavesOnEncodedTree)
+					require.Contains(t, err.Error(), errmsg)
+				}
+
+			})
 		}
 	}
 
@@ -776,11 +788,15 @@ func TestMerkleVC(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for i := uint64(1); i < 32; i++ {
-		testMerkleVC(t, crypto.Sha512_256, i)
+		t.Run(fmt.Sprintf("hash#%s/Size#%d", crypto.Sha512_256.String(), i), func(t *testing.T) {
+			testMerkleVC(t, crypto.Sha512_256, i)
+		})
 	}
 
 	for i := uint64(1); i < 8; i++ {
-		testMerkleVC(t, crypto.Sumhash, i)
+		t.Run(fmt.Sprintf("hash#%s/Size#%d", crypto.Sumhash.String(), i), func(t *testing.T) {
+			testMerkleVC(t, crypto.Sumhash, i)
+		})
 	}
 
 }

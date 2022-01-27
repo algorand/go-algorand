@@ -224,13 +224,13 @@ func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 }
 
 // You must call defer part.Close() after calling this function,
-// since it creates a DB accessor but the caller must close it (required for PersistentKeystore)
+// since it creates a DB accessor but the caller must close it (required for mss)
 func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].CompactCertRounds), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
 
 	return part

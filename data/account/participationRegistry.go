@@ -22,13 +22,13 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"strings"
 	"time"
 
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -89,22 +89,25 @@ type (
 	StateProofSigner crypto.GenericSigningKey
 
 	// StateProofVerifier defined the type used for the stateproofs public key
-	StateProofVerifier merklekeystore.Verifier
+	StateProofVerifier merklesignature.Verifier
 
 	// StateProofKeys represents a set of ephemeral stateproof keys with their corresponding round
 	//msgp:allocbound StateProofKeys 1000
 	StateProofKeys map[uint64]StateProofSigner
 
-	// ParticipationRecordForRound r
+	// ParticipationRecordForRound contains participant's secrets that corresponds to
+	// one specific round. In Addition, it also returns the participation metadata
 	ParticipationRecordForRound struct {
 		ParticipationRecord
 	}
 
-	// StateProofRecordForRound adds in the per-round state proof key.
+	// StateProofRecordForRound contains participant's state proof secrets that corresponds to
+	// one specific round. In Addition, it also returns the participation metadata.
+	// If there are no secrets for the round a nil is returned in Stateproof field.
 	StateProofRecordForRound struct {
 		ParticipationRecord
 
-		StateProofSecrets *merklekeystore.Signer
+		StateProofSecrets *merklesignature.Signer
 	}
 
 	// SortUint64 implements sorting by uint64 keys for
@@ -306,7 +309,7 @@ const (
 			keyDilution     INTEGER NOT NULL,
 
 			vrf BLOB,       --*  msgpack encoding of ParticipationAccount.vrf
-			stateProof BLOB --*  msgpack encoding of merklekeystore.SignerContext
+			stateProof BLOB --*  msgpack encoding of merklesignature.SignerContext
 		)`
 
 	createRolling = `CREATE TABLE Rolling (
@@ -848,7 +851,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		}
 
 		if len(rawStateProof) > 0 {
-			stateProof := merklekeystore.Signer{}
+			stateProof := merklesignature.Signer{}
 			err = protocol.Decode(rawStateProof, &stateProof.SignerContext)
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode stateproof: %w", err)
@@ -967,7 +970,7 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 	}
 
 	// Init stateproof fields after being able to retrieve key from database
-	result.StateProofSecrets = &merklekeystore.Signer{}
+	result.StateProofSecrets = &merklesignature.Signer{}
 	result.StateProofSecrets.SigningKey = &crypto.GenericSigningKey{}
 	result.StateProofSecrets.Round = uint64(round)
 

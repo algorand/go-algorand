@@ -20,7 +20,7 @@ import (
 	"encoding/binary"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -36,7 +36,7 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 
 	message := testMessage("hello world")
-	sig, err := key.GetSigner(uint64(128)).Sign(message)
+	sig, err := key.GetSigner(uint64(256)).Sign(message)
 	a.NoError(err)
 
 	sigs[0] = sigslot{
@@ -53,7 +53,7 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	a.Equal([]byte(tree.Root()), calculateHashOnInternalNode(leftLeafHash, rightLeafHash))
 }
 
-func calculateHashOnSigLeaf(t *testing.T, sig merklekeystore.Signature, lValue uint64) []byte {
+func calculateHashOnSigLeaf(t *testing.T, sig merklesignature.Signature, lValue uint64) []byte {
 
 	var sigCommitment []byte
 	sigCommitment = append(sigCommitment, protocol.CompactCertSig...)

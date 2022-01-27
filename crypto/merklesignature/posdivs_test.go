@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"testing"
@@ -71,26 +71,26 @@ func TestErrors(t *testing.T) {
 	firstValid := uint64(100)
 	interval := uint64(101)
 	round := uint64(0)
-	require.Equal(t, errRoundNotZero, checkKeystoreParams(firstValid, round, interval))
+	require.Equal(t, errRoundNotZero, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 
 	round = interval - 1
-	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
+	require.Equal(t, errRoundMultipleOfInterval, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 
 	round = interval + 1
-	require.Equal(t, errRoundMultipleOfInterval, checkKeystoreParams(firstValid, round, interval))
+	require.Equal(t, errRoundMultipleOfInterval, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 
 	firstValid = uint64(101)
 	round = firstValid - 1
 	interval = round / 2
-	require.Equal(t, errRoundFirstValid, checkKeystoreParams(firstValid, round, interval))
+	require.Equal(t, errRoundFirstValid, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 
 	interval = 0
-	require.Equal(t, errIntervalZero, checkKeystoreParams(firstValid, round, interval))
+	require.Equal(t, errIntervalZero, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 
 	interval = 107
 	round = 107
 	firstValid = 107
-	require.NoError(t, checkKeystoreParams(firstValid, round, interval))
+	require.NoError(t, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 }
 
 func checkIndexToRoundToIndex(count, firstValid, interval uint64, t *testing.T) {

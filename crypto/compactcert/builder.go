@@ -18,11 +18,11 @@ package compactcert
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 //msgp:ignore sigslot
@@ -82,7 +82,7 @@ func (b *Builder) Present(pos uint64) bool {
 // Add a signature to the set of signatures available for building a certificate.
 // verifySig should be set to true in production; setting it to false is useful
 // for benchmarking to avoid the cost of signature checks.
-func (b *Builder) Add(pos uint64, sig merklekeystore.Signature, verifySig bool) error {
+func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool) error {
 	if b.Present(pos) {
 		return fmt.Errorf("position %d already added", pos)
 	}

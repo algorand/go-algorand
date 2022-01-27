@@ -47,7 +47,7 @@ const (
 	BalanceRecord                    HashID = "BR"
 	Credential                       HashID = "CR"
 	Genesis                          HashID = "GE"
-	KeystorePK                       HashID = "KP"
+	KeysInMSS                        HashID = "KP"
 	MerkleArrayNode                  HashID = "MA"
 	MerkleVectorCommitmentBottomLeaf HashID = "MB"
 	Message                          HashID = "MX"

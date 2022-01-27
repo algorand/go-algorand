@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"errors"
@@ -25,7 +25,7 @@ var errRoundFirstValid = errors.New("the round cannot be less than firstValid")
 var errIntervalZero = errors.New("the interval should not be zero")
 var errRoundNotZero = errors.New("the round should not be zero")
 
-func checkKeystoreParams(firstValid, round, interval uint64) error {
+func checkMerkleSignatureSchemeParams(firstValid, round, interval uint64) error {
 	if interval == 0 {
 		return errIntervalZero
 	}

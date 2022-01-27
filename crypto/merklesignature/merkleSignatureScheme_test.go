@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"crypto/rand"
@@ -83,12 +83,27 @@ func TestSignerCreation(t *testing.T) {
 	a.Equal(0, length(signer, a))
 	_, err = signer.GetSigner(2).Sign(genHashableForTest())
 	a.Error(err)
+	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(crypto.FalconType, 11, 19, 10, a)
 	a.Equal(0, length(signer, a))
 	_, err = signer.GetSigner(2).Sign(genHashableForTest())
 	a.Error(err)
+	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 }
+
+func TestSignerCreationOutOfBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	_, err := New(8, 4, 1, crypto.FalconType)
+	a.Error(err)
+	a.ErrorIs(err, ErrStartBiggerThanEndRound)
+
+	_, err = New(1, 8, 0, crypto.FalconType)
+	a.Error(err)
+	a.ErrorIs(err, ErrDivisorIsZero)
+}
+
 func TestEmptyVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -96,7 +111,7 @@ func TestEmptyVerifier(t *testing.T) {
 	signer := generateTestSigner(crypto.FalconType, 8, 9, 5, a)
 	// even if there are no keys for that period, the root is not empty
 	// (part of the vector commitment property).
-	a.Equal(signer.GetVerifier().IsEmpty(), false)
+	a.Equal(false, signer.GetVerifier().IsEmpty())
 }
 
 func TestEmptySigner(t *testing.T) {
@@ -110,9 +125,11 @@ func TestEmptySigner(t *testing.T) {
 
 	_, err = signer.GetSigner(8).Sign(h)
 	a.Error(err)
+	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	_, err = signer.GetSigner(9).Sign(h)
 	a.Error(err)
+	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 }
 
 func TestDisposableKeysGeneration(t *testing.T) {
@@ -215,9 +232,11 @@ func TestSigning(t *testing.T) {
 
 	_, err = signer.GetSigner(start - 1).Sign(hashable)
 	a.Error(err)
+	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	_, err = signer.GetSigner(end + 1).Sign(hashable)
 	a.Error(err)
+	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(crypto.FalconType, start, end, 10, a)
 
@@ -227,10 +246,13 @@ func TestSigning(t *testing.T) {
 
 	sig, err = signer.GetSigner(start + 5).Sign(hashable)
 	a.Error(err)
-	a.Error(signer.GetVerifier().Verify(start+5, hashable, sig))
+
+	err = signer.GetVerifier().Verify(start+5, hashable, sig)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 
 	signer = generateTestSigner(crypto.FalconType, 50, 100, 12, a)
-	a.Equal(length(signer, a), 4)
+	a.Equal(4, length(signer, a))
 
 	for i := uint64(50); i < 100; i++ {
 		if i%12 != 0 {
@@ -243,12 +265,12 @@ func TestSigning(t *testing.T) {
 		}
 	}
 
-	signer = generateTestSigner(crypto.FalconType, 234, 4634, 128, a)
-	key := signer.GetKey(256)
+	signer = generateTestSigner(crypto.FalconType, 234, 4634, 256, a)
+	key := signer.GetKey(512)
 	a.NotNil(key)
 	key = signer.GetKey(4096)
 	a.NotNil(key)
-	key = signer.GetKey(234 + 128)
+	key = signer.GetKey(234 + 256)
 	a.Nil(key)
 }
 
@@ -259,11 +281,18 @@ func TestBadRound(t *testing.T) {
 	start, _, signer := generateTestSignerAux(a)
 	hashable, sig := makeSig(signer, start, a)
 
-	a.Error(signer.GetVerifier().Verify(start+1, hashable, sig))
+	err := signer.GetVerifier().Verify(start+1, hashable, sig)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 
 	hashable, sig = makeSig(signer, start+1, a)
-	a.Error(signer.GetVerifier().Verify(start, hashable, sig))
-	a.Error(signer.GetVerifier().Verify(start+2, hashable, sig))
+	err = signer.GetVerifier().Verify(start, hashable, sig)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+
+	err = signer.GetVerifier().Verify(start+2, hashable, sig)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
@@ -275,13 +304,17 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 
 	sig2 := copySig(sig)
 	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
-	a.Error(signer.GetVerifier().Verify(start, hashable, sig2))
+	err := signer.GetVerifier().Verify(start, hashable, sig2)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 
 	sig3 := copySig(sig)
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
-	a.Error(signer.GetVerifier().Verify(start, hashable, sig3))
+	err = signer.GetVerifier().Verify(start, hashable, sig3)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 }
 
 func copySig(sig Signature) Signature {
@@ -307,7 +340,10 @@ func TestIncorrectByteSignature(t *testing.T) {
 	copy(bs, sig2.ByteSignature)
 	bs[0]++
 	sig2.ByteSignature = bs
-	a.Error(signer.GetVerifier().Verify(start, hashable, sig2))
+
+	err := signer.GetVerifier().Verify(start, hashable, sig2)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 }
 
 func TestIncorrectMerkleIndex(t *testing.T) {
@@ -323,11 +359,18 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	a.NoError(err)
 
 	sig.MerkleArrayIndex = 0
-	a.Error(signer.GetVerifier().Verify(20, h, sig))
+	err = signer.GetVerifier().Verify(20, h, sig)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 
 	sig.MerkleArrayIndex = math.MaxUint64
-	a.Error(signer.GetVerifier().Verify(20, h, sig))
-	a.Error(signer.GetVerifier().Verify(20, h, sig))
+	err = signer.GetVerifier().Verify(20, h, sig)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+
+	err = signer.GetVerifier().Verify(20, h, sig)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 
 }
 
@@ -345,7 +388,10 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	a.NotNil(key)
 
 	sig2.VerifyingKey = *(key.GetSigner().GetVerifyingKey())
-	a.Error(signer.GetVerifier().Verify(start+1, hashable, sig2))
+
+	err := signer.GetVerifier().Verify(start+1, hashable, sig2)
+	a.Error(err)
+	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 }
 
 func TestMarshal(t *testing.T) {
@@ -369,7 +415,7 @@ func TestMarshal(t *testing.T) {
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(128)
+	interval := uint64(256)
 	validPeriod := uint64((1<<8)*interval - 1)
 
 	firstValid := uint64(1000)
@@ -393,7 +439,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 }
 
 //#region Helper Functions
-func makeSig(signer *Keystore, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
+func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := genHashableForTest()
 
 	sig, err := signer.GetSigner(sigRound).Sign(hashable)
@@ -402,20 +448,20 @@ func makeSig(signer *Keystore, sigRound uint64, a *require.Assertions) (crypto.H
 	return hashable, sig
 }
 
-func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Keystore) {
+func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {
 	start, end := uint64(50), uint64(100)
 	signer := generateTestSigner(crypto.FalconType, start, end, 1, a)
 	return start, end, signer
 }
 
-func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval uint64, a *require.Assertions) *Keystore {
+func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval uint64, a *require.Assertions) *Secrets {
 	signer, err := New(firstValid, lastValid, interval, t)
 	a.NoError(err)
 
 	return signer
 }
 
-func length(s *Keystore, a *require.Assertions) int {
+func length(s *Secrets, a *require.Assertions) int {
 	return len(s.ephemeralKeys)
 }
 

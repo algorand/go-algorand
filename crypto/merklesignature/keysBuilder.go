@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"runtime"
@@ -23,8 +23,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// KeyStoreBuilder Responsible for generate slice of keys in a specific AlgorithmType.
-func KeyStoreBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypto.GenericSigningKey, error) {
+// KeysBuilder Responsible for generate slice of keys in a specific AlgorithmType.
+func KeysBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypto.GenericSigningKey, error) {
 	numOfKeysPerRoutine, numOfRoutines := calculateRanges(numberOfKeys)
 
 	terminate := make(chan struct{})

@@ -92,7 +92,7 @@ func TestNumReveals(t *testing.T) {
 	billion := uint64(1000 * 1000 * 1000)
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 2 * billion * microalgo
-	secKQ := uint64(128)
+	secKQ := uint64(compactCertSecKQForTests)
 	bound := uint64(1000)
 
 	for i := uint64(3); i < 10; i++ {
@@ -114,7 +114,7 @@ func BenchmarkNumReveals(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	secKQ := uint64(128)
+	secKQ := uint64(compactCertSecKQForTests)
 	bound := uint64(1000)
 
 	nr, err := numReveals(signedWeight, provenWeight, secKQ, bound)

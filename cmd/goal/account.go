@@ -912,7 +912,7 @@ var addParticipationKeyCmd = &cobra.Command{
 			reportInfof("Participation key generation successful")
 		}
 
-		reportInfof("Please standby while generating keys. This might take few minutes...")
+		reportInfof("Please standby while generating keys. This might take a few minutes...")
 		genParticipationKeysAsync(participationGen)
 	},
 }

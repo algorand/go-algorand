@@ -50,7 +50,14 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.CompactCertSecKQ = 128
+	consensusParams.EnableStateProofKeyregCheck = true
 	configurableConsensus[consensusVersion] = consensusParams
+
+	tmp := config.Consensus[protocol.ConsensusFuture]
+	config.Consensus[protocol.ConsensusFuture] = consensusParams
+	defer func() {
+		config.Consensus[protocol.ConsensusFuture] = tmp
+	}()
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
@@ -143,7 +150,7 @@ func TestCompactCerts(t *testing.T) {
 			ccparams := compactcert.Params{
 				Msg:          nextCertBlockDecoded.Block.BlockHeader,
 				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(nextCertBlock.Round + 1),
+				SigRound:     basics.Round(nextCertBlock.Round),
 				SecKQ:        consensusParams.CompactCertSecKQ,
 			}
 			verif := compactcert.MkVerifier(ccparams, votersRoot)

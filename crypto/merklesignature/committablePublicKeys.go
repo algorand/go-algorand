@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package merklekeystore
+package merklesignature
 
 import (
 	"encoding/binary"
@@ -83,5 +83,5 @@ func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	keyCommitment = append(keyCommitment, roundAsBytes...)
 	keyCommitment = append(keyCommitment, verifyingRawKey...)
 
-	return protocol.KeystorePK, keyCommitment
+	return protocol.KeysInMSS, keyCommitment
 }

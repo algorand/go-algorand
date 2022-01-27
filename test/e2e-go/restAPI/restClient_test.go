@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/data/account"
@@ -35,11 +36,11 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1094,9 +1095,9 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	randomSelPKStr := randomString(32)
 	var selPK crypto.VRFVerifier
 	copy(selPK[:], randomSelPKStr)
-	var keystoreRoot [merklekeystore.KeyStoreRootSize]byte
-	randomRootStr := randomString(merklekeystore.KeyStoreRootSize)
-	copy(keystoreRoot[:], randomRootStr)
+	var mssRoot [merklesignature.MerkleSignatureSchemeRootSize]byte
+	randomRootStr := randomString(merklesignature.MerkleSignatureSchemeRootSize)
+	copy(mssRoot[:], randomRootStr)
 	var gh crypto.Digest
 	copy(gh[:], params.GenesisHash)
 
@@ -1113,7 +1114,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 			VotePK:           votePK,
 			SelectionPK:      selPK,
 			VoteFirst:        firstRound,
-			StateProofPK:     keystoreRoot,
+			StateProofPK:     mssRoot,
 			VoteLast:         lastRound,
 			VoteKeyDilution:  dilution,
 			Nonparticipation: false,
@@ -1128,9 +1129,9 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(account.Participation.StateProofKey)
 
-	actual := [merklekeystore.KeyStoreRootSize]byte{}
+	actual := [merklesignature.MerkleSignatureSchemeRootSize]byte{}
 	copy(actual[:], *account.Participation.StateProofKey)
-	a.Equal(keystoreRoot, actual)
+	a.Equal(mssRoot, actual)
 }
 
 func TestStateProofParticipationKeysAPI(t *testing.T) {
@@ -1154,7 +1155,7 @@ func TestStateProofParticipationKeysAPI(t *testing.T) {
 	pRoot, err := testClient.GetParticipationKeys()
 	a.NoError(err)
 
-	actual := [merklekeystore.KeyStoreRootSize]byte{}
+	actual := [merklesignature.MerkleSignatureSchemeRootSize]byte{}
 	a.NotNil(pRoot[0].Key.StateProofKey)
 	copy(actual[:], *pRoot[0].Key.StateProofKey)
 	a.Equal(partkey.StateProofSecrets.GetVerifier()[:], actual[:])
@@ -1225,7 +1226,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 			VotePK:           votePK,
 			SelectionPK:      selPK,
 			VoteFirst:        firstRound,
-			StateProofPK:     merklekeystore.Verifier{},
+			StateProofPK:     merklesignature.Verifier{},
 			VoteLast:         lastRound,
 			VoteKeyDilution:  dilution,
 			Nonparticipation: false,

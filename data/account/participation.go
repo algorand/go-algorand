@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -50,7 +50,7 @@ type Participation struct {
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
 	// StateProofSecrets is used to sign compact certificates. might be nil
-	StateProofSecrets *merklekeystore.Keystore
+	StateProofSecrets *merklesignature.Secrets
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -144,12 +144,12 @@ func (part Participation) VotingSecrets() *crypto.OneTimeSignatureSecrets {
 
 // StateProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
-func (part Participation) StateProofSigner() *merklekeystore.Keystore {
+func (part Participation) StateProofSigner() *merklesignature.Secrets {
 	return part.StateProofSecrets
 }
 
 // StateProofVerifier returns the verifier for the StateProof keys.
-func (part Participation) StateProofVerifier() *merklekeystore.Verifier {
+func (part Participation) StateProofVerifier() *merklesignature.Verifier {
 	return part.StateProofSecrets.GetVerifier()
 }
 
@@ -226,7 +226,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
 
 	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
-		return PersistedParticipation{}, fmt.Errorf("the validity period for merkleKeyStore is too large: the limit is %d", maxValidPeriod)
+		return PersistedParticipation{}, fmt.Errorf("the validity period for mss is too large: the limit is %d", maxValidPeriod)
 	}
 
 	// Compute how many distinct participation keys we should generate
@@ -241,7 +241,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), interval, compactcert.SignatureScheme)
+	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), interval, compactcert.SignatureScheme)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
