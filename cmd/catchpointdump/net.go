@@ -196,13 +196,7 @@ func downloadCatchpoint(addr string) ([]byte, error) {
 		} else {
 			outBytes = append(outBytes, tempBytes[:n]...)
 		}
-		err = wdReader.Reset()
-		if err != nil {
-			if err == io.EOF {
-				return outBytes, nil
-			}
-			return nil, err
-		}
+		wdReader.Reset()
 		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond {
 			lastProgressUpdate = time.Now()
 			printDownloadProgressLine(progress, 50, url, int64(len(outBytes)))

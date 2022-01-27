@@ -58,7 +58,7 @@ type watchdogStreamReader struct {
 
 // WatchdogStreamReader is the public interface for the watchdogStreamReader implementation.
 type WatchdogStreamReader interface {
-	Reset() error
+	Reset()
 	Read(p []byte) (n int, err error)
 	Close()
 }
@@ -82,18 +82,13 @@ func MakeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, read
 	return reader
 }
 
-// Reset extends the time and data limits by another "block", as well as returns an error code if the data stream has reached to it's end.
-func (r *watchdogStreamReader) Reset() error {
+// Reset extends the time and data limits by another "block".
+func (r *watchdogStreamReader) Reset() {
 	r.readerMu.Lock()
-	if r.readError != nil && len(r.stageBuffer) == 0 {
-		defer r.readerMu.Unlock()
-		return r.readError
-	}
 	r.maxDataSize = r.totalRead + r.readaheadSize
 	r.readerMu.Unlock()
 	r.tickerClose <- struct{}{}
 	go r.ticker()
-	return nil
 }
 
 // Read reads from the attached data stream, and aborts prematurally in case we've exceeed the data size or time allowed for the read to complete.
