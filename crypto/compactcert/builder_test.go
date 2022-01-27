@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/algorand/falcon"
 	"hash"
 	"math/bits"
 	"testing"
+
+	"github.com/algorand/falcon"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
