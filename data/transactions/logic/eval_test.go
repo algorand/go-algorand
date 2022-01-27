@@ -5129,3 +5129,326 @@ func TestOpBase64Decode(t *testing.T) {
 	args := b64TestDecodeAssembleWithArgs(t)
 	b64TestDecodeEval(t, args)
 }
+
+func TestHasDuplicateKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	testCases := []struct {
+		text []byte
+	}{
+		{
+			text: []byte(`{"key0": "1","key0": "2", "key1":1}`),
+		},
+		{
+			text: []byte(`{"key0": "1","key1": [1], "key0":{"key2": "a"}}`),
+		},
+	}
+	for _, s := range testCases {
+		hasDuplicates, _, err := hasDuplicateKeys(s.text)
+		require.Nil(t, err)
+		require.True(t, hasDuplicates)
+	}
+
+	noDuplicates := []struct {
+		text []byte
+	}{
+		{
+			text: []byte(`{"key0": "1","key1": "2", "key2":3}`),
+		},
+		{
+			text: []byte(`{"key0": "1","key1": [{"key0":1,"key0":2},{"key0":1,"key0":2}], "key2":{"key5": "a","key5": "b"}}`),
+		},
+	}
+	for _, s := range noDuplicates {
+		hasDuplicates, _, err := hasDuplicateKeys(s.text)
+		require.Nil(t, err)
+		require.False(t, hasDuplicates)
+	}
+}
+
+func TestOpJSONRef(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+		},
+	}
+	ledger := logictest.MakeLedger(nil)
+	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
+	sb := strings.Builder{}
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Proto = &proto
+	ep.Ledger = ledger
+	testCases := []struct {
+		source string
+	}{
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\":3}, \"key5\": 18446744073709551615 }"; 
+			byte "key0"; 
+			json_ref JSONUint64; 
+			int 0; 
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }"; 
+			byte "key5"; 
+			json_ref JSONUint64; 
+			int 18446744073709551615; //max uint64 value
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }"; 
+			byte "key1"; 
+			json_ref JSONString; 
+			byte "algo"; 
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"\\u0061\\u006C\\u0067\\u006F\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }"; 
+			byte "key1"; 
+			json_ref JSONString; 
+			byte "algo"; 
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key4";
+			json_ref JSONObject;
+			byte "key40";
+			json_ref JSONUint64
+			int 10
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key3";
+			json_ref JSONString;
+			byte "teal"
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"\\"teal\\"\", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key3";
+			json_ref JSONString;
+			byte ""teal"" // quotes match
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \" teal \", \"key4\": {\"key40\": 10}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key3";
+			json_ref JSONString;
+			byte " teal " // spaces match
+			==`,
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"10\"}}, \"key5\": 18446744073709551615 }"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key4";
+			json_ref JSONObject;
+			byte "{\"key40\": 10, \"key40\": \"10\"}"
+			==
+			`,
+		},
+		{
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "response"; 
+			json_ref JSONObject; 
+			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
+			==`,
+		},
+		{
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientD\\u0061taJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "response"; 
+			json_ref JSONObject; 
+			byte "{\"attestationObject\": \"based64url_encoded_buffer\",\"clientD\\u0061taJSON\":  \" based64url_encoded_client_data\"}" // object as it appeared in input
+			==`,
+		},
+		{
+			source: `byte  "{\"rawId\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "response"; 
+			json_ref JSONObject; 
+			byte "clientDataJSON"; 
+			json_ref JSONString; 
+			byte " based64url_encoded_client_data"; 
+			==`,
+		},
+		{
+			source: `byte  "{\"\\u0072\\u0061\\u0077\\u0049\\u0044\": \"responseId\",\"id\": \"0\",\"response\": {\"attestationObject\": \"based64url_encoded_buffer\",\"clientDataJSON\":  \" based64url_encoded_client_data\"},\"getClientExtensionResults\": {},\"type\": \"public-key\"}"; 
+			byte "rawID"; 
+			json_ref JSONString; 
+			byte "responseId"
+			==`,
+		},
+	}
+
+	for _, s := range testCases {
+		ops := testProg(t, s.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, s)
+
+		pass, _, err := EvalStatefulCx(ops.Program, ep)
+		require.NoError(t, err)
+		require.True(t, pass)
+	}
+
+	failedCases := []struct {
+		source string
+		error  string
+	}{
+		{
+			source: `byte  "{\"key0\": 1 }"; byte "key0"; json_ref JSONString;`,
+			error:  "json: cannot unmarshal number into Go value of type string",
+		},
+		{
+			source: `byte  "{\"key0\": [1] }"; byte "key0"; json_ref JSONString;`,
+			error:  "json: cannot unmarshal array into Go value of type string",
+		},
+		{
+			source: `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONString;`,
+			error:  "json: cannot unmarshal object into Go value of type string",
+		},
+		{
+			source: `byte  "{\"key0\": \"1\" }"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal string into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": [\"1\"] }"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal array into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": {\"key1\":1} }"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal object into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": [1]}"; byte "key0"; json_ref JSONObject;`,
+			error:  "json: cannot unmarshal array into Go value of type map[string]json.RawMessage",
+		},
+		{
+			source: `byte  "{\"key0\": 1}"; byte "key0"; json_ref JSONObject;`,
+			error:  "json: cannot unmarshal number into Go value of type map[string]json.RawMessage",
+		},
+		{
+			source: `byte  "{\"key0\": \"1\"}"; byte "key0"; json_ref JSONObject;`,
+			error:  "json: cannot unmarshal string into Go value of type map[string]json.RawMessage",
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]} }"; byte "key3"; json_ref JSONString;`,
+			error:  "key key3 not found in JSON text",
+		},
+		{
+			source: `byte  "{\"key0\": 1,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": [1,2,3]}}"; 
+			byte "key2"; 
+			json_ref JSONObject;
+			byte "key5";
+			json_ref JSONString
+			`,
+			error: "key key5 not found in JSON text",
+		},
+		{
+			source: `byte  "{\"key0\": -0,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number -0 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1e10,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number 1e10 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 0.2e-2,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number 0.2e-2 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number 1.0 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key1"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number 2.5 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1.0,\"key1\": 2.5,\"key2\": -3}"; byte "key2"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number -3 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 18446744073709551616}"; byte "key0"; json_ref JSONUint64;`,
+			error:  "json: cannot unmarshal number 18446744073709551616 into Go value of type uint64",
+		},
+		{
+			source: `byte  "{\"key0\": 1,}"; byte "key0"; json_ref JSONString;`,
+			error:  "error while parsing JSON text, invalid json text",
+		},
+		{
+			source: `byte  "{\"key0\": 1, \"key0\": \"3\"}"; byte "key0"; json_ref JSONString;`,
+			error:  "error while parsing JSON text, invalid json text, duplicate keys not allowed",
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"should fail!\"}}}"; 
+			byte "key2"; 
+			json_ref JSONObject; 
+			byte "key4";
+			json_ref JSONObject;
+			byte "key40"
+			json_ref JSONString
+			`,
+			error: "error while parsing JSON text, invalid json text, duplicate keys not allowed",
+		},
+		{
+			source: `byte  "[1,2,3]";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "2";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "null";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "true";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+		{
+			source: `byte  "\"sometext\"";  
+			byte "key"; 
+			json_ref JSONUint64 
+			`,
+			error: "error while parsing JSON text, invalid json text, only json object is allowed",
+		},
+	}
+
+	for _, s := range failedCases {
+		ops := testProg(t, s.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, s)
+
+		_, _, err = EvalStatefulCx(ops.Program, ep)
+		require.Error(t, err)
+		require.EqualError(t, err, s.error)
+	}
+
+}
