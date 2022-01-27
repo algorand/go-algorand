@@ -25,10 +25,10 @@ import (
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	Msg          crypto.Hashable // Message to be cerified
-	ProvenWeight uint64          // Weight threshold proven by the certificate
-	SigRound     basics.Round    // The round for which the ephemeral key is committed to
-	SecKQ        uint64          // Security parameter (k+q) from analysis document
+	Msg          []byte       // Message to be certified
+	ProvenWeight uint64       // Weight threshold proven by the certificate
+	SigRound     basics.Round // The round for which the ephemeral key is committed to
+	SecKQ        uint64       // Security parameter (k+q) from analysis document
 
 	EnableBatchVerification bool // whether ED25519 batch verification is enabled
 }

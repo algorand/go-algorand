@@ -152,8 +152,8 @@ func (s *SignerContext) GetVerifier() *Verifier {
 	return &ver
 }
 
-// Sign signs a hash of a given message. The signature is valid on a specific round
-func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
+// Sign signs a given message. The signature is valid on a specific round
+func (s *Signer) Sign(msg []byte) (Signature, error) {
 	key := s.SigningKey
 	// Possible since there may not be a StateProof key for this specific round
 	if key == nil {
@@ -170,13 +170,13 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 		return Signature{}, err
 	}
 
-	sig, err := s.SigningKey.Sign(hashable)
+	sig, err := signingKey.SignBytes(msg)
 	if err != nil {
 		return Signature{}, err
 	}
 
 	return Signature{
-		Signature:        sig,
+		ByteSignature:    sig,
 		Proof:            *proof,
 		VerifyingKey:     *s.SigningKey.GetVerifyingKey(),
 		MerkleArrayIndex: index,
@@ -237,7 +237,7 @@ func (s *Signature) ValidateSigVersion(version int) error {
 }
 
 // Verify verifies that a merklesignature sig is valid, on a specific round, under a given public key
-func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) error {
+func (v *Verifier) Verify(round uint64, msg []byte, sig Signature) error {
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
@@ -255,7 +255,7 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 	}
 
 	// verify that the signature is valid under the ephemeral public key
-	err = sig.VerifyingKey.Verify(msg, sig.Signature)
+	err = sig.VerifyingKey.VerifyBytes(msg, sig.ByteSignature)
 	if err != nil {
 		return fmt.Errorf("%w - %v", ErrSignatureSchemeVerificationFailed, err)
 	}

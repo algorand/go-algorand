@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -71,6 +73,11 @@ restart:
 				goto restart
 			}
 
+			//commitment, err := generateSignableCommitment(ccw.ledger, nextrnd)
+			//if err != nil {
+			//	// TODO: Log error
+			//	continue
+			//}
 			ccw.signBlock(hdr)
 			ccw.signedBlock(nextrnd)
 			nextrnd++
@@ -80,6 +87,30 @@ restart:
 			return
 		}
 	}
+}
+
+// Builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
+// for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
+func generateSignableCommitment(ledger Ledger, compactCertRound basics.Round) ([]byte, error) {
+	interval := 256 // TODO: replace by interval from block header
+	blockHeaders := make([]crypto.Hashable, interval)
+	firstRound := compactCertRound - basics.Round(interval) + 1
+	for i := 0; i < interval; i++ {
+		rnd := firstRound + basics.Round(i)
+		hdr, err := ledger.BlockHdr(rnd)
+		if err != nil {
+			return nil, err
+		}
+		blockHeaders[i] = hdr
+	}
+
+	// Build merkle tree from encoded headers
+	tree, err := merklearray.Build(merklearray.ArrayWrapper{[]crypto.Hashable(blockHeaders)}, crypto.HashFactory{HashType: crypto.Sha512_256})
+	if err != nil {
+		return nil, err
+	}
+
+	return tree.Root().ToSlice(), nil
 }
 
 func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
@@ -126,7 +157,12 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
-		sig, err := key.StateProofSecrets.Sign(hdr)
+		commitment, err := generateSignableCommitment(ccw.ledger, hdr.Round)
+		if err != nil {
+			ccw.log.Warnf("ccw.signBlock(%d): generateSignableCommitment: %v", hdr.Round, err)
+			continue
+		}
+		sig, err := key.StateProofSecrets.Sign(commitment)
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
 			continue

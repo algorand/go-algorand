@@ -30,20 +30,12 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type TestingHashable struct {
-	data []byte
-}
-
-func (s TestingHashable) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.TestHashable, s.data
-}
-
 func TestSignerCreation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	var err error
 
-	h := genHashableForTest()
+	h := genMsgForTest()
 	for i := uint64(1); i < 20; i++ {
 		signer := generateTestSigner(i, i+1, 1, a)
 		_, err = signer.GetSigner(i).Sign(h)
@@ -67,19 +59,19 @@ func TestSignerCreation(t *testing.T) {
 	signer := generateTestSigner(2, 2, 2, a)
 	a.Equal(1, length(signer, a))
 
-	sig, err := signer.GetSigner(2).Sign(genHashableForTest())
+	sig, err := signer.GetSigner(2).Sign(genMsgForTest())
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(2, genHashableForTest(), sig))
+	a.NoError(signer.GetVerifier().Verify(2, genMsgForTest(), sig))
 
 	signer = generateTestSigner(2, 2, 3, a)
 	a.Equal(0, length(signer, a))
-	_, err = signer.GetSigner(2).Sign(genHashableForTest())
+	_, err = signer.GetSigner(2).Sign(genMsgForTest())
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(11, 19, 10, a)
 	a.Equal(0, length(signer, a))
-	_, err = signer.GetSigner(2).Sign(genHashableForTest())
+	_, err = signer.GetSigner(2).Sign(genMsgForTest())
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 }
@@ -111,7 +103,7 @@ func TestEmptySigner(t *testing.T) {
 	a := require.New(t)
 	var err error
 
-	h := genHashableForTest()
+	h := genMsgForTest()
 	signer := generateTestSigner(8, 9, 5, a)
 	a.Equal(0, length(signer, a))
 
@@ -185,8 +177,8 @@ func TestSignatureStructure(t *testing.T) {
 
 	signer := generateTestSigner(50, 100, 1, a)
 
-	hashable := genHashableForTest()
-	sig, err := signer.GetSigner(51).Sign(hashable)
+	msg := genMsgForTest()
+	sig, err := signer.GetSigner(51).Sign(msg)
 	a.NoError(err)
 
 	key := signer.GetKey(51)
@@ -198,13 +190,11 @@ func TestSignatureStructure(t *testing.T) {
 	a.NoError(err)
 	a.Equal(*proof, sig.Proof)
 
-	a.NotEqual(nil, sig.Signature)
+	a.NotEqual(nil, sig.ByteSignature)
 }
 
-func genHashableForTest() crypto.Hashable {
-	hashable := TestingHashable{[]byte("test msg")}
-
-	return hashable
+func genMsgForTest() []byte {
+	return []byte("test msg")
 }
 
 func TestSigning(t *testing.T) {
@@ -214,30 +204,30 @@ func TestSigning(t *testing.T) {
 	start, end := uint64(50), uint64(100)
 	signer := generateTestSigner(start, end, 1, a)
 
-	hashable := genHashableForTest()
+	msg := genMsgForTest()
 
-	sig, err := signer.GetSigner(start).Sign(hashable)
+	sig, err := signer.GetSigner(start).Sign(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, msg, sig))
 
-	_, err = signer.GetSigner(start - 1).Sign(hashable)
+	_, err = signer.GetSigner(start - 1).Sign(msg)
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
-	_, err = signer.GetSigner(end + 1).Sign(hashable)
+	_, err = signer.GetSigner(end + 1).Sign(msg)
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(start, end, 10, a)
 
-	sig, err = signer.GetSigner(start).Sign(hashable)
+	sig, err = signer.GetSigner(start).Sign(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, msg, sig))
 
-	sig, err = signer.GetSigner(start + 5).Sign(hashable)
+	sig, err = signer.GetSigner(start + 5).Sign(msg)
 	a.Error(err)
 
-	err = signer.GetVerifier().Verify(start+5, hashable, sig)
+	err = signer.GetVerifier().Verify(start+5, msg, sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
@@ -246,12 +236,12 @@ func TestSigning(t *testing.T) {
 
 	for i := uint64(50); i < 100; i++ {
 		if i%12 != 0 {
-			_, err = signer.GetSigner(i).Sign(hashable)
+			_, err = signer.GetSigner(i).Sign(msg)
 			a.Error(err)
 		} else {
-			sig, err = signer.GetSigner(i).Sign(hashable)
+			sig, err = signer.GetSigner(i).Sign(msg)
 			a.NoError(err)
-			a.NoError(signer.GetVerifier().Verify(i, hashable, sig))
+			a.NoError(signer.GetVerifier().Verify(i, msg, sig))
 		}
 	}
 
@@ -269,18 +259,18 @@ func TestBadRound(t *testing.T) {
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start, a)
+	msg, sig := makeSig(signer, start, a)
 
-	err := signer.GetVerifier().Verify(start+1, hashable, sig)
+	err := signer.GetVerifier().Verify(start+1, msg, sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	hashable, sig = makeSig(signer, start+1, a)
-	err = signer.GetVerifier().Verify(start, hashable, sig)
+	err = signer.GetVerifier().Verify(start, msg, sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	err = signer.GetVerifier().Verify(start+2, hashable, sig)
+	err = signer.GetVerifier().Verify(start+2, msg, sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 	a.True(errors.Is(err, ErrSignatureSchemeVerificationFailed))
@@ -291,11 +281,11 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start, a)
+	msg, sig := makeSig(signer, start, a)
 
 	sig2 := copySig(sig)
 	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
-	err := signer.GetVerifier().Verify(start, hashable, sig2)
+	err := signer.GetVerifier().Verify(start, msg, sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
@@ -303,19 +293,19 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
-	err = signer.GetVerifier().Verify(start, hashable, sig3)
+	err = signer.GetVerifier().Verify(start, msg, sig3)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func copySig(sig Signature) Signature {
-	bsig := make([]byte, len(sig.Signature))
-	copy(bsig, sig.Signature)
+	bsig := make([]byte, len(sig.ByteSignature))
+	copy(bsig, sig.ByteSignature)
 
 	return Signature{
-		Signature:    bsig,
-		Proof:        copyProof(sig.Proof),
-		VerifyingKey: sig.VerifyingKey,
+		ByteSignature: bsig,
+		Proof:         copyProof(sig.Proof),
+		VerifyingKey:  sig.VerifyingKey,
 	}
 }
 
@@ -324,15 +314,15 @@ func TestIncorrectByteSignature(t *testing.T) {
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start, a)
+	msg, sig := makeSig(signer, start, a)
 
 	sig2 := sig
-	bs := make([]byte, len(sig.Signature))
-	copy(bs, sig2.Signature)
+	bs := make([]byte, len(sig.ByteSignature))
+	copy(bs, sig2.ByteSignature)
 	bs[0]++
-	sig2.Signature = bs
+	sig2.ByteSignature = bs
 
-	err := signer.GetVerifier().Verify(start, hashable, sig2)
+	err := signer.GetVerifier().Verify(start, msg, sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -342,7 +332,7 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	a := require.New(t)
 	var err error
 
-	h := genHashableForTest()
+	h := genMsgForTest()
 	signer := generateTestSigner(8, 100, 5, a)
 	a.NoError(err)
 
@@ -369,7 +359,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	a := require.New(t)
 
 	start, _, signer := generateTestSignerAux(a)
-	hashable, sig := makeSig(signer, start+1, a)
+	msg, sig := makeSig(signer, start+1, a)
 	// taking signature for specific round and changing the round
 
 	// taking signature and changing the key to match different round
@@ -379,7 +369,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 
 	sig2.VerifyingKey = *(key.GetVerifyingKey())
 
-	err := signer.GetVerifier().Verify(start+1, hashable, sig2)
+	err := signer.GetVerifier().Verify(start+1, msg, sig2)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -457,13 +447,13 @@ func TestGetAllKeys(t *testing.T) {
 }
 
 //#region Helper Functions
-func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
-	hashable := genHashableForTest()
+func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) ([]byte, Signature) {
+	msg := genMsgForTest()
 
-	sig, err := signer.GetSigner(sigRound).Sign(hashable)
+	sig, err := signer.GetSigner(sigRound).Sign(msg)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(sigRound, hashable, sig))
-	return hashable, sig
+	a.NoError(signer.GetVerifier().Verify(sigRound, msg, sig))
+	return msg, sig
 }
 
 func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {

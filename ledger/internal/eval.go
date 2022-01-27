@@ -369,7 +369,9 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Com
 			return err
 		}
 
-		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+		var msg []byte
+		// TODO Or: generate commitment message (the one signed on by the compact certificate)
+		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 		if err != nil {
 			return err
 		}
@@ -950,7 +952,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
 
 	case protocol.CompactCertTx:
-		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
+		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending on
 		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
 		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
