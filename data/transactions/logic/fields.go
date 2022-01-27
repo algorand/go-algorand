@@ -419,6 +419,7 @@ type EcdsaCurve int
 const (
 	// Secp256k1 curve for bitcoin/ethereum
 	Secp256k1 EcdsaCurve = iota
+	// Secp256r1 curve
 	Secp256r1
 	invalidEcdsaCurve
 )
@@ -433,7 +434,7 @@ type ecdsaCurveSpec struct {
 
 var ecdsaCurveSpecs = []ecdsaCurveSpec{
 	{Secp256k1, 5},
-	{Secp256r1, 6},
+	{Secp256r1, fidoVersion},
 }
 
 var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
