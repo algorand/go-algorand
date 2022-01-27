@@ -46,7 +46,7 @@ func TestBuilderFitsToCPUs(t *testing.T) {
 	numOfKeys := uint64(runtime.NumCPU() * 2)
 	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
 	a.NoError(err)
-	a.Equal(uint64(len(keys)), numOfKeys)
+	a.Equal(numOfKeys, uint64(len(keys)))
 
 }
 
@@ -56,7 +56,7 @@ func TestBuilderOneKey(t *testing.T) {
 	numOfKeys := uint64(1)
 	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
 	a.NoError(err)
-	a.Equal(uint64(len(keys)), numOfKeys)
+	a.Equal(numOfKeys, uint64(len(keys)))
 }
 
 func TestBuilderZeroKeys(t *testing.T) {
@@ -65,7 +65,7 @@ func TestBuilderZeroKeys(t *testing.T) {
 	numOfKeys := uint64(0)
 	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
 	a.NoError(err)
-	a.Equal(uint64(len(keys)), numOfKeys)
+	a.Equal(numOfKeys, uint64(len(keys)))
 }
 
 func BenchmarkMerkleSignatureSchemeGenFalcon(b *testing.B) {

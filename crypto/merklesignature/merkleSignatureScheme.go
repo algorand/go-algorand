@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 )
@@ -81,8 +80,13 @@ type (
 	Verifier [MerkleSignatureSchemeRootSize]byte
 )
 
-var errStartBiggerThanEndRound = errors.New("cannot create Merkle Signature Scheme because end round is smaller then start round")
-var errDivisorIsZero = errors.New("received zero Interval")
+// Errors for the merkle signature scheme
+var (
+	ErrStartBiggerThanEndRound           = errors.New("cannot create Merkle Signature Scheme because end round is smaller then start round")
+	ErrDivisorIsZero                     = errors.New("received zero Interval")
+	ErrNoStateProofKeyForRound           = errors.New("no stateproof key exists for this round")
+	ErrSignatureSchemeVerificationFailed = "merkle signature verification failed"
+)
 
 // New creates secrets needed for the merkle signature scheme.
 // This function generates one key for each round within the participation period [firstValid, lastValid] (inclusive bounds)
@@ -90,10 +94,10 @@ var errDivisorIsZero = errors.New("received zero Interval")
 // In case firstValid equals zero then signer will generate all keys from (0,Z], i.e will not generate key for round zero.m
 func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType) (*Secrets, error) {
 	if firstValid > lastValid {
-		return nil, errStartBiggerThanEndRound
+		return nil, ErrStartBiggerThanEndRound
 	}
 	if interval == 0 {
-		return nil, errDivisorIsZero
+		return nil, ErrDivisorIsZero
 	}
 
 	if firstValid == 0 {
@@ -141,7 +145,7 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 	key := s.SigningKey
 	// Possible since there may not be a StateProof key for this specific round
 	if key == nil {
-		return Signature{}, fmt.Errorf("no stateproof key exists for this round")
+		return Signature{}, ErrNoStateProofKeyForRound
 	}
 	signingKey := key.GetSigner()
 
@@ -213,11 +217,15 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 		sig.Proof.ToProof(),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s - %w", ErrSignatureSchemeVerificationFailed, err)
 	}
 
 	// verify that the signature is valid under the ephemeral public key
-	return sig.VerifyingKey.GetVerifier().Verify(msg, sig.ByteSignature)
+	err = sig.VerifyingKey.GetVerifier().Verify(msg, sig.ByteSignature)
+	if err != nil {
+		return fmt.Errorf("%s - %w", ErrSignatureSchemeVerificationFailed, err)
+	}
+	return nil
 }
 
 // GetFixedLengthHashableRepresentation returns the signature as a hashable byte sequence.

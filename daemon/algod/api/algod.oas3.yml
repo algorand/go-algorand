@@ -550,7 +550,7 @@
             "schema": {
               "properties": {
                 "hashtype": {
-                  "description": "The type of hash function used to create the proof",
+                  "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
                   "enum": [
                     "sumhash",
                     "sha512_256"
@@ -2248,7 +2248,7 @@
                 "schema": {
                   "properties": {
                     "hashtype": {
-                      "description": "The type of hash function used to create the proof",
+                      "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
                       "enum": [
                         "sumhash",
                         "sha512_256"
