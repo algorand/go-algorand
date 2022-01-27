@@ -101,6 +101,10 @@ func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string
 		WHERE normalizedonlinebalance>0`, idxname, tablename)
 }
 
+func createUniqueAddressBalanceIndex(idxname string, tablename string) string {
+	return fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (address)`, idxname, tablename)
+}
+
 var createOnlineAccountIndex = []string{
 	`ALTER TABLE accountbase
 		ADD COLUMN normalizedonlinebalance INTEGER`,
@@ -860,7 +864,9 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		// to "accountbase".  To construct a unique index name, we
 		// use the current time.
 		// Apply the same logic to
-		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
+		now := time.Now().UnixNano()
+		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
+		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
@@ -869,6 +875,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, rtype INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx, rtype) ) WITHOUT ROWID",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
+			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
 	}
 
@@ -1602,7 +1609,9 @@ func accountDataResources(
 
 // performResourceTableMigration migrate the database to use the resources table.
 func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
-	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
+	now := time.Now().UnixNano()
+	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
+	idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
 
 	createNewAcctBase := []string{
 		`CREATE TABLE IF NOT EXISTS accountbase_resources_migration (
@@ -1611,7 +1620,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		data blob,
 		normalizedonlinebalance INTEGER )`,
 		createNormalizedOnlineBalanceIndex(idxnameBalances, "accountbase_resources_migration"),
-		fmt.Sprintf(`CREATE UNIQUE INDEX accountbase_resources_migration_address_idx_%d ON accountbase_resources_migration(address)`, time.Now().UnixNano()),
+		createUniqueAddressBalanceIndex(idxnameAddress, "accountbase_resources_migration"),
 	}
 
 	applyNewAcctBase := []string{
