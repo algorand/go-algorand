@@ -341,10 +341,6 @@
         },
         "description": "Teal compile Result"
       },
-      "DeleteParticipationIdResponse": {
-        "content": {},
-        "description": "Participation key got deleted by ID"
-      },
       "DryrunResponse": {
         "content": {
           "application/json": {

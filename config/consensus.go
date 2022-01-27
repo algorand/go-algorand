@@ -395,6 +395,9 @@ type ConsensusParams struct {
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
 
+	// When rewards rate changes, use the new value immediately.
+	RewardsCalculationFix bool
+
 	// EnableStateProofKeyregCheck enables the check for stateProof key on key registration
 	EnableStateProofKeyregCheck bool
 
@@ -1062,6 +1065,8 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 6
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	vFuture.RewardsCalculationFix = true
 
 	// stat proof key registration
 	vFuture.EnableStateProofKeyregCheck = true

@@ -177,7 +177,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 		Round:        l.Latest() + 1,
 		Branch:       genBlk.Hash(),
 		TimeStamp:    0,
-		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: genBlk.UpgradeState,
 	}
 
