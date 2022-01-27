@@ -304,8 +304,6 @@ func (ad *NewAccountDeltas) MergeAccounts(other NewAccountDeltas) {
 
 // GetResource looks up a pair of app or asset resources, given its index and type.
 func (ad NewAccountDeltas) GetResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ret AccountResource, ok bool) {
-	ret.CreatableIndex = aidx
-	ret.CreatableType = ctype
 	switch ctype {
 	case basics.AssetCreatable:
 		aa := AccountAsset{addr, basics.AssetIndex(aidx)}

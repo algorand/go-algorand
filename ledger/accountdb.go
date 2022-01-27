@@ -173,10 +173,7 @@ type persistedResourcesData struct {
 }
 
 func (prd *persistedResourcesData) AccountResource() ledgercore.AccountResource {
-	ret := ledgercore.AccountResource{
-		CreatableIndex: prd.aidx,
-		CreatableType:  prd.rtype,
-	}
+	var ret ledgercore.AccountResource
 	if prd.data.IsAsset() {
 		if prd.data.IsHolding() {
 			holding := prd.data.GetAssetHolding()
