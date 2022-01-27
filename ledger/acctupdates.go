@@ -113,6 +113,7 @@ type accountCreatable struct {
 	index   basics.CreatableIndex
 }
 
+//msgp:ignore modifiedResource
 type modifiedResource struct {
 	// resource stores concrete information about this particular resource
 	resource ledgercore.AccountResource
@@ -233,6 +234,7 @@ func (e *MismatchingDatabaseRoundError) Error() string {
 // ErrLookupLatestResources is returned if there is an error retrieving an account along with its resources.
 var ErrLookupLatestResources = errors.New("couldn't find latest resources")
 
+//msgp:ignore resourcesUpdates
 type resourcesUpdates map[accountCreatable]modifiedResource
 
 func (r resourcesUpdates) set(ac accountCreatable, m modifiedResource) { r[ac] = m }
@@ -242,16 +244,16 @@ func (r resourcesUpdates) get(ac accountCreatable) (m modifiedResource, ok bool)
 	return
 }
 
-func (r resourcesUpdates) getForAddress(addr basics.Address) (ret []modifiedResource) {
-	if len(r) == 0 {
-		return
-	}
-	for ac, mres := range r {
-		if ac.address == addr {
-			ret = append(ret, mres)
+func (r resourcesUpdates) getForAddress(addr basics.Address) map[basics.CreatableIndex]modifiedResource {
+	res := make(map[basics.CreatableIndex]modifiedResource)
+
+	for k, v := range r {
+		if k.address == addr {
+			res[k.index] = v
 		}
 	}
-	return
+
+	return res
 }
 
 // initialize initializes the accountUpdates structure
@@ -815,8 +817,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		mres, _ := au.resources.get(key)
 		mres.resource.AssetHolding = res.Holding.Holding
 		mres.resource.AssetParams = res.Params.Params
-		mres.resource.CreatableIndex = basics.CreatableIndex(res.Aidx)
-		mres.resource.CreatableType = basics.AssetCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -828,8 +828,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		mres, _ := au.resources.get(key)
 		mres.resource.AppLocalState = res.State.LocalState
 		mres.resource.AppParams = res.Params.Params
-		mres.resource.CreatableIndex = basics.CreatableIndex(res.Aidx)
-		mres.resource.CreatableType = basics.AppCreatable
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
@@ -887,7 +885,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if !ok { // first time seeing this cidx
 			resourceCount++
 			foundResources[cidx] = round
-			res.AssignAccountData(&data)
+			ledgercore.AssignAccountResourceToAccountData(cidx, res, &data)
 			return nil
 		}
 		// is this newer than current "found" rnd for this resource?
@@ -985,8 +983,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		}
 
 		// check for resources modified in the past rounds, in the deltas
-		for _, mr := range au.resources.getForAddress(addr) {
-			if err := addResource(mr.resource.CreatableIndex, rnd, mr.resource); err != nil {
+		for cidx, mr := range au.resources.getForAddress(addr) {
+			if err := addResource(cidx, rnd, mr.resource); err != nil {
 				return basics.AccountData{}, basics.Round(0), err
 			}
 		}

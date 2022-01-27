@@ -43,10 +43,10 @@ type AccountBaseData struct {
 
 	TotalAppSchema      basics.StateSchema
 	TotalExtraAppPages  uint32
-	TotalAppParams      uint32
-	TotalAppLocalStates uint32
-	TotalAssetParams    uint32
-	TotalAssets         uint32
+	TotalAppParams      uint64
+	TotalAppLocalStates uint64
+	TotalAssetParams    uint64
+	TotalAssets         uint64
 }
 
 // VotingData holds participation information
@@ -74,10 +74,10 @@ func ToAccountData(acct basics.AccountData) AccountData {
 
 			TotalAppSchema:      acct.TotalAppSchema,
 			TotalExtraAppPages:  acct.TotalExtraAppPages,
-			TotalAssetParams:    uint32(len(acct.AssetParams)),
-			TotalAssets:         uint32(len(acct.Assets)),
-			TotalAppParams:      uint32(len(acct.AppParams)),
-			TotalAppLocalStates: uint32(len(acct.AppLocalStates)),
+			TotalAssetParams:    uint64(len(acct.AssetParams)),
+			TotalAssets:         uint64(len(acct.Assets)),
+			TotalAppParams:      uint64(len(acct.AppParams)),
+			TotalAppLocalStates: uint64(len(acct.AppLocalStates)),
 		},
 		VotingData: VotingData{
 			VoteID:          acct.VoteID,

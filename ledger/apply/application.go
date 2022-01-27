@@ -70,7 +70,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Make sure the creator isn't already at the app creation max
 	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
-	if maxAppsCreated > 0 && totalAppParams >= uint32(maxAppsCreated) {
+	if maxAppsCreated > 0 && totalAppParams >= uint64(maxAppsCreated) {
 		err = fmt.Errorf("cannot create app for %s: max created apps per acct is %d", creator.String(), maxAppsCreated)
 		return
 	}
@@ -110,7 +110,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
 	record.TotalAppSchema = totalSchema
-	record.TotalAppParams = basics.AddSaturate32(record.TotalAppParams, 1)
+	record.TotalAppParams = basics.AddSaturate(record.TotalAppParams, 1)
 
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
@@ -158,7 +158,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	globalSchema := params.GlobalStateSchema
 	totalSchema = totalSchema.SubSchema(globalSchema)
 	record.TotalAppSchema = totalSchema
-	record.TotalAppParams = basics.SubSaturate32(record.TotalAppParams, 1)
+	record.TotalAppParams = basics.SubSaturate(record.TotalAppParams, 1)
 
 	// Delete app's extra program pages
 	totalExtraPages := record.TotalExtraAppPages
@@ -242,7 +242,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 
 	// Make sure the user isn't already at the app opt-in max
 	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
-	if maxAppsOptedIn > 0 && totalAppLocalState >= uint32(maxAppsOptedIn) {
+	if maxAppsOptedIn > 0 && totalAppLocalState >= uint64(maxAppsOptedIn) {
 		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
 	}
 	if !balances.ConsensusParams().Application {
@@ -259,7 +259,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.AddSchema(params.LocalStateSchema)
 	record.TotalAppSchema = totalSchema
-	record.TotalAppLocalStates = basics.AddSaturate32(record.TotalAppLocalStates, 1)
+	record.TotalAppLocalStates = basics.AddSaturate(record.TotalAppLocalStates, 1)
 
 	// Write opted-in user back to cow
 	err = balances.Put(sender, record)
@@ -307,7 +307,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.SubSchema(localState.Schema)
 	record.TotalAppSchema = totalSchema
-	record.TotalAppLocalStates = basics.SubSaturate32(record.TotalAppLocalStates, 1)
+	record.TotalAppLocalStates = basics.SubSaturate(record.TotalAppLocalStates, 1)
 
 	// Write closed-out user back to cow
 	err = balances.Put(sender, record)

@@ -79,12 +79,12 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 
 		totalAssets := record.TotalAssets
 		maxAssetsPerAccount := balances.ConsensusParams().MaxAssetsPerAccount
-		if maxAssetsPerAccount > 0 && totalAssets >= uint32(maxAssetsPerAccount) {
+		if maxAssetsPerAccount > 0 && totalAssets >= uint64(maxAssetsPerAccount) {
 			return fmt.Errorf("too many assets in account: %d >= %d", totalAssets, maxAssetsPerAccount)
 		}
 
-		record.TotalAssets = basics.AddSaturate32(record.TotalAssets, 1)
-		record.TotalAssetParams = basics.AddSaturate32(record.TotalAssetParams, 1)
+		record.TotalAssets = basics.AddSaturate(record.TotalAssets, 1)
+		record.TotalAssetParams = basics.AddSaturate(record.TotalAssetParams, 1)
 
 		err = balances.Put(header.Sender, record)
 		if err != nil {
@@ -150,8 +150,8 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			return fmt.Errorf("cannot destroy asset: creator is holding only %d/%d", assetHolding.Amount, params.Total)
 		}
 
-		record.TotalAssetParams = basics.SubSaturate32(record.TotalAssetParams, 1)
-		record.TotalAssets = basics.SubSaturate32(record.TotalAssets, 1)
+		record.TotalAssetParams = basics.SubSaturate(record.TotalAssetParams, 1)
+		record.TotalAssets = basics.SubSaturate(record.TotalAssets, 1)
 
 		err = balances.Put(creator, record)
 		if err != nil {
@@ -299,12 +299,11 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 			totalSndAssets := record.TotalAssets
 			maxAssetsPerAccount := balances.ConsensusParams().MaxAssetsPerAccount
-
-			if maxAssetsPerAccount > 0 && totalSndAssets >= uint32(maxAssetsPerAccount) {
+			if maxAssetsPerAccount > 0 && totalSndAssets >= uint64(maxAssetsPerAccount) {
 				return fmt.Errorf("too many assets in account: %d >= %d", totalSndAssets, maxAssetsPerAccount)
 			}
 
-			record.TotalAssets = basics.AddSaturate32(record.TotalAssets, 1)
+			record.TotalAssets = basics.AddSaturate(record.TotalAssets, 1)
 			err = balances.Put(source, record)
 			if err != nil {
 				return err
@@ -418,7 +417,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			return fmt.Errorf("asset %v not zero (%d) after closing", ct.XferAsset, sndHolding.Amount)
 		}
 
-		record.TotalAssets = basics.SubSaturate32(record.TotalAssets, 1)
+		record.TotalAssets = basics.SubSaturate(record.TotalAssets, 1)
 		err = balances.Put(source, record)
 		if err != nil {
 			return err

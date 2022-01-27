@@ -113,7 +113,7 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 
 // toAccountResource returns ledgercore.AccountResource for a creatable in basics.AccountData
 func toAccountResource(ad basics.AccountData, aidx basics.CreatableIndex, ctype basics.CreatableType) ledgercore.AccountResource {
-	ret := ledgercore.AccountResource{CreatableIndex: aidx, CreatableType: ctype}
+	var ret ledgercore.AccountResource
 	switch ctype {
 	case basics.AppCreatable:
 		if a, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
