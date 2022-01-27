@@ -24,7 +24,7 @@ import (
 const LogicVersion = 6
 
 // TODO: remove the following temporary constant when FIDO2 strategy finalized
-const fidoVersion = LogicSigVersion + 1
+const fidoVersion = LogicVersion + 1
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
