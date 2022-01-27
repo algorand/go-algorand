@@ -2124,3 +2124,291 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	})
 	require.NoError(t, err)
 }
+
+type mockResourcesKey struct {
+	addrid int64
+	aidx   basics.CreatableIndex
+}
+type mockAccountWriter struct {
+	// rowid to data
+	accounts map[int64]ledgercore.AccountData
+	// addr to rowid
+	addresses map[basics.Address]int64
+	// rowid to addr
+	rowids    map[int64]basics.Address
+	resources map[mockResourcesKey]ledgercore.AccountResource
+
+	lastRowid   int64
+	availRowIds []int64
+}
+
+func makeMockAccountWriter() (m mockAccountWriter) {
+	m.accounts = make(map[int64]ledgercore.AccountData)
+	m.resources = make(map[mockResourcesKey]ledgercore.AccountResource)
+	m.addresses = make(map[basics.Address]int64)
+	m.rowids = make(map[int64]basics.Address)
+	return
+}
+
+func (m *mockAccountWriter) nextRowid() (rowid int64) {
+	if len(m.availRowIds) > 0 {
+		rowid = m.availRowIds[len(m.availRowIds)-1]
+		m.availRowIds = m.availRowIds[:len(m.availRowIds)-1]
+	} else {
+		m.lastRowid++
+		rowid = m.lastRowid
+	}
+	return
+}
+
+func (m *mockAccountWriter) setAccount(addr basics.Address, data ledgercore.AccountData) {
+	var rowid int64
+	var ok bool
+	if rowid, ok = m.addresses[addr]; !ok {
+		rowid = m.nextRowid()
+		m.rowids[rowid] = addr
+		m.addresses[addr] = rowid
+	}
+	m.accounts[rowid] = data
+}
+
+func (m *mockAccountWriter) setResource(addr basics.Address, cidx basics.CreatableIndex, data ledgercore.AccountResource) error {
+	var rowid int64
+	var ok bool
+	if rowid, ok = m.addresses[addr]; !ok {
+		return fmt.Errorf("account %s does not exist", addr.String())
+	}
+	key := mockResourcesKey{rowid, cidx}
+	m.resources[key] = data
+
+	return nil
+}
+
+func (m *mockAccountWriter) lookup(addr basics.Address) (pad persistedAccountData, ok bool, err error) {
+	rowid, ok := m.addresses[addr]
+	if !ok {
+		return
+	}
+	data, ok := m.accounts[rowid]
+	if !ok {
+		err = fmt.Errorf("not found %s", addr.String())
+		return
+	}
+	pad.accountData.SetCoreAccountData(&data)
+	pad.addr = addr
+	pad.rowid = rowid
+	return
+}
+
+func (m *mockAccountWriter) lookupResource(addr basics.Address, cidx basics.CreatableIndex) (prd persistedResourcesData, ok bool, err error) {
+	rowid, ok := m.addresses[addr]
+	if !ok {
+		return
+	}
+	res, ok := m.resources[mockResourcesKey{rowid, cidx}]
+	if !ok {
+		err = fmt.Errorf("not found (%s, %d)", addr.String(), cidx)
+		return
+	}
+	if res.AppLocalState != nil {
+		prd.data.SetAppLocalState(*res.AppLocalState)
+	}
+	if res.AppParams != nil {
+		prd.data.SetAppParams(*res.AppParams, prd.data.IsHolding())
+	}
+	if res.AssetHolding != nil {
+		prd.data.SetAssetHolding(*res.AssetHolding)
+	}
+	if res.AssetParams != nil {
+		prd.data.SetAssetParams(*res.AssetParams, prd.data.IsHolding())
+	}
+	prd.addrid = rowid
+	prd.aidx = cidx
+	return
+}
+
+func (m *mockAccountWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
+	rowid, ok := m.addresses[addr]
+	if ok {
+		err = fmt.Errorf("insertAccount: addr %s, rowid %d: UNIQUE constraint failed", addr.String(), rowid)
+		return
+	}
+	rowid = m.nextRowid()
+	m.addresses[addr] = rowid
+	m.rowids[rowid] = addr
+	m.accounts[rowid] = data.GetLedgerCoreAccountData()
+	return
+}
+
+func (m *mockAccountWriter) deleteAccount(rowid int64) (rowsAffected int64, err error) {
+	var addr basics.Address
+	var ok bool
+	if addr, ok = m.rowids[rowid]; !ok {
+		return 0, nil
+	}
+
+	delete(m.addresses, addr)
+	delete(m.rowids, rowid)
+	delete(m.accounts, rowid)
+	m.availRowIds = append(m.availRowIds, rowid)
+	return 1, nil
+}
+
+func (m *mockAccountWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
+	if _, ok := m.rowids[rowid]; !ok {
+		return 0, fmt.Errorf("updateAccount: not found rowid %d", rowid)
+	}
+	old, ok := m.accounts[rowid]
+	if !ok {
+		return 0, fmt.Errorf("updateAccount: not found data for %d", rowid)
+	}
+	if old == data.GetLedgerCoreAccountData() {
+		return 0, nil
+	}
+	m.accounts[rowid] = data.GetLedgerCoreAccountData()
+	return 1, nil
+}
+
+func (m *mockAccountWriter) insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error) {
+	key := mockResourcesKey{addrid, aidx}
+	if _, ok := m.resources[key]; ok {
+		return 0, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", addrid, aidx)
+	}
+	// use persistedResourcesData.AccountResource for conversion
+	prd := persistedResourcesData{data: data}
+	new := prd.AccountResource()
+	new.CreatableIndex = 0
+	new.CreatableType = 0
+	m.resources[key] = new
+	return 1, nil
+}
+
+func (m *mockAccountWriter) deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+	key := mockResourcesKey{addrid, aidx}
+	if _, ok := m.resources[key]; !ok {
+		return 0, nil
+	}
+	delete(m.resources, key)
+	return 1, nil
+}
+
+func (m *mockAccountWriter) updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error) {
+	key := mockResourcesKey{addrid, aidx}
+	old, ok := m.resources[key]
+	if !ok {
+		return 0, fmt.Errorf("updateResource: not found (%d, %d)", addrid, aidx)
+	}
+	// use persistedResourcesData.AccountResource for conversion
+	prd := persistedResourcesData{data: data}
+	new := prd.AccountResource()
+	new.CreatableIndex = 0
+	new.CreatableType = 0
+	if new == old {
+		return 0, nil
+	}
+	m.resources[key] = new
+	return 1, nil
+}
+
+func (m *mockAccountWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
+	return 0, fmt.Errorf("insertCreatable: not implemented")
+}
+
+func (m *mockAccountWriter) deleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
+	return 0, fmt.Errorf("deleteCreatable: not implemented")
+}
+
+func (m *mockAccountWriter) close() {}
+
+// TestAccountUnorderedUpdates ensures rowid reuse in accountbase does not lead to
+// resources insertion problems.
+// This test simulates a problem found while testing resources deltas on testnet:
+//
+// unable to advance tracker db snapshot (16541781-16541801): db op failed:
+// addr RGJVDTZIFR7VIHI4QMSA6Y7H3FCHUXIBS5H26UKDGMWHALTMW3ZRGMNX3M addrid 515356, aidx 22045503, err: UNIQUE constraint failed
+//
+// Investigation shown there was another account YF5GJTPPMOUPU2GRGGVP2PGJTQZWGSWZISFHNIKDJSZ2CDPPWN4KKKYVQE
+// opted in into the same app 22045503. During the commit range the following happened:
+// at 16541783 YF5 made a payment txn (one acct delta)
+// at 16541785 RGJ has been funded and and opted in into app 22045503 (one acct delta, one res delta)
+// at 16541788 YF5 address had clear state txn for 22045503, and close out txn for the entire account (one acct delta, one res delta)
+// Because YF5 had modifications before RGJ, all its acct deltas were compacted into a single entry before RGJ (delete, create)
+// In the same time, the order in resources delta remained the same (opt-in, delete).
+// While processing acct deltas (delete, create) SQLite reused on old rowid for new account.
+// Then this rowid was discovered as addrid for opt-in operation and the "UNIQUE constraint failed" error happened.
+func TestAccountUnorderedUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	mock := makeMockAccountWriter()
+	addr1 := ledgertesting.RandomAddress()
+	addr2 := ledgertesting.RandomAddress()
+	observer := ledgertesting.RandomAddress()
+	aidx := basics.AppIndex(22045503)
+
+	// set a base state: fund couple accounts, create an app and opt-in
+	mock.setAccount(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 10000000}, TotalAppParams: 1}})
+	err := mock.setResource(observer, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppParams: &basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}})
+	a.NoError(err)
+	mock.setAccount(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 10000000}, TotalAppLocalStates: 1}})
+	err = mock.setResource(addr1, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppLocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+	a.NoError(err)
+
+	updates := make([]ledgercore.NewAccountDeltas, 3)
+	// payment addr1 -> observer
+	updates[0].Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 9000000}, TotalAppLocalStates: 1}})
+	updates[0].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 11000000}, TotalAppParams: 1}})
+
+	// fund addr2, opt-in
+	updates[1].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 10000000}, TotalAppParams: 1}})
+	updates[1].Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAppLocalStates: 1}})
+	updates[1].UpsertAppResource(addr2, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+
+	// close addr1: delete app, move funds
+	updates[2].UpsertAppResource(addr1, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+	updates[2].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 19000000}, TotalAppParams: 1}})
+	updates[2].Upsert(addr1, ledgercore.AccountData{})
+
+	dbRound := basics.Round(16541781)
+	latestRound := basics.Round(16541801)
+
+	// we want to have all accounts to be found: addr1, observer existed, and addr2 non-existed
+	// this would have compact deltas current and without missing entries
+	var baseAccounts lruAccounts
+	baseAccounts.init(nil, 100, 80)
+
+	pad, ok, err := mock.lookup(addr1)
+	a.NoError(err)
+	a.True(ok)
+	baseAccounts.write(pad)
+	pad, ok, err = mock.lookup(observer)
+	a.NoError(err)
+	a.True(ok)
+	baseAccounts.write(pad)
+	baseAccounts.write(persistedAccountData{addr: addr2})
+
+	acctDeltas := makeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
+	a.Empty(acctDeltas.misses)
+	a.Equal(3, acctDeltas.len())
+
+	// we want to have (addr1, aidx)
+	var baseResources lruResources
+	baseResources.init(nil, 100, 80)
+
+	prd, ok, err := mock.lookupResource(addr1, basics.CreatableIndex(aidx))
+	a.NoError(err)
+	a.True(ok)
+	baseResources.write(prd, addr1)
+
+	resDeltas := makeCompactResourceDeltas(updates, dbRound, false, baseAccounts, baseResources)
+	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
+	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
+
+	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
+		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
+	)
+	a.NoError(err)
+	a.Equal(3, len(updatedAccounts))
+	a.Equal(2, len(updatedResources))
+}
