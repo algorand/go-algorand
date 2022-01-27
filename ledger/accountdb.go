@@ -2278,13 +2278,13 @@ type accountsWriter interface {
 	close()
 }
 
-type accountsSqlWriter struct {
+type accountsSQLWriter struct {
 	insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
 	deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
 	deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
 }
 
-func (w *accountsSqlWriter) close() {
+func (w *accountsSQLWriter) close() {
 	if w.deleteByRowIDStmt != nil {
 		w.deleteByRowIDStmt.Close()
 		w.deleteByRowIDStmt = nil
@@ -2319,8 +2319,8 @@ func (w *accountsSqlWriter) close() {
 	}
 }
 
-func makeAccountsSqlWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasCreatables bool) (w *accountsSqlWriter, err error) {
-	w = new(accountsSqlWriter)
+func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
+	w = new(accountsSQLWriter)
 
 	if hasAccounts {
 		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
@@ -2370,7 +2370,7 @@ func makeAccountsSqlWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasC
 	return
 }
 
-func (w accountsSqlWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
+func (w accountsSQLWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
 	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data))
 	if err != nil {
 		return
@@ -2379,7 +2379,7 @@ func (w accountsSqlWriter) insertAccount(addr basics.Address, normBalance uint64
 	return
 }
 
-func (w accountsSqlWriter) deleteAccount(rowid int64) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) deleteAccount(rowid int64) (rowsAffected int64, err error) {
 	result, err := w.deleteByRowIDStmt.Exec(rowid)
 	if err != nil {
 		return
@@ -2388,7 +2388,7 @@ func (w accountsSqlWriter) deleteAccount(rowid int64) (rowsAffected int64, err e
 	return
 }
 
-func (w accountsSqlWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
 	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
 	if err != nil {
 		return
@@ -2397,7 +2397,7 @@ func (w accountsSqlWriter) updateAccount(rowid int64, normBalance uint64, data b
 	return
 }
 
-func (w accountsSqlWriter) insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error) {
+func (w accountsSQLWriter) insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error) {
 	result, err := w.insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data))
 	if err != nil {
 		return
@@ -2406,7 +2406,7 @@ func (w accountsSqlWriter) insertResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
-func (w accountsSqlWriter) deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
 	result, err := w.deleteResourceStmt.Exec(addrid, aidx)
 	if err != nil {
 		return
@@ -2415,7 +2415,7 @@ func (w accountsSqlWriter) deleteResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
-func (w accountsSqlWriter) updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error) {
 	result, err := w.updateResourceStmt.Exec(protocol.Encode(&data), addrid, aidx)
 	if err != nil {
 		return
@@ -2424,7 +2424,7 @@ func (w accountsSqlWriter) updateResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
-func (w accountsSqlWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
+func (w accountsSQLWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
 	result, err := w.insertCreatableIdxStmt.Exec(cidx, creator, ctype)
 	if err != nil {
 		return
@@ -2433,7 +2433,7 @@ func (w accountsSqlWriter) insertCreatable(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (w accountsSqlWriter) deleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) deleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
 	result, err := w.deleteCreatableIdxStmt.Exec(cidx, ctype)
 	if err != nil {
 		return
@@ -2451,7 +2451,7 @@ func accountsNewRound(
 	hasAccounts := updates.len() > 0
 	hasResources := resources.len() > 0
 	hasCreatables := len(creatables) > 0
-	writer, err := makeAccountsSqlWriter(tx, hasAccounts, hasResources, hasCreatables)
+	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasCreatables)
 	if err != nil {
 		return
 	}
