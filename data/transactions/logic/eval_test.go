@@ -4958,8 +4958,6 @@ func TestPcDetails(t *testing.T) {
 	}
 }
 
-var minB64DecodeVersion uint64 = 6
-
 type b64DecodeTestCase struct {
 	Encoded     string
 	IsURL       bool
@@ -5078,8 +5076,22 @@ base64_decode %s
 			if testCase.IsURL {
 				field = "URLEncoding"
 			}
-			source := fmt.Sprintf(sourceTmpl, minB64DecodeVersion, field)
-			ops, err := AssembleStringWithVersion(source, minB64DecodeVersion)
+			for v := uint64(2); v < fidoVersion; v++ {
+				source := fmt.Sprintf(sourceTmpl, v, field)
+				ops, err := AssembleStringWithVersion(source, v)
+				require.Error(t, err)
+				require.Equal(t, 1, len(ops.Errors))
+				expectedMsg := "4: unknown opcode: base64_decode"
+				if fidoVersion <= LogicVersion {
+					expectedMsg = fmt.Sprintf("4: base64_decode opcode was introduced in TEAL v%d", LogicVersion)
+				}
+				require.Equal(t, expectedMsg, fmt.Sprintf("%s", ops.Errors[0]))
+			}
+			if fidoVersion > LogicVersion {
+				continue
+			}
+			source := fmt.Sprintf(sourceTmpl, fidoVersion, field)
+			ops, err := AssembleStringWithVersion(source, fidoVersion)
 			require.NoError(t, err)
 
 			arg := b64DecodeTestArgs{
@@ -5112,7 +5124,6 @@ func b64TestDecodeEval(tb testing.TB, args []b64DecodeTestArgs) {
 }
 
 func TestOpBase64Decode(t *testing.T) {
-	t.Skip("TODO: remove this skip when FIDO2 is accepted")
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	args := b64TestDecodeAssembleWithArgs(t)

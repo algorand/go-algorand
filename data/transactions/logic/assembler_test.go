@@ -347,7 +347,7 @@ itxn_next
 `
 
 // TODO: add this back in when FIDO2 accepted
-// const v42Nonsense = v6Nonsense + `
+// const v7Nonsense = v6Nonsense + `
 // base64_decode URLEncoding
 // `
 
