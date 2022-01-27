@@ -2608,24 +2608,23 @@ func accountsNewRoundImpl(
 					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 					return
 				}
-				encodedNewResource := protocol.Encode(&data.newResource)
 				// check if we need to "upgrade" this insert operation into an update operation due to a scheduled
 				// delete operation of the same resource.
 				if _, pendingDeletion := pendingResourcesDeletion[resourceKey{addrid: addrid, aidx: aidx}]; pendingDeletion {
 					// yes - we've had this entry being deleted and re-created in the same commit range. This means that we can safely
 					// update the database entry instead of deleting + inserting.
 					delete(pendingResourcesDeletion, resourceKey{addrid: addrid, aidx: aidx})
-					result, err = updateResourceStmt.Exec(encodedNewResource, addrid, aidx)
+					var rowsAffected int64
+					rowsAffected, err = writer.updateResource(addrid, aidx, data.newResource)
 					if err == nil {
 						// rowid doesn't change on update.
 						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
-						rowsAffected, err = result.RowsAffected()
 						if rowsAffected != 1 {
 							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 						}
 					}
 				} else {
-					_, err = insertResourceStmt.Exec(addrid, aidx, rtype, encodedNewResource)
+					_, err = writer.insertResource(addrid, aidx, rtype, data.newResource)
 					if err == nil {
 						// set the returned persisted account states so that we could store that as the baseResources in commitRound
 						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
@@ -2672,12 +2671,12 @@ func accountsNewRoundImpl(
 	// last, we want to delete the resource table entries that are no longer needed.
 	for delRes := range pendingResourcesDeletion {
 		// new value is zero, which means we need to delete the current value.
-		result, err = deleteResourceStmt.Exec(delRes.addrid, delRes.aidx)
+		var rowsAffected int64
+		rowsAffected, err = writer.deleteResource(delRes.addrid, delRes.aidx)
 		if err == nil {
 			// we deleted the entry successfully.
 			// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
 			// because the base account might gone.
-			rowsAffected, err = result.RowsAffected()
 			if rowsAffected != 1 {
 				err = fmt.Errorf("failed to delete resources row (%d), aidx %d", delRes.addrid, delRes.aidx)
 			}
