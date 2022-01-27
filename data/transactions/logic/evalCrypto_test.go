@@ -53,6 +53,22 @@ byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 	testAccepts(t, progText, 1)
 }
 
+func TestSHA3_256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	/*
+		pip install hashlib
+		import hashlib
+		hashlib.sha3_256(b"fnord").hexdigest()
+	*/
+	progText := `byte 0x666E6F7264
+sha3_256
+byte 0xd757297405c5c89f7ceca368ee76c2f1893ee24f654e60032e65fb53b01aae10
+==`
+	testAccepts(t, progText, 1)
+}
+
 func TestSHA512_256(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

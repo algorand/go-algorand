@@ -78,6 +78,7 @@ bytec 0
 sha256
 keccak256
 sha512_256
+sha3_256
 len
 intc_0
 +

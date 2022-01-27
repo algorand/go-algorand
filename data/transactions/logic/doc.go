@@ -28,6 +28,7 @@ var opDocByName = map[string]string{
 	"sha256":              "SHA256 hash of value X, yields [32]byte",
 	"keccak256":           "Keccak256 hash of value X, yields [32]byte",
 	"sha512_256":          "SHA512_256 hash of value X, yields [32]byte",
+	"sha3_256":            "SHA3_2456 hash of value X, yields [32]byte",
 	"ed25519verify":       "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y => [*... stack*, X, Y]",
