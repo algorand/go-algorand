@@ -116,11 +116,13 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 }
 
 func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *EvalParams {
+	var zero uint64
 	ep := &EvalParams{
-		Proto:    makeTestProtoV(version),
-		TxnGroup: make([]transactions.SignedTxnWithAD, 1),
-		Specials: &transactions.SpecialAddresses{},
-		Trace:    &strings.Builder{},
+		Proto:     makeTestProtoV(version),
+		TxnGroup:  make([]transactions.SignedTxnWithAD, 1),
+		Specials:  &transactions.SpecialAddresses{},
+		Trace:     &strings.Builder{},
+		FeeCredit: &zero,
 	}
 	if txn != nil {
 		ep.TxnGroup[0].SignedTxn = *txn
