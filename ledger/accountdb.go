@@ -509,6 +509,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 				continue
 			}
 		}
+		resDataBuf = nil
 		err = selectStmt.QueryRow(addrid, aidx).Scan(&rtype, &resDataBuf)
 		switch err {
 		case nil:
@@ -2273,40 +2274,211 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 	return err
 }
 
-// accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
-// The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
+type accountsWriter interface {
+	insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error)
+	deleteAccount(rowid int64) (rowsAffected int64, err error)
+	updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error)
+
+	insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error)
+	deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
+	updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error)
+
+	insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error)
+	deleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error)
+
+	close()
+}
+
+type accountsSQLWriter struct {
+	insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
+	deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
+	deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
+}
+
+func (w *accountsSQLWriter) close() {
+	if w.deleteByRowIDStmt != nil {
+		w.deleteByRowIDStmt.Close()
+		w.deleteByRowIDStmt = nil
+	}
+	if w.insertStmt != nil {
+		w.insertStmt.Close()
+		w.insertStmt = nil
+	}
+	if w.updateStmt != nil {
+		w.updateStmt.Close()
+		w.updateStmt = nil
+	}
+	if w.deleteResourceStmt != nil {
+		w.deleteResourceStmt.Close()
+		w.deleteResourceStmt = nil
+	}
+	if w.insertResourceStmt != nil {
+		w.insertResourceStmt.Close()
+		w.insertResourceStmt = nil
+	}
+	if w.updateResourceStmt != nil {
+		w.updateResourceStmt.Close()
+		w.updateResourceStmt = nil
+	}
+	if w.insertCreatableIdxStmt != nil {
+		w.insertCreatableIdxStmt.Close()
+		w.insertCreatableIdxStmt = nil
+	}
+	if w.deleteCreatableIdxStmt != nil {
+		w.deleteCreatableIdxStmt.Close()
+		w.deleteCreatableIdxStmt = nil
+	}
+}
+
+func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
+	w = new(accountsSQLWriter)
+
+	if hasAccounts {
+		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
+		if err != nil {
+			return
+		}
+
+		w.insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+		if err != nil {
+			return
+		}
+
+		w.updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
+		if err != nil {
+			return
+		}
+	}
+
+	if hasResources {
+		w.deleteResourceStmt, err = tx.Prepare("DELETE FROM resources WHERE addrid = ? AND aidx = ?")
+		if err != nil {
+			return
+		}
+
+		w.insertResourceStmt, err = tx.Prepare("INSERT INTO resources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+		if err != nil {
+			return
+		}
+
+		w.updateResourceStmt, err = tx.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
+		if err != nil {
+			return
+		}
+	}
+
+	if hasCreatables {
+		w.insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
+		if err != nil {
+			return
+		}
+
+		w.deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (w accountsSQLWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
+	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data))
+	if err != nil {
+		return
+	}
+	rowid, err = result.LastInsertId()
+	return
+}
+
+func (w accountsSQLWriter) deleteAccount(rowid int64) (rowsAffected int64, err error) {
+	result, err := w.deleteByRowIDStmt.Exec(rowid)
+	if err != nil {
+		return
+	}
+	rowsAffected, err = result.RowsAffected()
+	return
+}
+
+func (w accountsSQLWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
+	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
+	if err != nil {
+		return
+	}
+	rowsAffected, err = result.RowsAffected()
+	return
+}
+
+func (w accountsSQLWriter) insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error) {
+	result, err := w.insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data))
+	if err != nil {
+		return
+	}
+	rowid, err = result.LastInsertId()
+	return
+}
+
+func (w accountsSQLWriter) deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+	result, err := w.deleteResourceStmt.Exec(addrid, aidx)
+	if err != nil {
+		return
+	}
+	rowsAffected, err = result.RowsAffected()
+	return
+}
+
+func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error) {
+	result, err := w.updateResourceStmt.Exec(protocol.Encode(&data), addrid, aidx)
+	if err != nil {
+		return
+	}
+	rowsAffected, err = result.RowsAffected()
+	return
+}
+
+func (w accountsSQLWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
+	result, err := w.insertCreatableIdxStmt.Exec(cidx, creator, ctype)
+	if err != nil {
+		return
+	}
+	rowid, err = result.LastInsertId()
+	return
+}
+
+func (w accountsSQLWriter) deleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
+	result, err := w.deleteCreatableIdxStmt.Exec(cidx, ctype)
+	if err != nil {
+		return
+	}
+	rowsAffected, err = result.RowsAffected()
+	return
+}
+
+// accountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func accountsNewRound(
 	tx *sql.Tx,
 	updates compactAccountDeltas, resources compactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
-
-	var (
-		insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
-		deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
-		deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
-	)
-
-	deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
+	hasAccounts := updates.len() > 0
+	hasResources := resources.len() > 0
+	hasCreatables := len(creatables) > 0
+	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasCreatables)
 	if err != nil {
 		return
 	}
-	defer deleteByRowIDStmt.Close()
+	defer writer.close()
 
-	insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer insertStmt.Close()
+	return accountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
+}
 
-	updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
-	if err != nil {
-		return
-	}
-	defer updateStmt.Close()
+// accountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
+// The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
+func accountsNewRoundImpl(
+	writer accountsWriter,
+	updates compactAccountDeltas, resources compactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	proto config.ConsensusParams, lastUpdateRound basics.Round,
+) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
 
-	var result sql.Result
-	var rowsAffected int64
 	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
@@ -2320,11 +2492,10 @@ func accountsNewRound(
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
+				var rowid int64
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				result, err = insertStmt.Exec(data.address[:], normBalance, protocol.Encode(&data.newAcct))
+				rowid, err = writer.insertAccount(data.address, normBalance, data.newAcct)
 				if err == nil {
-					var rowid int64
-					rowid, err = result.LastInsertId()
 					updatedAccounts[updatedAccountIdx].rowid = rowid
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
 					newAddressesRowIDs[data.address] = rowid
@@ -2334,24 +2505,24 @@ func accountsNewRound(
 			// non-zero rowid means we had a previous value.
 			if data.newAcct.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
-				result, err = deleteByRowIDStmt.Exec(data.oldAcct.rowid)
+				var rowsAffected int64
+				rowsAffected, err = writer.deleteAccount(data.oldAcct.rowid)
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].rowid = 0
 					updatedAccounts[updatedAccountIdx].accountData = baseAccountData{}
-					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
 					}
 				}
 			} else {
+				var rowsAffected int64
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.newAcct), data.oldAcct.rowid)
+				rowsAffected, err = writer.updateAccount(data.oldAcct.rowid, normBalance, data.newAcct)
 				if err == nil {
 					// rowid doesn't change on update.
 					updatedAccounts[updatedAccountIdx].rowid = data.oldAcct.rowid
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
-					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.address, data.oldAcct.rowid)
 					}
@@ -2369,25 +2540,37 @@ func accountsNewRound(
 		updatedAccountIdx++
 	}
 
-	deleteResourceStmt, err = tx.Prepare("DELETE FROM resources WHERE addrid = ? AND aidx = ?")
-	if err != nil {
-		return
-	}
-	defer deleteResourceStmt.Close()
-
-	insertResourceStmt, err = tx.Prepare("INSERT INTO resources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer insertResourceStmt.Close()
-
-	updateResourceStmt, err = tx.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
-	if err != nil {
-		return
-	}
-	defer updateResourceStmt.Close()
-
 	updatedResources = make(map[basics.Address][]persistedResourcesData)
+
+	// the resources update is going to be made in three parts:
+	// on the first loop, we will find out all the entries that need to be deleted, and parepare a pendingResourcesDeletion map.
+	// on the second loop, we will perform update/insertion. when considering inserting, we would test the pendingResourcesDeletion to see
+	// if the said entry was scheduled to be deleted. If so, we would "upgrade" the insert operation into an update operation.
+	// on the last loop, we would delete the remainder of the resource entries that were detected in loop #1 and were not upgraded in loop #2.
+	// the rationale behind this is that addrid might get reused, and we need to ensure
+	// that at all times there are no two representations of the same entry in the resources table.
+	// ( which would trigger a constrain violation )
+	type resourceKey struct {
+		addrid int64
+		aidx   basics.CreatableIndex
+	}
+	var pendingResourcesDeletion map[resourceKey]struct{} // map to indicate which resources need to be deleted
+	for i := 0; i < resources.len(); i++ {
+		data := resources.getByIdx(i)
+		if data.oldResource.addrid == 0 || data.oldResource.data.IsEmpty() || !data.newResource.IsEmpty() {
+			continue
+		}
+		if pendingResourcesDeletion == nil {
+			pendingResourcesDeletion = make(map[resourceKey]struct{})
+		}
+		pendingResourcesDeletion[resourceKey{addrid: data.oldResource.addrid, aidx: data.oldResource.aidx}] = struct{}{}
+
+		entry := persistedResourcesData{addrid: 0, aidx: data.oldResource.aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
+		deltas := updatedResources[data.address]
+		deltas = append(deltas, entry)
+		updatedResources[data.address] = deltas
+	}
+
 	for i := 0; i < resources.len(); i++ {
 		data := resources.getByIdx(i)
 		addr := data.address
@@ -2425,27 +2608,35 @@ func accountsNewRound(
 					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 					return
 				}
-				_, err = insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data.newResource))
-				if err == nil {
-					// set the returned persisted account states so that we could store that as the baseResources in commitRound
-					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+				// check if we need to "upgrade" this insert operation into an update operation due to a scheduled
+				// delete operation of the same resource.
+				if _, pendingDeletion := pendingResourcesDeletion[resourceKey{addrid: addrid, aidx: aidx}]; pendingDeletion {
+					// yes - we've had this entry being deleted and re-created in the same commit range. This means that we can safely
+					// update the database entry instead of deleting + inserting.
+					delete(pendingResourcesDeletion, resourceKey{addrid: addrid, aidx: aidx})
+					var rowsAffected int64
+					rowsAffected, err = writer.updateResource(addrid, aidx, data.newResource)
+					if err == nil {
+						// rowid doesn't change on update.
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+						if rowsAffected != 1 {
+							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
+						}
+					}
+				} else {
+					_, err = writer.insertResource(addrid, aidx, rtype, data.newResource)
+					if err == nil {
+						// set the returned persisted account states so that we could store that as the baseResources in commitRound
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+					}
 				}
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
 			if data.newResource.IsEmpty() {
 				// new value is zero, which means we need to delete the current value.
-				result, err = deleteResourceStmt.Exec(addrid, aidx)
-				if err == nil {
-					// we deleted the entry successfully.
-					// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
-					// because the base account might gone.
-					entry = persistedResourcesData{addrid: 0, aidx: aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
-					rowsAffected, err = result.RowsAffected()
-					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete resources row for addr %s (%d), aidx %d", addr.String(), addrid, aidx)
-					}
-				}
+				// this case was already handled in the first loop.
+				continue
 			} else {
 				var rtype basics.CreatableType
 				if data.newResource.IsApp() {
@@ -2456,12 +2647,11 @@ func accountsNewRound(
 					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 					return
 				}
-
-				result, err = updateResourceStmt.Exec(protocol.Encode(&data.newResource), addrid, aidx)
+				var rowsAffected int64
+				rowsAffected, err = writer.updateResource(addrid, aidx, data.newResource)
 				if err == nil {
 					// rowid doesn't change on update.
 					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
-					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 					}
@@ -2478,24 +2668,30 @@ func accountsNewRound(
 		updatedResources[addr] = deltas
 	}
 
+	// last, we want to delete the resource table entries that are no longer needed.
+	for delRes := range pendingResourcesDeletion {
+		// new value is zero, which means we need to delete the current value.
+		var rowsAffected int64
+		rowsAffected, err = writer.deleteResource(delRes.addrid, delRes.aidx)
+		if err == nil {
+			// we deleted the entry successfully.
+			// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+			// because the base account might gone.
+			if rowsAffected != 1 {
+				err = fmt.Errorf("failed to delete resources row (%d), aidx %d", delRes.addrid, delRes.aidx)
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+
 	if len(creatables) > 0 {
-		insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
-		if err != nil {
-			return
-		}
-		defer insertCreatableIdxStmt.Close()
-
-		deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
-		if err != nil {
-			return
-		}
-		defer deleteCreatableIdxStmt.Close()
-
 		for cidx, cdelta := range creatables {
 			if cdelta.Created {
-				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.Creator[:], cdelta.Ctype)
+				_, err = writer.insertCreatable(cidx, cdelta.Ctype, cdelta.Creator[:])
 			} else {
-				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.Ctype)
+				_, err = writer.deleteCreatable(cidx, cdelta.Ctype)
 			}
 			if err != nil {
 				return
