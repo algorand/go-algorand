@@ -35,7 +35,10 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 	opSpecs := logic.OpsByName[logic.LogicVersion]
 	// TODO: sort by logic.OpSpecs[].Opcode
 	for _, opname := range names {
-		spec := opSpecs[opname]
+		spec, ok := opSpecs[opname]
+		if !ok {
+			continue
+		}
 		fmt.Fprintf(out, "| `%s%s` | %s |\n",
 			markdownTableEscape(spec.Name), immediateMarkdown(&spec),
 			markdownTableEscape(logic.OpDoc(opname)))
