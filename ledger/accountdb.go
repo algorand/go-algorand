@@ -128,6 +128,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
+	`DROP TABLE IF EXISTS resources`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -1093,10 +1094,10 @@ type baseAccountData struct {
 	TotalAppSchemaNumUint      uint64            `codec:"f"`
 	TotalAppSchemaNumByteSlice uint64            `codec:"g"`
 	TotalExtraAppPages         uint32            `codec:"h"`
-	TotalAssetParams           uint32            `codec:"i"`
-	TotalAssets                uint32            `codec:"j"`
-	TotalAppParams             uint32            `codec:"k"`
-	TotalAppLocalStates        uint32            `codec:"l"`
+	TotalAssetParams           uint64            `codec:"i"`
+	TotalAssets                uint64            `codec:"j"`
+	TotalAppParams             uint64            `codec:"k"`
+	TotalAppLocalStates        uint64            `codec:"l"`
 
 	baseOnlineAccountData
 
@@ -1166,10 +1167,10 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
 	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
 	ba.TotalExtraAppPages = ad.TotalExtraAppPages
-	ba.TotalAssetParams = uint32(len(ad.AssetParams))
-	ba.TotalAssets = uint32(len(ad.Assets))
-	ba.TotalAppParams = uint32(len(ad.AppParams))
-	ba.TotalAppLocalStates = uint32(len(ad.AppLocalStates))
+	ba.TotalAssetParams = uint64(len(ad.AssetParams))
+	ba.TotalAssets = uint64(len(ad.Assets))
+	ba.TotalAppParams = uint64(len(ad.AppParams))
+	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
 }
 
 func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
@@ -2789,7 +2790,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		return nil
 	}
 
-	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint32
+	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
 	// emptyCount := 0
 	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
@@ -3065,7 +3066,7 @@ func LoadAllFullAccounts(
 		return nil
 	}
 
-	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint32
+	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
 	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
 		if resData != nil {
 			// resData can be nil if a base account does not have resources
