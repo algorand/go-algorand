@@ -25,39 +25,108 @@ import (
 
 func TestProofSerialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
-	var junk TestData
-	crypto.RandBytes(junk[:])
-
-	a := make(TestArray, 3)
+	array := make(TestArray, 3)
 	for i := uint64(0); i < 3; i++ {
-		crypto.RandBytes(a[i][:])
+		crypto.RandBytes(array[i][:])
 	}
 
-	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
-	require.NoError(t, err)
+	tree, err := Build(array, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
 
 	// creates a proof with missing child
 	p, err := tree.ProveSingleLeaf(2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	data := p.GetFixedLengthHashableRepresentation()
-	require.Equal(t, len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
+	a.Equal(len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
 
 	// check the padded results
 	zeroDigest := make([]byte, crypto.Sha512_256Size)
-	require.Equal(t, data[1+((MaxEncodedTreeDepth-1)*crypto.Sha512_256Size):], zeroDigest)
-
-	var newPath []crypto.GenericDigest
-	for i := 0; i < MaxEncodedTreeDepth+1; i++ {
-		var junkDigest [crypto.Sha512_256Size]byte
-		crypto.RandBytes(junkDigest[:])
-		newPath = append(newPath, junkDigest[:])
+	i := 0
+	proofData := data[1:]
+	for ; i < (MaxEncodedTreeDepth - 2); i++ {
+		a.Equal(zeroDigest, proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
 	}
 
-	p.Path = newPath
-	p.TreeDepth = uint8(len(newPath))
+	// first proof digest is nil -> so the HashableRepresentation is zeros
+	a.Equal(crypto.GenericDigest(nil), p.Path[0])
+	a.Equal(zeroDigest, proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
+	i++
+
+	a.Equal([]byte(p.Path[1]), proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
+
+	//VC
+	tree, err = BuildVectorCommitmentTree(array, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	// creates a proof with missing child
+	p, err = tree.ProveSingleLeaf(2)
+	a.NoError(err)
+
 	data = p.GetFixedLengthHashableRepresentation()
-	require.Equal(t, len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
-	require.Equal(t, data[1+((MaxEncodedTreeDepth-1)*crypto.Sha512_256Size):], []byte(p.Path[MaxEncodedTreeDepth-1]))
+	a.Equal(len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
+
+	// check the padded results
+	zeroDigest = make([]byte, crypto.Sha512_256Size)
+	i = 0
+	proofData = data[1:]
+	for ; i < (MaxEncodedTreeDepth - 2); i++ {
+		a.Equal(zeroDigest, proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
+	}
+
+	a.Equal([]byte(p.Path[0]), proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
+	i++
+	a.Equal([]byte(p.Path[1]), proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
+
+}
+
+func TestProofSerializationMaxTree(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	array := make(TestArray, MaxNumLeavesOnEncodedTree)
+	for i := uint64(0); i < MaxNumLeavesOnEncodedTree; i++ {
+		crypto.RandBytes(array[i][:])
+	}
+
+	tree, err := BuildVectorCommitmentTree(array, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	p, err := tree.ProveSingleLeaf(2)
+	a.NoError(err)
+
+	data := p.GetFixedLengthHashableRepresentation()
+	a.Equal(len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
+
+	proofData := data[1:]
+	for i := 0; i < MaxEncodedTreeDepth; i++ {
+		a.Equal([]byte(p.Path[i]), proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
+	}
+}
+
+func TestProofSerializationOneLeafTree(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	array := make(TestArray, 1)
+	crypto.RandBytes(array[0][:])
+
+	tree, err := BuildVectorCommitmentTree(array, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	p, err := tree.ProveSingleLeaf(0)
+	a.NoError(err)
+
+	data := p.GetFixedLengthHashableRepresentation()
+	a.Equal(len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
+
+	zeroDigest := make([]byte, crypto.Sha512_256Size)
+
+	proofData := data[1:]
+	for i := 0; i < MaxEncodedTreeDepth; i++ {
+		a.Equal(zeroDigest, proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
+	}
+
 }

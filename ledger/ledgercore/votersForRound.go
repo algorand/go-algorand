@@ -115,7 +115,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.Build(participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return err
 	}

@@ -87,8 +87,9 @@ func TestEphemeralPublicKeysCommitmentBinaryFormat(t *testing.T) {
 	k3 := signer.GetSigner(8).SigningKey
 	k3hash := calculateHashOnKeyLeaf(k3, 8)
 
-	internal1 := calculateHashOnInternalNode(k0hash, k1hash)
-	internal2 := calculateHashOnInternalNode(k2hash, k3hash)
+	// hash internal node according to the vector commitment indices
+	internal1 := calculateHashOnInternalNode(k0hash, k2hash)
+	internal2 := calculateHashOnInternalNode(k1hash, k3hash)
 
 	root := calculateHashOnInternalNode(internal1, internal2)
 	a.Equal(root, signer.GetVerifier()[:])

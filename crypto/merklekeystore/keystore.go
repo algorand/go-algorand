@@ -110,8 +110,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	if err != nil {
 		return nil, err
 	}
-
-	tree, err := merklearray.Build(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
+	tree, err := merklearray.BuildVectorCommitmentTree(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: KeyStoreHashFunction})
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +209,7 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 
 	// verify the merkle tree verification path using the ephemeral public key, the
 	// verification path and the index.
-	err := merklearray.Verify(
+	err := merklearray.VerifyVectorCommitment(
 		v[:],
 		map[uint64]crypto.Hashable{sig.MerkleArrayIndex: &ephkey},
 		sig.Proof.ToProof(),

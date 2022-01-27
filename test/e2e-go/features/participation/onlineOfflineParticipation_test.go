@@ -17,10 +17,8 @@
 package participation
 
 import (
-	"errors"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -232,8 +230,8 @@ func balanceRoundOf(r basics.Round, cparams config.ConsensusParams) basics.Round
 	return basics.Round(2*cparams.SeedRefreshInterval*cparams.SeedLookback) + r
 }
 
-// if user choose to participate for short period (a period in which he won't have a key to sign stateproofs)
-// we need to reject the keyreg because we don't allow empty key commitment
+// make sure that a user can register online even if the participation period
+// does not contain a state proof round (i.e the user will not generate state proof keys at all)
 func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -292,30 +290,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
 	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, &partkeyResponse, partKeyFirstValid, partKeyLastValid, transactionFee, [32]byte{})
-	a.Equal(goOnlineTx.KeyregTxnFields.StateProofPK.IsEmpty(), true, "stateproof key should be zero")
-	a.NoError(err, "should be able to make go online tx")
-	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
-	_, err = client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
-
-	expectedError := errors.New("online keyreg transaction cannot have empty field StateProofPK")
-	if !strings.Contains(err.Error(), expectedError.Error()) {
-		a.Fail("online keyreg transaction cannot have empty StateProofPK field")
-	}
-
-	newAccountStatus, err := client.AccountInformation(newAccount)
-	a.NoError(err, "client should be able to get information about new account")
-	a.NotEqual(basics.Online.String(), newAccountStatus.Status, "new account should not be online")
-
-	// we try to register again with a stateproof
-	partKeyFirstValid = uint64(1)
-	partKeyLastValid = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-	partkeyResponse, _, err = client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 0)
-	a.NoError(err, "rest client should be able to add participation key to new account")
-	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
-	nodeStatus, err := client.Status()
-	a.NoError(err)
-	seededRound := nodeStatus.LastRound
-	goOnlineTx, err = client.MakeUnsignedGoOnlineTx(newAccount, &partkeyResponse, partKeyFirstValid, partKeyLastValid, transactionFee, [32]byte{})
+	a.Equal(goOnlineTx.KeyregTxnFields.StateProofPK.IsEmpty(), false, "stateproof key should not be zero")
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
@@ -323,10 +298,12 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 
 	fixture.AssertValidTxid(onlineTxID)
 	maxRoundsToWaitForTxnConfirm := uint64(5)
+	nodeStatus, err := client.Status()
+	seededRound := nodeStatus.LastRound
 	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
 	nodeStatus, _ = client.Status()
 
-	newAccountStatus, err = client.AccountInformation(newAccount)
+	accountStatus, err := client.AccountInformation(newAccount)
 	a.NoError(err, "client should be able to get information about new account")
-	a.Equal(basics.Online.String(), newAccountStatus.Status, "new account should be online")
+	a.Equal(basics.Online.String(), accountStatus.Status, "new account should be online")
 }
