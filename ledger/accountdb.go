@@ -128,6 +128,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
+	`DROP TABLE IF EXISTS resources`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
