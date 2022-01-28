@@ -348,6 +348,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	if minTealVersion < *caller.MinTealVersion {
 		minTealVersion = *caller.MinTealVersion
 	}
+
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
 	if caller.Proto.EnableAppCostPooling {
@@ -2575,6 +2576,7 @@ func opGitxna(cx *EvalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+
 func opGitxnas(cx *EvalContext) {
 	lastInnerGroup := cx.getLastInnerGroup()
 	gi := int(cx.program[cx.pc+1])
@@ -2598,6 +2600,7 @@ func opGitxnas(cx *EvalContext) {
 	}
 	cx.stack[last] = sv
 }
+
 
 func opGaidImpl(cx *EvalContext, gi int, opName string) (sv stackValue, err error) {
 	if gi >= len(cx.TxnGroup) {
