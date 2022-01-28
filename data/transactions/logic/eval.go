@@ -490,20 +490,22 @@ type EvalContext struct {
 // StackType describes the type of a value on the operand stack
 type StackType byte
 
+const (
+	// StackNone in an OpSpec shows that the op pops or yields nothing
+	StackNone StackType = iota
+
+	// StackAny in an OpSpec shows that the op pops or yield any type
+	StackAny StackType = iota
+
+	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
+	StackUint64 StackType = iota
+
+	// StackBytes in an OpSpec shows that the op pops or yields a []byte
+	StackBytes StackType = iota
+)
+
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
-
-// StackNone in an OpSpec shows that the op pops or yields nothing
-const StackNone StackType = 0
-
-// StackAny in an OpSpec shows that the op pops or yield any type
-const StackAny StackType = 1
-
-// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-const StackUint64 StackType = 2
-
-// StackBytes in an OpSpec shows that the op pops or yields a []byte
-const StackBytes StackType = 3
 
 func (st StackType) String() string {
 	switch st {
@@ -2267,159 +2269,170 @@ func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSp
 	return &fs, nil
 }
 
+type txnSource int
+
+const (
+	srcGroup      txnSource = iota
+	srcInner                = iota
+	srcInnerGroup           = iota
+)
+
+// opTxnImpl implements all of the txn variants.  Each form of txn opcode should
+// be able to get its work done with one call here, after collecting the args in
+// the most straightforward way possible. They ought to do no error checking, so
+// that it is all collected here.
+func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai uint64, expectArray bool) (sv stackValue, err error) {
+	fs, err := cx.fetchField(field, expectArray)
+	if err != nil {
+		return sv, err
+	}
+
+	var group []transactions.SignedTxnWithAD
+	switch src {
+	case srcGroup:
+		if fs.effects && gi >= uint64(cx.GroupIndex) {
+			// Test mode so that error is clearer
+			if cx.runModeFlags == runModeSignature {
+				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
+			}
+			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.GroupIndex)
+		}
+		group = cx.TxnGroup
+	case srcInner:
+		group = cx.getLastInner()
+	case srcInnerGroup:
+		group = cx.getLastInnerGroup()
+	}
+
+	// We cast the length up, rather than gi down, in case gi overflows `int`.
+	if gi >= uint64(len(group)) {
+		return sv, fmt.Errorf("txn index %d, len(group) is %d", gi, len(group))
+	}
+	tx := &group[gi]
+
+	// int(gi) is safe because gi < len(group). Slices in Go cannot exceed `int`
+	sv, err = cx.txnFieldToStack(tx, fs, ai, int(gi), src != srcGroup)
+	if err != nil {
+		return sv, err
+	}
+
+	return sv, nil
+}
+
 func opTxn(cx *EvalContext) {
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), false)
+	gi := uint64(cx.GroupIndex)
+	field := TxnField(cx.program[cx.pc+1])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	sv, err := cx.txnFieldToStack(cx.Txn, fs, 0, cx.GroupIndex, false)
-	if err != nil {
-		cx.err = err
-		return
-	}
 	cx.stack = append(cx.stack, sv)
 }
 
 func opTxna(cx *EvalContext) {
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	gi := uint64(cx.GroupIndex)
+	field := TxnField(cx.program[cx.pc+1])
+	ai := uint64(cx.program[cx.pc+2])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(cx.Txn, fs, arrayFieldIdx, cx.GroupIndex, false)
-	if err != nil {
-		cx.err = err
-		return
-	}
 	cx.stack = append(cx.stack, sv)
 }
 
 func opTxnas(cx *EvalContext) {
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	last := len(cx.stack) - 1
+
+	gi := uint64(cx.GroupIndex)
+	field := TxnField(cx.program[cx.pc+1])
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	last := len(cx.stack) - 1
-	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(cx.Txn, fs, arrayFieldIdx, cx.GroupIndex, false)
-	if err != nil {
-		cx.err = err
-		return
-	}
 	cx.stack[last] = sv
 }
 
 func opGtxn(cx *EvalContext) {
-	gi := cx.program[cx.pc+1]
-	if int(gi) >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
-		return
-	}
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), false)
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	tx := &cx.TxnGroup[gi]
-	sv, err := cx.txnFieldToStack(tx, fs, 0, int(gi), false)
-	if err != nil {
-		cx.err = err
-		return
-	}
 	cx.stack = append(cx.stack, sv)
 }
 
 func opGtxna(cx *EvalContext) {
-	gi := cx.program[cx.pc+1]
-	if int(gi) >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxna lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
-		return
-	}
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+	ai := uint64(cx.program[cx.pc+3])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	tx := &cx.TxnGroup[gi]
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, int(gi), false)
-	if err != nil {
-		cx.err = err
-		return
-	}
+
 	cx.stack = append(cx.stack, sv)
 }
 
 func opGtxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	gi := cx.program[cx.pc+1]
-	if int(gi) >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
-		return
-	}
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	arrayFieldIdx := cx.stack[last].Uint
-	tx := &cx.TxnGroup[gi]
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, int(gi), false)
-	if err != nil {
-		cx.err = err
-		return
-	}
+
 	cx.stack[last] = sv
 }
 
 func opGtxns(cx *EvalContext) {
 	last := len(cx.stack) - 1
+
 	gi := cx.stack[last].Uint
-	if gi >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gtxns lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
-		return
-	}
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), false)
+	field := TxnField(cx.program[cx.pc+1])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	tx := &cx.TxnGroup[gi]
-	sv, err := cx.txnFieldToStack(tx, fs, 0, int(gi), false)
-	if err != nil {
-		cx.err = err
-		return
-	}
+
 	cx.stack[last] = sv
 }
 
 func opGtxnsa(cx *EvalContext) {
 	last := len(cx.stack) - 1
+
 	gi := cx.stack[last].Uint
-	if gi >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
-		return
-	}
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	field := TxnField(cx.program[cx.pc+1])
+	ai := uint64(cx.program[cx.pc+2])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	tx := &cx.TxnGroup[gi]
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, int(gi), false)
-	if err != nil {
-		cx.err = err
-		return
-	}
+
 	cx.stack[last] = sv
 }
 
@@ -2428,40 +2441,23 @@ func opGtxnsas(cx *EvalContext) {
 	prev := last - 1
 
 	gi := cx.stack[prev].Uint
-	if gi >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gtxnsas lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
-		return
-	}
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	field := TxnField(cx.program[cx.pc+1])
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	arrayFieldIdx := cx.stack[last].Uint
-	tx := &cx.TxnGroup[gi]
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, int(gi), false)
-	if err != nil {
-		cx.err = err
-		return
-	}
+
 	cx.stack[prev] = sv
 	cx.stack = cx.stack[:last]
 }
 
 func opItxn(cx *EvalContext) {
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), false)
-	if err != nil {
-		cx.err = err
-		return
-	}
+	field := TxnField(cx.program[cx.pc+1])
 
-	if len(cx.Txn.EvalDelta.InnerTxns) == 0 {
-		cx.err = fmt.Errorf("no inner transaction available %d", fs.field)
-		return
-	}
-
-	itxn := &cx.Txn.EvalDelta.InnerTxns[len(cx.Txn.EvalDelta.InnerTxns)-1]
-	sv, err := cx.txnFieldToStack(itxn, fs, 0, 0, true)
+	sv, err := cx.opTxnImpl(0, srcInner, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
@@ -2470,49 +2466,40 @@ func opItxn(cx *EvalContext) {
 }
 
 func opItxna(cx *EvalContext) {
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	field := TxnField(cx.program[cx.pc+1])
+	ai := uint64(cx.program[cx.pc+2])
+
+	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 
-	if len(cx.Txn.EvalDelta.InnerTxns) == 0 {
-		cx.err = fmt.Errorf("no inner transaction available %d", fs.field)
-		return
-	}
-
-	itxn := &cx.Txn.EvalDelta.InnerTxns[len(cx.Txn.EvalDelta.InnerTxns)-1]
-	sv, err := cx.txnFieldToStack(itxn, fs, arrayFieldIdx, 0, true)
-	if err != nil {
-		cx.err = err
-		return
-	}
 	cx.stack = append(cx.stack, sv)
 }
 
 func opItxnas(cx *EvalContext) {
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
-	if err != nil {
-		cx.err = err
-		return
-	}
-
 	last := len(cx.stack) - 1
-	arrayFieldIdx := cx.stack[last].Uint
 
-	if len(cx.Txn.EvalDelta.InnerTxns) == 0 {
-		cx.err = fmt.Errorf("no inner transaction available %d", fs.field)
-		return
-	}
+	field := TxnField(cx.program[cx.pc+1])
+	ai := cx.stack[last].Uint
 
-	itxn := &cx.Txn.EvalDelta.InnerTxns[len(cx.Txn.EvalDelta.InnerTxns)-1]
-	sv, err := cx.txnFieldToStack(itxn, fs, arrayFieldIdx, 0, true)
+	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack[last] = sv
+}
+
+func (cx *EvalContext) getLastInner() []transactions.SignedTxnWithAD {
+	inners := cx.Txn.EvalDelta.InnerTxns
+	// If there are no inners yet, return empty slice, which will result in error
+	if len(inners) == 0 {
+		return inners
+	}
+	return inners[len(inners)-1:]
 }
 
 func (cx *EvalContext) getLastInnerGroup() []transactions.SignedTxnWithAD {
@@ -2537,72 +2524,45 @@ func (cx *EvalContext) getLastInnerGroup() []transactions.SignedTxnWithAD {
 }
 
 func opGitxn(cx *EvalContext) {
-	lastInnerGroup := cx.getLastInnerGroup()
-	gi := cx.program[cx.pc+1]
-	if int(gi) >= len(lastInnerGroup) {
-		cx.err = fmt.Errorf("gitxn %d ... but last group has %d", gi, len(lastInnerGroup))
-		return
-	}
-	itxn := &lastInnerGroup[gi]
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
 
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), false)
+	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	sv, err := cx.txnFieldToStack(itxn, fs, 0, int(gi), true)
-	if err != nil {
-		cx.err = err
-		return
-	}
 	cx.stack = append(cx.stack, sv)
 }
 
 func opGitxna(cx *EvalContext) {
-	lastInnerGroup := cx.getLastInnerGroup()
-	gi := int(cx.program[cx.pc+1])
-	if gi >= len(lastInnerGroup) {
-		cx.err = fmt.Errorf("gitxna %d ... but last group has %d", gi, len(lastInnerGroup))
-		return
-	}
-	itxn := &lastInnerGroup[gi]
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+	ai := uint64(cx.program[cx.pc+3])
 
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
+	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err := cx.txnFieldToStack(itxn, fs, arrayFieldIdx, gi, true)
-	if err != nil {
-		cx.err = err
-		return
-	}
+
 	cx.stack = append(cx.stack, sv)
 }
 
 func opGitxnas(cx *EvalContext) {
-	lastInnerGroup := cx.getLastInnerGroup()
-	gi := int(cx.program[cx.pc+1])
-	if gi >= len(lastInnerGroup) {
-		cx.err = fmt.Errorf("gitxnas %d ... but last group has %d", gi, len(lastInnerGroup))
-		return
-	}
-	itxn := &lastInnerGroup[gi]
-
-	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
-	if err != nil {
-		cx.err = err
-		return
-	}
 	last := len(cx.stack) - 1
-	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(itxn, fs, arrayFieldIdx, gi, true)
+
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack[last] = sv
 }
 
@@ -2646,7 +2606,9 @@ func opGaid(cx *EvalContext) {
 
 func opGaids(cx *EvalContext) {
 	last := len(cx.stack) - 1
+
 	gi := cx.stack[last].Uint
+
 	if gi >= uint64(len(cx.TxnGroup)) {
 		cx.err = fmt.Errorf("gaids lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
 		return

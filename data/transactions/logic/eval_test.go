@@ -829,7 +829,7 @@ func TestGtxnBadIndex(t *testing.T) {
 
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
-	testLogicBytes(t, program, defaultEvalParams(nil), "gtxn lookup")
+	testLogicBytes(t, program, defaultEvalParams(nil), "txn index 1")
 }
 
 func TestGtxnBadField(t *testing.T) {
@@ -1367,30 +1367,31 @@ assert
 int 1
 `
 
+// The additions in v6 were all "effects" so they must look behind.  They use gtxn 2.
 const testTxnProgramTextV6 = testTxnProgramTextV5 + `
 assert
 
-txn CreatedAssetID
+gtxn 2 CreatedAssetID
 int 0
 ==
 assert
 
-txn CreatedApplicationID
+gtxn 2 CreatedApplicationID
 int 0
 ==
 assert
 
-txn NumLogs
+gtxn 2 NumLogs
 int 2
 ==
 assert
 
-txn Logs 1
+gtxn 2 Logs 1
 byte "prefilled"
 ==
 assert
 
-txn LastLog
+gtxn 2 LastLog
 byte "prefilled"
 ==
 assert
@@ -1553,11 +1554,11 @@ func TestTxn(t *testing.T) {
 			// Since we test GroupIndex ==3, we need to fake up such a group
 			ep := defaultEvalParams(nil)
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{txn, txn, txn, txn})
-			ep.TxnGroup[3].EvalDelta.Logs = []string{"x", "prefilled"}
+			ep.TxnGroup[2].EvalDelta.Logs = []string{"x", "prefilled"}
 			if v < txnEffectsVersion {
 				testLogicFull(t, ops.Program, 3, ep)
 			} else {
-				// Starting in txnEffectsVersion we can't access all fields in Logic mode
+				// Starting in txnEffectsVersion, there are fields we can't access all fields in Logic mode
 				testLogicFull(t, ops.Program, 3, ep, "not allowed in current mode")
 				// And the early tests use "arg" a lot - not allowed in stateful. So remove those tests.
 				lastArg := strings.Index(source, "arg 10\n==\n&&")
@@ -1939,7 +1940,7 @@ txna ApplicationArgs 0
 	// modify gtxn index
 	saved = ops.Program[2]
 	ops.Program[2] = 0x01
-	testLogicBytes(t, ops.Program, ep, "gtxna lookup TxnGroup[1] but it only has 1")
+	testLogicBytes(t, ops.Program, ep, "txn index 1, len(group) is 1")
 
 	// modify gtxn field
 	ops.Program[2] = saved
