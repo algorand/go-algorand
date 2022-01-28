@@ -180,9 +180,9 @@ func TestTxnEffectsAvailable(t *testing.T) {
 		if !fs.effects {
 			continue
 		}
-		source := fmt.Sprintf("txn %s", fs.field.String())
+		source := fmt.Sprintf("txn %s; pop; int 1", fs.field)
 		if fs.array {
-			source = fmt.Sprintf("txna %s 0", fs.field.String())
+			source = fmt.Sprintf("txn %s 0; pop; int 1", fs.field)
 		}
 		for v := fs.version; v <= AssemblerMaxVersion; v++ {
 			ops := testProg(t, source, v)
@@ -193,12 +193,12 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			ep.Ledger = MakeLedger(nil)
 			_, err = EvalApp(ops.Program, 0, 0, ep)
 			if v < txnEffectsVersion {
-				require.Error(t, err)
+				require.Error(t, err, source)
 			} else {
 				if fs.array {
 					continue // Array (Logs) will be 0 length, so will fail anyway
 				}
-				require.NoError(t, err)
+				require.NoError(t, err, source)
 			}
 		}
 	}
