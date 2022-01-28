@@ -25,6 +25,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -4088,4 +4089,107 @@ func opBase64Decode(cx *EvalContext) {
 		encoding = base64.StdEncoding
 	}
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
+}
+func hasDuplicateKeys(jsonText []byte) (bool, map[string]json.RawMessage, error) {
+	dec := json.NewDecoder(bytes.NewReader(jsonText))
+	parsed := make(map[string]json.RawMessage)
+	t, err := dec.Token()
+	if err != nil {
+		return false, nil, err
+	}
+	t, ok := t.(json.Delim)
+	if !ok || t.(json.Delim).String() != "{" {
+		return false, nil, fmt.Errorf("only json object is allowed")
+	}
+	for dec.More() {
+		var value json.RawMessage
+		// get JSON key
+		key, err := dec.Token()
+		if err != nil {
+			return false, nil, err
+		}
+		// end of json
+		if key == '}' {
+			break
+		}
+		// decode value
+		err = dec.Decode(&value)
+		if err != nil {
+			return false, nil, err
+		}
+		// check for duplicates
+		if _, ok := parsed[key.(string)]; ok {
+			return true, nil, nil
+		}
+		parsed[key.(string)] = value
+	}
+	return false, parsed, nil
+}
+
+func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
+	if !json.Valid(jsonText) {
+		return nil, fmt.Errorf("invalid json text")
+	}
+	// parse json text and check for duplicate keys
+	hasDuplicates, parsed, err := hasDuplicateKeys(jsonText)
+	if hasDuplicates {
+		return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invalid json text, %v", err)
+	}
+	return parsed, nil
+}
+func opJSONRef(cx *EvalContext) {
+	// get json key
+	last := len(cx.stack) - 1
+	key := string(cx.stack[last].Bytes)
+	cx.stack = cx.stack[:last] // pop
+
+	// parse json text
+	last = len(cx.stack) - 1
+	parsed, err := parseJSON(cx.stack[last].Bytes)
+	if err != nil {
+		cx.err = fmt.Errorf("error while parsing JSON text, %v", err)
+		return
+	}
+
+	// get value from json
+	var stval stackValue
+	_, ok := parsed[key]
+	if !ok {
+		cx.err = fmt.Errorf("key %s not found in JSON text", key)
+		return
+	}
+	expectedType := JSONRefType(cx.program[cx.pc+1])
+	switch expectedType {
+	case JSONString:
+		var value string
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		stval.Bytes = []byte(value)
+	case JSONUint64:
+		var value uint64
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		stval.Uint = value
+	case JSONObject:
+		var value map[string]json.RawMessage
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		stval.Bytes = parsed[key]
+	default:
+		cx.err = fmt.Errorf("unsupported json_ref return type, should not have reached here")
+		return
+	}
+	cx.stack[last] = stval
 }

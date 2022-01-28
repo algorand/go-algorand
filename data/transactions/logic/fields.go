@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -489,6 +489,47 @@ func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
+// JSONRefType is an enum for the `json_ref` opcode
+type JSONRefType int
+
+const (
+	// JSONString represents string json value
+	JSONString JSONRefType = iota
+	// JSONUint64 represents uint64 json value
+	JSONUint64
+	// JSONObject represents json object
+	JSONObject
+	invalidJSONRefType
+)
+
+// After running `go generate` these strings will be available:
+var jsonRefTypeNames [3]string = [...]string{JSONString.String(), JSONUint64.String(), JSONObject.String()}
+
+type jsonRefSpec struct {
+	field   JSONRefType
+	ftype   StackType
+	version uint64
+}
+
+var jsonRefSpecs = []jsonRefSpec{
+	{JSONString, StackBytes, 6},
+	{JSONUint64, StackUint64, 6},
+	{JSONObject, StackBytes, 6},
+}
+
+var jsonRefSpecByField map[JSONRefType]jsonRefSpec
+var jsonRefSpecByName jsonRefSpecMap
+
+type jsonRefSpecMap map[string]jsonRefSpec
+
+func (s jsonRefSpecMap) getExtraFor(name string) (extra string) {
+	// Uses 6 here because base64_decode fields were introduced in 6
+	if s[name].version > 6 {
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
+	}
+	return
+}
+
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
@@ -730,6 +771,16 @@ func init() {
 	base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
 	for i, encoding := range base64EncodingNames {
 		base64EncodingSpecByName[encoding] = base64EncodingSpecByField[Base64Encoding(i)]
+	}
+
+	jsonRefSpecByField = make(map[JSONRefType]jsonRefSpec, len(jsonRefTypeNames))
+	for _, s := range jsonRefSpecs {
+		jsonRefSpecByField[s.field] = s
+	}
+
+	jsonRefSpecByName = make(jsonRefSpecMap, len(jsonRefTypeNames))
+	for i, typename := range jsonRefTypeNames {
+		jsonRefSpecByName[typename] = jsonRefSpecByField[JSONRefType(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
