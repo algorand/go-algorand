@@ -807,7 +807,7 @@ func simpleImm(value string, label string) (uint64, error) {
 	return res, err
 }
 
-func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
+func asmTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("txn expects one argument")
 	}
@@ -821,21 +821,22 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// assembleTxn2 delegates to assembleTxn or assembleTxna depending on number of operands
-func assembleTxn2(ops *OpStream, spec *OpSpec, args []string) error {
+// asmTxn2 delegates to asmTxn or asmTxna depending on number of operands
+func asmTxn2(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
-		return assembleTxn(ops, spec, args)
+		return asmTxn(ops, spec, args)
 	}
 	if len(args) == 2 {
 		txna := OpsByName[ops.Version]["txna"]
-		return assembleTxna(ops, &txna, args)
+		return asmTxna(ops, &txna, args)
 	}
 	return ops.error("txn expects one or two arguments")
 }
 
-func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
+// asmTxna also assemble asmItxna
+func asmTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
-		return ops.error("txna expects two immediate arguments")
+		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
 	fs, err := txnFieldImm(args[0], true, ops)
 	if err != nil {
@@ -853,9 +854,10 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleTxnas(ops *OpStream, spec *OpSpec, args []string) error {
+// asmTxnas also assembles itxnas
+func asmTxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("txnas expects one immediate argument")
+		return ops.errorf("%s expects one immediate argument", spec.Name)
 	}
 	fs, err := txnFieldImm(args[0], true, ops)
 	if err != nil {
@@ -868,9 +870,9 @@ func assembleTxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
+func asmGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
-		return ops.error("gtxn expects two arguments")
+		return ops.errorf("%s expects two arguments", spec.Name)
 	}
 	slot, err := simpleImm(args[0], "transaction index")
 	if err != nil {
@@ -888,18 +890,19 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
+func asmGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 2 {
-		return assembleGtxn(ops, spec, args)
+		return asmGtxn(ops, spec, args)
 	}
 	if len(args) == 3 {
 		gtxna := OpsByName[ops.Version]["gtxna"]
-		return assembleGtxna(ops, &gtxna, args)
+		return asmGtxna(ops, &gtxna, args)
 	}
 	return ops.errorf("%s expects two or three arguments", spec.Name)
 }
 
-func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
+//asmGtxna also assembles asmGitxna
+func asmGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 3 {
 		return ops.errorf("%s expects three arguments", spec.Name)
 	}
@@ -924,7 +927,8 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleGtxnas(ops *OpStream, spec *OpSpec, args []string) error {
+// asmGtxnas also assembles gitxnas
+func asmGtxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
@@ -944,10 +948,10 @@ func assembleGtxnas(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
+func asmGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 2 {
 		gtxnsa := OpsByName[ops.Version]["gtxnsa"]
-		return assembleGtxnsa(ops, &gtxnsa, args)
+		return asmGtxnsa(ops, &gtxnsa, args)
 	}
 	if len(args) != 1 {
 		return ops.errorf("%s expects one or two immediate arguments", spec.Name)
@@ -963,7 +967,7 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
+func asmGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.errorf("%s expects two immediate arguments", spec.Name)
 	}
@@ -982,7 +986,7 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleGtxnsas(ops *OpStream, spec *OpSpec, args []string) error {
+func asmGtxnsas(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one immediate argument", spec.Name)
 	}
@@ -1003,7 +1007,7 @@ func asmItxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if len(args) == 2 {
 		itxna := OpsByName[ops.Version]["itxna"]
-		return asmItxna(ops, &itxna, args)
+		return asmTxna(ops, &itxna, args)
 	}
 	return ops.errorf("%s expects one or two arguments", spec.Name)
 }
@@ -1023,82 +1027,16 @@ func asmItxnOnly(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func asmItxna(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) != 2 {
-		return ops.errorf("%s expects two immediate arguments", spec.Name)
-	}
-	fs, err := txnFieldImm(args[0], true, ops)
-	if err != nil {
-		return ops.errorf("%s %w", spec.Name, err)
-	}
-	arrayFieldIdx, err := simpleImm(args[1], "array index")
-	if err != nil {
-		return ops.errorf("%s %w", spec.Name, err)
-	}
-
-	ops.pending.WriteByte(spec.Opcode)
-	ops.pending.WriteByte(uint8(fs.field))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(fs.ftype)
-	return nil
-}
-
-// asmGitxn delegates to asmGitxnOnly or asmGitxna depending on number of operands
+// asmGitxn delegates to asmGtxn or asmGtxna depending on number of operands
 func asmGitxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 2 {
-		return asmGitxnOnly(ops, spec, args)
+		return asmGtxn(ops, spec, args)
 	}
 	if len(args) == 3 {
 		itxna := OpsByName[ops.Version]["gitxna"]
-		return asmGitxna(ops, &itxna, args)
+		return asmGtxna(ops, &itxna, args)
 	}
 	return ops.errorf("%s expects two or three arguments", spec.Name)
-}
-
-func asmGitxnOnly(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) != 2 {
-		return ops.errorf("%s expects two arguments", spec.Name)
-	}
-	slot, err := simpleImm(args[0], "transaction index")
-	if err != nil {
-		return ops.errorf("%s %w", spec.Name, err)
-	}
-	fs, err := txnFieldImm(args[1], false, ops)
-	if err != nil {
-		return ops.errorf("%s %w", spec.Name, err)
-	}
-
-	ops.pending.WriteByte(spec.Opcode)
-	ops.pending.WriteByte(uint8(slot))
-	ops.pending.WriteByte(uint8(fs.field))
-	ops.returns(fs.ftype)
-	return nil
-}
-
-func asmGitxna(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) != 3 {
-		return ops.errorf("%s expects three immediate arguments", spec.Name)
-	}
-	slot, err := simpleImm(args[0], "transaction index")
-	if err != nil {
-		return ops.errorf("%s %w", spec.Name, err)
-	}
-
-	fs, err := txnFieldImm(args[1], true, ops)
-	if err != nil {
-		return ops.errorf("%s %w", spec.Name, err)
-	}
-	arrayFieldIdx, err := simpleImm(args[2], "array index")
-	if err != nil {
-		return ops.errorf("%s %w", spec.Name, err)
-	}
-
-	ops.pending.WriteByte(spec.Opcode)
-	ops.pending.WriteByte(uint8(slot))
-	ops.pending.WriteByte(uint8(fs.field))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(fs.ftype)
-	return nil
 }
 
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
@@ -2513,7 +2451,7 @@ func checkPushBytes(cx *EvalContext) error {
 	return cx.err
 }
 
-// This is also used to disassemble gtxns, gtxnsas, txnas, itxn
+// This is also used to disassemble gtxns, gtxnsas, txnas, itxn, itxnas
 func disTxn(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
@@ -2544,7 +2482,7 @@ func disTxna(dis *disassembleState, spec *OpSpec) (string, error) {
 	return fmt.Sprintf("%s %s %d", spec.Name, TxnFieldNames[txarg], arrayFieldIdx), nil
 }
 
-// disGtxn is also used to disassemble gtxnas, gitxn
+// disGtxn is also used to disassemble gtxnas, gitxn, gitxnas
 func disGtxn(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {

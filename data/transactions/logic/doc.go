@@ -60,6 +60,7 @@ var opDocByName = map[string]string{
 	"expw":    "A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1",
 	"mulw":    "A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low",
 	"addw":    "A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.",
+	"divw":    "A,B / C. Fail if C == 0 or if result overflows.",
 	"divmodw": "W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)",
 
 	"intcblock":  "prepare block of uint64 constants for use by intc",
@@ -95,8 +96,10 @@ var opDocByName = map[string]string{
 	"gtxnsas": "Bth value of the array field F from the Ath transaction in the current group",
 	"itxn":    "field F of the last inner transaction",
 	"itxna":   "Ith value of the array field F of the last inner transaction",
+	"itxnas":  "Ath value of the array field F of the last inner transaction",
 	"gitxn":   "field F of the Tth transaction in the last inner group submitted",
 	"gitxna":  "Ith value of the array field F from the Tth transaction in the last inner group submitted",
+	"gitxnas": "Ath value of the array field F from the Tth transaction in the last inner group submitted",
 
 	"global":  "global field F",
 	"load":    "Ith scratch space value. All scratch spaces are 0 at program start.",
@@ -231,8 +234,10 @@ var opcodeImmediateNotes = map[string]string{
 	"itxn_field": "{uint8 transaction field index}",
 	"itxn":       "{uint8 transaction field index}",
 	"itxna":      "{uint8 transaction field index} {uint8 transaction field array index}",
+	"itxnas":     "{uint8 transaction field index}",
 	"gitxn":      "{uint8 transaction group index} {uint8 transaction field index}",
 	"gitxna":     "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
+	"gitxnas":    "{uint8 transaction group index} {uint8 transaction field index}",
 
 	"ecdsa_verify":        "{uint8 curve index}",
 	"ecdsa_pk_decompress": "{uint8 curve index}",
@@ -278,6 +283,7 @@ var opDocExtras = map[string]string{
 	"+":                   "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
 	"/":                   "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
 	"bitlen":              "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
+	"divw":                "The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.",
 	"divmodw":             "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
 	"txn":                 "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":                "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
@@ -322,14 +328,14 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log"},
-	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "gitxn", "gitxna"},
+	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 
 // OpCost indicates the cost of an operation over the range of

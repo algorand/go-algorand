@@ -268,7 +268,7 @@ type EvalParams struct {
 	Specials *transactions.SpecialAddresses
 
 	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
-	PooledApplicationBudget *uint64
+	PooledApplicationBudget *int
 
 	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
 	pooledAllowedInners *int
@@ -309,14 +309,14 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 
 	minTealVersion := ComputeMinTealVersion(txgroup, false)
 
-	var pooledApplicationBudget *uint64
+	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
 
 	credit, _ := transactions.FeeCredit(txgroup, proto.MinTxnFee)
 
 	if proto.EnableAppCostPooling {
-		pooledApplicationBudget = new(uint64)
-		*pooledApplicationBudget = uint64(apps * proto.MaxAppProgramCost)
+		pooledApplicationBudget = new(int)
+		*pooledApplicationBudget = apps * proto.MaxAppProgramCost
 	}
 
 	if proto.EnableInnerTransactionPooling {
@@ -348,12 +348,12 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	if minTealVersion < *caller.MinTealVersion {
 		minTealVersion = *caller.MinTealVersion
 	}
-	// Unlike NewEvalParams, do not add credit here. opTxSubmit has already done so.
+	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
 	if caller.Proto.EnableAppCostPooling {
 		for _, tx := range txgroup {
 			if tx.Txn.Type == protocol.ApplicationCallTx {
-				*caller.PooledApplicationBudget += uint64(caller.Proto.MaxAppProgramCost)
+				*caller.PooledApplicationBudget += caller.Proto.MaxAppProgramCost
 			}
 		}
 	}
@@ -558,10 +558,6 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	}
 	pass, err := eval(program, &cx)
 
-	// update pooled budget (shouldn't overflow, but being careful anyway)
-	if cx.PooledApplicationBudget != nil {
-		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
-	}
 	// update side effects
 	cx.pastScratch[cx.GroupIndex] = &scratchSpace{}
 	*cx.pastScratch[cx.GroupIndex] = cx.scratch
@@ -721,7 +717,7 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 	cx.branchTargets = make(map[int]bool)
 	cx.instructionStarts = make(map[int]bool)
 
-	maxCost := cx.budget()
+	maxCost := cx.remainingBudget()
 	if version >= backBranchEnabledVersion {
 		maxCost = math.MaxInt32
 	}
@@ -796,14 +792,14 @@ func boolToUint(x bool) uint64 {
 // MaxStackDepth should not change unless gated by a teal version change / consensus upgrade.
 const MaxStackDepth = 1000
 
-func (cx *EvalContext) budget() int {
+func (cx *EvalContext) remainingBudget() int {
 	if cx.runModeFlags == runModeSignature {
-		return int(cx.Proto.LogicSigMaxCost)
+		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
-	if cx.Proto.EnableAppCostPooling && cx.PooledApplicationBudget != nil {
-		return int(*cx.PooledApplicationBudget)
+	if cx.PooledApplicationBudget != nil {
+		return *cx.PooledApplicationBudget
 	}
-	return cx.Proto.MaxAppProgramCost
+	return cx.Proto.MaxAppProgramCost - cx.cost
 }
 
 func (cx *EvalContext) remainingInners() int {
@@ -850,9 +846,13 @@ func (cx *EvalContext) step() {
 		return
 	}
 	cx.cost += deets.Cost
-	if cx.cost > cx.budget() {
-		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: remaining budget is %d but program cost was %d",
-			cx.pc, spec.Name, cx.budget(), cx.cost)
+	if cx.PooledApplicationBudget != nil {
+		*cx.PooledApplicationBudget -= deets.Cost
+	}
+
+	if cx.remainingBudget() < 0 {
+		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
+			cx.pc, spec.Name, cx.cost)
 		return
 	}
 
@@ -1158,6 +1158,28 @@ func opMulw(cx *EvalContext) {
 	high, low := bits.Mul64(cx.stack[prev].Uint, cx.stack[last].Uint)
 	cx.stack[prev].Uint = high
 	cx.stack[last].Uint = low
+}
+
+func opDivw(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	pprev := last - 2
+	hi := cx.stack[pprev].Uint
+	lo := cx.stack[prev].Uint
+	y := cx.stack[last].Uint
+	// These two clauses catch what will cause panics in bits.Div64, so we get
+	// nicer errors.
+	if y == 0 {
+		cx.err = errors.New("divw 0")
+		return
+	}
+	if y <= hi {
+		cx.err = fmt.Errorf("divw overflow: %d <= %d", y, hi)
+		return
+	}
+	quo, _ := bits.Div64(hi, lo, y)
+	cx.stack = cx.stack[:prev] // pop 2
+	cx.stack[pprev].Uint = quo
 }
 
 func opLt(cx *EvalContext) {
@@ -2462,6 +2484,30 @@ func opItxna(cx *EvalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+func opItxnas(cx *EvalContext) {
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+1]), true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	last := len(cx.stack) - 1
+	arrayFieldIdx := cx.stack[last].Uint
+
+	if len(cx.Txn.EvalDelta.InnerTxns) == 0 {
+		cx.err = fmt.Errorf("no inner transaction available %d", fs.field)
+		return
+	}
+
+	itxn := &cx.Txn.EvalDelta.InnerTxns[len(cx.Txn.EvalDelta.InnerTxns)-1]
+	sv, err := cx.txnFieldToStack(itxn, fs, arrayFieldIdx, 0, true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
+}
+
 func (cx *EvalContext) getLastInnerGroup() []transactions.SignedTxnWithAD {
 	inners := cx.Txn.EvalDelta.InnerTxns
 	// If there are no inners yet, return empty slice, which will result in error
@@ -2527,6 +2573,30 @@ func opGitxna(cx *EvalContext) {
 		return
 	}
 	cx.stack = append(cx.stack, sv)
+}
+
+func opGitxnas(cx *EvalContext) {
+	lastInnerGroup := cx.getLastInnerGroup()
+	gi := int(cx.program[cx.pc+1])
+	if gi >= len(lastInnerGroup) {
+		cx.err = fmt.Errorf("gitxnas %d ... but last group has %d", gi, len(lastInnerGroup))
+		return
+	}
+	itxn := &lastInnerGroup[gi]
+
+	fs, err := cx.fetchField(TxnField(cx.program[cx.pc+2]), true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	last := len(cx.stack) - 1
+	arrayFieldIdx := cx.stack[last].Uint
+	sv, err := cx.txnFieldToStack(itxn, fs, arrayFieldIdx, gi, true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
 }
 
 func opGaidImpl(cx *EvalContext, gi int, opName string) (sv stackValue, err error) {
@@ -2669,7 +2739,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case GroupID:
 		sv.Bytes = cx.Txn.Txn.Group[:]
 	case OpcodeBudget:
-		sv.Uint = uint64(cx.budget() - cx.cost)
+		sv.Uint = uint64(cx.remainingBudget())
 	case CallerApplicationID:
 		if cx.caller != nil {
 			sv.Uint = uint64(cx.caller.appID)
@@ -3942,12 +4012,15 @@ func opLog(cx *EvalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func authorizedSender(cx *EvalContext, addr basics.Address) bool {
+func authorizedSender(cx *EvalContext, addr basics.Address) error {
 	authorizer, err := cx.Ledger.Authorizer(addr)
 	if err != nil {
-		return false
+		return err
 	}
-	return cx.getApplicationAddress(cx.appID) == authorizer
+	if cx.getApplicationAddress(cx.appID) != authorizer {
+		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.getApplicationAddress(cx.appID), authorizer)
+	}
+	return nil
 }
 
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
@@ -4386,8 +4459,9 @@ func opTxSubmit(cx *EvalContext) {
 		// transaction pool. Namely that any transaction that makes it
 		// to Perform (which is equivalent to eval.applyTransaction)
 		// is authorized, and WellFormed.
-		if !authorizedSender(cx, cx.subtxns[itx].Txn.Sender) {
-			cx.err = fmt.Errorf("unauthorized")
+		err := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
+		if err != nil {
+			cx.err = err
 			return
 		}
 

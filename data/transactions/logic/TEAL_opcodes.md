@@ -770,16 +770,6 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
 
-## base64_decode e
-
-- Opcode: 0x5c {uint8 encoding index}
-- Stack: ..., A: []byte &rarr; ..., []byte
-- decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 25
-- Availability: v6
-
-Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\n` and `\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\r`, or `\n`.
-
 ## balance
 
 - Opcode: 0x60
@@ -1070,6 +1060,15 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - **Cost**: 40
 - Availability: v6
 
+## divw
+
+- Opcode: 0x97
+- Stack: ..., A: uint64, B: uint64, C: uint64 &rarr; ..., uint64
+- A,B / C. Fail if C == 0 or if result overflows.
+- Availability: v6
+
+The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
+
 ## b+
 
 - Opcode: 0xa0
@@ -1307,5 +1306,21 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xc4
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth scratch space value of the Ath transaction in the current group
+- Availability: v6
+- Mode: Application
+
+## itxnas f
+
+- Opcode: 0xc5 {uint8 transaction field index}
+- Stack: ..., A: uint64 &rarr; ..., any
+- Ath value of the array field F of the last inner transaction
+- Availability: v6
+- Mode: Application
+
+## gitxnas t f
+
+- Opcode: 0xc6 {uint8 transaction group index} {uint8 transaction field index}
+- Stack: ..., A: uint64 &rarr; ..., any
+- Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application

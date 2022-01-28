@@ -87,7 +87,7 @@ func TestNewAppEvalParams(t *testing.T) {
 				if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
 					require.Nil(t, ep.PooledApplicationBudget)
 				} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
-					require.Equal(t, *ep.PooledApplicationBudget, uint64(param.MaxAppProgramCost*testCase.numAppCalls))
+					require.Equal(t, *ep.PooledApplicationBudget, param.MaxAppProgramCost*testCase.numAppCalls)
 				}
 			})
 		}

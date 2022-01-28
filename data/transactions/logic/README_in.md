@@ -179,7 +179,7 @@ and `byte 0xcafed00d`. Constants introduced via `int` and `byte` will
 be assembled into appropriate uses of `pushint|pushbytes` and
 `{int|byte}c, {int|byte}c_[0123]` to minimize program size.
 
-The opcodes intcblock and bytecblock use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint),
+The opcodes `intcblock` and `bytecblock` use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint),
 reproduced [here](#varuint). The `intcblock` opcode is followed by a
 varuint specifying the number of integer constants and then that
 number of varuints. The `bytecblock` opcode is followed by a varuint

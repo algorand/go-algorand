@@ -107,9 +107,9 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 	ep := defaultEvalParamsWithVersion(txn, LogicVersion)
 	ep.Trace = nil // Tracing would slow down benchmarks
 	clone := *ep.Proto
-	bigBudget := uint64(1000 * 1000) // Allow long run times
-	clone.LogicSigMaxCost = bigBudget
-	clone.MaxAppProgramCost = int(bigBudget)
+	bigBudget := 1000 * 1000 // Allow long run times
+	clone.LogicSigMaxCost = uint64(bigBudget)
+	clone.MaxAppProgramCost = bigBudget
 	ep.Proto = &clone
 	ep.PooledApplicationBudget = &bigBudget
 	return ep
@@ -136,7 +136,7 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 // a group, and then thrown away.
 func (ep *EvalParams) reset() {
 	if ep.Proto.EnableAppCostPooling {
-		budget := uint64(ep.Proto.MaxAppProgramCost)
+		budget := ep.Proto.MaxAppProgramCost
 		ep.PooledApplicationBudget = &budget
 	}
 	if ep.Proto.EnableInnerTransactionPooling {
@@ -572,6 +572,19 @@ err
 done:
 int 1                   // ret 1
 `, 2)
+}
+
+func TestDivw(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testPanics(t, "int 1; int 2; int 0; divw; assert;", 6)
+	testPanics(t, "int 2; int 1; int 1; divw; assert;", 6)
+	testPanics(t, "int 2; int 0; int 2; divw; assert", 6)
+	testAccepts(t, "int 1; int 2; int 2; divw;", 6)
+
+	testAccepts(t, "int 1; int 0; int 2; divw; int 0x8000000000000000; ==", 6)
+	testAccepts(t, "int 0; int 90; int 30; divw; int 3; ==", 6)
 }
 
 func TestUint128(t *testing.T) {
@@ -3302,6 +3315,7 @@ func BenchmarkUintMath(b *testing.B) {
 		{"mul", "", "int 212; int 323; *; pop", "int 1"},
 		{"mulw", "", "int 21276237623; int 32387238723; mulw; pop; pop", "int 1"},
 		{"div", "", "int 736247364; int 892; /; pop", "int 1"},
+		{"divw", "", "int 736; int 892; int 892; divw; pop", "int 1"},
 		{"divmodw", "", "int 736247364; int 892; int 126712; int 71672; divmodw; pop; pop; pop; pop", "int 1"},
 		{"sqrt", "", "int 736247364; sqrt; pop", "int 1"},
 		{"exp", "", "int 734; int 5; exp; pop", "int 1"},
@@ -4633,10 +4647,18 @@ By Herman Melville`, "",
 		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), hex.EncodeToString([]byte(tc.encoded)), tc.alph)
 
 		if tc.error == "" {
-			testAccepts(t, source, minB64DecodeVersion)
+			if LogicVersion < fidoVersion {
+				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
+			} else {
+				testAccepts(t, source, fidoVersion)
+			}
 		} else {
-			err := testPanics(t, source, minB64DecodeVersion)
-			require.Contains(t, err.Error(), tc.error)
+			if LogicVersion < fidoVersion {
+				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
+			} else {
+				err := testPanics(t, source, fidoVersion)
+				require.Contains(t, err.Error(), tc.error)
+			}
 		}
 	}
 }
