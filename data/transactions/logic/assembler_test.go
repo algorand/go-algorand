@@ -1396,6 +1396,7 @@ itxna Logs 1
 itxn NumLogs
 itxn CreatedAssetID
 itxn CreatedApplicationID
+itxn LastLog
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {

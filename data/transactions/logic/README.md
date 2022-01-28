@@ -454,6 +454,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
+| 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
