@@ -238,6 +238,10 @@ type CatchpointCatchupAccessorProgress struct {
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
 	cachedTrie     *merkletrie.Trie
 	evictFrequency uint64
+
+	BalancesWriteDuration   time.Duration
+	CreatablesWriteDuration time.Duration
+	HashesWriteDuration     time.Duration
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
@@ -355,22 +359,24 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	}
 
 	wg := sync.WaitGroup{}
-	errChan := make(chan error, 3)
+
+	var errBalances error
+	var errCreatables error
+	var errHashes error
+	var durBalances time.Duration
+	var durCreatables time.Duration
+	var durHashes time.Duration
 
 	// start the balances writer
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
-			if err != nil {
-				return
-			}
-			return nil
+		errBalances = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			start := time.Now()
+			err := writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
+			durBalances = time.Since(start)
+			return err
 		})
-		if err != nil {
-			errChan <- err
-		}
 	}()
 
 	// on a in-memory database, wait for the writer to finish before starting the new writer
@@ -392,13 +398,12 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			}
 		}
 		if hasCreatables {
-			err := wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				err = writeCatchpointStagingCreatable(ctx, tx, normalizedAccountBalances)
+			errCreatables = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				start := time.Now()
+				err := writeCatchpointStagingCreatable(ctx, tx, normalizedAccountBalances)
+				durCreatables = time.Since(start)
 				return err
 			})
-			if err != nil {
-				errChan <- err
-			}
 		}
 	}()
 
@@ -411,36 +416,39 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			err = writeCatchpointStagingHashes(ctx, tx, normalizedAccountBalances)
-			if err != nil {
-				return
-			}
+		errHashes = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			start := time.Now()
+			err := writeCatchpointStagingHashes(ctx, tx, normalizedAccountBalances)
+			durHashes = time.Since(start)
 			return err
 		})
-		if err != nil {
-			errChan <- err
-		}
 	}()
 
 	wg.Wait()
-	select {
-	case err := <-errChan:
-		return err
-	default:
+
+	if errBalances != nil {
+		return errBalances
 	}
+	if errCreatables != nil {
+		return errCreatables
+	}
+	if errHashes != nil {
+		return errHashes
+	}
+
+	progress.BalancesWriteDuration += durBalances
+	progress.CreatablesWriteDuration += durCreatables
+	progress.HashesWriteDuration += durHashes
 
 	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
-	if err == nil {
-		progress.ProcessedAccounts += uint64(len(normalizedAccountBalances))
-		progress.ProcessedBytes += uint64(len(bytes))
-		for _, acctBal := range normalizedAccountBalances {
-			progress.TotalAccountHashes += uint64(len(acctBal.accountHashes))
-		}
+	progress.ProcessedAccounts += uint64(len(normalizedAccountBalances))
+	progress.ProcessedBytes += uint64(len(bytes))
+	for _, acctBal := range normalizedAccountBalances {
+		progress.TotalAccountHashes += uint64(len(acctBal.accountHashes))
 	}
 
-	// not strictly required, but clean up the pointer in case of either a failure or when we're done.
-	if err != nil || progress.ProcessedAccounts == progress.TotalAccounts {
+	// not strictly required, but clean up the pointer when we're done.
+	if progress.ProcessedAccounts == progress.TotalAccounts {
 		progress.cachedTrie = nil
 		// restore "normal" synchronous mode
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
