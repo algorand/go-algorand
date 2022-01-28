@@ -115,9 +115,8 @@ var createResourcesTable = []string{
 	`CREATE TABLE IF NOT EXISTS resources (
 		addrid INTEGER NOT NULL,
 		aidx INTEGER NOT NULL,
-		rtype INTEGER NOT NULL,
 		data BLOB NOT NULL,
-		PRIMARY KEY (addrid, aidx, rtype) ) WITHOUT ROWID`,
+		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`,
 }
 
 var accountsResetExprs = []string{
@@ -163,8 +162,6 @@ type persistedResourcesData struct {
 	addrid int64
 	// creatable index
 	aidx basics.CreatableIndex
-	// rtype is the resource type ( asset / app )
-	rtype basics.CreatableType
 	// actual resource data
 	data resourcesData
 	// the round number that is associated with the resourcesData. This field is the corresponding one to the round field
@@ -297,7 +294,7 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 			resourcesData
 		}
 		var resources []resourcesRow
-		addResourceRow := func(_ context.Context, _ int64, aidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error {
+		addResourceRow := func(_ context.Context, _ int64, aidx basics.CreatableIndex, rd *resourcesData) error {
 			resources = append(resources, resourcesRow{aidx: aidx, resourcesData: *rd})
 			return nil
 		}
@@ -346,9 +343,13 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				if err != nil {
 					return nil, err
 				}
-				ctype := basics.AssetCreatable
-				if resData.IsApp() {
+				var ctype basics.CreatableType
+				if resData.IsAsset() {
+					ctype = basics.AssetCreatable
+				} else if resData.IsApp() {
 					ctype = basics.AppCreatable
+				} else {
+					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", balance.Address.String(), cidx, resData)
 				}
 				normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
 				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
@@ -466,7 +467,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 	if len(a.misses) == 0 {
 		return nil
 	}
-	selectStmt, err := tx.Prepare("SELECT rtype, data FROM resources WHERE addrid = ? AND aidx = ?")
+	selectStmt, err := tx.Prepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
 	if err != nil {
 		return
 	}
@@ -484,7 +485,6 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 	var addrid int64
 	var aidx basics.CreatableIndex
 	var resDataBuf []byte
-	var rtype sql.NullInt64
 	var ok bool
 	for _, missIdx := range a.misses {
 		delta := a.deltas[missIdx]
@@ -507,11 +507,11 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 			}
 		}
 		resDataBuf = nil
-		err = selectStmt.QueryRow(addrid, aidx).Scan(&rtype, &resDataBuf)
+		err = selectStmt.QueryRow(addrid, aidx).Scan(&resDataBuf)
 		switch err {
 		case nil:
 			if len(resDataBuf) > 0 {
-				persistedResData := persistedResourcesData{addrid: addrid, aidx: aidx, rtype: basics.CreatableType(rtype.Int64)}
+				persistedResData := persistedResourcesData{addrid: addrid, aidx: aidx}
 				err = protocol.Decode(resDataBuf, &persistedResData.data)
 				if err != nil {
 					return err
@@ -730,7 +730,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	}
 
 	var insertRscStmt *sql.Stmt
-	insertRscStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+	insertRscStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
@@ -754,12 +754,8 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 			return err
 		}
 		// write resources
-		for aidx, resData := range balance.resources {
-			ctype := basics.AssetCreatable
-			if resData.IsApp() {
-				ctype = basics.AppCreatable
-			}
-			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, ctype, balance.encodedResources[aidx])
+		for aidx := range balance.resources {
+			result, err := insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
 			if err != nil {
 				return err
 			}
@@ -871,7 +867,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointbalances (addrid INTEGER PRIMARY KEY NOT NULL, address blob NOT NULL, data blob, normalizedonlinebalance INTEGER)",
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
-			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, rtype INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx, rtype) ) WITHOUT ROWID",
+			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
@@ -1554,7 +1550,7 @@ func (rd *resourcesData) SetAppData(ap ledgercore.AppParamsDelta, al ledgercore.
 func accountDataResources(
 	ctx context.Context,
 	accountData *basics.AccountData, rowid int64,
-	cb func(ctx context.Context, rowid int64, cidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error,
+	outputResourceCb func(ctx context.Context, rowid int64, cidx basics.CreatableIndex, rd *resourcesData) error,
 ) error {
 	// does this account have any assets ?
 	if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
@@ -1565,7 +1561,7 @@ func accountDataResources(
 				rd.SetAssetParams(ap, true)
 				delete(accountData.AssetParams, aidx)
 			}
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
 			if err != nil {
 				return err
 			}
@@ -1573,7 +1569,7 @@ func accountDataResources(
 		for aidx, aparams := range accountData.AssetParams {
 			var rd resourcesData
 			rd.SetAssetParams(aparams, false)
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AssetCreatable, &rd)
+			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
 			if err != nil {
 				return err
 			}
@@ -1588,7 +1584,7 @@ func accountDataResources(
 				rd.SetAppParams(ap, true)
 				delete(accountData.AppParams, aidx)
 			}
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
+			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
 			if err != nil {
 				return err
 			}
@@ -1596,7 +1592,7 @@ func accountDataResources(
 		for aidx, aparams := range accountData.AppParams {
 			var rd resourcesData
 			rd.SetAppParams(aparams, false)
-			err := cb(ctx, rowid, basics.CreatableIndex(aidx), basics.AppCreatable, &rd)
+			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
 			if err != nil {
 				return err
 			}
@@ -1648,7 +1644,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	}
 	defer insertNewAcctBaseNormBal.Close()
 
-	insertResources, err = tx.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+	insertResources, err = tx.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
@@ -1709,11 +1705,11 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, ctype basics.CreatableType, rd *resourcesData) error {
+		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, rd *resourcesData) error {
 			var err error
 			if rd != nil {
 				encodedData := protocol.Encode(rd)
-				_, err = insertResources.ExecContext(ctx, rowID, cidx, ctype, encodedData)
+				_, err = insertResources.ExecContext(ctx, rowID, cidx, encodedData)
 			}
 			return err
 		}
@@ -1853,12 +1849,12 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid AND resources.aidx = ? AND resources.rtype = ? WHERE id='acctbase'")
+	qs.lookupResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid AND resources.aidx = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupAllResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.aidx, resources.rtype, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid WHERE id='acctbase'")
+	qs.lookupAllResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.aidx, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -1971,13 +1967,22 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx, ctype).Scan(&rowid, &data.round, &buf)
+		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.aidx = aidx
-			data.rtype = ctype
 			if len(buf) > 0 && rowid.Valid {
 				data.addrid = rowid.Int64
-				return protocol.Decode(buf, &data.data)
+				err = protocol.Decode(buf, &data.data)
+				if err != nil {
+					return err
+				}
+				if ctype == basics.AssetCreatable && !data.data.IsAsset() {
+					return fmt.Errorf("lookupResources asked for an asset but got %v", data.data)
+				}
+				if ctype == basics.AppCreatable && !data.data.IsApp() {
+					return fmt.Errorf("lookupResources asked for an app but got %v", data.data)
+				}
+				return nil
 			}
 			data.data = makeResourcesData(0)
 			// we don't have that account, just return the database round.
@@ -2003,20 +2008,20 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 		}
 		defer rows.Close()
 
-		var addrid, aidx, rtype sql.NullInt64
+		var addrid, aidx sql.NullInt64
 		var dbRound basics.Round
 		data = nil
 		var buf []byte
 		for rows.Next() {
-			err := rows.Scan(&addrid, &dbRound, &aidx, &rtype, &buf)
+			err := rows.Scan(&addrid, &dbRound, &aidx, &buf)
 			if err != nil {
 				return err
 			}
-			if !addrid.Valid || !aidx.Valid || !rtype.Valid {
+			if !addrid.Valid || !aidx.Valid {
 				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
 				// ensure this is the first entry, set the round and return
 				if len(data) != 0 {
-					return fmt.Errorf("lookupAllResources: unexpected invalid result on non-first resource record: (%v, %v, %v)", addrid.Valid, aidx.Valid, rtype.Valid)
+					return fmt.Errorf("lookupAllResources: unexpected invalid result on non-first resource record: (%v, %v)", addrid.Valid, aidx.Valid)
 				}
 				rnd = dbRound
 				break
@@ -2029,7 +2034,6 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 			data = append(data, persistedResourcesData{
 				addrid: addrid.Int64,
 				aidx:   basics.CreatableIndex(aidx.Int64),
-				rtype:  basics.CreatableType(rtype.Int64),
 				data:   resData,
 				round:  dbRound,
 			})
@@ -2276,7 +2280,7 @@ type accountsWriter interface {
 	deleteAccount(rowid int64) (rowsAffected int64, err error)
 	updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error)
 
-	insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error)
+	insertResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowid int64, err error)
 	deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
 	updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error)
 
@@ -2353,7 +2357,7 @@ func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasC
 			return
 		}
 
-		w.insertResourceStmt, err = tx.Prepare("INSERT INTO resources(addrid, aidx, rtype, data) VALUES(?, ?, ?, ?)")
+		w.insertResourceStmt, err = tx.Prepare("INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
 		if err != nil {
 			return
 		}
@@ -2405,8 +2409,8 @@ func (w accountsSQLWriter) updateAccount(rowid int64, normBalance uint64, data b
 	return
 }
 
-func (w accountsSQLWriter) insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error) {
-	result, err := w.insertResourceStmt.Exec(addrid, aidx, rtype, protocol.Encode(&data))
+func (w accountsSQLWriter) insertResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowid int64, err error) {
+	result, err := w.insertResourceStmt.Exec(addrid, aidx, protocol.Encode(&data))
 	if err != nil {
 		return
 	}
@@ -2562,7 +2566,7 @@ func accountsNewRoundImpl(
 		}
 		pendingResourcesDeletion[resourceKey{addrid: data.oldResource.addrid, aidx: data.oldResource.aidx}] = struct{}{}
 
-		entry := persistedResourcesData{addrid: 0, aidx: data.oldResource.aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
+		entry := persistedResourcesData{addrid: 0, aidx: data.oldResource.aidx, data: makeResourcesData(0), round: lastUpdateRound}
 		deltas := updatedResources[data.address]
 		deltas = append(deltas, entry)
 		updatedResources[data.address] = deltas
@@ -2593,15 +2597,10 @@ func accountsNewRoundImpl(
 				// if we didn't had it before, and we don't have anything now, just skip it.
 				// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
 				// because the base account might gone.
-				entry = persistedResourcesData{addrid: 0, aidx: aidx, rtype: 0, data: makeResourcesData(0), round: lastUpdateRound}
+				entry = persistedResourcesData{addrid: 0, aidx: aidx, data: makeResourcesData(0), round: lastUpdateRound}
 			} else {
 				// create a new entry.
-				var rtype basics.CreatableType
-				if data.newResource.IsApp() {
-					rtype = basics.AppCreatable
-				} else if data.newResource.IsAsset() {
-					rtype = basics.AssetCreatable
-				} else {
+				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
 					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 					return
 				}
@@ -2615,16 +2614,16 @@ func accountsNewRoundImpl(
 					rowsAffected, err = writer.updateResource(addrid, aidx, data.newResource)
 					if err == nil {
 						// rowid doesn't change on update.
-						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.newResource, round: lastUpdateRound}
 						if rowsAffected != 1 {
 							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 						}
 					}
 				} else {
-					_, err = writer.insertResource(addrid, aidx, rtype, data.newResource)
+					_, err = writer.insertResource(addrid, aidx, data.newResource)
 					if err == nil {
 						// set the returned persisted account states so that we could store that as the baseResources in commitRound
-						entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+						entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.newResource, round: lastUpdateRound}
 					}
 				}
 			}
@@ -2635,12 +2634,7 @@ func accountsNewRoundImpl(
 				// this case was already handled in the first loop.
 				continue
 			} else {
-				var rtype basics.CreatableType
-				if data.newResource.IsApp() {
-					rtype = basics.AppCreatable
-				} else if data.newResource.IsAsset() {
-					rtype = basics.AssetCreatable
-				} else {
+				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
 					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
 					return
 				}
@@ -2648,7 +2642,7 @@ func accountsNewRoundImpl(
 				rowsAffected, err = writer.updateResource(addrid, aidx, data.newResource)
 				if err == nil {
 					// rowid doesn't change on update.
-					entry = persistedResourcesData{addrid: addrid, aidx: aidx, rtype: rtype, data: data.newResource, round: lastUpdateRound}
+					entry = persistedResourcesData{addrid: addrid, aidx: aidx, data: data.newResource, round: lastUpdateRound}
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 					}
@@ -2907,7 +2901,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 		}
 	}
 	if iterator.resourcesRows == nil {
-		iterator.resourcesRows, err = tx.QueryContext(ctx, "SELECT addrid, aidx, rtype, data FROM resources ORDER BY addrid, aidx, rtype")
+		iterator.resourcesRows, err = tx.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
 		if err != nil {
 			return
 		}
@@ -2927,7 +2921,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
 	// emptyCount := 0
-	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
 		if !emptyBaseAcct && resData != nil {
 			if encodedRecord.Resources == nil {
@@ -3050,28 +3044,26 @@ func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter 
 type pendingRow struct {
 	addrid int64
 	aidx   basics.CreatableIndex
-	rtype  basics.CreatableType
 	buf    []byte
 }
 
 func processAllResources(
 	resRows *sql.Rows,
 	addr basics.Address, accountData *baseAccountData, acctRowid int64, pr pendingRow,
-	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
+	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
 ) (pendingRow, error) {
 	var err error
 	for {
 		var buf []byte
 		var addrid int64
 		var aidx basics.CreatableIndex
-		var rtype basics.CreatableType
 		if pr.addrid != 0 {
 			// some accounts may not have resources, consider the following case:
 			// acct 1 and 3 has resources, account 2 does not
 			// in this case addrid = 3 after processing resources from 1, but acctRowid = 2
 			// and we need to skip accounts without resources
 			if pr.addrid > acctRowid {
-				err = callback(addr, 0, 0, nil, nil)
+				err = callback(addr, 0, nil, nil)
 				return pr, err
 			}
 			if pr.addrid < acctRowid {
@@ -3081,17 +3073,16 @@ func processAllResources(
 			addrid = pr.addrid
 			buf = pr.buf
 			aidx = pr.aidx
-			rtype = pr.rtype
 			pr = pendingRow{}
 		} else {
 			if !resRows.Next() {
-				err = callback(addr, 0, 0, nil, nil)
+				err = callback(addr, 0, nil, nil)
 				if err != nil {
 					return pendingRow{}, err
 				}
 				break
 			}
-			err = resRows.Scan(&addrid, &aidx, &rtype, &buf)
+			err = resRows.Scan(&addrid, &aidx, &buf)
 			if err != nil {
 				return pendingRow{}, err
 			}
@@ -3099,8 +3090,8 @@ func processAllResources(
 				err = fmt.Errorf("resource table entries mismatches accountbase table entries : reached addrid %d while expecting resource for %d", addrid, acctRowid)
 				return pendingRow{}, err
 			} else if addrid > acctRowid {
-				err = callback(addr, 0, 0, nil, nil)
-				return pendingRow{addrid, aidx, rtype, buf}, err
+				err = callback(addr, 0, nil, nil)
+				return pendingRow{addrid, aidx, buf}, err
 			}
 		}
 		var resData resourcesData
@@ -3108,7 +3099,7 @@ func processAllResources(
 		if err != nil {
 			return pendingRow{}, err
 		}
-		err = callback(addr, aidx, rtype, &resData, buf)
+		err = callback(addr, aidx, &resData, buf)
 		if err != nil {
 			return pendingRow{}, err
 		}
@@ -3120,7 +3111,7 @@ func processAllBaseAccountRecords(
 	baseRows *sql.Rows,
 	resRows *sql.Rows,
 	baseCb func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) error,
-	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error,
+	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
 	pending pendingRow, accountCount int,
 ) (int, pendingRow, error) {
 	var addr basics.Address
@@ -3184,7 +3175,7 @@ func LoadAllFullAccounts(
 	defer baseRows.Close()
 
 	// iterate over the existing resources
-	resRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT addrid, aidx, rtype, data FROM %s ORDER BY addrid, aidx, rtype", resourcesTable))
+	resRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT addrid, aidx, data FROM %s ORDER BY addrid, aidx", resourcesTable))
 	if err != nil {
 		return
 	}
@@ -3202,7 +3193,7 @@ func LoadAllFullAccounts(
 	}
 
 	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
-	resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
 		if resData != nil {
 			// resData can be nil if a base account does not have resources
 			// or there is a pending resource row from a next account
@@ -3302,7 +3293,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			return
 		}
 		// iterate over the existing resources
-		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, aidx, rtype, data FROM resources ORDER BY addrid, aidx, rtype")
+		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
 		if err != nil {
 			return
 		}
@@ -3326,9 +3317,18 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			return nil
 		}
 
-		resCb := func(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, resData *resourcesData, encodedResourceData []byte) error {
+		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
 			var err error
 			if resData != nil {
+				var ctype basics.CreatableType
+				if resData.IsAsset() {
+					ctype = basics.AssetCreatable
+				} else if resData.IsApp() {
+					ctype = basics.AppCreatable
+				} else {
+					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", addr.String(), cidx, resData)
+					return err
+				}
 				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
 				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
 			}

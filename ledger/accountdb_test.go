@@ -2292,7 +2292,7 @@ func (m *mockAccountWriter) updateAccount(rowid int64, normBalance uint64, data 
 	return 1, nil
 }
 
-func (m *mockAccountWriter) insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error) {
+func (m *mockAccountWriter) insertResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowid int64, err error) {
 	key := mockResourcesKey{addrid, aidx}
 	if _, ok := m.resources[key]; ok {
 		return 0, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", addrid, aidx)

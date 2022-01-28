@@ -507,7 +507,15 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
 		if !resDelta.oldResource.data.IsEmpty() {
-			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, resDelta.oldResource.rtype, uint64(resDelta.oldResource.data.UpdateRound), protocol.Encode(&resDelta.oldResource.data))
+			var ctype basics.CreatableType
+			if resDelta.oldResource.data.IsAsset() {
+				ctype = basics.AssetCreatable
+			} else if resDelta.oldResource.data.IsApp() {
+				ctype = basics.AppCreatable
+			} else {
+				err = fmt.Errorf("unknown old creatable for addr %s (%d), aidx %d, data %v", addr.String(), resDelta.oldResource.addrid, resDelta.oldResource.aidx, resDelta.oldResource.data)
+			}
+			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.oldResource.data.UpdateRound), protocol.Encode(&resDelta.oldResource.data))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -520,9 +528,13 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !resDelta.newResource.IsEmpty() {
-			ctype := basics.AssetCreatable
-			if resDelta.newResource.IsApp() {
+			var ctype basics.CreatableType
+			if resDelta.newResource.IsAsset() {
+				ctype = basics.AssetCreatable
+			} else if resDelta.newResource.IsApp() {
 				ctype = basics.AppCreatable
+			} else {
+				err = fmt.Errorf("unknown new creatable for addr %s, aidx %d, data %v", addr.String(), resDelta.oldResource.aidx, resDelta.newResource)
 			}
 			addHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
 			added, err = ct.balancesTrie.Add(addHash)
@@ -910,7 +922,7 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 }
 
 // accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func resourcesHashBuilderV6(addr basics.Address, creatableIdx basics.CreatableIndex, creatableType basics.CreatableType, updateRound uint64, encodedResourceData []byte) []byte {
+func resourcesHashBuilderV6(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, updateRound uint64, encodedResourceData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
@@ -918,11 +930,11 @@ func resourcesHashBuilderV6(addr basics.Address, creatableIdx basics.CreatableIn
 		// the following takes the prefix & 255 -> hash[i]
 		hash[i] = byte(prefix)
 	}
-	hash[4] = byte(creatableType + 1) // set the 5th byte to one or two ( asset / application ) so we could diffrenciate the hashes.
+	hash[4] = byte(ctype + 1) // set the 5th byte to one or two ( asset / application ) so we could differentiate the hashes.
 
 	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
 	copy(prehash[:], addr[:])
-	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], uint64(creatableIdx))
+	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], uint64(cidx))
 	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
 	entryHash := crypto.Hash(prehash)
 	copy(hash[5:], entryHash[1:])
