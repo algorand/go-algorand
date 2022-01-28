@@ -2231,6 +2231,12 @@ func TestReturnTypes(t *testing.T) {
 		StackBytes:  "byte 0x33343536\n",
 	}
 	ep, tx, ledger := makeSampleEnv()
+
+	// This unit test reususes this `ep` willy-nilly.  Would be nice to rewrite,
+	// but for now, trun off budget pooling so that it doesn't get exhausted.
+	ep.Proto.EnableAppCostPooling = false
+	ep.PooledApplicationBudget = nil
+
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = 1
 	tx.ForeignApps = []basics.AppIndex{tx.ApplicationID}
@@ -2304,11 +2310,14 @@ func TestReturnTypes(t *testing.T) {
 		"txnas":             "txnas ApplicationArgs",
 		"gtxnas":            "gtxnas 0 ApplicationArgs",
 		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
+		"divw":              "pop; pop; pop; int 1; int 2; int 3; divw",
 		"args":              "args",
 		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
 		"itxna":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxna Accounts 0",
+		"itxnas":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxnas Accounts",
 		"gitxn":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxn 0 Sender",
 		"gitxna":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
+		"gitxnas":           "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxnas 0 Accounts",
 		"base64_decode":     `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
 	}
 
@@ -2361,7 +2370,7 @@ func TestReturnTypes(t *testing.T) {
 				require.Equal(
 					t,
 					len(spec.Returns), len(cx.stack),
-					fmt.Sprintf("\n%s%s expected to return %d values but stack is %v", ep.Trace.String(), spec.Name, len(spec.Returns), cx.stack),
+					fmt.Sprintf("\n%s%s expected to return %d values but stack is %#v", ep.Trace, spec.Name, len(spec.Returns), cx.stack),
 				)
 				for i := 0; i < len(spec.Returns); i++ {
 					sp := len(cx.stack) - 1 - i
@@ -2434,7 +2443,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
-		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905"})
+		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 1905"})
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, LogicVersion, ledger)

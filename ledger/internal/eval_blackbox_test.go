@@ -585,14 +585,14 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			"",
 			""},
 		{source(5, 48), false, true,
-			"pc=157 dynamic cost budget exceeded, executing pushint: remaining budget is 700 but program cost was 701",
+			"pc=157 dynamic cost budget exceeded, executing pushint",
 			""},
 		{source(16, 17), false, true,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			"pc= 12 dynamic cost budget exceeded, executing keccak256",
 			""},
 		{source(16, 18), false, false,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
-			"pc= 78 dynamic cost budget exceeded, executing pushint: remaining budget is 2100 but program cost was 2101"},
+			"pc= 12 dynamic cost budget exceeded, executing keccak256",
+			"pc= 78 dynamic cost budget exceeded, executing pushint"},
 	}
 
 	for i, param := range params {
