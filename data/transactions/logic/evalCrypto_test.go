@@ -66,7 +66,7 @@ func TestSHA3_256(t *testing.T) {
 sha3_256
 byte 0xd757297405c5c89f7ceca368ee76c2f1893ee24f654e60032e65fb53b01aae10
 ==`
-	testAccepts(t, progText, 1)
+	testAccepts(t, progText, 6)
 }
 
 func TestSHA512_256(t *testing.T) {
