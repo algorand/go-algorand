@@ -2259,6 +2259,10 @@ func TestReturnTypes(t *testing.T) {
 		[]byte("aoeu2"),
 		[]byte("aoeu3"),
 	}
+	// We are going to run with GroupIndex=1, so make tx1 interesting too (so
+	// txn can look at things)
+	ep.TxnGroup[1] = ep.TxnGroup[0]
+
 	ep.pastScratch[0] = &scratchSpace{} // for gload
 	ledger.NewAccount(tx.Sender, 1)
 	params := basics.AssetParams{
@@ -2366,29 +2370,35 @@ func TestReturnTypes(t *testing.T) {
 				source := sb.String()
 				ops := testProg(t, source, AssemblerMaxVersion)
 
-				var cx EvalContext
-				cx.EvalParams = ep
-				cx.runModeFlags = m
-				cx.appID = 1
+				// Setup as if evaluation is in tx1, since we want to test gaid
+				// that must look back.
+				cx := EvalContext{
+					EvalParams:   ep,
+					runModeFlags: m,
+					GroupIndex:   1,
+					Txn:          &ep.TxnGroup[1],
+					appID:        1,
+				}
 
 				// These set conditions for some ops that examine the group.
 				// This convinces them all to work.  Revisit.
-				cx.Txn = &ep.TxnGroup[0]
-				cx.GroupIndex = 1
 				cx.TxnGroup[0].ConfigAsset = 100
 
 				eval(ops.Program, &cx)
 
-				require.Equal(
+				assert.Equal(
 					t,
 					len(spec.Returns), len(cx.stack),
 					fmt.Sprintf("\n%s%s expected to return %d values but stack is %#v", ep.Trace, spec.Name, len(spec.Returns), cx.stack),
 				)
 				for i := 0; i < len(spec.Returns); i++ {
 					sp := len(cx.stack) - 1 - i
+					if sp < 0 {
+						continue // We only assert this above, not require.
+					}
 					stackType := cx.stack[sp].argType()
 					retType := spec.Returns[i]
-					require.True(
+					assert.True(
 						t, typecheck(retType, stackType),
 						fmt.Sprintf("%s expected to return %s but actual is %s", spec.Name, retType.String(), stackType.String()),
 					)
@@ -2403,12 +2413,12 @@ func TestTxnEffects(t *testing.T) {
 	t.Parallel()
 	ep, _, _ := makeSampleEnv()
 	// We don't allow the effects fields to see the current or future transactions
-	testApp(t, "byte 0x32; log; txn NumLogs; int 1; ==", ep)
-	testApp(t, "byte 0x32; log; txn Logs 0; byte 0x32; ==", ep)
-	testApp(t, "byte 0x32; log; txn LastLog; byte 0x32; ==", ep)
-	testApp(t, "byte 0x32; log; gtxn 0 NumLogs; int 1; ==", ep)
-	testApp(t, "byte 0x32; log; gtxn 0 Logs 0; byte 0x32; ==", ep)
-	testApp(t, "byte 0x32; log; gtxn 0 LastLog; byte 0x32; ==", ep)
+	testApp(t, "byte 0x32; log; txn NumLogs; int 1; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; txn Logs 0; byte 0x32; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; txn LastLog; byte 0x32; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; gtxn 0 NumLogs; int 1; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; gtxn 0 Logs 0; byte 0x32; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; gtxn 0 LastLog; byte 0x32; ==", ep, "txn effects can only be read from past txns")
 
 	// Look at the logs of tx 0
 	testApps(t, []string{"", "byte 0x32; log; gtxn 0 LastLog; byte 0x; =="}, nil, AssemblerMaxVersion, nil)
