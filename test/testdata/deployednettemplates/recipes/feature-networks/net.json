@@ -8,7 +8,11 @@
           "IsRelay": true,
           "Wallets": [
             {
-              "Name": "Wallet1",
+              "Name": "Wallet1-R1",
+              "ParticipationOnly": false
+            },
+            {
+              "Name": "Wallet3-Dispenser",
               "ParticipationOnly": false
             }
           ],
@@ -16,7 +20,7 @@
           "APIEndpoint": "{{APIEndpoint}}",
           "APIToken": "{{APIToken}}",
           "EnableTelemetry": true,
-          "TelemetryURI": "{{TelemetryURI}}",
+          "TelemetryURI": "telemetry.feature-networks.algodev.network:9105",
           "EnableMetrics": true,
           "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
@@ -33,7 +37,7 @@
           "IsRelay": true,
           "Wallets": [
             {
-              "Name": "Wallet2",
+              "Name": "Wallet2-R2",
               "ParticipationOnly": false
             }
           ],
@@ -41,7 +45,7 @@
           "APIEndpoint": "{{APIEndpoint}}",
           "APIToken": "{{APIToken}}",
           "EnableTelemetry": true,
-          "TelemetryURI": "{{TelemetryURI}}",
+          "TelemetryURI": "telemetry.feature-networks.algodev.network:9105",
           "EnableMetrics": true,
           "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
@@ -51,48 +55,27 @@
       ]
     },
     {
-      "Name": "N1",
-      "Group": "",
+      "Name": "NPN1",
       "Nodes": [
         {
           "Name": "node1",
+          "IsRelay": false,
           "Wallets": [
             {
-              "Name": "Wallet3",
+              "Name": "Wallet4-NPN1",
               "ParticipationOnly": false
             }
           ],
+          "NetAddress": "{{NetworkPort}}",
           "APIEndpoint": "{{APIEndpoint}}",
           "APIToken": "{{APIToken}}",
-          "EnableTelemetry": false,
-          "TelemetryURI": "{{TelemetryURI}}",
-          "EnableMetrics": false,
+          "EnableTelemetry": true,
+          "TelemetryURI": "telemetry.feature-networks.algodev.network:9105",
+          "EnableMetrics": true,
           "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
-          "EnableBlockStats": false,
-          "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
-        }
-      ]
-    },
-    {
-      "Name": "NPN1",
-      "Group": "",
-      "Nodes": [
-        {
-          "Name": "nonParticipatingNode1",
-          "Wallets": [
-            {
-              "Name": "Wallet4",
-              "ParticipationOnly": false
-            }
-          ],
-          "APIEndpoint": "{{APIEndpoint}}",
-          "APIToken": "{{APIToken}}",
-          "EnableTelemetry": false,
-          "EnableMetrics": false,
-          "EnableService": false,
-          "EnableBlockStats": false,
-          "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
+          "EnableBlockStats": true,
+          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
         }
       ]
     }
