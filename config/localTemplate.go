@@ -62,7 +62,7 @@ type Local struct {
 	MaxConnectionsPerIP int `version[3]:"30"`
 
 	// 0 == disable
-	PeerPingPeriodSeconds int `version[0]:"0"`
+	PeerPingPeriodSeconds int `version[0]:"0" version[18]:"10"`
 
 	// for https serving
 	TLSCertFile string `version[0]:""`
@@ -430,6 +430,10 @@ type Local struct {
 	// The http server does not accept new connections as long we have this many
 	// (hard limit) connections already.
 	RestConnectionsHardLimit uint64 `version[20]:"2048"`
+
+	// EnableDynamicProposalSizeLimit determine whether to dynamically set the proposal size limit
+	// based on network bandwidth.
+	EnableDynamicProposalSizeLimit bool `version[20]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
