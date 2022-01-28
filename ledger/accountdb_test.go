@@ -293,6 +293,17 @@ func TestAccountDBRound(t *testing.T) {
 	actualTotals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
+
+	// check LoadAllFullAccounts
+	loaded := make(map[basics.Address]basics.AccountData, len(accts))
+	acctCb := func(addr basics.Address, data basics.AccountData) {
+		loaded[addr] = data
+	}
+	count, err := LoadAllFullAccounts(context.Background(), tx, "accountbase", "resources", acctCb)
+	require.NoError(t, err)
+	require.Equal(t, count, len(accts))
+	require.Equal(t, count, len(loaded))
+	require.Equal(t, accts, loaded)
 }
 
 // TestAccountDBInMemoryAcct checks in-memory only account modifications are handled correctly by
