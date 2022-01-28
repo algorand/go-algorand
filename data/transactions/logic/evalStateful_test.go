@@ -336,7 +336,19 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			codes[i] = testProg(t, program, version).Program
 		}
 	}
+	if txgroup == nil {
+		for _, program := range programs {
+			sample := makeSampleTxn()
+			if program != "" {
+				sample.Txn.Type = protocol.ApplicationCallTx
+			}
+			txgroup = append(txgroup, sample)
+		}
+	}
 	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	if ledger == nil {
+		ledger = MakeLedger(nil)
+	}
 	ep.Ledger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
@@ -2375,6 +2387,32 @@ func TestReturnTypes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTxnEffects(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, _, _ := makeSampleEnv()
+	// We don't allow the effects fields to see the current or future transactions
+	testApp(t, "byte 0x32; log; txn NumLogs; int 1; ==", ep)
+	testApp(t, "byte 0x32; log; txn Logs 0; byte 0x32; ==", ep)
+	testApp(t, "byte 0x32; log; txn LastLog; byte 0x32; ==", ep)
+	testApp(t, "byte 0x32; log; gtxn 0 NumLogs; int 1; ==", ep)
+	testApp(t, "byte 0x32; log; gtxn 0 Logs 0; byte 0x32; ==", ep)
+	testApp(t, "byte 0x32; log; gtxn 0 LastLog; byte 0x32; ==", ep)
+
+	// Look at the logs of tx 0
+	testApps(t, []string{"", "byte 0x32; log; gtxn 0 LastLog; byte 0x; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x33; log; int 1", "gtxn 0 LastLog; byte 0x33; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x33; dup; log; log; int 1", "gtxn 0 NumLogs; int 2; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxn 0 Logs 0; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "int 0; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
+
+	// Look past the logs of tx 0
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxna 0 Logs 1; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+		Expect{1, "invalid Logs index 1"})
+	testApps(t, []string{"byte 0x37; log; int 1", "int 6; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+		Expect{1, "invalid Logs index 6"})
 }
 
 func TestRound(t *testing.T) {

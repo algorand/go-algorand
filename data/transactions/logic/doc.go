@@ -465,6 +465,7 @@ var txnFieldDocs = map[string]string{
 
 	"Logs":                 "Log messages emitted by an application call (only with `itxn` in v5)",
 	"NumLogs":              "Number of Logs (only with `itxn` in v5)",
+	"LastLog":              "The last message emitted. Empty bytes if none were emitted",
 	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (only with `itxn` in v5)",
 	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (only with `itxn` in v5)",
 }

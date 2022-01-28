@@ -1377,6 +1377,11 @@ byte "prefilled"
 ==
 assert
 
+txn LastLog
+byte "prefilled"
+==
+assert
+
 int 1
 `
 

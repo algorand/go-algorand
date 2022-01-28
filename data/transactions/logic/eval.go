@@ -2208,6 +2208,12 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Bytes = nilToEmpty([]byte(stxn.EvalDelta.Logs[arrayFieldIdx]))
 	case NumLogs:
 		sv.Uint = uint64(len(stxn.EvalDelta.Logs))
+	case LastLog:
+		if logs := len(stxn.EvalDelta.Logs); logs > 0 {
+			sv.Bytes = nilToEmpty([]byte(stxn.EvalDelta.Logs[logs-1]))
+		} else {
+			sv.Bytes = nilToEmpty(nil)
+		}
 	case CreatedAssetID:
 		sv.Uint = uint64(stxn.ApplyData.ConfigAsset)
 	case CreatedApplicationID:
