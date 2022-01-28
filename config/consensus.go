@@ -287,7 +287,7 @@ type ConsensusParams struct {
 	// and enforced over the whole group.
 	MaxInnerTransactions int
 
-	// should inner transaction limit be pooled across app calls?
+	// should the number of inner transactions be pooled across group?
 	EnableInnerTransactionPooling bool
 
 	// maximum number of applications a single account can create and store
