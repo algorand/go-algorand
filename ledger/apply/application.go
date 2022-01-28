@@ -228,6 +228,10 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 		return err
 	}
 
+	if !balances.ConsensusParams().Application {
+		return fmt.Errorf("cannot opt in app %d for %s: applications not supported", appIdx, sender.String())
+	}
+
 	// If the user has already opted in, fail
 	// future optimization: find a way to avoid testing this in case record.TotalAppLocalStates == 0.
 	ok, err := balances.HasAppLocalState(sender, appIdx)
@@ -244,9 +248,6 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
 	if maxAppsOptedIn > 0 && totalAppLocalState >= uint64(maxAppsOptedIn) {
 		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
-	}
-	if !balances.ConsensusParams().Application {
-		return fmt.Errorf("cannot opt in app %d for %s: applications not supported", appIdx, sender.String())
 	}
 
 	// Write an AppLocalState, opting in the user
