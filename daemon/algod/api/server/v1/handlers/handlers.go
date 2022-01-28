@@ -1416,23 +1416,22 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	// Fill in the asset models
+	lastRound := ledger.Latest()
 	var result v1.AssetList
 	for _, aloc := range alocs {
 		// Fetch the asset parameters
-		creatorRecord, _, err := ledger.LookupLatest(aloc.Creator)
+		record, err := ledger.LookupResource(lastRound, aloc.Creator, aloc.Index, basics.AssetCreatable)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 			return
 		}
 
-		// Ensure no race with asset deletion
-		rp, ok := creatorRecord.AssetParams[basics.AssetIndex(aloc.Index)]
-		if !ok {
+		if record.AssetParams == nil {
 			continue
 		}
 
 		// Append the result
-		params := modelAssetParams(aloc.Creator, rp)
+		params := modelAssetParams(aloc.Creator, *record.AssetParams)
 		result.Assets = append(result.Assets, v1.Asset{
 			AssetIndex:  uint64(aloc.Index),
 			AssetParams: params,
