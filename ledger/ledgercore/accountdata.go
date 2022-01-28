@@ -110,17 +110,9 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
 func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
-	ad := basics.AccountData{
-		Status:             u.Status,
-		MicroAlgos:         u.MicroAlgos,
-		RewardsBase:        u.RewardsBase,
-		RewardedMicroAlgos: u.RewardedMicroAlgos,
-	}
-	ad = ad.WithUpdatedRewards(proto, rewardsLevel)
-
-	u.MicroAlgos = ad.MicroAlgos
-	u.RewardsBase = ad.RewardsBase
-	u.RewardedMicroAlgos = ad.RewardedMicroAlgos
+	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = basics.WithUpdatedRewards(
+		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
+	)
 	return u
 }
 
@@ -160,15 +152,11 @@ func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (m
 
 // OnlineAccountData calculates the online account data given an AccountData, by adding the rewards.
 func (u *AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
-	x := basics.AccountData{
-		Status:             u.Status,
-		MicroAlgos:         u.MicroAlgos,
-		RewardsBase:        u.RewardsBase,
-		RewardedMicroAlgos: u.RewardedMicroAlgos,
-	}
-	x = x.WithUpdatedRewards(proto, rewardsLevel)
+	microAlgos, _, _ := basics.WithUpdatedRewards(
+		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
+	)
 	return basics.OnlineAccountData{
-		MicroAlgosWithRewards: x.MicroAlgos,
+		MicroAlgosWithRewards: microAlgos,
 		VoteID:                u.VoteID,
 		SelectionID:           u.SelectionID,
 		VoteFirstValid:        u.VoteFirstValid,
