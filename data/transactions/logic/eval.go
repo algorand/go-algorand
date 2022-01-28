@@ -2576,7 +2576,6 @@ func opGitxna(cx *EvalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-
 func opGitxnas(cx *EvalContext) {
 	lastInnerGroup := cx.getLastInnerGroup()
 	gi := int(cx.program[cx.pc+1])
@@ -2600,7 +2599,6 @@ func opGitxnas(cx *EvalContext) {
 	}
 	cx.stack[last] = sv
 }
-
 
 func opGaidImpl(cx *EvalContext, gi int, opName string) (sv stackValue, err error) {
 	if gi >= len(cx.TxnGroup) {
