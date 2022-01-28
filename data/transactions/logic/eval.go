@@ -490,20 +490,22 @@ type EvalContext struct {
 // StackType describes the type of a value on the operand stack
 type StackType byte
 
+const (
+	// StackNone in an OpSpec shows that the op pops or yields nothing
+	StackNone StackType = iota
+
+	// StackAny in an OpSpec shows that the op pops or yield any type
+	StackAny StackType = iota
+
+	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
+	StackUint64 StackType = iota
+
+	// StackBytes in an OpSpec shows that the op pops or yields a []byte
+	StackBytes StackType = iota
+)
+
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
-
-// StackNone in an OpSpec shows that the op pops or yields nothing
-const StackNone StackType = 0
-
-// StackAny in an OpSpec shows that the op pops or yield any type
-const StackAny StackType = 1
-
-// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-const StackUint64 StackType = 2
-
-// StackBytes in an OpSpec shows that the op pops or yields a []byte
-const StackBytes StackType = 3
 
 func (st StackType) String() string {
 	switch st {
@@ -2269,9 +2271,11 @@ func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSp
 
 type txnSource int
 
-const srcGroup txnSource = 0
-const srcInner txnSource = 1
-const srcInnerGroup txnSource = 2
+const (
+	srcGroup      txnSource = iota
+	srcInner                = iota
+	srcInnerGroup           = iota
+)
 
 // opTxnImpl implements all of the txn variants.  Each form of txn opcode should
 // be able to get its work done with one call here, after collecting the args in
@@ -2310,8 +2314,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	// int(gi) is safe because gi < len(group). Slices in Go cannot exceed `int`
 	sv, err = cx.txnFieldToStack(tx, fs, ai, int(gi), src != srcGroup)
 	if err != nil {
-		cx.err = err
-		return
+		return sv, err
 	}
 
 	return sv, nil
@@ -2482,7 +2485,7 @@ func opItxnas(cx *EvalContext) {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := cx.stack[last].Uint
 
-	sv, err := cx.opTxnImpl(0, srcGroup, field, ai, true)
+	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
