@@ -2294,9 +2294,8 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 			// Test mode so that error is clearer
 			if cx.runModeFlags == runModeSignature {
 				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
-			} else {
-				return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.GroupIndex)
 			}
+			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.GroupIndex)
 		}
 		group = cx.TxnGroup
 	case srcInner:
