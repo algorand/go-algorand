@@ -632,10 +632,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		}
 		for aapp, idx := range ad.appResourcesCache {
 			if aapp.Address == addr {
-				if idx >= len(ad.appResources) {
-					fmt.Println("overflow")
-				}
-
 				rec := ad.appResources[idx]
 				if rec.Params.Deleted {
 					delete(result.AppParams, aapp.App)
@@ -656,10 +652,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		}
 		for aapp, idx := range ad.appResourcesCache {
 			if aapp.Address == addr {
-				if idx >= len(ad.appResources) {
-					fmt.Println("overflow")
-				}
-
 				rec := ad.appResources[idx]
 				if rec.State.Deleted {
 					delete(result.AppLocalStates, aapp.App)
@@ -680,9 +672,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		}
 		for aapp, idx := range ad.assetResourcesCache {
 			if aapp.Address == addr {
-				if idx >= len(ad.assetResources) {
-					fmt.Println("overflow")
-				}
 				rec := ad.assetResources[idx]
 				if rec.Params.Deleted {
 					delete(result.AssetParams, aapp.Asset)
@@ -703,10 +692,6 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 		}
 		for aapp, idx := range ad.assetResourcesCache {
 			if aapp.Address == addr {
-				if idx >= len(ad.assetResources) {
-					fmt.Println("overflow")
-				}
-
 				rec := ad.assetResources[idx]
 				if rec.Holding.Deleted {
 					delete(result.Assets, aapp.Asset)
@@ -731,60 +716,4 @@ func (ad *NewAccountDeltas) GetAllAppResources() []AppResourceRecord {
 // GetAllAssetResources returns all AssetResourceRecords
 func (ad *NewAccountDeltas) GetAllAssetResources() []AssetResourceRecord {
 	return ad.assetResources
-}
-
-// ExtractDelta extracts only data belonging to a specific address
-func (ad NewAccountDeltas) ExtractDelta(addr basics.Address) (result NewAccountDeltas) {
-	acct, ok := ad.GetData(addr)
-	if ok {
-		result = MakeNewAccountDeltas(1)
-		result.Upsert(addr, acct)
-		result.mergeInOther(addr, ad)
-	}
-	return result
-}
-
-// mergeInOther adds app/asset params, local states and holdings from other to ad for the specified address
-func (ad *NewAccountDeltas) mergeInOther(addr basics.Address, other NewAccountDeltas) {
-	for _, rec := range other.appResources {
-		if rec.Addr == addr {
-			var newParams AppParamsDelta
-			newParams.Deleted = rec.Params.Deleted
-			if !rec.Params.Deleted && rec.Params.Params != nil {
-				cp := *rec.Params.Params
-				newParams.Params = &cp
-			}
-			var newState AppLocalStateDelta
-			newState.Deleted = rec.State.Deleted
-			if !rec.State.Deleted && rec.State.LocalState != nil {
-				cp := *rec.State.LocalState
-				newState.LocalState = &cp
-			}
-			last := len(ad.appResources)
-			key := AccountApp{rec.Addr, rec.Aidx}
-			ad.appResources = append(ad.appResources, AppResourceRecord{rec.Aidx, addr, newParams, newState})
-			ad.appResourcesCache[key] = last
-		}
-	}
-
-	for _, rec := range other.assetResources {
-		if rec.Addr == addr {
-			var newParams AssetParamsDelta
-			newParams.Deleted = rec.Params.Deleted
-			if !rec.Params.Deleted && rec.Params.Params != nil {
-				cp := *rec.Params.Params
-				newParams.Params = &cp
-			}
-			var newHolding AssetHoldingDelta
-			newHolding.Deleted = rec.Holding.Deleted
-			if !rec.Holding.Deleted && rec.Holding.Holding != nil {
-				cp := *rec.Holding.Holding
-				newHolding.Holding = &cp
-			}
-			last := len(ad.assetResources)
-			key := AccountAsset{rec.Addr, rec.Aidx}
-			ad.assetResources = append(ad.assetResources, AssetResourceRecord{rec.Aidx, addr, newParams, newHolding})
-			ad.assetResourcesCache[key] = last
-		}
-	}
 }
