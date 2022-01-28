@@ -343,7 +343,15 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				if err != nil {
 					return nil, err
 				}
-				normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				var ctype basics.CreatableType
+				if resData.IsAsset() {
+					ctype = basics.AssetCreatable
+				} else if resData.IsApp() {
+					ctype = basics.AppCreatable
+				} else {
+					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", balance.Address.String(), cidx, resData)
+				}
+				normalizedAccountBalances[i].accountHashes[resIdx+1] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
 				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
 				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
 				resIdx++
@@ -3312,7 +3320,16 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
 			var err error
 			if resData != nil {
-				hash := resourcesHashBuilderV6(addr, cidx, resData.UpdateRound, encodedResourceData)
+				var ctype basics.CreatableType
+				if resData.IsAsset() {
+					ctype = basics.AssetCreatable
+				} else if resData.IsApp() {
+					ctype = basics.AppCreatable
+				} else {
+					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", addr.String(), cidx, resData)
+					return err
+				}
+				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
 				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
 			}
 			return err
