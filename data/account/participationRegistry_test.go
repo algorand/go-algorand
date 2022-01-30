@@ -788,16 +788,17 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
-	signer, err := merklesignature.New(1, max, 1, crypto.FalconType)
+	signer, err := merklesignature.New(1, max, 3, crypto.FalconType)
 	a.NoError(err)
 	// Initialize keys array.
-	keys := make(map[uint64]StateProofSigner)
+	var keys StateProofKeys
 	for i := uint64(1); i < max; i++ {
 		k := signer.GetKey(i)
 		if k == nil {
 			continue
 		}
-		keys[i] = StateProofSigner(*k)
+		keysRound := merklesignature.KeyRoundPair{Round: i, Key: k}
+		keys = append(keys, keysRound)
 	}
 
 	err = registry.AppendKeys(id, keys)
@@ -807,11 +808,18 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
+	j := 0
 	// Make sure we're able to fetch the same data that was put in.
 	for i := uint64(1); i < max; i++ {
 		r, err := registry.GetStateProofForRound(id, basics.Round(i))
 		a.NoError(err)
-		a.Equal(keys[i], StateProofSigner(*r.StateProofSecrets.SigningKey))
+
+		if r.StateProofSecrets != nil {
+			a.Equal(*keys[j].Key, *r.StateProofSecrets.SigningKey)
+			a.Equal(keys[j].Round, i)
+			j++
+		}
+
 	}
 }
 
@@ -858,9 +866,10 @@ func TestAddingSecretTwice(t *testing.T) {
 	a.Equal(p.ID(), id)
 
 	// Append key
-	keys := make(map[uint64]StateProofSigner)
+	var keys StateProofKeys
 
-	keys[0] = StateProofSigner(*p.StateProofSecrets.GetKey(CompactCertRounds))
+	keysRound := merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keys = append(keys, keysRound)
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
@@ -905,8 +914,9 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.Nil(partPerRound.StateProofSecrets)
 
 	// Append key
-	keys := make(map[uint64]StateProofSigner)
-	keys[CompactCertRounds] = StateProofSigner(*p.StateProofSecrets.GetKey(CompactCertRounds))
+	keys := make(StateProofKeys, 1)
+	keys[0] = merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
 
@@ -919,5 +929,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
 	a.NoError(err)
 	a.NotNil(partPerRound.StateProofSecrets)
-	a.Equal(keys[CompactCertRounds], StateProofSigner(*partPerRound.StateProofSecrets.SigningKey))
+
+	a.Equal(*partPerRound.StateProofSecrets.SigningKey, *keys[0].Key)
+	a.Equal(CompactCertRounds, keys[0].Round)
 }

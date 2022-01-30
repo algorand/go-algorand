@@ -260,11 +260,17 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		Store: store,
 	}
 	// Persist the Participation into the database
-	err = part.Persist()
-	if err == nil {
-		err = stateProofSecrets.Persist(store) // must be called after part.Persist()
-	}
+	err = part.PersistWithSecrets()
 	return part, err
+}
+
+// PersistWithSecrets writes Participation struct to the database along with all the secrets it contains
+func (part PersistedParticipation) PersistWithSecrets() error {
+	err := part.Persist()
+	if err != nil {
+		return err
+	}
+	return part.StateProofSecrets.Persist(part.Store) // must be called after part.Persist()
 }
 
 // Persist writes a Participation out to a database on the disk

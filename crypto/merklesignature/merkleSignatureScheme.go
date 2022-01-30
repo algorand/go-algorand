@@ -78,6 +78,14 @@ type (
 	// Verifier is used to verify a merklesignature.Signature produced by merklesignature.Secrets.
 	// It validates a merklesignature.Signature by validating the commitment on the GenericVerifyingKey and validating the signature with that key
 	Verifier [MerkleSignatureSchemeRootSize]byte
+
+	//KeyRoundPair represents an ephemeral signing key with it's corresponding round
+	KeyRoundPair struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+		Round uint64                    `codec:"rnd"`
+		Key   *crypto.GenericSigningKey `codec:"key"`
+	}
 )
 
 // Errors for the merkle signature scheme
@@ -175,6 +183,21 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 // expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
 	return roundToIndex(s.FirstValid, round, s.Interval)
+}
+
+// GetAllKeys returns all stateproof secrets.
+// An empty array will be return if no stateproof secrets are found
+func (s *Secrets) GetAllKeys() []KeyRoundPair {
+	NumOfKeys := uint64(len(s.ephemeralKeys))
+	keys := make([]KeyRoundPair, NumOfKeys)
+	for i := uint64(0); i < NumOfKeys; i++ {
+		keyRound := KeyRoundPair{
+			Round: indexToRound(s.SignerContext.FirstValid, s.SignerContext.Interval, i),
+			Key:   &s.ephemeralKeys[i],
+		}
+		keys[i] = keyRound
+	}
+	return keys
 }
 
 // GetKey retrieves key from memory if exists

@@ -34,6 +34,12 @@ import (
 const merkleSignatureSchemaVersion = 1
 const merkleSignatureTableSchemaName = "merklesignaturescheme"
 
+// Errors for the persistent merkle signature scheme
+var (
+	errSelectKeysError = "failed to fetch stateproof keys from DB"
+	errKeyDecodeError  = "failed to decode stateproof key"
+)
+
 func merkleSignatureInstallDatabase(tx *sql.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE StateProofKeys (
     	id	  INTEGER PRIMARY KEY, 
@@ -88,46 +94,34 @@ func (s *Secrets) Persist(store db.Accessor) error {
 	return nil // Success
 }
 
-// FetchKey returns the SigningKey and round for a specified index from the StateProof DB
-func (s *Secrets) FetchKey(id uint64, store db.Accessor) (*crypto.GenericSigningKey, uint64, error) {
-	var keyB []byte
-	var round uint64
-	key := &crypto.GenericSigningKey{}
+// RestoreAllSecrets fetch all stateproof secrets from a persisted storage into memory
+func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
+	var keys []crypto.GenericSigningKey
 
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT key,round FROM StateProofKeys WHERE id = ?", id)
-		err := row.Scan(&keyB, &round)
+		rows, err := tx.Query("SELECT key FROM StateProofKeys")
 		if err != nil {
-			return fmt.Errorf("failed to select stateProof key for round %d : %w", round, err)
+			return fmt.Errorf("%s - %w", errSelectKeysError, err)
 		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, 0, err
-	}
-
-	err = protocol.Decode(keyB, key)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return key, round, nil
-}
-
-// CountKeys counts the number of rows in StateProofKeys table
-func (s *Secrets) CountKeys(store db.Accessor) (int, error) {
-	var count int
-	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT COUNT(*) FROM StateProofKeys")
-		err := row.Scan(&count)
-		if err != nil {
-			return fmt.Errorf("failed to count rows in table StateProofKeys : %w", err)
+		for rows.Next() {
+			var keyB []byte
+			key := crypto.GenericSigningKey{}
+			err := rows.Scan(&keyB)
+			if err != nil {
+				return fmt.Errorf("%s - %w", errKeyDecodeError, err)
+			}
+			err = protocol.Decode(keyB, &key)
+			if err != nil {
+				return err
+			}
+			keys = append(keys, key)
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return err
 	}
-	return count, nil
+
+	s.ephemeralKeys = keys
+	return nil
 }

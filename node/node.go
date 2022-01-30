@@ -965,7 +965,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		}
 
 		// Fetch an account.Participation from the database
-		part, err := account.RestoreParticipation(handle)
+		part, err := account.RestoreParticipationWithSecrets(handle)
 		if err != nil {
 			handle.Close()
 			if err == account.ErrUnsupportedSchema {
@@ -1002,30 +1002,14 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 }
 
 func insertStateProofToRegistry(part account.PersistedParticipation, node *AlgorandFullNode) error {
-	// create a const value Number of records in one fetch
-	// insert into the registry X rounds of keys via account manager
-	// all in for loop until no more keys in db
 	partID := part.ID()
-	numKeys, err := part.Participation.StateProofSecrets.CountKeys(part.Store)
-	if err != nil {
-		return err
+	keys := part.StateProofSecrets.GetAllKeys()
+	keysSinger := make(account.StateProofKeys, len(keys))
+	for i := uint64(0); i < uint64(len(keys)); i++ {
+		keysSinger[i] = keys[i]
 	}
-	keys := make(map[uint64]account.StateProofSigner, numKeys)
-	for i := uint64(0); i < uint64(numKeys); i++ {
-		key, round, err := part.Participation.StateProofSecrets.FetchKey(i, part.Store)
-		if err != nil {
-			return err
-		}
+	return node.accountManager.Registry().AppendKeys(partID, keysSinger)
 
-		keys[round] = account.StateProofSigner(*key)
-	}
-	err = node.accountManager.Registry().AppendKeys(partID, keys)
-	// kinda useless since AppendKeys returns nil exclusively and appends asynchronously
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
