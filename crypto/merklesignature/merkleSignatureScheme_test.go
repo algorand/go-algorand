@@ -453,7 +453,7 @@ func TestGetAllKeys(t *testing.T) {
 
 	keys := s.GetAllKeys()
 	for i := uint64(0); i < uint64(len(s.ephemeralKeys)); i++ {
-		a.Equal(s.ephemeralKeys[i], *keys[i].EphemeralSigningKey)
+		a.Equal(s.ephemeralKeys[i], *keys[i].Key)
 		a.Equal(indexToRound(firstValid, interval, i), keys[i].Round)
 	}
 

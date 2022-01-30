@@ -14,7 +14,7 @@ import (
 
 func TestMarshalUnmarshalKeyRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := KeyRound{}
+	v := KeyRoundPair{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -34,11 +34,11 @@ func TestMarshalUnmarshalKeyRound(t *testing.T) {
 }
 
 func TestRandomizedEncodingKeyRound(t *testing.T) {
-	protocol.RunEncodingTest(t, &KeyRound{})
+	protocol.RunEncodingTest(t, &KeyRoundPair{})
 }
 
 func BenchmarkMarshalMsgKeyRound(b *testing.B) {
-	v := KeyRound{}
+	v := KeyRoundPair{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -47,7 +47,7 @@ func BenchmarkMarshalMsgKeyRound(b *testing.B) {
 }
 
 func BenchmarkAppendMsgKeyRound(b *testing.B) {
-	v := KeyRound{}
+	v := KeyRoundPair{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -59,7 +59,7 @@ func BenchmarkAppendMsgKeyRound(b *testing.B) {
 }
 
 func BenchmarkUnmarshalKeyRound(b *testing.B) {
-	v := KeyRound{}
+	v := KeyRoundPair{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

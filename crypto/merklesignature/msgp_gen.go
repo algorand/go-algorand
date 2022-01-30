@@ -8,7 +8,7 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// KeyRound
+// KeyRoundPair
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
@@ -50,12 +50,12 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *KeyRound) MarshalMsg(b []byte) (o []byte) {
+func (z *KeyRoundPair) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if (*z).EphemeralSigningKey == nil {
+	if (*z).Key == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -69,10 +69,10 @@ func (z *KeyRound) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "key"
 			o = append(o, 0xa3, 0x6b, 0x65, 0x79)
-			if (*z).EphemeralSigningKey == nil {
+			if (*z).Key == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o = (*z).EphemeralSigningKey.MarshalMsg(o)
+				o = (*z).Key.MarshalMsg(o)
 			}
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
@@ -84,13 +84,13 @@ func (z *KeyRound) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *KeyRound) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*KeyRound)
+func (_ *KeyRoundPair) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*KeyRoundPair)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *KeyRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -117,14 +117,14 @@ func (z *KeyRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if err != nil {
 					return
 				}
-				(*z).EphemeralSigningKey = nil
+				(*z).Key = nil
 			} else {
-				if (*z).EphemeralSigningKey == nil {
-					(*z).EphemeralSigningKey = new(crypto.GenericSigningKey)
+				if (*z).Key == nil {
+					(*z).Key = new(crypto.GenericSigningKey)
 				}
-				bts, err = (*z).EphemeralSigningKey.UnmarshalMsg(bts)
+				bts, err = (*z).Key.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "EphemeralSigningKey")
+					err = msgp.WrapError(err, "struct-from-array", "Key")
 					return
 				}
 			}
@@ -142,7 +142,7 @@ func (z *KeyRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0002 {
-			(*z) = KeyRound{}
+			(*z) = KeyRoundPair{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -164,14 +164,14 @@ func (z *KeyRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if err != nil {
 						return
 					}
-					(*z).EphemeralSigningKey = nil
+					(*z).Key = nil
 				} else {
-					if (*z).EphemeralSigningKey == nil {
-						(*z).EphemeralSigningKey = new(crypto.GenericSigningKey)
+					if (*z).Key == nil {
+						(*z).Key = new(crypto.GenericSigningKey)
 					}
-					bts, err = (*z).EphemeralSigningKey.UnmarshalMsg(bts)
+					bts, err = (*z).Key.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "EphemeralSigningKey")
+						err = msgp.WrapError(err, "Key")
 						return
 					}
 				}
@@ -188,25 +188,25 @@ func (z *KeyRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *KeyRound) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*KeyRound)
+func (_ *KeyRoundPair) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*KeyRoundPair)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *KeyRound) Msgsize() (s int) {
+func (z *KeyRoundPair) Msgsize() (s int) {
 	s = 1 + 4 + msgp.Uint64Size + 4
-	if (*z).EphemeralSigningKey == nil {
+	if (*z).Key == nil {
 		s += msgp.NilSize
 	} else {
-		s += (*z).EphemeralSigningKey.Msgsize()
+		s += (*z).Key.Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *KeyRound) MsgIsZero() bool {
-	return ((*z).Round == 0) && ((*z).EphemeralSigningKey == nil)
+func (z *KeyRoundPair) MsgIsZero() bool {
+	return ((*z).Round == 0) && ((*z).Key == nil)
 }
 
 // MarshalMsg implements msgp.Marshaler

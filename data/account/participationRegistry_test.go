@@ -797,7 +797,7 @@ func TestAddStateProofKeys(t *testing.T) {
 		if k == nil {
 			continue
 		}
-		keysRound := merklesignature.KeyRound{Round: i, EphemeralSigningKey: k}
+		keysRound := merklesignature.KeyRoundPair{Round: i, Key: k}
 		keys = append(keys, keysRound)
 	}
 
@@ -815,7 +815,7 @@ func TestAddStateProofKeys(t *testing.T) {
 		a.NoError(err)
 
 		if r.StateProofSecrets != nil {
-			a.Equal(*keys[j].EphemeralSigningKey, *r.StateProofSecrets.SigningKey)
+			a.Equal(*keys[j].Key, *r.StateProofSecrets.SigningKey)
 			a.Equal(keys[j].Round, i)
 			j++
 		}
@@ -868,7 +868,7 @@ func TestAddingSecretTwice(t *testing.T) {
 	// Append key
 	var keys StateProofKeys
 
-	keysRound := merklesignature.KeyRound{Round: CompactCertRounds, EphemeralSigningKey: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keysRound := merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
 	keys = append(keys, keysRound)
 
 	err = registry.AppendKeys(id, keys)
@@ -915,8 +915,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 
 	// Append key
 	keys := make(StateProofKeys, 1)
-	keyRound := merklesignature.KeyRound{Round: CompactCertRounds, EphemeralSigningKey: p.StateProofSecrets.GetKey(CompactCertRounds)}
-	keys[0] = keyRound
+	keys[0] = merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
@@ -931,6 +930,6 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(partPerRound.StateProofSecrets)
 
-	a.Equal(*partPerRound.StateProofSecrets.SigningKey, *keys[0].EphemeralSigningKey)
+	a.Equal(*partPerRound.StateProofSecrets.SigningKey, *keys[0].Key)
 	a.Equal(CompactCertRounds, keys[0].Round)
 }

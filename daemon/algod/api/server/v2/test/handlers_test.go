@@ -700,8 +700,8 @@ func TestAppendParticipationKeys(t *testing.T) {
 		testKey2.Type = crypto.FalconType
 		testKey2.FalconSigner.PrivateKey[0] = 101
 
-		keys[0] = merklesignature.KeyRound{Round: 100, EphemeralSigningKey: &testKey1}
-		keys[1] = merklesignature.KeyRound{Round: 101, EphemeralSigningKey: &testKey2}
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
@@ -719,10 +719,10 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, id, mockNode.id)
 		require.Len(t, mockNode.keys, 2)
 		require.Equal(t, mockNode.keys[0].Round, keys[0].Round)
-		require.Equal(t, mockNode.keys[0].EphemeralSigningKey, keys[0].EphemeralSigningKey)
+		require.Equal(t, mockNode.keys[0].Key, keys[0].Key)
 
 		require.Equal(t, mockNode.keys[1].Round, keys[1].Round)
-		require.Equal(t, mockNode.keys[1].EphemeralSigningKey, keys[1].EphemeralSigningKey)
+		require.Equal(t, mockNode.keys[1].Key, keys[1].Key)
 
 	})
 
@@ -781,8 +781,8 @@ func TestAppendParticipationKeys(t *testing.T) {
 		testKey2.Type = crypto.FalconType
 		testKey2.FalconSigner.PrivateKey[0] = 101
 
-		keys[0] = merklesignature.KeyRound{Round: 100, EphemeralSigningKey: &testKey1}
-		keys[1] = merklesignature.KeyRound{Round: 101, EphemeralSigningKey: &testKey2}
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
