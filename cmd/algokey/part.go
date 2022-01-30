@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -78,17 +79,21 @@ var partGenerateCmd = &cobra.Command{
 			}
 			os.Exit(1)
 		}
-
-		partkey, err := account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Cannot generate partkey database %s: %v\n", partKeyfile, err)
-			err = os.Remove(partKeyfile)
+		var partkey account.PersistedParticipation
+		participationGen := func() {
+			partkey, err = account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove the database file %s: %v\n", partKeyfile, err)
+				fmt.Fprintf(os.Stderr, "Cannot generate partkey database %s: %v\n", partKeyfile, err)
+				err = os.Remove(partKeyfile)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to remove the database file %s: %v\n", partKeyfile, err)
+				}
+				os.Exit(1)
 			}
-			os.Exit(1)
 		}
 
+		fmt.Println("Please standby while generating keys. This might take a few minutes...")
+		util.RunWithProgress(participationGen)
 		printPartkey(partkey.Participation)
 	},
 }
@@ -155,7 +160,7 @@ func printPartkey(partkey account.Participation) {
 	fmt.Printf("VRF public key:    %s\n", base64.StdEncoding.EncodeToString(partkey.VRF.PK[:]))
 	fmt.Printf("Voting public key: %s\n", base64.StdEncoding.EncodeToString(partkey.Voting.OneTimeSignatureVerifier[:]))
 	if partkey.StateProofSecrets != nil && !partkey.StateProofSecrets.GetVerifier().IsEmpty() {
-		fmt.Printf("State proof key:     %s\n", base64.StdEncoding.EncodeToString(partkey.StateProofSecrets.GetVerifier()[:]))
+		fmt.Printf("State proof key:   %s\n", base64.StdEncoding.EncodeToString(partkey.StateProofSecrets.GetVerifier()[:]))
 	}
 	fmt.Printf("First round:       %d\n", partkey.FirstValid)
 	fmt.Printf("Last round:        %d\n", partkey.LastValid)

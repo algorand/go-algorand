@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -863,32 +862,6 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 	return err
 }
 
-func genParticipationKeysAsync(asyncFunc func()) {
-	errChan := make(chan struct{}, 1)
-	go func() {
-		asyncFunc()
-		errChan <- struct{}{}
-	}()
-
-	progressStrings := [...]string{"/", "-", "\\", "|"}
-
-	finished := false
-	i := 0
-
-	for !finished {
-		timer := time.NewTimer(time.Duration(100 * time.Millisecond))
-		select {
-		case <-errChan:
-			finished = true
-			break
-		case <-timer.C:
-			fmt.Print(progressStrings[i])
-			fmt.Print("\b")
-			i = (i + 1) % len(progressStrings)
-		}
-	}
-}
-
 var addParticipationKeyCmd = &cobra.Command{
 	Use:   "addpartkey",
 	Short: "Generate a participation key for the specified account",
@@ -913,7 +886,7 @@ var addParticipationKeyCmd = &cobra.Command{
 		}
 
 		reportInfof("Please standby while generating keys. This might take a few minutes...")
-		genParticipationKeysAsync(participationGen)
+		util.RunWithProgress(participationGen)
 	},
 }
 
@@ -1007,7 +980,7 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 		fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, keyLastValidRound)
 	}
 	fmt.Printf("Generated participation key please standby...")
-	genParticipationKeysAsync(genFunc)
+	util.RunWithProgress(genFunc)
 	if err != nil {
 		return err
 	}

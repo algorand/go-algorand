@@ -93,7 +93,7 @@ type (
 
 	// StateProofKeys represents a set of ephemeral stateproof keys with their corresponding round
 	//msgp:allocbound StateProofKeys 1000
-	StateProofKeys map[uint64]StateProofSigner
+	StateProofKeys map[uint64]*StateProofSigner
 
 	// ParticipationRecordForRound contains participant's secrets that corresponds to
 	// one specific round. In Addition, it also returns the participation metadata
@@ -223,7 +223,7 @@ type ParticipationRegistry interface {
 
 	// AppendKeys appends state proof keys to an existing Participation record. Keys can only be appended
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
-	AppendKeys(id ParticipationID, keys map[uint64]StateProofSigner) error
+	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
@@ -412,7 +412,7 @@ type updatingParticipationRecord struct {
 type partDBWriteRecord struct {
 	insertID ParticipationID
 	insert   Participation
-	keys     map[uint64]StateProofSigner
+	keys     StateProofKeys
 
 	registerUpdated map[ParticipationID]updatingParticipationRecord
 
@@ -544,7 +544,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 	return err
 }
 
-func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]StateProofSigner) error {
+func (db *participationDB) appendKeysInner(id ParticipationID, keys StateProofKeys) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
@@ -564,7 +564,7 @@ func (db *participationDB) appendKeysInner(id ParticipationID, keys map[uint64]S
 		}
 
 		for rnd, key := range keys {
-			result, err := stmt.Exec(pk, rnd, protocol.Encode(&key))
+			result, err := stmt.Exec(pk, rnd, protocol.Encode(key))
 			if err = verifyExecWithOneRowEffected(err, result, "append keys"); err != nil {
 				return err
 			}
@@ -751,7 +751,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	return
 }
 
-func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateProofSigner) error {
+func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
@@ -759,7 +759,7 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys map[uint64]StateP
 		return ErrParticipationIDNotFound
 	}
 
-	keyCopy := make(map[uint64]StateProofSigner, len(keys))
+	keyCopy := make(StateProofKeys, len(keys))
 	for k, v := range keys {
 		keyCopy[k] = v // PKI TODO: Deep copy?
 	}

@@ -36,8 +36,8 @@ const merkleSignatureTableSchemaName = "merklesignaturescheme"
 
 // Errors for the persistent merkle signature scheme
 var (
-	errSelectKeysError      = "failed so fetch stateproof keys from DB"
-	errSelectKeyDecodeError = "failed so decode stateproof key"
+	errSelectKeysError = "failed to fetch stateproof keys from DB"
+	errKeyDecodeError  = "failed to decode stateproof key"
 )
 
 func merkleSignatureInstallDatabase(tx *sql.Tx) error {
@@ -108,7 +108,7 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 			key := crypto.GenericSigningKey{}
 			err := rows.Scan(&keyB)
 			if err != nil {
-				return fmt.Errorf("%s - %w", errSelectKeyDecodeError, err)
+				return fmt.Errorf("%s - %w", errKeyDecodeError, err)
 			}
 			err = protocol.Decode(keyB, &key)
 			if err != nil {

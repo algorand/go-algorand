@@ -791,13 +791,13 @@ func TestAddStateProofKeys(t *testing.T) {
 	signer, err := merklesignature.New(1, max, 1, crypto.FalconType)
 	a.NoError(err)
 	// Initialize keys array.
-	keys := make(map[uint64]StateProofSigner)
+	keys := make(StateProofKeys)
 	for i := uint64(1); i < max; i++ {
 		k := signer.GetKey(i)
 		if k == nil {
 			continue
 		}
-		keys[i] = StateProofSigner(*k)
+		keys[i] = (*StateProofSigner)(k)
 	}
 
 	err = registry.AppendKeys(id, keys)
@@ -811,7 +811,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	for i := uint64(1); i < max; i++ {
 		r, err := registry.GetStateProofForRound(id, basics.Round(i))
 		a.NoError(err)
-		a.Equal(keys[i], StateProofSigner(*r.StateProofSecrets.SigningKey))
+		a.Equal(*keys[i], StateProofSigner(*r.StateProofSecrets.SigningKey))
 	}
 }
 
@@ -858,9 +858,9 @@ func TestAddingSecretTwice(t *testing.T) {
 	a.Equal(p.ID(), id)
 
 	// Append key
-	keys := make(map[uint64]StateProofSigner)
+	keys := make(StateProofKeys)
 
-	keys[0] = StateProofSigner(*p.StateProofSecrets.GetKey(CompactCertRounds))
+	keys[0] = (*StateProofSigner)(p.StateProofSecrets.GetKey(CompactCertRounds))
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
@@ -905,8 +905,8 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.Nil(partPerRound.StateProofSecrets)
 
 	// Append key
-	keys := make(map[uint64]StateProofSigner)
-	keys[CompactCertRounds] = StateProofSigner(*p.StateProofSecrets.GetKey(CompactCertRounds))
+	keys := make(StateProofKeys)
+	keys[CompactCertRounds] = (*StateProofSigner)(p.StateProofSecrets.GetKey(CompactCertRounds))
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
 
@@ -919,5 +919,5 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
 	a.NoError(err)
 	a.NotNil(partPerRound.StateProofSecrets)
-	a.Equal(keys[CompactCertRounds], StateProofSigner(*partPerRound.StateProofSecrets.SigningKey))
+	a.Equal(*keys[CompactCertRounds], StateProofSigner(*partPerRound.StateProofSecrets.SigningKey))
 }

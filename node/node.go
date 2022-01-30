@@ -1004,9 +1004,9 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 func insertStateProofToRegistry(part account.PersistedParticipation, node *AlgorandFullNode) error {
 	partID := part.ID()
 	keys := part.StateProofSecrets.GetAllKeys()
-	keysSinger := make(map[uint64]account.StateProofSigner)
+	keysSinger := make(account.StateProofKeys, len(keys))
 	for i := uint64(0); i < uint64(len(keys)); i++ {
-		keysSinger[i] = account.StateProofSigner(*keys[i])
+		keysSinger[i] = (*account.StateProofSigner)(keys[i])
 	}
 	return node.accountManager.Registry().AppendKeys(partID, keysSinger)
 

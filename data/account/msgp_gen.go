@@ -282,7 +282,11 @@ func (z StateProofKeys) MarshalMsg(b []byte) (o []byte) {
 		za0002 := z[za0001]
 		_ = za0002
 		o = msgp.AppendUint64(o, za0001)
-		o = za0002.MarshalMsg(o)
+		if za0002 == nil {
+			o = msgp.AppendNil(o)
+		} else {
+			o = za0002.MarshalMsg(o)
+		}
 	}
 	return
 }
@@ -316,17 +320,28 @@ func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	for zb0003 > 0 {
 		var zb0001 uint64
-		var zb0002 StateProofSigner
+		var zb0002 *StateProofSigner
 		zb0003--
 		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		bts, err = zb0002.UnmarshalMsg(bts)
-		if err != nil {
-			err = msgp.WrapError(err, zb0001)
-			return
+		if msgp.IsNil(bts) {
+			bts, err = msgp.ReadNilBytes(bts)
+			if err != nil {
+				return
+			}
+			zb0002 = nil
+		} else {
+			if zb0002 == nil {
+				zb0002 = new(StateProofSigner)
+			}
+			bts, err = zb0002.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, zb0001)
+				return
+			}
 		}
 		(*z)[zb0001] = zb0002
 	}
@@ -346,7 +361,12 @@ func (z StateProofKeys) Msgsize() (s int) {
 		for za0001, za0002 := range z {
 			_ = za0001
 			_ = za0002
-			s += 0 + msgp.Uint64Size + za0002.Msgsize()
+			s += 0 + msgp.Uint64Size
+			if za0002 == nil {
+				s += msgp.NilSize
+			} else {
+				s += za0002.Msgsize()
+			}
 		}
 	}
 	return

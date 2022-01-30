@@ -699,8 +699,8 @@ func TestAppendParticipationKeys(t *testing.T) {
 		testKey2.Type = crypto.FalconType
 		testKey2.FalconSigner.PrivateKey[0] = 101
 
-		keys[100] = testKey1
-		keys[101] = testKey2
+		keys[100] = &testKey1
+		keys[101] = &testKey2
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
@@ -776,8 +776,8 @@ func TestAppendParticipationKeys(t *testing.T) {
 		testKey2.Type = crypto.FalconType
 		testKey2.FalconSigner.PrivateKey[0] = 101
 
-		keys[100] = testKey1
-		keys[101] = testKey2
+		keys[100] = &testKey1
+		keys[101] = &testKey2
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
