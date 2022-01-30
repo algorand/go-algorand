@@ -138,6 +138,7 @@ func makeBalancesAdapter(
 			}
 		}
 	}
+	// TODO: Look at logs and itxns?
 
 	// painless mode creates all missed global states and opt-in all mentioned accounts
 	if painless {

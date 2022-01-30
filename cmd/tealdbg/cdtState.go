@@ -120,6 +120,7 @@ const tealErrorID = "tealErrorID"
 const appGlobalObjID = "appGlobalObjID"
 const appLocalsObjID = "appLocalsObjID"
 const txnArrayFieldObjID = "txnArrayField"
+const logsObjID = "logObjID"
 
 type objectDescFn func(s *cdtState, preview bool) []cdt.RuntimePropertyDescriptor
 
@@ -134,6 +135,7 @@ var objectDescMap = map[string]objectDescFn{
 	tealErrorID:      makeTealError,
 	appGlobalObjID:   makeAppGlobalState,
 	appLocalsObjID:   makeAppLocalsState,
+	logsObjID:        makeLogsState,
 }
 
 func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.RuntimePropertyDescriptor, err error) {
@@ -153,6 +155,8 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				return makeArrayLength(s.stack), nil
 			case scratchObjID:
 				return makeArrayLength(s.scratch), nil
+			case logsObjID:
+				return makeStringArrayLength(s.logs), nil
 			default:
 			}
 		} else if parentObjID, from, to, ok := decodeArraySlice(objID); ok {
@@ -161,6 +165,8 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				return makeStackSlice(s, from, to, preview), nil
 			case scratchObjID:
 				return makeScratchSlice(s, from, to, preview), nil
+			case logsObjID:
+				return makeLogsSlice(s, from, to, preview), nil
 			default:
 			}
 		} else if appID, ok := decodeAppGlobalAppID(objID); ok {
@@ -434,6 +440,16 @@ func prepareArray(array []basics.TealValue) []fieldDesc {
 	return result
 }
 
+func prepareStringArray(array []string) []fieldDesc {
+	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
+	for i := 0; i < len(array); i++ {
+		value := array[i]
+		name := strconv.Itoa(i)
+		result = append(result, fieldDesc{name, value, "string"})
+	}
+	return result
+}
+
 func makePreview(fields []fieldDesc) (prop []cdt.RuntimePropertyPreview) {
 	prop = make([]cdt.RuntimePropertyPreview, 0, len(fields))
 	for _, field := range fields {
@@ -503,6 +519,25 @@ func makeArrayPreview(array []basics.TealValue) cdt.RuntimeObjectPreview {
 	return p
 }
 
+func makeStringArrayPreview(array []string) cdt.RuntimeObjectPreview {
+	fields := prepareStringArray(array)
+
+	length := len(fields)
+	overflow := length > maxArrayPreviewLength
+	if overflow {
+		length = maxArrayPreviewLength
+	}
+	prop := makePreview(fields[:length])
+
+	p := cdt.RuntimeObjectPreview{
+		Type:        "object",
+		Subtype:     "array",
+		Description: fmt.Sprintf("Array(%d)", len(array)),
+		Overflow:    overflow,
+		Properties:  prop}
+	return p
+}
+
 func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 	fields := prepareGlobals(globals)
 	prop := makePreview(fields)
@@ -540,6 +575,8 @@ func decodeArrayLength(objID string) (string, bool) {
 			return stackObjID, true
 		} else if strings.HasPrefix(objID, scratchObjID) {
 			return scratchObjID, true
+		} else if strings.HasPrefix(objID, logsObjID) {
+			return logsObjID, true
 		}
 	}
 	return "", false
@@ -550,7 +587,7 @@ func encodeArraySlice(objID string, fromIndex int, toIndex int) string {
 }
 
 func decodeArraySlice(objID string) (string, int, int, bool) {
-	if strings.HasPrefix(objID, stackObjID) || strings.HasPrefix(objID, scratchObjID) {
+	if strings.HasPrefix(objID, stackObjID) || strings.HasPrefix(objID, scratchObjID) || strings.HasPrefix(objID, logsObjID) {
 		parts := strings.Split(objID, "_")
 		if len(parts) != 3 {
 			return "", 0, 0, false
@@ -654,6 +691,7 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 	gtxn := makeArray("gtxn", len(s.txnGroup), gtxnObjID)
 	stack := makeArray("stack", len(s.stack), stackObjID)
 	scratch := makeArray("scratch", len(s.scratch), scratchObjID)
+	logs := makeArray("logs", len(s.logs), logsObjID)
 	if preview {
 		txnPreview := makeTxnPreview(s.txnGroup, s.groupIndex)
 		if len(txnPreview.Properties) > 0 {
@@ -669,6 +707,10 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 		if len(scratchPreview.Properties) > 0 {
 			scratch.Value.Preview = &scratchPreview
 		}
+		logsPreview := makeStringArrayPreview(s.logs)
+		if len(logsPreview.Properties) > 0 {
+			logs.Value.Preview = &logsPreview
+		}
 	}
 
 	pc := makePrimitive(fieldDesc{
@@ -682,6 +724,7 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 		gtxn,
 		stack,
 		scratch,
+		logs,
 	}
 
 	if !s.AppState.empty() {
@@ -883,6 +926,12 @@ func makeArrayLength(array []basics.TealValue) (desc []cdt.RuntimePropertyDescri
 	return
 }
 
+func makeStringArrayLength(array []string) (desc []cdt.RuntimePropertyDescriptor) {
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
+	desc = append(desc, makePrimitive(field))
+	return
+}
+
 func makeStackSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	// temporary disable stack reversion to see if people prefer appending to the list
 	// stack := make([]v2.TealValue, len(s.stack))
@@ -917,6 +966,21 @@ func makeScratchSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.R
 
 func makeScratch(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	return makeScratchSlice(s, 0, len(s.scratch)-1, preview)
+}
+
+func makeLogsSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	logs := s.logs[from : to+1]
+	fields := prepareStringArray(logs)
+	for _, field := range fields {
+		desc = append(desc, makePrimitive(field))
+	}
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(logs)), Type: "number"}
+	desc = append(desc, makePrimitive(field))
+	return
+}
+
+func makeLogsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	return makeLogsSlice(s, 0, len(s.logs)-1, preview)
 }
 
 func makeTealError(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {

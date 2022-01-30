@@ -361,6 +361,10 @@ func (s *session) GetStates(st *logic.DebugState) AppState {
 		newStates.locals[addr] = local
 	}
 
+	if len(changes.Logs) > 0 {
+		newStates.logs = changes.Logs
+	}
+
 	return newStates
 }
 

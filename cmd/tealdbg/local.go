@@ -162,6 +162,7 @@ type AppState struct {
 	schemas basics.StateSchemas
 	global  map[basics.AppIndex]basics.TealKeyValue
 	locals  map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
+	logs    []string
 }
 
 func (a *AppState) clone() (b AppState) {
@@ -177,11 +178,12 @@ func (a *AppState) clone() (b AppState) {
 			b.locals[addr][aid] = tkv.Clone()
 		}
 	}
+	b.logs = a.logs
 	return
 }
 
 func (a *AppState) empty() bool {
-	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0
+	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0 && len(a.logs) == 0
 }
 
 type modeType int
@@ -238,6 +240,7 @@ type LocalRunner struct {
 func makeAppState() (states AppState) {
 	states.global = make(map[basics.AppIndex]basics.TealKeyValue)
 	states.locals = make(map[basics.Address]map[basics.AppIndex]basics.TealKeyValue)
+	states.logs = make([]string, 0)
 	return
 }
 
