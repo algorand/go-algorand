@@ -78,6 +78,14 @@ type (
 	// Verifier is used to verify a merklesignature.Signature produced by merklesignature.Secrets.
 	// It validates a merklesignature.Signature by validating the commitment on the GenericVerifyingKey and validating the signature with that key
 	Verifier [MerkleSignatureSchemeRootSize]byte
+
+	//KeyRound represents an ephemeral signing key with it's corresponding round
+	KeyRound struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+		Round               uint64                    `codec:"rnd"`
+		EphemeralSigningKey *crypto.GenericSigningKey `codec:"key"`
+	}
 )
 
 // Errors for the merkle signature scheme
@@ -177,13 +185,14 @@ func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
 	return roundToIndex(s.FirstValid, round, s.Interval)
 }
 
-// GetAllKeys returns all stateproof secrets if exists.
-// an empty array will be return if no stateproof secrets are loaded
-func (s *Secrets) GetAllKeys() []*crypto.GenericSigningKey {
+// GetAllKeys returns all stateproof secrets.
+// An empty array will be return if no stateproof secrets are found
+func (s *Secrets) GetAllKeys() []KeyRound {
 	NumOfKeys := uint64(len(s.ephemeralKeys))
-	keys := make([]*crypto.GenericSigningKey, NumOfKeys)
+	keys := make([]KeyRound, NumOfKeys)
 	for i := uint64(0); i < NumOfKeys; i++ {
-		keys[i] = &s.ephemeralKeys[i]
+		keyRound := KeyRound{Round: indexToRound(s.SignerContext.FirstValid, s.SignerContext.Interval, i), EphemeralSigningKey: &s.ephemeralKeys[i]}
+		keys[i] = keyRound
 	}
 	return keys
 }

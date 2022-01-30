@@ -442,17 +442,19 @@ func TestGetAllKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	interval := uint64(256)
-	validPeriod := (1<<8)*interval - 1
+	numOfKeys := uint64(1 << 8)
+	validPeriod := numOfKeys*interval - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
 	s, err := New(firstValid, lastValid, interval, crypto.Ed25519Type)
 	a.NoError(err)
-	a.Equal(1<<8, length(s, a))
+	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
 	keys := s.GetAllKeys()
-	for i := 0; i < len(s.ephemeralKeys); i++ {
-		a.Equal(*keys[i], s.ephemeralKeys[i])
+	for i := uint64(0); i < uint64(len(s.ephemeralKeys)); i++ {
+		a.Equal(s.ephemeralKeys[i], *keys[i].EphemeralSigningKey)
+		a.Equal(indexToRound(firstValid, interval, i), keys[i].Round)
 	}
 
 	s, err = New(1, 2, 100, crypto.Ed25519Type)

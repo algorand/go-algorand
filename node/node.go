@@ -1006,7 +1006,7 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 	keys := part.StateProofSecrets.GetAllKeys()
 	keysSinger := make(account.StateProofKeys, len(keys))
 	for i := uint64(0); i < uint64(len(keys)); i++ {
-		keysSinger[i] = (*account.StateProofSigner)(keys[i])
+		keysSinger[i] = keys[i]
 	}
 	return node.accountManager.Registry().AppendKeys(partID, keysSinger)
 

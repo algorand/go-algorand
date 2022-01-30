@@ -85,15 +85,12 @@ type (
 		Voting     *crypto.OneTimeSignatureSecrets
 	}
 
-	// StateProofSigner defined the type used for the compact certificate signing key
-	StateProofSigner crypto.GenericSigningKey
-
 	// StateProofVerifier defined the type used for the stateproofs public key
 	StateProofVerifier merklesignature.Verifier
 
 	// StateProofKeys represents a set of ephemeral stateproof keys with their corresponding round
 	//msgp:allocbound StateProofKeys 1000
-	StateProofKeys map[uint64]*StateProofSigner
+	StateProofKeys []merklesignature.KeyRound
 
 	// ParticipationRecordForRound contains participant's secrets that corresponds to
 	// one specific round. In Addition, it also returns the participation metadata
@@ -563,8 +560,8 @@ func (db *participationDB) appendKeysInner(id ParticipationID, keys StateProofKe
 			return fmt.Errorf("unable to prepare state proof insert: %w", err)
 		}
 
-		for rnd, key := range keys {
-			result, err := stmt.Exec(pk, rnd, protocol.Encode(key))
+		for i := 0; i < len(keys); i++ {
+			result, err := stmt.Exec(pk, keys[i].Round, protocol.Encode(keys[i].EphemeralSigningKey))
 			if err = verifyExecWithOneRowEffected(err, result, "append keys"); err != nil {
 				return err
 			}
@@ -759,15 +756,10 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) e
 		return ErrParticipationIDNotFound
 	}
 
-	keyCopy := make(StateProofKeys, len(keys))
-	for k, v := range keys {
-		keyCopy[k] = v // PKI TODO: Deep copy?
-	}
-
 	// Update the DB asynchronously.
 	db.writeQueue <- partDBWriteRecord{
 		insertID: id,
-		keys:     keyCopy,
+		keys:     keys,
 	}
 	return nil
 }
