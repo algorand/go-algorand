@@ -177,6 +177,17 @@ func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
 	return roundToIndex(s.FirstValid, round, s.Interval)
 }
 
+// GetAllKeys returns all stateproof secrets if exists.
+// an empty array will be return if no stateproof secrets are loaded
+func (s *Secrets) GetAllKeys() []*crypto.GenericSigningKey {
+	NumOfKeys := uint64(len(s.ephemeralKeys))
+	keys := make([]*crypto.GenericSigningKey, NumOfKeys)
+	for i := uint64(0); i < NumOfKeys; i++ {
+		keys[i] = &s.ephemeralKeys[i]
+	}
+	return keys
+}
+
 // GetKey retrieves key from memory if exists
 func (s *Secrets) GetKey(round uint64) *crypto.GenericSigningKey {
 	idx := roundToIndex(s.FirstValid, round, s.Interval)

@@ -202,7 +202,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	}
 	defer inputdb.Close()
 
-	partkey, err := account.RestoreParticipation(inputdb)
+	partkey, err := account.RestoreParticipationWithSecrets(inputdb)
 	if err != nil {
 		return
 	}
@@ -224,7 +224,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 
 	newpartkey := partkey
 	newpartkey.Store = newdb
-	err = newpartkey.Persist()
+	err = newpartkey.PersistWithSecrets()
 	if err != nil {
 		newpartkey.Close()
 		return

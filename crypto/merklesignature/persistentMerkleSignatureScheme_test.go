@@ -29,25 +29,28 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func TestFetchKey(t *testing.T) {
+func TestFetchAllKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	store := createTestDB(a)
 	defer store.Close()
 
+	firstValid := uint64(1)
+	LastValid := uint64(5000)
+
 	interval := uint64(256)
-	mss, err := New(1, 1000, interval, crypto.FalconType)
+	mss, err := New(firstValid, LastValid, interval, crypto.FalconType)
 	a.NoError(err)
 	a.NoError(mss.Persist(*store))
 
-	key, rnd, err := mss.FetchKey(interval*1, *store)
-	a.Equal(mss.GetKey(rnd), key)
+	newMss := Secrets{}
+	newMss.SignerContext = mss.SignerContext
+	err = newMss.RestoreAllSecrets(*store)
+	a.NoError(err)
 
-	key, rnd, err = mss.FetchKey(interval*2, *store)
-	a.Equal(mss.GetKey(rnd), key)
-
-	key, rnd, err = mss.FetchKey(interval*5, *store)
-	a.Equal(mss.GetKey(rnd), key)
+	for i := uint64(0); i < LastValid; i++ {
+		a.Equal(mss.GetKey(i), newMss.GetKey(i))
+	}
 
 }
 
