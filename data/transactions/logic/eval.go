@@ -2658,6 +2658,57 @@ func leadingZeros(size int, b *big.Int) ([]byte, error) {
 	return buf, nil
 }
 
+// polynomial returns x³ - 3x + b.
+//
+// TODO: remove this when go-algorand is updated to go 1.15+
+func polynomial(curve *elliptic.CurveParams, x *big.Int) *big.Int {
+	x3 := new(big.Int).Mul(x, x)
+	x3.Mul(x3, x)
+
+	threeX := new(big.Int).Lsh(x, 1)
+	threeX.Add(threeX, x)
+
+	x3.Sub(x3, threeX)
+	x3.Add(x3, curve.B)
+	x3.Mod(x3, curve.P)
+
+	return x3
+}
+
+// unmarshalCompressed converts a point, serialized by MarshalCompressed, into an x, y pair.
+// It is an error if the point is not in compressed form or is not on the curve.
+// On error, x = nil.
+//
+// TODO: remove this and replace usage with elliptic.UnmarshallCompressed when go-algorand is
+// updated to go 1.15+
+func unmarshalCompressed(curve elliptic.Curve, data []byte) (x, y *big.Int) {
+	byteLen := (curve.Params().BitSize + 7) / 8
+	if len(data) != 1+byteLen {
+		return nil, nil
+	}
+	if data[0] != 2 && data[0] != 3 { // compressed form
+		return nil, nil
+	}
+	p := curve.Params().P
+	x = new(big.Int).SetBytes(data[1:])
+	if x.Cmp(p) >= 0 {
+		return nil, nil
+	}
+	// y² = x³ - 3x + b
+	y = polynomial(curve.Params(), x)
+	y = y.ModSqrt(y, p)
+	if y == nil {
+		return nil, nil
+	}
+	if byte(y.Bit(0)) != data[0]&1 {
+		y.Neg(y).Mod(y, p)
+	}
+	if !curve.IsOnCurve(x, y) {
+		return nil, nil
+	}
+	return
+}
+
 func opEcdsaVerify(cx *EvalContext) {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
@@ -2744,7 +2795,7 @@ func opEcdsaPkDecompress(cx *EvalContext) {
 			return
 		}
 	} else if fs.field == Secp256r1 {
-		x, y = elliptic.UnmarshalCompressed(elliptic.P256(), pubkey)
+		x, y = unmarshalCompressed(elliptic.P256(), pubkey)
 		if x == nil {
 			cx.err = fmt.Errorf("invalid compressed pubkey")
 			return

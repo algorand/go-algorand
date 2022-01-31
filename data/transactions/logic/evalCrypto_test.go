@@ -657,7 +657,7 @@ ecdsa_verify Secp256k1`
 	if LogicVersion >= fidoVersion {
 		b.Run("ecdsa_verify secp256r1", func(b *testing.B) {
 			source := `#pragma version ` + strconv.Itoa(fidoVersion) + `
-	arg 0
+	arg 0d
 	arg 1
 	arg 2
 	arg 3
