@@ -407,26 +407,27 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	interval := uint64(256)
-	validPeriod := uint64((1<<8)*interval - 1)
+	numberOfKeys := uint64(1 << 6)
+	validPeriod := numberOfKeys*interval - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
 	s, err := New(firstValid, lastValid, interval)
 	a.NoError(err)
-	a.Equal(1<<8, length(s, a))
+	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(0)
 	lastValid = validPeriod
 	s, err = New(firstValid, lastValid, interval)
 	a.NoError(err)
-	a.Equal((1<<8)-1, length(s, a))
+	a.Equal(numberOfKeys-1, uint64(length(s, a)))
 
 	firstValid = uint64(1000)
 	lastValid = validPeriod + 1000 - (interval * 50)
 	s, err = New(firstValid, lastValid, interval)
 	a.NoError(err)
 
-	a.Equal((1<<8)-50, length(s, a))
+	a.Equal(numberOfKeys-50, uint64(length(s, a)))
 }
 
 func TestGetAllKeys(t *testing.T) {

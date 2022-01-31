@@ -67,7 +67,7 @@ func TestBuilderZeroKeys(t *testing.T) {
 	a.Equal(numOfKeys, uint64(len(keys)))
 }
 
-func BenchmarkMerkleSignatureSchemeGenFalcon(b *testing.B) {
+func BenchmarkMerkleSignatureSchemeGenerate(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		New(0, 3000000, 256)
