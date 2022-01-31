@@ -295,7 +295,7 @@ var OpSpecs = []OpSpec{
 	{0x95, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, costly(10)},
 
 	//More Hash Functions
-	{0x96, "sha3_256", opSHA3256, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(130)},
+	{0x96, "sha3_256", opSHA3_256, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(130)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
