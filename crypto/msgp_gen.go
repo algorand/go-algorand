@@ -465,8 +465,8 @@ func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > cfalcon.SignatureMaxSize {
-			err = msgp.ErrOverflow(uint64(zb0002), uint64(cfalcon.SignatureMaxSize))
+		if zb0002 > FalconMaxSignatureSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(FalconMaxSignatureSize))
 			return
 		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))

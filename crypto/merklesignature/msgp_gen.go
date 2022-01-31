@@ -367,15 +367,15 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
 	var zb0001Mask uint8 /* 5 bits */
-	if (*z).Signature.MsgIsZero() {
+	if (*z).MerkleArrayIndex == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).MerkleArrayIndex == 0 {
+	if (*z).Proof.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Proof.MsgIsZero() {
+	if (*z).Signature.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -387,19 +387,19 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "bsig"
-			o = append(o, 0xa4, 0x62, 0x73, 0x69, 0x67)
-			o = (*z).Signature.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "idx"
 			o = append(o, 0xa3, 0x69, 0x64, 0x78)
 			o = msgp.AppendUint64(o, (*z).MerkleArrayIndex)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "prf"
 			o = append(o, 0xa3, 0x70, 0x72, 0x66)
 			o = (*z).Proof.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o = (*z).Signature.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "vkey"
@@ -483,7 +483,7 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "bsig":
+			case "sig":
 				bts, err = (*z).Signature.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Signature")
@@ -527,7 +527,7 @@ func (_ *Signature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Signature) Msgsize() (s int) {
-	s = 1 + 5 + (*z).Signature.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).Proof.Msgsize() + 5 + (*z).VerifyingKey.Msgsize()
+	s = 1 + 4 + (*z).Signature.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).Proof.Msgsize() + 5 + (*z).VerifyingKey.Msgsize()
 	return
 }
 
