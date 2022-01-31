@@ -66,7 +66,7 @@ func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key 
 }
 
 func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a *require.Assertions) *merklesignature.Secrets {
-	signer, err := merklesignature.New(firstValid, lastValid, interval, crypto.FalconType)
+	signer, err := merklesignature.New(firstValid, lastValid, interval)
 	a.NoError(err)
 
 	return signer
@@ -414,7 +414,7 @@ func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes i
 
 func findLInCert(a *require.Assertions, signature merklesignature.Signature, cert *Cert) uint64 {
 	for _, t := range cert.Reveals {
-		if bytes.Compare(t.SigSlot.Sig.Signature.ByteSignature, signature.ByteSignature) == 0 {
+		if bytes.Compare(t.SigSlot.Sig.Signature.Signature, signature.Signature) == 0 {
 			return t.SigSlot.L
 		}
 	}

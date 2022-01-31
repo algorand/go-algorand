@@ -37,7 +37,7 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 	a.NoError(err)
 
 	verifier := key.GetVerifyingKey()
-	err = verifier.GetVerifier().VerifyBytes(msg, byteSig)
+	err = verifier.VerifyBytes(msg, byteSig)
 	a.NoError(err)
 }
 
@@ -55,7 +55,7 @@ func TestSignAndVerifyFalconHashable(t *testing.T) {
 	a.NoError(err)
 
 	verifier := key.GetVerifyingKey()
-	err = verifier.GetVerifier().Verify(msg, byteSig)
+	err = verifier.Verify(msg, byteSig)
 	a.NoError(err)
 }
 
@@ -68,7 +68,7 @@ func TestFalconCanHandleNilSignature(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	err = key.GetVerifyingKey().GetVerifier().VerifyBytes([]byte("Test"), nil)
+	err = key.GetVerifyingKey().VerifyBytes([]byte("Test"), nil)
 	a.Error(err)
 }
 
@@ -81,7 +81,7 @@ func TestVerificationBytes(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	verifyingRawKey := key.GetVerifyingKey().GetVerifier().GetFixedLengthHashableRepresentation()
+	verifyingRawKey := key.GetVerifyingKey().GetFixedLengthHashableRepresentation()
 
 	a.Equal(verifyingRawKey, key.PublicKey[:])
 }
@@ -102,7 +102,7 @@ func TestFalconsFormatConversion(t *testing.T) {
 	falconSig := falcon.CompressedSignature(sig)
 	ctFormat, err := falconSig.ConvertToCT()
 
-	rawFormat, err := key.GetVerifyingKey().GetVerifier().GetSignatureFixedLengthHashableRepresentation(sig)
+	rawFormat, err := key.GetVerifyingKey().GetSignatureFixedLengthHashableRepresentation(sig)
 	a.NoError(err)
 	a.NotEqual([]byte(sig), rawFormat)
 

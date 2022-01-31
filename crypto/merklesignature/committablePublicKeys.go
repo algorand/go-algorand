@@ -26,7 +26,7 @@ import (
 type (
 	// CommittablePublicKeyArray used to arrange the keys so a merkle tree could be build on them.
 	CommittablePublicKeyArray struct {
-		keys       []crypto.GenericSigningKey
+		keys       []crypto.FalconSigner
 		firstValid uint64
 		interval   uint64
 	}
@@ -34,7 +34,7 @@ type (
 	// CommittablePublicKey  is used to create a binary representation of public keys in the merkle
 	// signature scheme.
 	CommittablePublicKey struct {
-		VerifyingKey crypto.GenericVerifyingKey
+		VerifyingKey crypto.FalconVerifier
 		Round        uint64
 	}
 )
@@ -56,9 +56,8 @@ func (k *CommittablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error)
 		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(k.keys))
 	}
 
-	signer := k.keys[pos].GetSigner()
 	ephPK := CommittablePublicKey{
-		VerifyingKey: *signer.GetVerifyingKey(),
+		VerifyingKey: *k.keys[pos].GetVerifyingKey(),
 		Round:        indexToRound(k.firstValid, k.interval, pos),
 	}
 
@@ -70,13 +69,13 @@ func (k *CommittablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error)
 // msgpack creates a compressed representation of the struct which might be varied in length, this will
 // be bad for creating SNARK
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	verifyingRawKey := e.VerifyingKey.GetVerifier().GetFixedLengthHashableRepresentation()
+	verifyingRawKey := e.VerifyingKey.GetFixedLengthHashableRepresentation()
 
 	roundAsBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundAsBytes, e.Round)
 
 	schemeAsBytes := make([]byte, 2)
-	binary.LittleEndian.PutUint16(schemeAsBytes, uint16(e.VerifyingKey.Type))
+	binary.LittleEndian.PutUint16(schemeAsBytes, CryptoPrimitivesID)
 
 	keyCommitment := make([]byte, 0, len(schemeAsBytes)+len(verifyingRawKey)+len(roundAsBytes))
 	keyCommitment = append(keyCommitment, schemeAsBytes...)

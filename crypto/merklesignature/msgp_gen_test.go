@@ -12,7 +12,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-func TestMarshalUnmarshalKeyRound(t *testing.T) {
+func TestMarshalUnmarshalKeyRoundPair(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := KeyRoundPair{}
 	bts := v.MarshalMsg(nil)
@@ -33,11 +33,11 @@ func TestMarshalUnmarshalKeyRound(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingKeyRound(t *testing.T) {
+func TestRandomizedEncodingKeyRoundPair(t *testing.T) {
 	protocol.RunEncodingTest(t, &KeyRoundPair{})
 }
 
-func BenchmarkMarshalMsgKeyRound(b *testing.B) {
+func BenchmarkMarshalMsgKeyRoundPair(b *testing.B) {
 	v := KeyRoundPair{}
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -46,7 +46,7 @@ func BenchmarkMarshalMsgKeyRound(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgKeyRound(b *testing.B) {
+func BenchmarkAppendMsgKeyRoundPair(b *testing.B) {
 	v := KeyRoundPair{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
@@ -58,7 +58,7 @@ func BenchmarkAppendMsgKeyRound(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalKeyRound(b *testing.B) {
+func BenchmarkUnmarshalKeyRoundPair(b *testing.B) {
 	v := KeyRoundPair{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()

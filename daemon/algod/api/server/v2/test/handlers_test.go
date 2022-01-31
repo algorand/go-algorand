@@ -692,13 +692,11 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Happy path", func(t *testing.T) {
 		// Create test object to append.
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.GenericSigningKey{}
-		testKey1.Type = crypto.FalconType
-		testKey1.FalconSigner.PrivateKey[0] = 100
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.GenericSigningKey{}
-		testKey2.Type = crypto.FalconType
-		testKey2.FalconSigner.PrivateKey[0] = 101
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
 		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
@@ -773,13 +771,11 @@ func TestAppendParticipationKeys(t *testing.T) {
 		}
 
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.GenericSigningKey{}
-		testKey1.Type = crypto.FalconType
-		testKey1.FalconSigner.PrivateKey[0] = 100
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.GenericSigningKey{}
-		testKey2.Type = crypto.FalconType
-		testKey2.FalconSigner.PrivateKey[0] = 101
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
 		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}

@@ -9,12 +9,12 @@ import (
 
 // The following msgp objects are implemented in this file:
 // KeyRoundPair
-//     |-----> (*) MarshalMsg
-//     |-----> (*) CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> (*) Msgsize
-//     |-----> (*) MsgIsZero
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
 //
 // Secrets
 //    |-----> (*) MarshalMsg
@@ -120,7 +120,7 @@ func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Key = nil
 			} else {
 				if (*z).Key == nil {
-					(*z).Key = new(crypto.GenericSigningKey)
+					(*z).Key = new(crypto.FalconSigner)
 				}
 				bts, err = (*z).Key.UnmarshalMsg(bts)
 				if err != nil {
@@ -167,7 +167,7 @@ func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Key = nil
 				} else {
 					if (*z).Key == nil {
-						(*z).Key = new(crypto.GenericSigningKey)
+						(*z).Key = new(crypto.FalconSigner)
 					}
 					bts, err = (*z).Key.UnmarshalMsg(bts)
 					if err != nil {
@@ -367,7 +367,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
 	var zb0001Mask uint8 /* 5 bits */
-	if (*z).ByteSignature.MsgIsZero() {
+	if (*z).Signature.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -389,7 +389,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "bsig"
 			o = append(o, 0xa4, 0x62, 0x73, 0x69, 0x67)
-			o = (*z).ByteSignature.MarshalMsg(o)
+			o = (*z).Signature.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "idx"
@@ -430,9 +430,9 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ByteSignature.UnmarshalMsg(bts)
+			bts, err = (*z).Signature.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ByteSignature")
+				err = msgp.WrapError(err, "struct-from-array", "Signature")
 				return
 			}
 		}
@@ -484,9 +484,9 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "bsig":
-				bts, err = (*z).ByteSignature.UnmarshalMsg(bts)
+				bts, err = (*z).Signature.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ByteSignature")
+					err = msgp.WrapError(err, "Signature")
 					return
 				}
 			case "idx":
@@ -527,13 +527,13 @@ func (_ *Signature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Signature) Msgsize() (s int) {
-	s = 1 + 5 + (*z).ByteSignature.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).Proof.Msgsize() + 5 + (*z).VerifyingKey.Msgsize()
+	s = 1 + 5 + (*z).Signature.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).Proof.Msgsize() + 5 + (*z).VerifyingKey.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
-	return ((*z).ByteSignature.MsgIsZero()) && ((*z).MerkleArrayIndex == 0) && ((*z).Proof.MsgIsZero()) && ((*z).VerifyingKey.MsgIsZero())
+	return ((*z).Signature.MsgIsZero()) && ((*z).MerkleArrayIndex == 0) && ((*z).Proof.MsgIsZero()) && ((*z).VerifyingKey.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
