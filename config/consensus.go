@@ -1054,12 +1054,24 @@ func initConsensusProtocols() {
 
 	Consensus[protocol.ConsensusV30] = v30
 
+	v31 := v30
+	Consensus[protocol.ConsensusV31] = v31
+	v32 := v31
+
+	// state proof key registration
+	v32.EnableStateProofKeyregCheck = true
+
+	// Maximum validity period for key registration, to prevent generating too many StateProof keys
+	v32.MaxKeyregValidPeriod = 256*(1<<16) - 1
+
+	Consensus[protocol.ConsensusV32] = v32
+
 	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
 	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v30
+	vFuture := v32
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -1082,12 +1094,6 @@ func initConsensusProtocols() {
 	vFuture.EnableBatchVerification = true
 
 	vFuture.RewardsCalculationFix = true
-
-	// stat proof key registration
-	vFuture.EnableStateProofKeyregCheck = true
-
-	// Maximum validity period for key registration, to prevent generating too many StateProof keys
-	vFuture.MaxKeyregValidPeriod = 256*(1<<16) - 1
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
