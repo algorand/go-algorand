@@ -72,7 +72,7 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 	maxAssetsPerAccount := currentConsensusParams.MaxAssetsPerAccount
 	// if the number of supported assets is unlimited, create only 1000 for the purpose of this unit test.
 	if maxAssetsPerAccount == 0 {
-		maxAssetsPerAccount = 1000
+		maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
 	}
 	for assetCreatorAssets := 0; assetCreatorAssets < maxAssetsPerAccount; assetCreatorAssets++ {
 		ap := basics.AssetParams{
@@ -102,10 +102,10 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 	maxApps := currentConsensusParams.MaxAppsCreated
 	maxOptIns := currentConsensusParams.MaxAppsOptedIn
 	if maxApps == 0 {
-		maxApps = 10
+		maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 	}
 	if maxOptIns == 0 {
-		maxOptIns = 10
+		maxOptIns = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	}
 	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
 	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens

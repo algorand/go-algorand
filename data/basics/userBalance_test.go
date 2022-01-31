@@ -192,7 +192,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 	}
 	maxAppsCreate := currentConsensusParams.MaxAppsCreated
 	if maxAppsCreate == 0 {
-		maxAppsCreate = 10
+		maxAppsCreate = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 	}
 	for appCreatorApps := 0; appCreatorApps < maxAppsCreate; appCreatorApps++ {
 		ap := AppParams{
@@ -209,7 +209,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 
 	maxAppsOptedIn := currentConsensusParams.MaxAppsOptedIn
 	if maxAppsOptedIn == 0 {
-		maxAppsOptedIn = 10
+		maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	}
 	for appHolderApps := 0; appHolderApps < maxAppsOptedIn; appHolderApps++ {
 		ls := AppLocalState{

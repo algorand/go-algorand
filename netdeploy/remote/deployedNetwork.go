@@ -591,7 +591,7 @@ func accountsNeeded(appsCount uint64, assetCount uint64, params config.Consensus
 	// code so that we'll have control on how many app/account we want to create.
 	// for now, I'm going to keep the previous max values until we have refactored this code.
 	if maxApps == 0 {
-		maxApps = 10
+		maxApps = uint64(config.Consensus[protocol.ConsensusV30].MaxAppsCreated)
 	}
 
 	if maxApps > 0 {
@@ -608,7 +608,7 @@ func accountsNeeded(appsCount uint64, assetCount uint64, params config.Consensus
 	// code so that we'll have control on how many asset/account we want to create.
 	// for now, I'm going to keep the previous max values until we have refactored this code.
 	if maxAssets == 0 {
-		maxAssets = 1000
+		maxAssets = uint64(config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount)
 	}
 
 	if maxAssets > 0 {
@@ -782,7 +782,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 		// for now, I'm going to keep the previous max values until we have refactored this code.
 		maxApps := params.MaxAppsCreated
 		if maxApps == 0 {
-			maxApps = 10
+			maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 		}
 		if bootstrappedNet.nApplications == 0 || bootstrappedNet.appsPerAcct == maxApps {
 			bootstrappedNet.txnState = protocol.PaymentTx

@@ -278,7 +278,7 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 		// code so that we'll have control on how many asset/account we want to create.
 		// for now, I'm going to keep the previous max values until we have refactored this code.
 		if maxAssetsPerAccount == 0 {
-			maxAssetsPerAccount = 1000
+			maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
 		}
 		numSlots := maxAssetsPerAccount - len(acct.Assets)
 		optInsByAddr[addr] = make(map[uint64]bool)
