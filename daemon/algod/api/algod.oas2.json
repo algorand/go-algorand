@@ -593,7 +593,7 @@
         "operationId": "DeleteParticipationKeyByID",
         "responses": {
           "200": {
-            "$ref": "#/responses/DeleteParticipationIdResponse"
+            "description": "Participation key got deleted by ID"
           },
           "400": {
             "description": "Bad Request",
@@ -2639,7 +2639,6 @@
         }
       }
     },
-
     "ParticipationKeysResponse": {
       "description": "A list of participation keys",
       "schema": {
@@ -2654,9 +2653,6 @@
       "schema": {
         "$ref": "#/definitions/ParticipationKey"
       }
-    },
-    "DeleteParticipationIdResponse" : {
-      "description": "Participation key got deleted by ID"
     },
     "PostParticipationResponse" : {
       "description": "Participation ID of the submission",
