@@ -27,7 +27,7 @@ import (
 func TestBatchVerifierSingle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// test expected success
-	bv := MakeBatchVerifier(1)
+	bv := MakeBatchVerifierWithAlgorithmDefaultSize()
 	msg := randString()
 	var s Seed
 	RandBytes(s[:])
@@ -36,8 +36,8 @@ func TestBatchVerifierSingle(t *testing.T) {
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 	require.NoError(t, bv.Verify())
 
-	// test expected failuire
-	bv = MakeBatchVerifier(1)
+	// test expected failure
+	bv = MakeBatchVerifierWithAlgorithmDefaultSize()
 	msg = randString()
 	RandBytes(s[:])
 	sigSecrets = GenerateSignatureSecrets(s)
@@ -52,7 +52,7 @@ func TestBatchVerifierBulk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	for i := 1; i < 64*2+3; i++ {
 		n := i
-		bv := MakeBatchVerifier(n)
+		bv := MakeBatchVerifier(n, true)
 		var s Seed
 
 		for i := 0; i < n; i++ {
@@ -71,7 +71,7 @@ func TestBatchVerifierBulk(t *testing.T) {
 func TestBatchVerifierBulkWithExpand(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	n := 64
-	bv := MakeBatchVerifier(1)
+	bv := MakeBatchVerifierWithAlgorithmDefaultSize()
 	var s Seed
 	RandBytes(s[:])
 
@@ -87,7 +87,7 @@ func TestBatchVerifierBulkWithExpand(t *testing.T) {
 func TestBatchVerifierWithInvalidSiganture(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	n := 64
-	bv := MakeBatchVerifier(1)
+	bv := MakeBatchVerifierWithAlgorithmDefaultSize()
 	var s Seed
 	RandBytes(s[:])
 
@@ -109,7 +109,7 @@ func TestBatchVerifierWithInvalidSiganture(t *testing.T) {
 
 func BenchmarkBatchVerifier(b *testing.B) {
 	c := makeCurve25519Secret()
-	bv := MakeBatchVerifier(1)
+	bv := MakeBatchVerifier(1, true)
 	for i := 0; i < b.N; i++ {
 		str := randString()
 		bv.EnqueueSignature(c.SignatureVerifier, str, c.Sign(str))
@@ -121,6 +121,6 @@ func BenchmarkBatchVerifier(b *testing.B) {
 
 func TestEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	bv := MakeBatchVerifierDefaultSize()
+	bv := MakeBatchVerifierWithAlgorithmDefaultSize()
 	require.Error(t, bv.Verify())
 }
