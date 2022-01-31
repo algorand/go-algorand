@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -341,6 +342,10 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 }
 
 func TestEcdsaWithSecp256r1(t *testing.T) {
+	if LogicVersion < fidoVersion {
+		return
+	}
+
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -380,9 +385,9 @@ byte 0x%s
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
-				testAcceptsWithField(t, src, 5, 6)
+				testAcceptsWithField(t, src, 5, fidoVersion)
 			} else {
-				testPanicsWithField(t, src, 5, 6)
+				testPanicsWithField(t, src, 5, fidoVersion)
 			}
 		})
 	}
@@ -422,15 +427,15 @@ ecdsa_verify Secp256r1
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
-				testAcceptsWithField(t, src, 5, 6)
+				testAcceptsWithField(t, src, 5, fidoVersion)
 			} else {
-				testRejectsWithField(t, src, 5, 6)
+				testRejectsWithField(t, src, 5, fidoVersion)
 			}
 		})
 	}
 
 	// sample sequencing: decompress + verify
-	source = fmt.Sprintf(`#pragma version 6
+	source = fmt.Sprintf(`#pragma version `+strconv.Itoa(fidoVersion)+`
 byte "testdata"
 sha512_256
 byte 0x%s
@@ -438,10 +443,10 @@ byte 0x%s
 byte 0x%s
 ecdsa_pk_decompress Secp256r1
 ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(pk))
-	ops := testProg(t, source, 6)
+	ops := testProg(t, source, fidoVersion)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(nil, &txn, 6))
+	pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(nil, &txn, fidoVersion))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -649,16 +654,18 @@ ecdsa_verify Secp256k1`
 		benchmarkEcdsa(b, source, Secp256k1)
 	})
 
-	b.Run("ecdsa_verify secp256r1", func(b *testing.B) {
-		source := `#pragma version 6
-arg 0
-arg 1
-arg 2
-arg 3
-arg 4
-ecdsa_verify Secp256r1`
-		benchmarkEcdsa(b, source, Secp256r1)
-	})
+	if LogicVersion >= fidoVersion {
+		b.Run("ecdsa_verify secp256r1", func(b *testing.B) {
+			source := `#pragma version ` + strconv.Itoa(fidoVersion) + `
+	arg 0
+	arg 1
+	arg 2
+	arg 3
+	arg 4
+	ecdsa_verify Secp256r1`
+			benchmarkEcdsa(b, source, Secp256r1)
+		})
+	}
 
 	b.Run("ecdsa_pk_decompress Secp256k1", func(b *testing.B) {
 		source := `#pragma version 5
@@ -670,15 +677,17 @@ int 1`
 		benchmarkEcdsa(b, source, Secp256k1)
 	})
 
-	b.Run("ecdsa_pk_decompress Secp256r1", func(b *testing.B) {
-		source := `#pragma version 6
-arg 5
-ecdsa_pk_decompress Secp256r1
-pop
-pop
-int 1`
-		benchmarkEcdsa(b, source, Secp256r1)
-	})
+	if LogicVersion >= fidoVersion {
+		b.Run("ecdsa_pk_decompress Secp256r1", func(b *testing.B) {
+			source := `#pragma version ` + strconv.Itoa(fidoVersion) + `
+	arg 5
+	ecdsa_pk_decompress Secp256r1
+	pop
+	pop
+	int 1`
+			benchmarkEcdsa(b, source, Secp256r1)
+		})
+	}
 
 	b.Run("ecdsa_pk_recover Secp256k1", func(b *testing.B) {
 		source := `#pragma version 5
