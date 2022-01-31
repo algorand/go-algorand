@@ -22,10 +22,13 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFeeCredit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	c, err := transactions.FeeCredit([]transactions.SignedTxnWithAD{
 		txntest.Txn{Fee: 5}.SignedTxnWithAD(),
 	}, 5)
