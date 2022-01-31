@@ -110,7 +110,7 @@ func (g *BenchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 	maxLocalSchemaEntries := config.Consensus[g.Proto].MaxLocalSchemaEntries
 	maxAppsOptedIn := config.Consensus[g.Proto].MaxAppsOptedIn
 	if maxAppsOptedIn == 0 {
-		maxAppsOptedIn = 10
+		maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	}
 
 	// this function might create too much transaction even to fit into a single block

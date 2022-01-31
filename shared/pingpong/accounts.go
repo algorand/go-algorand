@@ -678,7 +678,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 	// code so that we'll have control on how many app/account we want to create.
 	// for now, I'm going to keep the previous max values until we have refactored this code.
 	if appsPerAcct == 0 {
-		appsPerAcct = 10
+		appsPerAcct = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 	}
 
 	// create min(groupSize, maxAppsPerAcct) per account to optimize sending in batches

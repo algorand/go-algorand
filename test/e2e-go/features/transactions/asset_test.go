@@ -235,7 +235,7 @@ func TestAssetConfig(t *testing.T) {
 	// Create max number of assets, or 1000 if the number of assets are unlimitd.
 	maxAssetsCount := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
 	if maxAssetsCount == 0 {
-		maxAssetsCount = 1000
+		maxAssetsCount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
 	}
 	txids := make(map[string]string)
 	for i := 0; i < maxAssetsCount; i++ {

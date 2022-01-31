@@ -727,7 +727,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 		// code so that we'll have control on how many asset/account we want to create.
 		// for now, I'm going to keep the previous max values until we have refactored this code.
 		if maxAssets == 0 {
-			maxAssets = 1000
+			maxAssets = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
 		}
 		if bootstrappedNet.nAssets == 0 || bootstrappedNet.assetPerAcct == maxAssets {
 			if bootstrappedNet.nApplications > 0 {

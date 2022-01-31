@@ -235,10 +235,10 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 		// code so that we'll have control on how many app/account we want to create.
 		// for now, I'm going to keep the previous max values until we have refactored this code.
 		if maxAppsCreated == 0 {
-			maxAppsCreated = 10
+			maxAppsCreated = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 		}
 		if maxAppsOptedIn == 0 {
-			maxAppsOptedIn = 10
+			maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 		}
 
 		creationCost := uint64(cfg.NumApp) * proto.AppFlatParamsMinBalance * uint64(maxAppsCreated)
