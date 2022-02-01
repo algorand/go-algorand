@@ -56,7 +56,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		parts[pos] = crypto.HashObj(r.Part)
 
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
-		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
+		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature, v.EnableBatchVerification) {
 			return fmt.Errorf("signature in reveal pos %d does not verify", pos)
 		}
 	}
