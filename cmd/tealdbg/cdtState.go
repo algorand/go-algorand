@@ -732,6 +732,7 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 		stack,
 		scratch,
 		logs,
+		innerTxns,
 	}
 
 	if !s.AppState.empty() {
