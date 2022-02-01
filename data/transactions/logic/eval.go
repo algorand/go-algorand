@@ -314,12 +314,12 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 
 	credit, _ := transactions.FeeCredit(txgroup, proto.MinTxnFee)
 
-	if proto.EnableAppCostPooling {
+	if proto.EnableAppCostPooling && apps > 0 {
 		pooledApplicationBudget = new(int)
 		*pooledApplicationBudget = apps * proto.MaxAppProgramCost
 	}
 
-	if proto.EnableInnerTransactionPooling {
+	if proto.EnableInnerTransactionPooling && apps > 0 {
 		pooledAllowedInners = new(int)
 		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
 	}
@@ -495,13 +495,13 @@ const (
 	StackNone StackType = iota
 
 	// StackAny in an OpSpec shows that the op pops or yield any type
-	StackAny StackType = iota
+	StackAny
 
 	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-	StackUint64 StackType = iota
+	StackUint64
 
 	// StackBytes in an OpSpec shows that the op pops or yields a []byte
-	StackBytes StackType = iota
+	StackBytes
 )
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
@@ -551,6 +551,9 @@ var errTooManyArgs = errors.New("LogicSig has too many arguments")
 func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
+	}
+	if aid == 0 {
+		return false, nil, errors.New("0 appId in contract eval")
 	}
 	cx := EvalContext{
 		EvalParams:   params,
@@ -2272,9 +2275,9 @@ func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSp
 type txnSource int
 
 const (
-	srcGroup      txnSource = iota
-	srcInner                = iota
-	srcInnerGroup           = iota
+	srcGroup txnSource = iota
+	srcInner
+	srcInnerGroup
 )
 
 // opTxnImpl implements all of the txn variants.  Each form of txn opcode should
@@ -2566,35 +2569,38 @@ func opGitxnas(cx *EvalContext) {
 	cx.stack[last] = sv
 }
 
-func opGaidImpl(cx *EvalContext, gi int, opName string) (sv stackValue, err error) {
-	if gi >= len(cx.TxnGroup) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
+func opGaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err error) {
+	if giw >= uint64(len(cx.TxnGroup)) {
+		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, giw, len(cx.TxnGroup))
 		return
-	} else if gi > cx.GroupIndex {
+	}
+	// Is now assured smalled than a len() so fits in int.
+	gi := int(giw)
+	if gi > cx.GroupIndex {
 		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, gi)
 		return
-	} else if gi == cx.GroupIndex {
+	}
+	if gi == cx.GroupIndex {
 		err = fmt.Errorf("%s is only for accessing creatable IDs of previous txns, use `global CurrentApplicationID` instead to access the current app's creatable ID", opName)
 		return
-	} else if txn := cx.TxnGroup[gi].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
+	}
+	if txn := cx.TxnGroup[gi].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
 		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, gi)
 		return
 	}
 
-	cid, err := cx.getCreatableID(gi)
-	if cid == 0 {
-		err = fmt.Errorf("%s can't read creatable ID from txn with group index %d because the txn did not create anything", opName, gi)
-		return
+	if aid := cx.TxnGroup[gi].ApplyData.ConfigAsset; aid != 0 {
+		return stackValue{Uint: uint64(aid)}, nil
 	}
-
-	sv = stackValue{
-		Uint: cid,
+	if aid := cx.TxnGroup[gi].ApplyData.ApplicationID; aid != 0 {
+		return stackValue{Uint: uint64(aid)}, nil
 	}
+	err = fmt.Errorf("%s: index %d did not create anything", opName, gi)
 	return
 }
 
 func opGaid(cx *EvalContext) {
-	gi := int(cx.program[cx.pc+1])
+	gi := uint64(cx.program[cx.pc+1])
 	sv, err := opGaidImpl(cx, gi, "gaid")
 	if err != nil {
 		cx.err = err
@@ -2606,14 +2612,9 @@ func opGaid(cx *EvalContext) {
 
 func opGaids(cx *EvalContext) {
 	last := len(cx.stack) - 1
-
 	gi := cx.stack[last].Uint
 
-	if gi >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gaids lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
-		return
-	}
-	sv, err := opGaidImpl(cx, int(gi), "gaids")
+	sv, err := opGaidImpl(cx, gi, "gaids")
 	if err != nil {
 		cx.err = err
 		return
@@ -2655,16 +2656,6 @@ func (cx *EvalContext) getApplicationAddress(app basics.AppIndex) basics.Address
 	}
 
 	return appAddr
-}
-
-func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
-	if aid := cx.TxnGroup[groupIndex].ApplyData.ConfigAsset; aid != 0 {
-		return uint64(aid), nil
-	}
-	if aid := cx.TxnGroup[groupIndex].ApplyData.ApplicationID; aid != 0 {
-		return uint64(aid), nil
-	}
-	return 0, fmt.Errorf("Index %d did not create anything", groupIndex)
 }
 
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
@@ -3044,7 +3035,7 @@ func opGloadss(cx *EvalContext) {
 
 	gi := cx.stack[prev].Uint
 	if gi >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gloads lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
+		cx.err = fmt.Errorf("gloadss lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
 		return
 	}
 	scratchIdx := cx.stack[last].Uint
@@ -3967,7 +3958,7 @@ func opAcctParamsGet(cx *EvalContext) {
 func opLog(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	if len(cx.Txn.EvalDelta.Logs) == MaxLogCalls {
+	if len(cx.Txn.EvalDelta.Logs) >= MaxLogCalls {
 		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
 		return
 	}
@@ -4546,5 +4537,6 @@ func opBase64Decode(cx *EvalContext) {
 	if encodingField == StdEncoding {
 		encoding = base64.StdEncoding
 	}
+	encoding = encoding.Strict()
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
 }

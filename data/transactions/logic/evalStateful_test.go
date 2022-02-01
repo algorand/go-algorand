@@ -1010,7 +1010,7 @@ intc_2 // 1
 	ops := testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
-	_, err := EvalApp(ops.Program, 0, 0, now)
+	_, err := EvalApp(ops.Program, 0, 888, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset_holding_get field 2")
 
@@ -1035,7 +1035,7 @@ intc_1
 	ops = testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
-	_, err = EvalApp(ops.Program, 0, 0, now)
+	_, err = EvalApp(ops.Program, 0, 888, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset_params_get field 32")
 

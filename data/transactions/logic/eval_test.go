@@ -1649,12 +1649,12 @@ func TestGaid(t *testing.T) {
 	ep.Ledger = MakeLedger(nil)
 
 	// should fail when no creatable was created
-	_, err := EvalApp(check0.Program, 1, 0, ep)
+	_, err := EvalApp(check0.Program, 1, 888, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "the txn did not create anything")
+	require.Contains(t, err.Error(), "did not create anything")
 
 	ep.TxnGroup[0].ApplyData.ConfigAsset = 100
-	pass, err := EvalApp(check0.Program, 1, 0, ep)
+	pass, err := EvalApp(check0.Program, 1, 888, ep)
 	if !pass || err != nil {
 		t.Log(ep.Trace.String())
 	}
@@ -1663,18 +1663,18 @@ func TestGaid(t *testing.T) {
 
 	// should fail when accessing future transaction in group
 	check2 := testProg(t, "gaid 2; int 0; >", 4)
-	_, err = EvalApp(check2.Program, 1, 0, ep)
+	_, err = EvalApp(check2.Program, 1, 888, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
-	_, err = EvalApp(check0.Program, 0, 0, ep)
+	_, err = EvalApp(check0.Program, 0, 888, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalApp(check0.Program, 1, 0, ep)
+	_, err = EvalApp(check0.Program, 1, 888, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
@@ -4543,9 +4543,10 @@ func TestPcDetails(t *testing.T) {
 			ops := testProg(t, test.source, LogicVersion)
 			ep, _, _ := makeSampleEnv()
 
-			pass, cx, err := EvalContract(ops.Program, 0, 0, ep)
+			pass, cx, err := EvalContract(ops.Program, 0, 888, ep)
 			require.Error(t, err)
 			require.False(t, pass)
+			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
 			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
 
@@ -4646,6 +4647,15 @@ By Herman Melville`, "",
 		{"SQ=", "URLEncoding", "", "byte 3"},
 		{"SQ===", "StdEncoding", "", "byte 4"},
 		{"SQ===", "URLEncoding", "", "byte 4"},
+
+		// Strict decoding. "Y" is normally encoded as "WQ==", as confirmed by the first test
+		{"WQ==", "StdEncoding", "Y", ""},
+		// When encoding one byte, the Y (90) becomes a 6bit value (the W) and a
+		// 2bit value (the first 2 bits of the Q. Q is the 16th b64 digit, it is
+		// 0b010000. For encoding Y, only those first two bits matter. In
+		// Strict() mode, the rest must be 0s. So using R (0b010001) should
+		// fail.
+		{"WR==", "StdEncoding", "Y", "byte 2"},
 	}
 
 	template := `byte 0x%s; byte 0x%s; base64_decode %s; ==`
