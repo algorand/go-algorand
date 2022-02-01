@@ -346,7 +346,7 @@ const v6Nonsense = v5Nonsense + `
 itxn_next
 `
 
-// TODO: finalize this when FIDO2 accepted:
+// TODO: finalize this when FIDO2 accepted
 const v7Nonsense = v6Nonsense + `
 base64_decode URLEncoding
 json_ref JSONUint64
