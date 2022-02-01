@@ -2644,6 +2644,10 @@
       "schema": {
         "type": "object",
         "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+          },
           "asset-holding": {
             "description": "\\[asset\\] Details about the asset held by this account.\n\nThe raw account uses `AssetHolding` for this type.",
             "$ref": "#/definitions/AssetHolding"
@@ -2660,6 +2664,10 @@
       "schema": {
         "type": "object",
         "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+            },
           "app-local-state": {
             "description": "\\[appl\\] the application local data stored in this account.\n\nThe raw account uses `AppLocalState` for this type.",
             "$ref": "#/definitions/ApplicationLocalState"

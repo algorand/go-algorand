@@ -233,6 +233,10 @@
                 },
                 "created-app": {
                   "$ref": "#/components/schemas/ApplicationParams"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer"
                 }
               },
               "type": "object"
@@ -251,6 +255,10 @@
                 },
                 "created-asset": {
                   "$ref": "#/components/schemas/AssetParams"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer"
                 }
               },
               "type": "object"
@@ -1853,6 +1861,10 @@
                     },
                     "created-app": {
                       "$ref": "#/components/schemas/ApplicationParams"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer"
                     }
                   },
                   "type": "object"
@@ -1866,6 +1878,10 @@
                     },
                     "created-app": {
                       "$ref": "#/components/schemas/ApplicationParams"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer"
                     }
                   },
                   "type": "object"
@@ -1975,6 +1991,10 @@
                     },
                     "created-asset": {
                       "$ref": "#/components/schemas/AssetParams"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer"
                     }
                   },
                   "type": "object"
@@ -1988,6 +2008,10 @@
                     },
                     "created-asset": {
                       "$ref": "#/components/schemas/AssetParams"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer"
                     }
                   },
                   "type": "object"

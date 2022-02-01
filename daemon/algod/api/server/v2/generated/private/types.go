@@ -540,6 +540,9 @@ type AccountApplicationResponse struct {
 
 	// Stores the global information associated with an application.
 	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// The round for which this information is relevant.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // AccountAssetResponse defines model for AccountAssetResponse.
@@ -558,6 +561,9 @@ type AccountAssetResponse struct {
 	// Definition:
 	// data/transactions/asset.go : AssetParams
 	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
+
+	// The round for which this information is relevant.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // AccountResponse defines model for AccountResponse.
