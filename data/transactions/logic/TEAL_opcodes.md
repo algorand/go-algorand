@@ -64,8 +64,6 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 | Index | Name | Notes |
 | --- | --- | --- |
 | 0 | Secp256k1 | secp256k1 curve |
-| 1 | Secp256r1 | secp256r1 curve |
-
 
 The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.
 
@@ -83,8 +81,6 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 | Index | Name | Notes |
 | --- | --- | --- |
 | 0 | Secp256k1 | secp256k1 curve |
-| 1 | Secp256r1 | secp256r1 curve |
-
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
 
