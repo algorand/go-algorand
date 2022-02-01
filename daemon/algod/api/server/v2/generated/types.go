@@ -46,7 +46,7 @@ type Account struct {
 
 	// \[apar\] parameters of assets created by this account.
 	//
-	// Note: the raw account uses `map[int] -> Asset` for this type.
+	// Note: the raw account uses `map[int] -> AssetParams` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
 	// MicroAlgo balance required by the account.
@@ -80,6 +80,18 @@ type Account struct {
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
+
+	// The count of all application local data (AppLocalState objects) stored in this account.
+	TotalAppsLocalState *uint64 `json:"total-apps-local-state,omitempty"`
+
+	// The count of all assets (AssetHolding objects) held by this account.
+	TotalAssets *uint64 `json:"total-assets,omitempty"`
+
+	// The count of all apps (AppParams objects) created by this account.
+	TotalCreatedApps *uint64 `json:"total-created-apps,omitempty"`
+
+	// The count of all assets (AssetParams objects) created by this account.
+	TotalCreatedAssets *uint64 `json:"total-created-assets,omitempty"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
@@ -520,6 +532,34 @@ type TxId string
 // TxType defines model for tx-type.
 type TxType string
 
+// AccountApplicationResponse defines model for AccountApplicationResponse.
+type AccountApplicationResponse struct {
+
+	// Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// Stores the global information associated with an application.
+	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+}
+
+// AccountAssetResponse defines model for AccountAssetResponse.
+type AccountAssetResponse struct {
+
+	// Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
+
+	// AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
+}
+
 // AccountResponse defines model for AccountResponse.
 type AccountResponse Account
 
@@ -709,6 +749,23 @@ type VersionsResponse Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+
+	// List of account information to exclude
+	Exclude *[]string `json:"exclude,omitempty"`
+}
+
+// AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
+type AccountApplicationInformationParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+}
+
+// AccountAssetInformationParams defines parameters for AccountAssetInformation.
+type AccountAssetInformationParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`

@@ -223,6 +223,42 @@
       }
     },
     "responses": {
+      "AccountApplicationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "app-local-state": {
+                  "$ref": "#/components/schemas/ApplicationLocalState"
+                },
+                "created-app": {
+                  "$ref": "#/components/schemas/ApplicationParams"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "description": "AccountApplicationResponse describes the application data for a specific account and application ID."
+      },
+      "AccountAssetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "asset-holding": {
+                  "$ref": "#/components/schemas/AssetHolding"
+                },
+                "created-asset": {
+                  "$ref": "#/components/schemas/AssetParams"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "description": "AccountAssetResponse describes the asset data for a specific account and asset ID."
+      },
       "AccountResponse": {
         "content": {
           "application/json": {
@@ -230,7 +266,8 @@
               "$ref": "#/components/schemas/Account"
             }
           }
-        }
+        },
+        "description": "AccountResponse wraps the Account type in a response."
       },
       "ApplicationResponse": {
         "content": {
@@ -716,7 +753,7 @@
             "type": "array"
           },
           "created-assets": {
-            "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> Asset` for this type.",
+            "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> AssetParams` for this type.",
             "items": {
               "$ref": "#/components/schemas/Asset"
             },
@@ -757,6 +794,22 @@
           "status": {
             "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
             "type": "string"
+          },
+          "total-apps-local-state": {
+            "description": "The count of all application local data (AppLocalState objects) stored in this account.",
+            "type": "integer"
+          },
+          "total-assets": {
+            "description": "The count of all assets (AssetHolding objects) held by this account.",
+            "type": "integer"
+          },
+          "total-created-apps": {
+            "description": "The count of all apps (AppParams objects) created by this account.",
+            "type": "integer"
+          },
+          "total-created-assets": {
+            "description": "The count of all assets (AssetParams objects) created by this account.",
+            "type": "integer"
           }
         },
         "required": [
@@ -1662,6 +1715,25 @@
               "pattern": "[A-Z0-9]{58}",
               "type": "string"
             }
+          },
+          {
+            "description": "List of account information to exclude",
+            "explode": false,
+            "in": "query",
+            "name": "exclude",
+            "schema": {
+              "items": {
+                "enum": [
+                  "created-assets",
+                  "created-apps",
+                  "assets",
+                  "apps-local-state"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
           }
         ],
         "responses": {
@@ -1677,7 +1749,8 @@
                   "$ref": "#/components/schemas/Account"
                 }
               }
-            }
+            },
+            "description": "AccountResponse wraps the Account type in a response."
           },
           "400": {
             "content": {
@@ -1730,6 +1803,250 @@
           }
         },
         "summary": "Get account information."
+      }
+    },
+    "/v2/accounts/{address}/applications/{application-id}": {
+      "get": {
+        "description": "Given a specific account public key, this call returns the account's application local state and application params (if they exist) about a given application ID",
+        "operationId": "AccountApplicationInformation",
+        "parameters": [
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "An account public key",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string"
+            }
+          },
+          {
+            "description": "An application identifier",
+            "in": "path",
+            "name": "application-id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "app-local-state": {
+                      "$ref": "#/components/schemas/ApplicationLocalState"
+                    },
+                    "created-app": {
+                      "$ref": "#/components/schemas/ApplicationParams"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "app-local-state": {
+                      "$ref": "#/components/schemas/ApplicationLocalState"
+                    },
+                    "created-app": {
+                      "$ref": "#/components/schemas/ApplicationParams"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "AccountApplicationResponse describes the application data for a specific account and application ID."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed address or application ID"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get account information about a given app."
+      }
+    },
+    "/v2/accounts/{address}/assets/{asset-id}": {
+      "get": {
+        "description": "Given a specific account public key, this call returns the account's asset holding and asset params (if they exist) about a given asset ID",
+        "operationId": "AccountAssetInformation",
+        "parameters": [
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "An account public key",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string"
+            }
+          },
+          {
+            "description": "An asset identifier",
+            "in": "path",
+            "name": "asset-id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "asset-holding": {
+                      "$ref": "#/components/schemas/AssetHolding"
+                    },
+                    "created-asset": {
+                      "$ref": "#/components/schemas/AssetParams"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "asset-holding": {
+                      "$ref": "#/components/schemas/AssetHolding"
+                    },
+                    "created-asset": {
+                      "$ref": "#/components/schemas/AssetParams"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "AccountAssetResponse describes the asset data for a specific account and asset ID."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed address or asset ID"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get account information about a given asset."
       }
     },
     "/v2/accounts/{address}/transactions/pending": {
