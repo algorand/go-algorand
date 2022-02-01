@@ -120,7 +120,7 @@ const tealErrorID = "tealErrorID"
 const appGlobalObjID = "appGlobalObjID"
 const appLocalsObjID = "appLocalsObjID"
 const txnArrayFieldObjID = "txnArrayField"
-const logsObjID = "logObjID"
+const logsObjID = "logsObjID"
 const innerTxnsObjID = "innerTxnsObjID"
 
 type objectDescFn func(s *cdtState, preview bool) []cdt.RuntimePropertyDescriptor
