@@ -901,6 +901,16 @@ func opSHA256(cx *EvalContext) {
 	cx.stack[last].Bytes = hash[:]
 }
 
+// The NIST SHA3-256 is implemented for compatability with ICON
+func opSHA3_256(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	hasher := sha3.New256()
+	hasher.Write(cx.stack[last].Bytes)
+	hv := make([]byte, 0, hasher.Size())
+	hv = hasher.Sum(hv)
+	cx.stack[last].Bytes = hv
+}
+
 // The Keccak256 variant of SHA-3 is implemented for compatibility with Ethereum
 func opKeccak256(cx *EvalContext) {
 	last := len(cx.stack) - 1

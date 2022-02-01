@@ -1154,6 +1154,15 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - **Cost**: 10
 - LogicSigVersion >= 4
 
+## sha3_256
+
+- Opcode: 0x96
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- SHA3_256 hash of value X, yields [32]byte
+- **Cost**: 130
+   - LogicSigVersion >= 6
+
 ## b+
 
 - Opcode: 0xa0

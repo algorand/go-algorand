@@ -28,6 +28,7 @@ var opDocByName = map[string]string{
 	"sha256":              "SHA256 hash of value X, yields [32]byte",
 	"keccak256":           "Keccak256 hash of value X, yields [32]byte",
 	"sha512_256":          "SHA512_256 hash of value X, yields [32]byte",
+	"sha3_256":            "SHA3_256 hash of value X, yields [32]byte",
 	"ed25519verify":       "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y => [*... stack*, X, Y]",
@@ -298,7 +299,7 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},

@@ -109,6 +109,7 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | Op | Description |
 | --- | --- |
 | `sha256` | SHA256 hash of value X, yields [32]byte |
+| `sha3_256`| SHA3_256 hash of value X, yields [32]byte |
 | `keccak256` | Keccak256 hash of value X, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value X, yields [32]byte |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
