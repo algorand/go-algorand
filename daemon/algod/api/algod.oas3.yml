@@ -834,7 +834,11 @@
           "pending-rewards",
           "rewards",
           "round",
-          "status"
+          "status",
+          "total-apps-local-state",
+          "total-assets",
+          "total-created-apps",
+          "total-created-assets"
         ],
         "type": "object"
       },
@@ -1731,23 +1735,12 @@
             }
           },
           {
-            "description": "List of account information to exclude",
-            "explode": false,
+            "description": "Whether to exclude asset and application data from account information (asset holding and application local data, created asset and application parameters)",
             "in": "query",
-            "name": "exclude",
+            "name": "exclude-creatable-data",
             "schema": {
-              "items": {
-                "enum": [
-                  "created-assets",
-                  "created-apps",
-                  "assets",
-                  "apps-local-state"
-                ],
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "style": "form"
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

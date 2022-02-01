@@ -44,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-codec/codec"
 )
 
 const maxTealSourceBytes = 1e5
@@ -259,8 +260,12 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
 	}
 
-	myLedger := v2.Node.Ledger()
+	// should we skip fetching apps and assets?
+	if params.ExcludeCreatableData != nil && *params.ExcludeCreatableData {
+		return v2.basicAccountInformation(ctx, addr, handle, contentType)
+	}
 
+	myLedger := v2.Node.Ledger()
 	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupLatest(addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -301,6 +306,70 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
 
+	response := generated.AccountResponse(account)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// basicAccountInformation handles the case when no resources (assets or apps) are requested.
+func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Address, handle codec.Handle, contentType string) error {
+	myLedger := v2.Node.Ledger()
+	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupAccount(myLedger.Latest(), addr)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	consensus, err := myLedger.ConsensusParams(lastRound)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
+	}
+
+	var apiParticipation *generated.AccountParticipation
+	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+		apiParticipation = &generated.AccountParticipation{
+			VoteParticipationKey:      record.VoteID[:],
+			SelectionParticipationKey: record.SelectionID[:],
+			VoteFirstValid:            uint64(record.VoteFirstValid),
+			VoteLastValid:             uint64(record.VoteLastValid),
+			VoteKeyDilution:           uint64(record.VoteKeyDilution),
+		}
+	}
+
+	pendingRewards, overflowed := basics.OSubA(record.MicroAlgos, amountWithoutPendingRewards)
+	if overflowed {
+		return internalError(ctx, errors.New("overflow on pending reward calculation"), errInternalFailure, v2.Log)
+	}
+
+	account := generated.Account{
+		SigType:                     nil,
+		Round:                       uint64(lastRound),
+		Address:                     addr.String(),
+		Amount:                      record.MicroAlgos.Raw,
+		PendingRewards:              pendingRewards.Raw,
+		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
+		Rewards:                     record.RewardedMicroAlgos.Raw,
+		Status:                      record.Status.String(),
+		RewardBase:                  &record.RewardsBase,
+		Participation:               apiParticipation,
+		TotalCreatedAssets:          record.TotalAssetParams,
+		TotalCreatedApps:            record.TotalAppParams,
+		TotalAssets:                 record.TotalAssets,
+		AuthAddr:                    addrOrNil(record.AuthAddr),
+		TotalAppsLocalState:         record.TotalAppLocalStates,
+		AppsTotalSchema: &generated.ApplicationStateSchema{
+			NumByteSlice: record.TotalAppSchema.NumByteSlice,
+			NumUint:      record.TotalAppSchema.NumUint,
+		},
+		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
+		MinBalance:          record.MinBalance(&consensus).Raw,
+	}
 	response := generated.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)
 }

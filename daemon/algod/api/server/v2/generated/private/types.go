@@ -82,16 +82,16 @@ type Account struct {
 	Status string `json:"status"`
 
 	// The count of all application local data (AppLocalState objects) stored in this account.
-	TotalAppsLocalState *uint64 `json:"total-apps-local-state,omitempty"`
+	TotalAppsLocalState uint64 `json:"total-apps-local-state"`
 
 	// The count of all assets (AssetHolding objects) held by this account.
-	TotalAssets *uint64 `json:"total-assets,omitempty"`
+	TotalAssets uint64 `json:"total-assets"`
 
 	// The count of all apps (AppParams objects) created by this account.
-	TotalCreatedApps *uint64 `json:"total-created-apps,omitempty"`
+	TotalCreatedApps uint64 `json:"total-created-apps"`
 
 	// The count of all assets (AssetParams objects) created by this account.
-	TotalCreatedAssets *uint64 `json:"total-created-assets,omitempty"`
+	TotalCreatedAssets uint64 `json:"total-created-assets"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
