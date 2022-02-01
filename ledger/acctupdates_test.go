@@ -650,7 +650,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		return
 	}
 	// we want to fake the N to reflect the time it took us, if we were to wait an entire second.
-	singleIterationTime := deltaTime / time.Duration((uint64(b.N) - initialRounds))
+	singleIterationTime := deltaTime / time.Duration(uint64(b.N)-initialRounds)
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)
@@ -690,6 +690,10 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -766,6 +770,10 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 			ml.trackers.waitAccountsWriting()
 		}
 	}
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
 }
 
 // The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
@@ -1309,6 +1317,10 @@ func TestCompactDeltas(t *testing.T) {
 func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	protocolVersion := protocol.ConsensusCurrentVersion
 	proto := config.Consensus[protocolVersion]
 
@@ -1399,6 +1411,9 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
 	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.cachedDBRound)
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
 }
 
 // TestAcctUpdatesSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
