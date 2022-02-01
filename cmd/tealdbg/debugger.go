@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -367,6 +368,7 @@ func (s *session) GetStates(st *logic.DebugState) AppState {
 
 	if len(changes.InnerTxns) > 0 {
 		newStates.innerTxns = changes.InnerTxns
+		log.Printf("I am ITXN: %v\n", changes.InnerTxns)
 	}
 
 	return newStates

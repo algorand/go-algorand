@@ -151,6 +151,14 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 			if len(s.txnGroup) > 0 {
 				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, preview), nil
 			}
+		} else if idx, ok := decodeInnerTxnID(objID); ok {
+			if idx >= len(s.innerTxns) || idx < 0 {
+				err = fmt.Errorf("invalid group idx: %d", idx)
+				return
+			}
+			if len(s.txnGroup) > 0 {
+				return makeTxnImpl(&s.innerTxns[idx].Txn, idx, preview), nil
+			}
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
 			switch parentObjID {
 			case stackObjID:
@@ -376,6 +384,7 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 			field == int(logic.CreatedApplicationID) ||
 			field == int(logic.CreatedAssetID) ||
 			field == int(logic.Logs) ||
+			field == int(logic.LastLog) ||
 			field == int(logic.NumLogs) {
 			continue
 		}
@@ -553,14 +562,28 @@ func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 }
 
 var gtxnObjIDPrefix = fmt.Sprintf("%s_gid_", gtxnObjID)
+var innerTxnObjIDPrefix = fmt.Sprintf("%s_id_", innerTxnsObjID)
 
 func encodeGroupTxnID(groupIndex int) string {
 	return gtxnObjIDPrefix + strconv.Itoa(groupIndex)
 }
 
+func encodeInnerTxnID(groupIndex int) string {
+	return innerTxnObjIDPrefix + strconv.Itoa(groupIndex)
+}
+
 func decodeGroupTxnID(objID string) (int, bool) {
 	if strings.HasPrefix(objID, gtxnObjIDPrefix) {
 		if val, err := strconv.ParseInt(objID[len(gtxnObjIDPrefix):], 10, 32); err == nil {
+			return int(val), true
+		}
+	}
+	return 0, false
+}
+
+func decodeInnerTxnID(objID string) (int, bool) {
+	if strings.HasPrefix(objID, innerTxnObjIDPrefix) {
+		if val, err := strconv.ParseInt(objID[len(innerTxnObjIDPrefix):], 10, 32); err == nil {
 			return int(val), true
 		}
 	}
@@ -998,7 +1021,7 @@ func makeLogsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescrip
 func makeInnerTxnsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(s.innerTxns))
 	for i := 0; i < len(s.innerTxns); i++ {
-		item := makeObject(strconv.Itoa(i), encodeGroupTxnID(i))
+		item := makeObject(strconv.Itoa(i), encodeInnerTxnID(i))
 		if preview {
 			txnPreview := makeTxnPreview(s.innerTxns, i)
 			item.Value.Preview = &txnPreview
