@@ -165,6 +165,22 @@
             "required": true
           },
           {
+            "name": "exclude",
+            "description": "List of account information to exclude",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "created-assets",
+                "created-apps",
+                "assets",
+                "apps-local-state"
+                ]
+            }
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -174,6 +190,160 @@
           },
           "400": {
             "description": "Malformed address",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
+        }
+      ]
+    },
+    "/v2/accounts/{address}/assets/{asset-id}": {
+      "get": {
+        "description": "Given a specific account public key, this call returns the account's asset holding and asset params (if they exist) about a given asset ID",
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information about a given asset.",
+        "operationId": "AccountAssetInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "An asset identifier",
+            "name": "asset-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountAssetResponse"
+          },
+          "400": {
+            "description": "Malformed address or asset ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
+        }
+      ]
+    },
+    "/v2/accounts/{address}/applications/{application-id}": {
+      "get": {
+        "description": "Given a specific account public key, this call returns the account's application local state and application params (if they exist) about a given application ID",
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information about a given app.",
+        "operationId": "AccountApplicationInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountApplicationResponse"
+          },
+          "400": {
+            "description": "Malformed address or application ID",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1455,6 +1625,10 @@
             "$ref": "#/definitions/ApplicationLocalState"
           }
         },
+        "total-apps-local-state": {
+          "description": "The count of all application local data (AppLocalState objects) stored in this account.",
+          "type": "integer"
+        },
         "apps-total-schema": {
           "description": "\\[tsch\\] stores the sum of all of the local schemas and global schemas in this account.\n\nNote: the raw account uses `StateSchema` for this type.",
           "$ref": "#/definitions/ApplicationStateSchema"
@@ -1470,6 +1644,10 @@
             "$ref": "#/definitions/AssetHolding"
           }
         },
+        "total-assets": {
+          "description": "The count of all assets (AssetHolding objects) held by this account.",
+          "type": "integer"
+        },
         "created-apps": {
           "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -\u003e AppParams` for this type.",
           "type": "array",
@@ -1477,12 +1655,20 @@
             "$ref": "#/definitions/Application"
           }
         },
+        "total-created-apps": {
+          "description": "The count of all apps (AppParams objects) created by this account.",
+          "type": "integer"
+        },
         "created-assets": {
-          "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e Asset` for this type.",
+          "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e AssetParams` for this type.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Asset"
           }
+        },
+        "total-created-assets": {
+          "description": "The count of all assets (AssetParams objects) created by this account.",
+          "type": "integer"
         },
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
@@ -2448,8 +2634,41 @@
   },
   "responses": {
     "AccountResponse": {
+      "description": "AccountResponse wraps the Account type in a response.",
       "schema": {
         "$ref": "#/definitions/Account"
+      }
+    },
+    "AccountAssetResponse": {
+      "description": "AccountAssetResponse describes the asset data for a specific account and asset ID.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "asset-holding": {
+            "description": "\\[asset\\] Details about the asset held by this account.\n\nThe raw account uses `AssetHolding` for this type.",
+            "$ref": "#/definitions/AssetHolding"
+          },
+          "created-asset": {
+            "description": "\\[apar\\] parameters of the asset created by this account.\n\nThe raw account uses `AssetParams` for this type.",
+            "$ref": "#/definitions/AssetParams"
+          }
+        }
+      }
+    },
+    "AccountApplicationResponse": {
+      "description": "AccountApplicationResponse describes the application data for a specific account and application ID.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "app-local-state": {
+            "description": "\\[appl\\] the application local data stored in this account.\n\nThe raw account uses `AppLocalState` for this type.",
+            "$ref": "#/definitions/ApplicationLocalState"
+          },
+          "created-app": {
+            "description": "\\[appp\\] parameters of the application created by this account including app global data.\n\nThe raw account uses `AppParams` for this type.",
+            "$ref": "#/definitions/ApplicationParams"
+          }
+        }
       }
     },
     "BlockResponse": {
