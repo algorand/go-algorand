@@ -4307,6 +4307,55 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 	return outer
 }
 
+func testEvaluationWithField(t *testing.T, program string, introducedOpcode, introducedField uint64, tester evalTester) error {
+	t.Helper()
+	var outer error
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Helper()
+			if v < introducedOpcode {
+				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
+				return
+			} else if v < introducedField {
+				testProg(t, obfuscate(program), v, expect{0, "...available in version..."})
+				return
+			}
+			ops := testProg(t, program, v)
+			// Programs created with a previous assembler
+			// should still operate properly with future
+			// EvalParams, so try all forward versions.
+			for lv := v; lv <= AssemblerMaxVersion; lv++ {
+				t.Run(fmt.Sprintf("lv=%d", lv), func(t *testing.T) {
+					sb := strings.Builder{}
+					err := Check(ops.Program, defaultEvalParamsWithVersion(&sb, nil, lv))
+					if err != nil {
+						t.Log(hex.EncodeToString(ops.Program))
+						t.Log(sb.String())
+					}
+					require.NoError(t, err)
+					var txn transactions.SignedTxn
+					txn.Lsig.Logic = ops.Program
+					sb = strings.Builder{}
+					pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(&sb, &txn, lv))
+					ok := tester(pass, err)
+					if !ok {
+						t.Log(hex.EncodeToString(ops.Program))
+						t.Log(sb.String())
+						t.Log(err)
+					}
+					require.True(t, ok)
+					isNotPanic(t, err) // Never want a Go level panic.
+					if err != nil {
+						// Use wisely. This could probably return any of the concurrent runs' errors.
+						outer = err
+					}
+				})
+			}
+		})
+	}
+	return outer
+}
+
 func testAccepts(t *testing.T, program string, introduced uint64) {
 	t.Helper()
 	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
@@ -4323,6 +4372,27 @@ func testRejects(t *testing.T, program string, introduced uint64) {
 func testPanics(t *testing.T, program string, introduced uint64) error {
 	t.Helper()
 	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+		// TEAL panic! not just reject at exit
+		return !pass && err != nil
+	})
+}
+
+func testAcceptsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
+	t.Helper()
+	testEvaluationWithField(t, program, introducedOpcode, introducedField, func(pass bool, err error) bool {
+		return pass && err == nil
+	})
+}
+func testRejectsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
+	t.Helper()
+	testEvaluationWithField(t, program, introducedOpcode, introducedField, func(pass bool, err error) bool {
+		// Returned False, but didn't panic
+		return !pass && err == nil
+	})
+}
+func testPanicsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) error {
+	t.Helper()
+	return testEvaluationWithField(t, program, introducedOpcode, introducedField, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
 	})

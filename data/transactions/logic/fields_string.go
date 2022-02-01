@@ -214,12 +214,13 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[Secp256k1-0]
-	_ = x[invalidEcdsaCurve-1]
+	_ = x[Secp256r1-1]
+	_ = x[invalidEcdsaCurve-2]
 }
 
-const _EcdsaCurve_name = "Secp256k1invalidEcdsaCurve"
+const _EcdsaCurve_name = "Secp256k1Secp256r1invalidEcdsaCurve"
 
-var _EcdsaCurve_index = [...]uint8{0, 9, 26}
+var _EcdsaCurve_index = [...]uint8{0, 9, 18, 35}
 
 func (i EcdsaCurve) String() string {
 	if i < 0 || i >= EcdsaCurve(len(_EcdsaCurve_index)-1) {

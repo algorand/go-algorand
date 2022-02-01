@@ -18,6 +18,8 @@ package logic
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -2656,6 +2658,57 @@ func leadingZeros(size int, b *big.Int) ([]byte, error) {
 	return buf, nil
 }
 
+// polynomial returns x³ - 3x + b.
+//
+// TODO: remove this when go-algorand is updated to go 1.15+
+func polynomial(curve *elliptic.CurveParams, x *big.Int) *big.Int {
+	x3 := new(big.Int).Mul(x, x)
+	x3.Mul(x3, x)
+
+	threeX := new(big.Int).Lsh(x, 1)
+	threeX.Add(threeX, x)
+
+	x3.Sub(x3, threeX)
+	x3.Add(x3, curve.B)
+	x3.Mod(x3, curve.P)
+
+	return x3
+}
+
+// unmarshalCompressed converts a point, serialized by MarshalCompressed, into an x, y pair.
+// It is an error if the point is not in compressed form or is not on the curve.
+// On error, x = nil.
+//
+// TODO: remove this and replace usage with elliptic.UnmarshallCompressed when go-algorand is
+// updated to go 1.15+
+func unmarshalCompressed(curve elliptic.Curve, data []byte) (x, y *big.Int) {
+	byteLen := (curve.Params().BitSize + 7) / 8
+	if len(data) != 1+byteLen {
+		return nil, nil
+	}
+	if data[0] != 2 && data[0] != 3 { // compressed form
+		return nil, nil
+	}
+	p := curve.Params().P
+	x = new(big.Int).SetBytes(data[1:])
+	if x.Cmp(p) >= 0 {
+		return nil, nil
+	}
+	// y² = x³ - 3x + b
+	y = polynomial(curve.Params(), x)
+	y = y.ModSqrt(y, p)
+	if y == nil {
+		return nil, nil
+	}
+	if byte(y.Bit(0)) != data[0]&1 {
+		y.Neg(y).Mod(y, p)
+	}
+	if !curve.IsOnCurve(x, y) {
+		return nil, nil
+	}
+	return
+}
+
 func opEcdsaVerify(cx *EvalContext) {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
@@ -2664,7 +2717,7 @@ func opEcdsaVerify(cx *EvalContext) {
 		return
 	}
 
-	if fs.field != Secp256k1 {
+	if fs.field != Secp256k1 && fs.field != Secp256r1 {
 		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
 		return
 	}
@@ -2681,15 +2734,33 @@ func opEcdsaVerify(cx *EvalContext) {
 	sigR := cx.stack[fourth].Bytes
 	msg := cx.stack[fifth].Bytes
 
+	if len(msg) != 32 {
+		cx.err = fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
+		return
+	}
+
 	x := new(big.Int).SetBytes(pkX)
 	y := new(big.Int).SetBytes(pkY)
-	pubkey := secp256k1.S256().Marshal(x, y)
 
-	signature := make([]byte, 0, len(sigR)+len(sigS))
-	signature = append(signature, sigR...)
-	signature = append(signature, sigS...)
+	var result bool
+	if fs.field == Secp256k1 {
+		signature := make([]byte, 0, len(sigR)+len(sigS))
+		signature = append(signature, sigR...)
+		signature = append(signature, sigS...)
 
-	result := secp256k1.VerifySignature(pubkey, msg, signature)
+		pubkey := secp256k1.S256().Marshal(x, y)
+		result = secp256k1.VerifySignature(pubkey, msg, signature)
+	} else if fs.field == Secp256r1 {
+		r := new(big.Int).SetBytes(sigR)
+		s := new(big.Int).SetBytes(sigS)
+
+		pubkey := ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     x,
+			Y:     y,
+		}
+		result = ecdsa.Verify(&pubkey, msg, r, s)
+	}
 
 	if result {
 		cx.stack[fifth].Uint = 1
@@ -2708,7 +2779,7 @@ func opEcdsaPkDecompress(cx *EvalContext) {
 		return
 	}
 
-	if fs.field != Secp256k1 {
+	if fs.field != Secp256k1 && fs.field != Secp256r1 {
 		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
 		return
 	}
@@ -2716,10 +2787,19 @@ func opEcdsaPkDecompress(cx *EvalContext) {
 	last := len(cx.stack) - 1 // compressed PK
 
 	pubkey := cx.stack[last].Bytes
-	x, y := secp256k1.DecompressPubkey(pubkey)
-	if x == nil {
-		cx.err = fmt.Errorf("invalid pubkey")
-		return
+	var x, y *big.Int
+	if fs.field == Secp256k1 {
+		x, y = secp256k1.DecompressPubkey(pubkey)
+		if x == nil {
+			cx.err = fmt.Errorf("invalid pubkey")
+			return
+		}
+	} else if fs.field == Secp256r1 {
+		x, y = unmarshalCompressed(elliptic.P256(), pubkey)
+		if x == nil {
+			cx.err = fmt.Errorf("invalid compressed pubkey")
+			return
+		}
 	}
 
 	var err error
