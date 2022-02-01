@@ -462,7 +462,7 @@ func TestMinBalance(t *testing.T) {
 	ledger.NewLocals(tx.Sender, 77)
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
 	// and global count b/c NewLocals opts the creator in)
-	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
+	minb := 1002 + 1006 + 10*1003 + 4*1004 + 6*1005
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 	// request extra program pages, min balance increase
 	withepp := makeApp(1, 2, 3, 4)
@@ -1010,7 +1010,7 @@ intc_2 // 1
 	ops := testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
-	_, err := EvalApp(ops.Program, 0, 0, now)
+	_, err := EvalApp(ops.Program, 0, 888, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset_holding_get field 2")
 
@@ -1035,7 +1035,7 @@ intc_1
 	ops = testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
-	_, err = EvalApp(ops.Program, 0, 0, now)
+	_, err = EvalApp(ops.Program, 0, 888, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset_params_get field 32")
 

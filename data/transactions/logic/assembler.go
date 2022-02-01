@@ -823,14 +823,15 @@ func asmTxn(ops *OpStream, spec *OpSpec, args []string) error {
 
 // asmTxn2 delegates to asmTxn or asmTxna depending on number of operands
 func asmTxn2(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) == 1 {
+	switch len(args) {
+	case 1:
 		return asmTxn(ops, spec, args)
-	}
-	if len(args) == 2 {
+	case 2:
 		txna := OpsByName[ops.Version]["txna"]
 		return asmTxna(ops, &txna, args)
+	default:
+		return ops.error("txn expects one or two arguments")
 	}
-	return ops.error("txn expects one or two arguments")
 }
 
 // asmTxna also assemble asmItxna

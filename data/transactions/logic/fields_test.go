@@ -64,7 +64,7 @@ func TestGlobalFieldsVersions(t *testing.T) {
 		ep.Ledger = ledger
 
 		// check failure with version check
-		_, err := EvalApp(ops.Program, 0, 0, ep)
+		_, err := EvalApp(ops.Program, 0, 888, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -191,7 +191,7 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			_, err := EvalSignature(1, ep)
 			require.Error(t, err)
 			ep.Ledger = MakeLedger(nil)
-			_, err = EvalApp(ops.Program, 1, 0, ep)
+			_, err = EvalApp(ops.Program, 1, 888, ep)
 			if v < txnEffectsVersion {
 				require.Error(t, err, source)
 			} else {
