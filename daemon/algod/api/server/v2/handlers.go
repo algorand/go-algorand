@@ -260,7 +260,8 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	}
 
 	myLedger := v2.Node.Ledger()
-	record, lastRound, err := myLedger.LookupLatest(addr)
+
+	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupLatest(addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -277,12 +278,6 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
-
-	recordWithoutPendingRewards, _, err := myLedger.LookupWithoutRewards(lastRound, addr)
-	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-	}
-	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 
 	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
 	if len(record.Assets) > 0 {

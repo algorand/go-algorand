@@ -392,13 +392,18 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 	latest := au.deltas[len(au.deltas)-1]
 	for i := 0; i < latest.Len(); i++ {
 		addr, acct := latest.GetByIdx(i)
-		d, r, err := au.lookupLatest(addr)
+		d, r, withoutRewards, err := au.lookupLatest(addr)
 		require.NoError(t, err)
 		require.Equal(t, rnd, r)
 		require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
 		require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
 		require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
 		require.Equal(t, int(acct.TotalAssets), len(d.Assets))
+		// check "withoutRewards" matches result of LookupWithoutRewards
+		d2, r2, err2 := au.LookupWithoutRewards(r, addr)
+		require.NoError(t, err2)
+		require.Equal(t, r2, r)
+		require.Equal(t, withoutRewards, d2.MicroAlgos)
 	}
 }
 
@@ -2130,7 +2135,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 		accts = append(accts, newAccts)
 	}
 
-	ad, _, err := au.lookupLatest(addr1)
+	ad, _, _, err := au.lookupLatest(addr1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), ad.AssetParams[aidx2].Total)
 	require.Equal(t, uint64(901), ad.Assets[aidx2].Amount)
@@ -2142,7 +2147,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 	require.True(t, ok)
 	require.Empty(t, h)
 
-	ad, _, err = au.lookupLatest(addr2)
+	ad, _, _, err = au.lookupLatest(addr2)
 	require.NoError(t, err)
 	require.Equal(t, uint64(99), ad.Assets[aidx2].Amount)
 }
@@ -2188,9 +2193,15 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	defer au.close()
 	require.NoError(t, err)
 	for addr, acct := range accts {
-		acctData, _, err := au.lookupLatest(addr)
+		acctData, validThrough, withoutRewards, err := au.lookupLatest(addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
+
+		// check "withoutRewards" matches result of LookupWithoutRewards
+		d, r, err := au.LookupWithoutRewards(validThrough, addr)
+		require.NoError(t, err)
+		require.Equal(t, validThrough, r)
+		require.Equal(t, withoutRewards, d.MicroAlgos)
 	}
 }
 
@@ -2347,9 +2358,10 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 			}
 
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
-			d, validThrough, err := au.lookupLatest(addr)
+			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
 			require.NoError(t, err)
 			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
 }

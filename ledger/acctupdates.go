@@ -858,7 +858,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 // The rewards are added to the AccountData before returning.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccountData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.AccountData, rnd basics.Round, err error) {
+func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -942,7 +942,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		}
 		// offset should now be len(au.deltas)
 		if offset != uint64(len(au.deltas)) {
-			return basics.AccountData{}, basics.Round(0), fmt.Errorf("offset != len(au.deltas): %w", ErrLookupLatestResources)
+			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, fmt.Errorf("offset != len(au.deltas): %w", ErrLookupLatestResources)
 		}
 		ad = ledgercore.AccountData{}
 		foundResources = make(map[basics.CreatableIndex]basics.Round)
@@ -957,6 +957,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			defer func() {
 				if err == nil {
 					ledgercore.AssignAccountData(&data, ad)
+					withoutRewards = data.MicroAlgos // record balance before updating rewards
 					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
 				}
 			}()
@@ -985,7 +986,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		// check for resources modified in the past rounds, in the deltas
 		for cidx, mr := range au.resources.getForAddress(addr) {
 			if err := addResource(cidx, rnd, mr.resource); err != nil {
-				return basics.AccountData{}, basics.Round(0), err
+				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 			}
 		}
 
@@ -1001,7 +1002,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				au.baseResources.writePending(prd, addr)
 				if prd.addrid != 0 {
 					if err := addResource(prd.aidx, rnd, prd.AccountResource()); err != nil {
-						return basics.AccountData{}, basics.Round(0), err
+						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 					}
 				}
 			}
@@ -1021,7 +1022,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if !foundAccount {
 			persistedData, err = au.accountsq.lookup(addr)
 			if err != nil {
-				return basics.AccountData{}, basics.Round(0), err
+				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 			}
 			if persistedData.round == currentDbRound {
 				if persistedData.rowid != 0 {
@@ -1040,7 +1041,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 
 			if persistedData.round < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupLatest: account database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			if persistedData.round > currentDbRound {
 				goto tryAgain
@@ -1050,13 +1051,13 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		// Look for resources on disk
 		persistedResources, resourceDbRound, err = au.accountsq.lookupAllResources(addr)
 		if err != nil {
-			return basics.AccountData{}, basics.Round(0), err
+			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 		}
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
 				au.baseResources.writePending(pd, addr)
 				if err := addResource(pd.aidx, currentDbRound, pd.AccountResource()); err != nil {
-					return basics.AccountData{}, basics.Round(0), err
+					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 				}
 			}
 			// We've found all the resources we could find for this address.
@@ -1065,7 +1066,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 
 		if resourceDbRound < currentDbRound {
 			au.log.Errorf("accountUpdates.lookupLatest: resource database round %d is behind in-memory round %d", resourceDbRound, currentDbRound)
-			return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
+			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
 		}
 
 	tryAgain:
