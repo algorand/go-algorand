@@ -462,7 +462,7 @@ func TestMinBalance(t *testing.T) {
 	ledger.NewLocals(tx.Sender, 77)
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
 	// and global count b/c NewLocals opts the creator in)
-	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
+	minb := 1002 + 1006 + 10*1003 + 4*1004 + 6*1005
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 	// request extra program pages, min balance increase
 	withepp := makeApp(1, 2, 3, 4)

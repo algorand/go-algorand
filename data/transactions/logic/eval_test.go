@@ -62,6 +62,7 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		SchemaMinBalancePerEntry: 1003,
 		SchemaUintMinBalance:     1004,
 		SchemaBytesMinBalance:    1005,
+		AppFlatOptInMinBalance:   1006,
 
 		MaxInnerTransactions: 4,
 		MaxTxGroupSize:       8,

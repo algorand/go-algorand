@@ -207,8 +207,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
-	Balance(addr basics.Address) (basics.MicroAlgos, error)
-	MinBalance(addr basics.Address, proto *config.ConsensusParams) (basics.MicroAlgos, error)
+	AccountData(addr basics.Address) (basics.AccountData, error)
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
@@ -3352,49 +3351,50 @@ func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Addre
 	return addr, accountIdx, err
 }
 
-type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, error)
-
-func opBalanceQuery(cx *EvalContext, query opQuery, item string) error {
-	last := len(cx.stack) - 1 // account (index or actual address)
-
-	addr, _, err := cx.accountReference(cx.stack[last])
-	if err != nil {
-		return err
-	}
-
-	microAlgos, err := query(addr, cx.Proto)
-	if err != nil {
-		return fmt.Errorf("failed to fetch %s of %v: %w", item, addr, err)
-	}
-
-	cx.stack[last].Bytes = nil
-	cx.stack[last].Uint = microAlgos.Raw
-	return nil
-}
 func opBalance(cx *EvalContext) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
+	last := len(cx.stack) - 1 // account (index or actual address)
 
-	balanceQuery := func(addr basics.Address, _ *config.ConsensusParams) (basics.MicroAlgos, error) {
-		return cx.Ledger.Balance(addr)
-	}
-	err := opBalanceQuery(cx, balanceQuery, "balance")
+	addr, _, err := cx.accountReference(cx.stack[last])
 	if err != nil {
 		cx.err = err
+		return
 	}
+
+	account, err := cx.Ledger.AccountData(addr)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = account.MicroAlgos.Raw
 }
+
 func opMinBalance(cx *EvalContext) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
+	last := len(cx.stack) - 1 // account (index or actual address)
 
-	err := opBalanceQuery(cx, cx.Ledger.MinBalance, "minimum balance")
+	addr, _, err := cx.accountReference(cx.stack[last])
 	if err != nil {
 		cx.err = err
+		return
 	}
+
+	account, err := cx.Ledger.AccountData(addr)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = account.MinBalance(cx.Proto).Raw
 }
 
 func opAppOptedIn(cx *EvalContext) {
@@ -3918,36 +3918,23 @@ func opAcctParamsGet(cx *EvalContext) {
 		return
 	}
 
-	bal, err := cx.Ledger.Balance(addr)
+	account, err := cx.Ledger.AccountData(addr)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	exist := boolToUint(bal.Raw > 0)
+
+	exist := boolToUint(account.MicroAlgos.Raw > 0)
 
 	var value stackValue
 
 	switch fs.field {
 	case AcctBalance:
-		value.Uint = bal.Raw
+		value.Uint = account.MicroAlgos.Raw
 	case AcctMinBalance:
-		mbal, err := cx.Ledger.MinBalance(addr, cx.Proto)
-		if err != nil {
-			cx.err = err
-			return
-		}
-		value.Uint = mbal.Raw
+		value.Uint = account.MinBalance(cx.Proto).Raw
 	case AcctAuthAddr:
-		auth, err := cx.Ledger.Authorizer(addr)
-		if err != nil {
-			cx.err = err
-			return
-		}
-		if auth == addr {
-			value.Bytes = zeroAddress[:]
-		} else {
-			value.Bytes = auth[:]
-		}
+		value.Bytes = account.AuthAddr[:]
 	}
 	cx.stack[last] = value
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
