@@ -20,7 +20,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -30,12 +29,12 @@ func TestBuilderSanity(t *testing.T) {
 	a := require.New(t)
 
 	numOfKeys := uint64(100)
-	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys)
 	a.NoError(err)
 	a.Equal(uint64(len(keys)), numOfKeys)
 
-	s, err := keys[0].GetSigner().SignBytes([]byte{0})
-	v := keys[0].GetSigner().GetVerifyingKey().GetVerifier()
+	s, err := keys[0].SignBytes([]byte{0})
+	v := keys[0].GetVerifyingKey()
 	err = v.VerifyBytes([]byte{0}, s)
 	a.NoError(err)
 }
@@ -44,7 +43,7 @@ func TestBuilderFitsToCPUs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	numOfKeys := uint64(runtime.NumCPU() * 2)
-	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(keys)))
 
@@ -54,7 +53,7 @@ func TestBuilderOneKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	numOfKeys := uint64(1)
-	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(keys)))
 }
@@ -63,21 +62,14 @@ func TestBuilderZeroKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	numOfKeys := uint64(0)
-	keys, err := KeysBuilder(numOfKeys, crypto.FalconType)
+	keys, err := KeysBuilder(numOfKeys)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(keys)))
 }
 
-func BenchmarkMerkleSignatureSchemeGenFalcon(b *testing.B) {
-	bencKeyGen(b, crypto.FalconType)
-}
-func BenchmarkMerkleSignatureSchemeGenEd25519(b *testing.B) {
-	bencKeyGen(b, crypto.Ed25519Type)
-}
-
-func bencKeyGen(b *testing.B, algoType crypto.AlgorithmType) {
+func BenchmarkMerkleSignatureSchemeGenerate(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		New(0, 3000000, 256, algoType)
+		New(0, 3000000, 256)
 	}
 }

@@ -44,48 +44,39 @@ func TestSignerCreation(t *testing.T) {
 
 	h := genHashableForTest()
 	for i := uint64(1); i < 20; i++ {
-		signer := generateTestSigner(crypto.FalconType, i, i+1, 1, a)
+		signer := generateTestSigner(i, i+1, 1, a)
 		_, err = signer.GetSigner(i).Sign(h)
 		a.NoError(err)
 	}
 
-	testSignerNumKeysLimits := func(t crypto.AlgorithmType, firstValid uint64, lastValid uint64, interval uint64, expectedLen int) {
-		signer := generateTestSigner(t, firstValid, lastValid, interval, a)
+	testSignerNumKeysLimits := func(firstValid uint64, lastValid uint64, interval uint64, expectedLen int) {
+		signer := generateTestSigner(firstValid, lastValid, interval, a)
 		a.Equal(expectedLen, length(signer, a))
 	}
 
-	testSignerNumKeysLimits(crypto.FalconType, 0, 0, 1, 0)
-	testSignerNumKeysLimits(crypto.FalconType, 0, 1, 1, 1)
-	testSignerNumKeysLimits(crypto.FalconType, 2, 2, 2, 1)
-	testSignerNumKeysLimits(crypto.FalconType, 8, 21, 10, 2)
-	testSignerNumKeysLimits(crypto.FalconType, 8, 20, 10, 2)
-	testSignerNumKeysLimits(crypto.FalconType, 10, 21, 10, 2)
-	testSignerNumKeysLimits(crypto.FalconType, 10, 20, 10, 2)
-	testSignerNumKeysLimits(crypto.FalconType, 11, 20, 10, 1)
+	testSignerNumKeysLimits(0, 0, 1, 0)
+	testSignerNumKeysLimits(0, 1, 1, 1)
+	testSignerNumKeysLimits(2, 2, 2, 1)
+	testSignerNumKeysLimits(8, 21, 10, 2)
+	testSignerNumKeysLimits(8, 20, 10, 2)
+	testSignerNumKeysLimits(10, 21, 10, 2)
+	testSignerNumKeysLimits(10, 20, 10, 2)
+	testSignerNumKeysLimits(11, 20, 10, 1)
 
-	testSignerNumKeysLimits(crypto.Ed25519Type, 0, 0, 1, 0)
-	testSignerNumKeysLimits(crypto.Ed25519Type, 0, 1, 1, 1)
-	testSignerNumKeysLimits(crypto.Ed25519Type, 2, 2, 2, 1)
-	testSignerNumKeysLimits(crypto.Ed25519Type, 8, 21, 10, 2)
-	testSignerNumKeysLimits(crypto.Ed25519Type, 8, 20, 10, 2)
-	testSignerNumKeysLimits(crypto.Ed25519Type, 10, 21, 10, 2)
-	testSignerNumKeysLimits(crypto.Ed25519Type, 10, 20, 10, 2)
-	testSignerNumKeysLimits(crypto.Ed25519Type, 11, 20, 10, 1)
-
-	signer := generateTestSigner(crypto.FalconType, 2, 2, 2, a)
+	signer := generateTestSigner(2, 2, 2, a)
 	a.Equal(1, length(signer, a))
 
 	sig, err := signer.GetSigner(2).Sign(genHashableForTest())
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(2, genHashableForTest(), sig))
 
-	signer = generateTestSigner(crypto.FalconType, 2, 2, 3, a)
+	signer = generateTestSigner(2, 2, 3, a)
 	a.Equal(0, length(signer, a))
 	_, err = signer.GetSigner(2).Sign(genHashableForTest())
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
-	signer = generateTestSigner(crypto.FalconType, 11, 19, 10, a)
+	signer = generateTestSigner(11, 19, 10, a)
 	a.Equal(0, length(signer, a))
 	_, err = signer.GetSigner(2).Sign(genHashableForTest())
 	a.Error(err)
@@ -95,11 +86,11 @@ func TestSignerCreation(t *testing.T) {
 func TestSignerCreationOutOfBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	_, err := New(8, 4, 1, crypto.FalconType)
+	_, err := New(8, 4, 1)
 	a.Error(err)
 	a.ErrorIs(err, ErrStartBiggerThanEndRound)
 
-	_, err = New(1, 8, 0, crypto.FalconType)
+	_, err = New(1, 8, 0)
 	a.Error(err)
 	a.ErrorIs(err, ErrDivisorIsZero)
 }
@@ -108,7 +99,7 @@ func TestEmptyVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.FalconType, 8, 9, 5, a)
+	signer := generateTestSigner(8, 9, 5, a)
 	// even if there are no keys for that period, the root is not empty
 	// (part of the vector commitment property).
 	a.Equal(false, signer.GetVerifier().IsEmpty())
@@ -120,7 +111,7 @@ func TestEmptySigner(t *testing.T) {
 	var err error
 
 	h := genHashableForTest()
-	signer := generateTestSigner(crypto.FalconType, 8, 9, 5, a)
+	signer := generateTestSigner(8, 9, 5, a)
 	a.Equal(0, length(signer, a))
 
 	_, err = signer.GetSigner(8).Sign(h)
@@ -136,7 +127,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.FalconType, 0, 100, 1, a)
+	signer := generateTestSigner(0, 100, 1, a)
 	for i := uint64(1); i < 100; i++ {
 		k := signer.GetKey(i)
 		a.NotNil(k)
@@ -145,7 +136,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	k := signer.GetKey(101)
 	a.Nil(k)
 
-	signer = generateTestSigner(crypto.FalconType, 1000, 1100, 1, a)
+	signer = generateTestSigner(1000, 1100, 1, a)
 	for i := uint64(1000); i < 1100; i++ {
 		k = signer.GetKey(i)
 		a.NotNil(k)
@@ -154,7 +145,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	k = signer.GetKey(999)
 	a.Nil(k)
 
-	signer = generateTestSigner(crypto.FalconType, 1000, 1100, 101, a)
+	signer = generateTestSigner(1000, 1100, 101, a)
 	intervalRounds := make([]uint64, 0)
 	for i := uint64(1000); i <= 1100; i++ {
 		if i%101 == 0 {
@@ -170,18 +161,18 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.FalconType, 0, 100, 1, a)
+	signer := generateTestSigner(0, 100, 1, a)
 
-	s := crypto.GenericSigningKey{}
+	s := crypto.FalconSigner{}
 	for i := uint64(1); i <= 100; i++ {
 		key := signer.GetKey(i)
 		a.NotNil(key)
 		a.NotEqual(s, key)
 	}
 
-	signer = generateTestSigner(crypto.Ed25519Type, 0, 100, 1, a)
+	signer = generateTestSigner(0, 100, 1, a)
 
-	s = crypto.GenericSigningKey{}
+	s = crypto.FalconSigner{}
 	for i := uint64(1); i <= 100; i++ {
 		key := signer.GetKey(i)
 		a.NotNil(key)
@@ -193,7 +184,7 @@ func TestSignatureStructure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.FalconType, 50, 100, 1, a)
+	signer := generateTestSigner(50, 100, 1, a)
 
 	hashable := genHashableForTest()
 	sig, err := signer.GetSigner(51).Sign(hashable)
@@ -202,13 +193,13 @@ func TestSignatureStructure(t *testing.T) {
 	key := signer.GetKey(51)
 	a.NotNil(key)
 
-	a.Equal(sig.VerifyingKey, *key.GetSigner().GetVerifyingKey())
+	a.Equal(sig.VerifyingKey, *key.GetVerifyingKey())
 
 	proof, err := signer.Tree.ProveSingleLeaf(1)
 	a.NoError(err)
 	a.Equal(*proof, sig.Proof)
 
-	a.NotEqual(nil, sig.ByteSignature)
+	a.NotEqual(nil, sig.Signature)
 }
 
 func genHashableForTest() crypto.Hashable {
@@ -222,7 +213,7 @@ func TestSigning(t *testing.T) {
 	a := require.New(t)
 
 	start, end := uint64(50), uint64(100)
-	signer := generateTestSigner(crypto.FalconType, start, end, 1, a)
+	signer := generateTestSigner(start, end, 1, a)
 
 	hashable := genHashableForTest()
 
@@ -238,7 +229,7 @@ func TestSigning(t *testing.T) {
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
-	signer = generateTestSigner(crypto.FalconType, start, end, 10, a)
+	signer = generateTestSigner(start, end, 10, a)
 
 	sig, err = signer.GetSigner(start).Sign(hashable)
 	a.NoError(err)
@@ -251,7 +242,7 @@ func TestSigning(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
 
-	signer = generateTestSigner(crypto.FalconType, 50, 100, 12, a)
+	signer = generateTestSigner(50, 100, 12, a)
 	a.Equal(4, length(signer, a))
 
 	for i := uint64(50); i < 100; i++ {
@@ -265,7 +256,7 @@ func TestSigning(t *testing.T) {
 		}
 	}
 
-	signer = generateTestSigner(crypto.FalconType, 234, 4634, 256, a)
+	signer = generateTestSigner(234, 4634, 256, a)
 	key := signer.GetKey(512)
 	a.NotNil(key)
 	key = signer.GetKey(4096)
@@ -318,13 +309,13 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 }
 
 func copySig(sig Signature) Signature {
-	bsig := make([]byte, len(sig.ByteSignature))
-	copy(bsig, sig.ByteSignature)
+	bsig := make([]byte, len(sig.Signature))
+	copy(bsig, sig.Signature)
 
 	return Signature{
-		ByteSignature: bsig,
-		Proof:         copyProof(sig.Proof),
-		VerifyingKey:  sig.VerifyingKey,
+		Signature:    bsig,
+		Proof:        copyProof(sig.Proof),
+		VerifyingKey: sig.VerifyingKey,
 	}
 }
 
@@ -336,10 +327,10 @@ func TestIncorrectByteSignature(t *testing.T) {
 	hashable, sig := makeSig(signer, start, a)
 
 	sig2 := sig
-	bs := make([]byte, len(sig.ByteSignature))
-	copy(bs, sig2.ByteSignature)
+	bs := make([]byte, len(sig.Signature))
+	copy(bs, sig2.Signature)
 	bs[0]++
-	sig2.ByteSignature = bs
+	sig2.Signature = bs
 
 	err := signer.GetVerifier().Verify(start, hashable, sig2)
 	a.Error(err)
@@ -352,7 +343,7 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	var err error
 
 	h := genHashableForTest()
-	signer := generateTestSigner(crypto.FalconType, 8, 100, 5, a)
+	signer := generateTestSigner(8, 100, 5, a)
 	a.NoError(err)
 
 	sig, err := signer.GetSigner(20).Sign(h)
@@ -387,7 +378,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	key := signer.GetKey(start)
 	a.NotNil(key)
 
-	sig2.VerifyingKey = *(key.GetSigner().GetVerifyingKey())
+	sig2.VerifyingKey = *(key.GetVerifyingKey())
 
 	err := signer.GetVerifier().Verify(start+1, hashable, sig2)
 	a.Error(err)
@@ -398,7 +389,7 @@ func TestMarshal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.FalconType, 0, 10, 1, a)
+	signer := generateTestSigner(0, 10, 1, a)
 
 	out := protocol.Encode(&signer.SignerContext)
 	decodeInto := SignerContext{}
@@ -416,26 +407,27 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	interval := uint64(256)
-	validPeriod := uint64((1<<8)*interval - 1)
+	numberOfKeys := uint64(1 << 6)
+	validPeriod := numberOfKeys*interval - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval, crypto.Ed25519Type)
+	s, err := New(firstValid, lastValid, interval)
 	a.NoError(err)
-	a.Equal(1<<8, length(s, a))
+	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(0)
 	lastValid = validPeriod
-	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type)
+	s, err = New(firstValid, lastValid, interval)
 	a.NoError(err)
-	a.Equal((1<<8)-1, length(s, a))
+	a.Equal(numberOfKeys-1, uint64(length(s, a)))
 
 	firstValid = uint64(1000)
 	lastValid = validPeriod + 1000 - (interval * 50)
-	s, err = New(firstValid, lastValid, interval, crypto.Ed25519Type)
+	s, err = New(firstValid, lastValid, interval)
 	a.NoError(err)
 
-	a.Equal((1<<8)-50, length(s, a))
+	a.Equal(numberOfKeys-50, uint64(length(s, a)))
 }
 
 func TestGetAllKeys(t *testing.T) {
@@ -447,7 +439,7 @@ func TestGetAllKeys(t *testing.T) {
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval, crypto.Ed25519Type)
+	s, err := New(firstValid, lastValid, interval)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
@@ -457,7 +449,7 @@ func TestGetAllKeys(t *testing.T) {
 		a.Equal(indexToRound(firstValid, interval, i), keys[i].Round)
 	}
 
-	s, err = New(1, 2, 100, crypto.Ed25519Type)
+	s, err = New(1, 2, 100)
 	a.NoError(err)
 	a.Equal(0, length(s, a))
 
@@ -477,12 +469,12 @@ func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) (crypto.Ha
 
 func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {
 	start, end := uint64(50), uint64(100)
-	signer := generateTestSigner(crypto.FalconType, start, end, 1, a)
+	signer := generateTestSigner(start, end, 1, a)
 	return start, end, signer
 }
 
-func generateTestSigner(t crypto.AlgorithmType, firstValid, lastValid, interval uint64, a *require.Assertions) *Secrets {
-	signer, err := New(firstValid, lastValid, interval, t)
+func generateTestSigner(firstValid, lastValid, interval uint64, a *require.Assertions) *Secrets {
+	signer, err := New(firstValid, lastValid, interval)
 	a.NoError(err)
 
 	return signer

@@ -96,7 +96,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 
 // RestoreAllSecrets fetch all stateproof secrets from a persisted storage into memory
 func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
-	var keys []crypto.GenericSigningKey
+	var keys []crypto.FalconSigner
 
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := tx.Query("SELECT key FROM StateProofKeys")
@@ -105,7 +105,7 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 		}
 		for rows.Next() {
 			var keyB []byte
-			key := crypto.GenericSigningKey{}
+			key := crypto.FalconSigner{}
 			err := rows.Scan(&keyB)
 			if err != nil {
 				return fmt.Errorf("%s - %w", errKeyDecodeError, err)

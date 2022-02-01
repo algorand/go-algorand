@@ -35,14 +35,14 @@ func hashBytes(hash hash.Hash, m []byte) []byte {
 	return outhash
 }
 
-func calculateHashOnKeyLeaf(key *crypto.GenericSigningKey, round uint64) []byte {
+func calculateHashOnKeyLeaf(key *crypto.FalconSigner, round uint64) []byte {
 	binaryRound := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryRound, round)
 
 	schemeBytes := make([]byte, 2)
-	binary.LittleEndian.PutUint16(schemeBytes, uint16(key.Type))
+	binary.LittleEndian.PutUint16(schemeBytes, CryptoPrimitivesID)
 
-	verifyingRawKey := key.GetSigner().GetVerifyingKey().GetVerifier().GetFixedLengthHashableRepresentation()
+	verifyingRawKey := key.GetVerifyingKey().GetFixedLengthHashableRepresentation()
 	keyCommitment := make([]byte, 0, len(protocol.KeysInMSS)+len(verifyingRawKey)+len(binaryRound))
 
 	keyCommitment = append(keyCommitment, protocol.KeysInMSS...)
@@ -71,7 +71,7 @@ func TestEphemeralPublicKeysCommitmentBinaryFormat(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signer := generateTestSigner(crypto.FalconType, 1, 9, 2, a)
+	signer := generateTestSigner(1, 9, 2, a)
 	a.Equal(4, length(signer, a))
 
 	k0 := signer.GetSigner(2).SigningKey

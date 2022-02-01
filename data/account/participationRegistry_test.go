@@ -33,7 +33,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -69,7 +68,7 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 
 func makeTestParticipation(a *require.Assertions, addrID int, first, last basics.Round, dilution uint64) Participation {
 	// Generate sample of stateproof keys. because it might take time we will reduce the number always to get 2 keys
-	stateProofSecrets, err := merklesignature.New(uint64(first), uint64(last), (uint64(last)+1)/2, compactcert.SignatureScheme)
+	stateProofSecrets, err := merklesignature.New(uint64(first), uint64(last), (uint64(last)+1)/2)
 	a.NoError(err)
 
 	p := Participation{
@@ -788,7 +787,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
-	signer, err := merklesignature.New(1, max, 3, crypto.FalconType)
+	signer, err := merklesignature.New(1, max, 3)
 	a.NoError(err)
 	// Initialize keys array.
 	var keys StateProofKeys

@@ -86,7 +86,7 @@ var partGenerateCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "Cannot generate partkey database %s: %v\n", partKeyfile, err)
 				err = os.Remove(partKeyfile)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove the database file %s: %v\n", partKeyfile, err)
+					fmt.Fprintf(os.Stderr, "Failed to cleanup the database file %s: %v\n", partKeyfile, err)
 				}
 				os.Exit(1)
 			}

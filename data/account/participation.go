@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -241,7 +240,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), interval, compactcert.SignatureScheme)
+	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), interval)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}

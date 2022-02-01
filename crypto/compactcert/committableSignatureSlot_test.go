@@ -54,7 +54,6 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 }
 
 func calculateHashOnSigLeaf(t *testing.T, sig merklesignature.Signature, lValue uint64) []byte {
-
 	var sigCommitment []byte
 	sigCommitment = append(sigCommitment, protocol.CompactCertSig...)
 
@@ -64,16 +63,15 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklesignature.Signature, lValue 
 	sigCommitment = append(sigCommitment, binaryL...)
 
 	//build the expected binary representation of the merkle signature
-	pK := sig.VerifyingKey.GetVerifier()
-	serializedSig, err := pK.GetSignatureFixedLengthHashableRepresentation(sig.ByteSignature)
+	serializedSig, err := sig.VerifyingKey.GetSignatureFixedLengthHashableRepresentation(sig.Signature)
 	require.NoError(t, err)
 
 	schemeType := make([]byte, 2)
-	binary.LittleEndian.PutUint16(schemeType, uint16(sig.VerifyingKey.Type))
+	binary.LittleEndian.PutUint16(schemeType, merklesignature.CryptoPrimitivesID)
 
 	sigCommitment = append(sigCommitment, schemeType...)
 	sigCommitment = append(sigCommitment, serializedSig...)
-	sigCommitment = append(sigCommitment, pK.GetFixedLengthHashableRepresentation()...)
+	sigCommitment = append(sigCommitment, sig.VerifyingKey.GetFixedLengthHashableRepresentation()...)
 
 	treeIdxBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(treeIdxBytes, sig.MerkleArrayIndex)

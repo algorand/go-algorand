@@ -23,8 +23,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// KeysBuilder Responsible for generate slice of keys in a specific AlgorithmType.
-func KeysBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypto.GenericSigningKey, error) {
+// KeysBuilder Responsible for generate slice of falcon keys
+func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
 	numOfKeysPerRoutine, numOfRoutines := calculateRanges(numberOfKeys)
 
 	terminate := make(chan struct{})
@@ -39,7 +39,7 @@ func KeysBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypt
 
 	var wg sync.WaitGroup
 	var endIdx uint64
-	keys := make([]crypto.GenericSigningKey, numberOfKeys)
+	keys := make([]crypto.FalconSigner, numberOfKeys)
 
 	for i := uint64(0); i < numberOfKeys; i = endIdx {
 		endIdx = i + numOfKeysPerRoutine
@@ -50,16 +50,16 @@ func KeysBuilder(numberOfKeys uint64, sigAlgoType crypto.AlgorithmType) ([]crypt
 		}
 
 		wg.Add(1)
-		go func(startIdx, endIdx uint64, errChan chan error, terminate chan struct{}, sigAlgoType crypto.AlgorithmType, keys []crypto.GenericSigningKey) {
+		go func(startIdx, endIdx uint64, errChan chan error, terminate chan struct{}, keys []crypto.FalconSigner) {
 			defer wg.Done()
-			generateKeysForRange(startIdx, endIdx, errChan, terminate, sigAlgoType, keys)
-		}(i, endIdx, errors, terminate, sigAlgoType, keys)
+			generateKeysForRange(startIdx, endIdx, errChan, terminate, keys)
+		}(i, endIdx, errors, terminate, keys)
 	}
 	wg.Wait()
 
 	select {
 	case err := <-errors:
-		return []crypto.GenericSigningKey{}, err
+		return []crypto.FalconSigner{}, err
 	default:
 	}
 	return keys, nil
@@ -76,12 +76,12 @@ func calculateRanges(numberOfKeys uint64) (numOfKeysPerRoutine uint64, numOfRout
 	return
 }
 
-func generateKeysForRange(startIdx uint64, endIdx uint64, errChan chan error, terminate chan struct{}, sigAlgoType crypto.AlgorithmType, keys []crypto.GenericSigningKey) {
+func generateKeysForRange(startIdx uint64, endIdx uint64, errChan chan error, terminate chan struct{}, keys []crypto.FalconSigner) {
 	for k := startIdx; k < endIdx; k++ {
 		if isChannelClosed(terminate) {
 			return
 		}
-		sigAlgo, err := crypto.NewSigner(sigAlgoType)
+		sigAlgo, err := crypto.NewFalconSigner()
 		if err != nil {
 			errChan <- err
 			close(terminate)

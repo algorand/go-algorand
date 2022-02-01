@@ -963,7 +963,7 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 
 	// Init stateproof fields after being able to retrieve key from database
 	result.StateProofSecrets = &merklesignature.Signer{}
-	result.StateProofSecrets.SigningKey = &crypto.GenericSigningKey{}
+	result.StateProofSecrets.SigningKey = &crypto.FalconSigner{}
 	result.StateProofSecrets.Round = uint64(round)
 
 	err = protocol.Decode(rawStateProofKey, result.StateProofSecrets.SigningKey)
