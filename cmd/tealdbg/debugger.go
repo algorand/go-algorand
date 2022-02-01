@@ -365,6 +365,10 @@ func (s *session) GetStates(st *logic.DebugState) AppState {
 		newStates.logs = changes.Logs
 	}
 
+	if len(changes.InnerTxns) > 0 {
+		newStates.innerTxns = changes.InnerTxns
+	}
+
 	return newStates
 }
 

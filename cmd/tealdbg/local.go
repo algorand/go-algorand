@@ -158,11 +158,12 @@ type evalResult struct {
 
 // AppState encapsulates information about execution of stateful teal program
 type AppState struct {
-	appIdx  basics.AppIndex
-	schemas basics.StateSchemas
-	global  map[basics.AppIndex]basics.TealKeyValue
-	locals  map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
-	logs    []string
+	appIdx    basics.AppIndex
+	schemas   basics.StateSchemas
+	global    map[basics.AppIndex]basics.TealKeyValue
+	locals    map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
+	logs      []string
+	innerTxns []transactions.SignedTxnWithAD
 }
 
 func (a *AppState) clone() (b AppState) {
@@ -178,12 +179,15 @@ func (a *AppState) clone() (b AppState) {
 			b.locals[addr][aid] = tkv.Clone()
 		}
 	}
-	b.logs = a.logs
+	b.logs = make([]string, len(a.logs))
+	copy(b.logs, a.logs)
+	b.innerTxns = make([]transactions.SignedTxnWithAD, len(a.innerTxns))
+	copy(b.innerTxns, a.innerTxns)
 	return
 }
 
 func (a *AppState) empty() bool {
-	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0 && len(a.logs) == 0
+	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0 && len(a.logs) == 0 && len(a.innerTxns) == 0
 }
 
 type modeType int
@@ -241,6 +245,7 @@ func makeAppState() (states AppState) {
 	states.global = make(map[basics.AppIndex]basics.TealKeyValue)
 	states.locals = make(map[basics.Address]map[basics.AppIndex]basics.TealKeyValue)
 	states.logs = make([]string, 0)
+	states.innerTxns = make([]transactions.SignedTxnWithAD, 0)
 	return
 }
 

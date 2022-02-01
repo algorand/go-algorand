@@ -121,6 +121,7 @@ const appGlobalObjID = "appGlobalObjID"
 const appLocalsObjID = "appLocalsObjID"
 const txnArrayFieldObjID = "txnArrayField"
 const logsObjID = "logObjID"
+const innerTxnsObjID = "innerTxnsObjID"
 
 type objectDescFn func(s *cdtState, preview bool) []cdt.RuntimePropertyDescriptor
 
@@ -136,6 +137,7 @@ var objectDescMap = map[string]objectDescFn{
 	appGlobalObjID:   makeAppGlobalState,
 	appLocalsObjID:   makeAppLocalsState,
 	logsObjID:        makeLogsState,
+	innerTxnsObjID:   makeInnerTxnsState,
 }
 
 func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.RuntimePropertyDescriptor, err error) {
@@ -156,7 +158,7 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 			case scratchObjID:
 				return makeArrayLength(s.scratch), nil
 			case logsObjID:
-				return makeStringArrayLength(s.logs), nil
+				return makeArrayLength(s.logs), nil
 			default:
 			}
 		} else if parentObjID, from, to, ok := decodeArraySlice(objID); ok {
@@ -692,6 +694,7 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 	stack := makeArray("stack", len(s.stack), stackObjID)
 	scratch := makeArray("scratch", len(s.scratch), scratchObjID)
 	logs := makeArray("logs", len(s.logs), logsObjID)
+	innerTxns := makeArray("innerTxns", len(s.innerTxns), innerTxnsObjID)
 	if preview {
 		txnPreview := makeTxnPreview(s.txnGroup, s.groupIndex)
 		if len(txnPreview.Properties) > 0 {
@@ -710,6 +713,10 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 		logsPreview := makeStringArrayPreview(s.logs)
 		if len(logsPreview.Properties) > 0 {
 			logs.Value.Preview = &logsPreview
+		}
+		innerTxnsPreview := makeGtxnPreview(s.innerTxns)
+		if len(innerTxnsPreview.Properties) > 0 {
+			innerTxns.Value.Preview = &innerTxnsPreview
 		}
 	}
 
@@ -920,9 +927,13 @@ func tkvToRpd(tkv basics.TealKeyValue) (desc []cdt.RuntimePropertyDescriptor) {
 	return
 }
 
-func makeArrayLength(array []basics.TealValue) (desc []cdt.RuntimePropertyDescriptor) {
-	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
-	desc = append(desc, makePrimitive(field))
+func makeArrayLength(rawArray interface{}) (desc []cdt.RuntimePropertyDescriptor) {
+	switch array := rawArray.(type) {
+	case []string:
+	case []basics.TealKeyValue:
+		field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
+		desc = append(desc, makePrimitive(field))
+	}
 	return
 }
 
@@ -981,6 +992,19 @@ func makeLogsSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.Runt
 
 func makeLogsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	return makeLogsSlice(s, 0, len(s.logs)-1, preview)
+}
+
+func makeInnerTxnsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(s.innerTxns))
+	for i := 0; i < len(s.innerTxns); i++ {
+		item := makeObject(strconv.Itoa(i), encodeGroupTxnID(i))
+		if preview {
+			txnPreview := makeTxnPreview(s.innerTxns, i)
+			item.Value.Preview = &txnPreview
+		}
+		desc = append(desc, item)
+	}
+	return
 }
 
 func makeTealError(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {

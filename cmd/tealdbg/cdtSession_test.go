@@ -527,6 +527,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 					},
 				},
 			},
+			logs: []string{"test log 1", "test log 2"},
 		},
 	}
 
