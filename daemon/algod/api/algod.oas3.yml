@@ -239,6 +239,9 @@
                   "type": "integer"
                 }
               },
+              "required": [
+                "round"
+              ],
               "type": "object"
             }
           }
@@ -261,6 +264,9 @@
                   "type": "integer"
                 }
               },
+              "required": [
+                "round"
+              ],
               "type": "object"
             }
           }
@@ -1867,6 +1873,9 @@
                       "type": "integer"
                     }
                   },
+                  "required": [
+                    "round"
+                  ],
                   "type": "object"
                 }
               },
@@ -1884,6 +1893,9 @@
                       "type": "integer"
                     }
                   },
+                  "required": [
+                    "round"
+                  ],
                   "type": "object"
                 }
               }
@@ -1997,6 +2009,9 @@
                       "type": "integer"
                     }
                   },
+                  "required": [
+                    "round"
+                  ],
                   "type": "object"
                 }
               },
@@ -2014,6 +2029,9 @@
                       "type": "integer"
                     }
                   },
+                  "required": [
+                    "round"
+                  ],
                   "type": "object"
                 }
               }

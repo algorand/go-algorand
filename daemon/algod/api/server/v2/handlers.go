@@ -310,6 +310,127 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// AccountAssetInformation gets account information about a given asset.
+// (GET /v2/accounts/{address}/assets/{asset-id})
+func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, assetID uint64, params generated.AccountAssetInformationParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
+	}
+
+	ledger := v2.Node.Ledger()
+
+	lastRound := ledger.Latest()
+	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(assetID), basics.AssetCreatable)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	if record.AssetParams == nil && record.AssetHolding == nil {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	// return msgpack response
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	// prepare JSON response
+	response := generated.AccountAssetResponse{Round: uint64(lastRound)}
+
+	if record.AssetParams != nil {
+		asset := AssetParamsToAsset(addr.String(), basics.AssetIndex(assetID), record.AssetParams)
+		response.CreatedAsset = &asset.Params
+	}
+
+	if record.AssetHolding != nil {
+		// AccountInformation REST API endpoint and generated.AssetHolding provides creator address with AssetHolding
+		creatorAddr, ok, err := ledger.GetCreator(basics.CreatableIndex(assetID), basics.AssetCreatable)
+		var creator string
+		if err == nil && ok {
+			creator = creatorAddr.String()
+		} else {
+			// Asset may have been deleted, so we can no
+			// longer fetch the creator
+			creator = ""
+		}
+		response.AssetHolding = &generated.AssetHolding{
+			Amount:   record.AssetHolding.Amount,
+			AssetId:  uint64(assetID),
+			Creator:  creator,
+			IsFrozen: record.AssetHolding.Frozen,
+		}
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// AccountApplicationInformation gets account information about a given app.
+// (GET /v2/accounts/{address}/applications/{application-id})
+func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address string, applicationID uint64, params generated.AccountApplicationInformationParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
+	}
+
+	ledger := v2.Node.Ledger()
+
+	lastRound := ledger.Latest()
+	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(applicationID), basics.AssetCreatable)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	if record.AppParams == nil && record.AppLocalState == nil {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	// return msgpack response
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	// prepare JSON response
+	response := generated.AccountApplicationResponse{Round: uint64(lastRound)}
+
+	if record.AssetParams != nil {
+		app := AppParamsToApplication(addr.String(), basics.AppIndex(applicationID), record.AppParams)
+		response.CreatedApp = &app.Params
+	}
+
+	if record.AppLocalState != nil {
+		localState := convertTKVToGenerated(&record.AppLocalState.KeyValue)
+		response.AppLocalState = &generated.ApplicationLocalState{
+			Id:       uint64(applicationID),
+			KeyValue: localState,
+			Schema: generated.ApplicationStateSchema{
+				NumByteSlice: record.AppLocalState.Schema.NumByteSlice,
+				NumUint:      record.AppLocalState.Schema.NumUint,
+			},
+		}
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.GetBlockParams) error {

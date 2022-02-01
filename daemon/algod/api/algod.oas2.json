@@ -2643,6 +2643,9 @@
       "description": "AccountAssetResponse describes the asset data for a specific account and asset ID.",
       "schema": {
         "type": "object",
+        "required": [
+          "round"
+        ],
         "properties": {
           "round": {
             "description": "The round for which this information is relevant.",
@@ -2663,6 +2666,9 @@
       "description": "AccountApplicationResponse describes the application data for a specific account and application ID.",
       "schema": {
         "type": "object",
+        "required": [
+          "round"
+        ],
         "properties": {
           "round": {
             "description": "The round for which this information is relevant.",

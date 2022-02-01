@@ -542,7 +542,7 @@ type AccountApplicationResponse struct {
 	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
 
 	// The round for which this information is relevant.
-	Round *uint64 `json:"round,omitempty"`
+	Round uint64 `json:"round"`
 }
 
 // AccountAssetResponse defines model for AccountAssetResponse.
@@ -563,7 +563,7 @@ type AccountAssetResponse struct {
 	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
 
 	// The round for which this information is relevant.
-	Round *uint64 `json:"round,omitempty"`
+	Round uint64 `json:"round"`
 }
 
 // AccountResponse defines model for AccountResponse.
