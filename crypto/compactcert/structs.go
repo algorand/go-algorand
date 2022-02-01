@@ -28,6 +28,8 @@ type Params struct {
 	ProvenWeight uint64          // Weight threshold proven by the certificate
 	SigRound     basics.Round    // Ephemeral signature round to expect
 	SecKQ        uint64          // Security parameter (k+q) from analysis document
+
+	EnableBatchVerification bool // whether ED25519 batch verification is enabled
 }
 
 // CompactOneTimeSignature is crypto.OneTimeSignature with omitempty
