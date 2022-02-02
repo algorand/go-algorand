@@ -472,6 +472,10 @@ func testWithSize(t *testing.T, size int) error {
 func TestSizeLimitsMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	increment := uint64(1)
 	// with -race this will take a very long time
 	// run a shorter version for Short testing

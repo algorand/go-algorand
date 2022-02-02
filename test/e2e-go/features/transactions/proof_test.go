@@ -128,7 +128,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	err = merklearray.Verify(blk.TxnRoot.ToSlice(), elems, &proof)
 	if err != nil {
 		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v", blk.TxnRoot.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash)
-		t.FailNow()
+		a.NoError(err)
 	}
 
 }

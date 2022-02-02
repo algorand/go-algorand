@@ -157,6 +157,10 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	fbc := catchpointFileBalancesChunk{}
 	for i := 0; i < 512; i++ {
 		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
