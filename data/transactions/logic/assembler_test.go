@@ -375,7 +375,7 @@ var nonsense = map[uint64]string{
 	6: v6Nonsense,
 
 	// FIDO2:
-	// 7: v7Nonsense,
+	7: v7Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -387,7 +387,7 @@ var compiled = map[uint64]string{
 	6: "06" + v6CompiledNonsense,
 
 	// FIDO2:
-	// 7: "07" + v7CompiledNonsense,
+	7: "07" + v7CompiledNonsense,
 }
 
 func pseudoOp(opcode string) bool {
