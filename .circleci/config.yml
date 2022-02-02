@@ -56,7 +56,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
 
       - test:
           name: << matrix.platform >>_test
@@ -83,6 +83,15 @@ workflows:
                 - /hotfix\/.*/
           context: slack-secrets
 
+      - integration:
+          name: << matrix.platform >>_integration
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
+
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
           matrix:
@@ -93,6 +102,14 @@ workflows:
             <<: *filters-nightly
           context: slack-secrets
 
+      - e2e_expect:
+          name: << matrix.platform >>_e2e_expect
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -104,6 +121,14 @@ workflows:
             <<: *filters-nightly
           context: slack-secrets
 
+      - e2e_subs:
+          name: << matrix.platform >>_e2e_subs
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -119,8 +144,8 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64"]
-              job_type: ["test", "test_nightly",  "integration_nightly", "e2e_expect_nightly"]
+              platform: ["amd64", "arm64", "mac_amd64"]
+              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
@@ -530,6 +555,23 @@ jobs:
           event: fail
           template: basic_fail_1
 
+  integration:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 2
+    environment:
+      E2E_TEST_FILTER: "GO"
+    steps:
+      - prepare_build_dir
+      - prepare_go
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_integration
+          short_test_flag: "-short"
+
   integration_nightly:
     parameters:
       platform:
@@ -549,6 +591,22 @@ jobs:
       - slack/notify:
           <<: *slack-fail-event
 
+  e2e_expect:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 2
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - prepare_build_dir
+      - prepare_go
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_expect
+          short_test_flag: "-short"
 
   e2e_expect_nightly:
     parameters:
@@ -568,6 +626,22 @@ jobs:
           no_output_timeout: 45m
       - slack/notify:
           <<: *slack-fail-event
+
+  e2e_subs:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    environment:
+      E2E_TEST_FILTER: "SCRIPTS"
+    steps:
+      - prepare_build_dir
+      - prepare_go
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_subs
+          short_test_flag: "-short"
 
   e2e_subs_nightly:
     parameters:
