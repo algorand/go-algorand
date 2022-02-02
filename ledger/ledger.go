@@ -474,7 +474,7 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 }
 
 // LookupResource loads a resource that matches the request parameters from the accounts update
-func (l *Ledger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, _ basics.CreatableType) (ledgercore.AccountResource, error) {
+func (l *Ledger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
@@ -482,6 +482,15 @@ func (l *Ledger) LookupResource(rnd basics.Round, addr basics.Address, aidx basi
 	res, _, err := l.accts.LookupResource(rnd, addr, aidx)
 	if err != nil {
 		return ledgercore.AccountResource{}, err
+	}
+
+	if (res != ledgercore.AccountResource{}) && res.GetCreatableType() != ctype {
+		if ctype == basics.AssetCreatable {
+			return ledgercore.AccountResource{}, fmt.Errorf("LookupResource asked for an asset but got %v", res.GetCreatableType())
+		}
+		if ctype == basics.AppCreatable {
+			return ledgercore.AccountResource{}, fmt.Errorf("LookupResource asked for an app but got %v", res.GetCreatableType())
+		}
 	}
 
 	return res, nil
