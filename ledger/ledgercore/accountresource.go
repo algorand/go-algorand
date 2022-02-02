@@ -56,3 +56,12 @@ func AssignAccountResourceToAccountData(cindex basics.CreatableIndex, resource A
 		ad.AppLocalStates[basics.AppIndex(cindex)] = *resource.AppLocalState
 	}
 }
+
+// GetCreatableType returns the basics.CreatableType for the given resource. If the resource is not initialized,
+// the returned type is basics.AssetCreatable.
+func (ar *AccountResource) GetCreatableType() basics.CreatableType {
+	if ar.AppParams != nil || ar.AppLocalState != nil {
+		return basics.AppCreatable
+	}
+	return basics.AssetCreatable
+}

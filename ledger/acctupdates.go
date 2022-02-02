@@ -294,8 +294,8 @@ func (au *accountUpdates) LookupOnlineAccountData(rnd basics.Round, addr basics.
 	return au.lookupOnlineAccountData(rnd, addr)
 }
 
-func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
-	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
+func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex) (ledgercore.AccountResource, basics.Round, error) {
+	return au.lookupResource(rnd, addr, aidx, true /* take lock */)
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
@@ -707,7 +707,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	r, _, err := aul.au.lookupResource(rnd, addr, aidx, ctype, false /* don't sync */)
+	r, _, err := aul.au.lookupResource(rnd, addr, aidx, false /* don't sync */)
 	return r, err
 }
 
@@ -1163,7 +1163,7 @@ func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	}
 }
 
-func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (data ledgercore.AccountResource, validThrough basics.Round, err error) {
+func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, synchronized bool) (data ledgercore.AccountResource, validThrough basics.Round, err error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -1192,6 +1192,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			if offset == uint64(len(au.deltas)) {
 				return macct.resource, rnd, nil
 			}
+			ctype := macct.resource.GetCreatableType()
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
 			// Traverse the deltas backwards to ensure that later updates take
@@ -1230,7 +1231,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.lookupResources(addr, aidx, ctype)
+		persistedData, err = au.accountsq.lookupResources(addr, aidx)
 		if persistedData.round == currentDbRound {
 			if persistedData.addrid != 0 {
 				// if we read actual data return it

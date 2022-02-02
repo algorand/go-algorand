@@ -1963,7 +1963,7 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data persistedResourcesData, err error) {
+func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.CreatableIndex) (data persistedResourcesData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -1976,12 +1976,6 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 				if err != nil {
 					return err
 				}
-				if ctype == basics.AssetCreatable && !data.data.IsAsset() {
-					return fmt.Errorf("lookupResources asked for an asset but got %v", data.data)
-				}
-				if ctype == basics.AppCreatable && !data.data.IsApp() {
-					return fmt.Errorf("lookupResources asked for an app but got %v", data.data)
-				}
 				return nil
 			}
 			data.data = makeResourcesData(0)
@@ -1992,7 +1986,7 @@ func (qs *accountsDbQueries) lookupResources(addr basics.Address, aidx basics.Cr
 		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
 			// Return the zero value of data
-			return fmt.Errorf("unable to query resource data for address %v aidx %v ctype %v : %w", addr, aidx, ctype, err)
+			return fmt.Errorf("unable to query resource data for address %v aidx %v : %w", addr, aidx, err)
 		}
 		return err
 	})
