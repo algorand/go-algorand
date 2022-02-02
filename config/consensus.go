@@ -1044,7 +1044,14 @@ func initConsensusProtocols() {
 
 	v31.EnableBatchVerification = true
 
+	v31.RewardsCalculationFix = true
+
+	v31.MaxProposedExpiredOnlineAccounts = 32
+
 	Consensus[protocol.ConsensusV31] = v31
+
+	// v30 can be upgraded to v31, with an update delay of 7 days ( see calculation above )
+	v30.ApprovedUpgrades[protocol.ConsensusV31] = 140000
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
@@ -1063,10 +1070,6 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 6 / AVM 1.1
 	vFuture.LogicSigVersion = 6
-
-	vFuture.MaxProposedExpiredOnlineAccounts = 32
-
-	vFuture.RewardsCalculationFix = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

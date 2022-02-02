@@ -164,7 +164,8 @@ const ConsensusV30 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bc36005dbd776e6d1eaf0c560619bb183215645c",
 )
 
-// ConsensusV31 enables the batch verification for ed25519 signatures
+// ConsensusV31 enables the batch verification for ed25519 signatures. Fix reward calculation issue and introduces the ability
+// to force an expired participation offline
 const ConsensusV31 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bbe7001b2ec84f8512b089fd89599ea887bb8b71",
 )
@@ -181,7 +182,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV30
+const ConsensusCurrentVersion = ConsensusV31
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
