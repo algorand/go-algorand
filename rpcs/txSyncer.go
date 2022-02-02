@@ -145,7 +145,7 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 						pendingTxidMap[txid] = struct{}{}
 					}
 				}
-				if _, has := pendingTxidMap[txID]; !has {
+				if _, has := pendingTxidMap[txID]; has {
 					// we just found a transaction that shouldn't have been
 					// included in the response.  maybe this is a false positive
 					// and other transactions in the group aren't included in the
