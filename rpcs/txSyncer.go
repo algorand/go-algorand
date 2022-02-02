@@ -135,7 +135,7 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 		for i := range txgroup {
 			txID := txgroup[i].ID()
 			if filter.Test(txID[:]) {
-				// having the transaction id tested here migth still fall into the false-postive class, so we
+				// having the transaction id tested here might still fall into the false-postive class, so we
 				// need to perform explicit check. This is not too bad since we're doing this check only on the fail
 				// cases.
 				if pendingTxidMap == nil {
