@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
@@ -2438,4 +2439,89 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		executeMegaContract(b)
 	}
+}
+
+// TestClearStateInner ensures that ClearState programs can also run inner txns
+func TestClearStateInner(t *testing.T) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	app0 := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+	int pay
+	itxn_field TypeEnum
+	int 3000
+	itxn_field Amount
+    txn Sender
+    itxn_field Receiver
+itxn_submit`),
+		ClearStateProgram: `
+itxn_begin
+	int pay
+	itxn_field TypeEnum
+	int 2000
+	itxn_field Amount
+    txn Sender
+    itxn_field Receiver
+itxn_submit
+int 1
+`,
+	}
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &app0)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+
+	fund0 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index0.Address(),
+		Amount:   1_000_000,
+	}
+
+	optin := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: index0,
+		OnCompletion:  transactions.OptInOC,
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fund0, &optin)
+	vb = endBlock(t, l, eval)
+
+	// Check that addrs[1] got paid during optin, and pay txn is in block
+	ad1 := micros(t, l, addrs[1])
+
+	// paid 3000, but 1000 fee, 2000 bump
+	require.Equal(t, uint64(2000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+	// InnerTxn in block ([1] position, because followed fund0)
+	require.Len(t, vb.Block().Payset[1].EvalDelta.InnerTxns, 1)
+	require.Equal(t, vb.Block().Payset[1].EvalDelta.InnerTxns[0].Txn.Amount.Raw, uint64(3000))
+
+	clear := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: index0,
+		OnCompletion:  transactions.ClearStateOC,
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &clear)
+	vb = endBlock(t, l, eval)
+
+	// Check if addrs[1] got paid during clear, and pay txn is in block
+	ad1 = micros(t, l, addrs[1])
+
+	// had 2000 bump, now paid 2k, charge 1k, left with 3k total bump
+	require.Equal(t, uint64(3000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+	// InnerTxn in block
+	require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, index0)
+	require.Equal(t, vb.Block().Payset[0].Txn.OnCompletion, transactions.ClearStateOC)
+	require.Len(t, vb.Block().Payset[0].EvalDelta.InnerTxns, 1)
+	require.Equal(t, vb.Block().Payset[0].EvalDelta.InnerTxns[0].Txn.Amount.Raw, uint64(2000))
 }

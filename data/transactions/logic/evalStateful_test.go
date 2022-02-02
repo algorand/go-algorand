@@ -400,6 +400,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 	case 1:
 		evalProblem = problems[0]
 	case 0:
+		// no problems == expect success
 	default:
 		require.Fail(t, "Misused testApp: %d problems", len(problems))
 	}

@@ -986,6 +986,56 @@ func TestAppInsMinBalance(t *testing.T) {
 	require.Len(t, vb.Delta().ModifiedAppLocalStates, 50)
 }
 
+// TestLogsInBlock ensures that logs appear in the block properly
+func TestLogsInBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+
+	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	require.NoError(t, err)
+	defer l.Close()
+
+	const appid basics.AppIndex = 1
+	createTxn := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: "byte \"APP\"\n log\n int 1",
+		// Fail the clear state
+		ClearStateProgram: "byte \"CLR\"\n log\n int 0",
+	}
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &createTxn)
+	vb := endBlock(t, l, eval)
+	createInBlock := vb.Block().Payset[0]
+	require.Equal(t, "APP", createInBlock.ApplyData.EvalDelta.Logs[0])
+
+	optInTxn := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        addrs[1],
+		ApplicationID: appid,
+		OnCompletion:  transactions.OptInOC,
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &optInTxn)
+	vb = endBlock(t, l, eval)
+	optInInBlock := vb.Block().Payset[0]
+	require.Equal(t, "APP", optInInBlock.ApplyData.EvalDelta.Logs[0])
+
+	clearTxn := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        addrs[1],
+		ApplicationID: appid,
+		OnCompletion:  transactions.ClearStateOC,
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &clearTxn)
+	vb = endBlock(t, l, eval)
+	clearInBlock := vb.Block().Payset[0]
+	// Logs do not appear if the ClearState failed
+	require.Len(t, clearInBlock.ApplyData.EvalDelta.Logs, 0)
+}
+
 // TestGhostTransactions confirms that accounts that don't even exist
 // can be the Sender in some situations.  If some other transaction
 // covers the fee, and the transaction itself does not require an
