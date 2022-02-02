@@ -19,6 +19,7 @@ package merklearray
 import (
 	"fmt"
 	"hash"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -555,6 +556,10 @@ func TestSizeLimitsMerkle(t *testing.T) {
 	var outTree Tree
 	err := protocol.Decode(bytes, &outTree)
 	require.Contains(t, err.Error(), "> 17 at Levels")
+
+	// Garbage collection helps prevent trashing
+	// for next tests
+	runtime.GC()
 }
 
 func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, positions []uint64) (*Tree, *Proof) {

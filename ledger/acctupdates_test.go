@@ -690,9 +690,6 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
-	runtime.GC()
 
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
@@ -771,8 +768,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		}
 	}
 
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
+	// Garbage collection helps prevent trashing for next tests
 	runtime.GC()
 }
 
@@ -1317,10 +1313,6 @@ func TestCompactDeltas(t *testing.T) {
 func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
-	runtime.GC()
-
 	protocolVersion := protocol.ConsensusCurrentVersion
 	proto := config.Consensus[protocolVersion]
 
@@ -1411,8 +1403,8 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
 	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.cachedDBRound)
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
+
+	// Garbage collection helps prevent trashing for next tests
 	runtime.GC()
 }
 
