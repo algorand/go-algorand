@@ -704,7 +704,8 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	return aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+	data, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+	return data, validThrough, err
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {

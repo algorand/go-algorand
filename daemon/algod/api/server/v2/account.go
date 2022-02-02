@@ -461,34 +461,3 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Params: assetParams,
 	}
 }
-
-// AssetHoldingToAssetHolding converts basics.AssetHolding to generated.AssetHolding
-func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) generated.Asset {
-	frozen := params.DefaultFrozen
-	assetParams := generated.AssetParams{
-		Creator:       creator,
-		Total:         params.Total,
-		Decimals:      uint64(params.Decimals),
-		DefaultFrozen: &frozen,
-		Name:          strOrNil(printableUTF8OrEmpty(params.AssetName)),
-		NameB64:       byteOrNil([]byte(params.AssetName)),
-		UnitName:      strOrNil(printableUTF8OrEmpty(params.UnitName)),
-		UnitNameB64:   byteOrNil([]byte(params.UnitName)),
-		Url:           strOrNil(printableUTF8OrEmpty(params.URL)),
-		UrlB64:        byteOrNil([]byte(params.URL)),
-		Clawback:      addrOrNil(params.Clawback),
-		Freeze:        addrOrNil(params.Freeze),
-		Manager:       addrOrNil(params.Manager),
-		Reserve:       addrOrNil(params.Reserve),
-	}
-	if params.MetadataHash != ([32]byte{}) {
-		metadataHash := make([]byte, len(params.MetadataHash))
-		copy(metadataHash, params.MetadataHash[:])
-		assetParams.MetadataHash = &metadataHash
-	}
-
-	return generated.Asset{
-		Index:  uint64(idx),
-		Params: assetParams,
-	}
-}

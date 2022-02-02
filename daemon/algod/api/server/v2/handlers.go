@@ -271,9 +271,13 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	consensus, err := myLedger.ConsensusParams(lastRound)
-	if err != nil {
-		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
+	// check against configured total limit on assets/apps
+	if maxResults := v2.Node.Config().MaxAccountsAPIResults; maxResults != 0 {
+		totalResults := uint64(len(record.Assets) + len(record.AssetParams) + len(record.AppLocalStates) + len(record.AppParams))
+		if totalResults > maxResults {
+			return badRequest(ctx, fmt.Errorf("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults),
+				fmt.Sprintf("Limit of %d exceeded, account has %d results", maxResults, totalResults), v2.Log)
+		}
 	}
 
 	if handle == protocol.CodecHandle {
@@ -282,6 +286,11 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 		}
 		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	consensus, err := myLedger.ConsensusParams(lastRound)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
 	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
