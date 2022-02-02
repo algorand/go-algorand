@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -167,6 +168,9 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, fbc, fbc2)
+	// Garbage collection helps prevent trashing
+	// for next tests
+	runtime.GC()
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
