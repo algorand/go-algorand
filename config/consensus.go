@@ -1040,9 +1040,15 @@ func initConsensusProtocols() {
 	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
 	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
 
+	v31 := v30
+
+	v31.EnableBatchVerification = true
+
+	Consensus[protocol.ConsensusV31] = v31
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v30
+	vFuture := v31
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -1059,8 +1065,6 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 6
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
-
-	vFuture.EnableBatchVerification = true
 
 	vFuture.RewardsCalculationFix = true
 

@@ -164,6 +164,11 @@ const ConsensusV30 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bc36005dbd776e6d1eaf0c560619bb183215645c",
 )
 
+// ConsensusV31 enables the batch verification for ed25519 signatures
+const ConsensusV31 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/bbe7001b2ec84f8512b089fd89599ea887bb8b71",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
