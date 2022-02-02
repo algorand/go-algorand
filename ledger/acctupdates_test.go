@@ -2333,7 +2333,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 
 	// issue a lookupWithoutRewards while persistedData.round != au.cachedDBRound
 	// when synchronized=false it will fail fast
-	_, _, err := au.lookupWithoutRewards(rnd, basics.Address{}, false)
+	_, _, _, _, err := au.lookupWithoutRewards(rnd, basics.Address{}, false)
 	require.Equal(t, err, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1})
 
 	// release the postCommit lock, once au.lookupWithoutRewards hits au.accountsReadCond.Wait()
@@ -2381,7 +2381,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 			}
 
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
-			d, validThrough, err := au.lookupWithoutRewards(rnd, addr, true)
+			d, validThrough, _, _, err := au.lookupWithoutRewards(rnd, addr, true)
 			require.NoError(t, err)
 			require.Equal(t, d, ledgercore.ToAccountData(data))
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)

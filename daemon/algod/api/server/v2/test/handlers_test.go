@@ -167,7 +167,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, l.Latest(), totalsRound)
 	totalRewardUnits := totals.RewardUnits()
-	poolBal, _, err := l.LookupLatest(poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	require.NoError(t, err)
 
 	var blk bookkeeping.Block

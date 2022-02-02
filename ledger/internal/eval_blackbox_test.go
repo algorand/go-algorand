@@ -677,18 +677,18 @@ func TestMinBalanceChanges(t *testing.T) {
 		AssetReceiver: addrs[5],
 	}
 
-	ad0init, _, err := l.LookupLatest(addrs[0])
+	ad0init, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5init, _, err := l.LookupLatest(addrs[5])
+	ad5init, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	eval := nextBlock(t, l, true, nil)
 	txns(t, l, eval, &createTxn, &optInTxn)
 	endBlock(t, l, eval)
 
-	ad0new, _, err := l.LookupLatest(addrs[0])
+	ad0new, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5new, _, err := l.LookupLatest(addrs[5])
+	ad5new, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	proto := l.GenesisProto()
@@ -716,9 +716,9 @@ func TestMinBalanceChanges(t *testing.T) {
 	txns(t, l, eval, &optOutTxn, &closeTxn)
 	endBlock(t, l, eval)
 
-	ad0final, _, err := l.LookupLatest(addrs[0])
+	ad0final, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5final, _, err := l.LookupLatest(addrs[5])
+	ad5final, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
 	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
