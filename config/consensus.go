@@ -1041,7 +1041,7 @@ func initConsensusProtocols() {
 	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
 
 	v31 := v30
-
+	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	v31.EnableBatchVerification = true
 
 	v31.RewardsCalculationFix = true
