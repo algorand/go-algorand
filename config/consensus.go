@@ -399,6 +399,9 @@ type ConsensusParams struct {
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
 
+	//EnableBatchVerification enable the use of the batch verification algorithm.
+	EnableBatchVerification bool
+
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 }
@@ -1066,6 +1069,8 @@ func initConsensusProtocols() {
 	// application storage, and therefore would not produce catchpoints and/or
 	// catchpoint labels prior to this feature being enabled.
 	vFuture.EnableAccountDataResourceSeparation = true
+
+	vFuture.EnableBatchVerification = true
 
 	vFuture.RewardsCalculationFix = true
 
