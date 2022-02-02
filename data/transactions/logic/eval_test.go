@@ -1012,6 +1012,10 @@ const globalV6TestProgram = globalV5TestProgram + `
 // No new globals in v6
 `
 
+const globalV7TestProgram = globalV6TestProgram + `
+// No new globals in v7
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1043,6 +1047,10 @@ func TestGlobal(t *testing.T) {
 		},
 		6: {
 			GroupID, globalV6TestProgram,
+			EvalStateful, CheckStateful,
+		},
+		7: {
+			GroupID, globalV7TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
