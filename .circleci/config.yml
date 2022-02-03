@@ -195,8 +195,11 @@ commands:
           name: install deps
           shell: bash.exe
           command: |
+            set -e
             choco install -y msys2 pacman make wget --force
+            echo "Installing golang"
             choco install -y golang --version=1.14.7 --force
+            echo "Finished installing golang"
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
@@ -671,6 +674,7 @@ jobs:
       - run:
           no_output_timeout: 45m
           command: |
+            set -e
             #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
