@@ -23,7 +23,9 @@ package sortition
 // #include "sortition.h"
 import "C"
 import (
+	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -33,14 +35,15 @@ func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cry
 	binomialN := float64(money)
 	binomialP := expectedSize / float64(totalMoney)
 
-	t := &big.Int{}
-	t.SetBytes(vrfOutput[:])
-
 	precision := uint(8 * (len(vrfOutput) + 1))
-	max, b, err := big.ParseFloat("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0, precision, big.ToNearestEven)
+	maxFloatString := fmt.Sprintf("0x%s", strings.Repeat("f", crypto.DigestSize*2+1))
+	max, b, err := big.ParseFloat(maxFloatString, 0, precision, big.ToNearestEven)
 	if b != 16 || err != nil {
 		panic("failed to parse big float constant in sortition")
 	}
+
+	t := &big.Int{}
+	t.SetBytes(vrfOutput[:])
 
 	h := big.Float{}
 	h.SetPrec(precision)
