@@ -32,12 +32,14 @@ import (
 // A ledger interface that Indexer implements. This is a simplified version of the
 // LedgerForEvaluator interface. Certain functions that the evaluator doesn't use
 // in the trusting mode are excluded, and the present functions only request data
-// at the latest round.
+// at the latest round. However, functions below can be used for batch querying.
 type indexerLedgerForEval interface {
 	LatestBlockHdr() (bookkeeping.BlockHeader, error)
 	// The value of the returned map is nil iff the account was not found.
 	LookupWithoutRewards(map[basics.Address]struct{}) (map[basics.Address]*ledgercore.AccountData, error)
-	LookupResources(map[basics.Address]map[Creatable]struct{}) (map[basics.Address]map[Creatable]*ledgercore.AccountResource, error)
+	// The returned map must have the same structure (elements) as the input map.
+	// If a resource is not found, it must be nil in `ledgercore.AccountResource`.
+	LookupResources(map[basics.Address]map[Creatable]struct{}) (map[basics.Address]map[Creatable]ledgercore.AccountResource, error)
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
@@ -54,8 +56,9 @@ type FoundAddress struct {
 // resources one by one.
 type EvalForIndexerResources struct {
 	// The map value is nil iff the account does not exist. The account data is owned here.
-	Accounts map[basics.Address]*basics.AccountData
-	Creators map[Creatable]FoundAddress
+	Accounts  map[basics.Address]*ledgercore.AccountData
+	Resources map[basics.Address]map[Creatable]ledgercore.AccountResource
+	Creators  map[Creatable]FoundAddress
 }
 
 // Creatable represent a single creatable object.
@@ -96,7 +99,7 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 		if pad == nil {
 			return ledgercore.AccountData{}, round, nil
 		}
-		return ledgercore.ToAccountData(*pad), round, nil
+		return *pad, round, nil
 	}
 
 	accountDataMap, err := l.il.LookupWithoutRewards(map[basics.Address]struct{}{address: {}})
@@ -111,35 +114,12 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 	return *accountData, round, nil
 }
 
-// toAccountResource returns ledgercore.AccountResource for a creatable in basics.AccountData
-func toAccountResource(ad basics.AccountData, aidx basics.CreatableIndex, ctype basics.CreatableType) ledgercore.AccountResource {
-	var ret ledgercore.AccountResource
-	switch ctype {
-	case basics.AppCreatable:
-		if a, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
-			ret.AppLocalState = &a
-		}
-		if a, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
-			ret.AppParams = &a
-		}
-	case basics.AssetCreatable:
-		if a, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
-			ret.AssetHolding = &a
-		}
-		if a, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-			ret.AssetParams = &a
-		}
-	}
-	return ret
-}
-
 func (l indexerLedgerConnector) LookupResource(round basics.Round, address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	// check to see if the account data in the cache.
-	if pad, has := l.roundResources.Accounts[address]; has {
-		if pad == nil {
-			return ledgercore.AccountResource{}, nil
+	if creatableMap, ok := l.roundResources.Resources[address]; ok {
+		if resource, ok := creatableMap[Creatable{aidx, ctype}]; ok {
+			return resource, nil
 		}
-		return toAccountResource(*pad, aidx, ctype), nil
 	}
 
 	accountResourceMap, err :=
@@ -148,15 +128,7 @@ func (l indexerLedgerConnector) LookupResource(round basics.Round, address basic
 		return ledgercore.AccountResource{}, err
 	}
 
-	creatables, ok := accountResourceMap[address]
-	if !ok {
-		return ledgercore.AccountResource{}, nil
-	}
-	accountResource := creatables[Creatable{aidx, ctype}]
-	if accountResource == nil {
-		return ledgercore.AccountResource{}, nil
-	}
-	return *accountResource, nil
+	return accountResourceMap[address][Creatable{aidx, ctype}], nil
 }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.

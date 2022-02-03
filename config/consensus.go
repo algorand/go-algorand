@@ -399,6 +399,9 @@ type ConsensusParams struct {
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
 
+	//EnableBatchVerification enable the use of the batch verification algorithm.
+	EnableBatchVerification bool
+
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 }
@@ -1078,6 +1081,8 @@ func initConsensusProtocols() {
 
 	// Remove limits on maximum number of apps a single account can opt into
 	vFuture.MaxAppsOptedIn = 0
+
+	vFuture.EnableBatchVerification = true
 
 	vFuture.RewardsCalculationFix = true
 

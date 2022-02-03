@@ -1207,7 +1207,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		err = func() (err error) {
 			// make a scope to use defer
 			var resRows *sql.Rows
-			resRows, err = tx.Query("SELECT aidx, rtype, data FROM resources where addrid = ?", rowid)
+			resRows, err = tx.Query("SELECT aidx, data FROM resources where addrid = ?", rowid)
 			if err != nil {
 				return
 			}
@@ -1216,8 +1216,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			for resRows.Next() {
 				var buf []byte
 				var aidx int64
-				var rtype int64
-				err = resRows.Scan(&aidx, &rtype, &buf)
+				err = resRows.Scan(&aidx, &buf)
 				if err != nil {
 					return
 				}
@@ -1236,18 +1235,12 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 					if resData.IsHolding() {
 						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
 					}
-					if basics.CreatableType(rtype) != basics.AppCreatable {
-						return fmt.Errorf("addr %s (%d) aidx = %d type mismatch %d != %d", addr.String(), rowid.Int64, aidx, rtype, basics.AppCreatable)
-					}
 				} else if resData.IsAsset() {
 					if resData.IsOwning() {
 						ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
 					}
 					if resData.IsHolding() {
 						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
-					}
-					if basics.CreatableType(rtype) != basics.AssetCreatable {
-						return fmt.Errorf("addr %s (%d) aidx = %d type mismatch %d != %d", addr.String(), rowid.Int64, aidx, rtype, basics.AssetCreatable)
 					}
 				} else {
 					return err

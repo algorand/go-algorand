@@ -42,7 +42,6 @@ func TestLRUBasicResources(t *testing.T) {
 		res := persistedResourcesData{
 			addrid: int64(i),
 			aidx:   basics.CreatableIndex(i),
-			rtype:  basics.CreatableType(i % 2),
 			round:  basics.Round(i),
 			data:   resourcesData{Total: uint64(i)},
 		}
@@ -58,7 +57,6 @@ func TestLRUBasicResources(t *testing.T) {
 		require.Equal(t, int64(i), res.addrid)
 		require.Equal(t, uint64(i), res.data.Total)
 		require.Equal(t, basics.CreatableIndex(i), res.aidx)
-		require.Equal(t, basics.CreatableType(i%2), res.rtype)
 	}
 
 	// verify expected missing entries
@@ -83,7 +81,6 @@ func TestLRUBasicResources(t *testing.T) {
 			require.Equal(t, int64(i), res.addrid)
 			require.Equal(t, uint64(i), res.data.Total)
 			require.Equal(t, basics.CreatableIndex(i), res.aidx)
-			require.Equal(t, basics.CreatableType(i%2), res.rtype)
 		} else {
 			require.False(t, has)
 			require.Equal(t, persistedResourcesData{}, res)
@@ -105,7 +102,6 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 			res := persistedResourcesData{
 				addrid: int64(i),
 				aidx:   basics.CreatableIndex(i),
-				rtype:  basics.CreatableType(i % 2),
 				round:  basics.Round(i),
 				data:   resourcesData{Total: uint64(i)},
 			}
@@ -159,7 +155,6 @@ func TestLRUResourcesPendingWritesWarning(t *testing.T) {
 			res := persistedResourcesData{
 				addrid: int64(i),
 				aidx:   basics.CreatableIndex(i),
-				rtype:  basics.CreatableType(i % 2),
 				round:  basics.Round(i),
 				data:   resourcesData{Total: uint64(i)},
 			}
@@ -187,7 +182,6 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 		res := persistedResourcesData{
 			addrid: int64(i),
 			aidx:   basics.CreatableIndex(i),
-			rtype:  basics.CreatableType(i % 2),
 			round:  basics.Round(i),
 			data:   resourcesData{Total: uint64(i)},
 		}
@@ -205,7 +199,6 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 		require.Equal(t, int64(i), res.addrid)
 		require.Equal(t, uint64(i), res.data.Total)
 		require.Equal(t, basics.CreatableIndex(i), res.aidx)
-		require.Equal(t, basics.CreatableType(i%2), res.rtype)
 	}
 
 	// verify expected missing entries
@@ -261,7 +254,6 @@ func generatePersistedResourcesData(startRound, endRound int) []cachedResourceDa
 			persistedResourcesData: persistedResourcesData{
 				addrid: int64(i),
 				aidx:   basics.CreatableIndex(i),
-				rtype:  basics.AppCreatable,
 				round:  basics.Round(i + startRound),
 				data:   resourcesData{Total: uint64(i)},
 			},

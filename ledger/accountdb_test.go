@@ -293,6 +293,17 @@ func TestAccountDBRound(t *testing.T) {
 	actualTotals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
+
+	// check LoadAllFullAccounts
+	loaded := make(map[basics.Address]basics.AccountData, len(accts))
+	acctCb := func(addr basics.Address, data basics.AccountData) {
+		loaded[addr] = data
+	}
+	count, err := LoadAllFullAccounts(context.Background(), tx, "accountbase", "resources", acctCb)
+	require.NoError(t, err)
+	require.Equal(t, count, len(accts))
+	require.Equal(t, count, len(loaded))
+	require.Equal(t, accts, loaded)
 }
 
 // TestAccountDBInMemoryAcct checks in-memory only account modifications are handled correctly by
@@ -2292,7 +2303,7 @@ func (m *mockAccountWriter) updateAccount(rowid int64, normBalance uint64, data 
 	return 1, nil
 }
 
-func (m *mockAccountWriter) insertResource(addrid int64, aidx basics.CreatableIndex, rtype basics.CreatableType, data resourcesData) (rowid int64, err error) {
+func (m *mockAccountWriter) insertResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowid int64, err error) {
 	key := mockResourcesKey{addrid, aidx}
 	if _, ok := m.resources[key]; ok {
 		return 0, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", addrid, aidx)
@@ -2491,7 +2502,6 @@ func compactResourcesDeltasPermutations(a *require.Assertions, crd compactResour
 // Then this rowid was discovered as addrid for opt-in operation and the "UNIQUE constraint failed" error happened.
 func TestAccountUnorderedUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	mock := makeMockAccountWriter()
@@ -2581,5 +2591,105 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 				a.Equal(3, len(updatedResources))
 			})
 		}
+	}
+}
+
+// TestAccountsNewRoundDeletedResourceEntries checks that accountsNewRound
+// returns updated entries with empty addrid as an indication of deleted entry
+func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	mock := makeMockAccountWriter()
+	addr1 := ledgertesting.RandomAddress()
+	addr2 := ledgertesting.RandomAddress()
+	observer := ledgertesting.RandomAddress()
+	aidx := basics.AppIndex(22045503)
+
+	// set a base state: fund couple accounts, create an app and opt-in
+	mock.setAccount(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 10000000}, TotalAppParams: 1}})
+	err := mock.setResource(observer, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppParams: &basics.AppParams{ApprovalProgram: []byte{1, 2, 3}}})
+	a.NoError(err)
+	mock.setAccount(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 10000000}, TotalAppLocalStates: 1}})
+	err = mock.setResource(addr1, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppLocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+	a.NoError(err)
+
+	updates := make([]ledgercore.NewAccountDeltas, 3)
+	// fund addr2, opt-in, delete app, move funds
+	updates[0].Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAppLocalStates: 1}})
+	updates[0].UpsertAppResource(addr2, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+
+	// close addr1: delete app, move funds
+	updates[1].UpsertAppResource(addr1, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+	updates[1].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 20000000}, TotalAppParams: 1}})
+	updates[1].Upsert(addr1, ledgercore.AccountData{})
+
+	// close addr2: delete app, move funds
+	updates[2].UpsertAppResource(addr2, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+	updates[2].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 11000000}, TotalAppParams: 1}})
+	updates[2].Upsert(addr2, ledgercore.AccountData{})
+
+	dbRound := basics.Round(1)
+	latestRound := basics.Round(10)
+
+	var baseAccounts lruAccounts
+	baseAccounts.init(nil, 100, 80)
+	var baseResources lruResources
+	baseResources.init(nil, 100, 80)
+
+	pad, ok, err := mock.lookup(addr1)
+	a.NoError(err)
+	a.True(ok)
+	baseAccounts.write(pad)
+	pad, ok, err = mock.lookup(observer)
+	a.NoError(err)
+	a.True(ok)
+	baseAccounts.write(pad)
+	baseAccounts.write(persistedAccountData{addr: addr2}) // put an empty record for addr2 to get rid of lookups
+
+	acctDeltas := makeCompactAccountDeltas(updates, dbRound, false, baseAccounts)
+	a.Empty(acctDeltas.misses)
+	a.Equal(3, acctDeltas.len())
+
+	// we want to have (addr1, aidx) and (observer, aidx)
+	prd, ok, err := mock.lookupResource(addr1, basics.CreatableIndex(aidx))
+	a.NoError(err)
+	a.True(ok)
+	baseResources.write(prd, addr1)
+	prd, ok, err = mock.lookupResource(observer, basics.CreatableIndex(aidx))
+	a.NoError(err)
+	a.True(ok)
+	baseResources.write(prd, observer)
+
+	resDeltas := makeCompactResourceDeltas(updates, dbRound, false, baseAccounts, baseResources)
+	a.Equal(1, len(resDeltas.misses)) // (addr2, aidx) does not exist
+	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
+
+	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
+		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
+	)
+	a.NoError(err)
+	a.Equal(3, len(updatedAccounts))
+	a.Equal(2, len(updatedResources))
+
+	// one deletion entry for pre-existing account addr1, and one entry for in-memory account addr2
+	// in base accounts updates and in resources updates
+	addressesToCheck := map[basics.Address]bool{addr1: true, addr2: true}
+	matches := 0
+	for _, upd := range updatedAccounts {
+		if addressesToCheck[upd.addr] {
+			a.Equal(int64(0), upd.rowid)
+			a.Empty(upd.accountData)
+			matches++
+		}
+	}
+	a.Equal(len(addressesToCheck), matches)
+
+	for addr := range addressesToCheck {
+		upd := updatedResources[addr]
+		a.Equal(1, len(upd))
+		a.Equal(int64(0), upd[0].addrid)
+		a.Equal(basics.CreatableIndex(aidx), upd[0].aidx)
+		a.Equal(makeResourcesData(uint64(0)), upd[0].data)
 	}
 }

@@ -99,7 +99,7 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 
 	// Check signature
 	ephID := basics.OneTimeIDForRound(b.SigRound, p.KeyDilution)
-	if verifySig && !p.PK.Verify(ephID, b.Msg, sig) {
+	if verifySig && !p.PK.Verify(ephID, b.Msg, sig, b.EnableBatchVerification) {
 		return fmt.Errorf("signature does not verify under ID %v", ephID)
 	}
 
