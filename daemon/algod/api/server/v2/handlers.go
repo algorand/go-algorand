@@ -266,20 +266,26 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	}
 
 	myLedger := v2.Node.Ledger()
-	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupLatest(addr)
-	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-	}
 
-	// check against configured total limit on assets/apps
+	// count total # of resources, if max limit is set
 	if maxResults := v2.Node.Config().MaxAccountsAPIResults; maxResults != 0 {
-		totalResults := uint64(len(record.Assets) + len(record.AssetParams) + len(record.AppLocalStates) + len(record.AppParams))
+		record, _, _, err := myLedger.LookupAccount(myLedger.Latest(), addr)
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
 			return badRequest(ctx, fmt.Errorf("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults),
 				fmt.Sprintf("Limit of %d exceeded, account has %d results", maxResults, totalResults), v2.Log)
 		}
 	}
 
+	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupLatest(addr)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	// check against configured total limit on assets/apps
 	if handle == protocol.CodecHandle {
 		data, err := encode(handle, record)
 		if err != nil {
@@ -628,11 +634,6 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
-	var maxAcctResults *uint64
-	if max := v2.Node.Config().MaxAccountsAPIResults; max != 0 {
-		maxAcctResults = &max
-	}
-
 	response := generated.NodeStatusResponse{
 		LastRound:                   uint64(stat.LastRound),
 		LastVersion:                 string(stat.LastVersion),
@@ -649,7 +650,6 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
-		MaxAccountsApiResults:       maxAcctResults,
 	}
 
 	return ctx.JSON(http.StatusOK, response)

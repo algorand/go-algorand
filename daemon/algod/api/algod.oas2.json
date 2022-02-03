@@ -2842,10 +2842,6 @@
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
-          },
-          "max-accounts-api-results": {
-            "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
-            "type": "integer"
           }
         }
       }

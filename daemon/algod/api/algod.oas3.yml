@@ -468,10 +468,6 @@
                   "description": "LastVersion indicates the last consensus version supported",
                   "type": "string"
                 },
-                "max-accounts-api-results": {
-                  "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
-                  "type": "integer"
-                },
                 "next-version": {
                   "description": "NextVersion of consensus protocol to use",
                   "type": "string"
@@ -3367,10 +3363,6 @@
                       "description": "LastVersion indicates the last consensus version supported",
                       "type": "string"
                     },
-                    "max-accounts-api-results": {
-                      "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
-                      "type": "integer"
-                    },
                     "next-version": {
                       "description": "NextVersion of consensus protocol to use",
                       "type": "string"
@@ -3497,10 +3489,6 @@
                     "last-version": {
                       "description": "LastVersion indicates the last consensus version supported",
                       "type": "string"
-                    },
-                    "max-accounts-api-results": {
-                      "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
-                      "type": "integer"
                     },
                     "next-version": {
                       "description": "NextVersion of consensus protocol to use",

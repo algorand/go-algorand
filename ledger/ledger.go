@@ -480,14 +480,14 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (ledgerc
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, rnd, rewardsProto, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
+	data, rnd, rewardsVersion, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards := data.MicroAlgos
-	data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
 
 	return data, rnd, withoutRewards, nil
 }
