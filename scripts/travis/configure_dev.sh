@@ -29,7 +29,7 @@ elif [[ "${OS}" == "darwin" ]]; then
 elif [[ "${OS}" == "windows" ]]; then
     git config --global core.autocrlf true
     # Golang probably is not installed under MSYS2 so add the environment variable temporarily
-    export GOPATH=$HOME/go
+    # export GOPATH=$HOME/go
     mkdir -p $GOPATH/bin
 fi
 
