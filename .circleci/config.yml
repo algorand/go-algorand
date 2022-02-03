@@ -56,7 +56,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64"] #, "arm64", "mac_amd64"]
 
       - test:
           name: << matrix.platform >>_test
@@ -69,6 +69,7 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
+                - /Moving-to-centos-stream-8\/.*/
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -81,6 +82,7 @@ workflows:
               only:
                 - /rel\/.*/
                 - /hotfix\/.*/
+                - /Moving-to-centos-stream-8\/.*/
           context: slack-secrets
 
       - integration:
@@ -92,15 +94,15 @@ workflows:
           filters:
             <<: *filters-default
 
-      - integration_nightly:
-          name: << matrix.platform >>_integration_nightly
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
-          context: slack-secrets
+      # - integration_nightly:
+      #     name: << matrix.platform >>_integration_nightly
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-nightly
+      #     context: slack-secrets
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
@@ -111,15 +113,15 @@ workflows:
           filters:
             <<: *filters-default
 
-      - e2e_expect_nightly:
-          name: << matrix.platform >>_e2e_expect_nightly
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
-          context: slack-secrets
+      # - e2e_expect_nightly:
+      #     name: << matrix.platform >>_e2e_expect_nightly
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-nightly
+      #     context: slack-secrets
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
@@ -130,22 +132,22 @@ workflows:
           filters:
             <<: *filters-default
 
-      - e2e_subs_nightly:
-          name: << matrix.platform >>_e2e_subs_nightly
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_build
-          filters:
-            <<: *filters-nightly
-          context: slack-secrets
+      # - e2e_subs_nightly:
+      #     name: << matrix.platform >>_e2e_subs_nightly
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_build
+      #     filters:
+      #       <<: *filters-nightly
+      #     context: slack-secrets
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
-              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+              platform: ["amd64"] #, "arm64", "mac_amd64"]
+              job_type: ["test_nightly"] #["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
@@ -155,14 +157,15 @@ workflows:
             <<: *matrix-default
           requires:
             - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
-            - << matrix.platform >>_e2e_subs_nightly
+            # - << matrix.platform >>_integration_nightly_verification
+            # - << matrix.platform >>_e2e_expect_nightly_verification
+            # - << matrix.platform >>_e2e_subs_nightly
             - codegen_verification
           filters:
             branches:
               only:
                 - /rel\/.*/
+                - /Moving-to-centos-stream-8\/.*/
           context:
             - slack-secrets
             - aws-secrets
@@ -479,7 +482,7 @@ commands:
         - run:
             name: Upload Binaries << parameters.platform >>
             command: |
-              if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
+              if [ "${CIRCLE_BRANCH}" = "Moving-to-centos-stream-8" ]
               then
                 export NO_BUILD="true"
               fi
