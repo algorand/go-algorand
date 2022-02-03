@@ -50,7 +50,7 @@ workflows:
   version: 2
   "circleci_build_and_test":
     jobs:
-      - codegen_verification
+      # - codegen_verification
 
       - build:
           name: << matrix.platform >>_build
