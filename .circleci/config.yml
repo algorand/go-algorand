@@ -69,7 +69,7 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - /hotfix\/.*/
-                - /Moving-to-centos-stream-8\/.*/
+                - /Moving\-to\-centos\-stream\-8/
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -82,7 +82,7 @@ workflows:
               only:
                 - /rel\/.*/
                 - /hotfix\/.*/
-                - /Moving-to-centos-stream-8\/.*/
+                - /Moving\-to\-centos\-stream\-8/
           context: slack-secrets
 
       - integration:
@@ -165,7 +165,7 @@ workflows:
             branches:
               only:
                 - /rel\/.*/
-                - /Moving-to-centos-stream-8\/.*/
+                - /Moving\-to\-centos\-stream\-8/
           context:
             - slack-secrets
             - aws-secrets
