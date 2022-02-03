@@ -29,7 +29,4 @@ const (
 const (
 	// MaxReveals is a bound on allocation and on numReveals to limit log computation
 	MaxReveals = 1024
-
-	// MaxProofDigests is a bound on allocation on number of proofs
-	MaxProofDigests = 20 * MaxReveals
 )

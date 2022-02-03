@@ -81,7 +81,7 @@ func (tme *txnMerkleElem) ToBeHashed() (protocol.HashID, []byte) {
 	// The leaf contains two hashes: the transaction ID (hash of the
 	// transaction itself), and the hash of the entire SignedTxnInBlock.
 	txid := tme.txn.ID()
-	stib := crypto.HashObj(&tme.stib)
+	stib := tme.stib.Hash()
 
 	return protocol.TxnMerkleLeaf, txnMerkleToRaw(txid[:], stib[:])
 }

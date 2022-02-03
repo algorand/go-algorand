@@ -32,9 +32,9 @@ type (
 	// (for the root given in the long-term public key).
 	// More details can be found on Algorand's spec
 	Signature struct {
-		_struct   struct{}               `codec:",omitempty,omitemptyarray"`
-		Signature crypto.FalconSignature `codec:"sig"`
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+		Signature        crypto.FalconSignature      `codec:"sig"`
 		MerkleArrayIndex uint64                      `codec:"idx"`
 		Proof            merklearray.SingleLeafProof `codec:"prf"`
 		VerifyingKey     crypto.FalconVerifier       `codec:"vkey"`
@@ -67,12 +67,9 @@ type (
 	SignerContext struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		// the first round is used to set up the intervals.
-		FirstValid uint64 `codec:"rnd"`
-
-		Interval uint64 `codec:"iv"`
-
-		Tree merklearray.Tree `codec:"tree"`
+		FirstValid uint64           `codec:"rnd"`
+		Interval   uint64           `codec:"iv"`
+		Tree       merklearray.Tree `codec:"tree"`
 	}
 
 	// Verifier is used to verify a merklesignature.Signature produced by merklesignature.Secrets.

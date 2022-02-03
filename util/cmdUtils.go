@@ -21,9 +21,9 @@ import (
 	"time"
 )
 
-// RunWithProgress runs a given function in a new go-routine.
-// While the function runs. This function prints progress bar to stdout
-func RunWithProgress(asyncFunc func()) {
+// RunFuncWithSpinningCursor runs a given function in a go-routine,
+// while displaying a spinning cursor to the CLI
+func RunFuncWithSpinningCursor(asyncFunc func()) {
 	errChan := make(chan struct{}, 1)
 	go func() {
 		asyncFunc()

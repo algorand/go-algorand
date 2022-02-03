@@ -68,8 +68,8 @@ type Cert struct {
 
 	SigCommit    crypto.GenericDigest `codec:"c"`
 	SignedWeight uint64               `codec:"w"`
-	SigProofs    merklearray.Proof    `codec:"S,allocbound=MaxProofDigests"`
-	PartProofs   merklearray.Proof    `codec:"P,allocbound=MaxProofDigests"`
+	SigProofs    merklearray.Proof    `codec:"S"`
+	PartProofs   merklearray.Proof    `codec:"P"`
 
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants

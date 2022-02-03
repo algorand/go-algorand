@@ -965,6 +965,9 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		}
 
 		// Fetch an account.Participation from the database
+		// currently, we load all stateproof secrets to memory which is not ideal .
+		// as part of the participation interface changes , secrets will no longer
+		// be loaded like this.
 		part, err := account.RestoreParticipationWithSecrets(handle)
 		if err != nil {
 			handle.Close()

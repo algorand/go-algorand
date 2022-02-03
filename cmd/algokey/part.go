@@ -73,12 +73,9 @@ var partGenerateCmd = &cobra.Command{
 		partdb, err := db.MakeErasableAccessor(partKeyfile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
-			err = os.Remove(partKeyfile)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove the database file %s: %v\n", partKeyfile, err)
-			}
 			os.Exit(1)
 		}
+
 		var partkey account.PersistedParticipation
 		participationGen := func() {
 			partkey, err = account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
@@ -93,7 +90,7 @@ var partGenerateCmd = &cobra.Command{
 		}
 
 		fmt.Println("Please standby while generating keys. This might take a few minutes...")
-		util.RunWithProgress(participationGen)
+		util.RunFuncWithSpinningCursor(participationGen)
 		printPartkey(partkey.Participation)
 	},
 }

@@ -21,9 +21,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-deadlock"
 )
 
 func makeRecordingKeyManager(accounts []account.Participation) *recordingKeyManager {

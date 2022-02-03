@@ -886,7 +886,7 @@ var addParticipationKeyCmd = &cobra.Command{
 		}
 
 		reportInfof("Please standby while generating keys. This might take a few minutes...")
-		util.RunWithProgress(participationGen)
+		util.RunFuncWithSpinningCursor(participationGen)
 	},
 }
 
@@ -980,7 +980,7 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 		fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, keyLastValidRound)
 	}
 	fmt.Printf("Generated participation key please standby...")
-	util.RunWithProgress(genFunc)
+	util.RunFuncWithSpinningCursor(genFunc)
 	if err != nil {
 		return err
 	}
