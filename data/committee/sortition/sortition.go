@@ -30,13 +30,14 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+var maxFloatString string = fmt.Sprintf("0x%s", strings.Repeat("f", crypto.DigestSize*2))
+
 // Select runs the sortition function and returns the number of time the key was selected
 func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput crypto.Digest) uint64 {
 	binomialN := float64(money)
 	binomialP := expectedSize / float64(totalMoney)
 
 	precision := uint(8 * (len(vrfOutput) + 1))
-	maxFloatString := fmt.Sprintf("0x%s", strings.Repeat("f", crypto.DigestSize*2))
 	max, b, err := big.ParseFloat(maxFloatString, 0, precision, big.ToNearestEven)
 	if b != 16 || err != nil {
 		panic("failed to parse big float constant in sortition")
