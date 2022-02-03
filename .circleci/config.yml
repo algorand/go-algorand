@@ -192,7 +192,7 @@ commands:
     description: Prepare windows image
     steps:
       - run:
-          name: install deps
+          name: install deps part 1
           shell: bash.exe
           command: |
             set -e
@@ -200,9 +200,19 @@ commands:
             echo "Installing golang"
             choco install -y golang --version=1.14.7 --force
             echo "Finished installing golang"
+      - run:
+          name: install deps part 2
+          shell: bash.exe
+          command: |
+            set -e
             go version
             python --version
             choco install -y python3 --version=3.7.3 --force
+      - run:
+          name: install deps part 3
+          shell: bash.exe
+          command: |
+            set -e
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
