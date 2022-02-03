@@ -94,6 +94,17 @@ type Account struct {
 	TotalCreatedAssets uint64 `json:"total-created-assets"`
 }
 
+// AccountErrorResponse defines model for AccountErrorResponse.
+type AccountErrorResponse struct {
+	Data                *string `json:"data,omitempty"`
+	MaxResults          *uint64 `json:"max-results,omitempty"`
+	Message             string  `json:"message"`
+	TotalAppsLocalState *uint64 `json:"total-apps-local-state,omitempty"`
+	TotalAssets         *uint64 `json:"total-assets,omitempty"`
+	TotalCreatedApps    *uint64 `json:"total-created-apps,omitempty"`
+	TotalCreatedAssets  *uint64 `json:"total-created-assets,omitempty"`
+}
+
 // AccountParticipation defines model for AccountParticipation.
 type AccountParticipation struct {
 

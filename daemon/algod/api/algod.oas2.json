@@ -184,9 +184,9 @@
             "$ref": "#/responses/AccountResponse"
           },
           "400": {
-            "description": "Malformed address",
+            "description": "Bad request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/definitions/AccountErrorResponse"
             }
           },
           "401": {
@@ -2231,6 +2231,36 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "AccountErrorResponse": {
+      "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
+      "type": "object",
+      "required": [
+        "message"
+      ],
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "max-results": {
+          "type": "integer"
+        },
+        "total-apps-local-state": {
+          "type": "integer"
+        },
+        "total-assets": {
+          "type": "integer"
+        },
+        "total-created-apps": {
+          "type": "integer"
+        },
+        "total-created-assets": {
+          "type": "integer"
         }
       }
     },

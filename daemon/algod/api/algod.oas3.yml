@@ -842,6 +842,36 @@
         ],
         "type": "object"
       },
+      "AccountErrorResponse": {
+        "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
+        "properties": {
+          "data": {
+            "type": "string"
+          },
+          "max-results": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "total-apps-local-state": {
+            "type": "integer"
+          },
+          "total-assets": {
+            "type": "integer"
+          },
+          "total-created-apps": {
+            "type": "integer"
+          },
+          "total-created-assets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
       "AccountParticipation": {
         "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
         "properties": {
@@ -1767,16 +1797,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/AccountErrorResponse"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/AccountErrorResponse"
                 }
               }
             },
-            "description": "Malformed address"
+            "description": "Bad request"
           },
           "401": {
             "content": {
