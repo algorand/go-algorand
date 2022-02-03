@@ -192,16 +192,18 @@ commands:
     description: Prepare windows image
     steps:
       - run:
-          name: install deps part 1
+          name: install deps and golang
           shell: bash.exe
           command: |
             set -e
-            choco install -y msys2 pacman make wget --force
-            echo "Installing golang"
+            #choco install -y msys2 pacman make wget --force
             choco install -y golang --version=1.14.7 --force
-            echo "Finished installing golang"
+            env
+            \$env:GOPATH
+            setx PATH "\$(\$env:path);\$GOPATH\bin"
+            go version
       - run:
-          name: install deps part 2
+          name: install python3
           shell: bash.exe
           command: |
             set -e
@@ -209,7 +211,7 @@ commands:
               choco install -y python3 --version=3.7.3 --force
             fi
       - run:
-          name: install deps part 3
+          name: install pacman deps
           shell: bash.exe
           command: |
             set -e
