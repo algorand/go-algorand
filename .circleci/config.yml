@@ -205,7 +205,6 @@ commands:
           shell: bash.exe
           command: |
             set -e
-            go version
             python --version
             choco install -y python3 --version=3.7.3 --force
       - run:
