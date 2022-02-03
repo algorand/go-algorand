@@ -76,7 +76,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	waitUntilProtocolUpgrades(a, &fixture, nodeClient)
 
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
-	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusCurrentVersion)) // should be supported on consensus versions >= v32
+	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusV32))
 }
 
 func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
@@ -98,7 +98,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
-	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusCurrentVersion))
+	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV32))
 
 }
 
@@ -145,8 +145,7 @@ func getStateProofConsensus() config.ConsensusProtocols {
 
 	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)].
 		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusV32)] = 0
-	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)].
-		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusCurrentVersion)] = 0
+
 	return consensus
 }
 
@@ -177,7 +176,7 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 	return false
 }
 
-// This test starts with participation keys in Version29, then attempts to let the richest user participate even after
+// This test starts with participation keys in Version30, then attempts to let the richest user participate even after
 //  consensus upgrade.
 func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)

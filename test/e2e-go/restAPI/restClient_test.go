@@ -1063,9 +1063,6 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	var localFixture fixtures.RestClientFixture
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	// TODO: remove these 2 lines when CurrentVersion contains them already
-	proto.EnableStateProofKeyregCheck = true
-	proto.MaxKeyregValidPeriod = config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
 	localFixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
 
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -1167,23 +1164,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
-
-	// currently, the genesis creator uses the EnableStateProofKeyregCheck flag on the future
-	// version to write a statproof to the genesis file.
-	// we want to create a gensis file without state proof.
-	// + need to revert this change if other tests use that
-	tmp := config.Consensus[protocol.ConsensusFuture]
-	tmp.EnableStateProofKeyregCheck = false
-	config.Consensus[protocol.ConsensusFuture] = tmp
-
-	defer func() {
-		tmp := config.Consensus[protocol.ConsensusFuture]
-		tmp.EnableStateProofKeyregCheck = true
-		config.Consensus[protocol.ConsensusFuture] = tmp
-	}()
-
-	localFixture.SetConsensus(config.Consensus)
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
 	defer localFixture.Shutdown()
 
 	testClient := localFixture.LibGoalClient
@@ -1226,7 +1207,6 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 			VotePK:           votePK,
 			SelectionPK:      selPK,
 			VoteFirst:        firstRound,
-			StateProofPK:     merklesignature.Verifier{},
 			VoteLast:         lastRound,
 			VoteKeyDilution:  dilution,
 			Nonparticipation: false,

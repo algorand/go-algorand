@@ -1054,6 +1054,9 @@ func initConsensusProtocols() {
 
 	Consensus[protocol.ConsensusV30] = v30
 
+	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
+	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
+
 	v31 := v30
 	Consensus[protocol.ConsensusV31] = v31
 	v32 := v31
@@ -1066,8 +1069,7 @@ func initConsensusProtocols() {
 
 	Consensus[protocol.ConsensusV32] = v32
 
-	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
-	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
+	v30.ApprovedUpgrades[protocol.ConsensusV32] = 0 // TODO: how long?
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
