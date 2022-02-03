@@ -468,6 +468,10 @@
                   "description": "LastVersion indicates the last consensus version supported",
                   "type": "string"
                 },
+                "max-accounts-api-results": {
+                  "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
+                  "type": "integer"
+                },
                 "next-version": {
                   "description": "NextVersion of consensus protocol to use",
                   "type": "string"
@@ -1735,11 +1739,15 @@
             }
           },
           {
-            "description": "Whether to exclude asset and application data from account information (asset holding and application local data, created asset and application parameters)",
+            "description": "Whether to include asset holdings, application local state, created asset parameters, or created application parameters. Defaults to `all`.",
             "in": "query",
-            "name": "exclude-creatable-data",
+            "name": "include",
             "schema": {
-              "type": "boolean"
+              "enum": [
+                "all",
+                "none"
+              ],
+              "type": "string"
             }
           }
         ],
@@ -3359,6 +3367,10 @@
                       "description": "LastVersion indicates the last consensus version supported",
                       "type": "string"
                     },
+                    "max-accounts-api-results": {
+                      "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
+                      "type": "integer"
+                    },
                     "next-version": {
                       "description": "NextVersion of consensus protocol to use",
                       "type": "string"
@@ -3485,6 +3497,10 @@
                     "last-version": {
                       "description": "LastVersion indicates the last consensus version supported",
                       "type": "string"
+                    },
+                    "max-accounts-api-results": {
+                      "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
+                      "type": "integer"
                     },
                     "next-version": {
                       "description": "NextVersion of consensus protocol to use",

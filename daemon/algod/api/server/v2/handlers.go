@@ -261,7 +261,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	}
 
 	// should we skip fetching apps and assets?
-	if params.ExcludeCreatableData != nil && *params.ExcludeCreatableData {
+	if params.Include != nil && *params.Include == "none" {
 		return v2.basicAccountInformation(ctx, addr, handle, contentType)
 	}
 
@@ -628,6 +628,11 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
+	var maxAcctResults *uint64
+	if max := v2.Node.Config().MaxAccountsAPIResults; max != 0 {
+		maxAcctResults = &max
+	}
+
 	response := generated.NodeStatusResponse{
 		LastRound:                   uint64(stat.LastRound),
 		LastVersion:                 string(stat.LastVersion),
@@ -644,6 +649,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
+		MaxAccountsApiResults:       maxAcctResults,
 	}
 
 	return ctx.JSON(http.StatusOK, response)

@@ -165,11 +165,15 @@
             "required": true
           },
           {
-            "name": "exclude-creatable-data",
-            "description": "Whether to exclude asset and application data from account information (asset holding and application local data, created asset and application parameters)",
+            "name": "include",
+            "description": "Whether to include asset holdings, application local state, created asset parameters, or created application parameters. Defaults to `all`.",
             "in": "query",
             "required": false,
-            "type": "boolean"
+            "type": "string",
+            "enum": [
+              "all",
+              "none"
+            ]
           },
           {
             "$ref": "#/parameters/format"
@@ -2837,6 +2841,10 @@
           },
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+            "type": "integer"
+          },
+          "max-accounts-api-results": {
+            "description": "The maximum total number of assets and application resources that will be returned in a /v2/accounts response",
             "type": "integer"
           }
         }

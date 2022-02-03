@@ -651,6 +651,9 @@ type NodeStatusResponse struct {
 	// LastVersion indicates the last consensus version supported
 	LastVersion string `json:"last-version"`
 
+	// The maximum total number of assets and application resources that will be returned in a /v2/accounts response
+	MaxAccountsApiResults *uint64 `json:"max-accounts-api-results,omitempty"`
+
 	// NextVersion of consensus protocol to use
 	NextVersion string `json:"next-version"`
 
@@ -759,8 +762,8 @@ type AccountInformationParams struct {
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
 
-	// Whether to exclude asset and application data from account information (asset holding and application local data, created asset and application parameters)
-	ExcludeCreatableData *bool `json:"exclude-creatable-data,omitempty"`
+	// Whether to include asset holdings, application local state, created asset parameters, or created application parameters. Defaults to `all`.
+	Include *string `json:"include,omitempty"`
 }
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.

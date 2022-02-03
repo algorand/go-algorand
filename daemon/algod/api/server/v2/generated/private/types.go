@@ -651,6 +651,9 @@ type NodeStatusResponse struct {
 	// LastVersion indicates the last consensus version supported
 	LastVersion string `json:"last-version"`
 
+	// The maximum total number of assets and application resources that will be returned in a /v2/accounts response
+	MaxAccountsApiResults *uint64 `json:"max-accounts-api-results,omitempty"`
+
 	// NextVersion of consensus protocol to use
 	NextVersion string `json:"next-version"`
 
