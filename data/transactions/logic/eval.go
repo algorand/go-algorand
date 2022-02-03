@@ -547,6 +547,19 @@ func (pe PanicError) Error() string {
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
+// ClearStateBudgetError allows evaluation to signal that the caller should
+// reject the transaction.  Normally, an error in evaluation would not cause a
+// ClearState txn to fail. However, callers fail a txn for ClearStateBudgetError
+// because the transaction has not provided enough budget to let ClearState do
+// its job.
+type ClearStateBudgetError struct {
+	offered int
+}
+
+func (e ClearStateBudgetError) Error() string {
+	return fmt.Sprintf("ClearState execution with only %d", e.offered)
+}
+
 // EvalContract executes stateful TEAL program as the gi'th transaction in params
 func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
@@ -559,6 +572,13 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		Txn:          &params.TxnGroup[gi],
 		appID:        aid,
 	}
+
+	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
+			return false, nil, &ClearStateBudgetError{*cx.PooledApplicationBudget}
+		}
+	}
+
 	pass, err := eval(program, &cx)
 
 	// update side effects. It is tempting, and maybe even a good idea, to store
@@ -803,6 +823,16 @@ func (cx *EvalContext) remainingBudget() int {
 	if cx.runModeFlags == runModeSignature {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
+
+	// restrict clear state programs from using more than standard unpooled budget
+	// cx.Txn is not set during check()
+	if cx.Proto.IsolateClearState && cx.Txn != nil && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		// Need not confirm that *cx.PooledApplicationBudget is also >0, as
+		// ClearState programs are only run if *cx.PooledApplicationBudget >
+		// MaxAppProgramCost at the start.
+		return cx.Proto.MaxAppProgramCost - cx.cost
+	}
+
 	if cx.PooledApplicationBudget != nil {
 		return *cx.PooledApplicationBudget
 	}
@@ -4045,6 +4075,10 @@ func addInnerTxn(cx *EvalContext) error {
 func opTxBegin(cx *EvalContext) {
 	if len(cx.subtxns) > 0 {
 		cx.err = errors.New("itxn_begin without itxn_submit")
+		return
+	}
+	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		cx.err = errors.New("clear state prorgams can not issue inner transactions")
 		return
 	}
 	cx.err = addInnerTxn(cx)

@@ -656,6 +656,10 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 		ad.ApplicationID = aid
 	}
 
+	if appl.OnCompletion == transactions.ClearStateOC {
+		return errors.New("not implemented in test ledger")
+	}
+
 	if appl.OnCompletion == transactions.OptInOC {
 		br, ok := l.balances[from]
 		if !ok {
