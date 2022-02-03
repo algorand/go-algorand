@@ -22,6 +22,7 @@ package sortition
 // #include <stdlib.h>
 // #include "sortition.h"
 import "C"
+
 import (
 	"fmt"
 	"math/big"
@@ -30,18 +31,14 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-var maxFloatString string = fmt.Sprintf("0x%s", strings.Repeat("f", crypto.DigestSize*2))
+const precision = uint(8 * (crypto.DigestSize + 1))
+
+var maxFloat *big.Float
 
 // Select runs the sortition function and returns the number of time the key was selected
 func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput crypto.Digest) uint64 {
 	binomialN := float64(money)
 	binomialP := expectedSize / float64(totalMoney)
-
-	precision := uint(8 * (len(vrfOutput) + 1))
-	max, b, err := big.ParseFloat(maxFloatString, 0, precision, big.ToNearestEven)
-	if b != 16 || err != nil {
-		panic("failed to parse big float constant in sortition")
-	}
 
 	t := &big.Int{}
 	t.SetBytes(vrfOutput[:])
@@ -51,7 +48,18 @@ func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cry
 	h.SetInt(t)
 
 	ratio := big.Float{}
-	cratio, _ := ratio.Quo(&h, max).Float64()
+	cratio, _ := ratio.Quo(&h, maxFloat).Float64()
 
 	return uint64(C.sortition_binomial_cdf_walk(C.double(binomialN), C.double(binomialP), C.double(cratio), C.uint64_t(money)))
+}
+
+func init() {
+	var b int
+	var err error
+	maxFloatString := fmt.Sprintf("0x%s", strings.Repeat("f", crypto.DigestSize*2))
+	maxFloat, b, err = big.ParseFloat(maxFloatString, 0, precision, big.ToNearestEven)
+	if b != 16 || err != nil {
+		err = fmt.Errorf("failed to parse big float constant in sortition : %w", err)
+		panic(err)
+	}
 }
