@@ -305,24 +305,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
-	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
-	if len(record.Assets) > 0 {
-		//assets = make(map[uint64]v1.AssetHolding)
-		for curid := range record.Assets {
-			var creator string
-			creatorAddr, ok, err := myLedger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
-			if err == nil && ok {
-				creator = creatorAddr.String()
-			} else {
-				// Asset may have been deleted, so we can no
-				// longer fetch the creator
-				creator = ""
-			}
-			assetsCreators[curid] = creator
-		}
-	}
-
-	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, &consensus, amountWithoutPendingRewards)
+	account, err := AccountDataToAccount(address, &record, lastRound, &consensus, amountWithoutPendingRewards)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
@@ -438,20 +421,9 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 	}
 
 	if record.AssetHolding != nil {
-		// AccountInformation REST API endpoint and generated.AssetHolding provides creator address with AssetHolding
-		creatorAddr, ok, err := ledger.GetCreator(basics.CreatableIndex(assetID), basics.AssetCreatable)
-		var creator string
-		if err == nil && ok {
-			creator = creatorAddr.String()
-		} else {
-			// Asset may have been deleted, so we can no
-			// longer fetch the creator
-			creator = ""
-		}
 		response.AssetHolding = &generated.AssetHolding{
 			Amount:   record.AssetHolding.Amount,
 			AssetId:  uint64(assetID),
-			Creator:  creator,
 			IsFrozen: record.AssetHolding.Frozen,
 		}
 	}

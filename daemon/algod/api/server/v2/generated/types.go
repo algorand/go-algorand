@@ -214,9 +214,6 @@ type AssetHolding struct {
 	// Asset ID of the holding.
 	AssetId uint64 `json:"asset-id"`
 
-	// Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.
-	Creator string `json:"creator"`
-
 	// \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
 }

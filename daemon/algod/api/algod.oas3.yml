@@ -1053,10 +1053,6 @@
             "type": "integer",
             "x-go-name": "AssetID"
           },
-          "creator": {
-            "description": "Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.",
-            "type": "string"
-          },
           "is-frozen": {
             "description": "\\[f\\] whether or not the holding is frozen.",
             "type": "boolean"
@@ -1065,7 +1061,6 @@
         "required": [
           "amount",
           "asset-id",
-          "creator",
           "is-frozen"
         ],
         "type": "object"
