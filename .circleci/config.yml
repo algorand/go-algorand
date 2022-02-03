@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  win: circleci/windows@2.3.0
+  win: circleci/windows@2.4.1
   go: circleci/go@1.7.0
   slack: circleci/slack@4.4.2
 
@@ -200,6 +200,8 @@ commands:
             echo "Installing golang"
             choco install -y golang --version=1.14.7 --force
             echo "Finished installing golang"
+            go version
+            python --version
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
