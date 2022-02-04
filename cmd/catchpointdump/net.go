@@ -277,7 +277,7 @@ func makeFileDump(addr string, tarFile string) error {
 	if err != nil {
 		return err
 	}
-	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile)
+	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, nil)
 	if err != nil {
 		return err
 	}
