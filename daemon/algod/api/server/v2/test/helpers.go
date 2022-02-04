@@ -82,7 +82,7 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 // but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
-	ledger    *data.Ledger
+	ledger    v2.LedgerForAPI
 	genesisID string
 	config    config.Local
 	err       error
@@ -112,7 +112,7 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 	return m.err
 }
 
-func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) *mockNode {
+func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mockNode {
 	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
@@ -133,7 +133,7 @@ func (m mockNode) GenesisID() string {
 }
 
 func (m mockNode) GenesisHash() crypto.Digest {
-	return m.ledger.GenesisHash()
+	return m.ledger.(*data.Ledger).GenesisHash()
 }
 
 func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {

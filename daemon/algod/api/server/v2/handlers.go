@@ -57,6 +57,7 @@ type Handlers struct {
 	Shutdown <-chan struct{}
 }
 
+// LedgerForAPI describes the Ledger methods used by the v2 API.
 type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
