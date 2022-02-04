@@ -202,8 +202,10 @@ commands:
           name: Check golang install
           shell: bash.exe
           command: |
+            cmd //C RefreshEnv.cmd
             env
             go version
+            RefreshEnv
       - run:
           name: install python3
           shell: bash.exe
