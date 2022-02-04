@@ -198,14 +198,11 @@ commands:
             set -e
             #choco install -y msys2 pacman make wget --force
             choco install -y golang --version=1.14.7 --force
-      - run:
-          name: Check golang install
-          shell: bash.exe
-          command: |
             cmd //C RefreshEnv.cmd
-            env
+            ls /c/Program\ Files/Go/bin/
+            ls /c/Program\ Files/Go/
             go version
-            RefreshEnv
+
       - run:
           name: install python3
           shell: bash.exe
