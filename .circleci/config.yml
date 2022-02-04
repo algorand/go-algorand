@@ -198,9 +198,8 @@ commands:
             set -e
             #choco install -y msys2 pacman make wget --force
             choco install -y golang --version=1.14.7 --force
-            env
-            \$env:GOPATH
             setx PATH "\$(\$env:path);\$GOPATH\bin"
+            env
             go version
       - run:
           name: install python3
