@@ -677,18 +677,18 @@ func TestMinBalanceChanges(t *testing.T) {
 		AssetReceiver: addrs[5],
 	}
 
-	ad0init, _, err := l.LookupLatest(addrs[0])
+	ad0init, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5init, _, err := l.LookupLatest(addrs[5])
+	ad5init, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	eval := nextBlock(t, l, true, nil)
 	txns(t, l, eval, &createTxn, &optInTxn)
 	endBlock(t, l, eval)
 
-	ad0new, _, err := l.LookupLatest(addrs[0])
+	ad0new, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5new, _, err := l.LookupLatest(addrs[5])
+	ad5new, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	proto := l.GenesisProto()
@@ -716,9 +716,9 @@ func TestMinBalanceChanges(t *testing.T) {
 	txns(t, l, eval, &optOutTxn, &closeTxn)
 	endBlock(t, l, eval)
 
-	ad0final, _, err := l.LookupLatest(addrs[0])
+	ad0final, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5final, _, err := l.LookupLatest(addrs[5])
+	ad5final, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
 	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
@@ -907,6 +907,7 @@ func TestAppInsMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusV30
 
 	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
@@ -914,11 +915,11 @@ func TestAppInsMinBalance(t *testing.T) {
 
 	const appid basics.AppIndex = 1
 
-	maxAppsOptedIn := config.Consensus[protocol.ConsensusFuture].MaxAppsOptedIn
+	maxAppsOptedIn := config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	require.Greater(t, maxAppsOptedIn, 0)
-	maxAppsCreated := config.Consensus[protocol.ConsensusFuture].MaxAppsCreated
+	maxAppsCreated := config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 	require.Greater(t, maxAppsCreated, 0)
-	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries
+	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusV30].MaxLocalSchemaEntries
 	require.Greater(t, maxLocalSchemaEntries, uint64(0))
 
 	txnsCreate := make([]*txntest.Txn, 0, maxAppsOptedIn)

@@ -255,7 +255,7 @@ return`
 	a.NoError(err)
 	a.Nil(prd.data.GetAppLocalState().KeyValue)
 	a.True(prd.data.IsApp())
-	ad, rnd, err := l.LookupLatest(userOptin)
+	ad, rnd, _, err := l.LookupLatest(userOptin)
 	a.Equal(dbRound, rnd)
 	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
