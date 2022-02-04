@@ -198,7 +198,10 @@ commands:
             set -e
             #choco install -y msys2 pacman make wget --force
             choco install -y golang --version=1.14.7 --force
-            setx PATH "\$(\$env:path);\$GOPATH\bin"
+      - run:
+          name: Check golang install
+          shell: bash.exe
+          command: |
             env
             go version
       - run:
