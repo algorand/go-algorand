@@ -584,7 +584,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	// update side effects. It is tempting, and maybe even a good idea, to store
 	// the pointer to cx.scratch instead.  Since we don't modify them again,
 	// it's probably safe. However it may have poor GC characteristics (because
-	// we'd be storing a pointer into a much larger structre, the cx), and
+	// we'd be storing a pointer into a much larger structure, the cx), and
 	// copying seems nice and clean.
 	cx.pastScratch[cx.GroupIndex] = &scratchSpace{}
 	*cx.pastScratch[cx.GroupIndex] = cx.scratch
