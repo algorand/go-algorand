@@ -37,4 +37,5 @@ jobs:
           export SKIP_GO_INSTALLATION=True
           export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
           export MAKE=mingw32-make
+          ls scripts/travis/build_test.sh
           $msys2 scripts/travis/build_test.sh
