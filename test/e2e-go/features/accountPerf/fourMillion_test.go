@@ -39,6 +39,7 @@ const roundDelay = uint64(200)
 
 func queuePayments(queueWg *sync.WaitGroup, c libgoal.Client, q <-chan *transactions.SignedTxn) {
 	counter := 0
+	failures := 0
 	for stxn := range q {
 
 		if stxn == nil {
@@ -51,7 +52,11 @@ func queuePayments(queueWg *sync.WaitGroup, c libgoal.Client, q <-chan *transact
 				break
 			}
 			fmt.Printf("Error broadcasting transaction: %v\n", err)
-			time.Sleep(config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout)
+			if failures > 100 {
+				break
+			}
+			time.Sleep(time.Millisecond * 250)
+			failures++
 		}
 	}
 	queueWg.Done()
@@ -66,9 +71,6 @@ func signer(t *testing.T, sigWg *sync.WaitGroup, client libgoal.Client, txnChan 
 		require.NoError(t, err)
 
 		stxn, err := client.SignTransactionWithWallet(walletHandle, nil, *txn)
-		if err != nil {
-			fmt.Printf("Error signing: %v\n", err)
-		}
 		require.NoError(t, err)
 		sigTxnChan <- &stxn
 	}
@@ -99,7 +101,7 @@ func Test5MAssets(t *testing.T) {
 
 	var sigWg sync.WaitGroup
 	var queueWg sync.WaitGroup
-	var scenarioWg sync.WaitGroup
+	var hkWg sync.WaitGroup
 	txnChan := make(chan *transactions.Transaction, 100)
 	sigTxnChan := make(chan *transactions.SignedTxn, 100)
 
@@ -118,43 +120,20 @@ func Test5MAssets(t *testing.T) {
 		go queuePayments(&queueWg, client, sigTxnChan)
 	}
 
-	lastRound := uint64(0)
-	// Call to different scenarios
-	scenarioWg.Add(1)
+	// some housekeeping
+	hkWg.Add(1)
 	go func() {
-		lastRound = scenarioA(t, &fixture, baseAcct, genesisHash, txnChan)
-		scenarioWg.Done()
+		sigWg.Wait()
+		close(sigTxnChan)
+		queueWg.Wait()
+		hkWg.Done()
 	}()
 
-	sigWg.Wait()
-	close(sigTxnChan)
-	queueWg.Wait()
-	scenarioWg.Wait()
+	lastRound := uint64(0)
+	// Call different scenarios
+	lastRound = scenarioA(t, &fixture, baseAcct, genesisHash, txnChan)
+	hkWg.Wait()
 	fixture.WaitForRound(lastRound, 1000*time.Second)
-}
-
-func checkPoint(
-	t *testing.T,
-	baseAcct string,
-	fixture *fixtures.RestClientFixture,
-	round uint64) {
-
-	var tx transactions.Transaction
-	var err error
-	client := fixture.LibGoalClient
-	for {
-		tx, err = client.SendPaymentFromUnencryptedWallet(baseAcct, baseAcct, config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 0, nil)
-		if err == nil {
-			break
-		}
-
-		fmt.Printf("Error broadcasting final transaction: %v\n", err)
-		time.Sleep(config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout)
-	}
-	fmt.Printf("Waiting for confirmation transaction to commit...")
-	_, err = fixture.WaitForConfirmedTxn(round+100, baseAcct, tx.ID().String())
-	fmt.Printf("done\n")
-	require.NoError(t, err)
 }
 
 func activateAccountTransaction(
@@ -197,6 +176,7 @@ func createAssetTransaction(
 	round uint64,
 	sender basics.Address,
 	tLife uint64,
+	amount uint64,
 	genesisHash crypto.Digest) (assetTx transactions.Transaction) {
 
 	sround := zeroSub(round, roundDelay)
@@ -211,7 +191,7 @@ func createAssetTransaction(
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
 			AssetParams: basics.AssetParams{
-				Total:         999000000 + round,
+				Total:         amount,
 				DefaultFrozen: false,
 				Manager:       sender,
 			},
@@ -260,8 +240,8 @@ func scenarioA(
 
 	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 
-	numberOfAccounts := uint64(6000) // 6K
-	numberOfAssets := uint64(600000)  // 6M
+	numberOfAccounts := uint64(600) // 6K
+	numberOfAssets := uint64(6000)   // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -275,6 +255,8 @@ func scenarioA(
 	createdAccounts := make([]basics.Address, 0, numberOfAccounts)
 
 	round := uint64(0)
+
+	totalAssetAmount := uint64(0)
 
 	// create 6K accounts
 	for txi := uint64(0); txi < numberOfAccounts; txi++ {
@@ -291,24 +273,28 @@ func scenarioA(
 	// create 6M unique assets by a different 6,000 accounts
 	for nai, na := range createdAccounts {
 		for asi := uint64(0); asi < assetsPerAccount; asi++ {
-			if asi%100 == 0 {
+			if nai%100 == 0 && asi%100 == 0 {
 				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
-
-			atx := createAssetTransaction(t, round, na, tLife, genesisHash)
+			atx := createAssetTransaction(t, round, na, tLife, 90000000+round, genesisHash)
 			txnChan <- &atx
+			totalAssetAmount += 90000000 + round
 			round++
 		}
 	}
+
 	fixture.WaitForRound(round, 1000*time.Second)
 
 	// have a single account opted in all of them
 	ownAllAccount := createdAccounts[numberOfAccounts-1]
 	for acci, nacc := range createdAccounts {
+		if nacc == ownAllAccount {
+			continue
+		}
 		info, err := client.AccountInformationV2(nacc.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
-			if assi%100 == 0 {
+			if assi%100 == 0 && acci%100 == 0 {
 				fmt.Printf("Accepting assets acct: %d asset %d\n", acci, assi)
 			}
 			optInT := sendAssetTransaction(
@@ -333,7 +319,7 @@ func scenarioA(
 		info, err := client.AccountInformationV2(nacc.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
-			if assi%100 == 0 {
+			if assi%100 == 0 && acci%100 == 0 {
 				fmt.Printf("Sending assets acct: %d asset %d\n", acci, assi)
 			}
 			optInT := sendAssetTransaction(
@@ -349,7 +335,22 @@ func scenarioA(
 			round++
 		}
 	}
-	
+
 	close(txnChan)
+
+	fixture.WaitForRound(round, 1000*time.Second)
+
+	// Verify the assets are transfered here
+	info, err := client.AccountInformationV2(ownAllAccount.String())
+	require.NoError(t, err)
+	require.Equal(t, len(*info.Assets), int(numberOfAssets))
+	tAssetAmt := uint64(0)
+	for _, asset := range *info.Assets {
+		tAssetAmt += asset.Amount
+	}
+	if totalAssetAmount != tAssetAmt {
+		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
+	}
+	require.Equal(t, totalAssetAmount, tAssetAmt)
 	return round
 }
