@@ -528,6 +528,24 @@ func TestCdtSessionGetObjects(t *testing.T) {
 				},
 			},
 			logs: []string{"test log 1", "test log 2"},
+			innerTxns: transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
+				{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender: basics.Address{}, Fee: basics.MicroAlgos{Raw: 1000}, FirstValid: 10,
+						},
+					},
+				},
+				{
+					Txn: transactions.Transaction{
+						Type: protocol.ApplicationCallTx,
+						ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+							ApplicationArgs: [][]byte{{0, 1, 2, 3}},
+						},
+					},
+				},
+			}),
 		},
 	}
 
@@ -556,6 +574,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 		encodeAppLocalsAddr(basics.Address{}.String()),
 		encodeAppGlobalAppID("0"), encodeAppGlobalAppID("1"),
 		encodeAppLocalsAppID(basics.Address{}.String(), "1"),
+		encodeInnerTxnID(0), encodeInnerTxnID(1),
 	}
 	for _, k := range objIds {
 		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}
