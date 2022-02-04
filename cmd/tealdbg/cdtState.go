@@ -562,14 +562,9 @@ func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 }
 
 var gtxnObjIDPrefix = fmt.Sprintf("%s_gid_", gtxnObjID)
-var innerTxnObjIDPrefix = fmt.Sprintf("%s_id_", innerTxnsObjID)
 
 func encodeGroupTxnID(groupIndex int) string {
 	return gtxnObjIDPrefix + strconv.Itoa(groupIndex)
-}
-
-func encodeInnerTxnID(groupIndex int) string {
-	return innerTxnObjIDPrefix + strconv.Itoa(groupIndex)
 }
 
 func decodeGroupTxnID(objID string) (int, bool) {
@@ -579,6 +574,12 @@ func decodeGroupTxnID(objID string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+var innerTxnObjIDPrefix = fmt.Sprintf("%s_id_", innerTxnsObjID)
+
+func encodeInnerTxnID(groupIndex int) string {
+	return innerTxnObjIDPrefix + strconv.Itoa(groupIndex)
 }
 
 func decodeInnerTxnID(objID string) (int, bool) {
@@ -958,12 +959,6 @@ func makeArrayLength(rawArray interface{}) (desc []cdt.RuntimePropertyDescriptor
 		field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
 		desc = append(desc, makePrimitive(field))
 	}
-	return
-}
-
-func makeStringArrayLength(array []string) (desc []cdt.RuntimePropertyDescriptor) {
-	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
-	desc = append(desc, makePrimitive(field))
 	return
 }
 
