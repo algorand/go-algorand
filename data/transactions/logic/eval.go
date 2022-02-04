@@ -4075,7 +4075,7 @@ func opTxBegin(cx *EvalContext) {
 		return
 	}
 	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
-		cx.err = errors.New("clear state prorgams can not issue inner transactions")
+		cx.err = errors.New("clear state programs can not issue inner transactions")
 		return
 	}
 	cx.err = addInnerTxn(cx)
