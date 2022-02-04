@@ -199,6 +199,8 @@ func TestEvalDeltaEqual(t *testing.T) {
 // that take advnatage of a new, bigger bound. (Or, if the bound is *lowered* it
 // had better be the case that such messages cannot be emitted in old code.)
 func TestUnchangedAllocBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	delta := &EvalDelta{}
 	max := 256 // Hardcodes config.MaxEvalDeltaAccounts
 	for i := 0; i < max; i++ {

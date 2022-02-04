@@ -2614,6 +2614,8 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 
 // TestInnerClearState ensures inner ClearState performs close out properly, even if rejects.
 func TestInnerClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
 	defer l.Close()
@@ -2693,6 +2695,7 @@ itxn_submit
 // TestClearStateInnerPay ensures that ClearState programs can run inner txns in
 // v30, but not in vFuture. (Test should add v31 after it exists.)
 func TestClearStateInnerPay(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	tests := []struct {
 		consensus protocol.ConsensusVersion

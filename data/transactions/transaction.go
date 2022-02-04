@@ -666,6 +666,9 @@ func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
 	return version, vlen, nil
 }
 
+// ExtraProgramChecksVersion is version of AVM programs that are subject to
+// extra test - approval and clear must match versions, and they may not be
+// downgraded
 const ExtraProgramChecksVersion = 6
 
 // CheckContractVersions ensures that for v6 and higher two programs are version
