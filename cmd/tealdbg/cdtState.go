@@ -151,14 +151,20 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 			if len(s.txnGroup) > 0 {
 				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, preview), nil
 			}
-		} else if idx, ok := decodeInnerTxnID(objID); ok {
-			if idx >= len(s.innerTxns) || idx < 0 {
-				err = fmt.Errorf("invalid group idx: %d", idx)
-				return
+		} else if idxs, ok := decodeInnerTxnID(objID); ok {
+			var itxn transactions.SignedTxnWithAD
+			itxns := s.innerTxns
+
+			// Traverse to the itxn we want using the idxs.
+			for _, idx := range idxs {
+				if idx >= len(itxns) || idx < 0 {
+					err = fmt.Errorf("invalid group idx: %d", idx)
+					return
+				}
+				itxn = itxns[idx]
+				itxns = itxn.EvalDelta.InnerTxns
 			}
-			if len(s.innerTxns) > 0 {
-				return makeTxnImpl(&s.innerTxns[idx].Txn, idx, preview), nil
-			}
+			return makeInnerTxnImpl(&s.innerTxns[idx], idxs, preview), nil
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
 			switch parentObjID {
 			case stackObjID:
@@ -576,19 +582,31 @@ func decodeGroupTxnID(objID string) (int, bool) {
 	return 0, false
 }
 
-var innerTxnObjIDPrefix = fmt.Sprintf("%s_id_", innerTxnsObjID)
+var innerTxnObjIDPrefix = fmt.Sprintf("%s_id", innerTxnsObjID)
 
-func encodeInnerTxnID(groupIndex int) string {
-	return innerTxnObjIDPrefix + strconv.Itoa(groupIndex)
+func encodeInnerTxnID(groupIndexes []int) string {
+	encodedItxnID := innerTxnObjIDPrefix
+	for _, i := range groupIndexes {
+		encodedItxnID = fmt.Sprintf("%s_%d", encodedItxnID, i)
+	}
+	return encodedItxnID
 }
 
-func decodeInnerTxnID(objID string) (int, bool) {
+func decodeInnerTxnID(objID string) ([]int, bool) {
+	parsedIDs := make([]int, 0)
 	if strings.HasPrefix(objID, innerTxnObjIDPrefix) {
-		if val, err := strconv.ParseInt(objID[len(innerTxnObjIDPrefix):], 10, 32); err == nil {
-			return int(val), true
+		groupIDs := objID[len(innerTxnObjIDPrefix)+1:]
+		parts := strings.Split(groupIDs, "_")
+		for _, id := range parts {
+			if val, err := strconv.ParseInt(id, 10, 32); err == nil {
+				parsedIDs = append(parsedIDs, int(val))
+			} else {
+				return []int{}, false
+			}
 		}
+		return parsedIDs, true
 	}
-	return 0, false
+	return []int{}, false
 }
 
 func encodeArrayLength(objID string) string {
@@ -829,6 +847,30 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 	return
 }
 
+func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	groupIndex := groupIndexes[len(groupIndexes)-1]
+	desc = makeTxnImpl(&txn.Txn, groupIndex, preview)
+
+	// TODO: Need to encode log objects
+	logs := makeArray("logs", len(txn.EvalDelta.Logs), logsObjID)
+	innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeInnerTxnID(groupIndexes))
+
+	if preview {
+		logsPreview := makeStringArrayPreview(txn.EvalDelta.Logs)
+		if len(logsPreview.Properties) > 0 {
+			logs.Value.Preview = &logsPreview
+		}
+		innerTxnsPreview := makeGtxnPreview(txn.EvalDelta.InnerTxns)
+		if len(innerTxnsPreview.Properties) > 0 {
+			innerTxns.Value.Preview = &innerTxnsPreview
+		}
+	}
+	desc = append(desc, logs)
+	desc = append(desc, innerTxns)
+
+	return
+}
+
 func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
 	for i := 0; i < length; i++ {
 		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i))
@@ -1016,7 +1058,8 @@ func makeLogsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescrip
 func makeInnerTxnsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(s.innerTxns))
 	for i := 0; i < len(s.innerTxns); i++ {
-		item := makeObject(strconv.Itoa(i), encodeInnerTxnID(i))
+		groupIDs := []int{i}
+		item := makeObject(strconv.Itoa(i), encodeInnerTxnID(groupIDs))
 		if preview {
 			txnPreview := makeTxnPreview(s.innerTxns, i)
 			item.Value.Preview = &txnPreview

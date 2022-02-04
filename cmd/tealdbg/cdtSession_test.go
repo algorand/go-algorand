@@ -574,7 +574,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 		encodeAppLocalsAddr(basics.Address{}.String()),
 		encodeAppGlobalAppID("0"), encodeAppGlobalAppID("1"),
 		encodeAppLocalsAppID(basics.Address{}.String(), "1"),
-		encodeInnerTxnID(0), encodeInnerTxnID(1),
+		encodeInnerTxnID([]int{0}), encodeInnerTxnID([]int{1}),
 	}
 	for _, k := range objIds {
 		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}
