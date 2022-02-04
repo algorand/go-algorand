@@ -294,6 +294,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 			v2.Log.Info("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
 			return ctx.JSON(http.StatusBadRequest, generated.AccountErrorResponse{
 				Message:             "Result limit exceeded",
+				MaxResults:          &maxResults,
 				TotalAssets:         &record.TotalAssets,
 				TotalCreatedAssets:  &record.TotalAppLocalStates,
 				TotalAppsLocalState: &record.TotalAppLocalStates,
