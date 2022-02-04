@@ -771,12 +771,9 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 }
 
 func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
-	if len(program) == 0 {
-		return 0, 0, errors.New("invalid program (empty)")
-	}
-	version, vlen := binary.Uvarint(program)
-	if vlen <= 0 {
-		return 0, 0, errors.New("invalid version")
+	version, vlen, err := transactions.ProgramVersion(program)
+	if err != nil {
+		return 0, 0, err
 	}
 	if version > EvalMaxVersion {
 		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
@@ -4495,6 +4492,28 @@ func opTxSubmit(cx *EvalContext) {
 			}
 			if depth >= maxAppCallDepth {
 				cx.err = fmt.Errorf("appl depth (%d) exceeded", depth)
+				return
+			}
+
+			// Can't call version < innerAppsEnabledVersion, and apps with such
+			// versions will always match, so just check approval program
+			// version.
+			program := cx.subtxns[itx].Txn.ApprovalProgram
+			if cx.subtxns[itx].Txn.ApplicationID != 0 {
+				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+				if err != nil {
+					cx.err = err
+					return
+				}
+				program = app.ApprovalProgram
+			}
+			v, _, err := transactions.ProgramVersion(program)
+			if err != nil {
+				cx.err = err
+				return
+			}
+			if v < innerAppsEnabledVersion {
+				cx.err = fmt.Errorf("inner app call with version %d < %d", v, innerAppsEnabledVersion)
 				return
 			}
 		}

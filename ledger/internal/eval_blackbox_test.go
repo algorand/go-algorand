@@ -656,6 +656,41 @@ func asaParams(t testing.TB, ledger *ledger.Ledger, asset basics.AssetIndex) (ba
 	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
 }
 
+func TestGarbageClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+
+	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	require.NoError(t, err)
+	defer l.Close()
+
+	createTxn := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: "int 1",
+	}
+
+	eval := nextBlock(t, l, true, nil)
+
+	// Do this "by hand" so we can have an empty / garbage clear state, which
+	// would have been papered over with txn()
+	fillDefaults(t, l, eval, &createTxn)
+	stxn := createTxn.SignedTxn()
+	stxn.Txn.ClearStateProgram = nil
+	err = eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid program")
+	err = eval.Transaction(stxn, transactions.ApplyData{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid program")
+
+	stxn.Txn.ClearStateProgram = []byte{0xfe} // bad uvarint
+	err = eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid version")
+}
+
 func TestRewardsInAD(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

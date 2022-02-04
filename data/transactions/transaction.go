@@ -368,6 +368,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
 				return fmt.Errorf("programs may only be specified during application creation or update")
 			}
+		} else {
+			// This will check version matching, but not downgrading. That
+			// depends on chain state (so we pass an empty AppParams)
+			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{})
+			if err != nil {
+				return err
+			}
 		}
 
 		effectiveEPP := tx.ExtraProgramPages
@@ -645,6 +652,48 @@ type TxnContext interface {
 	ConsensusProtocol() config.ConsensusParams
 	GenesisID() string
 	GenesisHash() crypto.Digest
+}
+
+// ProgramVersion extracts the version of an AVM program from its bytecode
+func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
+	if len(bytecode) == 0 {
+		return 0, 0, errors.New("invalid program (empty)")
+	}
+	version, vlen := binary.Uvarint(bytecode)
+	if vlen <= 0 {
+		return 0, 0, errors.New("invalid version")
+	}
+	return version, vlen, nil
+}
+
+const ExtraProgramChecksVersion = 6
+
+// CheckContractVersions ensures that for v6 and higher two programs are version
+// matched, and that they are not a downgrade.
+func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams) error {
+	av, _, err := ProgramVersion(approval)
+	if err != nil {
+		return fmt.Errorf("bad ApprovalProgram: %v", err)
+	}
+	cv, _, err := ProgramVersion(clear)
+	if err != nil {
+		return fmt.Errorf("bad ClearStateProgram: %v", err)
+	}
+	if av >= ExtraProgramChecksVersion || cv >= ExtraProgramChecksVersion {
+		if av != cv {
+			return fmt.Errorf("program version mismatch: %d != %d", av, cv)
+		}
+	}
+	if len(previous.ApprovalProgram) != 0 { // if creation or in call from WellFormed() previous is empty
+		pv, _, err := ProgramVersion(previous.ApprovalProgram)
+		if err != nil {
+			return err
+		}
+		if pv >= ExtraProgramChecksVersion && av < pv {
+			return fmt.Errorf("program version downgrade: %d < %d", av, pv)
+		}
+	}
+	return nil
 }
 
 // ExplicitTxnContext is a struct that implements TxnContext with

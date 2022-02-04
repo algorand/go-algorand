@@ -2162,7 +2162,178 @@ assert
 	endBlock(t, l, eval)
 }
 
-func TestCreatedAppsAreAccessible(t *testing.T) {
+// TestInnerAppVersionCalling ensure that inner app calls must be the >=v6 apps
+func TestInnerAppVersionCalling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	five, err := logic.AssembleStringWithVersion("int 1", 5)
+	require.NoError(t, err)
+	six, err := logic.AssembleStringWithVersion("int 1", 6)
+	require.NoError(t, err)
+
+	create5 := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   five.Program,
+		ClearStateProgram: five.Program,
+	}
+
+	create6 := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   six.Program,
+		ClearStateProgram: six.Program,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &create5, &create6)
+	vb := endBlock(t, l, eval)
+	v5id := vb.Block().Payset[0].ApplicationID
+	v6id := vb.Block().Payset[1].ApplicationID
+
+	call := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		// don't use main. do the test at creation time
+		ApprovalProgram: `
+itxn_begin
+	int appl
+	itxn_field TypeEnum
+	txn Applications 1
+	itxn_field ApplicationID
+itxn_submit`,
+		ForeignApps: []basics.AppIndex{v5id},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call, "inner app call with version 5")
+	call.ForeignApps[0] = v6id
+	txn(t, l, eval, &call, "overspend") // it tried to execute, but test doesn't bother funding
+	endBlock(t, l, eval)
+
+}
+
+func TestAppVersionMatching(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	four, err := logic.AssembleStringWithVersion("int 1", 4)
+	require.NoError(t, err)
+	five, err := logic.AssembleStringWithVersion("int 1", 5)
+	require.NoError(t, err)
+	six, err := logic.AssembleStringWithVersion("int 1", 6)
+	require.NoError(t, err)
+
+	create := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   five.Program,
+		ClearStateProgram: five.Program,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	endBlock(t, l, eval)
+
+	create.ClearStateProgram = six.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create, "version mismatch")
+	endBlock(t, l, eval)
+
+	create.ApprovalProgram = six.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	endBlock(t, l, eval)
+
+	create.ClearStateProgram = four.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create, "version mismatch")
+	endBlock(t, l, eval)
+
+	// four doesn't match five, but it doesn't have to
+	create.ApprovalProgram = five.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	endBlock(t, l, eval)
+}
+
+func TestAppDowngrade(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	four, err := logic.AssembleStringWithVersion("int 1", 4)
+	require.NoError(t, err)
+	five, err := logic.AssembleStringWithVersion("int 1", 5)
+	require.NoError(t, err)
+	six, err := logic.AssembleStringWithVersion("int 1", 6)
+	require.NoError(t, err)
+
+	create := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   four.Program,
+		ClearStateProgram: four.Program,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	vb := endBlock(t, l, eval)
+	app := vb.Block().Payset[0].ApplicationID
+
+	update := txntest.Txn{
+		Type:              "appl",
+		ApplicationID:     app,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		Sender:            addrs[0],
+		ApprovalProgram:   four.Program,
+		ClearStateProgram: four.Program,
+	}
+
+	// No change - legal
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &update)
+
+	// Upgrade just the approval. Sure (because under 6, no need to match)
+	update.ApprovalProgram = five.Program
+	txn(t, l, eval, &update)
+
+	// Upgrade just the clear state. Now they match
+	update.ClearStateProgram = five.Program
+	txn(t, l, eval, &update)
+
+	// Downgrade (allowed pre 6)
+	update.ClearStateProgram = four.Program
+	txn(t, l, eval, update.Noted("actually a repeat of first upgrade"))
+
+	// Try to upgrade (at 6, must match)
+	update.ApprovalProgram = six.Program
+	txn(t, l, eval, &update, "version mismatch")
+
+	// Do both
+	update.ClearStateProgram = six.Program
+	txn(t, l, eval, &update)
+
+	// Try to downgrade. Fails because it was 6.
+	update.ApprovalProgram = five.Program
+	update.ClearStateProgram = five.Program
+	txn(t, l, eval, update.Noted("repeat of 3rd update"), "downgrade")
+}
+
+func TestCreatedAppsAreAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
@@ -2441,8 +2612,87 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 	}
 }
 
-// TestClearStateInner ensures that ClearState programs can also run inner txns
-func TestClearStateInner(t *testing.T) {
+// TestInnerClearState ensures inner ClearState performs close out properly, even if rejects.
+func TestInnerClearState(t *testing.T) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	// inner will be an app that we opt into, then clearstate
+	// note that clearstate rejects
+	inner := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   "int 1",
+		ClearStateProgram: "int 0",
+		LocalStateSchema: basics.StateSchema{
+			NumUint:      2,
+			NumByteSlice: 2,
+		},
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &inner)
+	vb := endBlock(t, l, eval)
+	innerId := vb.Block().Payset[0].ApplicationID
+
+	outer := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+ int appl
+ itxn_field TypeEnum
+ txn Applications 1
+ itxn_field ApplicationID
+itxn_submit
+`),
+		ForeignApps: []basics.AppIndex{innerId},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &outer)
+	vb = endBlock(t, l, eval)
+	outerId := vb.Block().Payset[0].ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: outerId.Address(),
+		Amount:   1_000_000,
+	}
+
+	call := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: innerId,
+		OnCompletion:  transactions.OptInOC,
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fund, &call)
+	endBlock(t, l, eval)
+
+	ad0 := lookup(t, l, addrs[0])
+	require.Len(t, ad0.AppLocalStates, 1)
+	require.Equal(t, ad0.TotalAppSchema, basics.StateSchema{
+		NumUint:      2,
+		NumByteSlice: 2,
+	})
+
+	call.OnCompletion = transactions.ClearStateOC
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call)
+	endBlock(t, l, eval)
+
+	ad0 = lookup(t, l, addrs[0])
+	require.Empty(t, ad0.AppLocalStates)
+	require.Empty(t, ad0.TotalAppSchema)
+
+}
+
+// TestClearStateInnerPay ensures that ClearState programs can run inner txns in
+// v30, but not in vFuture. (Test should add v31 after it exists.)
+func TestClearStateInnerPay(t *testing.T) {
 
 	tests := []struct {
 		consensus protocol.ConsensusVersion

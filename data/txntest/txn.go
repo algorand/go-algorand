@@ -34,6 +34,7 @@ package txntest
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -93,8 +94,8 @@ type Txn struct {
 	ForeignAssets     []basics.AssetIndex
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
-	ApprovalProgram   string
-	ClearStateProgram string
+	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
+	ClearStateProgram interface{} // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
 	CertRound basics.Round
@@ -119,29 +120,57 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 	if tx.LastValid == 0 {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
-	if tx.ApprovalProgram != "" && !strings.Contains(tx.ApprovalProgram, "#pragma version") {
-		pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-		tx.ApprovalProgram = pragma + tx.ApprovalProgram
-	}
-	if tx.ApprovalProgram != "" && tx.ClearStateProgram == "" {
-		tx.ClearStateProgram = "int 0"
-	}
-	if tx.ClearStateProgram != "" && !strings.Contains(tx.ClearStateProgram, "#pragma version") {
-		pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-		tx.ClearStateProgram = pragma + tx.ClearStateProgram
+
+	if tx.Type == protocol.ApplicationCallTx &&
+		(tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC) {
+
+		if tx.ApprovalProgram == nil {
+			tx.ApprovalProgram = "int 1"
+		}
+		switch program := tx.ApprovalProgram.(type) {
+		case string:
+			if program != "" && !strings.Contains(program, "#pragma version") {
+				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+				tx.ApprovalProgram = pragma + program
+			}
+		case []byte:
+		}
+
+		if tx.ClearStateProgram == nil {
+			tx.ClearStateProgram = tx.ApprovalProgram
+		}
+
+		switch program := tx.ClearStateProgram.(type) {
+		case string:
+			if program != "" && !strings.Contains(program, "#pragma version") {
+				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+				tx.ClearStateProgram = pragma + program
+			}
+		case []byte:
+		}
 	}
 }
 
-func assemble(source string) []byte {
-	if source == "" {
+func assemble(source interface{}) []byte {
+	if source == nil {
 		return nil
 	}
-	ops, err := logic.AssembleString(source)
-	if err != nil {
-		fmt.Printf("Bad program %v", ops.Errors)
-		panic(ops.Errors)
+
+	switch program := source.(type) {
+	case string:
+		if program == "" {
+			return nil
+		}
+		ops, err := logic.AssembleString(program)
+		if err != nil {
+			fmt.Printf("Bad program %v", ops.Errors)
+			panic(ops.Errors)
+		}
+		return ops.Program
+	case []byte:
+		return program
 	}
-	return ops.Program
+	panic(reflect.TypeOf(source))
 }
 
 // Txn produces a transactions.Transaction from the fields in this Txn

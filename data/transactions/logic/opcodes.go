@@ -18,6 +18,8 @@ package logic
 
 import (
 	"sort"
+
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -42,9 +44,10 @@ const backBranchEnabledVersion = 4
 // using an index into arrays.
 const directRefEnabledVersion = 4
 
-// innerAppsEnabledVersion is first version that allowed inner app calls. No old
-// apps should be called as inner apps.
-const innerAppsEnabledVersion = 6
+// innerAppsEnabledVersion is the version that allowed inner app calls. No old
+// apps should be called as inner apps. Set to ExtraProgramChecks version
+// because those checks protect from tricky ClearState Programs.
+const innerAppsEnabledVersion = transactions.ExtraProgramChecksVersion
 
 // txnEffectsVersion is first version that allowed txn opcode to access
 // "effects" (ApplyData info)
