@@ -156,7 +156,7 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				err = fmt.Errorf("invalid group idx: %d", idx)
 				return
 			}
-			if len(s.txnGroup) > 0 {
+			if len(s.innerTxns) > 0 {
 				return makeTxnImpl(&s.innerTxns[idx].Txn, idx, preview), nil
 			}
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
