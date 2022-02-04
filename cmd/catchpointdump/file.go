@@ -19,13 +19,11 @@ package main
 import (
 	"archive/tar"
 	"bufio"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -59,9 +57,14 @@ var fileCmd = &cobra.Command{
 			cmd.HelpFunc()(cmd, args)
 			return
 		}
-		tarFileBytes, err := ioutil.ReadFile(tarFile)
-		if err != nil || len(tarFileBytes) == 0 {
-			reportErrorf("Unable to read '%s' : %v", tarFile, err)
+		stats, err := os.Stat(tarFile)
+		if err != nil {
+			reportErrorf("Unable to stat '%s' : %v", tarFile, err)
+		}
+		tarSize := stats.Size()
+
+		if tarSize == 0 {
+			reportErrorf("Empty file '%s' : %v", tarFile, err)
 		}
 		genesisInitState := ledgercore.InitState{}
 		cfg := config.GetDefaultLocal()
@@ -84,7 +87,14 @@ var fileCmd = &cobra.Command{
 			reportErrorf("Unable to initialize catchup database : %v", err)
 		}
 		var fileHeader ledger.CatchpointFileHeader
-		fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, tarFileBytes)
+
+		reader, err := os.Open(tarFile)
+		if err != nil {
+			reportErrorf("Unable to read '%s' : %v", tarFile, err)
+		}
+		defer reader.Close()
+
+		fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, reader, tarSize)
 		if err != nil {
 			reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 		}
@@ -115,15 +125,14 @@ func printLoadCatchpointProgressLine(progress int, barLength int, dld int64) {
 	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
-func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, fileBytes []byte) (fileHeader ledger.CatchpointFileHeader, err error) {
+func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, tarFile io.Reader, tarSize int64) (fileHeader ledger.CatchpointFileHeader, err error) {
 	fmt.Printf("\n")
 	printLoadCatchpointProgressLine(0, 50, 0)
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
 	defer printLoadCatchpointProgressLine(0, 0, 0)
 
-	reader := bytes.NewReader(fileBytes)
-	tarReader := tar.NewReader(reader)
+	tarReader := tar.NewReader(tarFile)
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
 	for {
 		header, err := tarReader.Next()
@@ -158,9 +167,9 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
-		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && len(fileBytes) > 0 {
+		if time.Since(lastProgressUpdate) > 50*time.Millisecond && tarSize > 0 {
 			lastProgressUpdate = time.Now()
-			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(len(fileBytes))), 50, int64(progress))
+			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(tarSize)), 50, int64(progress))
 		}
 	}
 }
