@@ -35,6 +35,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+const roundDelay = uint64(200)
+
 func queuePayments(queueWg *sync.WaitGroup, c libgoal.Client, q <-chan *transactions.SignedTxn) {
 	counter := 0
 	for stxn := range q {
@@ -89,16 +91,15 @@ func Test5MAssets(t *testing.T) {
 	defer fixture.Shutdown()
 	client := fixture.LibGoalClient
 
-	numberOfThreads := 8
+	numberOfThreads := 128
 
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	require.NoError(t, err)
 	baseAcct := accountList[0].Address
 
-	status, err := client.Status()
-	require.NoError(t, err)
 	var sigWg sync.WaitGroup
 	var queueWg sync.WaitGroup
+	var scenarioWg sync.WaitGroup
 	txnChan := make(chan *transactions.Transaction, 100)
 	sigTxnChan := make(chan *transactions.SignedTxn, 100)
 
@@ -112,21 +113,35 @@ func Test5MAssets(t *testing.T) {
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggestedParams.GenesisHash)
 
-	// Call to different scenarios
-	go scenarioA(t, client, baseAcct, genesisHash, txnChan)
-
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		queueWg.Add(1)
 		go queuePayments(&queueWg, client, sigTxnChan)
 	}
 
+	lastRound := uint64(0)
+	// Call to different scenarios
+	scenarioWg.Add(1)
+	go func() {
+		lastRound = scenarioA(t, &fixture, baseAcct, genesisHash, txnChan)
+		scenarioWg.Done()
+	}()
+
 	sigWg.Wait()
 	close(sigTxnChan)
 	queueWg.Wait()
-	status, err = client.Status()
-	require.NoError(t, err)
+	scenarioWg.Wait()
+	fixture.WaitForRound(lastRound, 1000*time.Second)
+}
+
+func checkPoint(
+	t *testing.T,
+	baseAcct string,
+	fixture *fixtures.RestClientFixture,
+	round uint64) {
 
 	var tx transactions.Transaction
+	var err error
+	client := fixture.LibGoalClient
 	for {
 		tx, err = client.SendPaymentFromUnencryptedWallet(baseAcct, baseAcct, config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 0, nil)
 		if err == nil {
@@ -136,8 +151,9 @@ func Test5MAssets(t *testing.T) {
 		fmt.Printf("Error broadcasting final transaction: %v\n", err)
 		time.Sleep(config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout)
 	}
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, baseAcct, tx.ID().String())
-	fmt.Printf("Waiting for confirmation transaction to commit..\n")
+	fmt.Printf("Waiting for confirmation transaction to commit...")
+	_, err = fixture.WaitForConfirmedTxn(round+100, baseAcct, tx.ID().String())
+	fmt.Printf("done\n")
 	require.NoError(t, err)
 }
 
@@ -158,7 +174,7 @@ func activateAccountTransaction(
 	receiver, err = basics.UnmarshalChecksumAddress(address)
 	require.NoError(t, err)
 
-	sround := zeroSub(round, 200)
+	sround := zeroSub(round, roundDelay)
 	txn = transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -170,7 +186,7 @@ func activateAccountTransaction(
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 100000000},
+			Amount:   basics.MicroAlgos{Raw: 10000000000},
 		},
 	}
 	return
@@ -183,7 +199,7 @@ func createAssetTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (assetTx transactions.Transaction) {
 
-	sround := zeroSub(round, 200)
+	sround := zeroSub(round, roundDelay)
 	assetTx = transactions.Transaction{
 		Type: protocol.AssetConfigTx,
 		Header: transactions.Header{
@@ -195,7 +211,7 @@ func createAssetTransaction(
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
 			AssetParams: basics.AssetParams{
-				Total:         100+round,
+				Total:         999000000 + round,
 				DefaultFrozen: false,
 				Manager:       sender,
 			},
@@ -204,15 +220,48 @@ func createAssetTransaction(
 	return
 }
 
+func sendAssetTransaction(
+	t *testing.T,
+	round uint64,
+	sender basics.Address,
+	tLife uint64,
+	genesisHash crypto.Digest,
+	assetID basics.AssetIndex,
+	receiver basics.Address,
+	amount uint64) (tx transactions.Transaction) {
+
+	sround := zeroSub(round, roundDelay)
+	tx = transactions.Transaction{
+		Type: protocol.AssetTransferTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
+			FirstValid:  basics.Round(sround),
+			LastValid:   basics.Round(sround + tLife),
+			GenesisHash: genesisHash,
+		},
+		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+			XferAsset:     assetID,
+			AssetAmount:   amount,
+			AssetReceiver: receiver,
+		},
+	}
+	return
+}
+
 func scenarioA(
 	t *testing.T,
-	client libgoal.Client,
+	fixture *fixtures.RestClientFixture,
 	baseAcct string,
 	genesisHash crypto.Digest,
-	txnChan chan<- *transactions.Transaction) {
+	txnChan chan<- *transactions.Transaction) uint64 {
 
-	numberOfAccounts := 600 // 6K
-	numberOfAssets := 60000   // 6M
+	client := fixture.LibGoalClient
+
+	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
+
+	numberOfAccounts := uint64(6000) // 6K
+	numberOfAssets := uint64(600000)  // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -224,9 +273,11 @@ func scenarioA(
 	tLife := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)].MaxTxnLife
 
 	createdAccounts := make([]basics.Address, 0, numberOfAccounts)
-	
+
 	round := uint64(0)
-	for txi := 0; txi < numberOfAccounts; txi++ {
+
+	// create 6K accounts
+	for txi := uint64(0); txi < numberOfAccounts; txi++ {
 		if txi%100 == 0 {
 			fmt.Println("account create txn: ", txi)
 		}
@@ -237,10 +288,11 @@ func scenarioA(
 		round++
 	}
 
+	// create 6M unique assets by a different 6,000 accounts
 	for nai, na := range createdAccounts {
-		for asi := 0; asi < assetsPerAccount; asi++ {
+		for asi := uint64(0); asi < assetsPerAccount; asi++ {
 			if asi%100 == 0 {
-				fmt.Printf("asset create: acct: %d asset %d\n", nai, asi)
+				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
 
 			atx := createAssetTransaction(t, round, na, tLife, genesisHash)
@@ -248,6 +300,56 @@ func scenarioA(
 			round++
 		}
 	}
+	fixture.WaitForRound(round, 1000*time.Second)
 
+	// have a single account opted in all of them
+	ownAllAccount := createdAccounts[numberOfAccounts-1]
+	for acci, nacc := range createdAccounts {
+		info, err := client.AccountInformationV2(nacc.String())
+		require.NoError(t, err)
+		for assi, asset := range *info.Assets {
+			if assi%100 == 0 {
+				fmt.Printf("Accepting assets acct: %d asset %d\n", acci, assi)
+			}
+			optInT := sendAssetTransaction(
+				t,
+				round,
+				ownAllAccount,
+				tLife,
+				genesisHash,
+				basics.AssetIndex(asset.AssetId),
+				ownAllAccount,
+				uint64(0))
+			txnChan <- &optInT
+			round++
+		}
+	}
+
+	// and owning all of them
+	for acci, nacc := range createdAccounts {
+		if nacc == ownAllAccount {
+			continue
+		}
+		info, err := client.AccountInformationV2(nacc.String())
+		require.NoError(t, err)
+		for assi, asset := range *info.Assets {
+			if assi%100 == 0 {
+				fmt.Printf("Sending assets acct: %d asset %d\n", acci, assi)
+			}
+			optInT := sendAssetTransaction(
+				t,
+				round,
+				nacc,
+				tLife,
+				genesisHash,
+				basics.AssetIndex(asset.AssetId),
+				ownAllAccount,
+				asset.Amount)
+			txnChan <- &optInT
+			round++
+		}
+	}
+	
 	close(txnChan)
+	return round
 }
