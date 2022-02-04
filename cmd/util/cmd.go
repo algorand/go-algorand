@@ -58,3 +58,63 @@ func (c *CobraStringValue) Set(other string) error {
 func (c *CobraStringValue) AllowedString() string {
 	return strings.Join(c.allowed, ", ")
 }
+
+type CobraStringSliceValue struct {
+	value      []string
+	allowed    []string
+	allowedMap map[string]int
+	isSet      bool
+}
+
+// MakeCobraStringSliceValue creates a string slice value (satisfying spf13/pflag.Value interface)
+// for a limited number of valid options
+func MakeCobraStringSliceValue(value *[]string, others []string) *CobraStringSliceValue {
+	c := new(CobraStringSliceValue)
+	if value != nil {
+		c.value = *value
+	}
+
+	// make allowed values by filtering out duplicates and preseve the order
+	c.allowedMap = make(map[string]int, len(others)+len(c.value))
+	var dups int
+	for i, v := range append(c.value, others...) {
+		if _, ok := c.allowedMap[v]; !ok {
+			c.allowedMap[v] = i - dups
+		} else {
+			dups++
+		}
+	}
+	c.allowed = make([]string, len(c.allowedMap))
+	for v, i := range c.allowedMap {
+		c.allowed[i] = v
+	}
+	return c
+}
+
+func (c *CobraStringSliceValue) String() string { return "[" + strings.Join(c.value, ", ") + "]" }
+func (c *CobraStringSliceValue) Type() string   { return "stringSlice" }
+func (c *CobraStringSliceValue) IsSet() bool    { return c.isSet }
+
+// Set sets a value and fails if it is not allowed
+func (c *CobraStringSliceValue) Set(values string) error {
+	others := strings.Split(values, ",")
+	for _, other := range others {
+		other = strings.TrimSpace(other)
+		if _, ok := c.allowedMap[other]; ok {
+			c.value = append(c.value, other)
+			c.isSet = true
+		} else {
+			return fmt.Errorf("value %s not allowed", other)
+		}
+	}
+	return nil
+}
+
+// AllowedString returns a comma-separated string of allowed values
+func (c *CobraStringSliceValue) AllowedString() string {
+	return strings.Join(c.allowed, ", ")
+}
+
+func (s *CobraStringSliceValue) GetSlice() []string {
+	return s.value
+}
