@@ -33,6 +33,7 @@ import (
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -122,7 +123,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	l := handler.Node.Ledger()
+	l := handler.Node.LedgerForAPI()
 
 	genBlk, err := l.Block(0)
 	require.NoError(t, err)
@@ -194,7 +195,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	blk.TxnRoot, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
-	err = l.AddBlock(blk, agreement.Certificate{})
+	err = l.(*data.Ledger).AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder

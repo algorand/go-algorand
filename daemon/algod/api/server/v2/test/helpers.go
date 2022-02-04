@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
@@ -119,7 +120,7 @@ func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) *mockN
 		err:       nodeError}
 }
 
-func (m mockNode) Ledger() *data.Ledger {
+func (m mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
 

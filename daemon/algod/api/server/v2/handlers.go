@@ -29,11 +29,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -57,9 +57,24 @@ type Handlers struct {
 	Shutdown <-chan struct{}
 }
 
+type LedgerForAPI interface {
+	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
+	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
+	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
+	Latest() basics.Round
+	LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error)
+	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
+	Wait(r basics.Round) chan struct{}
+	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
+	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
+}
+
 // NodeInterface represents node fns used by the handlers.
 type NodeInterface interface {
-	Ledger() *data.Ledger
+	LedgerForAPI() LedgerForAPI
 	Status() (s node.StatusReport, err error)
 	GenesisID() string
 	GenesisHash() crypto.Digest
@@ -265,7 +280,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return v2.basicAccountInformation(ctx, addr, handle, contentType)
 	}
 
-	myLedger := v2.Node.Ledger()
+	myLedger := v2.Node.LedgerForAPI()
 
 	// count total # of resources, if max limit is set
 	if maxResults := v2.Node.Config().MaxAccountsAPIResults; maxResults != 0 {
@@ -316,7 +331,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 // basicAccountInformation handles the case when no resources (assets or apps) are requested.
 func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Address, handle codec.Handle, contentType string) error {
-	myLedger := v2.Node.Ledger()
+	myLedger := v2.Node.LedgerForAPI()
 	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupAccount(myLedger.Latest(), addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -391,7 +406,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
 	}
 
-	ledger := v2.Node.Ledger()
+	ledger := v2.Node.LedgerForAPI()
 
 	lastRound := ledger.Latest()
 	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(assetID), basics.AssetCreatable)
@@ -444,7 +459,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
 	}
 
-	ledger := v2.Node.Ledger()
+	ledger := v2.Node.LedgerForAPI()
 
 	lastRound := ledger.Latest()
 	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(applicationID), basics.AssetCreatable)
@@ -498,7 +513,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 
 	// msgpack format uses 'RawBlockBytes' and attaches a custom header.
 	if handle == protocol.CodecHandle {
-		blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
+		blockbytes, err := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
 		if err != nil {
 			return internalError(ctx, err, err.Error(), v2.Log)
 		}
@@ -507,7 +522,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 		return ctx.Blob(http.StatusOK, contentType, blockbytes)
 	}
 
-	ledger := v2.Node.Ledger()
+	ledger := v2.Node.LedgerForAPI()
 	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -537,7 +552,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
 	}
 
-	ledger := v2.Node.Ledger()
+	ledger := v2.Node.LedgerForAPI()
 	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -589,7 +604,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 // GetSupply gets the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
-	latest, totals, err := v2.Node.Ledger().LatestTotals()
+	latest, totals, err := v2.Node.LedgerForAPI().LatestTotals()
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)
@@ -636,7 +651,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 // WaitForBlock returns the node status after waiting for the given round.
 // (GET /v2/status/wait-for-block-after/{round}/)
 func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
-	ledger := v2.Node.Ledger()
+	ledger := v2.Node.LedgerForAPI()
 
 	stat, err := v2.Node.Status()
 	if err != nil {
@@ -753,7 +768,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	// fetch previous block header just once to prevent racing with network
 	var hdr bookkeeping.BlockHeader
 	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
-		actualLedger := v2.Node.Ledger()
+		actualLedger := v2.Node.LedgerForAPI()
 		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
 		if err != nil {
 			return internalError(ctx, err, "current block error", v2.Log)
@@ -874,8 +889,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
 		response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
-		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
-		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
+		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.LedgerForAPI())
+		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.LedgerForAPI())
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
 		response.Logs = convertLogs(txn)
 		response.Inners = convertInners(&txn)
@@ -1022,7 +1037,7 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 // (GET /v2/applications/{application-id})
 func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) error {
 	appIdx := basics.AppIndex(applicationID)
-	ledger := v2.Node.Ledger()
+	ledger := v2.Node.LedgerForAPI()
 	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -1051,7 +1066,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 // (GET /v2/assets/{asset-id})
 func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	assetIdx := basics.AssetIndex(assetID)
-	ledger := v2.Node.Ledger()
+	ledger := v2.Node.LedgerForAPI()
 	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
