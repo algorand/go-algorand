@@ -21,6 +21,7 @@ import (
 	"strings"
 )
 
+// CobraStringValue is similar to spf13.pflag.stringValue but enforces allowed values
 type CobraStringValue struct {
 	value   string
 	allowed []string
@@ -39,8 +40,12 @@ func MakeCobraStringValue(value string, others []string) *CobraStringValue {
 }
 
 func (c *CobraStringValue) String() string { return c.value }
-func (c *CobraStringValue) Type() string   { return "string" }
-func (c *CobraStringValue) IsSet() bool    { return c.isSet }
+
+// Type returns the value type as a string
+func (c *CobraStringValue) Type() string { return "string" }
+
+// IsSet returns a boolean flag indicating of the value was changed from defaults
+func (c *CobraStringValue) IsSet() bool { return c.isSet }
 
 // Set sets a value and fails if it is not allowed
 func (c *CobraStringValue) Set(other string) error {
@@ -59,6 +64,7 @@ func (c *CobraStringValue) AllowedString() string {
 	return strings.Join(c.allowed, ", ")
 }
 
+// CobraStringSliceValue is similar to spf13.pflag.stringSliceValue but enforces allowed values
 type CobraStringSliceValue struct {
 	value      []string
 	allowed    []string
@@ -92,8 +98,12 @@ func MakeCobraStringSliceValue(value *[]string, others []string) *CobraStringSli
 }
 
 func (c *CobraStringSliceValue) String() string { return "[" + strings.Join(c.value, ", ") + "]" }
-func (c *CobraStringSliceValue) Type() string   { return "stringSlice" }
-func (c *CobraStringSliceValue) IsSet() bool    { return c.isSet }
+
+// Type returns the value type as a string
+func (c *CobraStringSliceValue) Type() string { return "stringSlice" }
+
+// IsSet returns a boolean flag indicating of the value was changed from defaults
+func (c *CobraStringSliceValue) IsSet() bool { return c.isSet }
 
 // Set sets a value and fails if it is not allowed
 func (c *CobraStringSliceValue) Set(values string) error {
@@ -115,6 +125,7 @@ func (c *CobraStringSliceValue) AllowedString() string {
 	return strings.Join(c.allowed, ", ")
 }
 
-func (s *CobraStringSliceValue) GetSlice() []string {
-	return s.value
+// GetSlice returns a current value as a string slice
+func (c *CobraStringSliceValue) GetSlice() []string {
+	return c.value
 }

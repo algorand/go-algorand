@@ -69,8 +69,12 @@ type frontendValue struct {
 	*cmdutil.CobraStringValue
 }
 
+func (f *frontendValue) value() string {
+	return f.CobraStringValue.String()
+}
+
 func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAdapter) {
-	switch f.String() {
+	switch f.value() {
 	case "web":
 		wa := MakeWebPageFrontend(&WebPageFrontendParams{router, appAddress})
 		return wa
