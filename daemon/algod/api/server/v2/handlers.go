@@ -44,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-codec/codec"
 )
 
 const maxTealSourceBytes = 1e5
@@ -259,15 +260,66 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
 	}
 
+	// should we skip fetching apps and assets?
+	if params.Include != nil && *params.Include == "none" {
+		return v2.basicAccountInformation(ctx, addr, handle, contentType)
+	}
+
 	myLedger := v2.Node.Ledger()
-	record, lastRound, err := myLedger.LookupLatest(addr)
+
+	// count total # of resources, if max limit is set
+	if maxResults := v2.Node.Config().MaxAccountsAPIResults; maxResults != 0 {
+		record, _, _, err := myLedger.LookupAccount(myLedger.Latest(), addr)
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
+		if totalResults > maxResults {
+			v2.Log.Info("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
+			return ctx.JSON(http.StatusBadRequest, generated.AccountErrorResponse{
+				Message:             "Result limit exceeded",
+				TotalAssets:         &record.TotalAssets,
+				TotalCreatedAssets:  &record.TotalAppLocalStates,
+				TotalAppsLocalState: &record.TotalAppLocalStates,
+				TotalCreatedApps:    &record.TotalAppParams,
+			})
+		}
+	}
+
+	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupLatest(addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	// check against configured total limit on assets/apps
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
 	}
 
 	consensus, err := myLedger.ConsensusParams(lastRound)
 	if err != nil {
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
+	}
+
+	account, err := AccountDataToAccount(address, &record, lastRound, &consensus, amountWithoutPendingRewards)
+	if err != nil {
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	response := generated.AccountResponse(account)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// basicAccountInformation handles the case when no resources (assets or apps) are requested.
+func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Address, handle codec.Handle, contentType string) error {
+	myLedger := v2.Node.Ledger()
+	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupAccount(myLedger.Latest(), addr)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
 	if handle == protocol.CodecHandle {
@@ -278,35 +330,161 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
 
-	recordWithoutPendingRewards, _, err := myLedger.LookupWithoutRewards(lastRound, addr)
+	consensus, err := myLedger.ConsensusParams(lastRound)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
-	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 
-	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
-	if len(record.Assets) > 0 {
-		//assets = make(map[uint64]v1.AssetHolding)
-		for curid := range record.Assets {
-			var creator string
-			creatorAddr, ok, err := myLedger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
-			if err == nil && ok {
-				creator = creatorAddr.String()
-			} else {
-				// Asset may have been deleted, so we can no
-				// longer fetch the creator
-				creator = ""
-			}
-			assetsCreators[curid] = creator
+	var apiParticipation *generated.AccountParticipation
+	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+		apiParticipation = &generated.AccountParticipation{
+			VoteParticipationKey:      record.VoteID[:],
+			SelectionParticipationKey: record.SelectionID[:],
+			VoteFirstValid:            uint64(record.VoteFirstValid),
+			VoteLastValid:             uint64(record.VoteLastValid),
+			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
 	}
 
-	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, &consensus, amountWithoutPendingRewards)
-	if err != nil {
-		return internalError(ctx, err, errInternalFailure, v2.Log)
+	pendingRewards, overflowed := basics.OSubA(record.MicroAlgos, amountWithoutPendingRewards)
+	if overflowed {
+		return internalError(ctx, errors.New("overflow on pending reward calculation"), errInternalFailure, v2.Log)
 	}
 
+	account := generated.Account{
+		SigType:                     nil,
+		Round:                       uint64(lastRound),
+		Address:                     addr.String(),
+		Amount:                      record.MicroAlgos.Raw,
+		PendingRewards:              pendingRewards.Raw,
+		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
+		Rewards:                     record.RewardedMicroAlgos.Raw,
+		Status:                      record.Status.String(),
+		RewardBase:                  &record.RewardsBase,
+		Participation:               apiParticipation,
+		TotalCreatedAssets:          record.TotalAssetParams,
+		TotalCreatedApps:            record.TotalAppParams,
+		TotalAssets:                 record.TotalAssets,
+		AuthAddr:                    addrOrNil(record.AuthAddr),
+		TotalAppsLocalState:         record.TotalAppLocalStates,
+		AppsTotalSchema: &generated.ApplicationStateSchema{
+			NumByteSlice: record.TotalAppSchema.NumByteSlice,
+			NumUint:      record.TotalAppSchema.NumUint,
+		},
+		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
+		MinBalance:          record.MinBalance(&consensus).Raw,
+	}
 	response := generated.AccountResponse(account)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// AccountAssetInformation gets account information about a given asset.
+// (GET /v2/accounts/{address}/assets/{asset-id})
+func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, assetID uint64, params generated.AccountAssetInformationParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
+	}
+
+	ledger := v2.Node.Ledger()
+
+	lastRound := ledger.Latest()
+	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(assetID), basics.AssetCreatable)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	if record.AssetParams == nil && record.AssetHolding == nil {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	// return msgpack response
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	// prepare JSON response
+	response := generated.AccountAssetResponse{Round: uint64(lastRound)}
+
+	if record.AssetParams != nil {
+		asset := AssetParamsToAsset(addr.String(), basics.AssetIndex(assetID), record.AssetParams)
+		response.CreatedAsset = &asset.Params
+	}
+
+	if record.AssetHolding != nil {
+		response.AssetHolding = &generated.AssetHolding{
+			Amount:   record.AssetHolding.Amount,
+			AssetId:  uint64(assetID),
+			IsFrozen: record.AssetHolding.Frozen,
+		}
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// AccountApplicationInformation gets account information about a given app.
+// (GET /v2/accounts/{address}/applications/{application-id})
+func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address string, applicationID uint64, params generated.AccountApplicationInformationParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
+	}
+
+	ledger := v2.Node.Ledger()
+
+	lastRound := ledger.Latest()
+	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(applicationID), basics.AssetCreatable)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	if record.AppParams == nil && record.AppLocalState == nil {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	// return msgpack response
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	// prepare JSON response
+	response := generated.AccountApplicationResponse{Round: uint64(lastRound)}
+
+	if record.AssetParams != nil {
+		app := AppParamsToApplication(addr.String(), basics.AppIndex(applicationID), record.AppParams)
+		response.CreatedApp = &app.Params
+	}
+
+	if record.AppLocalState != nil {
+		localState := convertTKVToGenerated(&record.AppLocalState.KeyValue)
+		response.AppLocalState = &generated.ApplicationLocalState{
+			Id:       uint64(applicationID),
+			KeyValue: localState,
+			Schema: generated.ApplicationStateSchema{
+				NumByteSlice: record.AppLocalState.Schema.NumByteSlice,
+				NumUint:      record.AppLocalState.Schema.NumUint,
+			},
+		}
+	}
+
 	return ctx.JSON(http.StatusOK, response)
 }
 

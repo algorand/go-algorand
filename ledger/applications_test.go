@@ -254,7 +254,7 @@ return`
 	prd, err := l.accts.accountsq.lookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
 	a.Nil(prd.data.GetAppLocalState().KeyValue)
-	ad, rnd, err := l.LookupLatest(userOptin)
+	ad, rnd, _, err := l.LookupLatest(userOptin)
 	a.Equal(dbRound, rnd)
 	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)

@@ -30,7 +30,7 @@ import (
 
 // AccountDataToAccount converts basics.AccountData to v2.generated.Account
 func AccountDataToAccount(
-	address string, record *basics.AccountData, assetsCreators map[basics.AssetIndex]string,
+	address string, record *basics.AccountData,
 	lastRound basics.Round, consensus *config.ConsensusParams,
 	amountWithoutPendingRewards basics.MicroAlgos,
 ) (generated.Account, error) {
@@ -39,11 +39,9 @@ func AccountDataToAccount(
 	for curid, holding := range record.Assets {
 		// Empty is ok, asset may have been deleted, so we can no
 		// longer fetch the creator
-		creator := assetsCreators[curid]
 		holding := generated.AssetHolding{
 			Amount:   holding.Amount,
 			AssetId:  uint64(curid),
-			Creator:  creator,
 			IsFrozen: holding.Frozen,
 		}
 
@@ -124,10 +122,14 @@ func AccountDataToAccount(
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
+		TotalCreatedAssets:          uint64(len(createdAssets)),
 		CreatedApps:                 &createdApps,
+		TotalCreatedApps:            uint64(len(createdApps)),
 		Assets:                      &assets,
+		TotalAssets:                 uint64(len(assets)),
 		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
+		TotalAppsLocalState:         uint64(len(appsLocalState)),
 		AppsTotalSchema:             &totalAppSchema,
 		AppsTotalExtraPages:         numOrNil(totalExtraPages),
 		MinBalance:                  minBalance.Raw,

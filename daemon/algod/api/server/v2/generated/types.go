@@ -46,7 +46,7 @@ type Account struct {
 
 	// \[apar\] parameters of assets created by this account.
 	//
-	// Note: the raw account uses `map[int] -> Asset` for this type.
+	// Note: the raw account uses `map[int] -> AssetParams` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
 	// MicroAlgo balance required by the account.
@@ -80,6 +80,29 @@ type Account struct {
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
+
+	// The count of all application local data (AppLocalState objects) stored in this account.
+	TotalAppsLocalState uint64 `json:"total-apps-local-state"`
+
+	// The count of all assets (AssetHolding objects) held by this account.
+	TotalAssets uint64 `json:"total-assets"`
+
+	// The count of all apps (AppParams objects) created by this account.
+	TotalCreatedApps uint64 `json:"total-created-apps"`
+
+	// The count of all assets (AssetParams objects) created by this account.
+	TotalCreatedAssets uint64 `json:"total-created-assets"`
+}
+
+// AccountErrorResponse defines model for AccountErrorResponse.
+type AccountErrorResponse struct {
+	Data                *string `json:"data,omitempty"`
+	MaxResults          *uint64 `json:"max-results,omitempty"`
+	Message             string  `json:"message"`
+	TotalAppsLocalState *uint64 `json:"total-apps-local-state,omitempty"`
+	TotalAssets         *uint64 `json:"total-assets,omitempty"`
+	TotalCreatedApps    *uint64 `json:"total-created-apps,omitempty"`
+	TotalCreatedAssets  *uint64 `json:"total-created-assets,omitempty"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
@@ -190,9 +213,6 @@ type AssetHolding struct {
 
 	// Asset ID of the holding.
 	AssetId uint64 `json:"asset-id"`
-
-	// Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.
-	Creator string `json:"creator"`
 
 	// \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
@@ -520,6 +540,40 @@ type TxId string
 // TxType defines model for tx-type.
 type TxType string
 
+// AccountApplicationResponse defines model for AccountApplicationResponse.
+type AccountApplicationResponse struct {
+
+	// Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// Stores the global information associated with an application.
+	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
+// AccountAssetResponse defines model for AccountAssetResponse.
+type AccountAssetResponse struct {
+
+	// Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
+
+	// AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
+
+	// The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
 // AccountResponse defines model for AccountResponse.
 type AccountResponse Account
 
@@ -709,6 +763,23 @@ type VersionsResponse Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+
+	// Whether to include asset holdings, application local state, created asset parameters, or created application parameters. Defaults to `all`.
+	Include *string `json:"include,omitempty"`
+}
+
+// AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
+type AccountApplicationInformationParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+}
+
+// AccountAssetInformationParams defines parameters for AccountAssetInformation.
+type AccountAssetInformationParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
