@@ -47,6 +47,7 @@ import (
 
 // Txn exists purely to make it easier to write a
 // transaction.Transaction in Go source.
+// To better understand Txn rationale, see https://github.com/algorand/go-algorand/pull/2730.
 type Txn struct {
 	Type protocol.TxType
 
