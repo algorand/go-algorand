@@ -1,0 +1,16 @@
+name: "Build workflow"
+on:
+  pull_request:
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          choco install -y golang --version=1.14.7 --force -v
+          cmd //C RefreshEnv.cmd
+          go version

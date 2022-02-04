@@ -166,7 +166,7 @@ workflows:
       #     context:
       #       - slack-secrets
       #       - aws-secrets
-      - windows_x64_build
+      # - windows_x64_build
 
 commands:
   prepare_go:
@@ -197,10 +197,10 @@ commands:
           command: |
             set -e
             #choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.14.7 --force
+            choco install -y golang --version=1.14.7 --force -v
             cmd //C RefreshEnv.cmd
-            ls /c/Program\ Files/Go/bin/
             ls /c/Program\ Files/Go/
+            ls /c/Program\ Files/Go/bin/
             go version
 
       - run:
