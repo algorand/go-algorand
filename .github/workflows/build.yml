@@ -33,7 +33,8 @@ jobs:
         shell: msys2 {0}
         run: |
           set -e
-          env
+          # env
+          choco install git
           git --version
           go version
           #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
