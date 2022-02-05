@@ -805,7 +805,7 @@ func TestInnerApplCreate(t *testing.T) {
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
 
-	ops := TestProg(t, "int 1", AssemblerMaxVersion)
+	ops := TestProg(t, "int 50", AssemblerMaxVersion)
 	approve := "byte 0x" + hex.EncodeToString(ops.Program)
 
 	TestApp(t, `
@@ -826,8 +826,8 @@ int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
 
 	call := `
 itxn_begin
-int appl;              itxn_field TypeEnum
-int 5000;               itxn_field ApplicationID
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
 itxn_submit
 int 1
 `

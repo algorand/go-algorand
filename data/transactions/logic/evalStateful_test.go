@@ -2011,8 +2011,7 @@ int 1
 	ledger.NewAccount(txn.Txn.Receiver, 1)
 	ledger.NewLocals(txn.Txn.Receiver, 100)
 
-	sb := strings.Builder{}
-	ep.Trace = &sb
+	ep.Trace = &strings.Builder{}
 
 	delta := testApp(t, source, ep)
 	require.Equal(t, 0, len(delta.GlobalDelta))

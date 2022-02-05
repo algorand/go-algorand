@@ -361,6 +361,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 
 	ep := &EvalParams{
 		Proto:                   caller.Proto,
+		Trace:                   caller.Trace,
 		TxnGroup:                copyWithClearAD(txgroup),
 		pastScratch:             make([]*scratchSpace, len(txgroup)),
 		MinTealVersion:          &minTealVersion,
@@ -579,7 +580,13 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 	}
 
+	if cx.Trace != nil && cx.caller != nil {
+		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.Txn.Txn.OnCompletion, cx.Txn.Txn.ApplicationArgs)
+	}
 	pass, err := eval(program, &cx)
+	if cx.Trace != nil && cx.caller != nil {
+		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
+	}
 
 	// update side effects. It is tempting, and maybe even a good idea, to store
 	// the pointer to cx.scratch instead.  Since we don't modify them again,
