@@ -316,6 +316,9 @@ type DryrunTxnResult struct {
 	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
 	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
 	Logs             *[][]byte            `json:"logs,omitempty"`
+
+	// Disassembled lsig program line by line.
+	LsigDisassembly *[]string `json:"lsig-disassembly,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.

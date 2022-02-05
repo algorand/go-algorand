@@ -1229,6 +1229,13 @@
             },
             "type": "array"
           },
+          "lsig-disassembly": {
+            "description": "Disassembled lsig program line by line.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "global-delta": {
             "$ref": "#/components/schemas/StateDelta"
           },

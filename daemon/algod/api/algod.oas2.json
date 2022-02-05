@@ -1988,6 +1988,13 @@
             "type": "string"
           }
         },
+        "lsig-disassembly": {
+          "description": "Disassembled lsig program line by line.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "logic-sig-trace": {
           "type": "array",
           "items": {
