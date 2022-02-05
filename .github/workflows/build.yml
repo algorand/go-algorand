@@ -28,15 +28,15 @@ jobs:
           # export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
           # export msys2+=" -msys2 -c "\"\$@"\" --"
           # $msys2
-          pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
+          pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake git go
       - name: Build Test
         shell: msys2 {0}
         run: |
           set -e
           # env
-          choco install git
-          git --version
+          "C:\Program Files\Git\bin\git.exe" --version
           go version
+          git --version
           #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
           # export GOPATH="/home/circleci/go"
           export ALGORAND_DEADLOCK=enable
