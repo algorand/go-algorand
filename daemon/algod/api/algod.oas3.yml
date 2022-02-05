@@ -1218,6 +1218,10 @@
             },
             "type": "array"
           },
+          "app-call-trace-string": {
+            "description": "Trace of application call from evaluation",
+            "type": "string"
+          },
           "cost": {
             "description": "Execution cost of app call transaction",
             "type": "integer"
@@ -1256,6 +1260,10 @@
               "$ref": "#/components/schemas/DryrunState"
             },
             "type": "array"
+          },
+          "logic-sig-trace-string": {
+            "description": "Trace of logic sig from evaluation",
+            "type": "string"
           },
           "logs": {
             "items": {

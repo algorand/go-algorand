@@ -304,6 +304,9 @@ type DryrunTxnResult struct {
 	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
+	// Trace of application call from evaluation
+	AppCallTraceString *string `json:"app-call-trace-string,omitempty"`
+
 	// Execution cost of app call transaction
 	Cost *uint64 `json:"cost,omitempty"`
 
@@ -318,7 +321,10 @@ type DryrunTxnResult struct {
 	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
 	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
 	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
-	Logs                *[][]byte      `json:"logs,omitempty"`
+
+	// Trace of logic sig from evaluation
+	LogicSigTraceString *string   `json:"logic-sig-trace-string,omitempty"`
+	Logs                *[][]byte `json:"logs,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
