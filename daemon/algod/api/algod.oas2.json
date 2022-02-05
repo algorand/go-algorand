@@ -1988,7 +1988,7 @@
             "type": "string"
           }
         },
-        "lsig-disassembly": {
+        "logic-sig-disassembly": {
           "description": "Disassembled lsig program line by line.",
           "type": "array",
           "items": {

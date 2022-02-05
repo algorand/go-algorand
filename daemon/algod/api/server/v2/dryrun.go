@@ -402,7 +402,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			var messages []string
 			result.Disassembly = debug.lines // Keep backwards compat
 			lines := debug.lines[:]
-			result.LsigDisassembly = &lines // Also add to Lsig specific
+			result.LogicSigDisassembly = &lines // Also add to Lsig specific
 			result.LogicSigTrace = &debug.history
 			if pass {
 				messages = append(messages, "PASS")
