@@ -3161,6 +3161,95 @@ func processAllBaseAccountRecords(
 	return count, pending, nil
 }
 
+// loadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
+func loadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, addr basics.Address, addrid int64, data baseAccountData) (ad basics.AccountData, err error) {
+	ad = data.GetAccountData()
+
+	hasResources := false
+	if data.TotalAppParams > 0 {
+		ad.AppParams = make(map[basics.AppIndex]basics.AppParams, data.TotalAppParams)
+		hasResources = true
+	}
+	if data.TotalAppLocalStates > 0 {
+		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, data.TotalAppLocalStates)
+		hasResources = true
+	}
+	if data.TotalAssetParams > 0 {
+		ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, data.TotalAssetParams)
+		hasResources = true
+	}
+	if data.TotalAssets > 0 {
+		ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, data.TotalAssets)
+		hasResources = true
+	}
+
+	if !hasResources {
+		return
+	}
+
+	var resRows *sql.Rows
+	query := fmt.Sprintf("SELECT aidx, data FROM %s where addrid = ?", resourcesTable)
+	resRows, err = tx.QueryContext(ctx, query, addrid)
+	if err != nil {
+		return
+	}
+	defer resRows.Close()
+
+	for resRows.Next() {
+		var buf []byte
+		var aidx int64
+		err = resRows.Scan(&aidx, &buf)
+		if err != nil {
+			return
+		}
+		var resData resourcesData
+		err = protocol.Decode(buf, &resData)
+		if err != nil {
+			return
+		}
+		if resData.ResourceFlags == resourceFlagsNotHolding {
+			err = fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), addrid, aidx)
+			return
+		}
+		if resData.IsApp() {
+			if resData.IsOwning() {
+				ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
+			}
+			if resData.IsHolding() {
+				ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
+			}
+		} else if resData.IsAsset() {
+			if resData.IsOwning() {
+				ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
+			}
+			if resData.IsHolding() {
+				ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
+			}
+		} else {
+			err = fmt.Errorf("unknown resource data: %v", resData)
+			return
+		}
+	}
+
+	if uint64(len(ad.AssetParams)) != data.TotalAssetParams {
+		err = fmt.Errorf("%s assets params mismatch: %d != %d", addr.String(), len(ad.AssetParams), data.TotalAssetParams)
+	}
+	if err == nil && uint64(len(ad.Assets)) != data.TotalAssets {
+		err = fmt.Errorf("%s assets mismatch: %d != %d", addr.String(), len(ad.Assets), data.TotalAssets)
+	}
+	if err == nil && uint64(len(ad.AppParams)) != data.TotalAppParams {
+		err = fmt.Errorf("%s app params mismatch: %d != %d", addr.String(), len(ad.AppParams), data.TotalAppParams)
+	}
+	if err == nil && uint64(len(ad.AppLocalStates)) != data.TotalAppLocalStates {
+		err = fmt.Errorf("%s app local states mismatch: %d != %d", addr.String(), len(ad.AppLocalStates), data.TotalAppLocalStates)
+	}
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 // LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
 // On every account full load it invokes acctCb callback to report progress and data.
 func LoadAllFullAccounts(
@@ -3168,87 +3257,48 @@ func LoadAllFullAccounts(
 	balancesTable string, resourcesTable string,
 	acctCb func(basics.Address, basics.AccountData),
 ) (count int, err error) {
-	baseRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT rowid, address, data FROM %s ORDER BY rowid", balancesTable))
+	baseRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT rowid, address, data FROM %s ORDER BY address", balancesTable))
 	if err != nil {
 		return
 	}
 	defer baseRows.Close()
 
-	// iterate over the existing resources
-	resRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT addrid, aidx, data FROM %s ORDER BY addrid, aidx", resourcesTable))
-	if err != nil {
-		return
-	}
-	defer resRows.Close()
-
-	var address basics.Address
-	var baseAcct baseAccountData
-	var ad basics.AccountData
-
-	baseCb := func(addr basics.Address, rowid int64, accountData *baseAccountData, encodedAccountData []byte) (err error) {
-		baseAcct = *accountData
-		ad = baseAcct.GetAccountData()
-		copy(address[:], addr[:])
-		return nil
-	}
-
-	var totalAppParams, totalAppLocalStates, totalAssetParams, totalAssets uint64
-	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error {
-		if resData != nil {
-			// resData can be nil if a base account does not have resources
-			// or there is a pending resource row from a next account
-			if resData.IsApp() && resData.IsOwning() {
-				if ad.AppParams == nil {
-					ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
-				}
-				ad.AppParams[basics.AppIndex(cidx)] = resData.GetAppParams()
-				totalAppParams++
-			}
-			if resData.IsApp() && resData.IsHolding() {
-				if ad.AppLocalStates == nil {
-					ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-				}
-				ad.AppLocalStates[basics.AppIndex(cidx)] = resData.GetAppLocalState()
-				totalAppLocalStates++
-			}
-
-			if resData.IsAsset() && resData.IsOwning() {
-				if ad.AssetParams == nil {
-					ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-				}
-				ad.AssetParams[basics.AssetIndex(cidx)] = resData.GetAssetParams()
-				totalAssetParams++
-			}
-			if resData.IsAsset() && resData.IsHolding() {
-				if ad.Assets == nil {
-					ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-				}
-				ad.Assets[basics.AssetIndex(cidx)] = resData.GetAssetHolding()
-				totalAssets++
-			}
+	for baseRows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid sql.NullInt64
+		err = baseRows.Scan(&rowid, &addrbuf, &buf)
+		if err != nil {
+			return
+		}
+		if !rowid.Valid {
+			err = fmt.Errorf("invalid rowid in %s", balancesTable)
+			return
 		}
 
-		if baseAcct.TotalAppParams == totalAppParams &&
-			baseAcct.TotalAppLocalStates == totalAppLocalStates &&
-			baseAcct.TotalAssetParams == totalAssetParams &&
-			baseAcct.TotalAssets == totalAssets {
-			acctCb(address, ad)
-			ad = basics.AccountData{}
-			totalAppParams = 0
-			totalAppLocalStates = 0
-			totalAssetParams = 0
-			totalAssets = 0
-			address = basics.Address{}
+		var data baseAccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return
 		}
 
-		return nil
-	}
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf)
 
-	count, _, err = processAllBaseAccountRecords(baseRows, resRows, baseCb, resCb, pendingRow{}, 0)
-	if err != nil {
-		return
-	}
+		var ad basics.AccountData
+		ad, err = loadFullAccount(ctx, tx, resourcesTable, addr, rowid.Int64, data)
+		if err != nil {
+			return
+		}
 
+		acctCb(addr, ad)
+
+		count++
+	}
 	return
 }
 
