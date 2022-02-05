@@ -557,7 +557,7 @@ type ClearStateBudgetError struct {
 }
 
 func (e ClearStateBudgetError) Error() string {
-	return fmt.Sprintf("ClearState execution with only %d", e.offered)
+	return fmt.Sprintf("Attempted ClearState execution with low OpcodeBudget %d", e.offered)
 }
 
 // EvalContract executes stateful TEAL program as the gi'th transaction in params
@@ -575,7 +575,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
-			return false, nil, &ClearStateBudgetError{*cx.PooledApplicationBudget}
+			return false, nil, ClearStateBudgetError{*cx.PooledApplicationBudget}
 		}
 	}
 
@@ -885,6 +885,13 @@ func (cx *EvalContext) step() {
 	}
 
 	if cx.remainingBudget() < 0 {
+		// We're not going to execute the instruction, so give the cost back.
+		// This only matters if this is an inner ClearState - the caller should
+		// not be over debited. (Normally, failure causes total txtree failure.)
+		cx.cost -= deets.Cost
+		if cx.PooledApplicationBudget != nil {
+			*cx.PooledApplicationBudget += deets.Cost
+		}
 		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 			cx.pc, spec.Name, cx.cost)
 		return

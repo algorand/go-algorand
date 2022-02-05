@@ -2699,6 +2699,228 @@ itxn_submit
 
 }
 
+// TestInnerClearStateBadCallee ensures that inner clear state programs are not
+// allowed to use more than 700 (MaxAppProgramCost)
+func TestInnerClearStateBadCallee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	// badCallee tries to run down your budget, so an inner clear must be
+	// protected from exhaustion
+	badCallee := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: "int 1",
+		ClearStateProgram: `top:
+int 1
+pop
+b top
+`,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &badCallee)
+	vb := endBlock(t, l, eval)
+	badId := vb.Block().Payset[0].ApplicationID
+
+	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
+	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
+	// to opt into, and then clear state,  the bad app
+	outer := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+ int appl
+ itxn_field TypeEnum
+ txn Applications 1
+ itxn_field ApplicationID
+ txn ApplicationArgs 0
+ btoi
+ itxn_field OnCompletion
+ global OpcodeBudget
+ store 0
+itxn_submit
+global OpcodeBudget
+store 1
+
+txn ApplicationArgs 0
+btoi
+int ClearState
+!=
+bnz skip						// Don't do budget checking during optin
+ load 0
+ load 1
+ int 3							// OpcodeBudget lines were 3 instructions apart
+ +								// ClearState got 700 added to budget, tried to take all,
+ ==								// but ended up just using that 700
+ assert
+skip:
+`),
+		ForeignApps: []basics.AppIndex{badId},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &outer)
+	vb = endBlock(t, l, eval)
+	outerId := vb.Block().Payset[0].ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: outerId.Address(),
+		Amount:   1_000_000,
+	}
+
+	call := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   outerId,
+		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
+		ForeignApps:     []basics.AppIndex{badId},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fund, &call)
+	endBlock(t, l, eval)
+
+	outerAcct := lookup(t, l, outerId.Address())
+	require.Len(t, outerAcct.AppLocalStates, 1)
+
+	// When doing a clear state, `call` checks that budget wasn't stolen
+	call.ApplicationArgs = [][]byte{{byte(transactions.ClearStateOC)}}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call)
+	endBlock(t, l, eval)
+
+	// Clearstate took effect, despite failure from infinite loop
+	outerAcct = lookup(t, l, outerId.Address())
+	require.Empty(t, outerAcct.AppLocalStates)
+}
+
+// TestInnerClearStateBadCaller ensures that inner clear state programs cannot
+// be called with less than 700 (MaxAppProgramCost)) OpcodeBudget.
+func TestInnerClearStateBadCaller(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	inner := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: "int 1",
+		ClearStateProgram: `global OpcodeBudget
+itob
+log
+int 1`,
+		LocalStateSchema: basics.StateSchema{
+			NumUint:      1,
+			NumByteSlice: 2,
+		},
+	}
+
+	// waster allows tries to get the budget down below 100 before returning
+	waster := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+global OpcodeBudget
+itob
+log
+top:
+global OpcodeBudget
+int 100
+<
+bnz done
+ byte "junk"
+ sha256
+ pop
+ b top
+done:
+global OpcodeBudget
+itob
+log
+`),
+		LocalStateSchema: basics.StateSchema{
+			NumUint:      3,
+			NumByteSlice: 4,
+		},
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &inner, &waster)
+	vb := endBlock(t, l, eval)
+	innerId := vb.Block().Payset[0].ApplicationID
+	wasterId := vb.Block().Payset[1].ApplicationID
+
+	// Grouper is a simple app that will invoke the given apps (in
+	// ForeignApps[0,1]) as a group, with the given OnCompletion (in
+	// ApplicationArgs[0]).
+	grouper := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+ int appl
+ itxn_field TypeEnum
+ txn Applications 1
+ itxn_field ApplicationID
+ txn ApplicationArgs 0
+ btoi
+ itxn_field OnCompletion
+itxn_next
+ int appl
+ itxn_field TypeEnum
+ txn Applications 2
+ itxn_field ApplicationID
+ txn ApplicationArgs 1
+ btoi
+ itxn_field OnCompletion
+itxn_submit
+`),
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &grouper)
+	vb = endBlock(t, l, eval)
+	grouperId := vb.Block().Payset[0].ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: grouperId.Address(),
+		Amount:   1_000_000,
+	}
+
+	call := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   grouperId,
+		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}, {byte(transactions.OptInOC)}},
+		ForeignApps:     []basics.AppIndex{wasterId, innerId},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fund, &call)
+	endBlock(t, l, eval)
+
+	gAcct := lookup(t, l, grouperId.Address())
+	require.Len(t, gAcct.AppLocalStates, 2)
+
+	call.ApplicationArgs = [][]byte{{byte(transactions.CloseOutOC)}, {byte(transactions.ClearStateOC)}}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call, "ClearState execution with low OpcodeBudget")
+	vb = endBlock(t, l, eval)
+	require.Len(t, vb.Block().Payset, 0)
+
+	// Clearstate did not take effect, since the caller tried to shortchange the CSP
+	gAcct = lookup(t, l, grouperId.Address())
+	require.Len(t, gAcct.AppLocalStates, 2)
+}
+
 // TestClearStateInnerPay ensures that ClearState programs can run inner txns in
 // v30, but not in vFuture. (Test should add v31 after it exists.)
 func TestClearStateInnerPay(t *testing.T) {
