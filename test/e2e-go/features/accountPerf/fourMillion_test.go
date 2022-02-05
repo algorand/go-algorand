@@ -35,43 +35,63 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const roundDelay = uint64(200)
+const roundDelay = uint64(400) // should be greate than numberOfThreads
+const numberOfThreads = 256
+const printFreequency = 100
 
-func queuePayments(queueWg *sync.WaitGroup, c libgoal.Client, q <-chan *transactions.SignedTxn) {
-	counter := 0
-	failures := 0
-	for stxn := range q {
-
+func queuePayments(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
+	for stxn := range sigTxnChan {
 		if stxn == nil {
 			break
 		}
-		for {
+		for x := 0; x < 20; x++ { // retry only 20 times
 			_, err := c.BroadcastTransaction(*stxn)
 			if err == nil {
-				counter++
 				break
 			}
 			fmt.Printf("Error broadcasting transaction: %v\n", err)
-			if failures > 100 {
-				break
+			select {
+			// use select to avoid blocking when the errChan is not interested in messages.
+			case errChan <- err:
+			default:
 			}
-			time.Sleep(time.Millisecond * 250)
-			failures++
+			time.Sleep(time.Millisecond * 256)
 		}
 	}
 	queueWg.Done()
 }
 
-func signer(t *testing.T, sigWg *sync.WaitGroup, client libgoal.Client, txnChan <-chan *transactions.Transaction, sigTxnChan chan<- *transactions.SignedTxn) {
+func signer(
+	sigWg *sync.WaitGroup,
+	client libgoal.Client,
+	txnChan <-chan *transactions.Transaction,
+	sigTxnChan chan<- *transactions.SignedTxn,
+	errChan chan<- error) {
+
 	for txn := range txnChan {
 		if txn == nil {
 			break
 		}
 		walletHandle, err := client.GetUnencryptedWalletHandle()
-		require.NoError(t, err)
+		if err != nil {
+			fmt.Printf("Error GetUnencryptedWalletHandle: %v\n", err)
+			select {
+			// use select to avoid blocking when the errChan is not interested in messages.
+			case errChan <- err:
+			default:
+			}
+		}
 
 		stxn, err := client.SignTransactionWithWallet(walletHandle, nil, *txn)
-		require.NoError(t, err)
+		if err != nil {
+			fmt.Printf("Error SignTransactionWithWallet: %v\n", err)
+			select {
+			// use select to avoid blocking when the errChan is not interested in messages.
+			case errChan <- err:
+			default:
+			}
+		}
+
 		sigTxnChan <- &stxn
 	}
 	sigWg.Done()
@@ -88,26 +108,29 @@ func Test5MAssets(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var fixture fixtures.RestClientFixture
+	var sigWg sync.WaitGroup
+	var queueWg sync.WaitGroup
+	var hkWg sync.WaitGroup
 
-	fixture.Setup(t, filepath.Join("nettemplates", "DevModeOneWallet.json"))
-	defer fixture.Shutdown()
+	fixture.Setup(t, filepath.Join("nettemplates", "DevModeOneWalletFuture.json"))
+	defer func() {
+		hkWg.Wait()
+		fixture.Shutdown()
+	}()
 	client := fixture.LibGoalClient
-
-	numberOfThreads := 128
 
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	require.NoError(t, err)
 	baseAcct := accountList[0].Address
 
-	var sigWg sync.WaitGroup
-	var queueWg sync.WaitGroup
-	var hkWg sync.WaitGroup
 	txnChan := make(chan *transactions.Transaction, 100)
 	sigTxnChan := make(chan *transactions.SignedTxn, 100)
+	errChan := make(chan error, 100)
+	stopChan := make(chan struct{}, 1)
 
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		sigWg.Add(1)
-		go signer(t, &sigWg, client, txnChan, sigTxnChan)
+		go signer(&sigWg, client, txnChan, sigTxnChan, errChan)
 	}
 
 	suggestedParams, err := client.SuggestedParams()
@@ -117,8 +140,21 @@ func Test5MAssets(t *testing.T) {
 
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		queueWg.Add(1)
-		go queuePayments(&queueWg, client, sigTxnChan)
+		go queuePayments(&queueWg, client, sigTxnChan, errChan)
 	}
+
+	// error handling
+	go func() {
+		errCount := 0
+		for range errChan {
+			errCount++
+			if errCount > 100 {
+				fmt.Println("Too many errors!")
+				stopChan <- struct{}{}
+				break
+			}
+		}
+	}()
 
 	// some housekeeping
 	hkWg.Add(1)
@@ -126,14 +162,12 @@ func Test5MAssets(t *testing.T) {
 		sigWg.Wait()
 		close(sigTxnChan)
 		queueWg.Wait()
+		close(errChan)
 		hkWg.Done()
 	}()
 
-	lastRound := uint64(0)
 	// Call different scenarios
-	lastRound = scenarioA(t, &fixture, baseAcct, genesisHash, txnChan)
-	hkWg.Wait()
-	fixture.WaitForRound(lastRound, 1000*time.Second)
+	scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, stopChan)
 }
 
 func activateAccountTransaction(
@@ -234,14 +268,15 @@ func scenarioA(
 	fixture *fixtures.RestClientFixture,
 	baseAcct string,
 	genesisHash crypto.Digest,
-	txnChan chan<- *transactions.Transaction) uint64 {
+	txnChan chan<- *transactions.Transaction,
+	stopChan <-chan struct{}) {
 
 	client := fixture.LibGoalClient
 
 	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 
-	numberOfAccounts := uint64(600) // 6K
-	numberOfAssets := uint64(6000)   // 6M
+	numberOfAccounts := uint64(100) // 6K
+	numberOfAssets := uint64(2000)  // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -258,9 +293,18 @@ func scenarioA(
 
 	totalAssetAmount := uint64(0)
 
+	defer func() {
+		close(txnChan)
+	}()
+
 	// create 6K accounts
 	for txi := uint64(0); txi < numberOfAccounts; txi++ {
-		if txi%100 == 0 {
+		select {
+		case <-stopChan:
+			require.Fail(t, "Test errored")
+		default:
+		}
+		if int(txi)%printFreequency == 0 {
 			fmt.Println("account create txn: ", txi)
 		}
 		txn, newAccount := activateAccountTransaction(t, client, round, sender, tLife, genesisHash)
@@ -273,7 +317,13 @@ func scenarioA(
 	// create 6M unique assets by a different 6,000 accounts
 	for nai, na := range createdAccounts {
 		for asi := uint64(0); asi < assetsPerAccount; asi++ {
-			if nai%100 == 0 && asi%100 == 0 {
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+
+			if nai%printFreequency == 0 && int(asi)%printFreequency == 0 {
 				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
 			atx := createAssetTransaction(t, round, na, tLife, 90000000+round, genesisHash)
@@ -283,7 +333,9 @@ func scenarioA(
 		}
 	}
 
-	fixture.WaitForRound(round, 1000*time.Second)
+	fmt.Printf("Waiting for round %d...", int(round))
+	fixture.WaitForRound(round, 10*time.Second)
+	fmt.Printf("done\n")
 
 	// have a single account opted in all of them
 	ownAllAccount := createdAccounts[numberOfAccounts-1]
@@ -294,7 +346,13 @@ func scenarioA(
 		info, err := client.AccountInformationV2(nacc.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
-			if assi%100 == 0 && acci%100 == 0 {
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+
+			if assi%printFreequency == 0 && acci%printFreequency == 0 {
 				fmt.Printf("Accepting assets acct: %d asset %d\n", acci, assi)
 			}
 			optInT := sendAssetTransaction(
@@ -319,7 +377,13 @@ func scenarioA(
 		info, err := client.AccountInformationV2(nacc.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
-			if assi%100 == 0 && acci%100 == 0 {
+			select {
+			case <-stopChan:
+				require.False(t, true, "Test interrupted")
+			default:
+			}
+
+			if assi%printFreequency == 0 && acci%printFreequency == 0 {
 				fmt.Printf("Sending assets acct: %d asset %d\n", acci, assi)
 			}
 			optInT := sendAssetTransaction(
@@ -336,9 +400,9 @@ func scenarioA(
 		}
 	}
 
-	close(txnChan)
-
-	fixture.WaitForRound(round, 1000*time.Second)
+	fmt.Printf("Waiting for round %d...", int(round))
+	fixture.WaitForRound(round, 10*time.Second)
+	fmt.Printf("done\n")
 
 	// Verify the assets are transfered here
 	info, err := client.AccountInformationV2(ownAllAccount.String())
@@ -352,5 +416,4 @@ func scenarioA(
 		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
 	}
 	require.Equal(t, totalAssetAmount, tAssetAmt)
-	return round
 }
