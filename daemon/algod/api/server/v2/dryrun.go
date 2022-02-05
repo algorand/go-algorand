@@ -385,13 +385,11 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
-		sb := strings.Builder{}
 		ep := logic.EvalParams{
 			Txn:                     &stxn,
 			Proto:                   &proto,
 			TxnGroup:                dr.Txns,
 			GroupIndex:              uint64(ti),
-			Trace:                   &sb,
 			PastSideEffects:         pse,
 			PooledApplicationBudget: &pooledAppBudget,
 			Specials:                &transactions.SpecialAddresses{},
@@ -415,10 +413,6 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				messages = append(messages, err.Error())
 			}
 			result.LogicSigMessages = &messages
-
-			strTrace := sb.String()
-			result.LogicSigTraceString = &strTrace
-			sb.Reset() // Let app call set its own
 		}
 		if stxn.Txn.Type == protocol.ApplicationCallTx {
 			appIdx := stxn.Txn.ApplicationID
@@ -549,9 +543,6 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				}
 			}
 			result.AppCallMessages = &messages
-
-			strTrace := sb.String()
-			result.AppCallTraceString = &strTrace
 		}
 		response.Txns[ti] = result
 	}

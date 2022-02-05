@@ -1988,14 +1988,6 @@
             "type": "string"
           }
         },
-        "app-call-trace-string":{
-          "description": "Trace of application call from evaluation",
-          "type": "string"
-        },
-        "logic-sig-trace-string":{
-          "description": "Trace of logic sig from evaluation",
-          "type": "string"
-        },
         "logic-sig-disassembly": {
           "description": "Disassembled lsig program line by line.",
           "type": "array",
