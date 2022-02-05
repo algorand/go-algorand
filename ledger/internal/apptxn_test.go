@@ -2638,6 +2638,9 @@ func TestInnerClearState(t *testing.T) {
 	vb := endBlock(t, l, eval)
 	innerId := vb.Block().Payset[0].ApplicationID
 
+	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
+	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
+	// to opt into, and the clear state, on the inner app.
 	outer := txntest.Txn{
 		Type:   "appl",
 		Sender: addrs[0],
@@ -2647,6 +2650,9 @@ itxn_begin
  itxn_field TypeEnum
  txn Applications 1
  itxn_field ApplicationID
+ txn ApplicationArgs 0
+ btoi
+ itxn_field OnCompletion
 itxn_submit
 `),
 		ForeignApps: []basics.AppIndex{innerId},
@@ -2665,30 +2671,31 @@ itxn_submit
 	}
 
 	call := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[0],
-		ApplicationID: innerId,
-		OnCompletion:  transactions.OptInOC,
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   outerId,
+		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
+		ForeignApps:     []basics.AppIndex{innerId},
 	}
 	eval = nextBlock(t, l, true, nil)
 	txns(t, l, eval, &fund, &call)
 	endBlock(t, l, eval)
 
-	ad0 := lookup(t, l, addrs[0])
-	require.Len(t, ad0.AppLocalStates, 1)
-	require.Equal(t, ad0.TotalAppSchema, basics.StateSchema{
+	outerAcct := lookup(t, l, outerId.Address())
+	require.Len(t, outerAcct.AppLocalStates, 1)
+	require.Equal(t, outerAcct.TotalAppSchema, basics.StateSchema{
 		NumUint:      2,
 		NumByteSlice: 2,
 	})
 
-	call.OnCompletion = transactions.ClearStateOC
+	call.ApplicationArgs = [][]byte{{byte(transactions.ClearStateOC)}}
 	eval = nextBlock(t, l, true, nil)
 	txn(t, l, eval, &call)
 	endBlock(t, l, eval)
 
-	ad0 = lookup(t, l, addrs[0])
-	require.Empty(t, ad0.AppLocalStates)
-	require.Empty(t, ad0.TotalAppSchema)
+	outerAcct = lookup(t, l, outerId.Address())
+	require.Empty(t, outerAcct.AppLocalStates)
+	require.Empty(t, outerAcct.TotalAppSchema)
 
 }
 
