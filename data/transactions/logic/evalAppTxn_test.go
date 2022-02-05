@@ -1133,6 +1133,12 @@ byte 0x33
 ==
 assert
 
+int 0
+gitxnas 1 Logs
+byte 0x33
+==
+assert
+
 itxn_begin
 int appl;    itxn_field TypeEnum
 int 444;     itxn_field ApplicationID

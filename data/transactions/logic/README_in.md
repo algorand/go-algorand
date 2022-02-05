@@ -179,7 +179,8 @@ and `byte 0xcafed00d`. Constants introduced via `int` and `byte` will
 be assembled into appropriate uses of `pushint|pushbytes` and
 `{int|byte}c, {int|byte}c_[0123]` to minimize program size.
 
-The opcodes intcblock and bytecblock use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint),
+
+The opcodes `intcblock` and `bytecblock` use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint),
 reproduced [here](#varuint). The `intcblock` opcode is followed by a
 varuint specifying the number of integer constants and then that
 number of varuints. The `bytecblock` opcode is followed by a varuint
@@ -312,8 +313,8 @@ with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects.
 
-In v5, only a few of the Header fields may be set: `Type`/`TypeEnum`,
-`Sender`, and `Fee`. In v6, Header fields `Note` and `RekeyTo` may
+In v5, only a subset of the transaction's header fields may be set: `Type`/`TypeEnum`,
+`Sender`, and `Fee`. In v6, header fields `Note` and `RekeyTo` may
 also be set.  For the specific (non-header) fields of each transaction
 type, any field may be set.  This allows, for example, clawback
 transactions, asset opt-ins, and asset creates in addition to the more

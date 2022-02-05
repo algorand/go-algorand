@@ -336,7 +336,19 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			codes[i] = testProg(t, program, version).Program
 		}
 	}
+	if txgroup == nil {
+		for _, program := range programs {
+			sample := makeSampleTxn()
+			if program != "" {
+				sample.Txn.Type = protocol.ApplicationCallTx
+			}
+			txgroup = append(txgroup, sample)
+		}
+	}
 	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	if ledger == nil {
+		ledger = MakeLedger(nil)
+	}
 	ep.Ledger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
@@ -450,7 +462,7 @@ func TestMinBalance(t *testing.T) {
 	ledger.NewLocals(tx.Sender, 77)
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
 	// and global count b/c NewLocals opts the creator in)
-	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
+	minb := 1002 + 1006 + 10*1003 + 4*1004 + 6*1005
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 	// request extra program pages, min balance increase
 	withepp := makeApp(1, 2, 3, 4)
@@ -998,7 +1010,7 @@ intc_2 // 1
 	ops := testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
-	_, err := EvalApp(ops.Program, 0, 0, now)
+	_, err := EvalApp(ops.Program, 0, 888, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset_holding_get field 2")
 
@@ -1023,7 +1035,7 @@ intc_1
 	ops = testProg(t, source, version)
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
-	_, err = EvalApp(ops.Program, 0, 0, now)
+	_, err = EvalApp(ops.Program, 0, 888, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset_params_get field 32")
 
@@ -2231,6 +2243,12 @@ func TestReturnTypes(t *testing.T) {
 		StackBytes:  "byte 0x33343536\n",
 	}
 	ep, tx, ledger := makeSampleEnv()
+
+	// This unit test reususes this `ep` willy-nilly.  Would be nice to rewrite,
+	// but for now, trun off budget pooling so that it doesn't get exhausted.
+	ep.Proto.EnableAppCostPooling = false
+	ep.PooledApplicationBudget = nil
+
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = 1
 	tx.ForeignApps = []basics.AppIndex{tx.ApplicationID}
@@ -2241,6 +2259,10 @@ func TestReturnTypes(t *testing.T) {
 		[]byte("aoeu2"),
 		[]byte("aoeu3"),
 	}
+	// We are going to run with GroupIndex=1, so make tx1 interesting too (so
+	// txn can look at things)
+	ep.TxnGroup[1] = ep.TxnGroup[0]
+
 	ep.pastScratch[0] = &scratchSpace{} // for gload
 	ledger.NewAccount(tx.Sender, 1)
 	params := basics.AssetParams{
@@ -2304,11 +2326,14 @@ func TestReturnTypes(t *testing.T) {
 		"txnas":             "txnas ApplicationArgs",
 		"gtxnas":            "gtxnas 0 ApplicationArgs",
 		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
+		"divw":              "pop; pop; pop; int 1; int 2; int 3; divw",
 		"args":              "args",
 		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
 		"itxna":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxna Accounts 0",
+		"itxnas":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxnas Accounts",
 		"gitxn":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxn 0 Sender",
 		"gitxna":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
+		"gitxnas":           "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxnas 0 Accounts",
 		"base64_decode":     `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
 	}
 
@@ -2345,29 +2370,35 @@ func TestReturnTypes(t *testing.T) {
 				source := sb.String()
 				ops := testProg(t, source, AssemblerMaxVersion)
 
-				var cx EvalContext
-				cx.EvalParams = ep
-				cx.runModeFlags = m
-				cx.appID = 1
+				// Setup as if evaluation is in tx1, since we want to test gaid
+				// that must look back.
+				cx := EvalContext{
+					EvalParams:   ep,
+					runModeFlags: m,
+					GroupIndex:   1,
+					Txn:          &ep.TxnGroup[1],
+					appID:        1,
+				}
 
 				// These set conditions for some ops that examine the group.
 				// This convinces them all to work.  Revisit.
-				cx.Txn = &ep.TxnGroup[0]
-				cx.GroupIndex = 1
 				cx.TxnGroup[0].ConfigAsset = 100
 
 				eval(ops.Program, &cx)
 
-				require.Equal(
+				assert.Equal(
 					t,
 					len(spec.Returns), len(cx.stack),
-					fmt.Sprintf("\n%s%s expected to return %d values but stack is %v", ep.Trace.String(), spec.Name, len(spec.Returns), cx.stack),
+					fmt.Sprintf("\n%s%s expected to return %d values but stack is %#v", ep.Trace, spec.Name, len(spec.Returns), cx.stack),
 				)
 				for i := 0; i < len(spec.Returns); i++ {
 					sp := len(cx.stack) - 1 - i
+					if sp < 0 {
+						continue // We only assert this above, not require.
+					}
 					stackType := cx.stack[sp].argType()
 					retType := spec.Returns[i]
-					require.True(
+					assert.True(
 						t, typecheck(retType, stackType),
 						fmt.Sprintf("%s expected to return %s but actual is %s", spec.Name, retType.String(), stackType.String()),
 					)
@@ -2375,6 +2406,32 @@ func TestReturnTypes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTxnEffects(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, _, _ := makeSampleEnv()
+	// We don't allow the effects fields to see the current or future transactions
+	testApp(t, "byte 0x32; log; txn NumLogs; int 1; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; txn Logs 0; byte 0x32; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; txn LastLog; byte 0x32; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; gtxn 0 NumLogs; int 1; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; gtxn 0 Logs 0; byte 0x32; ==", ep, "txn effects can only be read from past txns")
+	testApp(t, "byte 0x32; log; gtxn 0 LastLog; byte 0x32; ==", ep, "txn effects can only be read from past txns")
+
+	// Look at the logs of tx 0
+	testApps(t, []string{"", "byte 0x32; log; gtxn 0 LastLog; byte 0x; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x33; log; int 1", "gtxn 0 LastLog; byte 0x33; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x33; dup; log; log; int 1", "gtxn 0 NumLogs; int 2; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxn 0 Logs 0; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "int 0; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
+
+	// Look past the logs of tx 0
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxna 0 Logs 1; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+		Expect{1, "invalid Logs index 1"})
+	testApps(t, []string{"byte 0x37; log; int 1", "int 6; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+		Expect{1, "invalid Logs index 6"})
 }
 
 func TestRound(t *testing.T) {
@@ -2434,7 +2491,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
-		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: remaining budget is 1400 but program cost was 1905"})
+		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 1905"})
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, LogicVersion, ledger)

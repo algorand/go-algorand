@@ -145,9 +145,9 @@ func TestLogicLedgerBalances(t *testing.T) {
 	addr1 := ledgertesting.RandomAddress()
 	ble := basics.MicroAlgos{Raw: 100}
 	c.brs = map[basics.Address]basics.AccountData{addr1: {MicroAlgos: ble}}
-	bla, err := l.Balance(addr1)
+	acct, err := l.AccountData(addr1)
 	a.NoError(err)
-	a.Equal(ble, bla)
+	a.Equal(ble, acct.MicroAlgos)
 }
 
 func TestLogicLedgerGetters(t *testing.T) {

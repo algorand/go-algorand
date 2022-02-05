@@ -179,7 +179,8 @@ and `byte 0xcafed00d`. Constants introduced via `int` and `byte` will
 be assembled into appropriate uses of `pushint|pushbytes` and
 `{int|byte}c, {int|byte}c_[0123]` to minimize program size.
 
-The opcodes intcblock and bytecblock use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint),
+
+The opcodes `intcblock` and `bytecblock` use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint),
 reproduced [here](#varuint). The `intcblock` opcode is followed by a
 varuint specifying the number of integer constants and then that
 number of varuints. The `bytecblock` opcode is followed by a varuint
@@ -277,6 +278,7 @@ return stack matches the name of the input value.
 | `~` | bitwise invert value A |
 | `mulw` | A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low |
 | `addw` | A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits. |
+| `divw` | A,B / C. Fail if C == 0 or if result overflows. |
 | `divmodw` | W,X = (A,B / C,D); Y,Z = (A,B modulo C,D) |
 | `expw` | A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1 |
 | `getbit` | Bth bit of (byte-array or integer) A. |
@@ -296,7 +298,6 @@ return stack matches the name of the input value.
 | `extract_uint16` | A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails |
 | `extract_uint32` | A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails |
-| `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E |
 
 The following opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -453,6 +454,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
+| 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -596,8 +598,8 @@ with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects.
 
-In v5, only a few of the Header fields may be set: `Type`/`TypeEnum`,
-`Sender`, and `Fee`. In v6, Header fields `Note` and `RekeyTo` may
+In v5, only a subset of the transaction's header fields may be set: `Type`/`TypeEnum`,
+`Sender`, and `Fee`. In v6, header fields `Note` and `RekeyTo` may
 also be set.  For the specific (non-header) fields of each transaction
 type, any field may be set.  This allows, for example, clawback
 transactions, asset opt-ins, and asset creates in addition to the more
@@ -626,8 +628,10 @@ different transaction types, are rejected by `itxn_submit`.
 | `itxn_submit` | execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails. |
 | `itxn f` | field F of the last inner transaction |
 | `itxna f i` | Ith value of the array field F of the last inner transaction |
+| `itxnas f` | Ath value of the array field F of the last inner transaction |
 | `gitxn t f` | field F of the Tth transaction in the last inner group submitted |
 | `gitxna t f i` | Ith value of the array field F from the Tth transaction in the last inner group submitted |
+| `gitxnas t f` | Ath value of the array field F from the Tth transaction in the last inner group submitted |
 
 
 # Assembler Syntax
