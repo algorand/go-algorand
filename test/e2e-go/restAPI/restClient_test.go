@@ -553,6 +553,9 @@ func TestAccountParticipationInfo(t *testing.T) {
 	firstRound := basics.Round(params.LastRound + 1)
 	lastRound := basics.Round(params.LastRound + 1000)
 	dilution := uint64(100)
+	var stateproof merklesignature.Verifier
+	stateproof[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v32)
+
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
 	copy(votePK[:], []byte(randomVotePKStr))
@@ -576,6 +579,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 			VoteKeyDilution: dilution,
 			VoteFirst:       firstRound,
 			VoteLast:        lastRound,
+			StateProofPK:    stateproof,
 		},
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
@@ -590,6 +594,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	a.Equal(uint64(firstRound), account.Participation.VoteFirst, "API must print correct first participation round")
 	a.Equal(uint64(lastRound), account.Participation.VoteLast, "API must print correct last participation round")
 	a.Equal(dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
+	// TODO: should we update the v1 API to support state proof? Currently it does not return this field.
 }
 
 func TestSupply(t *testing.T) {
