@@ -188,21 +188,21 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	secretParticipation := keypair()
 
 	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
-	mockBal := makeMockBalances(protocol.ConsensusCurrentVersion)
+	mockBal := makeMockBalances(protocol.ConsensusV30)
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err := mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.Equal(t, acct.StateProofID.IsEmpty(), true)
+	require.Equal(t, true, acct.StateProofID.IsEmpty())
 
-	mockBal = makeMockBalances(protocol.ConsensusFuture)
+	mockBal = makeMockBalances(protocol.ConsensusCurrentVersion)
 	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.Equal(t, acct.StateProofID.IsEmpty(), false)
+	require.Equal(t, false, acct.StateProofID.IsEmpty())
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
