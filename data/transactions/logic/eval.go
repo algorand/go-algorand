@@ -338,10 +338,8 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
-func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *EvalParams {
-	txgroup := transactions.WrapSignedTxnsWithAD(txg)
-
-	minTealVersion := ComputeMinTealVersion(txgroup, true)
+func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
+	minTealVersion := ComputeMinTealVersion(txg, true)
 	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
 	// imposed otherwise.  But is correct to check, in case of future restriction.
 	if minTealVersion < *caller.MinTealVersion {
@@ -351,7 +349,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
 	if caller.Proto.EnableAppCostPooling {
-		for _, tx := range txgroup {
+		for _, tx := range txg {
 			if tx.Txn.Type == protocol.ApplicationCallTx {
 				*caller.PooledApplicationBudget += caller.Proto.MaxAppProgramCost
 			}
@@ -360,8 +358,9 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 
 	ep := &EvalParams{
 		Proto:                   caller.Proto,
-		TxnGroup:                copyWithClearAD(txgroup),
-		pastScratch:             make([]*scratchSpace, len(txgroup)),
+		Trace:                   caller.Trace,
+		TxnGroup:                txg,
+		pastScratch:             make([]*scratchSpace, len(txg)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
@@ -466,9 +465,9 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxns []transactions.SignedTxn // place to build for itxn_submit
-	cost    int                      // cost incurred so far
-	logSize int                      // total log size so far
+	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
+	cost    int                            // cost incurred so far
+	logSize int                            // total log size so far
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -546,6 +545,19 @@ func (pe PanicError) Error() string {
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
+// ClearStateBudgetError allows evaluation to signal that the caller should
+// reject the transaction.  Normally, an error in evaluation would not cause a
+// ClearState txn to fail. However, callers fail a txn for ClearStateBudgetError
+// because the transaction has not provided enough budget to let ClearState do
+// its job.
+type ClearStateBudgetError struct {
+	offered int
+}
+
+func (e ClearStateBudgetError) Error() string {
+	return fmt.Sprintf("Attempted ClearState execution with low OpcodeBudget %d", e.offered)
+}
+
 // EvalContract executes stateful TEAL program as the gi'th transaction in params
 func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
@@ -561,9 +573,26 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		Txn:          &params.TxnGroup[gi],
 		appID:        aid,
 	}
-	pass, err := eval(program, &cx)
 
-	// update side effects
+	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
+			return false, nil, ClearStateBudgetError{*cx.PooledApplicationBudget}
+		}
+	}
+
+	if cx.Trace != nil && cx.caller != nil {
+		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.Txn.Txn.OnCompletion, cx.Txn.Txn.ApplicationArgs)
+	}
+	pass, err := eval(program, &cx)
+	if cx.Trace != nil && cx.caller != nil {
+		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
+	}
+
+	// update side effects. It is tempting, and maybe even a good idea, to store
+	// the pointer to cx.scratch instead.  Since we don't modify them again,
+	// it's probably safe. However it may have poor GC characteristics (because
+	// we'd be storing a pointer into a much larger structure, the cx), and
+	// copying seems nice and clean.
 	cx.pastScratch[cx.GroupIndex] = &scratchSpace{}
 	*cx.pastScratch[cx.GroupIndex] = cx.scratch
 
@@ -749,12 +778,9 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 }
 
 func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
-	if len(program) == 0 {
-		return 0, 0, errors.New("invalid program (empty)")
-	}
-	version, vlen := binary.Uvarint(program)
-	if vlen <= 0 {
-		return 0, 0, errors.New("invalid version")
+	version, vlen, err := transactions.ProgramVersion(program)
+	if err != nil {
+		return 0, 0, err
 	}
 	if version > EvalMaxVersion {
 		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
@@ -801,6 +827,16 @@ func (cx *EvalContext) remainingBudget() int {
 	if cx.runModeFlags == runModeSignature {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
+
+	// restrict clear state programs from using more than standard unpooled budget
+	// cx.Txn is not set during check()
+	if cx.Proto.IsolateClearState && cx.Txn != nil && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		// Need not confirm that *cx.PooledApplicationBudget is also >0, as
+		// ClearState programs are only run if *cx.PooledApplicationBudget >
+		// MaxAppProgramCost at the start.
+		return cx.Proto.MaxAppProgramCost - cx.cost
+	}
+
 	if cx.PooledApplicationBudget != nil {
 		return *cx.PooledApplicationBudget
 	}
@@ -856,6 +892,13 @@ func (cx *EvalContext) step() {
 	}
 
 	if cx.remainingBudget() < 0 {
+		// We're not going to execute the instruction, so give the cost back.
+		// This only matters if this is an inner ClearState - the caller should
+		// not be over debited. (Normally, failure causes total txtree failure.)
+		cx.cost -= deets.Cost
+		if cx.PooledApplicationBudget != nil {
+			*cx.PooledApplicationBudget += deets.Cost
+		}
 		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 			cx.pc, spec.Name, cx.cost)
 		return
@@ -3984,7 +4027,7 @@ func addInnerTxn(cx *EvalContext) error {
 		return fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 	}
 
-	stxn := transactions.SignedTxn{}
+	stxn := transactions.SignedTxnWithAD{}
 
 	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
 	groupPaid := uint64(0)
@@ -4017,6 +4060,10 @@ func addInnerTxn(cx *EvalContext) error {
 func opTxBegin(cx *EvalContext) {
 	if len(cx.subtxns) > 0 {
 		cx.err = errors.New("itxn_begin without itxn_submit")
+		return
+	}
+	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		cx.err = errors.New("clear state programs can not issue inner transactions")
 		return
 	}
 	cx.err = addInnerTxn(cx)
@@ -4433,6 +4480,28 @@ func opTxSubmit(cx *EvalContext) {
 			}
 			if depth >= maxAppCallDepth {
 				cx.err = fmt.Errorf("appl depth (%d) exceeded", depth)
+				return
+			}
+
+			// Can't call version < innerAppsEnabledVersion, and apps with such
+			// versions will always match, so just check approval program
+			// version.
+			program := cx.subtxns[itx].Txn.ApprovalProgram
+			if cx.subtxns[itx].Txn.ApplicationID != 0 {
+				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+				if err != nil {
+					cx.err = err
+					return
+				}
+				program = app.ApprovalProgram
+			}
+			v, _, err := transactions.ProgramVersion(program)
+			if err != nil {
+				cx.err = err
+				return
+			}
+			if v < innerAppsEnabledVersion {
+				cx.err = fmt.Errorf("inner app call with version %d < %d", v, innerAppsEnabledVersion)
 				return
 			}
 		}
