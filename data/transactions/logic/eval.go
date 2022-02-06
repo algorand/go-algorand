@@ -339,10 +339,8 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
-func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *EvalParams {
-	txgroup := transactions.WrapSignedTxnsWithAD(txg)
-
-	minTealVersion := ComputeMinTealVersion(txgroup, true)
+func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
+	minTealVersion := ComputeMinTealVersion(txg, true)
 	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
 	// imposed otherwise.  But is correct to check, in case of future restriction.
 	if minTealVersion < *caller.MinTealVersion {
@@ -352,7 +350,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
 	if caller.Proto.EnableAppCostPooling {
-		for _, tx := range txgroup {
+		for _, tx := range txg {
 			if tx.Txn.Type == protocol.ApplicationCallTx {
 				*caller.PooledApplicationBudget += caller.Proto.MaxAppProgramCost
 			}
@@ -362,8 +360,8 @@ func NewInnerEvalParams(txg []transactions.SignedTxn, caller *EvalContext) *Eval
 	ep := &EvalParams{
 		Proto:                   caller.Proto,
 		Trace:                   caller.Trace,
-		TxnGroup:                copyWithClearAD(txgroup),
-		pastScratch:             make([]*scratchSpace, len(txgroup)),
+		TxnGroup:                txg,
+		pastScratch:             make([]*scratchSpace, len(txg)),
 		MinTealVersion:          &minTealVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
@@ -468,9 +466,9 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxns []transactions.SignedTxn // place to build for itxn_submit
-	cost    int                      // cost incurred so far
-	logSize int                      // total log size so far
+	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
+	cost    int                            // cost incurred so far
+	logSize int                            // total log size so far
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -4053,7 +4051,7 @@ func addInnerTxn(cx *EvalContext) error {
 		return fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 	}
 
-	stxn := transactions.SignedTxn{}
+	stxn := transactions.SignedTxnWithAD{}
 
 	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
 	groupPaid := uint64(0)
