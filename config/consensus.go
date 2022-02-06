@@ -1058,9 +1058,11 @@ func initConsensusProtocols() {
 	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
 
 	v31 := v30
+	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV31] = v31
-	v32 := v31
 
+	v32 := v31
+	v32.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	// state proof key registration
 	v32.EnableStateProofKeyregCheck = true
 
@@ -1069,8 +1071,8 @@ func initConsensusProtocols() {
 
 	Consensus[protocol.ConsensusV32] = v32
 
-	v30.ApprovedUpgrades[protocol.ConsensusV32] = 0 // TODO: how long?
-
+	v30.ApprovedUpgrades[protocol.ConsensusV32] = 140000 // TODO: calculate how long
+	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v32

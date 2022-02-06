@@ -84,10 +84,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
-	consensus := make(config.ConsensusProtocols)
-	currentCon := config.Consensus[protocol.ConsensusV30]
-
-	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)] = currentCon
+	consensus := getStateProofConsensus()
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
@@ -99,7 +96,6 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV32))
-
 }
 
 func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
