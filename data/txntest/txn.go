@@ -124,10 +124,9 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 	if tx.Type == protocol.ApplicationCallTx &&
 		(tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC) {
 
-		if tx.ApprovalProgram == nil {
-			tx.ApprovalProgram = "int 1"
-		}
 		switch program := tx.ApprovalProgram.(type) {
+		case nil:
+			tx.ApprovalProgram = fmt.Sprintf("#pragma version %d\nint 1", params.LogicSigVersion)
 		case string:
 			if program != "" && !strings.Contains(program, "#pragma version") {
 				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
@@ -136,11 +135,9 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 		case []byte:
 		}
 
-		if tx.ClearStateProgram == nil {
-			tx.ClearStateProgram = tx.ApprovalProgram
-		}
-
 		switch program := tx.ClearStateProgram.(type) {
+		case nil:
+			tx.ClearStateProgram = tx.ApprovalProgram
 		case string:
 			if program != "" && !strings.Contains(program, "#pragma version") {
 				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
@@ -152,10 +149,6 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 }
 
 func assemble(source interface{}) []byte {
-	if source == nil {
-		return nil
-	}
-
 	switch program := source.(type) {
 	case string:
 		if program == "" {
@@ -169,6 +162,8 @@ func assemble(source interface{}) []byte {
 		return ops.Program
 	case []byte:
 		return program
+	case nil:
+		return nil
 	}
 	panic(reflect.TypeOf(source))
 }
