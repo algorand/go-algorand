@@ -37,9 +37,12 @@ import (
 
 const roundDelay = uint64(400) // should be greate than numberOfThreads
 const numberOfThreads = 256
-const printFreequency = 100
+const printFreequency = 10
+const groupTransactions = false
+const channelDepth = 1
+var maxTxGroupSize int
 
-func queuePayments(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
+func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
 	for stxn := range sigTxnChan {
 		if stxn == nil {
 			break
@@ -49,12 +52,24 @@ func queuePayments(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan 
 			if err == nil {
 				break
 			}
-			fmt.Printf("Error broadcasting transaction: %v\n", err)
-			select {
-			// use select to avoid blocking when the errChan is not interested in messages.
-			case errChan <- err:
-			default:
+			handleError(err, "Error broadcasting transaction", errChan)
+			time.Sleep(time.Millisecond * 256)
+		}
+	}
+	queueWg.Done()
+}
+
+func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnGrpChan <-chan *[]transactions.SignedTxn, errChan chan<- error) {
+	for stxns := range sigTxnGrpChan {
+		if stxns == nil {
+			break
+		}
+		for x := 0; x < 20; x++ { // retry only 20 times
+			err := c.BroadcastTransactionGroup(*stxns)
+			if err == nil {
+				break
 			}
+			handleError(err, "Error broadcasting transaction", errChan)
 			time.Sleep(time.Millisecond * 256)
 		}
 	}
@@ -70,30 +85,84 @@ func signer(
 
 	for txn := range txnChan {
 		if txn == nil {
-			break
+			continue
 		}
 		walletHandle, err := client.GetUnencryptedWalletHandle()
-		if err != nil {
-			fmt.Printf("Error GetUnencryptedWalletHandle: %v\n", err)
-			select {
-			// use select to avoid blocking when the errChan is not interested in messages.
-			case errChan <- err:
-			default:
-			}
-		}
+		handleError(err, "Error GetUnencryptedWalletHandle", errChan)
 
 		stxn, err := client.SignTransactionWithWallet(walletHandle, nil, *txn)
-		if err != nil {
-			fmt.Printf("Error SignTransactionWithWallet: %v\n", err)
-			select {
-			// use select to avoid blocking when the errChan is not interested in messages.
-			case errChan <- err:
-			default:
-			}
-		}
+		handleError(err, "Error SignTransactionWithWallet", errChan)
 
 		sigTxnChan <- &stxn
 	}
+	sigWg.Done()
+}
+
+func signerGrpTxn(
+	sigWg *sync.WaitGroup,
+	client libgoal.Client,
+	txnChan <-chan *transactions.Transaction,
+	sigTxnGrpChan chan<- *[]transactions.SignedTxn,
+	errChan chan<- error) {
+
+	groupChan := make(chan []transactions.Transaction, 1)
+
+	var groupWg sync.WaitGroup
+
+	// group transactions and send
+
+	groupWg.Add(1)
+	go func() {
+		for tGroup := range groupChan {
+			gid, err := client.GroupID(tGroup)
+			handleError(err, "Error GetUnencryptedWalletHandle", errChan)
+
+			var stxns []transactions.SignedTxn
+			for i, _ := range tGroup {
+				tGroup[i].Group = gid
+
+				walletHandle, err := client.GetUnencryptedWalletHandle()
+				handleError(err, "Error GetUnencryptedWalletHandle", errChan)
+
+				stxn, err := client.SignTransactionWithWallet(walletHandle, nil, tGroup[i])
+				handleError(err, "Error SignTransactionWithWallet", errChan)
+
+				stxns = append(stxns, stxn)
+			}
+			sigTxnGrpChan <- &stxns
+		}
+		groupWg.Done()
+	}()
+
+	grpTransactions := make([]*transactions.Transaction, 0, maxTxGroupSize)
+
+	for txn := range txnChan {
+
+		if txn == nil { // if exsits transactions waiting to get grouped
+			if len(grpTransactions) > 0 {
+				sendTransactions := make([]transactions.Transaction, len(grpTransactions))
+				for i, t := range grpTransactions {
+					sendTransactions[i] = *t
+				}
+				groupChan <- sendTransactions
+				grpTransactions = grpTransactions[:0]
+			}
+			continue
+		}
+
+		grpTransactions = append(grpTransactions, txn)
+		if len(grpTransactions) == maxTxGroupSize {
+			sendTransactions := make([]transactions.Transaction, maxTxGroupSize)
+			for i, t := range grpTransactions {
+				sendTransactions[i] = *t
+			}
+			groupChan <- sendTransactions
+			grpTransactions = grpTransactions[:0]
+		}
+	}
+
+	close(groupChan)
+	groupWg.Wait()
 	sigWg.Done()
 }
 
@@ -112,6 +181,8 @@ func Test5MAssets(t *testing.T) {
 	var queueWg sync.WaitGroup
 	var hkWg sync.WaitGroup
 
+	maxTxGroupSize = config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize
+
 	fixture.Setup(t, filepath.Join("nettemplates", "DevModeOneWalletFuture.json"))
 	defer func() {
 		hkWg.Wait()
@@ -123,14 +194,19 @@ func Test5MAssets(t *testing.T) {
 	require.NoError(t, err)
 	baseAcct := accountList[0].Address
 
-	txnChan := make(chan *transactions.Transaction, 100)
-	sigTxnChan := make(chan *transactions.SignedTxn, 100)
-	errChan := make(chan error, 100)
+	txnChan := make(chan *transactions.Transaction, channelDepth)
+	sigTxnChan := make(chan *transactions.SignedTxn, channelDepth)
+	sigTxnGrpChan := make(chan *[]transactions.SignedTxn, channelDepth)
+	errChan := make(chan error, channelDepth)
 	stopChan := make(chan struct{}, 1)
 
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		sigWg.Add(1)
-		go signer(&sigWg, client, txnChan, sigTxnChan, errChan)
+		if groupTransactions {
+			go signerGrpTxn(&sigWg, client, txnChan, sigTxnGrpChan, errChan)
+		} else {
+			go signer(&sigWg, client, txnChan, sigTxnChan, errChan)
+		}
 	}
 
 	suggestedParams, err := client.SuggestedParams()
@@ -140,7 +216,11 @@ func Test5MAssets(t *testing.T) {
 
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		queueWg.Add(1)
-		go queuePayments(&queueWg, client, sigTxnChan, errChan)
+		if groupTransactions {
+			go broadcastTransactionGroups(&queueWg, client, sigTxnGrpChan, errChan)
+		} else {
+			go broadcastTransactions(&queueWg, client, sigTxnChan, errChan)
+		}
 	}
 
 	// error handling
@@ -161,6 +241,7 @@ func Test5MAssets(t *testing.T) {
 	go func() {
 		sigWg.Wait()
 		close(sigTxnChan)
+		close(sigTxnGrpChan)
 		queueWg.Wait()
 		close(errChan)
 		hkWg.Done()
@@ -274,9 +355,8 @@ func scenarioA(
 	client := fixture.LibGoalClient
 
 	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
-
-	numberOfAccounts := uint64(100) // 6K
-	numberOfAssets := uint64(2000)  // 6M
+	numberOfAccounts := uint64(200) // 6K
+	numberOfAssets := uint64(600)   // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -297,6 +377,8 @@ func scenarioA(
 		close(txnChan)
 	}()
 
+	fmt.Println("Creating accounts...")
+
 	// create 6K accounts
 	for txi := uint64(0); txi < numberOfAccounts; txi++ {
 		select {
@@ -313,6 +395,11 @@ func scenarioA(
 		createdAccounts = append(createdAccounts, newAccount)
 		round++
 	}
+
+	txnChan <- nil
+	round = checkPoint(round, 0, fixture)
+	xround := round
+	fmt.Println("Creating assets...")
 
 	// create 6M unique assets by a different 6,000 accounts
 	for nai, na := range createdAccounts {
@@ -333,9 +420,10 @@ func scenarioA(
 		}
 	}
 
-	fmt.Printf("Waiting for round %d...", int(round))
-	fixture.WaitForRound(round, 10*time.Second)
-	fmt.Printf("done\n")
+	txnChan <- nil
+	round = checkPoint(round, xround, fixture)
+	xround = round
+	fmt.Println("Opt-in assets...")
 
 	// have a single account opted in all of them
 	ownAllAccount := createdAccounts[numberOfAccounts-1]
@@ -369,6 +457,11 @@ func scenarioA(
 		}
 	}
 
+	txnChan <- nil
+	round = checkPoint(round, xround, fixture)
+	xround = round
+	fmt.Println("Transfer assets...")
+
 	// and owning all of them
 	for acci, nacc := range createdAccounts {
 		if nacc == ownAllAccount {
@@ -400,14 +493,14 @@ func scenarioA(
 		}
 	}
 
-	fmt.Printf("Waiting for round %d...", int(round))
-	fixture.WaitForRound(round, 10*time.Second)
-	fmt.Printf("done\n")
+	txnChan <- nil
+	round = checkPoint(round, xround, fixture)
+	xround = round
 
 	// Verify the assets are transfered here
 	info, err := client.AccountInformationV2(ownAllAccount.String())
 	require.NoError(t, err)
-	require.Equal(t, len(*info.Assets), int(numberOfAssets))
+	require.Equal(t, int(numberOfAssets), len(*info.Assets))
 	tAssetAmt := uint64(0)
 	for _, asset := range *info.Assets {
 		tAssetAmt += asset.Amount
@@ -416,4 +509,29 @@ func scenarioA(
 		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
 	}
 	require.Equal(t, totalAssetAmount, tAssetAmt)
+}
+
+func handleError(err error, message string, errChan chan<- error) {
+	if err != nil {
+		fmt.Printf("%s: %v\n", message, err)
+		select {
+		// use select to avoid blocking when the errChan is not interested in messages.
+		case errChan <- err:
+		default:
+		}
+	}
+}
+
+func checkPoint(round, xround uint64, fixture *fixtures.RestClientFixture) uint64 {
+	if groupTransactions {
+		round = (round-xround+uint64(maxTxGroupSize-1))/uint64(maxTxGroupSize) + xround
+	}
+	fmt.Printf("Waiting for round %d...", int(round))
+	err := fixture.WaitForRound(round, 200*time.Second)
+	if err == nil {
+		fmt.Printf("done\n")
+	} else {
+		fmt.Printf("failed\n")
+	}
+	return round
 }
