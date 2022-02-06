@@ -403,6 +403,9 @@ type ConsensusParams struct {
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
 
+	//EnableBatchVerification enable the use of the batch verification algorithm.
+	EnableBatchVerification bool
+
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
 }
@@ -1066,6 +1069,8 @@ func initConsensusProtocols() {
 	vFuture.IsolateClearState = true
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	vFuture.EnableBatchVerification = true
 
 	vFuture.RewardsCalculationFix = true
 

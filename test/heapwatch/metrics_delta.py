@@ -54,20 +54,24 @@ def test_metric_line_re():
 
 def parse_metrics(fin):
     out = dict()
-    for line in fin:
-        if not line:
-            continue
-        line = line.strip()
-        if not line:
-            continue
-        if line[0] == '#':
-            continue
-        m = metric_line_re.match(line)
-        if m:
-            out[m.group(1)] = num(m.group(2))
-        else:
-            ab = line.split()
-            out[ab[0]] = num(ab[1])
+    try:
+        for line in fin:
+            if not line:
+                continue
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == '#':
+                continue
+            m = metric_line_re.match(line)
+            if m:
+                out[m.group(1)] = num(m.group(2))
+            else:
+                ab = line.split()
+                out[ab[0]] = num(ab[1])
+    except:
+        print(f'An exception occurred in parse_metrics: {sys.exc_info()}')
+        pass
     return out
 
 # return b-a
@@ -396,12 +400,12 @@ class nodestats:
         prevbi = None
 
         for path in sorted(metrics_files):
-            with open(path, 'rt') as fin:
+            with open(path, 'rt', encoding="utf-8") as fin:
                 cur = parse_metrics(fin)
             bijsonpath = path.replace('.metrics', '.blockinfo.json')
             bi = None
             if os.path.exists(bijsonpath):
-                with open(bijsonpath, 'rt') as fin:
+                with open(bijsonpath, 'rt', encoding="utf-8") as fin:
                     bi = json.load(fin)
             curtime = os.path.getmtime(path)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
