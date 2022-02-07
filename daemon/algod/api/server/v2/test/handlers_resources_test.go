@@ -29,16 +29,16 @@ type mockLedger struct {
 func (l *mockLedger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
 	ad, ok := l.accounts[addr]
 	if !ok { // return empty / not found
-		return ledgercore.AccountData{}, l.latest, basics.MicroAlgos{0}, nil
+		return ledgercore.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
 	}
-	return ledgercore.ToAccountData(ad), l.latest, basics.MicroAlgos{0}, nil
+	return ledgercore.ToAccountData(ad), l.latest, basics.MicroAlgos{Raw: 0}, nil
 }
 func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
 	ad, ok := l.accounts[addr]
 	if !ok {
-		return basics.AccountData{}, l.latest, basics.MicroAlgos{0}, nil
+		return basics.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
 	}
-	return ad, l.latest, basics.MicroAlgos{0}, nil
+	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
