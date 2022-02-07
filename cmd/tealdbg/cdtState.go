@@ -151,7 +151,7 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 			if len(s.txnGroup) > 0 {
 				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, preview), nil
 			}
-		} else if idxs, ok := decodeInnerTxnID(objID); ok {
+		} else if parentObjID, idxs, ok := decodeNestedObjID(objID); ok {
 			var itxn transactions.SignedTxnWithAD
 			itxns := s.innerTxns
 
@@ -164,15 +164,20 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				itxn = itxns[idx]
 				itxns = itxn.EvalDelta.InnerTxns
 			}
-			return makeInnerTxnImpl(&s.innerTxns[idx], idxs, preview), nil
+
+			switch parentObjID {
+			case logObjIDPrefix:
+				logs := itxn.EvalDelta.Logs
+				return makeLogsSlice(logs, 0, len(logs)-1, preview), nil
+			case innerTxnObjIDPrefix:
+				return makeInnerTxnImpl(&s.innerTxns[idx], idxs, preview), nil
+			}
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
 			switch parentObjID {
 			case stackObjID:
 				return makeArrayLength(s.stack), nil
 			case scratchObjID:
 				return makeArrayLength(s.scratch), nil
-			case logsObjID:
-				return makeArrayLength(s.logs), nil
 			default:
 			}
 		} else if parentObjID, from, to, ok := decodeArraySlice(objID); ok {
@@ -181,8 +186,6 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				return makeStackSlice(s, from, to, preview), nil
 			case scratchObjID:
 				return makeScratchSlice(s, from, to, preview), nil
-			case logsObjID:
-				return makeLogsSlice(s, from, to, preview), nil
 			default:
 			}
 		} else if appID, ok := decodeAppGlobalAppID(objID); ok {
@@ -458,7 +461,7 @@ func prepareArray(array []basics.TealValue) []fieldDesc {
 }
 
 func prepareStringArray(array []string) []fieldDesc {
-	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
+	result := make([]fieldDesc, 0)
 	for i := 0; i < len(array); i++ {
 		value := array[i]
 		name := strconv.Itoa(i)
@@ -582,31 +585,47 @@ func decodeGroupTxnID(objID string) (int, bool) {
 	return 0, false
 }
 
+var logObjIDPrefix = fmt.Sprintf("%s_id", logsObjID)
 var innerTxnObjIDPrefix = fmt.Sprintf("%s_id", innerTxnsObjID)
 
-func encodeInnerTxnID(groupIndexes []int) string {
-	encodedItxnID := innerTxnObjIDPrefix
+func encodeNestedObjID(groupIndexes []int, prefix string) string {
+	encodedItxnID := prefix
 	for _, i := range groupIndexes {
 		encodedItxnID = fmt.Sprintf("%s_%d", encodedItxnID, i)
 	}
 	return encodedItxnID
 }
 
-func decodeInnerTxnID(objID string) ([]int, bool) {
+func decodeNestedObjID(objID string) (string, []int, bool) {
+	var prefix string
 	parsedIDs := make([]int, 0)
-	if strings.HasPrefix(objID, innerTxnObjIDPrefix) {
-		groupIDs := objID[len(innerTxnObjIDPrefix)+1:]
-		parts := strings.Split(groupIDs, "_")
-		for _, id := range parts {
-			if val, err := strconv.ParseInt(id, 10, 32); err == nil {
-				parsedIDs = append(parsedIDs, int(val))
-			} else {
-				return []int{}, false
-			}
-		}
-		return parsedIDs, true
+
+	if strings.HasPrefix(objID, logObjIDPrefix) {
+		prefix = logObjIDPrefix
+	} else if strings.HasPrefix(objID, innerTxnObjIDPrefix) {
+		prefix = innerTxnObjIDPrefix
+	} else {
+		return "", []int{}, false
 	}
-	return []int{}, false
+
+	groupIDs := objID[len(prefix)+1:]
+	parts := strings.Split(groupIDs, "_")
+	for _, id := range parts {
+		if val, err := strconv.ParseInt(id, 10, 32); err == nil {
+			parsedIDs = append(parsedIDs, int(val))
+		} else {
+			return "", []int{}, false
+		}
+	}
+	return prefix, parsedIDs, true
+}
+
+func encodeLogsID(groupIndexes []int) string {
+	return encodeNestedObjID(groupIndexes, logObjIDPrefix)
+}
+
+func encodeInnerTxnID(groupIndexes []int) string {
+	return encodeNestedObjID(groupIndexes, innerTxnObjIDPrefix)
 }
 
 func encodeArrayLength(objID string) string {
@@ -619,8 +638,6 @@ func decodeArrayLength(objID string) (string, bool) {
 			return stackObjID, true
 		} else if strings.HasPrefix(objID, scratchObjID) {
 			return scratchObjID, true
-		} else if strings.HasPrefix(objID, logsObjID) {
-			return logsObjID, true
 		}
 	}
 	return "", false
@@ -631,7 +648,7 @@ func encodeArraySlice(objID string, fromIndex int, toIndex int) string {
 }
 
 func decodeArraySlice(objID string) (string, int, int, bool) {
-	if strings.HasPrefix(objID, stackObjID) || strings.HasPrefix(objID, scratchObjID) || strings.HasPrefix(objID, logsObjID) {
+	if strings.HasPrefix(objID, stackObjID) || strings.HasPrefix(objID, scratchObjID) {
 		parts := strings.Split(objID, "_")
 		if len(parts) != 3 {
 			return "", 0, 0, false
@@ -851,23 +868,14 @@ func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, pre
 	groupIndex := groupIndexes[len(groupIndexes)-1]
 	desc = makeTxnImpl(&txn.Txn, groupIndex, preview)
 
-	// TODO: Need to encode log objects
-	logs := makeArray("logs", len(txn.EvalDelta.Logs), logsObjID)
-	innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeInnerTxnID(groupIndexes))
-
-	if preview {
-		logsPreview := makeStringArrayPreview(txn.EvalDelta.Logs)
-		if len(logsPreview.Properties) > 0 {
-			logs.Value.Preview = &logsPreview
-		}
-		innerTxnsPreview := makeGtxnPreview(txn.EvalDelta.InnerTxns)
-		if len(innerTxnsPreview.Properties) > 0 {
-			innerTxns.Value.Preview = &innerTxnsPreview
-		}
+	if len(txn.EvalDelta.Logs) > 0 {
+		logs := makeLogsSlice(txn.EvalDelta.Logs, 0, len(txn.EvalDelta.Logs), preview)
+		desc = append(desc, logs...)
 	}
-	desc = append(desc, logs)
-	desc = append(desc, innerTxns)
-
+	if len(txn.EvalDelta.InnerTxns) > 0 {
+		innerTxns := makeInnerTxnsSlice(txn.EvalDelta.InnerTxns, 0, len(txn.EvalDelta.InnerTxns), preview)
+		desc = append(desc, innerTxns...)
+	}
 	return
 }
 
@@ -994,13 +1002,9 @@ func tkvToRpd(tkv basics.TealKeyValue) (desc []cdt.RuntimePropertyDescriptor) {
 	return
 }
 
-func makeArrayLength(rawArray interface{}) (desc []cdt.RuntimePropertyDescriptor) {
-	switch array := rawArray.(type) {
-	case []string:
-	case []basics.TealKeyValue:
-		field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
-		desc = append(desc, makePrimitive(field))
-	}
+func makeArrayLength(rawArray []basics.TealValue) (desc []cdt.RuntimePropertyDescriptor) {
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(rawArray)), Type: "number"}
+	desc = append(desc, makePrimitive(field))
 	return
 }
 
@@ -1040,8 +1044,8 @@ func makeScratch(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 	return makeScratchSlice(s, 0, len(s.scratch)-1, preview)
 }
 
-func makeLogsSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	logs := s.logs[from : to+1]
+func makeLogsSlice(logs []string, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	logs = logs[from : to+1]
 	fields := prepareStringArray(logs)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
@@ -1052,21 +1056,25 @@ func makeLogsSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.Runt
 }
 
 func makeLogsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	return makeLogsSlice(s, 0, len(s.logs)-1, preview)
+	return makeLogsSlice(s.logs, 0, len(s.logs)-1, preview)
 }
 
-func makeInnerTxnsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(s.innerTxns))
-	for i := 0; i < len(s.innerTxns); i++ {
+func makeInnerTxnsSlice(stxns []transactions.SignedTxnWithAD, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(stxns))
+	for i := 0; i < len(stxns); i++ {
 		groupIDs := []int{i}
 		item := makeObject(strconv.Itoa(i), encodeInnerTxnID(groupIDs))
 		if preview {
-			txnPreview := makeTxnPreview(s.innerTxns, i)
+			txnPreview := makeTxnPreview(stxns, i)
 			item.Value.Preview = &txnPreview
 		}
 		desc = append(desc, item)
 	}
 	return
+}
+
+func makeInnerTxnsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	return makeInnerTxnsSlice(s.innerTxns, 0, len(s.innerTxns), preview)
 }
 
 func makeTealError(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
