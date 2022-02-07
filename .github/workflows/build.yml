@@ -4,19 +4,10 @@ on:
 jobs:
   build-windows:
     runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
-      - name: Check out code
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v2
-        with:
-          go-version: '1.14.7'
-      - run: go version
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.7.9'
-      - run: python --version
       - name: Install msys2
         uses: msys2/setup-msys2@v2
         with:
@@ -28,8 +19,18 @@ jobs:
             autoconf
             automake
             git
-            go
-
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.14.7'
+      # - run: go version
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7.9'
+      # - run: python --version
       # - name: Install dependencies
       #   shell: msys2 {0}
       #   run: |
@@ -41,7 +42,7 @@ jobs:
       #     # $msys2
       #     pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
       - name: Build Test
-        shell: msys2 {0}
+        # shell: msys2 {0}
         # shell: bash
         run: |
           # set -e
