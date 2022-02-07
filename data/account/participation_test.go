@@ -481,8 +481,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
