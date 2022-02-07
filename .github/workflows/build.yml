@@ -23,7 +23,7 @@ jobs:
         with:
           go-version: '1.14.7'
       - run: |
-          export PATH=$PATH:$GOROOT/bin
+          export PATH=${GOROOT}/bin:$PATH
           go version
 
       - name: Check out code
