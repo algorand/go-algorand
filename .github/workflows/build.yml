@@ -40,4 +40,4 @@ jobs:
           curl -X POST --data-urlencode "payload={\"text\": \"Nightly windows build test on Github failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        if: ${{ contains(github.head_ref, 'Moving-windows-build-to-circleci') }}
+        if: ${{ success() && contains(github.head_ref, 'Moving-windows-build-to-circleci') }}
