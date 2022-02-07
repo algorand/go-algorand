@@ -25,6 +25,7 @@ jobs:
       - run: |
           ls ${GOROOT}/bin
           export PATH=${GOROOT}\\bin:$PATH
+          refreshenv
           env
           which go
           go version
