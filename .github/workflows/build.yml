@@ -2,7 +2,7 @@ name: "Build workflow"
 on:
   pull_request:
 jobs:
-  build-windows:
+  build-test-windows:
     runs-on: windows-2022
     defaults:
       run:
@@ -13,59 +13,19 @@ jobs:
         with:
           update: true
           path-type: inherit
-        #   install: >-
-        #     mingw-w64-x86_64-toolchain
-        #     mingw-w64-x86_64-libtool
-        #     unzip
-        #     autoconf
-        #     automake
-        #     git
-      - uses: actions/setup-go@v2
-        with:
-          go-version: '1.14.7'
-      - run: |
-          ls ${GOROOT}\\bin
-          export PATH=${GOROOT}\\bin:$PATH
-          export GOPATH=${GOROOT}\\bin
-          env
-          which go
-          go version
-
       - name: Check out code
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-
-      # - run: go version
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.14.7'
       - uses: actions/setup-python@v2
         with:
           python-version: '3.7.9'
-      # - run: python --version
-      # - name: Install dependencies
-      #   shell: msys2 {0}
-      #   run: |
-      #     # set -e
-      #     # export msys2='set MSYS=winsymlinks:nativestrict '
-      #     # export msys2+='& msys2 -defterm -no-start'
-      #     # export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
-      #     # export msys2+=" -msys2 -c "\"\$@"\" --"
-      #     # $msys2
-      #     pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
       - name: Build Test
-        # shell: msys2 {0}
-        # shell: bash
         run: |
-          # set -e
-          # env
-          # "C:\Program Files\Git\bin\git.exe" --version
-          # go version
-          # git --version
-          # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-          # export GOPATH="/home/circleci/go"
           export ALGORAND_DEADLOCK=enable
           export SKIP_GO_INSTALLATION=True
-          # export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
-          # export MAKE=mingw32-make
-          # $msys2 scripts/travis/build_test.sh
           scripts/travis/build_test.sh
 
