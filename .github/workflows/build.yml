@@ -10,8 +10,9 @@ jobs:
     steps:
       - name: Install msys2
         uses: msys2/setup-msys2@v2
-        # with:
-        #   update: true
+        with:
+          update: true
+          path-type: inherit
         #   install: >-
         #     mingw-w64-x86_64-toolchain
         #     mingw-w64-x86_64-libtool
