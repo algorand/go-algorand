@@ -43,7 +43,7 @@ var (
 	ErrProofIsNil                    = errors.New("proof should not be nil")
 	ErrNonEmptyProofForEmptyElements = errors.New("non-empty proof for empty set of elements")
 	ErrUnexpectedTreeDepth           = errors.New("unexpected tree depth")
-	ErrPosOutOfBound                 = "pos %d larger than leaf count %d"
+	ErrPosOutOfBound                 = errors.New("pos out of bound")
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -210,7 +210,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 	// verify that all positions where part of the original array
 	for i := 0; i < len(idxs); i++ {
 		if idxs[i] >= tree.NumOfElements {
-			return nil, fmt.Errorf(ErrPosOutOfBound, idxs[i], tree.NumOfElements)
+			return nil, fmt.Errorf("idxs[i] %d >= tree.NumOfElements %d: %w", idxs[i], tree.NumOfElements, ErrPosOutOfBound)
 		}
 	}
 
@@ -368,7 +368,7 @@ func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Has
 	hashedLeaves := make(map[uint64]crypto.GenericDigest, len(elems))
 	for i, element := range elems {
 		if i >= (1 << treeDepth) {
-			return nil, fmt.Errorf(ErrPosOutOfBound, i, 1<<treeDepth)
+			return nil, fmt.Errorf("pos %d >= 1^treeDepth %d: %w", i, 1<<treeDepth, ErrPosOutOfBound)
 		}
 		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
 	}

@@ -17,16 +17,18 @@
 package merklearray
 
 import (
+	"errors"
 	"fmt"
+	"math/bits"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"math/bits"
 )
 
 // ErrGetOutOfBound returned when trying to retrieve an element which is out of
 // the padded array bound.
 var (
-	ErrGetOutOfBound = "vectorCommitmentArray.Get(%d): out of bounds, full size %d"
+	ErrGetOutOfBound = errors.New("can't get element out of padded array bound")
 )
 
 type vectorCommitmentArray struct {
@@ -62,7 +64,7 @@ func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
 		return nil, err
 	}
 	if lsbIndex >= vc.paddedLen {
-		return nil, fmt.Errorf(ErrGetOutOfBound, pos, vc.paddedLen)
+		return nil, fmt.Errorf("vectorCommitmentArray.Get(%d): out of bounds, full size %d: %w", pos, vc.paddedLen, ErrGetOutOfBound)
 	}
 
 	if lsbIndex < vc.array.Length() {
@@ -76,7 +78,7 @@ func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
 // The given index must be within the range of the elements in the tree (assume this number is 1^pathLen)
 func merkleTreeToVectorCommitmentIndex(msbIndex uint64, pathLen uint8) (uint64, error) {
 	if msbIndex >= (1 << pathLen) {
-		return 0, fmt.Errorf(ErrPosOutOfBound, msbIndex, 1<<pathLen)
+		return 0, fmt.Errorf("msbIndex %d >= 1^pathLen %d: %w", msbIndex, 1<<pathLen, ErrPosOutOfBound)
 	}
 	return bits.Reverse64(msbIndex) >> (64 - pathLen), nil
 }
