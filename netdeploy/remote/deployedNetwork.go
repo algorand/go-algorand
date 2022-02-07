@@ -17,6 +17,7 @@
 package remote
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -90,6 +91,8 @@ type netState struct {
 
 	assetPerAcct int
 	appsPerAcct  int
+
+	deterministicKeys bool
 
 	genesisID   string
 	genesisHash crypto.Digest
@@ -388,15 +391,16 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	//initial state
 
 	bootstrappedNet := netState{
-		nAssets:       fileCfgs.GeneratedAssetsCount,
-		nApplications: fileCfgs.GeneratedApplicationCount,
-		txnState:      protocol.PaymentTx,
-		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
-		round:         basics.Round(0),
-		genesisID:     genesis.ID(),
-		genesisHash:   crypto.HashObj(genesis),
-		poolAddr:      poolAddr,
-		sinkAddr:      sinkAddr,
+		nAssets:           fileCfgs.GeneratedAssetsCount,
+		nApplications:     fileCfgs.GeneratedApplicationCount,
+		txnState:          protocol.PaymentTx,
+		roundTxnCnt:       fileCfgs.RoundTransactionsCount,
+		round:             basics.Round(0),
+		genesisID:         genesis.ID(),
+		genesisHash:       crypto.HashObj(genesis),
+		poolAddr:          poolAddr,
+		sinkAddr:          sinkAddr,
+		deterministicKeys: fileCfgs.DeterministicKeys,
 	}
 
 	var params config.ConsensusParams
@@ -481,9 +485,14 @@ func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bo
 	return bookkeeping.GenesisAllocation{}
 }
 
-func keypair() *crypto.SignatureSecrets {
+// keypair returns a random key, unless deterministic is true, which will set i as the seed for key generation.
+func keypair(i uint64, deterministic bool) *crypto.SignatureSecrets {
 	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
+	if deterministic {
+		binary.LittleEndian.PutUint64(seed[:], i)
+	} else {
+		crypto.RandBytes(seed[:])
+	}
 	s := crypto.GenerateSignatureSecrets(seed)
 	return s
 }
@@ -638,7 +647,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 
 		if !bootstrappedNet.accountsCreated {
 			for i := uint64(0); i < n; i++ {
-				secretDst := keypair()
+				secretDst := keypair(i, bootstrappedNet.deterministicKeys)
 				dst := basics.Address(secretDst.SignatureVerifier)
 				accounts = append(accounts, dst)
 

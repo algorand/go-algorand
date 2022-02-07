@@ -30,6 +30,7 @@ type BootstrappedNetwork struct {
 	GeneratedApplicationCount uint64  `json:"generatedApplicationCount"`
 	SourceWalletName          string  `json:"sourceWalletName"`
 	BalanceRange              []int64 `json:"acctBalanceRange"`
+	DeterministicKeys         bool    `json:"deterministicKeys"`
 }
 
 // LoadBootstrappedData loads a bootstrappedFile structure from a json file

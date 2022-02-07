@@ -39,7 +39,7 @@ func TestCreateSignedTx(t *testing.T) {
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	secretDst := keypair()
+	secretDst := keypair(0, false)
 	src := basics.Address(secretDst.SignatureVerifier)
 
 	//	create accounts
