@@ -30,7 +30,7 @@ jobs:
       #     scripts/travis/build_test.sh
       - name: test upload to s3
         run: |
-          type nul >> "jacks-test.txt"
+          touch jacks-test.txt
           ls jacks-test.txt
           git --version
           grep --version
