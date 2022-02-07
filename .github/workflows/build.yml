@@ -40,4 +40,4 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
           curl -X POST --data-urlencode "payload={\"text\": \"Nightly windows build test on Github failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
-        if: ${{ failure() && contains(github.head_ref, 'rel/nightly') }}
+        if: ${{ failure() && contains(github.base_ref, 'rel/nightly') }}
