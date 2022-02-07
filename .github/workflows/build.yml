@@ -30,7 +30,10 @@ jobs:
       #     scripts/travis/build_test.sh
       - name: test upload to s3
         run: |
-          touch jacks-test.txt
+          type nul >> "jacks-test.txt"
+          ls jacks-test.txt
+          git --version
+          grep --version
           git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":"
       - name: Upload to S3
         env:
