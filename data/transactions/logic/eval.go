@@ -3733,11 +3733,8 @@ func opAppGlobalDel(cx *EvalContext) {
 
 func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		if ref == 0 {
+		if ref == 0 || ref == uint64(cx.appID) {
 			return cx.appID, nil
-		}
-		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 		}
 		for _, appID := range cx.Txn.Txn.ForeignApps {
 			if appID == basics.AppIndex(ref) {
@@ -3752,13 +3749,11 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 				}
 			}
 		}
-		// It should be legal to use your own app id, which can't be in
-		// ForeignApps during creation, because it is unknown then.  But it can
-		// be discovered in the app code.  It's tempting to combine this with
-		// the == 0 test, above, but it must come after the check for being
-		// below len(ForeignApps)
-		if ref == uint64(cx.appID) {
-			return cx.appID, nil
+		// Allow use of indexes, but this comes last so that clear advice can be
+		// given to anyone who cares about semantics in the first few rounds of
+		// a new network - don't use indexes for references, use the App ID
+		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
+			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 		}
 	} else {
 		// Old rules
@@ -3780,10 +3775,6 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 
 func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		// In recent versions, accept either kind of ASA reference
-		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
-		}
 		for _, assetID := range cx.Txn.Txn.ForeignAssets {
 			if assetID == basics.AssetIndex(ref) {
 				return assetID, nil
@@ -3796,6 +3787,12 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 					return assetID, nil
 				}
 			}
+		}
+		// Allow use of indexes, but this comes last so that clear advice can be
+		// given to anyone who cares about semantics in the first few rounds of
+		// a new network - don't use indexes for references, use the asa ID.
+		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
+			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
 		}
 	} else {
 		// Old rules
