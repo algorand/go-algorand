@@ -37,7 +37,7 @@ jobs:
       #     path: $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
       - name: Slack Notification
         run: |
-          curl -X POST --data-urlencode "payload={\"text\": \"Nightly windows build test on Github failed.\"}" $SLACK_WEBHOOK
+          curl -X POST --data-urlencode "payload={\"text\": \"Nightly windows build test on Github failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        # if: failure()
+        if: ${{ contains(github.head_ref, 'Moving-windows-build-to-circleci') }}
