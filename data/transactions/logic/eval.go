@@ -311,7 +311,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
 
-	credit, _ := transactions.FeeCredit(txgroup, proto.MinTxnFee)
+	credit := feeCredit(txgroup, proto.MinTxnFee)
 
 	if proto.EnableAppCostPooling && apps > 0 {
 		pooledApplicationBudget = new(int)
@@ -335,6 +335,25 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		created:                 &resources{},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 	}
+}
+
+// feeCredit returns the extra fee supplied in this top-level txgroup compared
+// to required minfee.  It can make assumptions about overflow because the group
+// is known OK according to TxnGroupBatchVerify. (In essence the group is
+// "WellFormed")
+func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
+	minFeeCount := uint64(0)
+	feesPaid := uint64(0)
+	for _, stxn := range txgroup {
+		if stxn.Txn.Type != protocol.CompactCertTx {
+			minFeeCount++
+		}
+		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+	}
+	// Overflow is impossible, because TxnGroupBatchVerify checked.
+	feeNeeded := minFee * minFeeCount
+
+	return feesPaid - feeNeeded
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
