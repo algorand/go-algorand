@@ -35,4 +35,3 @@ jobs:
         with:
           if-no-files-found: error
           path: $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
-          
