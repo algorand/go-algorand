@@ -4062,6 +4062,13 @@ func opTxBegin(cx *EvalContext) {
 		cx.err = errors.New("itxn_begin without itxn_submit")
 		return
 	}
+
+	// Product decision - Prevent clear state programs (CSPs) from issuing inner
+	// transactions to minimize complexity.
+	// * If CSPs support inner transactions, downstream program errors may
+	//   complicate CSP guarantees for opting out accounts from apps.
+	// * Since the team felt CSP inner transactions are a narrow(er) use case,
+	//   the complexity tradeoff did _not_ feel justified.
 	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
 		cx.err = errors.New("clear state programs can not issue inner transactions")
 		return
