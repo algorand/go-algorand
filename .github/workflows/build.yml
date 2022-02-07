@@ -24,7 +24,7 @@ jobs:
           go-version: '1.14.7'
       - run: |
           ls ${GOROOT}/bin
-          export PATH=${GOROOT}/bin:$PATH
+          export PATH=${GOROOT}\bin:$PATH
           env
           go version
 
