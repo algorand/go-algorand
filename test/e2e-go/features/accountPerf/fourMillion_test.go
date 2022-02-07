@@ -40,6 +40,7 @@ const numberOfThreads = 256
 const printFreequency = 10
 const groupTransactions = false
 const channelDepth = 1
+
 var maxTxGroupSize int
 
 func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
@@ -280,7 +281,34 @@ func activateAccountTransaction(
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 10000000000},
+			Amount:   basics.MicroAlgos{Raw: 100000000},
+		},
+	}
+	return
+}
+
+func sendAlgoTransaction(
+	t *testing.T,
+	round uint64,
+	sender basics.Address,
+	receiver basics.Address,
+	amount uint64,
+	tLife uint64,
+	genesisHash crypto.Digest) (txn transactions.Transaction) {
+
+	sround := zeroSub(round, roundDelay)
+	txn = transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
+			FirstValid:  basics.Round(sround),
+			LastValid:   basics.Round(sround + tLife),
+			GenesisHash: genesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: receiver,
+			Amount:   basics.MicroAlgos{Raw: amount},
 		},
 	}
 	return
@@ -355,8 +383,8 @@ func scenarioA(
 	client := fixture.LibGoalClient
 
 	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
-	numberOfAccounts := uint64(200) // 6K
-	numberOfAssets := uint64(600)   // 6M
+	numberOfAccounts := uint64(6000) // 6K
+	numberOfAssets := uint64(600000) // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -427,6 +455,9 @@ func scenarioA(
 
 	// have a single account opted in all of them
 	ownAllAccount := createdAccounts[numberOfAccounts-1]
+	sendAlgoTx := sendAlgoTransaction(t, round, sender, ownAllAccount, 100000000000, tLife, genesisHash)
+	txnChan <- &sendAlgoTx
+
 	for acci, nacc := range createdAccounts {
 		if nacc == ownAllAccount {
 			continue
