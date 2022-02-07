@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  win: circleci/windows@2.4.1
+  win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
   slack: circleci/slack@4.4.2
 
@@ -48,125 +48,125 @@ executors:
 
 workflows:
   version: 2
-  circleci_build_and_test:
+  "circleci_build_and_test":
     jobs:
-      # - codegen_verification
+      - codegen_verification
 
-      # - build:
-      #     name: << matrix.platform >>_build
-      #     matrix: &matrix-default
-      #       parameters:
-      #         platform: ["amd64", "arm64", "mac_amd64"]
+      - build:
+          name: << matrix.platform >>_build
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64"]
 
-      # - test:
-      #     name: << matrix.platform >>_test
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters: &filters-default
-      #       branches:
-      #         ignore:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
+      - test:
+          name: << matrix.platform >>_test
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - /hotfix\/.*/
 
-      # - test_nightly:
-      #     name: << matrix.platform >>_test_nightly
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters: &filters-nightly
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - /hotfix\/.*/
-      #     context: slack-secrets
+      - test_nightly:
+          name: << matrix.platform >>_test_nightly
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters: &filters-nightly
+            branches:
+              only:
+                - /rel\/.*/
+                - /hotfix\/.*/
+          context: slack-secrets
 
-      # - integration:
-      #     name: << matrix.platform >>_integration
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters:
-      #       <<: *filters-default
+      - integration:
+          name: << matrix.platform >>_integration
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
-      # - integration_nightly:
-      #     name: << matrix.platform >>_integration_nightly
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters:
-      #       <<: *filters-nightly
-      #     context: slack-secrets
+      - integration_nightly:
+          name: << matrix.platform >>_integration_nightly
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-nightly
+          context: slack-secrets
 
-      # - e2e_expect:
-      #     name: << matrix.platform >>_e2e_expect
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters:
-      #       <<: *filters-default
+      - e2e_expect:
+          name: << matrix.platform >>_e2e_expect
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
-      # - e2e_expect_nightly:
-      #     name: << matrix.platform >>_e2e_expect_nightly
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters:
-      #       <<: *filters-nightly
-      #     context: slack-secrets
+      - e2e_expect_nightly:
+          name: << matrix.platform >>_e2e_expect_nightly
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-nightly
+          context: slack-secrets
 
-      # - e2e_subs:
-      #     name: << matrix.platform >>_e2e_subs
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters:
-      #       <<: *filters-default
+      - e2e_subs:
+          name: << matrix.platform >>_e2e_subs
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-default
 
-      # - e2e_subs_nightly:
-      #     name: << matrix.platform >>_e2e_subs_nightly
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_build
-      #     filters:
-      #       <<: *filters-nightly
-      #     context: slack-secrets
+      - e2e_subs_nightly:
+          name: << matrix.platform >>_e2e_subs_nightly
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_build
+          filters:
+            <<: *filters-nightly
+          context: slack-secrets
 
-      # - tests_verification_job:
-      #     name: << matrix.platform >>_<< matrix.job_type >>_verification
-      #     matrix:
-      #       parameters:
-      #         platform: ["amd64", "arm64", "mac_amd64"]
-      #         job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
-      #     requires:
-      #       - << matrix.platform >>_<< matrix.job_type >>
+      - tests_verification_job:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64"]
+              job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
 
-      # - upload_binaries:
-      #     name: << matrix.platform >>_upload_binaries
-      #     matrix:
-      #       <<: *matrix-default
-      #     requires:
-      #       - << matrix.platform >>_test_nightly_verification
-      #       - << matrix.platform >>_integration_nightly_verification
-      #       - << matrix.platform >>_e2e_expect_nightly_verification
-      #       - << matrix.platform >>_e2e_subs_nightly
-      #       - codegen_verification
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #     context:
-      #       - slack-secrets
-      #       - aws-secrets
-      # - windows_x64_build
+      - upload_binaries:
+          name: << matrix.platform >>_upload_binaries
+          matrix:
+            <<: *matrix-default
+          requires:
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+            - << matrix.platform >>_e2e_subs_nightly
+            - codegen_verification
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+          context:
+            - slack-secrets
+            - aws-secrets
+      #- windows_x64_build
 
 commands:
   prepare_go:
@@ -192,30 +192,12 @@ commands:
     description: Prepare windows image
     steps:
       - run:
-          name: install deps and golang
+          name: install deps
           shell: bash.exe
           command: |
-            set -e
-            #choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.14.7 --force -v
-            cmd //C RefreshEnv.cmd
-            ls /c/Program\ Files/Go/
-            ls /c/Program\ Files/Go/bin/
-            go version
-
-      - run:
-          name: install python3
-          shell: bash.exe
-          command: |
-            set -e
-            if [[ ! $(python --version | grep 3.7.3) ]]; then
-              choco install -y python3 --version=3.7.3 --force
-            fi
-      - run:
-          name: install pacman deps
-          shell: bash.exe
-          command: |
-            set -e
+            choco install -y msys2 pacman make wget --force
+            choco install -y golang --version=1.14.7 --force
+            choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
@@ -689,14 +671,12 @@ jobs:
       - run:
           no_output_timeout: 45m
           command: |
-            set -e
             #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export SKIP_GO_INSTALLATION=True
             export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
             export MAKE=mingw32-make
-            go version
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
 
