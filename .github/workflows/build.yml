@@ -8,11 +8,6 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - name: Slack Notification
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        if: failure() && contains(github.head_ref, 'Moving-windows-build-to-circleci')
       - name: Install msys2
         uses: msys2/setup-msys2@v2
         with:
@@ -40,3 +35,8 @@ jobs:
         with:
           if-no-files-found: error
           path: $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        if: failure()
