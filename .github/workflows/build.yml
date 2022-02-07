@@ -10,22 +10,29 @@ jobs:
     steps:
       - name: Install msys2
         uses: msys2/setup-msys2@v2
+        # with:
+        #   update: true
+        #   install: >-
+        #     mingw-w64-x86_64-toolchain
+        #     mingw-w64-x86_64-libtool
+        #     unzip
+        #     autoconf
+        #     automake
+        #     git
+      - uses: actions/setup-go@v2
         with:
-          update: true
-          install: >-
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-libtool
-            unzip
-            autoconf
-            automake
-            git
+          go-version: '1.14.7'
+      - run: |
+          set GOPATH=C:\Users\runneradmin\go
+          set GOBIN=$GOPATH/bin
+          echo $GOPATH/bin >> $GITHUB_PATH
+          go version
+
       - name: Check out code
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v2
-        with:
-          go-version: '1.14.7'
+
       # - run: go version
       - uses: actions/setup-python@v2
         with:
