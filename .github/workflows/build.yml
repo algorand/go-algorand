@@ -26,6 +26,7 @@ jobs:
           ls ${GOROOT}/bin
           export PATH=${GOROOT}\\bin:$PATH
           env
+          which go
           go version
 
       - name: Check out code
