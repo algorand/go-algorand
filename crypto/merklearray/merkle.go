@@ -98,7 +98,7 @@ func buildWorker(ws *workerState, array Array, leaves Layer, h crypto.HashFactor
 				errs.nonBlockingSend(err)
 				return
 			}
-			leaves[i] = crypto.GenereicHashObj(hash, m)
+			leaves[i] = crypto.GenericHashObj(hash, m)
 		}
 
 		batchSize++
@@ -370,7 +370,7 @@ func hashLeaves(elems map[uint64]crypto.Hashable, treeDepth uint8, hash hash.Has
 		if i >= (1 << treeDepth) {
 			return nil, fmt.Errorf(ErrPosOutOfBound, i, 1<<treeDepth)
 		}
-		hashedLeaves[i] = crypto.GenereicHashObj(hash, element)
+		hashedLeaves[i] = crypto.GenericHashObj(hash, element)
 	}
 
 	return hashedLeaves, nil

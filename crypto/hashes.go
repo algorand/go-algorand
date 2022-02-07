@@ -29,8 +29,8 @@ import (
 // HashType represents different hash functions
 type HashType uint16
 
-// IsValid verifies that the hash type is in a valid range.
-func (h HashType) IsValid() error {
+// Validate verifies that the hash type is in a valid range.
+func (h HashType) Validate() error {
 	if h >= MaxHashType {
 		return protocol.ErrInvalidObject
 	}
@@ -56,9 +56,10 @@ const (
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
-//msgp:postunmarshalcheck HashFactory IsValid
+//msgp:postunmarshalcheck HashFactory Validate
 type HashFactory struct {
-	_struct  struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	HashType HashType `codec:"t"`
 }
 
@@ -102,13 +103,13 @@ func (z HashFactory) NewHash() hash.Hash {
 	}
 }
 
-// IsValid states whether the HashFactory is valid, and is safe to use.
-func (z *HashFactory) IsValid() error {
-	return z.HashType.IsValid()
+// Validate states whether the HashFactory is valid, and is safe to use.
+func (z *HashFactory) Validate() error {
+	return z.HashType.Validate()
 }
 
-// GenereicHashObj Makes it easier to sum using hash interface and Hashable interface
-func GenereicHashObj(hsh hash.Hash, h Hashable) []byte {
+// GenericHashObj Makes it easier to sum using hash interface and Hashable interface
+func GenericHashObj(hsh hash.Hash, h Hashable) []byte {
 	rep := HashRep(h)
 	return hashBytes(hsh, rep)
 }

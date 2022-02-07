@@ -18,16 +18,21 @@ package merklearray
 
 import (
 	"fmt"
+	"math/bits"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"math/bits"
 )
 
-// ErrGetOutOfBound returned when trying to retrieve an element which is out of
-// the padded array bound.
-var (
-	ErrGetOutOfBound = "vectorCommitmentArray.Get(%d): out of bounds, full size %d"
-)
+// ErrGetOutOfBound returned when trying to retrieve an element which is out of the padded array bound.
+type ErrGetOutOfBound struct {
+	requestIndex uint64
+	length       uint64
+}
+
+func (e ErrGetOutOfBound) Error() string {
+	return fmt.Sprintf("vectorCommitmentArray.Get(%d): out of bounds, full size %d", e.requestIndex, e.length)
+}
 
 type vectorCommitmentArray struct {
 	array     Array
@@ -62,7 +67,10 @@ func (vc *vectorCommitmentArray) Marshal(pos uint64) (crypto.Hashable, error) {
 		return nil, err
 	}
 	if lsbIndex >= vc.paddedLen {
-		return nil, fmt.Errorf(ErrGetOutOfBound, pos, vc.paddedLen)
+		return nil, ErrGetOutOfBound{
+			pos,
+			vc.paddedLen,
+		}
 	}
 
 	if lsbIndex < vc.array.Length() {

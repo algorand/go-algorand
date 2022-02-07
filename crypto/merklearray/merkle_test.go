@@ -713,11 +713,11 @@ func TestMerkleTreeInternalNodeWithOneChild(t *testing.T) {
 		crypto.RandBytes(a[i][:])
 	}
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
-	leaf0Hash := crypto.GenereicHashObj(h, a[0])
-	leaf1Hash := crypto.GenereicHashObj(h, a[1])
-	leaf2Hash := crypto.GenereicHashObj(h, a[2])
-	leaf3Hash := crypto.GenereicHashObj(h, a[3])
-	leaf4Hash := crypto.GenereicHashObj(h, a[4])
+	leaf0Hash := crypto.GenericHashObj(h, a[0])
+	leaf1Hash := crypto.GenericHashObj(h, a[1])
+	leaf2Hash := crypto.GenericHashObj(h, a[2])
+	leaf3Hash := crypto.GenericHashObj(h, a[3])
+	leaf4Hash := crypto.GenericHashObj(h, a[4])
 
 	internalNode0Hash := hashInternalNode(h, leaf0Hash, leaf1Hash)
 	internalNode1Hash := hashInternalNode(h, leaf2Hash, leaf3Hash)
@@ -741,10 +741,10 @@ func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 		crypto.RandBytes(a[i][:])
 	}
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
-	leaf0Hash := crypto.GenereicHashObj(h, a[0])
-	leaf1Hash := crypto.GenereicHashObj(h, a[1])
-	leaf2Hash := crypto.GenereicHashObj(h, a[2])
-	leaf3Hash := crypto.GenereicHashObj(h, a[3])
+	leaf0Hash := crypto.GenericHashObj(h, a[0])
+	leaf1Hash := crypto.GenericHashObj(h, a[1])
+	leaf2Hash := crypto.GenericHashObj(h, a[2])
+	leaf3Hash := crypto.GenericHashObj(h, a[3])
 
 	internalNode0Hash := hashInternalNode(h, leaf0Hash, leaf1Hash)
 	internalNode1Hash := hashInternalNode(h, leaf2Hash, leaf3Hash)
@@ -874,7 +874,7 @@ func TestMerkleTreeOneLeaf(t *testing.T) {
 	copy(a[0][:], []byte{0x1, 0x2})
 
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
-	rootHash := crypto.GenereicHashObj(h, a[0])
+	rootHash := crypto.GenericHashObj(h, a[0])
 
 	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	require.NoError(t, err)
@@ -891,7 +891,7 @@ func TestVCOneLeaf(t *testing.T) {
 	copy(a[0][:], []byte{0x1, 0x2})
 
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
-	rootHash := crypto.GenereicHashObj(h, a[0])
+	rootHash := crypto.GenericHashObj(h, a[0])
 
 	tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 	require.NoError(t, err)

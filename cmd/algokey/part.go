@@ -76,21 +76,24 @@ var partGenerateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		fmt.Println("Please standby while generating keys. This might take a few minutes...")
+
 		var partkey account.PersistedParticipation
 		participationGen := func() {
 			partkey, err = account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot generate partkey database %s: %v\n", partKeyfile, err)
-				err = os.Remove(partKeyfile)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to cleanup the database file %s: %v\n", partKeyfile, err)
-				}
-				os.Exit(1)
-			}
 		}
 
-		fmt.Println("Please standby while generating keys. This might take a few minutes...")
 		util.RunFuncWithSpinningCursor(participationGen)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot generate partkey database %s: %v\n", partKeyfile, err)
+			err = os.Remove(partKeyfile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to cleanup the database file %s: %v\n", partKeyfile, err)
+			}
+			os.Exit(1)
+		}
+
 		printPartkey(partkey.Participation)
 	},
 }

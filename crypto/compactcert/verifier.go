@@ -85,7 +85,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 
-	msgHash := crypto.GenereicHashObj(c.PartProofs.HashFactory.NewHash(), v.Msg)
+	msgHash := crypto.GenericHashObj(c.PartProofs.HashFactory.NewHash(), v.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{

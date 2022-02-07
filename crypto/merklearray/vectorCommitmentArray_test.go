@@ -17,16 +17,18 @@
 package merklearray
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func indexTranslate(t *testing.T, from, to uint64, pathLen uint8) {
-	lsbIndex, error := merkleTreeToVectorCommitmentIndex(from, pathLen)
-	require.NoError(t, error)
+	lsbIndex, err := merkleTreeToVectorCommitmentIndex(from, pathLen)
+	require.NoError(t, err)
 	require.Equal(t, to, lsbIndex)
 }
 
