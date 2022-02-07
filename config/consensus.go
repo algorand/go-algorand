@@ -290,6 +290,9 @@ type ConsensusParams struct {
 	// should the number of inner transactions be pooled across group?
 	EnableInnerTransactionPooling bool
 
+	// provide greater isolation for clear state programs
+	IsolateClearState bool
+
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
 	MaxAppsCreated int
@@ -399,6 +402,9 @@ type ConsensusParams struct {
 	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
 	// to be taken offline, that would be proposed to be taken offline.
 	MaxProposedExpiredOnlineAccounts int
+
+	//EnableBatchVerification enable the use of the batch verification algorithm.
+	EnableBatchVerification bool
 
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
@@ -1060,8 +1066,11 @@ func initConsensusProtocols() {
 	// Enable TEAL 6 / AVM 1.1
 	vFuture.LogicSigVersion = 6
 	vFuture.EnableInnerTransactionPooling = true
+	vFuture.IsolateClearState = true
 
 	vFuture.MaxProposedExpiredOnlineAccounts = 32
+
+	vFuture.EnableBatchVerification = true
 
 	vFuture.RewardsCalculationFix = true
 

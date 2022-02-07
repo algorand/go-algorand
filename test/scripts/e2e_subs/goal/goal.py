@@ -300,7 +300,8 @@ class Goal:
     ):
         assert not kwargs.pop("index", None)
         if not clear_program:
-            clear_program = self.assemble("#pragma version 2\nint 1")
+            approve = f"#pragma version {approval_program[0]}\nint 1"
+            clear_program = self.assemble(approve)
         return self.appl(
             sender,
             0,

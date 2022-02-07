@@ -400,6 +400,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 	case 1:
 		evalProblem = problems[0]
 	case 0:
+		// no problems == expect success
 	default:
 		require.Fail(t, "Misused testApp: %d problems", len(problems))
 	}
@@ -2010,8 +2011,7 @@ int 1
 	ledger.NewAccount(txn.Txn.Receiver, 1)
 	ledger.NewLocals(txn.Txn.Receiver, 100)
 
-	sb := strings.Builder{}
-	ep.Trace = &sb
+	ep.Trace = &strings.Builder{}
 
 	delta := testApp(t, source, ep)
 	require.Equal(t, 0, len(delta.GlobalDelta))
@@ -2491,7 +2491,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
-		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 1905"})
+		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"})
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, LogicVersion, ledger)

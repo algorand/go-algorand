@@ -83,8 +83,8 @@ func TestEncodeValid(t *testing.T) {
 			randomInt, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
 
-			expected := make([]byte, intSize/8)
-			randomInt.FillBytes(expected)
+			expected, err := bigIntToBytes(randomInt, uint(intSize/8))
+			require.NoError(t, err, "big int to byte conversion error")
 
 			uintEncode, err := uintType.Encode(randomInt)
 			require.NoError(t, err, "encoding from uint type fail")
@@ -122,8 +122,9 @@ func TestEncodeValid(t *testing.T) {
 				encodedUfixed, err := typeUfixed.Encode(randomInt)
 				require.NoError(t, err, "ufixed encode fail")
 
-				expected := make([]byte, size/8)
-				randomInt.FillBytes(expected)
+				expected, err := bigIntToBytes(randomInt, uint(size/8))
+				require.NoError(t, err, "big int to byte conversion error")
+
 				require.Equal(t, expected, encodedUfixed, "encode ufixed not match with expected")
 			}
 			// (2^[bitSize] - 1) / (10^[precision]) test
@@ -141,8 +142,8 @@ func TestEncodeValid(t *testing.T) {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
-		addrBytesExpected := make([]byte, addressByteSize)
-		randomAddrInt.FillBytes(addrBytesExpected)
+		addrBytesExpected, err := bigIntToBytes(randomAddrInt, uint(addressByteSize))
+		require.NoError(t, err, "big int to byte conversion error")
 
 		addrBytesActual, err := addressType.Encode(addrBytesExpected)
 		require.NoError(t, err, "address encode fail")
@@ -421,8 +422,8 @@ func TestDecodeValid(t *testing.T) {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
-		expected := make([]byte, addressByteSize)
-		randomAddrInt.FillBytes(expected)
+		expected, err := bigIntToBytes(randomAddrInt, uint(addressByteSize))
+		require.NoError(t, err, "big int to byte conversion error")
 
 		actual, err := addressType.Decode(expected)
 		require.NoError(t, err, "decoding address should not return error")
@@ -951,8 +952,10 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	for i := 0; i < addressTestCaseCount; i++ {
 		randAddrVal, err := rand.Int(rand.Reader, maxAddress)
 		require.NoError(t, err, "generate random value for address, should be no error")
-		addrBytes := make([]byte, addressByteSize)
-		randAddrVal.FillBytes(addrBytes)
+
+		addrBytes, err := bigIntToBytes(randAddrVal, uint(addressByteSize))
+		require.NoError(t, err, "big int to byte conversion error")
+
 		(*pool)[Address][i] = testUnit{serializedType: addressType.String(), value: addrBytes}
 	}
 	categorySelfRoundTripTest(t, (*pool)[Address])
@@ -1162,7 +1165,7 @@ func TestParseArgJSONtoByteSlice(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
-			applicationArgs := [][]byte{}
+			applicationArgs := make([][]byte, 0)
 			err := ParseArgJSONtoByteSlice(test.argTypes, test.jsonArgs, &applicationArgs)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedAppArgs, applicationArgs)
