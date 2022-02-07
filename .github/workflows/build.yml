@@ -17,21 +17,32 @@ jobs:
         with:
           python-version: '3.7.9'
       - run: python --version
-      # - name: Install msys2
-        # uses: msys2/setup-msys2@v2
+      - name: Install msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-libtool
+            unzip
+            autoconf
+            automake
+            git
+            go
+
       # - name: Install dependencies
-        # shell: msys2 {0}
-        # run: |
-          # set -e
-          # export msys2='set MSYS=winsymlinks:nativestrict '
-          # export msys2+='& msys2 -defterm -no-start'
-          # export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
-          # export msys2+=" -msys2 -c "\"\$@"\" --"
-          # $msys2
-          # pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake git go
+      #   shell: msys2 {0}
+      #   run: |
+      #     # set -e
+      #     # export msys2='set MSYS=winsymlinks:nativestrict '
+      #     # export msys2+='& msys2 -defterm -no-start'
+      #     # export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
+      #     # export msys2+=" -msys2 -c "\"\$@"\" --"
+      #     # $msys2
+      #     pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
       - name: Build Test
-        # shell: msys2 {0}
-        shell: bash
+        shell: msys2 {0}
+        # shell: bash
         run: |
           # set -e
           # env
