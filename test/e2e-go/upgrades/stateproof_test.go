@@ -76,7 +76,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	waitUntilProtocolUpgrades(a, &fixture, nodeClient)
 
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
-	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusV32))
+	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusV31))
 }
 
 func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
@@ -95,7 +95,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
-	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV32))
+	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV31))
 }
 
 func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
@@ -140,7 +140,7 @@ func getStateProofConsensus() config.ConsensusProtocols {
 	consensus := generateFastUpgradeConsensus()
 
 	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)].
-		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusV32)] = 0
+		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusV31)] = 0
 
 	return consensus
 }

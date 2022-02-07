@@ -1059,23 +1059,19 @@ func initConsensusProtocols() {
 
 	v31 := v30
 	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV31] = v31
-
-	v32 := v31
-	v32.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	// state proof key registration
-	v32.EnableStateProofKeyregCheck = true
+	v31.EnableStateProofKeyregCheck = true
 
 	// Maximum validity period for key registration, to prevent generating too many StateProof keys
-	v32.MaxKeyregValidPeriod = 256*(1<<16) - 1
+	v31.MaxKeyregValidPeriod = 256*(1<<16) - 1
 
-	Consensus[protocol.ConsensusV32] = v32
+	Consensus[protocol.ConsensusV31] = v31
 
-	v30.ApprovedUpgrades[protocol.ConsensusV32] = 140000 // TODO: calculate how long
-	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
+	v30.ApprovedUpgrades[protocol.ConsensusV31] = 140000 // TODO: calculate how long
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v32
+	vFuture := v31
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later

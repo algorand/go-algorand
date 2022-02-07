@@ -169,11 +169,6 @@ const ConsensusV31 = ConsensusVersion(
 	"waiting for commit in spec",
 )
 
-// ConsensusV32 introduces State Proof ! // TODO
-const ConsensusV32 = ConsensusVersion(
-	"waiting for another commit in spec",
-)
-
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -186,7 +181,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV32
+const ConsensusCurrentVersion = ConsensusV31
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
