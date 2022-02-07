@@ -13,10 +13,10 @@ jobs:
         with:
           update: true
           path-type: inherit
-      - name: Check out code
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+      # - name: Check out code
+      #   uses: actions/checkout@v2
+      #   with:
+      #     fetch-depth: 0
       # - name: Install golang
       #   uses: actions/setup-go@v2
       #   with:
@@ -30,13 +30,14 @@ jobs:
       #     export ALGORAND_DEADLOCK=enable
       #     export SKIP_GO_INSTALLATION=True
       #     scripts/travis/build_test.sh
-      - name: Upload artifact to Github
-        uses: actions/upload-artifact@v2
-        with:
-          if-no-files-found: error
-          path: $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
+      # - name: Upload artifact to Github
+      #   uses: actions/upload-artifact@v2
+      #   with:
+      #     if-no-files-found: error
+      #     path: $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
       - name: Slack Notification
-        uses: rtCamp/action-slack-notify@v2
+        run: |
+          curl -X POST --data-urlencode "payload={\"text\": \"Nightly windows build test on Github failed.\"}" $SLACK_WEBHOOK
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        if: failure()
+        # if: failure()
