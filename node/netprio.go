@@ -131,7 +131,7 @@ func (node *AlgorandFullNode) VerifyPrioResponse(challenge string, response []by
 	}
 
 	ephID := basics.OneTimeIDForRound(rs.Round, data.KeyDilution(proto))
-	if !data.VoteID.Verify(ephID, rs.Response, rs.Sig) {
+	if !data.VoteID.Verify(ephID, rs.Response, rs.Sig, proto.EnableBatchVerification) {
 		err = fmt.Errorf("signature verification failure")
 		return
 	}

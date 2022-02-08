@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
@@ -2161,7 +2162,178 @@ assert
 	endBlock(t, l, eval)
 }
 
-func TestCreatedAppsAreAccessible(t *testing.T) {
+// TestInnerAppVersionCalling ensure that inner app calls must be the >=v6 apps
+func TestInnerAppVersionCalling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	five, err := logic.AssembleStringWithVersion("int 1", 5)
+	require.NoError(t, err)
+	six, err := logic.AssembleStringWithVersion("int 1", 6)
+	require.NoError(t, err)
+
+	create5 := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   five.Program,
+		ClearStateProgram: five.Program,
+	}
+
+	create6 := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   six.Program,
+		ClearStateProgram: six.Program,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &create5, &create6)
+	vb := endBlock(t, l, eval)
+	v5id := vb.Block().Payset[0].ApplicationID
+	v6id := vb.Block().Payset[1].ApplicationID
+
+	call := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		// don't use main. do the test at creation time
+		ApprovalProgram: `
+itxn_begin
+	int appl
+	itxn_field TypeEnum
+	txn Applications 1
+	itxn_field ApplicationID
+itxn_submit`,
+		ForeignApps: []basics.AppIndex{v5id},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call, "inner app call with version 5")
+	call.ForeignApps[0] = v6id
+	txn(t, l, eval, &call, "overspend") // it tried to execute, but test doesn't bother funding
+	endBlock(t, l, eval)
+
+}
+
+func TestAppVersionMatching(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	four, err := logic.AssembleStringWithVersion("int 1", 4)
+	require.NoError(t, err)
+	five, err := logic.AssembleStringWithVersion("int 1", 5)
+	require.NoError(t, err)
+	six, err := logic.AssembleStringWithVersion("int 1", 6)
+	require.NoError(t, err)
+
+	create := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   five.Program,
+		ClearStateProgram: five.Program,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	endBlock(t, l, eval)
+
+	create.ClearStateProgram = six.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create, "version mismatch")
+	endBlock(t, l, eval)
+
+	create.ApprovalProgram = six.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	endBlock(t, l, eval)
+
+	create.ClearStateProgram = four.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create, "version mismatch")
+	endBlock(t, l, eval)
+
+	// four doesn't match five, but it doesn't have to
+	create.ApprovalProgram = five.Program
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	endBlock(t, l, eval)
+}
+
+func TestAppDowngrade(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	four, err := logic.AssembleStringWithVersion("int 1", 4)
+	require.NoError(t, err)
+	five, err := logic.AssembleStringWithVersion("int 1", 5)
+	require.NoError(t, err)
+	six, err := logic.AssembleStringWithVersion("int 1", 6)
+	require.NoError(t, err)
+
+	create := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   four.Program,
+		ClearStateProgram: four.Program,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &create)
+	vb := endBlock(t, l, eval)
+	app := vb.Block().Payset[0].ApplicationID
+
+	update := txntest.Txn{
+		Type:              "appl",
+		ApplicationID:     app,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		Sender:            addrs[0],
+		ApprovalProgram:   four.Program,
+		ClearStateProgram: four.Program,
+	}
+
+	// No change - legal
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &update)
+
+	// Upgrade just the approval. Sure (because under 6, no need to match)
+	update.ApprovalProgram = five.Program
+	txn(t, l, eval, &update)
+
+	// Upgrade just the clear state. Now they match
+	update.ClearStateProgram = five.Program
+	txn(t, l, eval, &update)
+
+	// Downgrade (allowed pre 6)
+	update.ClearStateProgram = four.Program
+	txn(t, l, eval, update.Noted("actually a repeat of first upgrade"))
+
+	// Try to upgrade (at 6, must match)
+	update.ApprovalProgram = six.Program
+	txn(t, l, eval, &update, "version mismatch")
+
+	// Do both
+	update.ClearStateProgram = six.Program
+	txn(t, l, eval, &update)
+
+	// Try to downgrade. Fails because it was 6.
+	update.ApprovalProgram = five.Program
+	update.ClearStateProgram = five.Program
+	txn(t, l, eval, update.Noted("repeat of 3rd update"), "downgrade")
+}
+
+func TestCreatedAppsAreAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
@@ -2438,4 +2610,646 @@ func BenchmarkMaximumCallStackDepth(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		executeMegaContract(b)
 	}
+}
+
+// TestInnerClearState ensures inner ClearState performs close out properly, even if rejects.
+func TestInnerClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	// inner will be an app that we opt into, then clearstate
+	// note that clearstate rejects
+	inner := txntest.Txn{
+		Type:              "appl",
+		Sender:            addrs[0],
+		ApprovalProgram:   "int 1",
+		ClearStateProgram: "int 0",
+		LocalStateSchema: basics.StateSchema{
+			NumUint:      2,
+			NumByteSlice: 2,
+		},
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &inner)
+	vb := endBlock(t, l, eval)
+	innerId := vb.Block().Payset[0].ApplicationID
+
+	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
+	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
+	// to opt into, and the clear state, on the inner app.
+	outer := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+ int appl
+ itxn_field TypeEnum
+ txn Applications 1
+ itxn_field ApplicationID
+ txn ApplicationArgs 0
+ btoi
+ itxn_field OnCompletion
+itxn_submit
+`),
+		ForeignApps: []basics.AppIndex{innerId},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &outer)
+	vb = endBlock(t, l, eval)
+	outerId := vb.Block().Payset[0].ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: outerId.Address(),
+		Amount:   1_000_000,
+	}
+
+	call := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   outerId,
+		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
+		ForeignApps:     []basics.AppIndex{innerId},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fund, &call)
+	endBlock(t, l, eval)
+
+	outerAcct := lookup(t, l, outerId.Address())
+	require.Len(t, outerAcct.AppLocalStates, 1)
+	require.Equal(t, outerAcct.TotalAppSchema, basics.StateSchema{
+		NumUint:      2,
+		NumByteSlice: 2,
+	})
+
+	call.ApplicationArgs = [][]byte{{byte(transactions.ClearStateOC)}}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call)
+	endBlock(t, l, eval)
+
+	outerAcct = lookup(t, l, outerId.Address())
+	require.Empty(t, outerAcct.AppLocalStates)
+	require.Empty(t, outerAcct.TotalAppSchema)
+
+}
+
+// TestInnerClearStateBadCallee ensures that inner clear state programs are not
+// allowed to use more than 700 (MaxAppProgramCost)
+func TestInnerClearStateBadCallee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	// badCallee tries to run down your budget, so an inner clear must be
+	// protected from exhaustion
+	badCallee := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: "int 1",
+		ClearStateProgram: `top:
+int 1
+pop
+b top
+`,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txn(t, l, eval, &badCallee)
+	vb := endBlock(t, l, eval)
+	badId := vb.Block().Payset[0].ApplicationID
+
+	// Outer is a simple app that will invoke the given app (in ForeignApps[0])
+	// with the given OnCompletion (in ApplicationArgs[0]).  Goal is to use it
+	// to opt into, and then clear state,  the bad app
+	outer := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+ int appl
+ itxn_field TypeEnum
+ txn Applications 1
+ itxn_field ApplicationID
+ txn ApplicationArgs 0
+ btoi
+ itxn_field OnCompletion
+ global OpcodeBudget
+ store 0
+itxn_submit
+global OpcodeBudget
+store 1
+
+txn ApplicationArgs 0
+btoi
+int ClearState
+!=
+bnz skip						// Don't do budget checking during optin
+ load 0
+ load 1
+ int 3							// OpcodeBudget lines were 3 instructions apart
+ +								// ClearState got 700 added to budget, tried to take all,
+ ==								// but ended up just using that 700
+ assert
+skip:
+`),
+		ForeignApps: []basics.AppIndex{badId},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &outer)
+	vb = endBlock(t, l, eval)
+	outerId := vb.Block().Payset[0].ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: outerId.Address(),
+		Amount:   1_000_000,
+	}
+
+	call := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   outerId,
+		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}},
+		ForeignApps:     []basics.AppIndex{badId},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fund, &call)
+	endBlock(t, l, eval)
+
+	outerAcct := lookup(t, l, outerId.Address())
+	require.Len(t, outerAcct.AppLocalStates, 1)
+
+	// When doing a clear state, `call` checks that budget wasn't stolen
+	call.ApplicationArgs = [][]byte{{byte(transactions.ClearStateOC)}}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call)
+	endBlock(t, l, eval)
+
+	// Clearstate took effect, despite failure from infinite loop
+	outerAcct = lookup(t, l, outerId.Address())
+	require.Empty(t, outerAcct.AppLocalStates)
+}
+
+// TestInnerClearStateBadCaller ensures that inner clear state programs cannot
+// be called with less than 700 (MaxAppProgramCost)) OpcodeBudget.
+func TestInnerClearStateBadCaller(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	inner := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApprovalProgram: "int 1",
+		ClearStateProgram: `global OpcodeBudget
+itob
+log
+int 1`,
+		LocalStateSchema: basics.StateSchema{
+			NumUint:      1,
+			NumByteSlice: 2,
+		},
+	}
+
+	// waster allows tries to get the budget down below 100 before returning
+	waster := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+global OpcodeBudget
+itob
+log
+top:
+global OpcodeBudget
+int 100
+<
+bnz done
+ byte "junk"
+ sha256
+ pop
+ b top
+done:
+global OpcodeBudget
+itob
+log
+`),
+		LocalStateSchema: basics.StateSchema{
+			NumUint:      3,
+			NumByteSlice: 4,
+		},
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &inner, &waster)
+	vb := endBlock(t, l, eval)
+	innerId := vb.Block().Payset[0].ApplicationID
+	wasterId := vb.Block().Payset[1].ApplicationID
+
+	// Grouper is a simple app that will invoke the given apps (in
+	// ForeignApps[0,1]) as a group, with the given OnCompletion (in
+	// ApplicationArgs[0]).
+	grouper := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+itxn_begin
+ int appl
+ itxn_field TypeEnum
+ txn Applications 1
+ itxn_field ApplicationID
+ txn ApplicationArgs 0
+ btoi
+ itxn_field OnCompletion
+itxn_next
+ int appl
+ itxn_field TypeEnum
+ txn Applications 2
+ itxn_field ApplicationID
+ txn ApplicationArgs 1
+ btoi
+ itxn_field OnCompletion
+itxn_submit
+`),
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &grouper)
+	vb = endBlock(t, l, eval)
+	grouperId := vb.Block().Payset[0].ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: grouperId.Address(),
+		Amount:   1_000_000,
+	}
+
+	call := txntest.Txn{
+		Type:            "appl",
+		Sender:          addrs[0],
+		ApplicationID:   grouperId,
+		ApplicationArgs: [][]byte{{byte(transactions.OptInOC)}, {byte(transactions.OptInOC)}},
+		ForeignApps:     []basics.AppIndex{wasterId, innerId},
+	}
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fund, &call)
+	endBlock(t, l, eval)
+
+	gAcct := lookup(t, l, grouperId.Address())
+	require.Len(t, gAcct.AppLocalStates, 2)
+
+	call.ApplicationArgs = [][]byte{{byte(transactions.CloseOutOC)}, {byte(transactions.ClearStateOC)}}
+	eval = nextBlock(t, l, true, nil)
+	txn(t, l, eval, &call, "ClearState execution with low OpcodeBudget")
+	vb = endBlock(t, l, eval)
+	require.Len(t, vb.Block().Payset, 0)
+
+	// Clearstate did not take effect, since the caller tried to shortchange the CSP
+	gAcct = lookup(t, l, grouperId.Address())
+	require.Len(t, gAcct.AppLocalStates, 2)
+}
+
+// TestClearStateInnerPay ensures that ClearState programs can run inner txns in
+// v30, but not in vFuture. (Test should add v31 after it exists.)
+func TestClearStateInnerPay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		consensus protocol.ConsensusVersion
+		approval  string
+	}{
+		{protocol.ConsensusFuture, "int 1"},
+		{protocol.ConsensusV30, "int 1"},
+		{protocol.ConsensusFuture, "int 0"},
+		{protocol.ConsensusV30, "int 0"},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+
+			genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+			l := newTestLedgerWithConsensusVersion(t, genBalances, test.consensus)
+			defer l.Close()
+
+			app0 := txntest.Txn{
+				Type:   "appl",
+				Sender: addrs[0],
+				ApprovalProgram: main(`
+itxn_begin
+	int pay
+	itxn_field TypeEnum
+	int 3000
+	itxn_field Amount
+    txn Sender
+    itxn_field Receiver
+itxn_submit`),
+				ClearStateProgram: `
+itxn_begin
+	int pay
+	itxn_field TypeEnum
+	int 2000
+	itxn_field Amount
+    txn Sender
+    itxn_field Receiver
+itxn_submit
+` + test.approval,
+			}
+			eval := nextBlock(t, l, true, nil)
+			txn(t, l, eval, &app0)
+			vb := endBlock(t, l, eval)
+			index0 := vb.Block().Payset[0].ApplicationID
+
+			fund0 := txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[0],
+				Receiver: index0.Address(),
+				Amount:   1_000_000,
+			}
+
+			optin := txntest.Txn{
+				Type:          "appl",
+				Sender:        addrs[1],
+				ApplicationID: index0,
+				OnCompletion:  transactions.OptInOC,
+			}
+
+			eval = nextBlock(t, l, true, nil)
+			txns(t, l, eval, &fund0, &optin)
+			vb = endBlock(t, l, eval)
+
+			// Check that addrs[1] got paid during optin, and pay txn is in block
+			ad1 := micros(t, l, addrs[1])
+
+			// paid 3000, but 1000 fee, 2000 bump
+			require.Equal(t, uint64(2000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+			// InnerTxn in block ([1] position, because followed fund0)
+			require.Len(t, vb.Block().Payset[1].EvalDelta.InnerTxns, 1)
+			require.Equal(t, vb.Block().Payset[1].EvalDelta.InnerTxns[0].Txn.Amount.Raw, uint64(3000))
+
+			clear := txntest.Txn{
+				Type:          "appl",
+				Sender:        addrs[1],
+				ApplicationID: index0,
+				OnCompletion:  transactions.ClearStateOC,
+			}
+
+			eval = nextBlock(t, l, true, nil)
+			txns(t, l, eval, &clear)
+			vb = endBlock(t, l, eval)
+
+			// Check if addrs[1] got paid during clear, and pay txn is in block
+			ad1 = micros(t, l, addrs[1])
+
+			// The pay only happens if the clear state approves (and it was legal back in V30)
+			if test.approval == "int 1" && test.consensus == protocol.ConsensusV30 {
+				// had 2000 bump, now paid 2k, charge 1k, left with 3k total bump
+				require.Equal(t, uint64(3000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+				// InnerTxn in block
+				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, index0)
+				require.Equal(t, vb.Block().Payset[0].Txn.OnCompletion, transactions.ClearStateOC)
+				require.Len(t, vb.Block().Payset[0].EvalDelta.InnerTxns, 1)
+				require.Equal(t, vb.Block().Payset[0].EvalDelta.InnerTxns[0].Txn.Amount.Raw, uint64(2000))
+			} else {
+				// Only the fee is paid because pay is "erased", so goes from 2k down to 1k
+				require.Equal(t, uint64(1000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+				// no InnerTxn in block
+				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, index0)
+				require.Equal(t, vb.Block().Payset[0].Txn.OnCompletion, transactions.ClearStateOC)
+				require.Len(t, vb.Block().Payset[0].EvalDelta.InnerTxns, 0)
+			}
+		})
+	}
+}
+
+// TestGlobalChangesAcrossApps ensures that state changes are seen by other app
+// calls when using inners.
+func TestGlobalChangesAcrossApps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appA := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+            // Call B : No arguments means: set your global "X" to "ABC"
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+			itxn_submit
+
+            // Call C : Checks that B's global X is ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 2;     itxn_field ApplicationID
+            txn Applications 1;     itxn_field Applications // Pass on access to B
+			itxn_submit
+
+            // Call B again:  1 arg means it checks if X == ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+            byte "check, please";   itxn_field ApplicationArgs
+			itxn_submit
+
+            // Check B's state for X
+            txn Applications 1
+            byte "X"
+            app_global_get_ex
+            assert
+            byte "ABC"
+            ==
+            assert
+`),
+	}
+
+	appB := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn NumAppArgs
+  bnz check						// 1 arg means check
+  // set
+  byte "X"
+  byte "ABC"
+  app_global_put
+  b end
+check:
+  byte "X"
+  app_global_get
+  byte "ABC"
+  ==
+  assert
+  b end
+`),
+		GlobalStateSchema: basics.StateSchema{
+			NumByteSlice: 1,
+		},
+	}
+
+	appC := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn Applications 1
+  byte "X"
+  app_global_get_ex
+  assert
+  byte "ABC"
+  ==
+  assert
+`),
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &appA, &appB, &appC)
+	vb := endBlock(t, l, eval)
+	indexA := vb.Block().Payset[0].ApplicationID
+	indexB := vb.Block().Payset[1].ApplicationID
+	indexC := vb.Block().Payset[2].ApplicationID
+
+	fundA := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: indexA.Address(),
+		Amount:   1_000_000,
+	}
+
+	callA := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: indexA,
+		ForeignApps:   []basics.AppIndex{indexB, indexC},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fundA, &callA)
+	endBlock(t, l, eval)
+}
+
+// TestLocalChangesAcrossApps ensures that state changes are seen by other app
+// calls when using inners.
+func TestLocalChangesAcrossApps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appA := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+            // Call B : No arguments means: set caller's local "X" to "ABC"
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+            int OptIn;              itxn_field OnCompletion
+			itxn_submit
+
+            // Call C : Checks that caller's local X for app B is ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 2;     itxn_field ApplicationID
+            txn Applications 1;     itxn_field Applications // Pass on access to B
+			itxn_submit
+
+            // Call B again:  1 arg means it checks if caller's local X == ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+            byte "check, please";   itxn_field ApplicationArgs
+			itxn_submit
+
+            // Check self local state for B
+            global CurrentApplicationAddress
+            txn Applications 1
+            byte "X"
+            app_local_get_ex
+            assert
+            byte "ABC"
+            ==
+            assert
+`),
+	}
+
+	appB := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn NumAppArgs
+  bnz check						// 1 arg means check
+  // set
+  txn Sender
+  byte "X"
+  byte "ABC"
+  app_local_put
+  b end
+check:
+  txn Sender
+  byte "X"
+  app_local_get
+  byte "ABC"
+  ==
+  assert
+  b end
+`),
+		LocalStateSchema: basics.StateSchema{
+			NumByteSlice: 1,
+		},
+	}
+
+	appC := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn Sender
+  txn Applications 1
+  byte "X"
+  app_local_get_ex
+  assert
+  byte "ABC"
+  ==
+  assert
+`),
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &appA, &appB, &appC)
+	vb := endBlock(t, l, eval)
+	indexA := vb.Block().Payset[0].ApplicationID
+	indexB := vb.Block().Payset[1].ApplicationID
+	indexC := vb.Block().Payset[2].ApplicationID
+
+	fundA := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: indexA.Address(),
+		Amount:   1_000_000,
+	}
+
+	callA := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: indexA,
+		ForeignApps:   []basics.AppIndex{indexB, indexC},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fundA, &callA)
+	endBlock(t, l, eval)
 }
