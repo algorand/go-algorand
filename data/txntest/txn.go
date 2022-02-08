@@ -45,8 +45,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// Txn exists purely to make it easier to write a
-// transaction.Transaction in Go source.
+// Txn exists to simplify writing tests where transaction.Transaction might be unwieldy.
+// Txn simplifies testing in these ways:
+// * Provides a flat structure to simplify object construction.
+// * Defines convenience methods to help setup test state.
 type Txn struct {
 	Type protocol.TxType
 
