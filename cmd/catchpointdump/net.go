@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -29,10 +30,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 	tools "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
 )
@@ -81,12 +85,19 @@ var netCmd = &cobra.Command{
 		}
 
 		for _, addr := range addrs {
-			tarName, err := downloadCatchpoint(addr, round)
+			tarName, proto, err := downloadCatchpoint(addr, round)
 			if err != nil {
 				reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
 				continue
 			}
-			err = makeFileDump(addr, tarName)
+			genesisInitState := ledgercore.InitState{
+				Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+					UpgradeState: bookkeeping.UpgradeState{
+						CurrentProtocol: proto,
+					},
+				}},
+			}
+			err = makeFileDump(addr, tarName, genesisInitState)
 			if err != nil {
 				reportInfof("failed to make a dump from tar file for '%s' : %v", addr, err)
 				continue
@@ -147,33 +158,64 @@ func printDownloadProgressLine(progress int, barLength int, url string, dld int6
 	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
-func downloadCatchpoint(addr string, round int) (tarName string, err error) {
-	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
-	url := "http://" + addr + "/v1/" + genesisID + "/ledger/" + strconv.FormatUint(uint64(round), 36)
-	fmt.Printf("downloading from %s\n", url)
+func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCancel context.CancelFunc, err error) {
+	fmt.Printf("downloading %s from %s\n", hint, url)
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
 
-	timeoutContext, timeoutContextCancel := context.WithTimeout(context.Background(), config.GetDefaultLocal().MaxCatchpointDownloadDuration)
-	defer timeoutContextCancel()
+	timeoutContext, ctxCancel := context.WithTimeout(context.Background(), config.GetDefaultLocal().MaxCatchpointDownloadDuration)
 	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return
 	}
-	defer response.Body.Close()
 
 	// check to see that we had no errors.
 	switch response.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound: // server could not find a block with that round numbers.
-		err = fmt.Errorf("no catchpoint file for round %d", round)
+		err = fmt.Errorf("no %s for round %d", hint, round)
 		return
 	default:
 		err = fmt.Errorf("error response status code %d", response.StatusCode)
+		return
+	}
+
+	result = response.Body
+	return
+}
+
+func downloadCatchpoint(addr string, round int) (tarName string, proto protocol.ConsensusVersion, err error) {
+	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
+	urlTemplate := "http://" + addr + "/v1/" + genesisID + "/%s/" + strconv.FormatUint(uint64(round), 36)
+	catchpointURL := fmt.Sprintf(urlTemplate, "ledger")
+	blockURL := fmt.Sprintf(urlTemplate, "block")
+
+	blockStream, blockCtxCancel, err := getRemoteDataStream(blockURL, "block")
+	defer blockCtxCancel()
+	defer blockStream.Close()
+	if err != nil {
+		return
+	}
+
+	rawBlock, err := ioutil.ReadAll(blockStream)
+	if err != nil {
+		return
+	}
+	var rpcsBlock rpcs.EncodedBlockCert
+	err = protocol.Decode(rawBlock, &rpcsBlock)
+	if err != nil {
+		return
+	}
+	proto = rpcsBlock.Block.CurrentProtocol
+
+	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(catchpointURL, "catchpoint")
+	defer catchpointCtxCancel()
+	defer catchpointStream.Close()
+	if err != nil {
 		return
 	}
 
@@ -186,20 +228,20 @@ func downloadCatchpoint(addr string, round int) (tarName string, err error) {
 	tarName = dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
 	file, err2 := os.Create(tarName) // will create a file with 0666 permission.
 	if err2 != nil {
-		return tarName, err2
+		return tarName, proto, err2
 	}
 	defer func() {
 		err = file.Close()
 	}()
 	writeChunkSize := 64 * 1024
 
-	wdReader := util.MakeWatchdogStreamReader(response.Body, 4096, 4096, 2*time.Second)
+	wdReader := util.MakeWatchdogStreamReader(catchpointStream, 4096, 4096, 2*time.Second)
 	var totalBytes int
 	tempBytes := make([]byte, writeChunkSize)
 	lastProgressUpdate := time.Now()
 	progress := -25
-	printDownloadProgressLine(progress, 50, url, 0)
-	defer printDownloadProgressLine(0, 0, url, 0)
+	printDownloadProgressLine(progress, 50, catchpointURL, 0)
+	defer printDownloadProgressLine(0, 0, catchpointURL, 0)
 	var n int
 	for {
 		n, err = wdReader.Read(tempBytes)
@@ -209,26 +251,25 @@ func downloadCatchpoint(addr string, round int) (tarName string, err error) {
 		totalBytes += n
 		writtenBytes, err2 := file.Write(tempBytes[:n])
 		if err2 != nil || n != writtenBytes {
-			return tarName, err2
+			return tarName, proto, err2
 		}
 
 		err = wdReader.Reset()
 		if err != nil {
 			if err == io.EOF {
-				return tarName, nil
+				return tarName, proto, nil
 			}
 			return
 		}
 		if time.Since(lastProgressUpdate) > 50*time.Millisecond {
 			lastProgressUpdate = time.Now()
-			printDownloadProgressLine(progress, 50, url, int64(totalBytes))
+			printDownloadProgressLine(progress, 50, catchpointURL, int64(totalBytes))
 			progress++
 		}
 	}
 }
 
-func makeFileDump(addr string, tarFile string) error {
-	genesisInitState := ledgercore.InitState{}
+func makeFileDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
 	deleteLedgerFiles := func() {
 		os.Remove("./ledger.block.sqlite")
 		os.Remove("./ledger.block.sqlite-shm")

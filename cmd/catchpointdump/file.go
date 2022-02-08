@@ -33,6 +33,7 @@ import (
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -69,7 +70,15 @@ var fileCmd = &cobra.Command{
 		if tarSize == 0 {
 			reportErrorf("Empty file '%s' : %v", tarFile, err)
 		}
-		genesisInitState := ledgercore.InitState{}
+		// TODO: store CurrentProtocol in catchpoint file header.
+		// As a temporary workaround use a current protocol version.
+		genesisInitState := ledgercore.InitState{
+			Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: protocol.ConsensusCurrentVersion,
+				},
+			}},
+		}
 		cfg := config.GetDefaultLocal()
 		l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 		if err != nil {
