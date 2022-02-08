@@ -29,10 +29,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/protocol"
 	tools "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
 )
@@ -40,6 +42,8 @@ import (
 var networkName string
 var round int
 var relayAddress string
+var singleCatchpoint bool
+var downloadOnly bool
 
 const (
 	escapeCursorUp   = string("\033[A") // Cursor Up
@@ -52,21 +56,23 @@ func init() {
 	netCmd.Flags().StringVarP(&networkName, "net", "n", "", "Specify the network name ( i.e. mainnet.algorand.network )")
 	netCmd.Flags().IntVarP(&round, "round", "r", 0, "Specify the round number ( i.e. 7700000 )")
 	netCmd.Flags().StringVarP(&relayAddress, "relay", "p", "", "Relay address to use ( i.e. r-ru.algorand-mainnet.network:4160 )")
+	netCmd.Flags().BoolVarP(&singleCatchpoint, "single", "s", true, "Download/process only from a single relay")
+	netCmd.Flags().BoolVarP(&downloadOnly, "download", "l", false, "Download only, do not process")
 }
 
 var netCmd = &cobra.Command{
-	Use:   "net",
-	Short: "Download and decode (possibly all) catchpoint files from all or specified the relay(s) on the network for a particular round",
-	Long:  "Download and decode (possibly all) catchpoint files from all or specified the relay(s) on the network for a particular round",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, args []string) {
+	Use:          "net",
+	Short:        "Download and decode (possibly all) catchpoint files from possibly all or specified the relay(s) on the network for a particular round",
+	Long:         "Download and decode (possibly all) catchpoint files from possibly all or specified the relay(s) on the network for a particular round",
+	Args:         validateNoPosArgsFn,
+	SilenceUsage: true, // prevent printing usage info on error
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		if networkName == "" || round == 0 {
 			cmd.HelpFunc()(cmd, args)
-			return
+			return fmt.Errorf("network or round not set")
 		}
 
 		var addrs []string
-		var err error
 		if relayAddress != "" {
 			addrs = []string{relayAddress}
 		} else {
@@ -77,22 +83,32 @@ var netCmd = &cobra.Command{
 		}
 
 		for _, addr := range addrs {
-			catchpointFileBytes, err := downloadCatchpoint(addr)
-			if err != nil || catchpointFileBytes == nil {
+			var tarName string
+			tarName, err = downloadCatchpoint(addr, round)
+			if err != nil {
 				reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
 				continue
 			}
-			err = saveCatchpointTarFile(addr, catchpointFileBytes)
-			if err != nil {
-				reportInfof("failed to save catchpoint file for '%s' : %v", addr, err)
-				continue
+			genesisInitState := ledgercore.InitState{
+				Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+					UpgradeState: bookkeeping.UpgradeState{
+						CurrentProtocol: protocol.ConsensusCurrentVersion,
+					},
+				}},
 			}
-			err = makeFileDump(addr, catchpointFileBytes)
+			err = makeFileDump(addr, tarName, genesisInitState)
 			if err != nil {
 				reportInfof("failed to make a dump from tar file for '%s' : %v", addr, err)
 				continue
 			}
+			// clear possible errors from previous run: at this point we've been succeed
+			err = nil
+			if singleCatchpoint {
+				// a catchpoint processes successfully, exit if needed
+				break
+			}
 		}
+		return err
 	},
 }
 
@@ -144,132 +160,99 @@ func printDownloadProgressLine(progress int, barLength int, url string, dld int6
 	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
-func downloadCatchpoint(addr string) ([]byte, error) {
-	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
-	url := "http://" + addr + "/v1/" + genesisID + "/ledger/" + strconv.FormatUint(uint64(round), 36)
-	fmt.Printf("downloading from %s\n", url)
+func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCancel context.CancelFunc, err error) {
+	fmt.Printf("downloading %s from %s\n", hint, url)
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	timeoutContext, timeoutContextCancel := context.WithTimeout(context.Background(), config.GetDefaultLocal().MaxCatchpointDownloadDuration)
-	defer timeoutContextCancel()
+	timeoutContext, ctxCancel := context.WithTimeout(context.Background(), config.GetDefaultLocal().MaxCatchpointDownloadDuration)
 	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return nil, err
+		return
 	}
-	defer response.Body.Close()
 
 	// check to see that we had no errors.
 	switch response.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound: // server could not find a block with that round numbers.
-		return nil, fmt.Errorf("no catchpoint file for round %d", round)
+		err = fmt.Errorf("no %s for round %d", hint, round)
+		return
 	default:
-		return nil, fmt.Errorf("error response status code %d", response.StatusCode)
-	}
-	wdReader := util.MakeWatchdogStreamReader(response.Body, 4096, 4096, 2*time.Second)
-	outBytes := make([]byte, 0, 4096)
-	tempBytes := make([]byte, 4096)
-	lastProgressUpdate := time.Now()
-	progress := -25
-	printDownloadProgressLine(progress, 50, url, 0)
-	defer printDownloadProgressLine(0, 0, url, 0)
-	for {
-		n, err := wdReader.Read(tempBytes)
-		if err != nil {
-			if err == io.EOF {
-				outBytes = append(outBytes, tempBytes[:n]...)
-				return outBytes, nil
-			}
-			return nil, err
-		}
-		if cap(outBytes) < len(outBytes)+n {
-			// need to increase buffer.
-			newBuffer := make([]byte, cap(outBytes)+n, cap(outBytes)+1024*1024)
-			copy(newBuffer, outBytes)
-			copy(newBuffer[len(outBytes):], tempBytes[:n])
-			outBytes = newBuffer
-		} else {
-			outBytes = append(outBytes, tempBytes[:n]...)
-		}
-		err = wdReader.Reset()
-		if err != nil {
-			if err == io.EOF {
-				return outBytes, nil
-			}
-			return nil, err
-		}
-		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond {
-			lastProgressUpdate = time.Now()
-			printDownloadProgressLine(progress, 50, url, int64(len(outBytes)))
-			progress++
-		}
-	}
-}
-
-func printSaveProgressLine(progress int, barLength int, filename string, dld int64) {
-	if barLength == 0 {
-		fmt.Printf(escapeCursorUp+escapeDeleteLine+"[ Done ] Saved %s\n", filename)
+		err = fmt.Errorf("error response status code %d", response.StatusCode)
 		return
 	}
 
-	outString := "[" + strings.Repeat(escapeSquare, progress) + strings.Repeat(escapeDot, barLength-progress) + "] Saving " + filename + " ..."
-
-	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
+	result = response.Body
+	return
 }
 
-func saveCatchpointTarFile(addr string, catchpointFileBytes []byte) (err error) {
-	// make a directory:
+func downloadCatchpoint(addr string, round int) (tarName string, err error) {
+	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
+	urlTemplate := "http://" + addr + "/v1/" + genesisID + "/%s/" + strconv.FormatUint(uint64(round), 36)
+	catchpointURL := fmt.Sprintf(urlTemplate, "ledger")
+
+	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(catchpointURL, "catchpoint")
+	defer catchpointCtxCancel()
+	if err != nil {
+		return
+	}
+	defer catchpointStream.Close()
+
 	dirName := "./" + strings.Split(networkName, ".")[0] + "/" + strings.Split(addr, ".")[0]
 	os.RemoveAll(dirName)
 	err = os.MkdirAll(dirName, 0777)
 	if err != nil && !os.IsExist(err) {
 		return
 	}
-	destFileName := dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
-	file, err2 := os.Create(destFileName) // will create a file with 0666 permission.
+	tarName = dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
+	file, err2 := os.Create(tarName) // will create a file with 0666 permission.
 	if err2 != nil {
-		return err2
+		return tarName, err2
 	}
 	defer func() {
 		err = file.Close()
 	}()
 	writeChunkSize := 64 * 1024
-	lastProgressUpdate := time.Now()
-	fmt.Printf("\n")
-	printSaveProgressLine(0, 50, destFileName, 0)
-	progress := uint64(0)
-	defer printSaveProgressLine(0, 0, destFileName, 0)
-	total := len(catchpointFileBytes)
-	for {
-		writeSize := writeChunkSize
-		if len(catchpointFileBytes) < writeSize {
-			writeSize = len(catchpointFileBytes)
-		}
-		if writeSize <= 0 {
-			break
-		}
-		n, err2 := file.Write(catchpointFileBytes[:writeSize])
-		if err2 != nil || n != writeSize {
-			return err
-		}
-		catchpointFileBytes = catchpointFileBytes[n:]
-		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && total > 0 {
-			lastProgressUpdate = time.Now()
-			printSaveProgressLine(int(float64(progress)*50.0/float64(total)), 50, destFileName, int64(progress))
 
+	wdReader := util.MakeWatchdogStreamReader(catchpointStream, 4096, 4096, 2*time.Second)
+	var totalBytes int
+	tempBytes := make([]byte, writeChunkSize)
+	lastProgressUpdate := time.Now()
+	progress := -25
+	printDownloadProgressLine(progress, 50, catchpointURL, 0)
+	defer printDownloadProgressLine(0, 0, catchpointURL, 0)
+	var n int
+	for {
+		n, err = wdReader.Read(tempBytes)
+		if err != nil && err != io.EOF {
+			return
 		}
-		progress += uint64(n)
+		totalBytes += n
+		writtenBytes, err2 := file.Write(tempBytes[:n])
+		if err2 != nil || n != writtenBytes {
+			return tarName, err2
+		}
+
+		err = wdReader.Reset()
+		if err != nil {
+			if err == io.EOF {
+				return tarName, nil
+			}
+			return
+		}
+		if time.Since(lastProgressUpdate) > 50*time.Millisecond {
+			lastProgressUpdate = time.Now()
+			printDownloadProgressLine(progress, 50, catchpointURL, int64(totalBytes))
+			progress++
+		}
 	}
-	return
 }
 
-func makeFileDump(addr string, catchpointFileBytes []byte) error {
-	genesisInitState := ledgercore.InitState{}
+func makeFileDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
 	deleteLedgerFiles := func() {
 		os.Remove("./ledger.block.sqlite")
 		os.Remove("./ledger.block.sqlite-shm")
@@ -294,8 +277,21 @@ func makeFileDump(addr string, catchpointFileBytes []byte) error {
 	if err != nil {
 		reportErrorf("Unable to initialize catchup database : %v", err)
 	}
+
+	stats, err := os.Stat(tarFile)
+	if err != nil {
+		return err
+	}
+	tarSize := stats.Size()
+
+	reader, err := os.Open(tarFile)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
 	var fileHeader ledger.CatchpointFileHeader
-	fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, catchpointFileBytes)
+	fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, reader, tarSize)
 	if err != nil {
 		reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 	}
@@ -305,7 +301,7 @@ func makeFileDump(addr string, catchpointFileBytes []byte) error {
 	if err != nil {
 		return err
 	}
-	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile)
+	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, nil)
 	if err != nil {
 		return err
 	}

@@ -37,7 +37,7 @@ type EvalDelta struct {
 
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 
-	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactions"`
+	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are

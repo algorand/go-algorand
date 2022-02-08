@@ -282,8 +282,16 @@ type ConsensusParams struct {
 	// maximum sum of the lengths of the key and value of one app state entry
 	MaxAppSumKeyValueLens int
 
-	// maximum number of inner transactions that can be created by an app call
+	// maximum number of inner transactions that can be created by an app call.
+	// with EnableInnerTransactionPooling, limit is multiplied by MaxTxGroupSize
+	// and enforced over the whole group.
 	MaxInnerTransactions int
+
+	// should the number of inner transactions be pooled across group?
+	EnableInnerTransactionPooling bool
+
+	// provide greater isolation for clear state programs
+	IsolateClearState bool
 
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
@@ -443,8 +451,8 @@ var MaxStateDeltaKeys int
 // any version, used only for decoding purposes. Never decrease this value.
 var MaxLogCalls int
 
-// MaxInnerTransactions is the maximum number of inner transactions that may be created in an app call.
-var MaxInnerTransactions int
+// MaxInnerTransactionsPerDelta is the maximum number of inner transactions in one EvalDelta
+var MaxInnerTransactionsPerDelta int
 
 // MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
 // protocols, used for decoding purposes.
@@ -513,7 +521,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
-	checkSetMax(p.MaxInnerTransactions, &MaxInnerTransactions)
+	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
 }
 
@@ -1070,6 +1078,8 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 6 / AVM 1.1
 	vFuture.LogicSigVersion = 6
+	vFuture.EnableInnerTransactionPooling = true
+	vFuture.IsolateClearState = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
