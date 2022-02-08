@@ -1012,8 +1012,8 @@ func tkvToRpd(tkv basics.TealKeyValue) (desc []cdt.RuntimePropertyDescriptor) {
 	return
 }
 
-func makeArrayLength(rawArray []basics.TealValue) (desc []cdt.RuntimePropertyDescriptor) {
-	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(rawArray)), Type: "number"}
+func makeArrayLength(array []basics.TealValue) (desc []cdt.RuntimePropertyDescriptor) {
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
 	desc = append(desc, makePrimitive(field))
 	return
 }
