@@ -49,7 +49,7 @@ func TestHashSum(t *testing.T) {
 	a.Equal(Sha512_256Size, h.Size())
 
 	dgst := HashObj(TestingHashable{})
-	a.Equal(GenereicHashObj(h, TestingHashable{}), dgst[:])
+	a.Equal(GenericHashObj(h, TestingHashable{}), dgst[:])
 
 }
 

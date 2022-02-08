@@ -25,8 +25,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// ErrGetOutOfBound returned when trying to retrieve an element which is out of
-// the padded array bound.
+// ErrGetOutOfBound returned when trying to retrieve an element which is out of the padded array bound.
 var (
 	ErrGetOutOfBound = errors.New("can't get element out of padded array bound")
 )

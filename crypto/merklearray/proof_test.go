@@ -17,10 +17,12 @@
 package merklearray
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestProofSerialization(t *testing.T) {

@@ -193,7 +193,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
-	msgHash := crypto.GenereicHashObj(hfactory.NewHash(), b.Msg)
+	msgHash := crypto.GenericHashObj(hfactory.NewHash(), b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{

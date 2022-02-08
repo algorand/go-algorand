@@ -41,6 +41,7 @@ type Proof struct {
 // root hash. it corresponds to merkle verification path.
 type SingleLeafProof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Proof
 }
 
