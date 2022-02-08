@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -36,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
 	tools "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
 )
@@ -85,7 +83,7 @@ var netCmd = &cobra.Command{
 		}
 
 		for _, addr := range addrs {
-			tarName, proto, err := downloadCatchpoint(addr, round)
+			tarName, err := downloadCatchpoint(addr, round)
 			if err != nil {
 				reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
 				continue
@@ -93,7 +91,7 @@ var netCmd = &cobra.Command{
 			genesisInitState := ledgercore.InitState{
 				Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
 					UpgradeState: bookkeeping.UpgradeState{
-						CurrentProtocol: proto,
+						CurrentProtocol: protocol.ConsensusCurrentVersion,
 					},
 				}},
 			}
@@ -188,36 +186,17 @@ func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCanc
 	return
 }
 
-func downloadCatchpoint(addr string, round int) (tarName string, proto protocol.ConsensusVersion, err error) {
+func downloadCatchpoint(addr string, round int) (tarName string, err error) {
 	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
 	urlTemplate := "http://" + addr + "/v1/" + genesisID + "/%s/" + strconv.FormatUint(uint64(round), 36)
 	catchpointURL := fmt.Sprintf(urlTemplate, "ledger")
-	blockURL := fmt.Sprintf(urlTemplate, "block")
-
-	blockStream, blockCtxCancel, err := getRemoteDataStream(blockURL, "block")
-	defer blockCtxCancel()
-	defer blockStream.Close()
-	if err != nil {
-		return
-	}
-
-	rawBlock, err := ioutil.ReadAll(blockStream)
-	if err != nil {
-		return
-	}
-	var rpcsBlock rpcs.EncodedBlockCert
-	err = protocol.Decode(rawBlock, &rpcsBlock)
-	if err != nil {
-		return
-	}
-	proto = rpcsBlock.Block.CurrentProtocol
 
 	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(catchpointURL, "catchpoint")
 	defer catchpointCtxCancel()
-	defer catchpointStream.Close()
 	if err != nil {
 		return
 	}
+	defer catchpointStream.Close()
 
 	dirName := "./" + strings.Split(networkName, ".")[0] + "/" + strings.Split(addr, ".")[0]
 	os.RemoveAll(dirName)
@@ -228,7 +207,7 @@ func downloadCatchpoint(addr string, round int) (tarName string, proto protocol.
 	tarName = dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
 	file, err2 := os.Create(tarName) // will create a file with 0666 permission.
 	if err2 != nil {
-		return tarName, proto, err2
+		return tarName, err2
 	}
 	defer func() {
 		err = file.Close()
@@ -251,13 +230,13 @@ func downloadCatchpoint(addr string, round int) (tarName string, proto protocol.
 		totalBytes += n
 		writtenBytes, err2 := file.Write(tempBytes[:n])
 		if err2 != nil || n != writtenBytes {
-			return tarName, proto, err2
+			return tarName, err2
 		}
 
 		err = wdReader.Reset()
 		if err != nil {
 			if err == io.EOF {
-				return tarName, proto, nil
+				return tarName, nil
 			}
 			return
 		}
