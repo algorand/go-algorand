@@ -58,6 +58,7 @@ func init() {
 	netCmd.Flags().StringVarP(&relayAddress, "relay", "p", "", "Relay address to use ( i.e. r-ru.algorand-mainnet.network:4160 )")
 	netCmd.Flags().BoolVarP(&singleCatchpoint, "single", "s", true, "Download/process only from a single relay")
 	netCmd.Flags().BoolVarP(&downloadOnly, "download", "l", false, "Download only, do not process")
+	netCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 }
 
 var netCmd = &cobra.Command{
@@ -301,7 +302,7 @@ func makeFileDump(addr string, tarFile string, genesisInitState ledgercore.InitS
 	if err != nil {
 		return err
 	}
-	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, nil)
+	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
 	if err != nil {
 		return err
 	}
