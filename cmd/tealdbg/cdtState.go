@@ -170,7 +170,10 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				logs := itxn.EvalDelta.Logs
 				return makeLogsSlice(logs, 0, len(logs)-1, preview), nil
 			case innerTxnObjIDPrefix:
-				return makeInnerTxnImpl(&s.innerTxns[idx], idxs, preview), nil
+				return makeInnerTxnImpl(&itxn, idxs, preview), nil
+			case innerNestedTxnObjIDPrefix:
+				return makeInnerTxnsSlice(itxns, idxs, 0, len(itxns)-1, preview), nil
+			default:
 			}
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
 			switch parentObjID {
@@ -587,6 +590,7 @@ func decodeGroupTxnID(objID string) (int, bool) {
 
 var logObjIDPrefix = fmt.Sprintf("%s_id", logsObjID)
 var innerTxnObjIDPrefix = fmt.Sprintf("%s_id", innerTxnsObjID)
+var innerNestedTxnObjIDPrefix = fmt.Sprintf("%s_nested", innerTxnsObjID)
 
 func encodeNestedObjID(groupIndexes []int, prefix string) string {
 	encodedItxnID := prefix
@@ -604,6 +608,8 @@ func decodeNestedObjID(objID string) (string, []int, bool) {
 		prefix = logObjIDPrefix
 	} else if strings.HasPrefix(objID, innerTxnObjIDPrefix) {
 		prefix = innerTxnObjIDPrefix
+	} else if strings.HasPrefix(objID, innerNestedTxnObjIDPrefix) {
+		prefix = innerNestedTxnObjIDPrefix
 	} else {
 		return "", []int{}, false
 	}
@@ -626,6 +632,10 @@ func encodeLogsID(groupIndexes []int) string {
 
 func encodeInnerTxnID(groupIndexes []int) string {
 	return encodeNestedObjID(groupIndexes, innerTxnObjIDPrefix)
+}
+
+func encodeNestedInnerTxnID(groupIndexes []int) string {
+	return encodeNestedObjID(groupIndexes, innerNestedTxnObjIDPrefix)
 }
 
 func encodeArrayLength(objID string) string {
@@ -869,12 +879,12 @@ func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, pre
 	desc = makeTxnImpl(&txn.Txn, groupIndex, preview)
 
 	if len(txn.EvalDelta.Logs) > 0 {
-		logs := makeLogsSlice(txn.EvalDelta.Logs, 0, len(txn.EvalDelta.Logs), preview)
-		desc = append(desc, logs...)
+		logs := makeArray("logs", len(txn.EvalDelta.Logs), encodeLogsID(groupIndexes))
+		desc = append(desc, logs)
 	}
 	if len(txn.EvalDelta.InnerTxns) > 0 {
-		innerTxns := makeInnerTxnsSlice(txn.EvalDelta.InnerTxns, 0, len(txn.EvalDelta.InnerTxns), preview)
-		desc = append(desc, innerTxns...)
+		innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeNestedInnerTxnID(groupIndexes))
+		desc = append(desc, innerTxns)
 	}
 	return
 }
@@ -1059,10 +1069,12 @@ func makeLogsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescrip
 	return makeLogsSlice(s.logs, 0, len(s.logs)-1, preview)
 }
 
-func makeInnerTxnsSlice(stxns []transactions.SignedTxnWithAD, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+func makeInnerTxnsSlice(stxns []transactions.SignedTxnWithAD, groupIndexes []int, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	stxns = stxns[from : to+1]
 	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(stxns))
 	for i := 0; i < len(stxns); i++ {
-		groupIDs := []int{i}
+		groupIDs := groupIndexes
+		groupIDs = append(groupIDs, i)
 		item := makeObject(strconv.Itoa(i), encodeInnerTxnID(groupIDs))
 		if preview {
 			txnPreview := makeTxnPreview(stxns, i)
@@ -1074,7 +1086,7 @@ func makeInnerTxnsSlice(stxns []transactions.SignedTxnWithAD, from int, to int, 
 }
 
 func makeInnerTxnsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	return makeInnerTxnsSlice(s.innerTxns, 0, len(s.innerTxns), preview)
+	return makeInnerTxnsSlice(s.innerTxns, []int{}, 0, len(s.innerTxns)-1, preview)
 }
 
 func makeTealError(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
