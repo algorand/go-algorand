@@ -790,13 +790,13 @@ var signCmd = &cobra.Command{
 			for idx, txn := range txnGroups[group] {
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
-				}
-				if signerAddress != "" {
-					addr, err := basics.UnmarshalChecksumAddress(signerAddress)
-					if err != nil {
-						reportErrorf("Signer invalid txn[%d]: %v", idx, err)
+					if signerAddress != "" {
+						addr, err := basics.UnmarshalChecksumAddress(signerAddress)
+						if err != nil {
+							reportErrorf("Signer invalid txn[%d]: %v", idx, err)
+						}
+						txn.AuthAddr = addr
 					}
-					txn.AuthAddr = addr
 				}
 				txnGroup = append(txnGroup, *txn)
 			}
