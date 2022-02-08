@@ -3705,15 +3705,27 @@ func opAppLocalDel(cx *EvalContext) {
 	}
 
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
-	if err == nil {
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	// if deleting a non-existant value, do nothing, matching ledger behavior
+	// with previous BuildEvalDelta mechanism
+	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
+		if err != nil {
+			cx.err = err
+			return
+		}
 		if _, ok := cx.Txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
 			cx.Txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
 		}
 		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
 			Action: basics.DeleteAction,
 		}
-		err = cx.Ledger.DelLocal(addr, cx.appID, key, accountIdx)
 	}
+
+	err = cx.Ledger.DelLocal(addr, cx.appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3732,9 +3744,18 @@ func opAppGlobalDel(cx *EvalContext) {
 		return
 	}
 
-	cx.Txn.EvalDelta.GlobalDelta[key] = basics.ValueDelta{
-		Action: basics.DeleteAction,
+	// if deleting a non-existant value, do nothing, matching ledger behavior
+	// with previous BuildEvalDelta mechanism
+	if _, ok, err := cx.Ledger.GetGlobal(cx.appID, key); ok {
+		if err != nil {
+			cx.err = err
+			return
+		}
+		cx.Txn.EvalDelta.GlobalDelta[key] = basics.ValueDelta{
+			Action: basics.DeleteAction,
+		}
 	}
+
 	err := cx.Ledger.DelGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
