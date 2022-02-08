@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"os"
 	"strconv"
 	"strings"
@@ -668,22 +669,20 @@ var appQueryCmd = &cobra.Command{
 			reportErrorf("Unknown schema entry %s.\nDefined %s schema entries in %s:\n%s", param, scope, appHdr, lookup.EntryList())
 		}
 
-		var tealval basics.TealValue
+		var tealval generated.TealValue
 		if scope == "local" {
 			// Fetching local state. Get account information
-			ad, err := client.AccountData(account)
+			resp, err := client.AccountApplicationInformation(account, appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
-
-			// Get application local state
-			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
-			if !ok {
-				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
+			kvStore := *resp.AppLocalState.KeyValue
+			for _, kv := range kvStore {
+				if kv.Key == meta.Key {
+					tealval = kv.Value
+					break
+				}
 			}
-
-			kv := local.KeyValue
-			tealval = kv[meta.Key]
 		}
 
 		if scope == "global" {
@@ -694,19 +693,18 @@ var appQueryCmd = &cobra.Command{
 			}
 
 			// Get creator information
-			ad, err := client.AccountData(app.Params.Creator)
+			resp, err := client.AccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
-			// Get app params
-			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
-			if !ok {
-				reportErrorf(errorNoSuchApplication, appIdx)
+			kvStore := *resp.CreatedApp.GlobalState
+			for _, kv := range kvStore {
+				if kv.Key == meta.Key {
+					tealval = kv.Value
+					break
+				}
 			}
-
-			kv := params.GlobalState
-			tealval = kv[meta.Key]
 		}
 
 		var decoded string
@@ -716,7 +714,7 @@ var appQueryCmd = &cobra.Command{
 				if meta.Explicit {
 					reportErrorf("%s not set for %d.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != basics.TealUintType {
+			} else if basics.TealType(tealval.Type) != basics.TealUintType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			decoded = fmt.Sprintf("%d", tealval.Uint)
@@ -725,7 +723,7 @@ var appQueryCmd = &cobra.Command{
 				if meta.Explicit {
 					reportErrorf("%s not set for %d.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != basics.TealBytesType {
+			} else if basics.TealType(tealval.Type) != basics.TealBytesType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			raw := []byte(tealval.Bytes)

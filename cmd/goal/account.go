@@ -64,6 +64,7 @@ var (
 	mnemonic           string
 	dumpOutFile        string
 	listAccountInfo    bool
+	onlyShowAssetIds   bool
 )
 
 func init() {
@@ -126,6 +127,7 @@ func init() {
 	// Info flags
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
 	infoCmd.MarkFlagRequired("address")
+	infoCmd.Flags().BoolVar(&onlyShowAssetIds, "onlyShowAssetIds", false, "Only show ASA IDs and not pull asset metadata")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -483,7 +485,7 @@ var listCmd = &cobra.Command{
 
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
-			response, _ := client.AccountInformationV2(addr.Addr)
+			response, _ := client.AccountInformationV2(addr.Addr, true)
 			// it's okay to proceed without algod info
 
 			// Display this information to the user
@@ -500,7 +502,7 @@ var listCmd = &cobra.Command{
 			}
 
 			if listAccountInfo {
-				hasError := printAccountInfo(client, addr.Addr, response)
+				hasError := printAccountInfo(client, addr.Addr, false, response)
 				accountInfoError = accountInfoError || hasError
 			}
 		}
@@ -519,19 +521,19 @@ var infoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, true)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		hasError := printAccountInfo(client, accountAddress, response)
+		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIds, response)
 		if hasError {
 			os.Exit(1)
 		}
 	},
 }
 
-func printAccountInfo(client libgoal.Client, address string, account generatedV2.Account) bool {
+func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account generatedV2.Account) bool {
 	var createdAssets []generatedV2.Asset
 	if account.CreatedAssets != nil {
 		createdAssets = make([]generatedV2.Asset, len(*account.CreatedAssets))
@@ -611,31 +613,35 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, assetHolding := range heldAssets {
-		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
-		if err != nil {
-			hasError = true
-			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
-			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
+		if onlyShowAssetIds {
+			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetId)
+		} else {
+			assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
+			if err != nil {
+				hasError = true
+				fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
+				fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
+			}
+
+			amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
+
+			assetName := "<unnamed>"
+			if assetParams.Params.Name != nil {
+				_, assetName = unicodePrintable(*assetParams.Params.Name)
+			}
+
+			unitName := "units"
+			if assetParams.Params.UnitName != nil {
+				_, unitName = unicodePrintable(*assetParams.Params.UnitName)
+			}
+
+			frozen := ""
+			if assetHolding.IsFrozen {
+				frozen = " (frozen)"
+			}
+
+			fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetId, assetName, amount, unitName, frozen)
 		}
-
-		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
-
-		assetName := "<unnamed>"
-		if assetParams.Params.Name != nil {
-			_, assetName = unicodePrintable(*assetParams.Params.Name)
-		}
-
-		unitName := "units"
-		if assetParams.Params.UnitName != nil {
-			_, unitName = unicodePrintable(*assetParams.Params.UnitName)
-		}
-
-		frozen := ""
-		if assetHolding.IsFrozen {
-			frozen = " (frozen)"
-		}
-
-		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetId, assetName, amount, unitName, frozen)
 	}
 
 	fmt.Fprintln(report, "Created Apps:")
@@ -713,7 +719,7 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -758,7 +764,7 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}

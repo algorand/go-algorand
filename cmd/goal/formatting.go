@@ -17,6 +17,7 @@
 package main
 
 import (
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"unicode"
 	"unicode/utf8"
 
@@ -181,18 +182,18 @@ func heuristicFormatKey(key string) string {
 	return heuristicFormatStr(key)
 }
 
-func heuristicFormatVal(val basics.TealValue) basics.TealValue {
-	if val.Type == basics.TealUintType {
+func heuristicFormatVal(val generated.TealValue) generated.TealValue {
+	if basics.TealType(val.Type) == basics.TealUintType {
 		return val
 	}
 	val.Bytes = heuristicFormatStr(val.Bytes)
 	return val
 }
 
-func heuristicFormat(state map[string]basics.TealValue) map[string]basics.TealValue {
-	result := make(map[string]basics.TealValue)
-	for k, v := range state {
-		result[heuristicFormatKey(k)] = heuristicFormatVal(v)
+func heuristicFormat(state generated.TealKeyValueStore) generated.TealKeyValueStore {
+	result := make(generated.TealKeyValueStore, 0, len(state))
+	for _, kv := range state {
+		result = append(result, generated.TealKeyValue{Key: heuristicFormatKey(kv.Key), Value: heuristicFormatVal(kv.Value)})
 	}
 	return result
 }

@@ -357,6 +357,11 @@ type rawFormat struct {
 	Format string `url:"format"`
 }
 
+type accountInformationParams struct {
+	Format string `url:"format"`
+	Include string `url:"include"`
+}
+
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
@@ -402,8 +407,12 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 }
 
 // AccountInformationV2 gets the AccountData associated with the passed address
-func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
+func (client RestClient) AccountInformationV2(address string, includeAppAssets bool) (response generatedV2.Account, err error) {
+	if includeAppAssets {
+		err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), accountInformationParams{Include: "all"})
+	} else {
+		err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), accountInformationParams{Include: "none"})
+	}
 	return
 }
 
@@ -450,6 +459,18 @@ func (client RestClient) PendingTransactionInformation(transactionID string) (re
 func (client RestClient) PendingTransactionInformationV2(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)
+	return
+}
+
+// AccountApplicationInformation gets account information about a given app.
+func (client RestClient) AccountApplicationInformation(accountAddress string, applicationID uint64) (response generatedV2.AccountApplicationResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), nil)
+	return
+}
+
+// AccountAssetInformation gets account information about a given app.
+func (client RestClient) AccountAssetInformation(accountAddress string, assetID uint64) (response generatedV2.AccountAssetResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
 	return
 }
 

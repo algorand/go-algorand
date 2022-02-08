@@ -656,10 +656,28 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 }
 
 // AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string) (resp generatedV2.Account, err error) {
+func (c *Client) AccountInformationV2(account string, includeAppAssets bool) (resp generatedV2.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformationV2(account)
+		resp, err = algod.AccountInformationV2(account, includeAppAssets)
+	}
+	return
+}
+
+// AccountApplicationInformation gets account information about a given app.
+func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp generatedV2.AccountApplicationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountApplicationInformation(accountAddress, applicationID)
+	}
+	return
+}
+
+// AccountAssetInformation gets account information about a given app.
+func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp generatedV2.AccountAssetResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountAssetInformation(accountAddress, assetID)
 	}
 	return
 }
@@ -1105,7 +1123,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 
 			for _, acc := range accounts {
 				var info generatedV2.Account
-				if info, err = client.AccountInformationV2(acc.String()); err != nil {
+				if info, err = client.AccountInformationV2(acc.String(), true); err != nil {
 					// ignore error - accounts might have app addresses that were not funded
 					continue
 				}
