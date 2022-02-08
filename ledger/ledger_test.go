@@ -688,6 +688,10 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	badTx.ApplicationID = 0
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
 	a.Error(err)
+	a.Contains(err.Error(), "ApprovalProgram: invalid program (empty)")
+	badTx.ApprovalProgram = []byte{242}
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
 	a.Contains(err.Error(), "ApprovalProgram: invalid version")
 
 	correctAppCall.ApplicationID = appIdx

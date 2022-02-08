@@ -19,18 +19,16 @@ package internal
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 type logicLedger struct {
-	aidx    basics.AppIndex
-	creator basics.Address
-	cow     cowForLogicLedger
+	cow cowForLogicLedger
 }
 
 type cowForLogicLedger interface {
@@ -38,9 +36,7 @@ type cowForLogicLedger interface {
 	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
 	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
 	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
-	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
-	MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
 
@@ -54,39 +50,18 @@ type cowForLogicLedger interface {
 	incTxnCount()
 }
 
-func newLogicLedger(cow cowForLogicLedger, aidx basics.AppIndex) (*logicLedger, error) {
-	if aidx == basics.AppIndex(0) {
-		return nil, fmt.Errorf("cannot make logic ledger for app index 0")
+func newLogicLedger(cow cowForLogicLedger) *logicLedger {
+	return &logicLedger{
+		cow: cow,
 	}
-
-	al := &logicLedger{
-		aidx: aidx,
-		cow:  cow,
-	}
-
-	// Fetch app creator so we don't have to look it up every time we get/set/del
-	// a key for this app's global state
-	creator, err := al.fetchAppCreator(al.aidx)
-	if err != nil {
-		return nil, err
-	}
-	al.creator = creator
-
-	return al, nil
 }
 
-func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
-	// Fetch record with pending rewards applied
+func (al *logicLedger) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
 	record, err := al.cow.Get(addr, true)
 	if err != nil {
-		return
+		return ledgercore.AccountData{}, err
 	}
-
-	return record.MicroAlgos, nil
-}
-
-func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
-	return al.cow.MinBalance(addr, proto)
+	return record, nil
 }
 
 func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
@@ -98,10 +73,6 @@ func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
 		return record.AuthAddr, nil
 	}
 	return addr, nil
-}
-
-func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return al.cow.GetCreatableID(groupIdx)
 }
 
 func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
@@ -182,34 +153,20 @@ func (al *logicLedger) LatestTimestamp() int64 {
 	return al.cow.prevTimestamp()
 }
 
-func (al *logicLedger) ApplicationID() basics.AppIndex {
-	return al.aidx
-}
-
-func (al *logicLedger) CreatorAddress() basics.Address {
-	return al.creator
-}
-
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = al.aidx
-	}
 	return al.cow.allocated(addr, appIdx, false)
 }
 
 func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = al.aidx
-	}
 	return al.cow.GetKey(addr, appIdx, false, key, accountIdx)
 }
 
-func (al *logicLedger) SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error {
-	return al.cow.SetKey(addr, al.aidx, false, key, value, accountIdx)
+func (al *logicLedger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
+	return al.cow.SetKey(addr, appIdx, false, key, value, accountIdx)
 }
 
-func (al *logicLedger) DelLocal(addr basics.Address, key string, accountIdx uint64) error {
-	return al.cow.DelKey(addr, al.aidx, false, key, accountIdx)
+func (al *logicLedger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
+	return al.cow.DelKey(addr, appIdx, false, key, accountIdx)
 }
 
 func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, error) {
@@ -226,9 +183,6 @@ func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, 
 }
 
 func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = al.aidx
-	}
 	addr, err := al.fetchAppCreator(appIdx)
 	if err != nil {
 		return basics.TealValue{}, false, err
@@ -236,16 +190,20 @@ func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.Tea
 	return al.cow.GetKey(addr, appIdx, true, key, 0)
 }
 
-func (al *logicLedger) SetGlobal(key string, value basics.TealValue) error {
-	return al.cow.SetKey(al.creator, al.aidx, true, key, value, 0)
+func (al *logicLedger) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
+	creator, err := al.fetchAppCreator(appIdx)
+	if err != nil {
+		return err
+	}
+	return al.cow.SetKey(creator, appIdx, true, key, value, 0)
 }
 
-func (al *logicLedger) DelGlobal(key string) error {
-	return al.cow.DelKey(al.creator, al.aidx, true, key, 0)
-}
-
-func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
-	return al.cow.BuildEvalDelta(al.aidx, txn)
+func (al *logicLedger) DelGlobal(appIdx basics.AppIndex, key string) error {
+	creator, err := al.fetchAppCreator(appIdx)
+	if err != nil {
+		return err
+	}
+	return al.cow.DelKey(creator, appIdx, true, key, 0)
 }
 
 func (al *logicLedger) balances() (apply.Balances, error) {
@@ -256,23 +214,22 @@ func (al *logicLedger) balances() (apply.Balances, error) {
 	return balances, nil
 }
 
-func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
-	var ad transactions.ApplyData
-
+func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
+	txn := &ep.TxnGroup[gi]
 	balances, err := al.balances()
 	if err != nil {
-		return ad, err
+		return err
 	}
 
 	// move fee to pool
-	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = balances.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
 	if err != nil {
-		return ad, err
+		return err
 	}
 
-	err = apply.Rekey(balances, tx)
+	err = apply.Rekey(balances, &txn.Txn)
 	if err != nil {
-		return ad, err
+		return err
 	}
 
 	// compared to eval.transaction() it may seem strange that we
@@ -286,26 +243,33 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 	// first glance.
 	al.cow.incTxnCount()
 
-	switch tx.Type {
+	switch txn.Txn.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.Payment(txn.Txn.PaymentTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, spec, &ad, al.Round())
+		err = apply.Keyreg(txn.Txn.KeyregTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData,
+			al.Round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, spec, &ad, al.cow.txnCounter())
+		err = apply.AssetConfig(txn.Txn.AssetConfigTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData,
+			al.cow.txnCounter())
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.AssetTransfer(txn.Txn.AssetTransferTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
+
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
+
+	case protocol.ApplicationCallTx:
+		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, balances, &txn.ApplyData,
+			gi, ep, al.cow.txnCounter())
 
 	default:
-		err = fmt.Errorf("%s tx in AVM", tx.Type)
+		err = fmt.Errorf("%s tx in AVM", txn.Txn.Type)
 	}
 	if err != nil {
-		return ad, err
+		return err
 	}
 
 	// We don't check min balances during in app txns.
@@ -314,6 +278,10 @@ func (al *logicLedger) Perform(tx *transactions.Transaction, spec transactions.S
 	// it when the top-level txn concludes, as because cow will return
 	// all changed accounts in modifiedAccounts().
 
-	return ad, nil
+	return nil
 
+}
+
+func (al *logicLedger) Counter() uint64 {
+	return al.cow.txnCounter()
 }
