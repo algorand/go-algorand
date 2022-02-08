@@ -61,18 +61,18 @@ func init() {
 }
 
 var netCmd = &cobra.Command{
-	Use:   "net",
-	Short: "Download and decode (possibly all) catchpoint files from possibly all or specified the relay(s) on the network for a particular round",
-	Long:  "Download and decode (possibly all) catchpoint files from possibly all or specified the relay(s) on the network for a particular round",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, args []string) {
+	Use:          "net",
+	Short:        "Download and decode (possibly all) catchpoint files from possibly all or specified the relay(s) on the network for a particular round",
+	Long:         "Download and decode (possibly all) catchpoint files from possibly all or specified the relay(s) on the network for a particular round",
+	Args:         validateNoPosArgsFn,
+	SilenceUsage: true, // prevent printing usage info on error
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		if networkName == "" || round == 0 {
 			cmd.HelpFunc()(cmd, args)
-			return
+			return fmt.Errorf("network or round not set")
 		}
 
 		var addrs []string
-		var err error
 		if relayAddress != "" {
 			addrs = []string{relayAddress}
 		} else {
@@ -83,7 +83,8 @@ var netCmd = &cobra.Command{
 		}
 
 		for _, addr := range addrs {
-			tarName, err := downloadCatchpoint(addr, round)
+			var tarName string
+			tarName, err = downloadCatchpoint(addr, round)
 			if err != nil {
 				reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
 				continue
@@ -100,11 +101,14 @@ var netCmd = &cobra.Command{
 				reportInfof("failed to make a dump from tar file for '%s' : %v", addr, err)
 				continue
 			}
+			// clear possible errors from previous run: at this point we've been succeed
+			err = nil
 			if singleCatchpoint {
 				// a catchpoint processes successfully, exit if needed
 				break
 			}
 		}
+		return err
 	},
 }
 

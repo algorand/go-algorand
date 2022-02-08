@@ -66,7 +66,6 @@ var fileCmd = &cobra.Command{
 			reportErrorf("Unable to stat '%s' : %v", tarFile, err)
 		}
 		tarSize := stats.Size()
-
 		if tarSize == 0 {
 			reportErrorf("Empty file '%s' : %v", tarFile, err)
 		}
