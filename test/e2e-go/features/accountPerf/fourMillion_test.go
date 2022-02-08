@@ -35,21 +35,32 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const roundDelay = uint64(400) // should be greate than numberOfThreads
+const roundDelay = uint64(400) // should be greater than numberOfThreads
 const numberOfThreads = 256
 const printFreequency = 10
 const groupTransactions = false
-const channelDepth = 1
+const channelDepth = 100
 
 var maxTxGroupSize int
+
+type psKey struct {
+	sk *crypto.SignatureSecrets
+	pk basics.Address
+}
+
+type txnKey struct {
+	sk *crypto.SignatureSecrets
+	tx transactions.Transaction
+}
 
 func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
 	for stxn := range sigTxnChan {
 		if stxn == nil {
 			break
 		}
-		for x := 0; x < 20; x++ { // retry only 20 times
-			_, err := c.BroadcastTransaction(*stxn)
+		var err error
+		for x := 0; x < 5; x++ { // retry only 20 times
+			_, err = c.BroadcastTransaction(*stxn)
 			if err == nil {
 				break
 			}
@@ -60,13 +71,13 @@ func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan
 	queueWg.Done()
 }
 
-func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnGrpChan <-chan *[]transactions.SignedTxn, errChan chan<- error) {
+func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnGrpChan <-chan []transactions.SignedTxn, errChan chan<- error) {
 	for stxns := range sigTxnGrpChan {
 		if stxns == nil {
 			break
 		}
 		for x := 0; x < 20; x++ { // retry only 20 times
-			err := c.BroadcastTransactionGroup(*stxns)
+			err := c.BroadcastTransactionGroup(stxns)
 			if err == nil {
 				break
 			}
@@ -80,30 +91,26 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 func signer(
 	sigWg *sync.WaitGroup,
 	client libgoal.Client,
-	txnChan <-chan *transactions.Transaction,
+	txnChan <-chan *txnKey,
 	sigTxnChan chan<- *transactions.SignedTxn,
 	errChan chan<- error) {
 
-	for txn := range txnChan {
-		if txn == nil {
+	for tk := range txnChan {
+		if tk == nil {
 			continue
 		}
-		walletHandle, err := client.GetUnencryptedWalletHandle()
-		handleError(err, "Error GetUnencryptedWalletHandle", errChan)
-
-		stxn, err := client.SignTransactionWithWallet(walletHandle, nil, *txn)
-		handleError(err, "Error SignTransactionWithWallet", errChan)
-
+		stxn := tk.tx.Sign(tk.sk)
 		sigTxnChan <- &stxn
 	}
 	sigWg.Done()
 }
 
+/*
 func signerGrpTxn(
 	sigWg *sync.WaitGroup,
 	client libgoal.Client,
-	txnChan <-chan *transactions.Transaction,
-	sigTxnGrpChan chan<- *[]transactions.SignedTxn,
+	txnChan <-chan *txnKey,
+	sigTxnGrpChan chan<- []transactions.SignedTxn,
 	errChan chan<- error) {
 
 	groupChan := make(chan []transactions.Transaction, 1)
@@ -116,21 +123,32 @@ func signerGrpTxn(
 	go func() {
 		for tGroup := range groupChan {
 			gid, err := client.GroupID(tGroup)
-			handleError(err, "Error GetUnencryptedWalletHandle", errChan)
+			handleError(err, "Error GroupID", errChan)
 
 			var stxns []transactions.SignedTxn
 			for i, _ := range tGroup {
 				tGroup[i].Group = gid
 
-				walletHandle, err := client.GetUnencryptedWalletHandle()
+				var walletHandle []byte
+				var err error
+				for x := 0; x < 20; x++ {
+					walletHandle, err = client.GetUnencryptedWalletHandle()
+					if err == nil {
+						break
+					}
+				}
 				handleError(err, "Error GetUnencryptedWalletHandle", errChan)
 
-				stxn, err := client.SignTransactionWithWallet(walletHandle, nil, tGroup[i])
+				for x := 0; x < 20; x++ {
+					stxn, err := client.SignTransactionWithWallet(walletHandle, nil, tGroup[i])
+					if err == nil {
+						stxns = append(stxns, stxn)
+						break
+					}
+				}
 				handleError(err, "Error SignTransactionWithWallet", errChan)
-
-				stxns = append(stxns, stxn)
 			}
-			sigTxnGrpChan <- &stxns
+			sigTxnGrpChan <- stxns
 		}
 		groupWg.Done()
 	}()
@@ -166,7 +184,7 @@ func signerGrpTxn(
 	groupWg.Wait()
 	sigWg.Done()
 }
-
+*/
 func zeroSub(a, b uint64) uint64 {
 	if a > b {
 		return a - b
@@ -193,27 +211,36 @@ func Test5MAssets(t *testing.T) {
 
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	require.NoError(t, err)
-	baseAcct := accountList[0].Address
+	// get the wallet account
+	wAcct := accountList[0].Address
 
-	txnChan := make(chan *transactions.Transaction, channelDepth)
+	suggestedParams, err := client.SuggestedParams()
+	require.NoError(t, err)
+	var genesisHash crypto.Digest
+	copy(genesisHash[:], suggestedParams.GenesisHash)
+
+	// fund the non-wallet base account
+	ba := generateKeys(1)
+	baseAcct := ba[0]
+	sender, err := basics.UnmarshalChecksumAddress(wAcct)
+	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 100000000000000, 1, genesisHash)
+	err = signAndBroadcastTransaction(0, &satxn, client, &fixture)
+	require.NoError(t, err)
+
+	txnChan := make(chan *txnKey, channelDepth)
 	sigTxnChan := make(chan *transactions.SignedTxn, channelDepth)
-	sigTxnGrpChan := make(chan *[]transactions.SignedTxn, channelDepth)
+	sigTxnGrpChan := make(chan []transactions.SignedTxn, channelDepth)
 	errChan := make(chan error, channelDepth)
 	stopChan := make(chan struct{}, 1)
 
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		sigWg.Add(1)
 		if groupTransactions {
-			go signerGrpTxn(&sigWg, client, txnChan, sigTxnGrpChan, errChan)
+			//			go signerGrpTxn(&sigWg, client, txnChan, sigTxnGrpChan, errChan)
 		} else {
 			go signer(&sigWg, client, txnChan, sigTxnChan, errChan)
 		}
 	}
-
-	suggestedParams, err := client.SuggestedParams()
-	require.NoError(t, err)
-	var genesisHash crypto.Digest
-	copy(genesisHash[:], suggestedParams.GenesisHash)
 
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		queueWg.Add(1)
@@ -252,37 +279,14 @@ func Test5MAssets(t *testing.T) {
 	scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, stopChan)
 }
 
-func activateAccountTransaction(
-	t *testing.T,
-	client libgoal.Client,
-	round uint64,
-	sender basics.Address,
-	tLife uint64,
-	genesisHash crypto.Digest) (txn transactions.Transaction, receiver basics.Address) {
-
-	walletHandle, err := client.GetUnencryptedWalletHandle()
-	require.NoError(t, err)
-
-	address, err := client.GenerateAddress(walletHandle)
-	require.NoError(t, err)
-
-	receiver, err = basics.UnmarshalChecksumAddress(address)
-	require.NoError(t, err)
-
-	sround := zeroSub(round, roundDelay)
-	txn = transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sender,
-			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(sround),
-			LastValid:   basics.Round(sround + tLife),
-			GenesisHash: genesisHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 100000000},
-		},
+func generateKeys(numAccounts int) (keys []psKey) {
+	keys = make([]psKey, 0, numAccounts)
+	var seed crypto.Seed
+	for a := 0; a < numAccounts; a++ {
+		crypto.RandBytes(seed[:])
+		privateKey := crypto.GenerateSignatureSecrets(seed)
+		publicKey := basics.Address(privateKey.SignatureVerifier)
+		keys = append(keys, psKey{pk: publicKey, sk: privateKey})
 	}
 	return
 }
@@ -375,9 +379,9 @@ func sendAssetTransaction(
 func scenarioA(
 	t *testing.T,
 	fixture *fixtures.RestClientFixture,
-	baseAcct string,
+	baseAcct psKey,
 	genesisHash crypto.Digest,
-	txnChan chan<- *transactions.Transaction,
+	txnChan chan<- *txnKey,
 	stopChan <-chan struct{}) {
 
 	client := fixture.LibGoalClient
@@ -388,49 +392,54 @@ func scenarioA(
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
-	sender, err := basics.UnmarshalChecksumAddress(baseAcct)
-	require.NoError(t, err)
+	balance := uint64(200000000) // 100300000 for (1002 assets)
 
 	params, err := client.SuggestedParams()
 	require.NoError(t, err)
 	tLife := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)].MaxTxnLife
 
-	createdAccounts := make([]basics.Address, 0, numberOfAccounts)
-
-	round := uint64(0)
-
+	round := uint64(1)
 	totalAssetAmount := uint64(0)
 
 	defer func() {
 		close(txnChan)
 	}()
 
+	xround := uint64(0)
+
 	fmt.Println("Creating accounts...")
 
 	// create 6K accounts
-	for txi := uint64(0); txi < numberOfAccounts; txi++ {
+	keys := generateKeys(int(numberOfAccounts))
+	for i, key := range keys {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
 		default:
 		}
-		if int(txi)%printFreequency == 0 {
-			fmt.Println("account create txn: ", txi)
+		if i%printFreequency == 0 {
+			fmt.Println("account create txn: ", i)
 		}
-		txn, newAccount := activateAccountTransaction(t, client, round, sender, tLife, genesisHash)
-		txnChan <- &txn
-
-		createdAccounts = append(createdAccounts, newAccount)
+		txn := sendAlgoTransaction(t, round, baseAcct.pk, key.pk, balance, tLife, genesisHash)
+		tk := txnKey{tx: txn, sk: baseAcct.sk}
+		txnChan <- &tk
 		round++
+		if round%(tLife/2) == 0 {
+			txnChan <- nil
+			round = checkPoint(round, 0, fixture)
+			require.Greater(t, round, uint64(0))
+			xround = round
+		}
 	}
 
 	txnChan <- nil
 	round = checkPoint(round, 0, fixture)
-	xround := round
+	require.Greater(t, round, uint64(0))
+	xround = round
 	fmt.Println("Creating assets...")
 
 	// create 6M unique assets by a different 6,000 accounts
-	for nai, na := range createdAccounts {
+	for nai, na := range keys {
 		for asi := uint64(0); asi < assetsPerAccount; asi++ {
 			select {
 			case <-stopChan:
@@ -441,28 +450,39 @@ func scenarioA(
 			if nai%printFreequency == 0 && int(asi)%printFreequency == 0 {
 				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
-			atx := createAssetTransaction(t, round, na, tLife, 90000000+round, genesisHash)
-			txnChan <- &atx
+			atx := createAssetTransaction(t, round, na.pk, tLife, 90000000+round, genesisHash)
+			tk := txnKey{tx: atx, sk: na.sk}
+			txnChan <- &tk
 			totalAssetAmount += 90000000 + round
 			round++
+			if round%(tLife/2) == 0 {
+				txnChan <- nil
+				round = checkPoint(round, 0, fixture)
+				require.Greater(t, round, uint64(0))
+				xround = round
+			}
+
 		}
 	}
 
 	txnChan <- nil
 	round = checkPoint(round, xround, fixture)
+	require.Greater(t, round, uint64(0))
 	xround = round
 	fmt.Println("Opt-in assets...")
 
 	// have a single account opted in all of them
-	ownAllAccount := createdAccounts[numberOfAccounts-1]
-	sendAlgoTx := sendAlgoTransaction(t, round, sender, ownAllAccount, 100000000000, tLife, genesisHash)
-	txnChan <- &sendAlgoTx
+	ownAllAccount := keys[numberOfAccounts-1]
+	// make ownAllAccount very rich
+	sendAlgoTx := sendAlgoTransaction(t, round, baseAcct.pk, ownAllAccount.pk, 100000000000, tLife, genesisHash)
+	tk := txnKey{tx: sendAlgoTx, sk: baseAcct.sk}
+	txnChan <- &tk
 
-	for acci, nacc := range createdAccounts {
+	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := client.AccountInformationV2(nacc.String())
+		info, err := client.AccountInformationV2(nacc.pk.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -477,28 +497,37 @@ func scenarioA(
 			optInT := sendAssetTransaction(
 				t,
 				round,
-				ownAllAccount,
+				ownAllAccount.pk,
 				tLife,
 				genesisHash,
 				basics.AssetIndex(asset.AssetId),
-				ownAllAccount,
+				ownAllAccount.pk,
 				uint64(0))
-			txnChan <- &optInT
+			tk := txnKey{tx: optInT, sk: ownAllAccount.sk}
+			txnChan <- &tk
 			round++
+			if round%(tLife/2) == 0 {
+				txnChan <- nil
+				round = checkPoint(round, 0, fixture)
+				require.Greater(t, round, uint64(0))
+				xround = round
+			}
+
 		}
 	}
 
 	txnChan <- nil
 	round = checkPoint(round, xround, fixture)
+	require.Greater(t, round, uint64(0))
 	xround = round
 	fmt.Println("Transfer assets...")
 
 	// and owning all of them
-	for acci, nacc := range createdAccounts {
+	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := client.AccountInformationV2(nacc.String())
+		info, err := client.AccountInformationV2(nacc.pk.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -513,23 +542,32 @@ func scenarioA(
 			optInT := sendAssetTransaction(
 				t,
 				round,
-				nacc,
+				nacc.pk,
 				tLife,
 				genesisHash,
 				basics.AssetIndex(asset.AssetId),
-				ownAllAccount,
+				ownAllAccount.pk,
 				asset.Amount)
-			txnChan <- &optInT
+			tk := txnKey{tx: optInT, sk: nacc.sk}
+			txnChan <- &tk
 			round++
+			if round%(tLife/2) == 0 {
+				txnChan <- nil
+				round = checkPoint(round, 0, fixture)
+				require.Greater(t, round, uint64(0))
+				xround = round
+			}
+
 		}
 	}
 
 	txnChan <- nil
 	round = checkPoint(round, xround, fixture)
+	require.Greater(t, round, uint64(0))
 	xround = round
 
 	// Verify the assets are transfered here
-	info, err := client.AccountInformationV2(ownAllAccount.String())
+	info, err := client.AccountInformationV2(ownAllAccount.pk.String())
 	require.NoError(t, err)
 	require.Equal(t, int(numberOfAssets), len(*info.Assets))
 	tAssetAmt := uint64(0)
@@ -558,11 +596,34 @@ func checkPoint(round, xround uint64, fixture *fixtures.RestClientFixture) uint6
 		round = (round-xround+uint64(maxTxGroupSize-1))/uint64(maxTxGroupSize) + xround
 	}
 	fmt.Printf("Waiting for round %d...", int(round))
-	err := fixture.WaitForRound(round, 200*time.Second)
+	err := fixture.WaitForRound(round, channelDepth*time.Millisecond*200*1000)
 	if err == nil {
 		fmt.Printf("done\n")
 	} else {
 		fmt.Printf("failed\n")
+		return 0
 	}
 	return round
+}
+
+func signAndBroadcastTransaction(
+	round uint64,
+	txn *transactions.Transaction,
+	client libgoal.Client,
+	fixture *fixtures.RestClientFixture) error {
+
+	walletHandle, err := client.GetUnencryptedWalletHandle()
+	if err != nil {
+		return err
+	}
+	stxn, err := client.SignTransactionWithWallet(walletHandle, nil, *txn)
+	if err != nil {
+		return err
+	}
+	_, err = client.BroadcastTransaction(stxn)
+	if err != nil {
+		return err
+	}
+	err = fixture.WaitForRound(round, time.Millisecond*2000)
+	return err
 }

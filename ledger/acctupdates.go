@@ -1317,6 +1317,11 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 					return d, rnd, rewardsVersion, rewardsLevel, nil
 				}
 			}
+			au.log.Warnf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+			au.log.Warnf("%+v", addr)
+			au.log.Warnf("deltas len: %d", len(au.deltas))
+			au.log.Warnf("%+v", macct)
+			au.log.Warnf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 		} else {
 			// we know that the account in not in the deltas - so there is no point in scanning it.
 			// we've going to fall back to search in the database, but before doing so, we should
