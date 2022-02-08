@@ -17,9 +17,9 @@
 package merklesignature
 
 import (
+	"context"
 	"runtime"
 	"sync"
-	"sync/atomic"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -28,7 +28,8 @@ import (
 func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
 	numOfKeysPerRoutine, _ := calculateRanges(numberOfKeys)
 
-	var terminate int64
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	defer ctxCancel()
 
 	errors := make(chan error, 1)
 	defer close(errors)
@@ -48,13 +49,13 @@ func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
 		wg.Add(1)
 		go func(startIdx, endIdx uint64, keys []crypto.FalconSigner) {
 			defer wg.Done()
-			if err := generateKeysForRange(startIdx, endIdx, &terminate, keys); err != nil {
+			if err := generateKeysForRange(ctx, startIdx, endIdx, keys); err != nil {
 				// write to the error channel, if it's not full already.
 				select {
 				case errors <- err:
 				default:
 				}
-				atomic.StoreInt64(&terminate, 1)
+				ctxCancel()
 			}
 		}(i, endIdx, keys)
 	}
@@ -80,10 +81,10 @@ func calculateRanges(numberOfKeys uint64) (numOfKeysPerRoutine uint64, numOfRout
 	return
 }
 
-func generateKeysForRange(startIdx uint64, endIdx uint64, terminate *int64, keys []crypto.FalconSigner) error {
+func generateKeysForRange(ctx context.Context, startIdx uint64, endIdx uint64, keys []crypto.FalconSigner) error {
 	for k := startIdx; k < endIdx; k++ {
-		if atomic.LoadInt64(terminate) != 0 {
-			return nil
+		if ctx.Err() != nil {
+			break
 		}
 		sigAlgo, err := crypto.NewFalconSigner()
 		if err != nil {
