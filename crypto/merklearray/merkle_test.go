@@ -83,8 +83,6 @@ func (a TestRepeatingArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return a.item, nil
 }
 
-const OutOfBoundErrorString = "larger than leaf count"
-
 func TestMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -236,7 +234,7 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 
 	_, err = tree.Prove([]uint64{4})
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundErrorString)
+	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// prove on nothing
 	proof, err := tree.Prove(nil)
@@ -273,12 +271,12 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	// element in the out of the inner array
 	_, err = tree.Prove([]uint64{5})
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundErrorString)
+	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// element in the padded array - bottom leaf
 	_, err = tree.Prove([]uint64{8})
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundErrorString)
+	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// prove on nothing
 	proof, err := tree.Prove(nil)
@@ -319,11 +317,11 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 
 	err = Verify(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundErrorString)
+	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = Verify(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundErrorString)
+	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = Verify(root, nil, nil)
 	a.Error(err)
@@ -403,11 +401,11 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundErrorString)
+	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
 	a.Error(err)
-	require.Contains(t, err.Error(), OutOfBoundErrorString)
+	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, nil, nil)
 	a.Error(err)
