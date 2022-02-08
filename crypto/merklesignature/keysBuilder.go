@@ -19,22 +19,18 @@ package merklesignature
 import (
 	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/algorand/go-algorand/crypto"
 )
 
 // KeysBuilder Responsible for generate slice of falcon keys
 func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
-	numOfKeysPerRoutine, numOfRoutines := calculateRanges(numberOfKeys)
+	numOfKeysPerRoutine, _ := calculateRanges(numberOfKeys)
 
-	terminate := make(chan struct{})
-	defer func() {
-		if !isChannelClosed(terminate) {
-			close(terminate)
-		}
-	}()
+	var terminate int64
 
-	errors := make(chan error, numOfRoutines)
+	errors := make(chan error, 1)
 	defer close(errors)
 
 	var wg sync.WaitGroup
@@ -50,11 +46,19 @@ func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
 		}
 
 		wg.Add(1)
-		go func(startIdx, endIdx uint64, errChan chan error, terminate chan struct{}, keys []crypto.FalconSigner) {
+		go func(startIdx, endIdx uint64, keys []crypto.FalconSigner) {
 			defer wg.Done()
-			generateKeysForRange(startIdx, endIdx, errChan, terminate, keys)
-		}(i, endIdx, errors, terminate, keys)
+			if err := generateKeysForRange(startIdx, endIdx, &terminate, keys); err != nil {
+				// write to the error channel, if it's not full already.
+				select {
+				case errors <- err:
+				default:
+				}
+				atomic.StoreInt64(&terminate, 1)
+			}
+		}(i, endIdx, keys)
 	}
+	// wait until all the go-routines are over.
 	wg.Wait()
 
 	select {
@@ -76,26 +80,16 @@ func calculateRanges(numberOfKeys uint64) (numOfKeysPerRoutine uint64, numOfRout
 	return
 }
 
-func generateKeysForRange(startIdx uint64, endIdx uint64, errChan chan error, terminate chan struct{}, keys []crypto.FalconSigner) {
+func generateKeysForRange(startIdx uint64, endIdx uint64, terminate *int64, keys []crypto.FalconSigner) error {
 	for k := startIdx; k < endIdx; k++ {
-		if isChannelClosed(terminate) {
-			return
+		if atomic.LoadInt64(terminate) != 0 {
+			return nil
 		}
 		sigAlgo, err := crypto.NewFalconSigner()
 		if err != nil {
-			errChan <- err
-			close(terminate)
-			return
+			return err
 		}
 		keys[k] = *sigAlgo
 	}
-}
-
-func isChannelClosed(terminate chan struct{}) bool {
-	select {
-	case <-terminate:
-		return true
-	default:
-	}
-	return false
+	return nil
 }
