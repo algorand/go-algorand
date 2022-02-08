@@ -400,7 +400,8 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			ep.Debugger = &debug
 			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
 			var messages []string
-			result.Disassembly = debug.lines
+			result.Disassembly = debug.lines          // Keep backwards compat
+			result.LogicSigDisassembly = &debug.lines // Also add to Lsig specific
 			result.LogicSigTrace = &debug.history
 			if pass {
 				messages = append(messages, "PASS")
