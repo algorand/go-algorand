@@ -717,7 +717,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			asmStats.EarlyCommittedCount++
 			continue
 		}
-
 		err := pool.add(txgroup, &asmStats)
 		if err != nil {
 			for _, tx := range txgroup {

@@ -24,8 +24,9 @@ import (
 )
 
 type (
-	// CommittablePublicKeyArray used to arrange the keys so a merkle tree could be build on them.
-	CommittablePublicKeyArray struct {
+	// committablePublicKeyArray used to arrange the keys so a merkle tree could be build on them.
+	//msgp:ignore committablePublicKeyArray
+	committablePublicKeyArray struct {
 		keys       []crypto.FalconSigner
 		firstValid uint64
 		interval   uint64
@@ -45,13 +46,13 @@ const (
 )
 
 // Length returns the number of elements in the key array
-func (k *CommittablePublicKeyArray) Length() uint64 {
+func (k *committablePublicKeyArray) Length() uint64 {
 	return uint64(len(k.keys))
 }
 
 // Marshal Gets []byte to represent a GenericVerifyingKey tied to the signatureAlgorithm in a pos.
 // used to implement the merklearray.Array interface needed to build a tree.
-func (k *CommittablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error) {
+func (k *committablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(k.keys)) {
 		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(k.keys))
 	}

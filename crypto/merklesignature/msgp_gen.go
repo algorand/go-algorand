@@ -215,11 +215,11 @@ func (z *Secrets) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0002Len := uint32(3)
 	var zb0002Mask uint8 /* 6 bits */
-	if (*z).SignerContext.Interval == 0 {
+	if (*z).SignerContext.FirstValid == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x8
 	}
-	if (*z).SignerContext.FirstValid == 0 {
+	if (*z).SignerContext.Interval == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x10
 	}
@@ -231,14 +231,14 @@ func (z *Secrets) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0002Len))
 	if zb0002Len != 0 {
 		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			o = msgp.AppendUint64(o, (*z).SignerContext.FirstValid)
+		}
+		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "iv"
 			o = append(o, 0xa2, 0x69, 0x76)
 			o = msgp.AppendUint64(o, (*z).SignerContext.Interval)
-		}
-		if (zb0002Mask & 0x10) == 0 { // if not empty
-			// string "rnd"
-			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o = msgp.AppendUint64(o, (*z).SignerContext.FirstValid)
 		}
 		if (zb0002Mask & 0x20) == 0 { // if not empty
 			// string "tree"
@@ -314,7 +314,7 @@ func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "rnd":
+			case "fv":
 				(*z).SignerContext.FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValid")
@@ -352,7 +352,7 @@ func (_ *Secrets) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Secrets) Msgsize() (s int) {
-	s = 1 + 4 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).SignerContext.Tree.Msgsize()
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).SignerContext.Tree.Msgsize()
 	return
 }
 
@@ -542,11 +542,11 @@ func (z *SignerContext) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).Interval == 0 {
+	if (*z).FirstValid == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).FirstValid == 0 {
+	if (*z).Interval == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -558,14 +558,14 @@ func (z *SignerContext) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			o = msgp.AppendUint64(o, (*z).FirstValid)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "iv"
 			o = append(o, 0xa2, 0x69, 0x76)
 			o = msgp.AppendUint64(o, (*z).Interval)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "rnd"
-			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o = msgp.AppendUint64(o, (*z).FirstValid)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "tree"
@@ -641,7 +641,7 @@ func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "rnd":
+			case "fv":
 				(*z).FirstValid, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValid")
@@ -679,7 +679,7 @@ func (_ *SignerContext) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignerContext) Msgsize() (s int) {
-	s = 1 + 4 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).Tree.Msgsize()
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).Tree.Msgsize()
 	return
 }
 

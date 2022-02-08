@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 )
@@ -67,7 +68,7 @@ type (
 	SignerContext struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		FirstValid uint64           `codec:"rnd"`
+		FirstValid uint64           `codec:"fv"`
 		Interval   uint64           `codec:"iv"`
 		Tree       merklearray.Tree `codec:"tree"`
 	}
@@ -93,7 +94,7 @@ var (
 	ErrStartBiggerThanEndRound           = errors.New("cannot create Merkle Signature Scheme because end round is smaller then start round")
 	ErrDivisorIsZero                     = errors.New("received zero Interval")
 	ErrNoStateProofKeyForRound           = errors.New("no stateproof key exists for this round")
-	ErrSignatureSchemeVerificationFailed = "merkle signature verification failed"
+	ErrSignatureSchemeVerificationFailed = errors.New("merkle signature verification failed")
 )
 
 // New creates secrets needed for the merkle signature scheme.
@@ -120,7 +121,7 @@ func New(firstValid, lastValid, interval uint64) (*Secrets, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree, err := merklearray.BuildVectorCommitmentTree(&CommittablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: MerkleSignatureSchemeHashFunction})
+	tree, err := merklearray.BuildVectorCommitmentTree(&committablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: MerkleSignatureSchemeHashFunction})
 	if err != nil {
 		return nil, err
 	}
@@ -240,13 +241,13 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 		sig.Proof.ToProof(),
 	)
 	if err != nil {
-		return fmt.Errorf("%s - %w", ErrSignatureSchemeVerificationFailed, err)
+		return fmt.Errorf("%w - %v", ErrSignatureSchemeVerificationFailed, err)
 	}
 
 	// verify that the signature is valid under the ephemeral public key
 	err = sig.VerifyingKey.Verify(msg, sig.Signature)
 	if err != nil {
-		return fmt.Errorf("%s - %w", ErrSignatureSchemeVerificationFailed, err)
+		return fmt.Errorf("%w - %v", ErrSignatureSchemeVerificationFailed, err)
 	}
 	return nil
 }
