@@ -134,10 +134,31 @@ must rerun their code to determine if the ApplicationCall transactions
 in their pool would still succeed each time a block is added to the
 blockchain.
 
+Smart contracts have limits on their execution cost (700, consensus
+parameter MaxAppProgramCost). Before v4, this was a static limit on
+the cost of all the instructions in the program. Since then, the cost
+is tracked dynamically during execution and must not exceed
+MaxAppProgramCost. Beginning with v5, programs costs are pooled and
+tracked dynamically across app executions in a group.  If `n`
+application invocations appear in a group, then the total execution
+cost of such calls must not exceed `n`*MaxAppProgramCost. In v6, inner
+application calls become possible, and each such call increases the
+pooled budget by MaxAppProgramCost.
+
+Executions of the ClearStateProgram are more stringent, in order to
+ensure that applications may be closed out, but that applications also
+are assured a chance to clean up their internal state. At the
+beginning of the execution of a ClearStateProgram, the pooled budget
+available must be MaxAppProgramCost or higher. If it is not, the
+containing transaction group fails without clearing the app's
+state. During the execution of the ClearStateProgram, no more than
+MaxAppProgramCost may be drawn. If further execution is attempted, the
+ClearStateProgram fails, and the app's state _is cleared_.
+
+
 ### Resource availability
 
-Smart contracts have limits on their execution budget (700, consensus
-parameter MaxAppProgramCost), and the amount of blockchain state they
+Smart contracts have limits on the amount of blockchain state they
 may examine.  Opcodes may only access blockchain resources such as
 Accounts, Assets, and contract state if the given resource is
 _available_.
@@ -596,7 +617,8 @@ In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `itxn_submit`, the effects of the transaction are visible begining
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
-`keyreg` and `appl` effects.
+`keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
+to invoke a program with version less than v6.
 
 In v5, only a subset of the transaction's header fields may be set: `Type`/`TypeEnum`,
 `Sender`, and `Fee`. In v6, header fields `Note` and `RekeyTo` may
