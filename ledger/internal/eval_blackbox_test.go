@@ -963,6 +963,44 @@ func TestModifiedAppLocalStates(t *testing.T) {
 	}
 }
 
+// TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
+func TestDeleteNonExistantKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+
+	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	require.NoError(t, err)
+	defer l.Close()
+
+	const appid basics.AppIndex = 1
+
+	createTxn := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+byte "missing_global"
+app_global_del
+int 0
+byte "missing_local"
+app_local_del
+`),
+	}
+
+	optInTxn := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[1],
+		ApplicationID: appid,
+		OnCompletion:  transactions.OptInOC,
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &createTxn, &optInTxn)
+	vb := endBlock(t, l, eval)
+	require.Len(t, vb.Block().Payset[1].EvalDelta.GlobalDelta, 0)
+	require.Len(t, vb.Block().Payset[1].EvalDelta.LocalDeltas, 0)
+}
+
 // TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator
 // and do not cause any MaximumMinimumBalance problems
 func TestAppInsMinBalance(t *testing.T) {
