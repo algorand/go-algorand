@@ -3636,8 +3636,8 @@ func opAppLocalPut(cx *EvalContext) {
 		return
 	}
 
-	// if writing the same value, do nothing, matching ledger behavior with
-	// previous BuildEvalDelta mechanism
+	// if writing the same value, don't record in EvalDelta, matching ledger
+	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
@@ -3672,8 +3672,8 @@ func opAppGlobalPut(cx *EvalContext) {
 		return
 	}
 
-	// if writing the same value, do nothing, matching ledger behavior with
-	// previous BuildEvalDelta mechanism
+	// if writing the same value, don't record in EvalDelta, matching ledger
+	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
@@ -3710,8 +3710,8 @@ func opAppLocalDel(cx *EvalContext) {
 		return
 	}
 
-	// if deleting a non-existant value, do nothing, matching ledger behavior
-	// with previous BuildEvalDelta mechanism
+	// if deleting a non-existent value, don't record in EvalDelta, matching
+	// ledger behavior with previous BuildEvalDelta mechanism
 	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
 		if err != nil {
 			cx.err = err
@@ -3744,8 +3744,8 @@ func opAppGlobalDel(cx *EvalContext) {
 		return
 	}
 
-	// if deleting a non-existant value, do nothing, matching ledger behavior
-	// with previous BuildEvalDelta mechanism
+	// if deleting a non-existent value, don't record in EvalDelta, matching
+	// ledger behavior with previous BuildEvalDelta mechanism
 	if _, ok, err := cx.Ledger.GetGlobal(cx.appID, key); ok {
 		if err != nil {
 			cx.err = err
