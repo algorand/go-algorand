@@ -35,10 +35,9 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const roundDelay = uint64(400) // should be greater than numberOfThreads
 const numberOfThreads = 256
 const printFreequency = 10
-const groupTransactions = false
+const groupTransactions = true
 const channelDepth = 100
 
 var maxTxGroupSize int
@@ -59,7 +58,7 @@ func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan
 			break
 		}
 		var err error
-		for x := 0; x < 5; x++ { // retry only 20 times
+		for x := 0; x < 50; x++ { // retry only 50 times
 			_, err = c.BroadcastTransaction(*stxn)
 			if err == nil {
 				break
@@ -105,91 +104,38 @@ func signer(
 	sigWg.Done()
 }
 
-/*
 func signerGrpTxn(
 	sigWg *sync.WaitGroup,
 	client libgoal.Client,
-	txnChan <-chan *txnKey,
+	txnGrpChan <-chan []txnKey,
 	sigTxnGrpChan chan<- []transactions.SignedTxn,
 	errChan chan<- error) {
 
-	groupChan := make(chan []transactions.Transaction, 1)
+	for tGroup := range txnGrpChan {
 
-	var groupWg sync.WaitGroup
-
-	// group transactions and send
-
-	groupWg.Add(1)
-	go func() {
-		for tGroup := range groupChan {
-			gid, err := client.GroupID(tGroup)
-			handleError(err, "Error GroupID", errChan)
-
-			var stxns []transactions.SignedTxn
-			for i, _ := range tGroup {
-				tGroup[i].Group = gid
-
-				var walletHandle []byte
-				var err error
-				for x := 0; x < 20; x++ {
-					walletHandle, err = client.GetUnencryptedWalletHandle()
-					if err == nil {
-						break
-					}
-				}
-				handleError(err, "Error GetUnencryptedWalletHandle", errChan)
-
-				for x := 0; x < 20; x++ {
-					stxn, err := client.SignTransactionWithWallet(walletHandle, nil, tGroup[i])
-					if err == nil {
-						stxns = append(stxns, stxn)
-						break
-					}
-				}
-				handleError(err, "Error SignTransactionWithWallet", errChan)
-			}
-			sigTxnGrpChan <- stxns
+		// prepare the array of transactions for the group id
+		sendTransactions := make([]transactions.Transaction, len(tGroup))
+		for i, tk := range tGroup {
+			sendTransactions[i] = tk.tx
 		}
-		groupWg.Done()
-	}()
+		// get the group id
+		gid, err := client.GroupID(sendTransactions)
+		handleError(err, "Error GroupID", errChan)
 
-	grpTransactions := make([]*transactions.Transaction, 0, maxTxGroupSize)
-
-	for txn := range txnChan {
-
-		if txn == nil { // if exsits transactions waiting to get grouped
-			if len(grpTransactions) > 0 {
-				sendTransactions := make([]transactions.Transaction, len(grpTransactions))
-				for i, t := range grpTransactions {
-					sendTransactions[i] = *t
-				}
-				groupChan <- sendTransactions
-				grpTransactions = grpTransactions[:0]
-			}
-			continue
+		// set the group id to each transaction
+		for i, _ := range tGroup {
+			sendTransactions[i].Group = gid
 		}
 
-		grpTransactions = append(grpTransactions, txn)
-		if len(grpTransactions) == maxTxGroupSize {
-			sendTransactions := make([]transactions.Transaction, maxTxGroupSize)
-			for i, t := range grpTransactions {
-				sendTransactions[i] = *t
-			}
-			groupChan <- sendTransactions
-			grpTransactions = grpTransactions[:0]
+		// sign the transactions
+		stxns := make([]transactions.SignedTxn, len(tGroup))
+		for i, tk := range tGroup {
+			stxns[i] = sendTransactions[i].Sign(tk.sk)
 		}
+
+		sigTxnGrpChan <- stxns
 	}
-
-	close(groupChan)
-	groupWg.Wait()
 	sigWg.Done()
-}
-*/
-func zeroSub(a, b uint64) uint64 {
-	if a > b {
-		return a - b
-	}
-	return 0
 }
 
 func Test5MAssets(t *testing.T) {
@@ -218,6 +164,7 @@ func Test5MAssets(t *testing.T) {
 	require.NoError(t, err)
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggestedParams.GenesisHash)
+	tLife := config.Consensus[protocol.ConsensusVersion(suggestedParams.ConsensusVersion)].MaxTxnLife
 
 	// fund the non-wallet base account
 	ba := generateKeys(1)
@@ -228,6 +175,7 @@ func Test5MAssets(t *testing.T) {
 	require.NoError(t, err)
 
 	txnChan := make(chan *txnKey, channelDepth)
+	txnGrpChan := make(chan []txnKey, channelDepth)
 	sigTxnChan := make(chan *transactions.SignedTxn, channelDepth)
 	sigTxnGrpChan := make(chan []transactions.SignedTxn, channelDepth)
 	errChan := make(chan error, channelDepth)
@@ -236,7 +184,7 @@ func Test5MAssets(t *testing.T) {
 	for nthread := 0; nthread < numberOfThreads; nthread++ {
 		sigWg.Add(1)
 		if groupTransactions {
-			//			go signerGrpTxn(&sigWg, client, txnChan, sigTxnGrpChan, errChan)
+			go signerGrpTxn(&sigWg, client, txnGrpChan, sigTxnGrpChan, errChan)
 		} else {
 			go signer(&sigWg, client, txnChan, sigTxnChan, errChan)
 		}
@@ -256,7 +204,7 @@ func Test5MAssets(t *testing.T) {
 		errCount := 0
 		for range errChan {
 			errCount++
-			if errCount > 100 {
+			if errCount > 1000 {
 				fmt.Println("Too many errors!")
 				stopChan <- struct{}{}
 				break
@@ -276,7 +224,7 @@ func Test5MAssets(t *testing.T) {
 	}()
 
 	// Call different scenarios
-	scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, stopChan)
+	scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
 }
 
 func generateKeys(numAccounts int) (keys []psKey) {
@@ -300,14 +248,13 @@ func sendAlgoTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (txn transactions.Transaction) {
 
-	sround := zeroSub(round, roundDelay)
 	txn = transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(sround),
-			LastValid:   basics.Round(sround + tLife),
+			FirstValid:  basics.Round(round),
+			LastValid:   basics.Round(round + tLife),
 			GenesisHash: genesisHash,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
@@ -326,14 +273,13 @@ func createAssetTransaction(
 	amount uint64,
 	genesisHash crypto.Digest) (assetTx transactions.Transaction) {
 
-	sround := zeroSub(round, roundDelay)
 	assetTx = transactions.Transaction{
 		Type: protocol.AssetConfigTx,
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(sround),
-			LastValid:   basics.Round(sround + tLife),
+			FirstValid:  basics.Round(round),
+			LastValid:   basics.Round(round + tLife),
 			GenesisHash: genesisHash,
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
@@ -357,14 +303,13 @@ func sendAssetTransaction(
 	receiver basics.Address,
 	amount uint64) (tx transactions.Transaction) {
 
-	sround := zeroSub(round, roundDelay)
 	tx = transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(sround),
-			LastValid:   basics.Round(sround + tLife),
+			FirstValid:  basics.Round(round),
+			LastValid:   basics.Round(round + tLife),
 			GenesisHash: genesisHash,
 		},
 		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
@@ -382,30 +327,31 @@ func scenarioA(
 	baseAcct psKey,
 	genesisHash crypto.Digest,
 	txnChan chan<- *txnKey,
+	txnGrpChan chan<- []txnKey,
+	tLife uint64,
 	stopChan <-chan struct{}) {
 
 	client := fixture.LibGoalClient
 
 	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 	numberOfAccounts := uint64(6000) // 6K
-	numberOfAssets := uint64(600000) // 6M
+	numberOfAssets := uint64(60000)  // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
 	balance := uint64(200000000) // 100300000 for (1002 assets)
 
-	params, err := client.SuggestedParams()
-	require.NoError(t, err)
-	tLife := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)].MaxTxnLife
-
-	round := uint64(1)
 	totalAssetAmount := uint64(0)
 
 	defer func() {
 		close(txnChan)
+		close(txnGrpChan)
 	}()
 
-	xround := uint64(0)
+	firstValid := uint64(2)
+	counter := uint64(0)
+	txnGroup := make([]txnKey, 0, maxTxGroupSize)
+	var err error
 
 	fmt.Println("Creating accounts...")
 
@@ -420,25 +366,21 @@ func scenarioA(
 		if i%printFreequency == 0 {
 			fmt.Println("account create txn: ", i)
 		}
-		txn := sendAlgoTransaction(t, round, baseAcct.pk, key.pk, balance, tLife, genesisHash)
-		tk := txnKey{tx: txn, sk: baseAcct.sk}
-		txnChan <- &tk
-		round++
-		if round%(tLife/2) == 0 {
-			txnChan <- nil
-			round = checkPoint(round, 0, fixture)
-			require.Greater(t, round, uint64(0))
-			xround = round
-		}
-	}
+		txn := sendAlgoTransaction(t, firstValid, baseAcct.pk, key.pk, balance, tLife, genesisHash)
+		//		fmt.Printf("sending with firstValid: %d\n", firstValid)
+		counter, txnGroup = queueTransaction(baseAcct.sk, txn, txnChan, txnGrpChan, counter, txnGroup)
 
-	txnChan <- nil
-	round = checkPoint(round, 0, fixture)
-	require.Greater(t, round, uint64(0))
-	xround = round
+		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+		require.NoError(t, err)
+	}
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
+
 	fmt.Println("Creating assets...")
 
 	// create 6M unique assets by a different 6,000 accounts
+	assetAmount := uint64(100)
 	for nai, na := range keys {
 		for asi := uint64(0); asi < assetsPerAccount; asi++ {
 			select {
@@ -450,33 +392,30 @@ func scenarioA(
 			if nai%printFreequency == 0 && int(asi)%printFreequency == 0 {
 				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
-			atx := createAssetTransaction(t, round, na.pk, tLife, 90000000+round, genesisHash)
-			tk := txnKey{tx: atx, sk: na.sk}
-			txnChan <- &tk
-			totalAssetAmount += 90000000 + round
-			round++
-			if round%(tLife/2) == 0 {
-				txnChan <- nil
-				round = checkPoint(round, 0, fixture)
-				require.Greater(t, round, uint64(0))
-				xround = round
-			}
+			//			fmt.Printf("sending with firstValid: %d\n", firstValid)
+			atx := createAssetTransaction(t, firstValid, na.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
+			totalAssetAmount += uint64(600000000) + assetAmount
+			assetAmount++
 
+			counter, txnGroup = queueTransaction(na.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
+
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			require.NoError(t, err)
 		}
 	}
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
 
-	txnChan <- nil
-	round = checkPoint(round, xround, fixture)
-	require.Greater(t, round, uint64(0))
-	xround = round
 	fmt.Println("Opt-in assets...")
 
 	// have a single account opted in all of them
 	ownAllAccount := keys[numberOfAccounts-1]
 	// make ownAllAccount very rich
-	sendAlgoTx := sendAlgoTransaction(t, round, baseAcct.pk, ownAllAccount.pk, 100000000000, tLife, genesisHash)
-	tk := txnKey{tx: sendAlgoTx, sk: baseAcct.sk}
-	txnChan <- &tk
+	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 100000000000, tLife, genesisHash)
+	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
@@ -496,30 +435,24 @@ func scenarioA(
 			}
 			optInT := sendAssetTransaction(
 				t,
-				round,
+				firstValid,
 				ownAllAccount.pk,
 				tLife,
 				genesisHash,
 				basics.AssetIndex(asset.AssetId),
 				ownAllAccount.pk,
 				uint64(0))
-			tk := txnKey{tx: optInT, sk: ownAllAccount.sk}
-			txnChan <- &tk
-			round++
-			if round%(tLife/2) == 0 {
-				txnChan <- nil
-				round = checkPoint(round, 0, fixture)
-				require.Greater(t, round, uint64(0))
-				xround = round
-			}
 
+			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInT, txnChan, txnGrpChan, counter, txnGroup)
+
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			require.NoError(t, err)
 		}
 	}
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
 
-	txnChan <- nil
-	round = checkPoint(round, xround, fixture)
-	require.Greater(t, round, uint64(0))
-	xround = round
 	fmt.Println("Transfer assets...")
 
 	// and owning all of them
@@ -539,32 +472,24 @@ func scenarioA(
 			if assi%printFreequency == 0 && acci%printFreequency == 0 {
 				fmt.Printf("Sending assets acct: %d asset %d\n", acci, assi)
 			}
-			optInT := sendAssetTransaction(
+			assSend := sendAssetTransaction(
 				t,
-				round,
+				firstValid,
 				nacc.pk,
 				tLife,
 				genesisHash,
 				basics.AssetIndex(asset.AssetId),
 				ownAllAccount.pk,
 				asset.Amount)
-			tk := txnKey{tx: optInT, sk: nacc.sk}
-			txnChan <- &tk
-			round++
-			if round%(tLife/2) == 0 {
-				txnChan <- nil
-				round = checkPoint(round, 0, fixture)
-				require.Greater(t, round, uint64(0))
-				xround = round
-			}
+			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
 
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			require.NoError(t, err)
 		}
 	}
-
-	txnChan <- nil
-	round = checkPoint(round, xround, fixture)
-	require.Greater(t, round, uint64(0))
-	xround = round
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
 
 	// Verify the assets are transfered here
 	info, err := client.AccountInformationV2(ownAllAccount.pk.String())
@@ -591,19 +516,27 @@ func handleError(err error, message string, errChan chan<- error) {
 	}
 }
 
-func checkPoint(round, xround uint64, fixture *fixtures.RestClientFixture) uint64 {
-	if groupTransactions {
-		round = (round-xround+uint64(maxTxGroupSize-1))/uint64(maxTxGroupSize) + xround
+func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
+	waitBlock := 5
+	if force || counter+100 == tLife {
+		fmt.Printf("Waiting for round %d...", int(firstValid+counter))
+		for x := 0; x < 1000; x++ {
+			err := fixture.WaitForRound(firstValid+counter, time.Duration(waitBlock)*time.Second)
+			if err == nil {
+				fmt.Printf(" waited %d sec, done.\n", (x+1)*waitBlock)
+				status, err := fixture.AlgodClient.Status()
+				if err != nil {
+					return 0, firstValid + counter + 1, nil
+				}
+				return 0, status.LastRound + 1, nil
+			} else {
+				fmt.Printf(" waited %d sec, continue waiting...\n", (x+1)*waitBlock)
+			}
+		}
+		fmt.Println("Giving up!")
+		return 0, 0, fmt.Errorf("Waited for round %d for %d seconds. Giving up!", firstValid+counter, 1000*waitBlock)
 	}
-	fmt.Printf("Waiting for round %d...", int(round))
-	err := fixture.WaitForRound(round, channelDepth*time.Millisecond*200*1000)
-	if err == nil {
-		fmt.Printf("done\n")
-	} else {
-		fmt.Printf("failed\n")
-		return 0
-	}
-	return round
+	return counter, firstValid, nil
 }
 
 func signAndBroadcastTransaction(
@@ -626,4 +559,49 @@ func signAndBroadcastTransaction(
 	}
 	err = fixture.WaitForRound(round, time.Millisecond*2000)
 	return err
+}
+
+func queueTransaction(
+	sk *crypto.SignatureSecrets,
+	tx transactions.Transaction,
+	txnChan chan<- *txnKey,
+	txnGrpChan chan<- []txnKey,
+	counter uint64,
+	txnGroup []txnKey) (uint64, []txnKey) {
+	tk := txnKey{tx: tx, sk: sk}
+
+	if !groupTransactions {
+		txnChan <- &tk
+		return counter + 1, txnGroup
+	}
+	txnGroup = append(txnGroup, tk)
+	if len(txnGroup) == maxTxGroupSize {
+		sendTransactions := make([]txnKey, len(txnGroup))
+		for i, t := range txnGroup {
+			sendTransactions[i] = t
+		}
+
+		txnGrpChan <- sendTransactions
+		txnGroup = txnGroup[:0]
+		return counter + 1, txnGroup
+	}
+	return counter, txnGroup
+}
+
+func flushQueue(
+	txnChan chan<- *txnKey,
+	txnGrpChan chan<- []txnKey,
+	counter uint64,
+	txnGroup []txnKey) (uint64, []txnKey) {
+
+	if len(txnGroup) == 0 {
+		return counter, txnGroup
+	}
+	sendTransactions := make([]txnKey, len(txnGroup))
+	for i, t := range txnGroup {
+		sendTransactions[i] = t
+	}
+	txnGrpChan <- sendTransactions
+	txnGroup = txnGroup[:0]
+	return counter + 1, txnGroup
 }
