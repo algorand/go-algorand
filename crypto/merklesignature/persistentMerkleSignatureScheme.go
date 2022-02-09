@@ -64,27 +64,30 @@ func (s *Secrets) Persist(store db.Accessor) error {
 	if s.ephemeralKeys == nil {
 		return fmt.Errorf("no keys provided (nil)")
 	}
-
 	if s.Interval == 0 {
 		return fmt.Errorf("Secrets.Persist: %w", errIntervalZero)
 	}
-
+	round := indexToRound(s.FirstValid, s.Interval, 0)
+	encodedKey := protocol.GetEncodingBuf()
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := merkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
 			return err
 		}
 
-		stmt, err := tx.Prepare(`INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)`)
+		insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)")
 		if err != nil {
 			return fmt.Errorf("unable to prepare insert stateproofkeys statement: %w", err)
 		}
+		defer insertStmt.Close()
 
-		round := indexToRound(s.FirstValid, s.Interval, 0)
 		for i, key := range s.ephemeralKeys {
-			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
-			_, err := stmt.Exec(i, round, encodedKey)
-			protocol.PutEncodingBuf(encodedKey)
+			// reset the slice
+			encodedKey = encodedKey[:0]
+			// store the encoded key into the slice
+			encodedKey = key.MarshalMsg(encodedKey)
+			_, err := insertStmt.ExecContext(ctx, i, round, encodedKey)
+
 			if err != nil {
 				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
 			}
@@ -93,6 +96,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 
 		return nil
 	})
+	protocol.PutEncodingBuf(encodedKey)
 	if err != nil {
 		return fmt.Errorf("Secrets.Persist: %w", err)
 	}
@@ -109,6 +113,7 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 		if err != nil {
 			return fmt.Errorf("%s - %w", errSelectKeysError, err)
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var keyB []byte
 			key := crypto.FalconSigner{}
