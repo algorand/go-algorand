@@ -143,10 +143,9 @@ func (s *Secrets) GetVerifier() *Verifier {
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *SignerContext) GetVerifier() *Verifier {
-	ver := [MerkleSignatureSchemeRootSize]byte{}
-	ss := s.Tree.Root().ToSlice()
-	copy(ver[:], ss)
-	return (*Verifier)(&ver)
+	var ver Verifier
+	copy(ver[:], s.Tree.Root())
+	return &ver
 }
 
 // Sign signs a hash of a given message. The signature is valid on a specific round
