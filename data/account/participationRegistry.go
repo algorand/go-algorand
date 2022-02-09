@@ -171,6 +171,17 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 	return dupParticipation
 }
 
+// OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
+func (part ParticipationRecord) OverlapsInterval(first, last basics.Round) bool {
+	if last < first {
+		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)
+	}
+	if last < part.FirstValid || first > part.LastValid {
+		return false
+	}
+	return true
+}
+
 // ParticipationAction is used when recording participation actions.
 //msgp:ignore ParticipationAction
 type ParticipationAction int

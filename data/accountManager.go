@@ -61,9 +61,9 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partKeys {
+	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(rnd, rnd) {
-			partRndSecrets, err := manager.registry.GetForRound(part.ID(), rnd)
+			partRndSecrets, err := manager.registry.GetForRound(part.ParticipationID, rnd)
 			if err != nil {
 				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
 				continue
@@ -72,31 +72,6 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 		}
 	}
 	return out
-
-	// PKI TODO: source keys from the registry.
-	// This kinda works, but voting keys are not updated.
-	/*
-		for _, record := range manager.registry.GetAll() {
-			part := account.Participation{
-				Parent:      record.Account,
-				VRF:         record.VRF,
-				Voting:      record.Voting,
-				FirstValid:  record.FirstValid,
-				LastValid:   record.LastValid,
-				KeyDilution: record.KeyDilution,
-			}
-
-			if part.OverlapsInterval(rnd, rnd) {
-				out = append(out, part)
-
-				id := part.ID()
-				if !bytes.Equal(id[:], record.ParticipationID[:]) {
-					manager.log.Warnf("Participation IDs do not equal while fetching keys... %s != %s\n", id, record.ParticipationID)
-				}
-			}
-		}
-		return out
-	*/
 }
 
 // StateProofKeys returns a list of Participation accounts, and their stateproof secrets
@@ -104,9 +79,9 @@ func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.S
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partKeys {
+	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(rnd, rnd) {
-			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ID(), rnd)
+			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ParticipationID, rnd)
 			if err != nil {
 				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
 				continue
@@ -123,7 +98,7 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partKeys {
+	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(from, to) {
 			return true
 		}
