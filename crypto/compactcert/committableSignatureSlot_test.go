@@ -18,13 +18,14 @@ package compactcert
 
 import (
 	"encoding/binary"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
-	"testing"
-
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
