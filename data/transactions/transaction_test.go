@@ -136,16 +136,17 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
-	specialAddr := SpecialAddresses{FeeSink: feeSink}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
+	v5 := []byte{0x05}
+	v6 := []byte{0x06}
+
 	usecases := []struct {
 		tx            Transaction
-		spec          SpecialAddresses
 		proto         config.ConsensusParams
-		expectedError error
+		expectedError string
 	}{
 		{
 			tx: Transaction{
@@ -157,13 +158,14 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 					FirstValid: 100,
 				},
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 0,
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
 				},
 			},
-			spec:  specialAddr,
 			proto: curProto,
 		},
 		{
@@ -176,14 +178,15 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 					FirstValid: 100,
 				},
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 0,
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
 					ExtraProgramPages: 0,
 				},
 			},
-			spec:  specialAddr,
 			proto: curProto,
 		},
 		{
@@ -196,14 +199,15 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 					FirstValid: 100,
 				},
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 0,
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
 					ExtraProgramPages: 3,
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -216,20 +220,45 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 					FirstValid: 100,
 				},
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 0,
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
 					ExtraProgramPages: 0,
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApprovalProgram:   v5,
+					ClearStateProgram: v6,
+				},
+			},
+			proto:         futureProto,
+			expectedError: "mismatch",
+		},
 	}
-	for _, usecase := range usecases {
-		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)
-		require.NoError(t, err)
+	for i, usecase := range usecases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			err := usecase.tx.WellFormed(SpecialAddresses{FeeSink: feeSink}, usecase.proto)
+			if usecase.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), usecase.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
 
@@ -244,6 +273,7 @@ func TestWellFormedErrors(t *testing.T) {
 	protoV28 := config.Consensus[protocol.ConsensusV28]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
+	v5 := []byte{0x05}
 	okHeader := Header{
 		Sender:     addr1,
 		Fee:        basics.MicroAlgos{Raw: 1000},
@@ -298,7 +328,9 @@ func TestWellFormedErrors(t *testing.T) {
 				Type:   protocol.ApplicationCallTx,
 				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 0, // creation
+					ApplicationID:     0, // creation
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
@@ -307,7 +339,7 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         protoV27,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", protoV27.MaxExtraAppProgramPages),
+			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", protoV27.MaxExtraAppProgramPages),
 		},
 		{
 			tx: Transaction{
@@ -316,7 +348,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID:     0, // creation
 					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte("junk"),
+					ClearStateProgram: []byte("Xjunk"),
 				},
 			},
 			spec:          specialAddr,
@@ -330,7 +362,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID:     0, // creation
 					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte("junk"),
+					ClearStateProgram: []byte("Xjunk"),
 				},
 			},
 			spec:  specialAddr,
@@ -385,7 +417,9 @@ func TestWellFormedErrors(t *testing.T) {
 				Type:   protocol.ApplicationCallTx,
 				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 0,
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
@@ -394,7 +428,7 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", futureProto.MaxExtraAppProgramPages),
+			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", futureProto.MaxExtraAppProgramPages),
 		},
 		{
 			tx: Transaction{
@@ -459,7 +493,7 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         futureProto,
-			expectedError: fmt.Errorf("tx has too many references, max is 8"),
+			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
 		},
 		{
 			tx: Transaction{
@@ -497,7 +531,9 @@ func TestWellFormedErrors(t *testing.T) {
 				Type:   protocol.ApplicationCallTx,
 				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID:     1,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
