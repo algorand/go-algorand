@@ -22,10 +22,12 @@ import (
 
 // AccountResource used to retrieve a generic resource information from the data tier
 type AccountResource struct {
-	AssetParams   *basics.AssetParams
-	AssetHolding  *basics.AssetHolding
-	AppLocalState *basics.AppLocalState
-	AppParams     *basics.AppParams
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	AssetParams   *basics.AssetParams   `codec:"asset-params"`
+	AssetHolding  *basics.AssetHolding  `codec:"asset-holding"`
+	AppLocalState *basics.AppLocalState `codec:"app-local-state"`
+	AppParams     *basics.AppParams     `codec:"app-params"`
 }
 
 // AssignAccountResourceToAccountData assignes the Asset/App params/holdings contained

@@ -21,7 +21,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"os"
 	"strconv"
 	"strings"
@@ -669,20 +668,16 @@ var appQueryCmd = &cobra.Command{
 			reportErrorf("Unknown schema entry %s.\nDefined %s schema entries in %s:\n%s", param, scope, appHdr, lookup.EntryList())
 		}
 
-		var tealval generated.TealValue
+		var tealval basics.TealValue
 		if scope == "local" {
 			// Fetching local state. Get account information
-			resp, err := client.AccountApplicationInformation(account, appIdx)
+			ai, err := client.RawAccountApplicationInformation(account, appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
-			kvStore := *resp.AppLocalState.KeyValue
-			for _, kv := range kvStore {
-				if kv.Key == meta.Key {
-					tealval = kv.Value
-					break
-				}
-			}
+
+			kv := ai.AppLocalState.KeyValue
+			tealval = kv[meta.Key]
 		}
 
 		if scope == "global" {
@@ -693,18 +688,13 @@ var appQueryCmd = &cobra.Command{
 			}
 
 			// Get creator information
-			resp, err := client.AccountApplicationInformation(app.Params.Creator, appIdx)
+			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
-			kvStore := *resp.CreatedApp.GlobalState
-			for _, kv := range kvStore {
-				if kv.Key == meta.Key {
-					tealval = kv.Value
-					break
-				}
-			}
+			kv := ai.AppParams.GlobalState
+			tealval = kv[meta.Key]
 		}
 
 		var decoded string
@@ -714,7 +704,7 @@ var appQueryCmd = &cobra.Command{
 				if meta.Explicit {
 					reportErrorf("%s not set for %d.%s", param, appIdx, storeName)
 				}
-			} else if basics.TealType(tealval.Type) != basics.TealUintType {
+			} else if tealval.Type != basics.TealUintType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			decoded = fmt.Sprintf("%d", tealval.Uint)
@@ -723,7 +713,7 @@ var appQueryCmd = &cobra.Command{
 				if meta.Explicit {
 					reportErrorf("%s not set for %d.%s", param, appIdx, storeName)
 				}
-			} else if basics.TealType(tealval.Type) != basics.TealBytesType {
+			} else if tealval.Type != basics.TealBytesType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			raw := []byte(tealval.Bytes)

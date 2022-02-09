@@ -615,33 +615,33 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 	for _, assetHolding := range heldAssets {
 		if onlyShowAssetIds {
 			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetId)
-		} else {
-			assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
-			if err != nil {
-				hasError = true
-				fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
-				fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
-			}
-
-			amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
-
-			assetName := "<unnamed>"
-			if assetParams.Params.Name != nil {
-				_, assetName = unicodePrintable(*assetParams.Params.Name)
-			}
-
-			unitName := "units"
-			if assetParams.Params.UnitName != nil {
-				_, unitName = unicodePrintable(*assetParams.Params.UnitName)
-			}
-
-			frozen := ""
-			if assetHolding.IsFrozen {
-				frozen = " (frozen)"
-			}
-
-			fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetId, assetName, amount, unitName, frozen)
+			continue
 		}
+		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
+		if err != nil {
+			hasError = true
+			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
+			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
+		}
+
+		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
+
+		assetName := "<unnamed>"
+		if assetParams.Params.Name != nil {
+			_, assetName = unicodePrintable(*assetParams.Params.Name)
+		}
+
+		unitName := "units"
+		if assetParams.Params.UnitName != nil {
+			_, unitName = unicodePrintable(*assetParams.Params.UnitName)
+		}
+
+		frozen := ""
+		if assetHolding.IsFrozen {
+			frozen = " (frozen)"
+		}
+
+		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetId, assetName, amount, unitName, frozen)
 	}
 
 	fmt.Fprintln(report, "Created Apps:")

@@ -19,6 +19,7 @@ package libgoal
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -673,11 +674,37 @@ func (c *Client) AccountApplicationInformation(accountAddress string, applicatio
 	return
 }
 
+// RawAccountApplicationInformation gets account information about a given app.
+func (c *Client) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (accountResource ledgercore.AccountResource, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawAccountApplicationInformation(accountAddress, applicationID)
+		if err == nil {
+			err = protocol.Decode(resp, &accountResource)
+		}
+	}
+	return
+}
+
 // AccountAssetInformation gets account information about a given app.
 func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp generatedV2.AccountAssetResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetInformation(accountAddress, assetID)
+	}
+	return
+}
+
+// RawAccountAssetInformation gets account information about a given app.
+func (c *Client) RawAccountAssetInformation(accountAddress string, assetID uint64) (accountResource ledgercore.AccountResource, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawAccountAssetInformation(accountAddress, assetID)
+		if err == nil {
+			err = protocol.Decode(resp, &accountResource)
+		}
 	}
 	return
 }

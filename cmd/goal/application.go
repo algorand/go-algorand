@@ -953,12 +953,12 @@ var readStateAppCmd = &cobra.Command{
 
 		if fetchLocal {
 			// Fetching local state. Get account information
-			resp, err := client.AccountApplicationInformation(account, appIdx)
+			ai, err := client.RawAccountApplicationInformation(account, appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
-			kv := *resp.AppLocalState.KeyValue
+			kv := ai.AppLocalState.KeyValue
 			if guessFormat {
 				kv = heuristicFormat(kv)
 			}
@@ -979,12 +979,12 @@ var readStateAppCmd = &cobra.Command{
 			}
 
 			// Get creator information
-			resp, err := client.AccountApplicationInformation(app.Params.Creator, appIdx)
+			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
-			kv := *resp.CreatedApp.GlobalState
+			kv := ai.AppParams.GlobalState
 			if guessFormat {
 				kv = heuristicFormat(kv)
 			}

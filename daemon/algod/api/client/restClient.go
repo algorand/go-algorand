@@ -358,7 +358,7 @@ type rawFormat struct {
 }
 
 type accountInformationParams struct {
-	Format string `url:"format"`
+	Format  string `url:"format"`
 	Include string `url:"include"`
 }
 
@@ -407,12 +407,14 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 }
 
 // AccountInformationV2 gets the AccountData associated with the passed address
-func (client RestClient) AccountInformationV2(address string, includeAppAssets bool) (response generatedV2.Account, err error) {
-	if includeAppAssets {
-		err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), accountInformationParams{Include: "all"})
+func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
+	var infoParams accountInformationParams
+	if includeCreatables {
+		infoParams = accountInformationParams{Include: "all"}
 	} else {
-		err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), accountInformationParams{Include: "none"})
+		infoParams = accountInformationParams{Include: "none"}
 	}
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), infoParams)
 	return
 }
 
@@ -468,9 +470,21 @@ func (client RestClient) AccountApplicationInformation(accountAddress string, ap
 	return
 }
 
+// RawAccountApplicationInformation gets account information about a given app.
+func (client RestClient) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (response []byte, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), rawFormat{Format: "msgpack"})
+	return
+}
+
 // AccountAssetInformation gets account information about a given app.
 func (client RestClient) AccountAssetInformation(accountAddress string, assetID uint64) (response generatedV2.AccountAssetResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
+	return
+}
+
+// RawAccountAssetInformation gets account information about a given app.
+func (client RestClient) RawAccountAssetInformation(accountAddress string, assetID uint64) (response []byte, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), rawFormat{Format: "msgpack"})
 	return
 }
 
