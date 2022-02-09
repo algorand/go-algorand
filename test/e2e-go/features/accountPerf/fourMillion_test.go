@@ -58,13 +58,16 @@ func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan
 			break
 		}
 		var err error
-		for x := 0; x < 50; x++ { // retry only 50 times
+		for x := 0; x < 100; x++ { // retry only 50 times
 			_, err = c.BroadcastTransaction(*stxn)
 			if err == nil {
 				break
 			}
-			handleError(err, "Error broadcasting transaction", errChan)
+			fmt.Printf("broadcastTransactions[%d]: %s", x, err)
 			time.Sleep(time.Millisecond * 256)
+		}
+		if err != nil {
+			handleError(err, "Error broadcastTransactions", errChan)
 		}
 	}
 	queueWg.Done()
@@ -75,13 +78,17 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 		if stxns == nil {
 			break
 		}
+		var err error
 		for x := 0; x < 20; x++ { // retry only 20 times
-			err := c.BroadcastTransactionGroup(stxns)
+			err = c.BroadcastTransactionGroup(stxns)
 			if err == nil {
 				break
 			}
-			handleError(err, "Error broadcasting transaction", errChan)
+			fmt.Printf("broadcastTransactionGroups[%d]: %s", x, err)
 			time.Sleep(time.Millisecond * 256)
+		}
+		if err != nil {
+			handleError(err, "Error broadcastTransactionGroups", errChan)
 		}
 	}
 	queueWg.Done()
@@ -170,7 +177,7 @@ func Test5MAssets(t *testing.T) {
 	ba := generateKeys(1)
 	baseAcct := ba[0]
 	sender, err := basics.UnmarshalChecksumAddress(wAcct)
-	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 100000000000000, 1, genesisHash)
+	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 1000000000000000, 1, genesisHash)
 	err = signAndBroadcastTransaction(0, &satxn, client, &fixture)
 	require.NoError(t, err)
 
@@ -335,11 +342,11 @@ func scenarioA(
 
 	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 	numberOfAccounts := uint64(6000) // 6K
-	numberOfAssets := uint64(60000)  // 6M
+	numberOfAssets := uint64(6000000)  // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
-	balance := uint64(200000000) // 100300000 for (1002 assets)
+	balance := uint64(200000000) // 100300000 for (1002 assets)  99363206259 below min 99363300000 (993632 assets)
 
 	totalAssetAmount := uint64(0)
 
@@ -412,7 +419,7 @@ func scenarioA(
 	// have a single account opted in all of them
 	ownAllAccount := keys[numberOfAccounts-1]
 	// make ownAllAccount very rich
-	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 100000000000, tLife, genesisHash)
+	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
 	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
