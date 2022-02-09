@@ -123,7 +123,7 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ui
 		0,
 		100,
 		[32]byte{},
-		cparams,
+		cparams.EnableStateProofKeyregCheck,
 	)
 
 	if cparams.SupportGenesisHash {

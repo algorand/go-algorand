@@ -221,7 +221,6 @@ var ErrMultipleKeysForID = errors.New("multiple valid keys found for the same pa
 var ErrNoKeyForID = errors.New("no valid key found for the participationID")
 
 // ErrSecretNotFound is used when attempting to lookup secrets for a particular round.
-// TODO: add round parameter to this error message?
 var ErrSecretNotFound = errors.New("the participation ID did not have secrets for the requested round")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
@@ -966,9 +965,12 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 
 		return nil
 	})
-	if err == ErrSecretNotFound {
+	switch err {
+	case nil:
+		// no error, continue
+	case ErrSecretNotFound: // not considered an error (yet), since some accounts may not have registered state proof yet
 		return result, nil
-	} else if err != nil {
+	default:
 		return StateProofRecordForRound{}, err
 	}
 
