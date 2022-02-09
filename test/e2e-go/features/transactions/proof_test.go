@@ -30,8 +30,8 @@ import (
 
 // TxnMerkleElemRaw this struct helps creates a hashable struct from the bytes
 type TxnMerkleElemRaw struct {
-	Txn  []byte // txn id
-	Stib []byte // hash value of transactions.SignedTxnInBlock
+	Txn  crypto.Digest // txn id
+	Stib crypto.Digest // hash value of transactions.SignedTxnInBlock
 }
 
 func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
@@ -121,7 +121,8 @@ func TestTxnMerkleProof(t *testing.T) {
 	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	element := TxnMerkleElemRaw{Txn: txid[:], Stib: proofresp.Stibhash}
+	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
+	copy(element.Stib[:], proofresp.Stibhash[:])
 
 	elems := make(map[uint64]crypto.Hashable)
 
