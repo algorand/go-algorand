@@ -172,11 +172,11 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 }
 
 // OverlapsInterval returns true if the partkey is valid at all within the range of rounds (inclusive)
-func (part ParticipationRecord) OverlapsInterval(first, last basics.Round) bool {
+func (r ParticipationRecord) OverlapsInterval(first, last basics.Round) bool {
 	if last < first {
 		logging.Base().Panicf("Round interval should be ordered (first = %v, last = %v)", first, last)
 	}
-	if last < part.FirstValid || first > part.LastValid {
+	if last < r.FirstValid || first > r.LastValid {
 		return false
 	}
 	return true
