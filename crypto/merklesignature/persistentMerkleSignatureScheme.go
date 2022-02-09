@@ -65,19 +65,25 @@ func (s *Secrets) Persist(store db.Accessor) error {
 		return fmt.Errorf("no keys provided (nil)")
 	}
 
+	if s.Interval == 0 {
+		return fmt.Errorf("Secrets.Persist: %w", errIntervalZero)
+	}
+
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := merkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
 			return err
 		}
 
-		if s.Interval == 0 {
-			return errIntervalZero
+		stmt, err := tx.Prepare(`INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)`)
+		if err != nil {
+			return fmt.Errorf("unable to prepare insert stateproofkeys statement: %w", err)
 		}
+
 		round := indexToRound(s.FirstValid, s.Interval, 0)
 		for i, key := range s.ephemeralKeys {
 			encodedKey := key.MarshalMsg(protocol.GetEncodingBuf())
-			_, err := tx.Exec("INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)", i, round, encodedKey)
+			_, err := stmt.Exec(i, round, encodedKey)
 			protocol.PutEncodingBuf(encodedKey)
 			if err != nil {
 				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
