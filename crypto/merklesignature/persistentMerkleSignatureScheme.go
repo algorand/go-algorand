@@ -77,7 +77,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 
 		insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)")
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to prepare insert stateproofkeys statement: %w", err)
 		}
 		defer insertStmt.Close()
 
