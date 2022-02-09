@@ -1238,6 +1238,13 @@
             },
             "type": "array"
           },
+          "logic-sig-disassembly": {
+            "description": "Disassembled lsig program line by line.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "logic-sig-messages": {
             "items": {
               "type": "string"
