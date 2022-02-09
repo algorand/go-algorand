@@ -142,3 +142,24 @@ func BenchmarkTxnRoots(b *testing.B) {
 
 	_ = r
 }
+
+func BenchmarkTxnMerkleToRaw(b *testing.B) {
+	digest1 := crypto.Hash([]byte{1, 2, 3})
+	digest2 := crypto.Hash([]byte{4, 5, 6})
+	txnMerkleToRawAppend := func(txid []byte, stib []byte) []byte {
+		buf := make([]byte, 0, 2*crypto.DigestSize)
+		buf = append(buf, txid...)
+		return append(buf, stib...)
+	}
+
+	b.Run("copy", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txnMerkleToRaw(digest1[:], digest2[:])
+		}
+	})
+	b.Run("append", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txnMerkleToRawAppend(digest1[:], digest2[:])
+		}
+	})
+}

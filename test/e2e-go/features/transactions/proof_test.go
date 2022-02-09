@@ -34,10 +34,11 @@ type TxnMerkleElemRaw struct {
 	Stib []byte // hash value of transactions.SignedTxnInBlock
 }
 
-func txnMerkleToRaw(txid []byte, stib []byte) []byte {
-	buf := make([]byte, 0, 2*crypto.DigestSize)
-	buf = append(buf, txid...)
-	return append(buf, stib...)
+func txnMerkleToRaw(txid []byte, stib []byte) (buf []byte) {
+	buf = make([]byte, 2*crypto.DigestSize)
+	copy(buf[:], txid[:])
+	copy(buf[crypto.DigestSize:], stib[:])
+	return
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
