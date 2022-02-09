@@ -360,6 +360,19 @@ pushint 1
 gitxnas 0 Logs
 `
 
+// TODO: finalize this when FIDO2 accepted
+const v7Nonsense = v6Nonsense + `
+base64_decode URLEncoding
+json_ref JSONUint64
+pushint 32
+bzero
+ecdsa_pk_decompress Secp256r1
+pushbytes 0x0123456789abcd
+dup
+dup
+ecdsa_verify Secp256r1
+`
+
 const v5CompiledNonsense = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03"
 
 const v6CompiledNonsense = v5CompiledNonsense + "b6"
@@ -2339,9 +2352,9 @@ func TestJsonRefAsm(t *testing.T) {
 	if fidoVersion > LogicVersion {
 		expectedMsg = "unknown opcode: json_ref"
 	}
-	testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref JSONUint64;`, 5, expect{3, expectedMsg})
+	testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref JSONUint64;`, 5, Expect{3, expectedMsg})
 	if fidoVersion <= AssemblerMaxVersion {
-		testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref 2 JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref expects one argument"})
-		testProg(t, `byte  "{\"key0\": [1]}"; byte \"key0\"; json_ref JSONArray;`, AssemblerMaxVersion, expect{3, "json_ref unsupported JSON value type: \"JSONArray\""})
+		testProg(t, `byte  "{\"key0\": 1}"; byte \"key0\"; json_ref 2 JSONArray;`, AssemblerMaxVersion, Expect{3, "json_ref expects one argument"})
+		testProg(t, `byte  "{\"key0\": [1]}"; byte \"key0\"; json_ref JSONArray;`, AssemblerMaxVersion, Expect{3, "json_ref unsupported JSON value type: \"JSONArray\""})
 	}
 }
