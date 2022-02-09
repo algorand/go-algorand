@@ -34,7 +34,7 @@ type TxnMerkleElemRaw struct {
 	Stib []byte // hash value of transactions.SignedTxnInBlock
 }
 
-func txnMerkleToRaw(txid []byte, stib []byte) (buf []byte) {
+func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
 	buf = make([]byte, 2*crypto.DigestSize)
 	copy(buf[:], txid[:])
 	copy(buf[crypto.DigestSize:], stib[:])
