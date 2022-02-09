@@ -33,8 +33,9 @@ import (
 
 // TODO put these in config
 const (
-	pseudonodeVerificationBacklog   = 32
-	maxPseudonodeOutputWaitDuration = 2 * time.Second
+	pseudonodeVerificationBacklog       = 32
+	maxPseudonodeOutputWaitDuration     = 2 * time.Second
+	votingKeysLoggingDurationThreashold = 200 * time.Millisecond
 )
 
 var errPseudonodeBacklogFull = fmt.Errorf("pseudonode input channel is full")
@@ -215,9 +216,18 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 	}
 	balanceRound := balanceRound(voteRound, cparams)
 
+	// measure the time it takes to acquire the voting keys.
+	beforeVotingKeysTime := time.Now()
+
 	// otherwise, we want to load the participation keys.
 	n.participationKeys = n.keys.VotingKeys(voteRound, balanceRound)
 	n.participationKeysRound = voteRound
+
+	votingKeysDuration := time.Since(beforeVotingKeysTime)
+	if votingKeysDuration > votingKeysLoggingDurationThreashold {
+		n.log.Warnf("asyncPseudonode: acquiring the %d voting keys for round %d took %v", len(n.participationKeys), voteRound, votingKeysDuration)
+	}
+
 	return n.participationKeys
 }
 

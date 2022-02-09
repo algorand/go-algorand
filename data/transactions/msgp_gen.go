@@ -1845,8 +1845,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "InnerTxns")
 				return
 			}
-			if zb0011 > config.MaxInnerTransactions {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxInnerTransactions))
+			if zb0011 > config.MaxInnerTransactionsPerDelta {
+				err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxInnerTransactionsPerDelta))
 				err = msgp.WrapError(err, "struct-from-array", "InnerTxns")
 				return
 			}
@@ -1963,8 +1963,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "InnerTxns")
 					return
 				}
-				if zb0017 > config.MaxInnerTransactions {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(config.MaxInnerTransactions))
+				if zb0017 > config.MaxInnerTransactionsPerDelta {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(config.MaxInnerTransactionsPerDelta))
 					err = msgp.WrapError(err, "InnerTxns")
 					return
 				}

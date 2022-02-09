@@ -239,8 +239,7 @@ func TestSigning(t *testing.T) {
 	a.Error(err)
 
 	err = signer.GetVerifier().Verify(start+5, hashable, sig)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	signer = generateTestSigner(50, 100, 12, a)
 	a.Equal(4, length(signer, a))
@@ -273,17 +272,14 @@ func TestBadRound(t *testing.T) {
 	hashable, sig := makeSig(signer, start, a)
 
 	err := signer.GetVerifier().Verify(start+1, hashable, sig)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	hashable, sig = makeSig(signer, start+1, a)
 	err = signer.GetVerifier().Verify(start, hashable, sig)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	err = signer.GetVerifier().Verify(start+2, hashable, sig)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
@@ -296,16 +292,14 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	sig2 := copySig(sig)
 	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
 	err := signer.GetVerifier().Verify(start, hashable, sig2)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	sig3 := copySig(sig)
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
 	err = signer.GetVerifier().Verify(start, hashable, sig3)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func copySig(sig Signature) Signature {
@@ -333,8 +327,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 	sig2.Signature = bs
 
 	err := signer.GetVerifier().Verify(start, hashable, sig2)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestIncorrectMerkleIndex(t *testing.T) {
@@ -351,17 +344,14 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 
 	sig.MerkleArrayIndex = 0
 	err = signer.GetVerifier().Verify(20, h, sig)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	sig.MerkleArrayIndex = math.MaxUint64
 	err = signer.GetVerifier().Verify(20, h, sig)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	err = signer.GetVerifier().Verify(20, h, sig)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 }
 
@@ -381,8 +371,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	sig2.VerifyingKey = *(key.GetVerifyingKey())
 
 	err := signer.GetVerifier().Verify(start+1, hashable, sig2)
-	a.Error(err)
-	a.Contains(err.Error(), ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestMarshal(t *testing.T) {
