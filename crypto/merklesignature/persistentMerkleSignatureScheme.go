@@ -68,7 +68,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 		return fmt.Errorf("Secrets.Persist: %w", errIntervalZero)
 	}
 	round := indexToRound(s.FirstValid, s.Interval, 0)
-
+	encodedKey := protocol.GetEncodingBuf()
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := merkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
@@ -81,7 +81,6 @@ func (s *Secrets) Persist(store db.Accessor) error {
 		}
 		defer insertStmt.Close()
 
-		encodedKey := protocol.GetEncodingBuf()
 		for i, key := range s.ephemeralKeys {
 			// reset the slice
 			encodedKey = encodedKey[:0]
@@ -94,9 +93,10 @@ func (s *Secrets) Persist(store db.Accessor) error {
 			}
 			round += s.Interval
 		}
-		protocol.PutEncodingBuf(encodedKey)
+
 		return nil
 	})
+	protocol.PutEncodingBuf(encodedKey)
 	if err != nil {
 		return fmt.Errorf("Secrets.Persist: %w", err)
 	}
