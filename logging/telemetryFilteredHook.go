@@ -84,9 +84,7 @@ func (hook *telemetryFilteredHook) Fire(entry *logrus.Entry) error {
 	}
 
 	// Also add version field, if not already present.
-	if _, has := entry.Data["v"]; has {
-		newEntry = newEntry
-	} else {
+	if _, has := entry.Data["v"]; !has {
 		newEntry = newEntry.WithField("v", hook.telemetryConfig.Version)
 	}
 	return hook.wrappedHook.Fire(newEntry)
