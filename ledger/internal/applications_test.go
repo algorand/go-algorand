@@ -45,7 +45,6 @@ type mockCowForLogicLedger struct {
 	cr     map[creatableLocator]basics.Address
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
-	tcs    map[int]basics.CreatableIndex
 	txc    uint64
 }
 
@@ -93,10 +92,6 @@ func (c *mockCowForLogicLedger) GetAssetHolding(addr basics.Address, aidx basics
 	}
 	ret, ok = acct.Assets[aidx]
 	return
-}
-
-func (c *mockCowForLogicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return c.tcs[groupIdx]
 }
 
 func (c *mockCowForLogicLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -172,27 +167,9 @@ func TestLogicLedgerMake(t *testing.T) {
 
 	a := require.New(t)
 
-	_, err := newLogicLedger(nil, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot make logic ledger for app index 0")
-
-	addr := ledgertesting.RandomAddress()
-	aidx := basics.AppIndex(1)
-
 	c := &mockCowForLogicLedger{}
-	_, err = newLogicLedger(c, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot make logic ledger for app index 0")
-
-	_, err = newLogicLedger(c, aidx)
-	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("app %d does not exist", aidx))
-
-	c = newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
+	l := newLogicLedger(c)
 	a.NotNil(l)
-	a.Equal(aidx, l.aidx)
 	a.Equal(c, l.cow)
 }
 
@@ -201,19 +178,16 @@ func TestLogicLedgerBalances(t *testing.T) {
 
 	a := require.New(t)
 
-	addr := ledgertesting.RandomAddress()
-	aidx := basics.AppIndex(1)
-	c := newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
+	c := newCowMock(nil)
+	l := newLogicLedger(c)
 	a.NotNil(l)
 
 	addr1 := ledgertesting.RandomAddress()
 	ble := basics.MicroAlgos{Raw: 100}
 	c.brs = map[basics.Address]basics.AccountData{addr1: {MicroAlgos: ble}}
-	bla, err := l.Balance(addr1)
+	acct, err := l.AccountData(addr1)
 	a.NoError(err)
-	a.Equal(ble, bla)
+	a.Equal(ble, acct.MicroAlgos)
 }
 
 func TestLogicLedgerGetters(t *testing.T) {
@@ -224,8 +198,7 @@ func TestLogicLedgerGetters(t *testing.T) {
 	addr := ledgertesting.RandomAddress()
 	aidx := basics.AppIndex(1)
 	c := newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
+	l := newLogicLedger(c)
 	a.NotNil(l)
 
 	round := basics.Round(1234)
@@ -235,12 +208,9 @@ func TestLogicLedgerGetters(t *testing.T) {
 
 	addr1 := ledgertesting.RandomAddress()
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {}}
-	a.Equal(aidx, l.ApplicationID())
 	a.Equal(round, l.Round())
 	a.Equal(ts, l.LatestTimestamp())
-	a.True(l.OptedIn(addr1, 0))
 	a.True(l.OptedIn(addr1, aidx))
-	a.False(l.OptedIn(addr, 0))
 	a.False(l.OptedIn(addr, aidx))
 }
 
@@ -257,11 +227,10 @@ func TestLogicLedgerAsset(t *testing.T) {
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 		{addr1, basics.CreatableIndex(assetIdx), basics.AssetCreatable},
 	})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
+	l := newLogicLedger(c)
 	a.NotNil(l)
 
-	_, _, err = l.AssetParams(basics.AssetIndex(aidx))
+	_, _, err := l.AssetParams(basics.AssetIndex(aidx))
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("asset %d does not exist", aidx))
 
@@ -303,8 +272,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 		{addr1, basics.CreatableIndex(assetIdx), basics.AssetCreatable},
 	})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
+	l := newLogicLedger(c)
 	a.NotNil(l)
 
 	_, ok, err := l.GetGlobal(basics.AppIndex(assetIdx), "gkey")
@@ -343,23 +311,22 @@ func TestLogicLedgerSetKey(t *testing.T) {
 	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
+	l := newLogicLedger(c)
 	a.NotNil(l)
 
 	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
-	err = l.SetGlobal("gkey", tv)
+	err := l.SetGlobal(aidx, "gkey", tv)
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("no store for (%s %d %v) in mock cow", addr, aidx, true))
 
 	tv2 := basics.TealValue{Type: basics.TealUintType, Uint: 2}
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, true}: {"gkey": tv}}
-	err = l.SetGlobal("gkey", tv2)
+	err = l.SetGlobal(aidx, "gkey", tv2)
 	a.NoError(err)
 
 	// check local
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, false}: {"lkey": tv}}
-	err = l.SetLocal(addr, "lkey", tv2, 0)
+	err = l.SetLocal(addr, aidx, "lkey", tv2, 0)
 	a.NoError(err)
 }
 
@@ -373,21 +340,20 @@ func TestLogicLedgerDelKey(t *testing.T) {
 	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
-	l, err := newLogicLedger(c, aidx)
-	a.NoError(err)
+	l := newLogicLedger(c)
 	a.NotNil(l)
 
-	err = l.DelGlobal("gkey")
+	err := l.DelGlobal(aidx, "gkey")
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("no store for (%s %d %v) in mock cow", addr, aidx, true))
 
 	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, true}: {"gkey": tv}}
-	err = l.DelGlobal("gkey")
+	err = l.DelGlobal(aidx, "gkey")
 	a.NoError(err)
 
 	addr1 := ledgertesting.RandomAddress()
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {"lkey": tv}}
-	err = l.DelLocal(addr1, "lkey", 0)
+	err = l.DelLocal(addr1, aidx, "lkey", 0)
 	a.NoError(err)
 }

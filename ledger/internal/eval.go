@@ -475,10 +475,6 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (ledg
 	return acct, nil
 }
 
-func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return cs.getCreatableIndex(groupIdx)
-}
-
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return cs.getCreator(cidx, ctype)
 }
@@ -620,6 +616,7 @@ type BlockEvaluator struct {
 type LedgerForEvaluator interface {
 	LedgerForCowBase
 	GenesisHash() crypto.Digest
+	GenesisProto() config.ConsensusParams
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
@@ -929,57 +926,17 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 	})
 }
 
-// prepareEvalParams creates a logic.EvalParams for each ApplicationCall
-// transaction in the group
-func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) []*logic.EvalParams {
-	var groupNoAD []transactions.SignedTxn
-	var pastSideEffects []logic.EvalSideEffects
-	var minTealVersion uint64
-	pooledApplicationBudget := uint64(0)
-	var credit uint64
-	res := make([]*logic.EvalParams, len(txgroup))
-	for i, txn := range txgroup {
-		// Ignore any non-ApplicationCall transactions
-		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
-			continue
-		}
-		if eval.proto.EnableAppCostPooling {
-			pooledApplicationBudget += uint64(eval.proto.MaxAppProgramCost)
-		} else {
-			pooledApplicationBudget = uint64(eval.proto.MaxAppProgramCost)
-		}
-
-		// Initialize side effects and group without ApplyData lazily
-		if groupNoAD == nil {
-			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
-			for j := range txgroup {
-				groupNoAD[j] = txgroup[j].SignedTxn
-			}
-			pastSideEffects = logic.MakePastSideEffects(len(txgroup))
-			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
-			credit, _ = transactions.FeeCredit(groupNoAD, eval.proto.MinTxnFee)
-			// intentionally ignoring error here, fees had to have been enough to get here
-		}
-
-		res[i] = &logic.EvalParams{
-			Txn:                     &groupNoAD[i],
-			Proto:                   &eval.proto,
-			TxnGroup:                groupNoAD,
-			GroupIndex:              uint64(i),
-			PastSideEffects:         pastSideEffects,
-			MinTealVersion:          &minTealVersion,
-			PooledApplicationBudget: &pooledApplicationBudget,
-			FeeCredit:               &credit,
-			Specials:                &eval.specials,
-		}
-	}
-	return res
-}
-
-// TransactionGroup tentatively executes a group of transactions as part of this block evaluation.
+// TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
+	return eval.transactionGroup(txads)
+}
+
+// transactionGroup tentatively executes a group of transactions as part of this block evaluation.
+// If the transaction group cannot be added to the block without violating some constraints,
+// an error is returned and the block evaluator state is unchanged.
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -994,15 +951,14 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
-	evalParams := eval.prepareEvalParams(txgroup)
+	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		cow.setGroupIdx(gi)
-		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -1093,7 +1049,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, gi int, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -1127,7 +1083,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, cow.txnCounter())
+	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -1164,13 +1120,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
-	// We are not allowing InnerTxns to have InnerTxns yet.  Error if that happens.
-	for _, itx := range applyData.EvalDelta.InnerTxns {
-		if len(itx.ApplyData.EvalDelta.InnerTxns) > 0 {
-			return fmt.Errorf("inner transaction has inner transactions %v", itx)
-		}
-	}
-
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)
 
@@ -1178,7 +1127,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, ctr uint64) (ad transactions.ApplyData, err error) {
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -1209,7 +1158,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
+		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
 
 	case protocol.CompactCertTx:
 		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
@@ -1225,12 +1174,25 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
 	}
 
+	// Record first, so that details can all be used in logic evaluation, even
+	// if cleared below. For example, `gaid`, introduced in v28 is now
+	// implemented in terms of the AD fields introduced in v30.
+	evalParams.RecordAD(gi, ad)
+
 	// If the protocol does not support rewards in ApplyData,
 	// clear them out.
 	if !params.RewardsInApplyData {
 		ad.SenderRewards = basics.MicroAlgos{}
 		ad.ReceiverRewards = basics.MicroAlgos{}
 		ad.CloseRewards = basics.MicroAlgos{}
+	}
+
+	// No separate config for activating these AD fields because inner
+	// transactions require their presence, so the consensus update to add
+	// inners also stores these IDs.
+	if params.MaxInnerTransactions == 0 {
+		ad.ApplicationID = 0
+		ad.ConfigAsset = 0
 	}
 
 	return

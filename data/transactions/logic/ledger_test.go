@@ -14,15 +14,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package logictest
+package logic
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -58,22 +59,13 @@ type asaParams struct {
 	Creator basics.Address
 }
 
-// Ledger is a convenient mock ledger that is used by
-// data/transactions/logic It is in its own package so that it can be
-// used by people developing teal code that need a fast testing setup,
-// rather than running against a real network.  It also might be
-// expanded to support the Balances interface so that we have fewer
-// mocks doing similar things.  By putting it here, it is publicly
-// exported, but will not be imported by non-test code, so won't bloat
-// binary.
+// Ledger is a fake ledger that is "good enough" to reasonably test AVM programs.
 type Ledger struct {
-	balances          map[basics.Address]balanceRecord
-	applications      map[basics.AppIndex]appParams
-	assets            map[basics.AssetIndex]asaParams
-	trackedCreatables map[int]basics.CreatableIndex
-	appID             basics.AppIndex
-	mods              map[basics.AppIndex]map[string]basics.ValueDelta
-	rnd               basics.Round
+	balances     map[basics.Address]balanceRecord
+	applications map[basics.AppIndex]appParams
+	assets       map[basics.AssetIndex]asaParams
+	mods         map[basics.AppIndex]map[string]basics.ValueDelta
+	rnd          basics.Round
 }
 
 // MakeLedger constructs a Ledger with the given balances.
@@ -85,7 +77,6 @@ func MakeLedger(balances map[basics.Address]uint64) *Ledger {
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]asaParams)
-	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
 }
@@ -104,26 +95,18 @@ func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 	l.balances[addr] = makeBalanceRecord(addr, balance)
 }
 
-// NewApp add a new AVM app to the Ledger, and arranges so that future
-// executions will act as though they are that app.  It only sets up
-// the id and schema, it inserts no code, since testing will want to
-// try many different code sequences.
+// NewApp add a new AVM app to the Ledger.  In most uses, it only sets up the id
+// and schema but no code, as testing will want to try many different code
+// sequences.
 func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
-	l.appID = appID
 	params = params.Clone()
 	if params.GlobalState == nil {
 		params.GlobalState = make(basics.TealKeyValue)
 	}
 	l.applications[appID] = appParams{
 		Creator:   creator,
-		AppParams: params.Clone(),
+		AppParams: params,
 	}
-	br, ok := l.balances[creator]
-	if !ok {
-		br = makeBalanceRecord(creator, 0)
-	}
-	br.locals[appID] = make(map[string]basics.TealValue)
-	l.balances[creator] = br
 }
 
 // NewAsset adds an asset with the given id and params to the ledger.
@@ -140,9 +123,12 @@ func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, par
 	l.balances[creator] = br
 }
 
-// freshID gets a new creatable ID that isn't in use
-func (l *Ledger) freshID() uint64 {
-	for try := l.appID + 1; true; try++ {
+const firstTestID = 5000
+
+// Counter implements LedgerForLogic, but it not really a txn counter, but is
+// sufficient for the logic package.
+func (l *Ledger) Counter() uint64 {
+	for try := firstTestID; true; try++ {
 		if _, ok := l.assets[basics.AssetIndex(try)]; ok {
 			continue
 		}
@@ -166,6 +152,9 @@ func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, 
 
 // NewLocals essentially "opts in" an address to an app id.
 func (l *Ledger) NewLocals(addr basics.Address, appID uint64) {
+	if _, ok := l.balances[addr]; !ok {
+		l.balances[addr] = makeBalanceRecord(addr, 0)
+	}
 	l.balances[addr].locals[basics.AppIndex(appID)] = basics.TealKeyValue{}
 }
 
@@ -208,48 +197,48 @@ func (l *Ledger) LatestTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
-// Balance returns the value in an account, as MicroAlgos
-func (l *Ledger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.MicroAlgos{Raw: 0}, nil
-	}
-	return basics.MicroAlgos{Raw: br.balance}, nil
-}
-
-// MinBalance computes the MinBalance requirement for an account,
-// under the given consensus parameters.
-func (l *Ledger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (amount basics.MicroAlgos, err error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		br = makeBalanceRecord(addr, 0)
-	}
-
-	var min uint64
-
-	// First, base MinBalance
-	min = proto.MinBalance
-
-	// MinBalance for each Asset
-	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(br.holdings)))
-	min = basics.AddSaturate(min, assetCost)
-
-	// Base MinBalance + GlobalStateSchema.MinBalance + ExtraProgramPages MinBalance for each created application
-	for _, params := range l.applications {
-		if params.Creator == addr {
-			min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
-			min = basics.AddSaturate(min, params.GlobalStateSchema.MinBalance(proto).Raw)
-			min = basics.AddSaturate(min, basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(params.ExtraProgramPages)))
+// AccountData returns a version of the account that is good enough for
+// satisfying AVM needs. (balance, calc minbalance, and authaddr)
+func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
+	br := l.balances[addr]
+	// br may come back empty if addr doesn't exist.  That's fine for our needs.
+	assets := make(map[basics.AssetIndex]basics.AssetParams)
+	for a, p := range l.assets {
+		if p.Creator == addr {
+			assets[a] = p.AssetParams
 		}
 	}
 
-	// Base MinBalance + LocalStateSchema.MinBalance for each opted in application
-	for idx := range br.locals {
-		min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
-		min = basics.AddSaturate(min, l.applications[idx].LocalStateSchema.MinBalance(proto).Raw)
+	schemaTotal := basics.StateSchema{}
+	pagesTotal := uint32(0)
+
+	apps := make(map[basics.AppIndex]basics.AppParams)
+	for a, p := range l.applications {
+		if p.Creator == addr {
+			apps[a] = p.AppParams
+			schemaTotal = schemaTotal.AddSchema(p.GlobalStateSchema)
+			pagesTotal = p.ExtraProgramPages
+		}
 	}
 
-	return basics.MicroAlgos{Raw: min}, nil
+	locals := map[basics.AppIndex]basics.AppLocalState{}
+	for a := range br.locals {
+		locals[a] = basics.AppLocalState{} // No need to fill in
+		schemaTotal = schemaTotal.AddSchema(l.applications[a].LocalStateSchema)
+	}
+
+	return ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos:          basics.MicroAlgos{Raw: br.balance},
+			AuthAddr:            br.auth,
+			TotalAppSchema:      schemaTotal,
+			TotalExtraAppPages:  pagesTotal,
+			TotalAppParams:      uint64(len(apps)),
+			TotalAppLocalStates: uint64(len(locals)),
+			TotalAssetParams:    uint64(len(assets)),
+			TotalAssets:         uint64(len(br.holdings)),
+		},
+	}, nil
 }
 
 // Authorizer returns the address that must authorize txns from a
@@ -269,12 +258,9 @@ func (l *Ledger) Authorizer(addr basics.Address) (basics.Address, error) {
 // GetGlobal returns the current value of a global in an app, taking
 // into account the mods created by earlier teal execution.
 func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
-	if appIdx == basics.AppIndex(0) {
-		appIdx = l.appID
-	}
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return basics.TealValue{}, false, fmt.Errorf("no such app")
+		return basics.TealValue{}, false, fmt.Errorf("no such app %d", appIdx)
 	}
 
 	// return most recent value if available
@@ -294,11 +280,10 @@ func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue
 
 // SetGlobal "sets" a global, but only through the mods mechanism, so
 // it can be removed with Reset()
-func (l *Ledger) SetGlobal(key string, value basics.TealValue) error {
-	appIdx := l.appID
+func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app")
+		return fmt.Errorf("no such app %d", appIdx)
 	}
 
 	// if writing the same value, return
@@ -319,11 +304,10 @@ func (l *Ledger) SetGlobal(key string, value basics.TealValue) error {
 
 // DelGlobal "deletes" a global, but only through the mods mechanism, so
 // the deletion can be Reset()
-func (l *Ledger) DelGlobal(key string) error {
-	appIdx := l.appID
+func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app")
+		return fmt.Errorf("no such app %d", appIdx)
 	}
 
 	exist := false
@@ -349,16 +333,13 @@ func (l *Ledger) DelGlobal(key string) error {
 // GetLocal returns the current value bound to a local key, taking
 // into account mods caused by earlier executions.
 func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	if appIdx == 0 {
-		appIdx = l.appID
-	}
 	br, ok := l.balances[addr]
 	if !ok {
 		return basics.TealValue{}, false, fmt.Errorf("no such address")
 	}
 	tkvd, ok := br.locals[appIdx]
 	if !ok {
-		return basics.TealValue{}, false, fmt.Errorf("no app for account")
+		return basics.TealValue{}, false, fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 
 	// check deltas first
@@ -377,16 +358,14 @@ func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 
 // SetLocal "sets" the current value bound to a local key using the
 // mods mechanism, so it can be Reset()
-func (l *Ledger) SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error {
-	appIdx := l.appID
-
+func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
 		return fmt.Errorf("no such address")
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
-		return fmt.Errorf("no app for account")
+		return fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 
 	// if writing the same value, return
@@ -407,16 +386,14 @@ func (l *Ledger) SetLocal(addr basics.Address, key string, value basics.TealValu
 
 // DelLocal "deletes" the current value bound to a local key using the
 // mods mechanism, so it can be Reset()
-func (l *Ledger) DelLocal(addr basics.Address, key string, accountIdx uint64) error {
-	appIdx := l.appID
-
+func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
 		return fmt.Errorf("no such address")
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
-		return fmt.Errorf("no app for account")
+		return fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 	exist := false
 	if _, ok := tkv[key]; ok {
@@ -442,27 +419,12 @@ func (l *Ledger) DelLocal(addr basics.Address, key string, accountIdx uint64) er
 // from NewLocals, but potentially from executing AVM inner
 // transactions.
 func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	if appIdx == 0 {
-		appIdx = l.appID
-	}
 	br, ok := l.balances[addr]
 	if !ok {
 		return false, fmt.Errorf("no such address")
 	}
 	_, ok = br.locals[appIdx]
 	return ok, nil
-}
-
-// SetTrackedCreatable remembers that the given cl "happened" in txn
-// groupIdx of the group, for use by GetCreatableID.
-func (l *Ledger) SetTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
-	l.trackedCreatables[groupIdx] = cl.Index
-}
-
-// GetCreatableID returns the creatable constructed in a given transaction
-// slot. For the test ledger, that's been set up by SetTrackedCreatable
-func (l *Ledger) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return l.trackedCreatables[groupIdx]
 }
 
 // AssetHolding gives the amount of an ASA held by an account, or
@@ -490,43 +452,7 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 	if app, ok := l.applications[appID]; ok {
 		return app.AppParams, app.Creator, nil
 	}
-	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app")
-}
-
-// ApplicationID gives ID of the "currently running" app.  For this
-// test ledger, that is chosen explicitly.
-func (l *Ledger) ApplicationID() basics.AppIndex {
-	return l.appID
-}
-
-// CreatorAddress returns of the address that created the "currently running" app.
-func (l *Ledger) CreatorAddress() basics.Address {
-	_, addr, _ := l.AppParams(l.appID)
-	return addr
-}
-
-// GetDelta translates the mods set by AVM execution into the standard
-// format of an EvalDelta.
-func (l *Ledger) GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error) {
-	if tkv, ok := l.mods[l.appID]; ok {
-		evalDelta.GlobalDelta = tkv
-	}
-	if len(txn.Accounts) > 0 {
-		accounts := make(map[basics.Address]int)
-		accounts[txn.Sender] = 0
-		for idx, addr := range txn.Accounts {
-			accounts[addr] = idx + 1
-		}
-		evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
-		for addr, br := range l.balances {
-			if idx, ok := accounts[addr]; ok {
-				if delta, ok := br.mods[l.appID]; ok {
-					evalDelta.LocalDeltas[uint64(idx)] = delta
-				}
-			}
-		}
-	}
-	return
+	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app %d", appID)
 }
 
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {
@@ -666,11 +592,12 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	return nil
 }
 
-func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields) (transactions.ApplyData, error) {
+func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields, ad *transactions.ApplyData) error {
 	if cfg.ConfigAsset == 0 {
-		aid := basics.AssetIndex(l.freshID())
+		aid := basics.AssetIndex(l.Counter())
 		l.NewAsset(from, aid, cfg.AssetParams)
-		return transactions.ApplyData{ConfigAsset: aid}, nil
+		ad.ConfigAsset = aid
+		return nil
 	}
 	// This is just a mock.  We don't check all the rules about
 	// not setting fields that have been zeroed. Nor do we keep
@@ -679,7 +606,7 @@ func (l *Ledger) acfg(from basics.Address, cfg transactions.AssetConfigTxnFields
 		Creator:     from,
 		AssetParams: cfg.AssetParams,
 	}
-	return transactions.ApplyData{}, nil
+	return nil
 }
 
 func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields) error {
@@ -693,55 +620,128 @@ func (l *Ledger) afrz(from basics.Address, frz transactions.AssetFreezeTxnFields
 	}
 	br, ok := l.balances[frz.FreezeAccount]
 	if !ok {
-		return fmt.Errorf("%s does not hold anything", from)
+		return fmt.Errorf("%s does not hold Asset (%d)", frz.FreezeAccount, aid)
 	}
 	holding, ok := br.holdings[aid]
 	if !ok {
-		return fmt.Errorf("%s does not hold Asset (%d)", from, aid)
+		return fmt.Errorf("%s does not hold Asset (%d)", frz.FreezeAccount, aid)
 	}
 	holding.Frozen = frz.AssetFrozen
 	br.holdings[aid] = holding
 	return nil
 }
 
-/* It's gross to reimplement this here, rather than have a way to use
-   a ledger that's backed by our mock, but uses the "real" code
-   (cowRoundState which implements Balances), as a better test. To
-   allow that, we need to move our mocks into separate packages so
-   they can be combined in yet *another* package, and avoid circular
-   imports.
-
-   This is currently unable to fill the ApplyData objects.  That would
-   require a whole new level of code duplication.
-*/
-
-// Perform causes txn to "occur" against the ledger. The returned ad is empty.
-func (l *Ledger) Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error) {
-	var ad transactions.ApplyData
-
-	err := l.move(txn.Sender, spec.FeeSink, txn.Fee.Raw)
-	if err != nil {
-		return ad, err
+func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnFields, ad *transactions.ApplyData, gi int, ep *EvalParams) error {
+	aid := appl.ApplicationID
+	if aid == 0 {
+		aid = basics.AppIndex(l.Counter())
+		params := basics.AppParams{
+			ApprovalProgram:   appl.ApprovalProgram,
+			ClearStateProgram: appl.ClearStateProgram,
+			GlobalState:       map[string]basics.TealValue{},
+			StateSchemas: basics.StateSchemas{
+				LocalStateSchema: basics.StateSchema{
+					NumUint:      appl.LocalStateSchema.NumUint,
+					NumByteSlice: appl.LocalStateSchema.NumByteSlice,
+				},
+				GlobalStateSchema: basics.StateSchema{
+					NumUint:      appl.GlobalStateSchema.NumUint,
+					NumByteSlice: appl.GlobalStateSchema.NumByteSlice,
+				},
+			},
+			ExtraProgramPages: appl.ExtraProgramPages,
+		}
+		l.NewApp(from, aid, params)
+		ad.ApplicationID = aid
 	}
 
-	err = l.rekey(txn)
-	if err != nil {
-		return ad, err
+	if appl.OnCompletion == transactions.ClearStateOC {
+		return errors.New("not implemented in test ledger")
 	}
 
-	switch txn.Type {
+	if appl.OnCompletion == transactions.OptInOC {
+		br, ok := l.balances[from]
+		if !ok {
+			return errors.New("no account")
+		}
+		br.locals[aid] = make(map[string]basics.TealValue)
+	}
+
+	// Execute the Approval program
+	params, ok := l.applications[aid]
+	if !ok {
+		return errors.New("No application")
+	}
+	pass, cx, err := EvalContract(params.ApprovalProgram, gi, aid, ep)
+	if err != nil {
+		return err
+	}
+	if !pass {
+		return errors.New("Approval program failed")
+	}
+	ad.EvalDelta = cx.Txn.EvalDelta
+
+	switch appl.OnCompletion {
+	case transactions.NoOpOC:
+	case transactions.OptInOC:
+		// done earlier so locals could be changed
+	case transactions.CloseOutOC:
+		// get the local state, error if not exists, delete it
+		br, ok := l.balances[from]
+		if !ok {
+			return errors.New("no account")
+		}
+		_, ok = br.locals[aid]
+		if !ok {
+			return errors.New("not opted in")
+		}
+		delete(br.locals, aid)
+	case transactions.DeleteApplicationOC:
+		// get the global object, delete it
+		_, ok := l.applications[aid]
+		if !ok {
+			return errors.New("no app")
+		}
+		delete(l.applications, aid)
+	case transactions.UpdateApplicationOC:
+		app, ok := l.applications[aid]
+		if !ok {
+			return errors.New("no app")
+		}
+		app.ApprovalProgram = appl.ApprovalProgram
+		app.ClearStateProgram = appl.ClearStateProgram
+		l.applications[aid] = app
+	}
+	return nil
+}
+
+// Perform causes txn to "occur" against the ledger.
+func (l *Ledger) Perform(gi int, ep *EvalParams) error {
+	txn := &ep.TxnGroup[gi]
+	err := l.move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee.Raw)
+	if err != nil {
+		return err
+	}
+
+	err = l.rekey(&txn.Txn)
+	if err != nil {
+		return err
+	}
+
+	switch txn.Txn.Type {
 	case protocol.PaymentTx:
-		err = l.pay(txn.Sender, txn.PaymentTxnFields)
+		return l.pay(txn.Txn.Sender, txn.Txn.PaymentTxnFields)
 	case protocol.AssetTransferTx:
-		err = l.axfer(txn.Sender, txn.AssetTransferTxnFields)
+		return l.axfer(txn.Txn.Sender, txn.Txn.AssetTransferTxnFields)
 	case protocol.AssetConfigTx:
-		ad, err = l.acfg(txn.Sender, txn.AssetConfigTxnFields)
+		return l.acfg(txn.Txn.Sender, txn.Txn.AssetConfigTxnFields, &txn.ApplyData)
 	case protocol.AssetFreezeTx:
-		err = l.afrz(txn.Sender, txn.AssetFreezeTxnFields)
+		return l.afrz(txn.Txn.Sender, txn.Txn.AssetFreezeTxnFields)
+	case protocol.ApplicationCallTx:
+		return l.appl(txn.Txn.Sender, txn.Txn.ApplicationCallTxnFields, &txn.ApplyData, gi, ep)
 	default:
-		err = fmt.Errorf("%s txn in AVM", txn.Type)
+		return fmt.Errorf("%s txn in AVM", txn.Txn.Type)
 	}
-	return ad, err
 }
 
 // Get() through allocated() implement cowForLogicLedger, so we should
