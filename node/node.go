@@ -1315,7 +1315,7 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
 	// on devmode, we don't need any voting keys for the agreement, since the agreement doesn't vote.
 	if node.devMode {
-		//		return []account.Participation{}
+		return []account.Participation{}
 	}
 
 	keys := node.accountManager.Keys(votingRound)

@@ -36,7 +36,7 @@ import (
 )
 
 const numberOfThreads = 256
-const printFreequency = 10
+const printFreequency = 50
 const groupTransactions = true
 const channelDepth = 100
 
