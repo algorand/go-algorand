@@ -70,7 +70,7 @@ type txnMerkleElem struct {
 	stib transactions.SignedTxnInBlock
 }
 
-func txnMerkleToRaw(txid []byte, stib []byte) (buf []byte) {
+func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
 	buf = make([]byte, 2*crypto.DigestSize)
 	copy(buf[:], txid[:])
 	copy(buf[crypto.DigestSize:], stib[:])
@@ -84,7 +84,7 @@ func (tme *txnMerkleElem) ToBeHashed() (protocol.HashID, []byte) {
 	txid := tme.txn.ID()
 	stib := tme.stib.Hash()
 
-	return protocol.TxnMerkleLeaf, txnMerkleToRaw(txid[:], stib[:])
+	return protocol.TxnMerkleLeaf, txnMerkleToRaw(txid, stib)
 }
 
 // Hash implements an optimized version of crypto.HashObj(tme).
@@ -99,6 +99,6 @@ func (tme *txnMerkleElem) HashRepresentation() []byte {
 	var buf [len(protocol.TxnMerkleLeaf) + 2*crypto.DigestSize]byte
 	s := buf[:0]
 	s = append(s, protocol.TxnMerkleLeaf...)
-	s = append(s, txnMerkleToRaw(txid[:], stib[:])...)
+	s = append(s, txnMerkleToRaw(txid, stib)...)
 	return s
 }
