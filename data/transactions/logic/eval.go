@@ -78,39 +78,28 @@ type stackValue struct {
 	Bytes []byte
 }
 
-func (sv *stackValue) argType() StackType {
+func (sv stackValue) argType() StackType {
 	if sv.Bytes != nil {
 		return StackBytes
 	}
 	return StackUint64
 }
 
-func (sv *stackValue) typeName() string {
+func (sv stackValue) typeName() string {
 	if sv.Bytes != nil {
 		return "[]byte"
 	}
 	return "uint64"
 }
 
-func (sv *stackValue) clone() stackValue {
-	if sv.Bytes != nil {
-		// clone stack value if Bytes
-		bytesClone := make([]byte, len(sv.Bytes))
-		copy(bytesClone, sv.Bytes)
-		return stackValue{Bytes: bytesClone}
-	}
-	// otherwise no cloning is needed if Uint
-	return stackValue{Uint: sv.Uint}
-}
-
-func (sv *stackValue) String() string {
+func (sv stackValue) String() string {
 	if sv.Bytes != nil {
 		return hex.EncodeToString(sv.Bytes)
 	}
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
-func (sv *stackValue) address() (addr basics.Address, err error) {
+func (sv stackValue) address() (addr basics.Address, err error) {
 	if len(sv.Bytes) != len(addr) {
 		return basics.Address{}, errors.New("not an address")
 	}
@@ -118,14 +107,14 @@ func (sv *stackValue) address() (addr basics.Address, err error) {
 	return
 }
 
-func (sv *stackValue) uint() (uint64, error) {
+func (sv stackValue) uint() (uint64, error) {
 	if sv.Bytes != nil {
 		return 0, errors.New("not a uint64")
 	}
 	return sv.Uint, nil
 }
 
-func (sv *stackValue) uintMaxed(max uint64) (uint64, error) {
+func (sv stackValue) uintMaxed(max uint64) (uint64, error) {
 	if sv.Bytes != nil {
 		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
 	}
@@ -135,7 +124,7 @@ func (sv *stackValue) uintMaxed(max uint64) (uint64, error) {
 	return sv.Uint, nil
 }
 
-func (sv *stackValue) bool() (bool, error) {
+func (sv stackValue) bool() (bool, error) {
 	u64, err := sv.uint()
 	if err != nil {
 		return false, err
@@ -150,7 +139,7 @@ func (sv *stackValue) bool() (bool, error) {
 	}
 }
 
-func (sv *stackValue) string(limit int) (string, error) {
+func (sv stackValue) string(limit int) (string, error) {
 	if sv.Bytes == nil {
 		return "", errors.New("not a byte array")
 	}
@@ -684,7 +673,9 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	cx.version = version
 	cx.pc = vlen
-	cx.stack = make([]stackValue, 0, 10)
+	// 16 is chosen to avoid growth for small programs, and so that repeated
+	// doublings lead to a number just a bit above 1000, the max stack height.
+	cx.stack = make([]stackValue, 0, 16)
 	cx.program = program
 	cx.Txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.Txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
@@ -904,7 +895,7 @@ func (cx *EvalContext) step() {
 		}
 	}
 
-	deets := spec.Details
+	deets := &spec.Details
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return
@@ -932,7 +923,7 @@ func (cx *EvalContext) step() {
 
 	if cx.err == nil {
 		postheight := len(cx.stack)
-		if spec.Name != "return" && postheight-preheight != len(spec.Returns)-len(spec.Args) {
+		if postheight-preheight != len(spec.Returns)-len(spec.Args) && spec.Name != "return" {
 			cx.err = fmt.Errorf("%s changed stack height improperly %d != %d",
 				spec.Name, postheight-preheight, len(spec.Returns)-len(spec.Args))
 			return

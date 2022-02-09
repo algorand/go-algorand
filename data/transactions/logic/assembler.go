@@ -1946,6 +1946,12 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 
 		// update all indexes into ops.pending that have been shifted by the above line
 
+		// This is a huge optimization for long repetitive programs. Takes
+		// BenchmarkUintMath from 160sec to 19s.
+		if positionDelta == 0 {
+			continue
+		}
+
 		for i := range ops.intcRefs {
 			if ops.intcRefs[i].position > position {
 				ops.intcRefs[i].position += positionDelta
