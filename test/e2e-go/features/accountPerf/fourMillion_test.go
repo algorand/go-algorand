@@ -374,7 +374,6 @@ func scenarioA(
 			fmt.Println("account create txn: ", i)
 		}
 		txn := sendAlgoTransaction(t, firstValid, baseAcct.pk, key.pk, balance, tLife, genesisHash)
-		//		fmt.Printf("sending with firstValid: %d\n", firstValid)
 		counter, txnGroup = queueTransaction(baseAcct.sk, txn, txnChan, txnGrpChan, counter, txnGroup)
 
 		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
@@ -525,15 +524,16 @@ func handleError(err error, message string, errChan chan<- error) {
 
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
+	lastRound := firstValid+counter-1
 	if force || counter+100 == tLife {
-		fmt.Printf("Waiting for round %d...", int(firstValid+counter))
+		fmt.Printf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
-			err := fixture.WaitForRound(firstValid+counter, time.Duration(waitBlock)*time.Second)
+			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
 			if err == nil {
 				fmt.Printf(" waited %d sec, done.\n", (x+1)*waitBlock)
 				status, err := fixture.AlgodClient.Status()
 				if err != nil {
-					return 0, firstValid + counter + 1, nil
+					return 0, lastRound + 1, nil
 				}
 				return 0, status.LastRound + 1, nil
 			} else {
