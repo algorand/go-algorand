@@ -231,12 +231,10 @@ func TestKeyRegCreation(t *testing.T) {
 
 	ppart := setupkeyWithNoDBS(t, a)
 
-	cur := config.Consensus[protocol.ConsensusCurrentVersion]
-	txn := ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, cur)
+	txn := ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, false)
 	a.Equal(txn.StateProofPK.IsEmpty(), true)
 
-	future := config.Consensus[protocol.ConsensusFuture]
-	txn = ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, future)
+	txn = ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, true)
 	a.Equal(txn.StateProofPK.IsEmpty(), false)
 }
 

@@ -205,7 +205,7 @@ func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClient
 	partkeyHandle.Vacuum(context.Background())
 	persistedParticipation.Close()
 
-	unsignedTxn := persistedParticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{}, c)
+	unsignedTxn := persistedParticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{}, c.EnableStateProofKeyregCheck)
 	copy(unsignedTxn.GenesisHash[:], genesisHash[:])
 	if err != nil {
 		a.NoError(err)
