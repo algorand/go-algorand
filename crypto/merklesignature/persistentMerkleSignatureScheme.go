@@ -41,7 +41,28 @@ var (
 )
 
 func merkleSignatureInstallDatabase(tx *sql.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE StateProofKeys (
+	var schemaVersion sql.NullInt32
+	err := tx.QueryRow("SELECT version FROM schema where tablename = ?", merkleSignatureTableSchemaName).Scan(&schemaVersion)
+	switch err {
+	case sql.ErrNoRows:
+		// proceed with the installation of the StateProofKeys table.
+	case nil:
+		// we were able to read from the schema successfully.
+		if schemaVersion.Valid {
+			switch schemaVersion.Int32 {
+			case merkleSignatureSchemaVersion:
+				// we're already at the desired version.
+				return nil
+			default:
+				// we're not at the desired version, proceed with update.
+			}
+		}
+	default:
+		// we hit some unexpected error
+		return fmt.Errorf("unable to query version from schema table : %w", err)
+	}
+
+	_, err = tx.Exec(`CREATE TABLE IF NOT EXISTS StateProofKeys (
     	id	  INTEGER PRIMARY KEY, 
     	round INTEGER,	    --*  committed round for this key
 		key   BLOB  --*  msgpack encoding of ParticipationAccount.StateProof.GenericSigningKey
@@ -54,6 +75,13 @@ func merkleSignatureInstallDatabase(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
+
+	// drop existing value from the schema and insert updated value.
+	_, err = tx.Exec("DELETE FROM schema WHERE tablename = ?", merkleSignatureTableSchemaName)
+	if err != nil {
+		return err
+	}
+
 	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", merkleSignatureTableSchemaName, merkleSignatureSchemaVersion)
 
 	return err

@@ -28,6 +28,36 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+func TestSecretsDatabaseUpgrade(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	store := createTestDB(a)
+	defer store.Close()
+
+	firstValid := uint64(1)
+	LastValid := uint64(5000)
+
+	interval := uint64(256)
+	mss, err := New(firstValid, LastValid, interval)
+	a.NoError(err)
+	a.NoError(mss.Persist(*store))
+
+	newMss := Secrets{}
+	newMss.SignerContext = mss.SignerContext
+	err = newMss.RestoreAllSecrets(*store)
+	a.NoError(err)
+
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err := merkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	a.NoError(err)
+}
+
 func TestFetchRestoreAllSecrets(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -60,6 +90,11 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 		a.Nil(key2)
 	}
 
+	// make sure we exercise the path of the database being upgraded, but then
+	// we would also expect to fail the Persist since the entries are already there.
+	// this is an expected failure since the Persist is only called on freshly created
+	// databases.
+	a.Contains(mss.Persist(*store).Error(), "failed to insert StateProof key number")
 }
 
 func createTestDB(a *require.Assertions) *db.Accessor {
