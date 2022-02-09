@@ -21,27 +21,29 @@ import (
 	"time"
 )
 
+const spinningCursorTickDuration = 100 * time.Millisecond
+
 // RunFuncWithSpinningCursor runs a given function in a go-routine,
 // while displaying a spinning cursor to the CLI
 func RunFuncWithSpinningCursor(asyncFunc func()) {
-	errChan := make(chan struct{}, 1)
+	doneChan := make(chan struct{}, 1)
 	go func() {
 		asyncFunc()
-		errChan <- struct{}{}
+		doneChan <- struct{}{}
 	}()
 
 	progressStrings := [...]string{"/", "-", "\\", "|"}
 
 	finished := false
 	i := 0
-
+	ticker := time.NewTicker(spinningCursorTickDuration)
 	for !finished {
-		timer := time.NewTimer(100 * time.Millisecond)
 		select {
-		case <-errChan:
+		case <-doneChan:
 			finished = true
+			ticker.Stop()
 			break
-		case <-timer.C:
+		case <-ticker.C:
 			fmt.Print(progressStrings[i])
 			fmt.Print("\b")
 			i = (i + 1) % len(progressStrings)

@@ -19,6 +19,7 @@ package merklesignature
 import (
 	"encoding/binary"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
