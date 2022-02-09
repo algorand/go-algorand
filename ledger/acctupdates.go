@@ -624,6 +624,11 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
 	return aul.au.ledger.GenesisHash()
 }
 
+// GenesisProto returns the genesis consensus params
+func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams {
+	return aul.au.ledger.GenesisProto()
+}
+
 // CompactCertVoters returns the top online accounts at round rnd.
 func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
 	return aul.au.voters.getVoters(rnd)
