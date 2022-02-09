@@ -36,7 +36,7 @@ import (
 )
 
 const numberOfThreads = 256
-const printFreequency = 50
+const printFreequency = 200
 const groupTransactions = true
 const channelDepth = 100
 
@@ -145,7 +145,15 @@ func signerGrpTxn(
 	sigWg.Done()
 }
 
-func Test5MAssets(t *testing.T) {
+func Test5MAssetsScenario1(t *testing.T) {
+	test5MAssets(t, 1)
+}
+
+func Test5MAssetsScenario2(t *testing.T) {
+	test5MAssets(t, 2)
+}
+
+func test5MAssets(t *testing.T, scenario int) {
 	partitiontest.PartitionTest(t)
 
 	var fixture fixtures.RestClientFixture
@@ -231,7 +239,12 @@ func Test5MAssets(t *testing.T) {
 	}()
 
 	// Call different scenarios
-	scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
+	switch scenario {
+	case 1:
+		scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
+	case 2:
+		scenarioB(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
+	}
 }
 
 func generateKeys(numAccounts int) (keys []psKey) {
@@ -328,6 +341,7 @@ func sendAssetTransaction(
 	return
 }
 
+// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 func scenarioA(
 	t *testing.T,
 	fixture *fixtures.RestClientFixture,
@@ -340,9 +354,8 @@ func scenarioA(
 
 	client := fixture.LibGoalClient
 
-	// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
-	numberOfAccounts := uint64(6000) // 6K
-	numberOfAssets := uint64(6000000)  // 6M
+	numberOfAccounts := uint64(6000)  // 6K
+	numberOfAssets := uint64(6000000) // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -398,7 +411,6 @@ func scenarioA(
 			if nai%printFreequency == 0 && int(asi)%printFreequency == 0 {
 				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
-			//			fmt.Printf("sending with firstValid: %d\n", firstValid)
 			atx := createAssetTransaction(t, firstValid, na.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
 			totalAssetAmount += uint64(600000000) + assetAmount
 			assetAmount++
@@ -511,6 +523,75 @@ func scenarioA(
 	require.Equal(t, totalAssetAmount, tAssetAmt)
 }
 
+// create 6M unique assets, all created by a single account.
+func scenarioB(
+	t *testing.T,
+	fixture *fixtures.RestClientFixture,
+	baseAcct psKey,
+	genesisHash crypto.Digest,
+	txnChan chan<- *txnKey,
+	txnGrpChan chan<- []txnKey,
+	tLife uint64,
+	stopChan <-chan struct{}) {
+
+	client := fixture.LibGoalClient
+
+	numberOfAssets := uint64(600000) // 6M
+	totalAssetAmount := uint64(0)
+
+	defer func() {
+		close(txnChan)
+		close(txnGrpChan)
+	}()
+
+	firstValid := uint64(2)
+	counter := uint64(0)
+	txnGroup := make([]txnKey, 0, maxTxGroupSize)
+	var err error
+
+	fmt.Println("Creating accounts...")
+
+	// create 6M unique assets by a single account
+	assetAmount := uint64(100)
+
+	for asi := uint64(0); asi < numberOfAssets; asi++ {
+		select {
+		case <-stopChan:
+			require.Fail(t, "Test errored")
+		default:
+		}
+
+		if int(asi)%printFreequency == 0 {
+			fmt.Printf("create asset %d / %d\n", asi, numberOfAssets)
+		}
+		atx := createAssetTransaction(t, firstValid, baseAcct.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
+		totalAssetAmount += uint64(600000000) + assetAmount
+		assetAmount++
+
+		counter, txnGroup = queueTransaction(baseAcct.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
+
+		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+		require.NoError(t, err)
+	}
+
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
+
+	// Verify the assets are transfered here
+	info, err := client.AccountInformationV2(baseAcct.pk.String())
+	require.NoError(t, err)
+	require.Equal(t, int(numberOfAssets), len(*info.Assets))
+	tAssetAmt := uint64(0)
+	for _, asset := range *info.Assets {
+		tAssetAmt += asset.Amount
+	}
+	if totalAssetAmount != tAssetAmt {
+		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
+	}
+	require.Equal(t, totalAssetAmount, tAssetAmt)
+}
+
 func handleError(err error, message string, errChan chan<- error) {
 	if err != nil {
 		fmt.Printf("%s: %v\n", message, err)
@@ -524,7 +605,7 @@ func handleError(err error, message string, errChan chan<- error) {
 
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
-	lastRound := firstValid+counter-1
+	lastRound := firstValid + counter - 1
 	if force || counter+100 == tLife {
 		fmt.Printf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
