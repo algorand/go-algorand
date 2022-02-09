@@ -275,16 +275,16 @@ func TestBadRound(t *testing.T) {
 
 	err := signer.GetVerifier().Verify(start+1, hashable, sig)
 	a.Error(err)
-  a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	hashable, sig = makeSig(signer, start+1, a)
 	err = signer.GetVerifier().Verify(start, hashable, sig)
 	a.Error(err)
-  a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	err = signer.GetVerifier().Verify(start+2, hashable, sig)
 	a.Error(err)
-  a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 	a.True(errors.Is(err, ErrSignatureSchemeVerificationFailed))
 }
 
@@ -354,12 +354,12 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	sig.MerkleArrayIndex = 0
 	err = signer.GetVerifier().Verify(20, h, sig)
 	a.Error(err)
-  a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	sig.MerkleArrayIndex = math.MaxUint64
 	err = signer.GetVerifier().Verify(20, h, sig)
 	a.Error(err)
-  a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	err = signer.GetVerifier().Verify(20, h, sig)
 	a.Error(err)
