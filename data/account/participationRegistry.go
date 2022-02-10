@@ -939,6 +939,7 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 	return results
 }
 
+// GetStateProofForRound returns the state proof data required to sign the compact certificate for this round
 func (db *participationDB) GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error) {
 	partRecord, err := db.GetForRound(id, round)
 	if err != nil {
