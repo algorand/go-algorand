@@ -162,8 +162,16 @@ func test5MAssets(t *testing.T, scenario int) {
 	var hkWg sync.WaitGroup
 
 	maxTxGroupSize = config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeOneWalletFuture.json"))
 
-	fixture.Setup(t, filepath.Join("nettemplates", "DevModeOneWalletFuture.json"))
+	for _, nodeDir := range fixture.NodeDataDirs() {
+		cfg, err := config.LoadConfigFromDisk(nodeDir)
+		require.NoError(t, err)
+		cfg.MaxAccountsAPIResults = 7000000
+		cfg.SaveToDisk(nodeDir)
+	}
+	fixture.Start()
+
 	defer func() {
 		hkWg.Wait()
 		fixture.Shutdown()
@@ -510,7 +518,9 @@ func scenarioA(
 	require.NoError(t, err)
 
 	// Verify the assets are transfered here
+	t0 := time.Now()
 	info, err := client.AccountInformationV2(ownAllAccount.pk.String())
+	fmt.Printf("AccountInformationV2 retrieval time: %s\n", time.Since(t0).String())
 	require.NoError(t, err)
 	require.Equal(t, int(numberOfAssets), len(*info.Assets))
 	tAssetAmt := uint64(0)
@@ -579,7 +589,9 @@ func scenarioB(
 	require.NoError(t, err)
 
 	// Verify the assets are transfered here
+	t0 := time.Now()
 	info, err := client.AccountInformationV2(baseAcct.pk.String())
+	fmt.Printf("AccountInformationV2 retrieval time: %s\n", time.Since(t0).String())
 	require.NoError(t, err)
 	require.Equal(t, int(numberOfAssets), len(*info.Assets))
 	tAssetAmt := uint64(0)
