@@ -160,6 +160,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	var sigWg sync.WaitGroup
 	var queueWg sync.WaitGroup
 	var hkWg sync.WaitGroup
+	var errWatcherWg sync.WaitGroup
 
 	maxTxGroupSize = config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeOneWalletFuture.json"))
@@ -223,6 +224,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	}
 
 	// error handling
+	errWatcherWg.Add(1)
 	go func() {
 		errCount := 0
 		for range errChan {
@@ -233,6 +235,8 @@ func test5MAssets(t *testing.T, scenario int) {
 				break
 			}
 		}
+		close(stopChan)
+		errWatcherWg.Done()
 	}()
 
 	// some housekeeping
@@ -243,7 +247,8 @@ func test5MAssets(t *testing.T, scenario int) {
 		close(sigTxnGrpChan)
 		queueWg.Wait()
 		close(errChan)
-		hkWg.Done()
+		errWatcherWg.Wait()
+		hkWg.Done()		
 	}()
 
 	// Call different scenarios
