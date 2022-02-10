@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -99,7 +99,7 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 
 	// Check signature
 	ephID := basics.OneTimeIDForRound(b.SigRound, p.KeyDilution)
-	if verifySig && !p.PK.Verify(ephID, b.Msg, sig) {
+	if verifySig && !p.PK.Verify(ephID, b.Msg, sig, b.EnableBatchVerification) {
 		return fmt.Errorf("signature does not verify under ID %v", ephID)
 	}
 

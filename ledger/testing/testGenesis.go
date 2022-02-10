@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,7 +87,6 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 	blk.BlockHeader.GenesisID = "test"
 	blk.FeeSink = testSinkAddr
 	blk.RewardsPool = testPoolAddr
-
 	crypto.RandBytes(blk.BlockHeader.GenesisHash[:])
 
 	addrs := []basics.Address{}

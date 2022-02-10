@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -1365,35 +1366,24 @@ int 1`
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
-	app, err := basics.UnmarshalChecksumAddress("6BPQU5WNZMTO4X72A2THZCGNJNTTE7YL6AWCYSUUTZEIYMJSEPJCQQ6DQI")
-	a.NoError(err)
 
 	// make balance records
 	appIdx := basics.AppIndex(100)
 	dr := DryrunRequest{
-		Txns: []transactions.SignedTxn{{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: transactions.Header{
-					Sender: sender,
-					Fee:    basics.MicroAlgos{Raw: 100},
-					Note:   []byte{1, 2, 3},
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: appIdx,
-				},
+		ProtocolVersion: string(dryrunProtoVersion),
+		Txns: []transactions.SignedTxn{txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender,
+			ApplicationID: appIdx,
+		}.SignedTxn()},
+		Apps: []generated.Application{{
+			Id: uint64(appIdx),
+			Params: generated.ApplicationParams{
+				Creator:           sender.String(),
+				ApprovalProgram:   approval,
+				ClearStateProgram: clst,
 			},
 		}},
-		Apps: []generated.Application{
-			{
-				Id: uint64(appIdx),
-				Params: generated.ApplicationParams{
-					Creator:           sender.String(),
-					ApprovalProgram:   approval,
-					ClearStateProgram: clst,
-				},
-			},
-		},
 		Accounts: []generated.Account{
 			{
 				Address:                     sender.String(),
@@ -1402,23 +1392,16 @@ int 1`
 				AmountWithoutPendingRewards: 10000000,
 			},
 			{
-				Address:                     app.String(),
+				Address:                     appIdx.Address().String(),
 				Status:                      "Offline",
 				Amount:                      10000000,
 				AmountWithoutPendingRewards: 10000000,
 			},
-			{
-				Address: basics.Address{}.String(),
-				Status:  "Offline",
-			},
 		},
 	}
 
-	dr.ProtocolVersion = string(dryrunProtoVersion)
-
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
-	require.NoError(t, err)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
@@ -1480,6 +1463,60 @@ int 0
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
 	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
+
+func TestDryrunInnerPay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	paySender, err := logic.AssembleString(`
+#pragma version 5
+itxn_begin
+int pay
+itxn_field TypeEnum
+txn Sender
+itxn_field Receiver
+int 10
+itxn_field Amount
+itxn_submit
+int 1
+`)
+	require.NoError(t, err)
+
+	ops, err := logic.AssembleString("int 1")
+	clst := ops.Program
+	require.NoError(t, err)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(7)
+	dr := DryrunRequest{
+		ProtocolVersion: string(dryrunProtoVersion),
+		Txns: []transactions.SignedTxn{txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender,
+			ApplicationID: appIdx,
+		}.SignedTxn()},
+		Apps: []generated.Application{{
+			Id: uint64(appIdx),
+			Params: generated.ApplicationParams{
+				ApprovalProgram:   paySender.Program,
+				ClearStateProgram: clst,
+			},
+		}},
+		// Sender must exist (though no fee is ever taken)
+		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
+		Accounts: []generated.Account{
+			{Address: sender.String(), Status: "Offline"},                                                // sender
+			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: 1_010}}, // app account
+	}
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)

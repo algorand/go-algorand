@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,6 +136,8 @@ func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockH
 		ProvenWeight: provenWeight,
 		SigRound:     hdr.Round + 1,
 		SecKQ:        proto.CompactCertSecKQ,
+
+		EnableBatchVerification: proto.EnableBatchVerification,
 	}
 	return
 }

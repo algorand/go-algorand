@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -120,7 +120,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
 		TimeStamp:    0,
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
@@ -219,7 +219,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
 		TimeStamp:    0,
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
@@ -686,6 +686,10 @@ func TestLedgerSingleTxV24(t *testing.T) {
 
 	badTx = correctAppCall
 	badTx.ApplicationID = 0
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "ApprovalProgram: invalid program (empty)")
+	badTx.ApprovalProgram = []byte{242}
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
 	a.Error(err)
 	a.Contains(err.Error(), "ApprovalProgram: invalid version")
@@ -1216,7 +1220,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				Round:        l.Latest() + 1,
 				Branch:       lastBlock.Hash(),
 				TimeStamp:    0,
-				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
 				// Seed:       does not matter,
 				// UpgradeVote: empty,

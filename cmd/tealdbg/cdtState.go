@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ type cdtState struct {
 	// immutable content
 	disassembly string
 	proto       *config.ConsensusParams
-	txnGroup    []transactions.SignedTxn
+	txnGroup    []transactions.SignedTxnWithAD
 	groupIndex  int
 	globals     []basics.TealValue
 
@@ -90,7 +90,7 @@ var txnFileTypeHints = map[logic.TxnField]typeHint{
 	logic.FreezeAssetAccount:  addressHint,
 }
 
-func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []basics.TealValue) {
+func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxnWithAD, groupIndex int, globals []basics.TealValue) {
 	s.disassembly = disassembly
 	s.proto = proto
 	s.txnGroup = txnGroup
@@ -368,7 +368,8 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 			field == int(logic.CreatedApplicationID) ||
 			field == int(logic.CreatedAssetID) ||
 			field == int(logic.Logs) ||
-			field == int(logic.NumLogs) {
+			field == int(logic.NumLogs) ||
+			field == int(logic.LastLog) {
 			continue
 		}
 		var value string
@@ -460,7 +461,7 @@ func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 	return
 }
 
-func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) cdt.RuntimeObjectPreview {
+func makeTxnPreview(txnGroup []transactions.SignedTxnWithAD, groupIndex int) cdt.RuntimeObjectPreview {
 	var prop []cdt.RuntimePropertyPreview
 	if len(txnGroup) > 0 {
 		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex)
@@ -471,7 +472,7 @@ func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) cdt.Runti
 	return p
 }
 
-func makeGtxnPreview(txnGroup []transactions.SignedTxn) cdt.RuntimeObjectPreview {
+func makeGtxnPreview(txnGroup []transactions.SignedTxnWithAD) cdt.RuntimeObjectPreview {
 	prop := makeIntPreview(len(txnGroup))
 	p := cdt.RuntimeObjectPreview{
 		Type:        "object",

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -217,7 +217,7 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 
 // MultisigVerify verifies an assembled MultisigSig
 func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, err error) {
-	batchVerifier := MakeBatchVerifierDefaultSize()
+	batchVerifier := MakeBatchVerifierWithAlgorithmDefaultSize()
 
 	if verified, err = MultisigBatchVerify(msg, addr, sig, batchVerifier); err != nil {
 		return

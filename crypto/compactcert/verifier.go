@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		parts[pos] = crypto.HashObj(r.Part)
 
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
-		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
+		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature, v.EnableBatchVerification) {
 			return fmt.Errorf("signature in reveal pos %d does not verify", pos)
 		}
 	}

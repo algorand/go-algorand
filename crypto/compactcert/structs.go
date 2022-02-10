@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,8 @@ type Params struct {
 	ProvenWeight uint64          // Weight threshold proven by the certificate
 	SigRound     basics.Round    // Ephemeral signature round to expect
 	SecKQ        uint64          // Security parameter (k+q) from analysis document
+
+	EnableBatchVerification bool // whether ED25519 batch verification is enabled
 }
 
 // CompactOneTimeSignature is crypto.OneTimeSignature with omitempty

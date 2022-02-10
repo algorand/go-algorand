@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -131,7 +131,7 @@ func TestServerRemote(t *testing.T) {
 
 func TestServerLocal(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 	dp := DebugParams{
 		ProgramNames: []string{"test"},
 		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1

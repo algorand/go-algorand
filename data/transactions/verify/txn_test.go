@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -126,7 +126,7 @@ func TestSignedPayment(t *testing.T) {
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
 	require.Error(t, Txn(&stxn2, 0, groupCtx), "verify succeeded with bad sig")
 
-	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
+	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig, true), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
 
 func TestTxnValidationEncodeDecode(t *testing.T) {

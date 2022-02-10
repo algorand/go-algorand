@@ -166,7 +166,6 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
-
       #- windows_x64_build
 
 commands:
@@ -197,7 +196,7 @@ commands:
           shell: bash.exe
           command: |
             choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.16.11 --force
+            choco install -y golang --version=1.14.7 --force
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
@@ -478,11 +477,14 @@ commands:
         - attach_workspace:
             at: << parameters.build_dir >>
         - run:
-            name: Upload binaries << parameters.platform >>
+            name: Upload Binaries << parameters.platform >>
             command: |
+              if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
+              then
+                export NO_BUILD="true"
+              fi
               export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"
-              export NO_BUILD=true
               export TRAVIS_BRANCH=${CIRCLE_BRANCH}
               scripts/travis/deploy_packages.sh
         - when:

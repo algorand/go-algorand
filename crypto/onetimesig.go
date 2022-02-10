@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,11 +20,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/algorand/go-deadlock"
-
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-deadlock"
 )
 
 // A OneTimeSignature is a cryptographic signature that is produced a limited
@@ -310,7 +308,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
 //
 // It returns true if this is the case; otherwise, it returns false.
-func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature) bool {
+func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature, batchVersionCompatible bool) bool {
 	offsetID := OneTimeSignatureSubkeyOffsetID{
 		SubKeyPK: sig.PK,
 		Batch:    id.Batch,
@@ -321,13 +319,13 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
-	if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig) {
+	if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig, batchVersionCompatible) {
 		return false
 	}
-	if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig) {
+	if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig, batchVersionCompatible) {
 		return false
 	}
-	if !ed25519Verify(offsetID.SubKeyPK, hashRep(message), sig.Sig) {
+	if !ed25519Verify(offsetID.SubKeyPK, hashRep(message), sig.Sig, batchVersionCompatible) {
 		return false
 	}
 	return true
@@ -432,10 +430,10 @@ type OneTimeSigner struct {
 }
 
 // KeyDilution returns the appropriate key dilution value for a OneTimeSigner.
-func (ots OneTimeSigner) KeyDilution(params config.ConsensusParams) uint64 {
+func (ots OneTimeSigner) KeyDilution(defaultKeyDilution uint64) uint64 {
 	if ots.OptionalKeyDilution != 0 {
 		return ots.OptionalKeyDilution
 	}
 
-	return params.DefaultKeyDilution
+	return defaultKeyDilution
 }

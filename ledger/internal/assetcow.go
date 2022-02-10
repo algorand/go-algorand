@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,8 +28,6 @@ func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIn
 			Creator: addr,
 			Created: true,
 		}
-
-		cs.trackCreatable(basics.CreatableIndex(index))
 	} else {
 		aa := ledgercore.AccountAsset{
 			Address: addr,

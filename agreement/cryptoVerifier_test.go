@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -72,7 +72,7 @@ func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.
 
 	m, _ := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion]))
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution))
 	sig := voting.Sign(ephID, rv)
 
 	return unauthenticatedVote{

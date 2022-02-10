@@ -311,11 +311,14 @@ type DryrunTxnResult struct {
 	Disassembly []string `json:"disassembly"`
 
 	// Application state delta.
-	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
-	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
-	Logs             *[][]byte            `json:"logs,omitempty"`
+	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
+
+	// Disassembled lsig program line by line.
+	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
+	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
+	Logs                *[][]byte      `json:"logs,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -640,7 +643,7 @@ type PendingTransactionsResponse struct {
 // PostParticipationResponse defines model for PostParticipationResponse.
 type PostParticipationResponse struct {
 
-	// encoding of the participation id.
+	// encoding of the participation ID.
 	PartId string `json:"partId"`
 }
 

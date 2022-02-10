@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 )
@@ -86,7 +85,6 @@ type DebugParams struct {
 	Proto            string
 	TxnBlob          []byte
 	GroupIndex       int
-	PastSideEffects  []logic.EvalSideEffects
 	BalanceBlob      []byte
 	DdrBlob          []byte
 	IndexerURL       string
