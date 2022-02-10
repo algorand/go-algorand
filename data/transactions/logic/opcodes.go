@@ -25,9 +25,6 @@ import (
 // LogicVersion defines default assembler and max eval versions
 const LogicVersion = 7
 
-// TODO: remove the following temporary constant when FIDO2 strategy finalized
-const fidoVersion = LogicVersion
-
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
 // be maliciously or accidentally rekeyed. Do not edit!

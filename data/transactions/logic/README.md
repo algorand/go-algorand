@@ -310,19 +310,17 @@ return stack matches the name of the input value.
 
 ### Byte Array Manipulation
 
-| Op | Description |
-| --- | --- |
-| `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
-| `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
-| `extract s l` | pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
-| `extract3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B+C is larger than the array length, the program fails |
-| `extract_uint16` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B+2 is larger than the array length, the program fails |
-| `extract_uint32` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B+4 is larger than the array length, the program fails |
-| `extract_uint64` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B+8 is larger than the array length, the program fails |
-| `base64_decode e` | decode X which was base64-encoded using _encoding_ E. Fail if X is not base64 encoded with encoding E |
-| `json_ref r` | return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A |
+| Opcode | Description |
+| - | -- |
+| `substring s e` | A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails |
+| `substring3` | A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails |
+| `extract s l` | A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
+| `extract3` | A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails |
+| `extract_uint16` | A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails |
+| `extract_uint32` | A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails |
+| `extract_uint64` | A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails |
 
-These opcodes take byte-array values that are interpreted as
+The following opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
 returned values are the shortest byte-array that can represent the
 returned value.  For example, the zero value is the empty
