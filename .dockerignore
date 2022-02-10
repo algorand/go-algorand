@@ -29,6 +29,7 @@ cmd/updater/updater
 tmp/dev_pkg
 tmp/out
 tmp/node_pkgs
+tmp/go-cache
 
 # Ignore vim backup and swap files
 *~

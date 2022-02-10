@@ -549,6 +549,14 @@
           "application/json": {
             "schema": {
               "properties": {
+                "hashtype": {
+                  "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                  "enum": [
+                    "sumhash",
+                    "sha512_256"
+                  ],
+                  "type": "string"
+                },
                 "idx": {
                   "description": "Index of the transaction in the block's payset.",
                   "type": "integer"
@@ -564,12 +572,18 @@
                   "format": "byte",
                   "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
                   "type": "string"
+                },
+                "treedepth": {
+                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+                  "type": "integer"
                 }
               },
               "required": [
+                "hashtype",
                 "idx",
                 "proof",
-                "stibhash"
+                "stibhash",
+                "treedepth"
               ],
               "type": "object"
             }
@@ -776,6 +790,12 @@
         "properties": {
           "selection-participation-key": {
             "description": "\\[sel\\] Selection public key (if any) currently registered for this round.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "state-proof-key": {
+            "description": "\\[stprf\\] Root of the state proof key (if any)",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
@@ -1235,6 +1255,13 @@
           "local-deltas": {
             "items": {
               "$ref": "#/components/schemas/AccountStateDelta"
+            },
+            "type": "array"
+          },
+          "logic-sig-disassembly": {
+            "description": "Disassembled lsig program line by line.",
+            "items": {
+              "type": "string"
             },
             "type": "array"
           },
@@ -2227,6 +2254,14 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "hashtype": {
+                      "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                      "enum": [
+                        "sumhash",
+                        "sha512_256"
+                      ],
+                      "type": "string"
+                    },
                     "idx": {
                       "description": "Index of the transaction in the block's payset.",
                       "type": "integer"
@@ -2242,12 +2277,18 @@
                       "format": "byte",
                       "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
                       "type": "string"
+                    },
+                    "treedepth": {
+                      "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+                      "type": "integer"
                     }
                   },
                   "required": [
+                    "hashtype",
                     "idx",
                     "proof",
-                    "stibhash"
+                    "stibhash",
+                    "treedepth"
                   ],
                   "type": "object"
                 }

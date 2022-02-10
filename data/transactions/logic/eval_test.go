@@ -97,6 +97,8 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 
 		EnableAppCostPooling:          true,
 		EnableInnerTransactionPooling: true,
+
+		SupportBecomeNonParticipatingTransactions: true,
 	}
 }
 
@@ -1371,6 +1373,36 @@ int 1
 // The additions in v6 were all "effects" so they must look behind.  They use gtxn 2.
 const testTxnProgramTextV6 = testTxnProgramTextV5 + `
 assert
+txn StateProofPK
+len
+int 64
+==
+assert
+
+gtxn 2 CreatedAssetID
+int 0
+==
+assert
+
+gtxn 2 CreatedApplicationID
+int 0
+==
+assert
+
+gtxn 2 NumLogs
+int 2
+==
+assert
+
+gtxn 2 Logs 1
+byte "prefilled"
+==
+assert
+
+gtxn 2 LastLog
+byte "prefilled"
+==
+assert
 
 gtxn 2 CreatedAssetID
 int 0
@@ -1407,6 +1439,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
 	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
+	copy(txn.Txn.StateProofPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiaoeuiao05"))
 	txn.Txn.XferAsset = 10
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
