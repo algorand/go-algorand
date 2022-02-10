@@ -481,8 +481,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
@@ -499,19 +498,8 @@ func TestKeyregValidityPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	// setup patched version
-	version := config.Consensus[protocol.ConsensusFuture]
-	oldValue := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-	version.MaxKeyregValidPeriod = 256*(1<<4) - 1
-	config.Consensus[protocol.ConsensusFuture] = version
-	defer func() {
-		version.MaxKeyregValidPeriod = oldValue
-		config.Consensus[protocol.ConsensusFuture] = version
-	}()
-
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
 

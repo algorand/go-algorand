@@ -1060,9 +1060,7 @@ func initConsensusProtocols() {
 	v31 := v30
 	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	v31.EnableBatchVerification = true
-
 	v31.RewardsCalculationFix = true
-
 	v31.MaxProposedExpiredOnlineAccounts = 32
 
 	// Enable TEAL 6 / AVM 1.1

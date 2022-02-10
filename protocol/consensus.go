@@ -164,10 +164,11 @@ const ConsensusV30 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bc36005dbd776e6d1eaf0c560619bb183215645c",
 )
 
-// ConsensusV31 enables the batch verification for ed25519 signatures. Fix reward calculation issue and introduces the ability
-// to force an expired participation offline
+// ConsensusV31 enables the batch verification for ed25519 signatures, Fix reward calculation issue, introduces the ability
+// to force an expired participation offline, enables TEAL 6 ( AVM 1.1 ) and add support for creating
+// state proof keys.
 const ConsensusV31 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/bbe7001b2ec84f8512b089fd89599ea887bb8b71",
+	"https://github.com/algorandfoundation/specs/tree/85e6db1fdbdef00aa232c75199e10dc5fe9498f6",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production

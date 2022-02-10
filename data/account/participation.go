@@ -222,7 +222,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 
 	// TODO: change to ConsensusCurrentVersion when updated
 	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
 
 	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
 		return PersistedParticipation{}, fmt.Errorf("the validity period for mss is too large: the limit is %d", maxValidPeriod)
