@@ -31,25 +31,27 @@ import (
 	"time"
 )
 
-func waitUntilProtocolFuture(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeClient libgoal.Client) {
+func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeClient libgoal.Client) {
 
 	curRound, err := nodeClient.CurrentRound()
 	a.NoError(err)
 
 	blk, err := nodeClient.Block(curRound)
 	a.NoError(err)
-	curProtocl := blk.CurrentProtocol
+	curProtocol := blk.CurrentProtocol
 
 	startTime := time.Now()
 
-	for strings.Compare(curProtocl, string(consensusTestFastUpgrade(protocol.ConsensusFuture))) != 0 {
+	// while consensus version has not upgraded
+	for strings.Compare(curProtocol, string(consensusTestFastUpgrade(protocol.ConsensusV30))) == 0 {
 		curRound = curRound + 1
 		fixture.WaitForRoundWithTimeout(curRound + 1)
 
+		// TODO: check node status instead of latest block?
 		blk, err := nodeClient.Block(curRound)
 		a.NoError(err)
 
-		curProtocl = blk.CurrentProtocol
+		curProtocol = blk.CurrentProtocol
 		if time.Now().After(startTime.Add(5 * time.Minute)) {
 			a.Fail("upgrade taking too long")
 		}
@@ -62,7 +64,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
-	consensus := getStateProofConcensus()
+	consensus := getStateProofConsensus()
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
@@ -72,10 +74,10 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
-	waitUntilProtocolFuture(a, &fixture, nodeClient)
+	waitUntilProtocolUpgrades(a, &fixture, nodeClient)
 
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
-	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusFuture))
+	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusV31))
 }
 
 func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
@@ -83,10 +85,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
-	consensus := make(config.ConsensusProtocols)
-	currentCon := config.Consensus[protocol.ConsensusV30]
-
-	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)] = currentCon
+	consensus := getStateProofConsensus()
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
@@ -97,8 +96,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
-	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusFuture))
-
+	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV31))
 }
 
 func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
@@ -139,12 +137,11 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ui
 	return err
 }
 
-func getStateProofConcensus() config.ConsensusProtocols {
+func getStateProofConsensus() config.ConsensusProtocols {
 	consensus := generateFastUpgradeConsensus()
 
-	// TODO: when upgrading from v29, need to change this from future to v30.
 	consensus[consensusTestFastUpgrade(protocol.ConsensusV30)].
-		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
+		ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusV31)] = 0
 	return consensus
 }
 
@@ -175,7 +172,7 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 	return false
 }
 
-// This test starts with participation keys in Version29, then attempts to let the richest user participate even after
+// This test starts with participation keys in Version30, then attempts to let the richest user participate even after
 //  consensus upgrade.
 func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -183,7 +180,7 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	consensus := getStateProofConcensus()
+	consensus := getStateProofConsensus()
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
@@ -197,7 +194,7 @@ func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	var address = act.Address
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
-	waitUntilProtocolFuture(a, &fixture, nodeClient)
+	waitUntilProtocolUpgrades(a, &fixture, nodeClient)
 
 	a.NotEmpty(address)
 

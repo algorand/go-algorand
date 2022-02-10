@@ -553,6 +553,9 @@ func TestAccountParticipationInfo(t *testing.T) {
 	firstRound := basics.Round(params.LastRound + 1)
 	lastRound := basics.Round(params.LastRound + 1000)
 	dilution := uint64(100)
+	var stateproof merklesignature.Verifier
+	stateproof[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v31)
+
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
 	copy(votePK[:], []byte(randomVotePKStr))
@@ -576,6 +579,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 			VoteKeyDilution: dilution,
 			VoteFirst:       firstRound,
 			VoteLast:        lastRound,
+			StateProofPK:    stateproof,
 		},
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
@@ -590,6 +594,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	a.Equal(uint64(firstRound), account.Participation.VoteFirst, "API must print correct first participation round")
 	a.Equal(uint64(lastRound), account.Participation.VoteLast, "API must print correct last participation round")
 	a.Equal(dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
+	// TODO: should we update the v1 API to support state proof? Currently it does not return this field.
 }
 
 func TestSupply(t *testing.T) {
@@ -1063,9 +1068,6 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	var localFixture fixtures.RestClientFixture
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	// TODO: remove these 2 lines when CurrentVersion contains them already
-	proto.EnableStateProofKeyregCheck = true
-	proto.MaxKeyregValidPeriod = config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
 	localFixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
 
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -1168,22 +1170,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 
-	// currently, the genesis creator uses the EnableStateProofKeyregCheck flag on the future
-	// version to write a statproof to the genesis file.
-	// we want to create a gensis file without state proof.
-	// + need to revert this change if other tests use that
-	tmp := config.Consensus[protocol.ConsensusFuture]
-	tmp.EnableStateProofKeyregCheck = false
-	config.Consensus[protocol.ConsensusFuture] = tmp
-
-	defer func() {
-		tmp := config.Consensus[protocol.ConsensusFuture]
-		tmp.EnableStateProofKeyregCheck = true
-		config.Consensus[protocol.ConsensusFuture] = tmp
-	}()
-
-	localFixture.SetConsensus(config.Consensus)
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
 	defer localFixture.Shutdown()
 
 	testClient := localFixture.LibGoalClient
@@ -1226,7 +1213,6 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 			VotePK:           votePK,
 			SelectionPK:      selPK,
 			VoteFirst:        firstRound,
-			StateProofPK:     merklesignature.Verifier{},
 			VoteLast:         lastRound,
 			VoteKeyDilution:  dilution,
 			Nonparticipation: false,
