@@ -940,19 +940,15 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 }
 
 func (db *participationDB) GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error) {
+	partRecord, err := db.GetForRound(id, round)
+	if err != nil {
+		return StateProofRecordForRound{}, err
+	}
+
 	var result StateProofRecordForRound
-
-	result.ParticipationRecord = db.Get(id)
-	if result.ParticipationRecord.IsZero() {
-		return StateProofRecordForRound{}, ErrParticipationIDNotFound
-	}
-
-	if round > result.LastValid {
-		return StateProofRecordForRound{}, ErrRequestedRoundOutOfRange
-	}
-
+	result.ParticipationRecord = partRecord.ParticipationRecord
 	var rawStateProofKey []byte
-	err := db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch secret key
 		row := tx.QueryRow(selectStateProofKey, round, id[:])
 		err := row.Scan(&rawStateProofKey)
