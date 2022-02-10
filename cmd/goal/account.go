@@ -982,7 +982,7 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 		}
 		fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, keyLastValidRound)
 	}
-	fmt.Printf("Generated participation key please standby...")
+	fmt.Println("Generated participation key please standby...")
 	util.RunFuncWithSpinningCursor(genFunc)
 	if err != nil {
 		return err
