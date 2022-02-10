@@ -33,7 +33,7 @@ const (
 
 	// MaxNumLeavesOnEncodedTree is the maximum number of leaves allowed for a tree which
 	// is being encoded (either by msbpack or by the fixed length encoding)
-	MaxNumLeavesOnEncodedTree = 65536 // 2^MaxEncodedTreeDepth
+	MaxNumLeavesOnEncodedTree = 1 << MaxEncodedTreeDepth
 )
 
 // Merkle tree errors
