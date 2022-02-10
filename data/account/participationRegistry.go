@@ -507,7 +507,7 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
 	var rawVRF []byte
 	var rawVoting []byte
-	var rawStateProof []byte
+	var rawStateProofContext []byte
 
 	if record.VRF != nil {
 		rawVRF = protocol.Encode(record.VRF)
@@ -519,7 +519,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 
 	// This contains all the state proof data except for the actual secret keys (stored in a different table)
 	if record.StateProofSecrets != nil {
-		rawStateProof = protocol.Encode(&record.StateProofSecrets.SignerContext)
+		rawStateProofContext = protocol.Encode(&record.StateProofSecrets.SignerContext)
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -531,7 +531,7 @@ func (db *participationDB) insertInner(record Participation, id ParticipationID)
 			record.LastValid,
 			record.KeyDilution,
 			rawVRF,
-			rawStateProof)
+			rawStateProofContext)
 		if err = verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
 			return err
 		}
