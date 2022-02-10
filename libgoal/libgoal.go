@@ -657,10 +657,10 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 }
 
 // AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string, includeAppAssets bool) (resp generatedV2.Account, err error) {
+func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp generatedV2.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformationV2(account, includeAppAssets)
+		resp, err = algod.AccountInformationV2(account, includeCreatables)
 	}
 	return
 }

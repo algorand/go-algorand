@@ -410,9 +410,9 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
 	var infoParams accountInformationParams
 	if includeCreatables {
-		infoParams = accountInformationParams{Include: "all"}
+		infoParams = accountInformationParams{Include: "all", Format: "json"}
 	} else {
-		infoParams = accountInformationParams{Include: "none"}
+		infoParams = accountInformationParams{Include: "none", Format: "json"}
 	}
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), infoParams)
 	return
