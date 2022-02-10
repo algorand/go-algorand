@@ -2454,10 +2454,6 @@ func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = pos + bytesUsed
 	return fmt.Sprintf("%s %d", spec.Name, val), nil
 }
-func checkPushInt(cx *EvalContext) error {
-	opPushInt(cx)
-	return cx.err
-}
 
 func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	pos := dis.pc + 1
@@ -2473,10 +2469,6 @@ func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	bytes := dis.program[pos:end]
 	dis.nextpc = int(end)
 	return fmt.Sprintf("%s 0x%s // %s", spec.Name, hex.EncodeToString(bytes), guessByteFormat(bytes)), nil
-}
-func checkPushBytes(cx *EvalContext) error {
-	opPushBytes(cx)
-	return cx.err
 }
 
 // This is also used to disassemble gtxns, gtxnsas, txnas, itxn, itxnas

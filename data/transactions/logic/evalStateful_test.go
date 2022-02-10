@@ -2275,7 +2275,7 @@ func TestReturnTypes(t *testing.T) {
 	typeToArg := map[StackType]string{
 		StackUint64: "int 1\n",
 		StackAny:    "int 1\n",
-		StackBytes:  "byte 0x33343536\n",
+		StackBytes:  "byte 0x3334353633343536\n",
 	}
 	ep, tx, ledger := makeSampleEnv()
 
@@ -2358,6 +2358,7 @@ func TestReturnTypes(t *testing.T) {
 		"app_params_get":    "app_params_get AppGlobalNumUint",
 		"acct_params_get":   "acct_params_get AcctMinBalance",
 		"extract":           "extract 0 2",
+		"extract_uint64":    "pop; int 0; extract_uint64", // Standard arg isn't long enough
 		"txnas":             "txnas ApplicationArgs",
 		"gtxnas":            "gtxnas 0 ApplicationArgs",
 		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
@@ -2409,11 +2410,12 @@ func TestReturnTypes(t *testing.T) {
 
 				// Setup as if evaluation is in tx1, since we want to test gaid
 				// that must look back.
+				ep.Trace = &strings.Builder{} // We reuse the ep. Reset the trace for better report.
 				cx := EvalContext{
 					EvalParams:   ep,
 					runModeFlags: m,
-					GroupIndex:   1,
-					Txn:          &ep.TxnGroup[1],
+					groupIndex:   1,
+					txn:          &ep.TxnGroup[1],
 					appID:        1,
 				}
 

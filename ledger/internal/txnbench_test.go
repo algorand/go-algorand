@@ -224,6 +224,7 @@ func BenchmarkTxnTypes(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
+			b.ReportAllocs()
 			t := bench.txn
 			eval := nextBlock(b, l, true, nil)
 			fillDefaults(b, l, eval, &t)

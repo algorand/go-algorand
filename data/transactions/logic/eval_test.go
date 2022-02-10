@@ -2839,7 +2839,7 @@ func TestShortBytecblock2(t *testing.T) {
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
-func opPanic(cx *EvalContext) {
+func opPanic(cx *EvalContext) error {
 	panic(panicString)
 }
 func checkPanic(cx *EvalContext) error {
@@ -3339,7 +3339,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 // Rather than run b.N times, build a program that runs the operation
 // 2000 times, and does so for b.N / 2000 tuns.  This lets us amortize
 // away the creation and teardown of the evaluation system.  We report
-// the "waste/op" as the number of extra instructions that are run
+// the "extra/op" as the number of extra instructions that are run
 // during the "operation".  They are presumed to be fast (15/ns), so
 // the idea is that you can subtract that out from the reported speed
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
@@ -3349,11 +3349,12 @@ func benchmarkOperation(b *testing.B, prefix string, operation string, suffix st
 	source = strings.ReplaceAll(source, ";", "\n")
 	ops := testProg(b, source, AssemblerMaxVersion)
 	evalLoop(b, runs, ops.Program)
-	b.ReportMetric(float64(inst)*15.0, "waste/op")
+	b.ReportMetric(float64(inst), "extra/op")
 }
 
 func BenchmarkUintMath(b *testing.B) {
 	benches := [][]string{
+		{"dup", "int 23423", "dup; pop", ""},
 		{"pop1", "", "int 1234576; pop", "int 1"},
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
 		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
@@ -3370,6 +3371,7 @@ func BenchmarkUintMath(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
+			b.ReportAllocs()
 			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
