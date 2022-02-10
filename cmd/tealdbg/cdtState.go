@@ -149,7 +149,7 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				return
 			}
 			if len(s.txnGroup) > 0 {
-				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, preview), nil
+				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, false, preview), nil
 			}
 		} else if parentObjID, idxs, ok := decodeNestedObjID(objID); ok {
 			var itxn transactions.SignedTxnWithAD
@@ -385,24 +385,44 @@ func prepareGlobals(globals []basics.TealValue) []fieldDesc {
 	return result
 }
 
-func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
+// These fields should not be included in any transaction
+func illegalTxnField(field int) bool {
+	return field == int(logic.FirstValidTime) ||
+		field == int(logic.Accounts) ||
+		field == int(logic.ApplicationArgs) ||
+		field == int(logic.Assets) ||
+		field == int(logic.Applications) ||
+		field == int(logic.Type) || // Use TypeEnum field instead
+		field == int(logic.Logs) ||
+		field == int(logic.NumLogs) ||
+		field == int(logic.LastLog)
+}
+
+// These fields should not be included in the top level transaction.
+func illegalRootTxnField(field int) bool {
+	return illegalTxnField(field) ||
+		field == int(logic.CreatedApplicationID) ||
+		field == int(logic.CreatedAssetID)
+}
+
+// These fields should not be included in inner level transactions.
+func illegalInnerTxnField(field int) bool {
+	return illegalTxnField(field) ||
+		field == int(logic.GroupIndex) ||
+		field == int(logic.TxID)
+}
+
+func prepareTxn(txn *transactions.Transaction, groupIndex int, inner bool) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for field, name := range logic.TxnFieldNames {
-		if field == int(logic.FirstValidTime) ||
-			field == int(logic.Accounts) ||
-			field == int(logic.ApplicationArgs) ||
-			field == int(logic.Assets) ||
-			field == int(logic.Applications) ||
-			field == int(logic.CreatedApplicationID) ||
-			field == int(logic.CreatedAssetID) ||
-			field == int(logic.Logs) ||
-			field == int(logic.NumLogs) ||
-			field == int(logic.LastLog) {
+		if !inner && illegalRootTxnField(field) {
+			continue
+		} else if inner && illegalInnerTxnField(field) {
 			continue
 		}
 		var value string
 		var valType string
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0)
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0, inner)
 		if err != nil {
 			value = err.Error()
 			valType = "undefined"
@@ -502,7 +522,7 @@ func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 func makeTxnPreview(txnGroup []transactions.SignedTxnWithAD, groupIndex int) cdt.RuntimeObjectPreview {
 	var prop []cdt.RuntimePropertyPreview
 	if len(txnGroup) > 0 {
-		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex)
+		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex, false)
 		prop = makePreview(fields)
 	}
 
@@ -830,14 +850,14 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 
 func makeTxn(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
-		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, preview)
+		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, false, preview)
 	}
 	desc = make([]cdt.RuntimePropertyDescriptor, 0)
 	return
 }
 
-func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	fields := prepareTxn(txn, groupIndex)
+func makeTxnImpl(txn *transactions.Transaction, groupIndex int, inner bool, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	fields := prepareTxn(txn, groupIndex, inner)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
 	}
@@ -876,7 +896,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 
 func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	groupIndex := groupIndexes[len(groupIndexes)-1]
-	desc = makeTxnImpl(&txn.Txn, groupIndex, preview)
+	desc = makeTxnImpl(&txn.Txn, groupIndex, true, preview)
 
 	if len(txn.EvalDelta.Logs) > 0 {
 		logs := makeArray("logs", len(txn.EvalDelta.Logs), encodeLogsID(groupIndexes))
@@ -891,7 +911,7 @@ func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, pre
 
 func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
 	for i := 0; i < length; i++ {
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i))
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i), false)
 		if err != nil {
 			return []fieldDesc{}
 		}
