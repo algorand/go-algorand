@@ -498,3 +498,20 @@ func copyProof(proof merklearray.SingleLeafProof) merklearray.SingleLeafProof {
 }
 
 //#endregion
+
+func TestTreeRootHashLength(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	interval := uint64(256)
+	numOfKeys := uint64(1 << 8)
+	validPeriod := numOfKeys*interval - 1
+
+	firstValid := uint64(1000)
+	lastValid := validPeriod + 1000
+	s, err := New(firstValid, lastValid, interval)
+	a.NoError(err)
+	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
+
+	a.Equal(MerkleSignatureSchemeRootSize, len(s.Tree.Root()))
+	a.Equal(MerkleSignatureSchemeRootSize, len(Verifier{}))
+}
