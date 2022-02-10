@@ -24,6 +24,7 @@ package merklesignature
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -36,8 +37,8 @@ const merkleSignatureTableSchemaName = "merklesignaturescheme"
 
 // Errors for the persistent merkle signature scheme
 var (
-	errSelectKeysError = "failed to fetch stateproof keys from DB"
-	errKeyDecodeError  = "failed to decode stateproof key"
+	errSelectKeysError = errors.New("failed to fetch stateproof keys from DB")
+	errKeyDecodeError  = errors.New("failed to decode stateproof key")
 )
 
 func merkleSignatureInstallDatabase(tx *sql.Tx) error {
@@ -139,7 +140,7 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := tx.Query("SELECT key FROM StateProofKeys")
 		if err != nil {
-			return fmt.Errorf("%s - %w", errSelectKeysError, err)
+			return fmt.Errorf("%w - %v", errSelectKeysError, err)
 		}
 		defer rows.Close()
 		for rows.Next() {
@@ -147,7 +148,7 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 			key := crypto.FalconSigner{}
 			err := rows.Scan(&keyB)
 			if err != nil {
-				return fmt.Errorf("%s - %w", errKeyDecodeError, err)
+				return fmt.Errorf("%w - %v", errKeyDecodeError, err)
 			}
 			err = protocol.Decode(keyB, &key)
 			if err != nil {
