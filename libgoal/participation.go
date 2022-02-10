@@ -156,12 +156,11 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 		return
 	}
 	_, err = os.Stat(partKeyPath)
-	if !os.IsNotExist(err) {
-		if err != nil {
-			err = fmt.Errorf("participation key file '%s' cannot be accessed : %w", partKeyPath, err)
-		} else {
-			err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstRound, lastRound)
-		}
+	if err == nil {
+		err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstRound, lastRound)
+		return
+	} else if !os.IsNotExist(err) {
+		err = fmt.Errorf("participation key file '%s' cannot be accessed : %w", partKeyPath, err)
 		return
 	}
 
