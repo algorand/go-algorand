@@ -18,6 +18,7 @@ package compactcert
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -30,10 +31,8 @@ type committableSignatureSlot struct {
 	isEmptySlot         bool
 }
 
-const (
-	// ErrIndexOutOfBound returned when an index is out of the array's bound
-	ErrIndexOutOfBound = "pos %d past end %d"
-)
+// ErrIndexOutOfBound returned when an index is out of the array's bound
+var ErrIndexOutOfBound = errors.New("index is out of bound")
 
 // committableSignatureSlotArray is used to create a merkle tree on the compact cert's
 // signature array. it serializes the MSS signatures using a specific format
@@ -47,7 +46,7 @@ func (sc committableSignatureSlotArray) Length() uint64 {
 
 func (sc committableSignatureSlotArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(sc)) {
-		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(sc))
+		return nil, fmt.Errorf("%w: pos %d past end %d", ErrIndexOutOfBound, pos, len(sc))
 	}
 
 	signatureSlot, err := buildCommittableSignature(sc[pos].sigslotCommit)

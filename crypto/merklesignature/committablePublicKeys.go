@@ -18,6 +18,7 @@ package merklesignature
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -41,10 +42,8 @@ type (
 	}
 )
 
-const (
-	// ErrIndexOutOfBound returned when an index is out of the array's bound
-	ErrIndexOutOfBound = "pos %d past end %d"
-)
+// ErrIndexOutOfBound returned when an index is out of the array's bound
+var ErrIndexOutOfBound = errors.New("index is out of bound")
 
 // Length returns the number of elements in the key array
 func (k *committablePublicKeyArray) Length() uint64 {
@@ -55,7 +54,7 @@ func (k *committablePublicKeyArray) Length() uint64 {
 // used to implement the merklearray.Array interface needed to build a tree.
 func (k *committablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(k.keys)) {
-		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(k.keys))
+		return nil, fmt.Errorf("%w: pos %d past end %d", ErrIndexOutOfBound, pos, len(k.keys))
 	}
 
 	ephPK := CommittablePublicKey{
