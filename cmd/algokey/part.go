@@ -76,7 +76,7 @@ var partGenerateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Println("Please standby while generating keys. This might take a few minutes...")
+		fmt.Println("Please stand by while generating keys. This might take a few minutes...")
 
 		var partkey account.PersistedParticipation
 		participationGen := func() {
@@ -93,6 +93,8 @@ var partGenerateCmd = &cobra.Command{
 			}
 			os.Exit(1)
 		}
+
+		fmt.Println("Participation key generation successful")
 
 		printPartkey(partkey.Participation)
 	},

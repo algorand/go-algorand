@@ -877,7 +877,7 @@ var addParticipationKeyCmd = &cobra.Command{
 		// Generate a participation keys database and install it
 		client := ensureFullClient(dataDir)
 
-		reportInfof("Please standby while generating keys. This might take a few minutes...")
+		reportInfof("Please stand by while generating keys. This might take a few minutes...")
 
 		var err error
 		participationGen := func() {
@@ -980,9 +980,9 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 		if err != nil {
 			err = fmt.Errorf(errorRequestFail, err)
 		}
-		fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, keyLastValidRound)
+		fmt.Println("Participation key generation successful")
 	}
-	fmt.Println("Generated participation key please standby...")
+	fmt.Println("Please stand by while generating keys. This might take a few minutes...")
 	util.RunFuncWithSpinningCursor(genFunc)
 	if err != nil {
 		return err
