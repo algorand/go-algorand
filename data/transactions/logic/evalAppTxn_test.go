@@ -27,6 +27,7 @@ import (
 	. "github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"github.com/stretchr/testify/require"
 )
@@ -559,6 +560,149 @@ func TestAssetFreeze(t *testing.T) {
 	require.Equal(t, false, holding.Frozen)
 }
 
+func TestKeyReg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	keyreg := `
+  store 6 // StateProofPK
+  store 5 // SelectionPK
+  store 4 // VotePK
+  store 3 // Nonparticipation
+  store 2 // VoteKeyDilution
+  store 1 // VoteLast
+  store 0 // VoteFirst
+
+  itxn_begin
+  global CurrentApplicationAddress; itxn_field Sender
+  int keyreg; itxn_field TypeEnum
+  load 0; itxn_field VoteFirst
+  load 1; itxn_field VoteLast
+  load 2; itxn_field VoteKeyDilution
+  load 3; itxn_field Nonparticipation
+  load 4; itxn_field VotePK
+  load 5; itxn_field SelectionPK
+  load 6; itxn_field StateProofPK
+  itxn_submit
+
+  itxn TypeEnum
+  int keyreg
+  ==
+  itxn VoteFirst
+  load 0
+  ==
+  &&
+  itxn VoteLast
+  load 1
+  ==
+  &&
+  itxn VoteKeyDilution
+  load 2
+  ==
+  &&
+  itxn Nonparticipation
+  load 3
+  ==
+  &&
+  itxn VotePK
+  load 4
+  ==
+  &&
+  itxn SelectionPK
+  load 5
+  ==
+  &&
+  itxn StateProofPK
+  load 6
+  ==
+  &&
+`
+
+	t.Run("nonparticipating", func(t *testing.T) {
+		params := `
+  int 0 // VoteFirst
+  int 0 // VoteLast
+  int 0 // VoteKeyDilution
+  int 1 // Nonparticipation
+  int 32; bzero // VotePK
+  int 32; bzero // SelectionPK
+  int 64; bzero // StateProofPK
+`
+		ep, tx, ledger := MakeSampleEnv()
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), ep.Proto.MinTxnFee)
+		TestApp(t, params+keyreg, ep)
+	})
+
+	t.Run("offline", func(t *testing.T) {
+		params := `
+  int 0 // VoteFirst
+  int 0 // VoteLast
+  int 0 // VoteKeyDilution
+  int 0 // Nonparticipation
+  int 32; bzero // VotePK
+  int 32; bzero // SelectionPK
+  int 64; bzero // StateProofPK
+`
+		ep, tx, ledger := MakeSampleEnv()
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), ep.Proto.MinTxnFee)
+		TestApp(t, params+keyreg, ep)
+	})
+
+	t.Run("online without StateProofPK", func(t *testing.T) {
+		params := `
+  int 100 // VoteFirst
+  int 200 // VoteLast
+  int 10 // VoteKeyDilution
+  int 0 // Nonparticipation
+  int 32; bzero; int 0; int 1; setbyte // VotePK
+  int 32; bzero; int 0; int 2; setbyte // SelectionPK
+  int 64; bzero // StateProofPK
+`
+		ep, tx, ledger := MakeSampleEnv()
+		ep.Proto.EnableStateProofKeyregCheck = false
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), ep.Proto.MinTxnFee)
+		TestApp(t, params+keyreg, ep)
+	})
+
+	t.Run("online with StateProofPK", func(t *testing.T) {
+		params := `
+  int 100 // VoteFirst
+  int 16777315 // VoteLast
+  int 10 // VoteKeyDilution
+  int 0 // Nonparticipation
+  int 32; bzero; int 0; int 1; setbyte // VotePK
+  int 32; bzero; int 0; int 2; setbyte // SelectionPK
+  int 64; bzero; int 0; int 3; setbyte // StateProofPK
+`
+		ep, tx, ledger := MakeSampleEnv()
+		ep.Proto.EnableStateProofKeyregCheck = true
+		ep.Proto.MaxKeyregValidPeriod = ((1 << 16) * 256) - 1 // 2^16 StateProof keys times CompactCertRounds (interval)
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), ep.Proto.MinTxnFee)
+		TestApp(t, params+keyreg, ep)
+	})
+
+	t.Run("online with StateProofPK and too long validity period", func(t *testing.T) {
+		params := `
+  int 100 // VoteFirst
+  int 16777316 // VoteLast
+  int 10 // VoteKeyDilution
+  int 0 // Nonparticipation
+  int 32; bzero; int 0; int 1; setbyte // VotePK
+  int 32; bzero; int 0; int 2; setbyte // SelectionPK
+  int 64; bzero; int 0; int 3; setbyte // StateProofPK
+`
+		ep, tx, ledger := MakeSampleEnv()
+		ep.Proto.EnableStateProofKeyregCheck = true
+		ep.Proto.MaxKeyregValidPeriod = ((1 << 16) * 256) - 1 // 2^16 StateProof keys times CompactCertRounds (interval)
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), ep.Proto.MinTxnFee)
+		TestApp(t, params+keyreg, ep, "validity period for keyreg transaction is too long") // VoteLast is +1 over the limit
+	})
+}
+
 func TestFieldSetting(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -574,6 +718,17 @@ func TestFieldSetting(t *testing.T) {
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field SelectionPK; int 1", ep)
 	TestApp(t, "itxn_begin; int 33; bzero; itxn_field SelectionPK; int 1", ep,
 		"SelectionPK must be 32")
+
+	TestApp(t, "itxn_begin; int 64; bzero; itxn_field StateProofPK; int 1", ep)
+	TestApp(t, "itxn_begin; int 63; bzero; itxn_field StateProofPK; int 1", ep,
+		"StateProofPK must be 64")
+	TestApp(t, "itxn_begin; int 65; bzero; itxn_field StateProofPK; int 1", ep,
+		"StateProofPK must be 64")
+
+	TestApp(t, "itxn_begin; int 0; itxn_field Nonparticipation; int 1", ep)
+	TestApp(t, "itxn_begin; int 1; itxn_field Nonparticipation; int 1", ep)
+	TestApp(t, "itxn_begin; int 2; itxn_field Nonparticipation; int 1", ep,
+		"boolean is neither 1 nor 0")
 
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field RekeyTo; int 1", ep)
 	TestApp(t, "itxn_begin; int 31; bzero; itxn_field RekeyTo; int 1", ep,
