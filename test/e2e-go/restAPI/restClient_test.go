@@ -554,7 +554,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	lastRound := basics.Round(params.LastRound + 1000)
 	dilution := uint64(100)
 	var stateproof merklesignature.Verifier
-	stateproof[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v32)
+	stateproof[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v31)
 
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier

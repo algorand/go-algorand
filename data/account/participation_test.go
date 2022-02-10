@@ -462,9 +462,8 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
