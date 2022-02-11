@@ -248,7 +248,7 @@ func test5MAssets(t *testing.T, scenario int) {
 		queueWg.Wait()
 		close(errChan)
 		errWatcherWg.Wait()
-		hkWg.Done()		
+		hkWg.Done()
 	}()
 
 	// Call different scenarios
@@ -595,29 +595,18 @@ func scenarioB(
 
 	// Verify the assets are transfered here
 	t0 := time.Now()
-	//	info, err := client.AccountInformationV2(baseAcct.pk.String())
-	_, err = client.AccountInformationV2(baseAcct.pk.String())
+	info, err := client.AccountInformationV2(baseAcct.pk.String())
 	fmt.Printf("AccountInformationV2 retrieval time: %s\n", time.Since(t0).String())
-	if err != nil {
-		fmt.Println(err)
+	require.NoError(t, err)
+	require.Equal(t, int(numberOfAssets), len(*info.Assets))
+	tAssetAmt := uint64(0)
+	for _, asset := range *info.Assets {
+		tAssetAmt += asset.Amount
 	}
-
-	_, err = client.Status()
-
-	if err != nil {
-		fmt.Println(err)
+	if totalAssetAmount != tAssetAmt {
+		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
 	}
-
-	//	require.NoError(t, err)
-	//	require.Equal(t, int(numberOfAssets), len(*info.Assets))
-	//	tAssetAmt := uint64(0)
-	//	for _, asset := range *info.Assets {
-	//		tAssetAmt += asset.Amount
-	//	}
-	//	if totalAssetAmount != tAssetAmt {
-	//		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
-	//	}
-	//	require.Equal(t, totalAssetAmount, tAssetAmt)
+	require.Equal(t, totalAssetAmount, tAssetAmt)
 }
 
 func handleError(err error, message string, errChan chan<- error) {
