@@ -1238,7 +1238,7 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		var retType *abi.Type
-		if retTypeStr != "void" {
+		if retTypeStr != abi.VoidReturnType {
 			theRetType, err := abi.TypeOf(retTypeStr)
 			if err != nil {
 				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)

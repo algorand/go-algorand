@@ -948,6 +948,17 @@ func assembleFile(fname string) (program []byte) {
 		}
 	}
 
+	if len(ops.Warnings) != 0 {
+		for _, warning := range ops.Warnings {
+			reportInfoln(warning.Error())
+		}
+		plural := "s"
+		if len(ops.Warnings) == 1 {
+			plural = ""
+		}
+		reportInfof("%d warning%s", len(ops.Warnings), plural)
+	}
+
 	return ops.Program
 }
 
