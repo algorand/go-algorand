@@ -408,13 +408,13 @@ func mustParseProgArgs() (approval []byte, clear []byte) {
 	}
 
 	if approvalProgFile != "" {
-		approval = assembleFile(approvalProgFile)
+		approval = assembleFile(approvalProgFile, false)
 	} else {
 		approval = mustReadFile(approvalProgRawFile)
 	}
 
 	if clearProgFile != "" {
-		clear = assembleFile(clearProgFile)
+		clear = assembleFile(clearProgFile, false)
 	} else {
 		clear = mustReadFile(clearProgRawFile)
 	}
