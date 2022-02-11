@@ -385,7 +385,7 @@ func prepareGlobals(globals []basics.TealValue) []fieldDesc {
 	return result
 }
 
-// These fields should not be included in any transaction
+// These fields should not be included in any transaction.
 func illegalTxnField(field int) bool {
 	return field == int(logic.FirstValidTime) ||
 		field == int(logic.Accounts) ||
@@ -395,12 +395,7 @@ func illegalTxnField(field int) bool {
 		field == int(logic.Type) || // Use TypeEnum field instead
 		field == int(logic.Logs) ||
 		field == int(logic.NumLogs) ||
-		field == int(logic.LastLog)
-}
-
-// These fields should not be included in the top level transaction.
-func illegalRootTxnField(field int) bool {
-	return illegalTxnField(field) ||
+		field == int(logic.LastLog) ||
 		field == int(logic.CreatedApplicationID) ||
 		field == int(logic.CreatedAssetID)
 }
@@ -415,7 +410,7 @@ func illegalInnerTxnField(field int) bool {
 func prepareTxn(txn *transactions.Transaction, groupIndex int, inner bool) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for field, name := range logic.TxnFieldNames {
-		if !inner && illegalRootTxnField(field) {
+		if !inner && illegalTxnField(field) {
 			continue
 		} else if inner && illegalInnerTxnField(field) {
 			continue
@@ -844,6 +839,9 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 	fields := prepareGlobals(s.globals)
 	desc = make([]cdt.RuntimePropertyDescriptor, len(fields))
 	for i, field := range fields {
+		if field.Name == "OpcodeBudget" {
+			field.Value = strconv.Itoa(s.opcodeBudget)
+		}
 		desc[i] = makePrimitive(field)
 	}
 	return
@@ -899,14 +897,17 @@ func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, pre
 	groupIndex := groupIndexes[len(groupIndexes)-1]
 	desc = makeTxnImpl(&txn.Txn, groupIndex, true, preview)
 
-	if len(txn.EvalDelta.Logs) > 0 {
-		logs := makeArray("logs", len(txn.EvalDelta.Logs), encodeLogsID(groupIndexes))
-		desc = append(desc, logs)
-	}
-	if len(txn.EvalDelta.InnerTxns) > 0 {
-		innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeNestedInnerTxnID(groupIndexes))
-		desc = append(desc, innerTxns)
-	}
+	logs := makeArray("logs", len(txn.EvalDelta.Logs), encodeLogsID(groupIndexes))
+	innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeNestedInnerTxnID(groupIndexes))
+	createdApplicationID := fieldDesc{Name: "CreatedApplicationID", Value: strconv.Itoa(int(txn.ApplicationID)), Type: "number"}
+	configAsset := fieldDesc{Name: "CreatedAssetID", Value: strconv.Itoa(int(txn.ConfigAsset)), Type: "number"}
+	desc = append(
+		desc,
+		logs,
+		innerTxns,
+		makePrimitive(createdApplicationID),
+		makePrimitive(configAsset),
+	)
 	return
 }
 

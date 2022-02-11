@@ -69,11 +69,12 @@ type DebugState struct {
 	Globals     []basics.TealValue             `codec:"globals"`
 
 	// fields updated every step
-	PC      int                `codec:"pc"`
-	Line    int                `codec:"line"`
-	Stack   []basics.TealValue `codec:"stack"`
-	Scratch []basics.TealValue `codec:"scratch"`
-	Error   string             `codec:"error"`
+	PC           int                `codec:"pc"`
+	Line         int                `codec:"line"`
+	Stack        []basics.TealValue `codec:"stack"`
+	Scratch      []basics.TealValue `codec:"scratch"`
+	Error        string             `codec:"error"`
+	OpcodeBudget int                `codec:"budget"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
 	transactions.EvalDelta
@@ -213,6 +214,7 @@ func (cx *EvalContext) refreshDebugState() *DebugState {
 
 	ds.Stack = stack
 	ds.Scratch = scratch
+	ds.OpcodeBudget = cx.remainingBudget()
 
 	if (cx.runModeFlags & runModeApplication) != 0 {
 		ds.EvalDelta = cx.Txn.EvalDelta
