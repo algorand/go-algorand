@@ -552,7 +552,7 @@ func scenarioB(
 
 	//	client := fixture.LibGoalClient
 
-	numberOfAssets := uint64(60) // 6M
+	numberOfAssets := uint64(2000000) // 6M
 	totalAssetAmount := uint64(0)
 
 	defer func() {
