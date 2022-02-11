@@ -3,7 +3,7 @@
   "VersionModifier": "",
   "ConsensusProtocol": "future",
   "FirstPartKeyRound": 0,
-  "LastPartKeyRound": 100000000,
+  "LastPartKeyRound": 10000000,
   "Wallets": [
     {
       "Name": "Wallet1-R1",
