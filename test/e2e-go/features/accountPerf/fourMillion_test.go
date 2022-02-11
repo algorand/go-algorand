@@ -595,13 +595,14 @@ func scenarioB(
 
 	// Verify the assets are transfered here
 	t0 := time.Now()
-	info, err := client.AccountInformationV2(baseAcct.pk.String())
+	//	info, err := client.AccountInformationV2(baseAcct.pk.String())
+	_, err = client.AccountInformationV2(baseAcct.pk.String())
 	fmt.Printf("AccountInformationV2 retrieval time: %s\n", time.Since(t0).String())
-	if err {
+	if err != nil {
 		fmt.Println(err)
 	}
 
-	_, err = algodClient.Status()
+	_, err = client.Status()
 
 	if err != nil {
 		fmt.Println(err)
