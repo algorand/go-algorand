@@ -2709,17 +2709,11 @@ func opGaids(cx *EvalContext) error {
 	return nil
 }
 
-func (cx *EvalContext) getRound() (uint64, error) {
-	if cx.Ledger == nil {
-		return 0, fmt.Errorf("ledger not available")
-	}
-	return uint64(cx.Ledger.Round()), nil
+func (cx *EvalContext) getRound() uint64 {
+	return uint64(cx.Ledger.Round())
 }
 
 func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
-	if cx.Ledger == nil {
-		return 0, fmt.Errorf("ledger not available")
-	}
 	ts := cx.Ledger.LatestTimestamp()
 	if ts < 0 {
 		return 0, fmt.Errorf("latest timestamp %d < 0", ts)
@@ -2742,9 +2736,6 @@ func (cx *EvalContext) getApplicationAddress(app basics.AppIndex) basics.Address
 }
 
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
-	if cx.Ledger == nil {
-		return nil, fmt.Errorf("ledger not available")
-	}
 	_, creator, err := cx.Ledger.AppParams(cx.appID)
 	if err != nil {
 		return nil, fmt.Errorf("No params for current app")
@@ -2769,7 +2760,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case LogicSigVersion:
 		sv.Uint = cx.Proto.LogicSigVersion
 	case Round:
-		sv.Uint, err = cx.getRound()
+		sv.Uint = cx.getRound()
 	case LatestTimestamp:
 		sv.Uint, err = cx.getLatestTimestamp()
 	case CurrentApplicationID:
@@ -3520,9 +3511,6 @@ func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Addre
 }
 
 func opBalance(cx *EvalContext) error {
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
 	last := len(cx.stack) - 1 // account (index or actual address)
 
 	addr, _, err := cx.accountReference(cx.stack[last])
@@ -3541,9 +3529,6 @@ func opBalance(cx *EvalContext) error {
 }
 
 func opMinBalance(cx *EvalContext) error {
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
 	last := len(cx.stack) - 1 // account (index or actual address)
 
 	addr, _, err := cx.accountReference(cx.stack[last])
@@ -3564,10 +3549,6 @@ func opMinBalance(cx *EvalContext) error {
 func opAppOptedIn(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // app
 	prev := last - 1          // account
-
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
 
 	addr, _, err := cx.accountReference(cx.stack[prev])
 	if err != nil {
@@ -3632,11 +3613,6 @@ func opAppLocalGetEx(cx *EvalContext) error {
 }
 
 func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
-	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
-	}
-
 	addr, accountIdx, err := cx.accountReference(acct)
 	if err != nil {
 		return
@@ -3659,11 +3635,6 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 }
 
 func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
-	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
-	}
-
 	app, err := appReference(cx, appIndex, true)
 	if err != nil {
 		return
@@ -3723,10 +3694,6 @@ func opAppLocalPut(cx *EvalContext) error {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
-
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[pprev])
 	if err != nil {
 		return err
@@ -3762,10 +3729,6 @@ func opAppGlobalPut(cx *EvalContext) error {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
-
 	// if writing the same value, don't record in EvalDelta, matching ledger
 	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
@@ -3791,10 +3754,6 @@ func opAppLocalDel(cx *EvalContext) error {
 	prev := last - 1          // account
 
 	key := string(cx.stack[last].Bytes)
-
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
 
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
 	if err != nil {
@@ -3828,10 +3787,6 @@ func opAppGlobalDel(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // key
 
 	key := string(cx.stack[last].Bytes)
-
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
 	// ledger behavior with previous BuildEvalDelta mechanism
@@ -3942,10 +3897,6 @@ func opAssetHoldingGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // asset
 	prev := last - 1          // account
 
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
-
 	holdingField := AssetHoldingField(cx.program[cx.pc+1])
 	fs, ok := assetHoldingFieldSpecByField[holdingField]
 	if !ok || fs.version > cx.version {
@@ -3981,10 +3932,6 @@ func opAssetHoldingGet(cx *EvalContext) error {
 func opAssetParamsGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // asset
 
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
-
 	paramField := AssetParamsField(cx.program[cx.pc+1])
 	fs, ok := assetParamsFieldSpecByField[paramField]
 	if !ok || fs.version > cx.version {
@@ -4014,10 +3961,6 @@ func opAssetParamsGet(cx *EvalContext) error {
 
 func opAppParamsGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // app
-
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
 
 	paramField := AppParamsField(cx.program[cx.pc+1])
 	fs, ok := appParamsFieldSpecByField[paramField]
@@ -4057,10 +4000,6 @@ func opAppParamsGet(cx *EvalContext) error {
 
 func opAcctParamsGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // acct
-
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
 
 	addr, _, err := cx.accountReference(cx.stack[last])
 	if err != nil {
@@ -4510,10 +4449,6 @@ func opTxField(cx *EvalContext) error {
 }
 
 func opTxSubmit(cx *EvalContext) error {
-	if cx.Ledger == nil {
-		return fmt.Errorf("ledger not available")
-	}
-
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
