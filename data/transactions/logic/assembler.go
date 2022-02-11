@@ -660,7 +660,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 		if err != nil {
 			// Warn if an invalid signature is used. Don't return an error, since the ABI is not
 			// governed by the core protocol, so there may be changes to it that we don't know about
-			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error())
+			ops.warnf("Invalid ARC-4 ABI method signature for method op: %s", err.Error()) // nolint:errcheck
 		}
 		hash := sha512.Sum512_256(methodSig)
 		ops.ByteLiteral(hash[0:4])
