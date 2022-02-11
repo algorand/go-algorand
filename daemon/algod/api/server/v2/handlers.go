@@ -428,7 +428,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 
 	// return msgpack response
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
+		data, err := encode(handle, record.AccountResourceToAccountResourceModel())
 		if err != nil {
 			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 		}
@@ -481,7 +481,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 
 	// return msgpack response
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
+		data, err := encode(handle, record.AccountResourceToAccountResourceModel())
 		if err != nil {
 			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 		}

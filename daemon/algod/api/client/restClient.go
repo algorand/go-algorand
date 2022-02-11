@@ -472,7 +472,9 @@ func (client RestClient) AccountApplicationInformation(accountAddress string, ap
 
 // RawAccountApplicationInformation gets account information about a given app.
 func (client RestClient) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (response []byte, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), rawFormat{Format: "msgpack"})
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), rawFormat{Format: "msgpack"})
+	response = blob
 	return
 }
 
@@ -484,7 +486,9 @@ func (client RestClient) AccountAssetInformation(accountAddress string, assetID 
 
 // RawAccountAssetInformation gets account information about a given app.
 func (client RestClient) RawAccountAssetInformation(accountAddress string, assetID uint64) (response []byte, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), rawFormat{Format: "msgpack"})
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), rawFormat{Format: "msgpack"})
+	response = blob
 	return
 }
 

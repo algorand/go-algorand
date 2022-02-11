@@ -12,9 +12,9 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-func TestMarshalUnmarshalAccountResource(t *testing.T) {
+func TestMarshalUnmarshalAccountResourceModel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := AccountResource{}
+	v := AccountResourceModel{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -33,12 +33,12 @@ func TestMarshalUnmarshalAccountResource(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingAccountResource(t *testing.T) {
-	protocol.RunEncodingTest(t, &AccountResource{})
+func TestRandomizedEncodingAccountResourceModel(t *testing.T) {
+	protocol.RunEncodingTest(t, &AccountResourceModel{})
 }
 
-func BenchmarkMarshalMsgAccountResource(b *testing.B) {
-	v := AccountResource{}
+func BenchmarkMarshalMsgAccountResourceModel(b *testing.B) {
+	v := AccountResourceModel{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -46,8 +46,8 @@ func BenchmarkMarshalMsgAccountResource(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgAccountResource(b *testing.B) {
-	v := AccountResource{}
+func BenchmarkAppendMsgAccountResourceModel(b *testing.B) {
+	v := AccountResourceModel{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -58,8 +58,8 @@ func BenchmarkAppendMsgAccountResource(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalAccountResource(b *testing.B) {
-	v := AccountResource{}
+func BenchmarkUnmarshalAccountResourceModel(b *testing.B) {
+	v := AccountResourceModel{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
