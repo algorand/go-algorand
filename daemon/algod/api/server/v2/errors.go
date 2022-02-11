@@ -25,6 +25,7 @@ var (
 	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
 	errFailedParsingFormatOption               = "failed to parse the format option"
 	errFailedToParseAddress                    = "failed to parse the address"
+	errFailedToParseExclude                    = "failed to parse exclude"
 	errFailedToParseTransaction                = "failed to parse transaction"
 	errFailedToParseBlock                      = "failed to parse block"
 	errFailedToParseCert                       = "failed to parse cert"

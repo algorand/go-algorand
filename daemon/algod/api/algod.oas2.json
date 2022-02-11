@@ -165,8 +165,8 @@
             "required": true
           },
           {
-            "name": "include",
-            "description": "Whether to include asset holdings, application local state, created asset parameters, or created application parameters. Defaults to `all`.",
+            "name": "exclude",
+            "description": "When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.",
             "in": "query",
             "required": false,
             "type": "string",
