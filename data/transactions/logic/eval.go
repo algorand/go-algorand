@@ -2709,14 +2709,14 @@ func opGaids(cx *EvalContext) error {
 	return nil
 }
 
-func (cx *EvalContext) getRound() (rnd uint64, err error) {
+func (cx *EvalContext) getRound() (uint64, error) {
 	if cx.Ledger == nil {
 		return 0, fmt.Errorf("ledger not available")
 	}
 	return uint64(cx.Ledger.Round()), nil
 }
 
-func (cx *EvalContext) getLatestTimestamp() (timestamp uint64, err error) {
+func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 	if cx.Ledger == nil {
 		return 0, fmt.Errorf("ledger not available")
 	}
