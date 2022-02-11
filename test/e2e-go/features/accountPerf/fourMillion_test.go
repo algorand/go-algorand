@@ -367,8 +367,8 @@ func scenarioA(
 
 	client := fixture.LibGoalClient
 
-	numberOfAccounts := uint64(2000000) // 6K
-	numberOfAssets := uint64(60)     // 6M
+	numberOfAccounts := uint64(6000) // 6K
+	numberOfAssets := uint64(2000000)     // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
