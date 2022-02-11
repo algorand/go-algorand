@@ -1520,8 +1520,7 @@ func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
 	bigbase := new(big.Int).SetUint64(base)
 	// safe to cast exp, because it is known to fit in int (it's < 128)
 	for i := 1; i < int(exp); i++ {
-		next := answer.Mul(answer, bigbase)
-		answer = next
+		answer.Mul(answer, bigbase)
 		if answer.BitLen() > 128 {
 			return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
 		}

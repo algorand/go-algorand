@@ -3410,6 +3410,7 @@ func BenchmarkBigLogic(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
+			b.ReportAllocs()
 			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
