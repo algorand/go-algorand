@@ -3,7 +3,7 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
-  slack: circleci/slack@4.4.2
+  # slack: circleci/slack@4.4.2
 
 parameters:
   ubuntu_image:
@@ -67,7 +67,7 @@ workflows:
           filters: &filters-default
             branches:
               ignore:
-                - /rel\/.*/
+                - /pull\/[0-9]+/
                 - /hotfix\/.*/
 
       - test_nightly:
@@ -79,9 +79,9 @@ workflows:
           filters: &filters-nightly
             branches:
               only:
-                - /rel\/.*/
+                - /pull\/[0-9]+/
                 - /hotfix\/.*/
-          context: slack-secrets
+          # context: slack-secrets
 
       - integration:
           name: << matrix.platform >>_integration
@@ -100,7 +100,7 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+          # context: slack-secrets
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
@@ -119,7 +119,7 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+          # context: slack-secrets
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
@@ -138,7 +138,7 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+          # context: slack-secrets
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -149,23 +149,23 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
-      - upload_binaries:
-          name: << matrix.platform >>_upload_binaries
-          matrix:
-            <<: *matrix-default
-          requires:
-            - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
-            - << matrix.platform >>_e2e_subs_nightly
-            - codegen_verification
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-          context:
-            - slack-secrets
-            - aws-secrets
+      # - upload_binaries:
+      #     name: << matrix.platform >>_upload_binaries
+      #     matrix:
+      #       <<: *matrix-default
+      #     requires:
+      #       - << matrix.platform >>_test_nightly_verification
+      #       - << matrix.platform >>_integration_nightly_verification
+      #       - << matrix.platform >>_e2e_expect_nightly_verification
+      #       - << matrix.platform >>_e2e_subs_nightly
+      #       - codegen_verification
+      #     filters:
+      #       branches:
+      #         only:
+      #           - /pull\/[0-9]+/
+          # context:
+          #   - slack-secrets
+          #   - aws-secrets
       #- windows_x64_build
 
 commands:
@@ -465,37 +465,37 @@ commands:
           path: << parameters.result_path >>/<< parameters.result_subdir >>
           destination: << parameters.result_subdir >>/combined-test-results
 
-  upload_binaries_command:
-    description: save build artifacts for potential deployments
-    parameters:
-      platform:
-        type: string
-      build_dir:
-        type: string
-        default: << pipeline.parameters.build_dir >>
-    steps:
-        - attach_workspace:
-            at: << parameters.build_dir >>
-        - run:
-            name: Upload Binaries << parameters.platform >>
-            command: |
-              if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
-              then
-                export NO_BUILD="true"
-              fi
-              export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
-              export GOPATH="<< parameters.build_dir >>/go"
-              export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-              scripts/travis/deploy_packages.sh
-        - when:
-            condition:
-              equal: [ "amd64", << parameters.platform >> ]
-            steps:
-              - run:
-                  name: test_release.sh
-                  command: |
-                    export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-                    scripts/travis/test_release.sh
+  # upload_binaries_command:
+  #   description: save build artifacts for potential deployments
+  #   parameters:
+  #     platform:
+  #       type: string
+  #     build_dir:
+  #       type: string
+  #       default: << pipeline.parameters.build_dir >>
+  #   steps:
+  #       - attach_workspace:
+  #           at: << parameters.build_dir >>
+  #       - run:
+  #           name: Upload Binaries << parameters.platform >>
+  #           command: |
+  #             if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
+  #             then
+  #               export NO_BUILD="true"
+  #             fi
+  #             export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
+  #             export GOPATH="<< parameters.build_dir >>/go"
+  #             export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+  #             scripts/travis/deploy_packages.sh
+  #       - when:
+  #           condition:
+  #             equal: [ "amd64", << parameters.platform >> ]
+  #           steps:
+  #             - run:
+  #                 name: test_release.sh
+  #                 command: |
+  #                   export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+  #                   scripts/travis/test_release.sh
 
 jobs:
   codegen_verification:
@@ -551,9 +551,9 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
+      # - slack/notify: &slack-fail-event
+      #     event: fail
+      #     template: basic_fail_1
 
   integration:
     parameters:
@@ -588,8 +588,8 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
+      # - slack/notify:
+      #     <<: *slack-fail-event
 
   e2e_expect:
     parameters:
@@ -624,8 +624,8 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform>>_e2e_expect_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
+      # - slack/notify:
+      #     <<: *slack-fail-event
 
   e2e_subs:
     parameters:
@@ -658,8 +658,8 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
+      # - slack/notify:
+      #     <<: *slack-fail-event
 
   windows_x64_build:
     executor:
@@ -695,16 +695,16 @@ jobs:
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
-  upload_binaries:
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    steps:
-      - prepare_build_dir
-      - prepare_go
-      - upload_binaries_command:
-          platform: << parameters.platform >>
-      - slack/notify:
-          <<: *slack-fail-event
+  # upload_binaries:
+  #   working_directory: << pipeline.parameters.build_dir >>/project
+  #   parameters:
+  #     platform:
+  #       type: string
+  #   executor: << parameters.platform >>_medium
+  #   steps:
+  #     - prepare_build_dir
+  #     - prepare_go
+  #     - upload_binaries_command:
+  #         platform: << parameters.platform >>
+      # - slack/notify:
+      #     <<: *slack-fail-event
