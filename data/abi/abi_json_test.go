@@ -31,14 +31,17 @@ func TestRandomAddressEquality(t *testing.T) {
 
 	upperLimit := new(big.Int).Lsh(big.NewInt(1), addressByteSize<<3)
 	var addrBasics basics.Address
-	var addrABI []byte = make([]byte, addressByteSize)
+	var addrABI = make([]byte, addressByteSize)
 
 	for testCaseIndex := 0; testCaseIndex < addressTestCaseCount; testCaseIndex++ {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
-		randomAddrInt.FillBytes(addrBasics[:])
-		randomAddrInt.FillBytes(addrABI)
+		expected, err := bigIntToBytes(randomAddrInt, uint(addressByteSize))
+		require.NoError(t, err, "big int to byte conversion error")
+
+		copy(addrABI[:], expected)
+		copy(addrBasics[:], expected)
 
 		checkSumBasics := addrBasics.GetChecksum()
 		checkSumABI, err := addressCheckSum(addrABI)

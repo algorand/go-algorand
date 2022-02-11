@@ -16,7 +16,7 @@ fi
 
 OS_LIST=(
     centos:7
-    centos:8
+    quay.io/centos/centos:stream8
     fedora:28
     ubuntu:16.04
     ubuntu:18.04

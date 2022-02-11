@@ -21,6 +21,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/util/db"
 	"math"
 	"math/rand"
 	"os"
@@ -32,12 +38,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/data/transactions/logic"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -550,6 +553,9 @@ func TestAccountParticipationInfo(t *testing.T) {
 	firstRound := basics.Round(params.LastRound + 1)
 	lastRound := basics.Round(params.LastRound + 1000)
 	dilution := uint64(100)
+	var stateproof merklesignature.Verifier
+	stateproof[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v31)
+
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
 	copy(votePK[:], []byte(randomVotePKStr))
@@ -573,6 +579,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 			VoteKeyDilution: dilution,
 			VoteFirst:       firstRound,
 			VoteLast:        lastRound,
+			StateProofPK:    stateproof,
 		},
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
@@ -587,6 +594,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	a.Equal(uint64(firstRound), account.Participation.VoteFirst, "API must print correct first participation round")
 	a.Equal(uint64(lastRound), account.Participation.VoteLast, "API must print correct last participation round")
 	a.Equal(dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
+	// TODO: should we update the v1 API to support state proof? Currently it does not return this field.
 }
 
 func TestSupply(t *testing.T) {
@@ -1050,4 +1058,172 @@ return
 	expectedMetadata, err := hex.DecodeString("67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b")
 	a.NoError(err)
 	a.Equal(expectedMetadata, *createdAssetInfo.Params.MetadataHash)
+}
+
+func TestStateProofInParticipationInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	localFixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
+
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(someAddress, "no addr with funds")
+
+	addr, err := basics.UnmarshalChecksumAddress(someAddress)
+	a.NoError(err)
+
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+
+	firstRound := basics.Round(params.LastRound + 1)
+	lastRound := basics.Round(params.LastRound + 1000)
+	dilution := uint64(100)
+	randomVotePKStr := randomString(32)
+	var votePK crypto.OneTimeSignatureVerifier
+	copy(votePK[:], randomVotePKStr)
+	randomSelPKStr := randomString(32)
+	var selPK crypto.VRFVerifier
+	copy(selPK[:], randomSelPKStr)
+	var mssRoot [merklesignature.MerkleSignatureSchemeRootSize]byte
+	randomRootStr := randomString(merklesignature.MerkleSignatureSchemeRootSize)
+	copy(mssRoot[:], randomRootStr)
+	var gh crypto.Digest
+	copy(gh[:], params.GenesisHash)
+
+	tx := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:      addr,
+			Fee:         basics.MicroAlgos{Raw: 10000},
+			FirstValid:  firstRound,
+			LastValid:   lastRound,
+			GenesisHash: gh,
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:           votePK,
+			SelectionPK:      selPK,
+			VoteFirst:        firstRound,
+			StateProofPK:     mssRoot,
+			VoteLast:         lastRound,
+			VoteKeyDilution:  dilution,
+			Nonparticipation: false,
+		},
+	}
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
+	a.NoError(err)
+
+	account, err := testClient.AccountInformationV2(someAddress)
+	a.NoError(err)
+	a.NotNil(account.Participation.StateProofKey)
+
+	actual := [merklesignature.MerkleSignatureSchemeRootSize]byte{}
+	copy(actual[:], *account.Participation.StateProofKey)
+	a.Equal(mssRoot, actual)
+}
+
+func TestStateProofParticipationKeysAPI(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+
+	partdb, err := db.MakeErasableAccessor(filepath.Join(testClient.DataDir(), "/..", "/Wallet1.0.3000.partkey"))
+	a.NoError(err)
+
+	partkey, err := account.RestoreParticipation(partdb)
+
+	pRoot, err := testClient.GetParticipationKeys()
+	a.NoError(err)
+
+	actual := [merklesignature.MerkleSignatureSchemeRootSize]byte{}
+	a.NotNil(pRoot[0].Key.StateProofKey)
+	copy(actual[:], *pRoot[0].Key.StateProofKey)
+	a.Equal(partkey.StateProofSecrets.GetVerifier()[:], actual[:])
+}
+
+func TestNilStateProofInParticipationInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+	waitForRoundOne(t, testClient)
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(someAddress, "no addr with funds")
+
+	addr, err := basics.UnmarshalChecksumAddress(someAddress)
+	a.NoError(err)
+
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+
+	firstRound := basics.Round(1)
+	lastRound := basics.Round(20)
+	dilution := uint64(100)
+	randomVotePKStr := randomString(32)
+	var votePK crypto.OneTimeSignatureVerifier
+	copy(votePK[:], []byte(randomVotePKStr))
+	randomSelPKStr := randomString(32)
+	var selPK crypto.VRFVerifier
+	copy(selPK[:], []byte(randomSelPKStr))
+	var gh crypto.Digest
+	copy(gh[:], params.GenesisHash)
+
+	tx := transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:      addr,
+			Fee:         basics.MicroAlgos{Raw: 10000},
+			FirstValid:  firstRound,
+			LastValid:   lastRound,
+			GenesisHash: gh,
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:           votePK,
+			SelectionPK:      selPK,
+			VoteFirst:        firstRound,
+			VoteLast:         lastRound,
+			VoteKeyDilution:  dilution,
+			Nonparticipation: false,
+		},
+	}
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
+	a.NoError(err)
+
+	account, err := testClient.AccountInformationV2(someAddress)
+	a.NoError(err)
+	a.Nil(account.Participation.StateProofKey)
 }

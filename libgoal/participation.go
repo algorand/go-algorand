@@ -155,6 +155,15 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	if err != nil {
 		return
 	}
+	_, err = os.Stat(partKeyPath)
+	if err == nil {
+		err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstRound, lastRound)
+		return
+	} else if !os.IsNotExist(err) {
+		err = fmt.Errorf("participation key file '%s' cannot be accessed : %w", partKeyPath, err)
+		return
+	}
+
 	partdb, err := db.MakeErasableAccessor(partKeyPath)
 	if err != nil {
 		return
@@ -196,7 +205,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	}
 	defer inputdb.Close()
 
-	partkey, err := account.RestoreParticipation(inputdb)
+	partkey, err := account.RestoreParticipationWithSecrets(inputdb)
 	if err != nil {
 		return
 	}
@@ -218,7 +227,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 
 	newpartkey := partkey
 	newpartkey.Store = newdb
-	err = newpartkey.Persist()
+	err = newpartkey.PersistWithSecrets()
 	if err != nil {
 		newpartkey.Close()
 		return

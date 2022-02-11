@@ -66,7 +66,7 @@ func (balances mockBalances) DeallocateAsset(addr basics.Address, index basics.A
 	return nil
 }
 
-func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, transactions.EvalDelta, error) {
+func (balances mockBalances) StatefulEval(int, *logic.EvalParams, basics.AppIndex, []byte) (bool, transactions.EvalDelta, error) {
 	return false, transactions.EvalDelta{}, nil
 }
 

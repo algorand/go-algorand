@@ -77,7 +77,11 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
-	var ccBasic bookkeeping.CompactCertState
+	var ccBasic = bookkeeping.CompactCertState{
+		CompactCertVoters:      make([]byte, compactcert.HashSize),
+		CompactCertVotersTotal: basics.MicroAlgos{},
+		CompactCertNextRound:   0,
+	}
 	ccBasic.CompactCertVotersTotal.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
@@ -96,10 +100,29 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.Participation) {
+func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
 	for _, part := range s.keys {
 		if part.OverlapsInterval(rnd, rnd) {
-			out = append(out, part)
+			partRecord := account.ParticipationRecord{
+				ParticipationID:   part.ID(),
+				Account:           part.Parent,
+				FirstValid:        part.FirstValid,
+				LastValid:         part.LastValid,
+				KeyDilution:       part.KeyDilution,
+				LastVote:          0,
+				LastBlockProposal: 0,
+				LastStateProof:    0,
+				EffectiveFirst:    0,
+				EffectiveLast:     0,
+				VRF:               part.VRF,
+				Voting:            part.Voting,
+			}
+			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
+			partRecordForRound := account.StateProofRecordForRound{
+				ParticipationRecord: partRecord,
+				StateProofSecrets:   signerInRound,
+			}
+			out = append(out, partRecordForRound)
 		}
 	}
 	return
@@ -131,13 +154,12 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersF
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
 		voters.Participants = append(voters.Participants, basics.Participant{
-			PK:          k.Voting.OneTimeSignatureVerifier,
-			Weight:      1,
-			KeyDilution: config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution,
+			PK:     *k.StateProofSecrets.GetVerifier(),
+			Weight: 1,
 		})
 	}
 
-	tree, err := merklearray.Build(voters.Participants)
+	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return nil, err
 	}
@@ -201,15 +223,17 @@ func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 	return newTestWorkerDB(t, s, dbs.Wdb)
 }
 
-func newPartKey(t testing.TB, parent basics.Address) account.Participation {
+// You must call defer part.Close() after calling this function,
+// since it creates a DB accessor but the caller must close it (required for mss)
+func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024*1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].CompactCertRounds), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
-	part.Close()
-	return part.Participation
+
+	return part
 }
 
 func TestWorkerAllSigs(t *testing.T) {
@@ -219,7 +243,9 @@ func TestWorkerAllSigs(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, len(keys))
@@ -259,7 +285,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			ccparams := compactcert.Params{
 				Msg:          signedHdr,
 				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(signedHdr.Round + 1),
+				SigRound:     basics.Round(signedHdr.Round),
 				SecKQ:        proto.CompactCertSecKQ,
 			}
 
@@ -281,7 +307,9 @@ func TestWorkerPartialSigs(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -320,7 +348,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	ccparams := compactcert.Params{
 		Msg:          signedHdr,
 		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(signedHdr.Round + 1),
+		SigRound:     basics.Round(signedHdr.Round),
 		SecKQ:        proto.CompactCertSecKQ,
 	}
 
@@ -339,7 +367,9 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -370,7 +400,9 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -423,7 +455,9 @@ func TestWorkerRestart(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -464,7 +498,9 @@ func TestWorkerHandleSig(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		keys = append(keys, newPartKey(t, parent))
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
 	}
 
 	s := newWorkerStubs(t, keys, 10)

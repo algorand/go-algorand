@@ -25,7 +25,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"math/big"
 	"math/bits"
@@ -49,7 +48,7 @@ const EvalMaxVersion = LogicVersion
 // The constants below control TEAL opcodes evaluation and MAY NOT be changed
 // without moving them into consensus parameters.
 
-// MaxStringSize is the limit of byte strings created by `concat`
+// MaxStringSize is the limit of byte string length in an AVM value
 const MaxStringSize = 4096
 
 // MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
@@ -60,6 +59,12 @@ const MaxLogSize = 1024
 
 // MaxLogCalls is the limit of total log calls during a program execution
 const MaxLogCalls = 32
+
+// maxAppCallDepth is the limit on inner appl call depth
+// To be clear, 0 would prevent inner appls, 1 would mean inner app calls cannot
+// make inner appls. So the total app depth can be 1 higher than this number, if
+// you count the top-level app call.
+const maxAppCallDepth = 8
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -116,6 +121,16 @@ func (sv *stackValue) uint() (uint64, error) {
 	return sv.Uint, nil
 }
 
+func (sv *stackValue) uintMaxed(max uint64) (uint64, error) {
+	if sv.Bytes != nil {
+		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
+	}
+	if sv.Uint > max {
+		return 0, fmt.Errorf("%d is larger than max=%d", sv.Uint, max)
+	}
+	return sv.Uint, nil
+}
+
 func (sv *stackValue) bool() (bool, error) {
 	u64, err := sv.uint()
 	if err != nil {
@@ -158,8 +173,10 @@ func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of TEAL. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
-// anywhere in the transaction group, or the group will be rejected.
-func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
+// anywhere in the transaction group, or the group will be rejected. In
+// addition, inner app calls must not call teal from before inner app calls were
+// introduced.
+func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -170,6 +187,11 @@ func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
 		if txn.Txn.Type == protocol.ApplicationCallTx {
 			if minVersion < appsEnabledVersion {
 				minVersion = appsEnabledVersion
+			}
+		}
+		if inner {
+			if minVersion < innerAppsEnabledVersion {
+				minVersion = innerAppsEnabledVersion
 			}
 		}
 	}
@@ -185,8 +207,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
-	Balance(addr basics.Address) (basics.MicroAlgos, error)
-	MinBalance(addr basics.Address, proto *config.ConsensusParams) (basics.MicroAlgos, error)
+	AccountData(addr basics.Address) (basics.AccountData, error)
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
@@ -194,65 +215,38 @@ type LedgerForLogic interface {
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
-	ApplicationID() basics.AppIndex
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
-	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
-	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
-	DelLocal(addr basics.Address, key string, accountIdx uint64) error
+	SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error
+	DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error
 
 	GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
-	SetGlobal(key string, value basics.TealValue) error
-	DelGlobal(key string) error
+	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
+	DelGlobal(appIdx basics.AppIndex, key string) error
 
-	GetDelta(txn *transactions.Transaction) (evalDelta transactions.EvalDelta, err error)
-
-	Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) (transactions.ApplyData, error)
+	Perform(gi int, ep *EvalParams) error
+	Counter() uint64
 }
 
-// EvalSideEffects contains data returned from evaluation
-type EvalSideEffects struct {
-	scratchSpace scratchSpace
-}
-
-// MakePastSideEffects allocates and initializes a slice of EvalSideEffects of length `size`
-func MakePastSideEffects(size int) (pastSideEffects []EvalSideEffects) {
-	pastSideEffects = make([]EvalSideEffects, size)
-	for j := range pastSideEffects {
-		pastSideEffects[j] = EvalSideEffects{}
-	}
-	return
-}
-
-// getScratchValue loads and clones a stackValue
-// The value is cloned so the original bytes are protected from changes
-func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {
-	return se.scratchSpace[scratchPos].clone()
-}
-
-// setScratchSpace stores the scratch space
-func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
-	se.scratchSpace = scratch
+// resources contains a list of apps and assets. It's used to track the apps and
+// assets created by a txgroup, for "free" access.
+type resources struct {
+	asas []basics.AssetIndex
+	apps []basics.AppIndex
 }
 
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
-	// the transaction being evaluated
-	Txn *transactions.SignedTxn
-
 	Proto *config.ConsensusParams
 
-	Trace io.Writer
+	Trace *strings.Builder
 
-	TxnGroup []transactions.SignedTxn
+	TxnGroup []transactions.SignedTxnWithAD
 
-	// GroupIndex should point to Txn within TxnGroup
-	GroupIndex uint64
+	pastScratch []*scratchSpace
 
-	PastSideEffects []EvalSideEffects
-
-	Logger logging.Logger
+	logger logging.Logger
 
 	Ledger LedgerForLogic
 
@@ -264,19 +258,139 @@ type EvalParams struct {
 	// MinTealVersion is nil, we will compute it ourselves
 	MinTealVersion *uint64
 
-	// Amount "overpaid" by the top-level transactions of the
-	// group.  Often 0.  When positive, it is spent by application
-	// actions.  Shared value across a group's txns, so that it
-	// can be updated. nil is interpretted as 0.
+	// Amount "overpaid" by the transactions of the group.  Often 0.  When
+	// positive, it can be spent by inner transactions.  Shared across a group's
+	// txns, so that it can be updated (including upward, by overpaying inner
+	// transactions). nil is treated as 0 (used before fee pooling is enabled).
 	FeeCredit *uint64
 
 	Specials *transactions.SpecialAddresses
 
-	// determines eval mode: runModeSignature or runModeApplication
-	runModeFlags runMode
+	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
+	PooledApplicationBudget *int
 
-	// Total pool of app call budget in a group transaction
-	PooledApplicationBudget *uint64
+	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
+	pooledAllowedInners *int
+
+	// created contains resources that may be used for "created" - they need not be in
+	// a foreign array. They remain empty until createdResourcesVersion.
+	created *resources
+
+	// Caching these here means the hashes can be shared across the TxnGroup
+	// (and inners, because the cache is shared with the inner EvalParams)
+	appAddrCache map[basics.AppIndex]basics.Address
+
+	// Cache the txid hashing, but do *not* share this into inner EvalParams, as
+	// the key is just the index in the txgroup.
+	txidCache map[int]transactions.Txid
+
+	// The calling context, if this is an inner app call
+	caller *EvalContext
+}
+
+func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
+	copy := make([]transactions.SignedTxnWithAD, len(txgroup))
+	for i := range txgroup {
+		copy[i].SignedTxn = txgroup[i].SignedTxn
+		// leave copy[i].ApplyData clear
+	}
+	return copy
+}
+
+// NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
+func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+	apps := 0
+	for _, tx := range txgroup {
+		if tx.Txn.Type == protocol.ApplicationCallTx {
+			apps++
+		}
+	}
+
+	minTealVersion := ComputeMinTealVersion(txgroup, false)
+
+	var pooledApplicationBudget *int
+	var pooledAllowedInners *int
+
+	credit := feeCredit(txgroup, proto.MinTxnFee)
+
+	if proto.EnableAppCostPooling && apps > 0 {
+		pooledApplicationBudget = new(int)
+		*pooledApplicationBudget = apps * proto.MaxAppProgramCost
+	}
+
+	if proto.EnableInnerTransactionPooling && apps > 0 {
+		pooledAllowedInners = new(int)
+		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
+	}
+
+	return &EvalParams{
+		TxnGroup:                copyWithClearAD(txgroup),
+		Proto:                   proto,
+		Specials:                specials,
+		pastScratch:             make([]*scratchSpace, len(txgroup)),
+		MinTealVersion:          &minTealVersion,
+		FeeCredit:               &credit,
+		PooledApplicationBudget: pooledApplicationBudget,
+		pooledAllowedInners:     pooledAllowedInners,
+		created:                 &resources{},
+		appAddrCache:            make(map[basics.AppIndex]basics.Address),
+	}
+}
+
+// feeCredit returns the extra fee supplied in this top-level txgroup compared
+// to required minfee.  It can make assumptions about overflow because the group
+// is known OK according to TxnGroupBatchVerify. (In essence the group is
+// "WellFormed")
+func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
+	minFeeCount := uint64(0)
+	feesPaid := uint64(0)
+	for _, stxn := range txgroup {
+		if stxn.Txn.Type != protocol.CompactCertTx {
+			minFeeCount++
+		}
+		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+	}
+	// Overflow is impossible, because TxnGroupBatchVerify checked.
+	feeNeeded := minFee * minFeeCount
+
+	return feesPaid - feeNeeded
+}
+
+// NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
+func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
+	minTealVersion := ComputeMinTealVersion(txg, true)
+	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
+	// imposed otherwise.  But is correct to check, in case of future restriction.
+	if minTealVersion < *caller.MinTealVersion {
+		minTealVersion = *caller.MinTealVersion
+	}
+
+	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
+
+	if caller.Proto.EnableAppCostPooling {
+		for _, tx := range txg {
+			if tx.Txn.Type == protocol.ApplicationCallTx {
+				*caller.PooledApplicationBudget += caller.Proto.MaxAppProgramCost
+			}
+		}
+	}
+
+	ep := &EvalParams{
+		Proto:                   caller.Proto,
+		Trace:                   caller.Trace,
+		TxnGroup:                txg,
+		pastScratch:             make([]*scratchSpace, len(txg)),
+		MinTealVersion:          &minTealVersion,
+		FeeCredit:               caller.FeeCredit,
+		Specials:                caller.Specials,
+		PooledApplicationBudget: caller.PooledApplicationBudget,
+		pooledAllowedInners:     caller.pooledAllowedInners,
+		Ledger:                  caller.Ledger,
+		created:                 caller.created,
+		appAddrCache:            caller.appAddrCache,
+		caller:                  caller,
+	}
+	return ep
 }
 
 type opEvalFunc func(cx *EvalContext)
@@ -312,35 +426,55 @@ func (r runMode) String() string {
 	return "Unknown"
 }
 
-func (ep EvalParams) budget() int {
-	if ep.runModeFlags == runModeSignature {
-		return int(ep.Proto.LogicSigMaxCost)
-	}
-	if ep.Proto.EnableAppCostPooling && ep.PooledApplicationBudget != nil {
-		return int(*ep.PooledApplicationBudget)
-	}
-	return ep.Proto.MaxAppProgramCost
-}
-
 func (ep EvalParams) log() logging.Logger {
-	if ep.Logger != nil {
-		return ep.Logger
+	if ep.logger != nil {
+		return ep.logger
 	}
 	return logging.Base()
 }
 
-type scratchSpace = [256]stackValue
+// RecordAD notes ApplyData information that was derived outside of the logic
+// package. For example, after a acfg transaction is processed, the AD created
+// by the acfg is added to the EvalParams this way.
+func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
+	ep.TxnGroup[gi].ApplyData = ad
+	if aid := ad.ConfigAsset; aid != 0 {
+		ep.created.asas = append(ep.created.asas, aid)
+	}
+	if aid := ad.ApplicationID; aid != 0 {
+		ep.created.apps = append(ep.created.apps, aid)
+	}
+}
 
-// EvalContext is the execution context of AVM bytecode.  It contains
-// the full state of the running program, and tracks some of the
-// things that the program has been done, like log message and inner
-// transactions.
+type scratchSpace [256]stackValue
+
+// EvalContext is the execution context of AVM bytecode.  It contains the full
+// state of the running program, and tracks some of the things that the program
+// has done, like log messages and inner transactions.
 type EvalContext struct {
-	EvalParams
+	*EvalParams
+
+	// determines eval mode: runModeSignature or runModeApplication
+	runModeFlags runMode
+
+	// the index of the transaction being evaluated
+	GroupIndex int
+	// the transaction being evaluated (initialized from GroupIndex + ep.TxnGroup)
+	Txn *transactions.SignedTxnWithAD
+
+	// Txn.EvalDelta maintains a summary of changes as we go.  We used to
+	// compute this from the ledger after a full eval.  But now apps can call
+	// apps.  When they do, all of the changes accumulate into the parent's
+	// ledger, but Txn.EvalDelta should only have the changes from *this*
+	// call. (The changes caused by children are deeper inside - in the
+	// EvalDeltas of the InnerTxns inside this EvalDelta) Nice bonus - by
+	// keeping the running changes, the debugger can be changed to display them
+	// as the app runs.
 
 	stack     []stackValue
 	callstack []int
 
+	appID   basics.AppIndex
 	program []byte
 	pc      int
 	nextpc  int
@@ -350,13 +484,9 @@ type EvalContext struct {
 	version uint64
 	scratch scratchSpace
 
-	subtxns []transactions.SignedTxn // place to build for itxn_submit
-	// Previous transactions Performed() and their effects
-	InnerTxns []transactions.SignedTxnWithAD
-
-	cost    int // cost incurred so far
-	Logs    []string
-	logSize int // total log size so far
+	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
+	cost    int                            // cost incurred so far
+	logSize int                            // total log size so far
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -369,8 +499,6 @@ type EvalContext struct {
 	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
-	txidCache         map[uint64]transactions.Txid
-	appAddrCache      map[basics.AppIndex]basics.Address
 
 	// Stores state & disassembly for the optional debugger
 	debugState DebugState
@@ -379,20 +507,22 @@ type EvalContext struct {
 // StackType describes the type of a value on the operand stack
 type StackType byte
 
+const (
+	// StackNone in an OpSpec shows that the op pops or yields nothing
+	StackNone StackType = iota
+
+	// StackAny in an OpSpec shows that the op pops or yield any type
+	StackAny
+
+	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
+	StackUint64
+
+	// StackBytes in an OpSpec shows that the op pops or yields a []byte
+	StackBytes
+)
+
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
-
-// StackNone in an OpSpec shows that the op pops or yields nothing
-const StackNone StackType = 0
-
-// StackAny in an OpSpec shows that the op pops or yield any type
-const StackAny StackType = 1
-
-// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-const StackUint64 StackType = 2
-
-// StackBytes in an OpSpec shows that the op pops or yields a []byte
-const StackBytes StackType = 3
 
 func (st StackType) String() string {
 	switch st {
@@ -406,6 +536,15 @@ func (st StackType) String() string {
 		return "[]byte"
 	}
 	return "internal error, unknown type"
+}
+
+// Typed tells whether the StackType is a specific concrete type.
+func (st StackType) Typed() bool {
+	switch st {
+	case StackUint64, StackBytes:
+		return true
+	}
+	return false
 }
 
 func (sts StackTypes) plus(other StackTypes) StackTypes {
@@ -425,41 +564,76 @@ func (pe PanicError) Error() string {
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
-// EvalStatefulCx executes stateful TEAL program
-func EvalStatefulCx(program []byte, params EvalParams) (bool, *EvalContext, error) {
-	var cx EvalContext
-	cx.EvalParams = params
-	cx.runModeFlags = runModeApplication
-	pass, err := eval(program, &cx)
+// ClearStateBudgetError allows evaluation to signal that the caller should
+// reject the transaction.  Normally, an error in evaluation would not cause a
+// ClearState txn to fail. However, callers fail a txn for ClearStateBudgetError
+// because the transaction has not provided enough budget to let ClearState do
+// its job.
+type ClearStateBudgetError struct {
+	offered int
+}
 
-	// The following two updates show a need for something like a
-	// GroupEvalContext, as we are currently tucking things into the
-	// EvalParams so that they are available to later calls.
+func (e ClearStateBudgetError) Error() string {
+	return fmt.Sprintf("Attempted ClearState execution with low OpcodeBudget %d", e.offered)
+}
 
-	// update pooled budget
-	if cx.Proto.EnableAppCostPooling && cx.PooledApplicationBudget != nil {
-		// if eval passes, then budget is always greater than cost, so should not have underflow
-		*cx.PooledApplicationBudget = basics.SubSaturate(*cx.PooledApplicationBudget, uint64(cx.cost))
+// EvalContract executes stateful TEAL program as the gi'th transaction in params
+func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
+	if params.Ledger == nil {
+		return false, nil, errors.New("no ledger in contract eval")
 	}
-	// update side effects
-	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	if aid == 0 {
+		return false, nil, errors.New("0 appId in contract eval")
+	}
+	cx := EvalContext{
+		EvalParams:   params,
+		runModeFlags: runModeApplication,
+		GroupIndex:   gi,
+		Txn:          &params.TxnGroup[gi],
+		appID:        aid,
+	}
+
+	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
+			return false, nil, ClearStateBudgetError{*cx.PooledApplicationBudget}
+		}
+	}
+
+	if cx.Trace != nil && cx.caller != nil {
+		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.Txn.Txn.OnCompletion, cx.Txn.Txn.ApplicationArgs)
+	}
+	pass, err := eval(program, &cx)
+	if cx.Trace != nil && cx.caller != nil {
+		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
+	}
+
+	// update side effects. It is tempting, and maybe even a good idea, to store
+	// the pointer to cx.scratch instead.  Since we don't modify them again,
+	// it's probably safe. However it may have poor GC characteristics (because
+	// we'd be storing a pointer into a much larger structure, the cx), and
+	// copying seems nice and clean.
+	cx.pastScratch[cx.GroupIndex] = &scratchSpace{}
+	*cx.pastScratch[cx.GroupIndex] = cx.scratch
 
 	return pass, &cx, err
 }
 
-// EvalStateful is a lighter weight interface that doesn't return the EvalContext
-func EvalStateful(program []byte, params EvalParams) (bool, error) {
-	pass, _, err := EvalStatefulCx(program, params)
+// EvalApp is a lighter weight interface that doesn't return the EvalContext
+func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, error) {
+	pass, _, err := EvalContract(program, gi, aid, params)
 	return pass, err
 }
 
-// Eval checks to see if a transaction passes logic
+// EvalSignature evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func Eval(program []byte, params EvalParams) (pass bool, err error) {
-	var cx EvalContext
-	cx.EvalParams = params
-	cx.runModeFlags = runModeSignature
-	return eval(program, &cx)
+func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+	cx := EvalContext{
+		EvalParams:   params,
+		runModeFlags: runModeSignature,
+		GroupIndex:   gi,
+		Txn:          &params.TxnGroup[gi],
+	}
+	return eval(cx.Txn.Lsig.Logic, &cx)
 }
 
 // eval implementation
@@ -471,10 +645,8 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 			stlen := runtime.Stack(buf, false)
 			pass = false
 			errstr := string(buf[:stlen])
-			if cx.EvalParams.Trace != nil {
-				if sb, ok := cx.EvalParams.Trace.(*strings.Builder); ok {
-					errstr += sb.String()
-				}
+			if cx.Trace != nil {
+				errstr += cx.Trace.String()
 			}
 			err = PanicError{x, errstr}
 			cx.EvalParams.log().Errorf("recovered panic in Eval: %w", err)
@@ -495,44 +667,23 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		err = errLogicSigNotSupported
 		return
 	}
-	if cx.EvalParams.Txn.Lsig.Args != nil && len(cx.EvalParams.Txn.Lsig.Args) > transactions.EvalMaxArgs {
+	if cx.Txn.Lsig.Args != nil && len(cx.Txn.Lsig.Args) > transactions.EvalMaxArgs {
 		err = errTooManyArgs
 		return
 	}
 
-	if len(program) == 0 {
-		cx.err = errors.New("invalid program (empty)")
-		return false, cx.err
-	}
-	version, vlen := binary.Uvarint(program)
-	if vlen <= 0 {
-		cx.err = errors.New("invalid version")
-		return false, cx.err
-	}
-	if version > EvalMaxVersion {
-		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
-		return false, cx.err
-	}
-	if version > cx.EvalParams.Proto.LogicSigVersion {
-		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.EvalParams.Proto.LogicSigVersion)
-		return false, cx.err
-	}
-
-	var minVersion uint64
-	if cx.EvalParams.MinTealVersion == nil {
-		minVersion = ComputeMinTealVersion(cx.EvalParams.TxnGroup)
-	} else {
-		minVersion = *cx.EvalParams.MinTealVersion
-	}
-	if version < minVersion {
-		cx.err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
-		return false, cx.err
+	version, vlen, err := versionCheck(program, cx.EvalParams)
+	if err != nil {
+		cx.err = err
+		return false, err
 	}
 
 	cx.version = version
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
+	cx.Txn.EvalDelta.GlobalDelta = basics.StateDelta{}
+	cx.Txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
@@ -573,34 +724,29 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	return cx.stack[0].Uint != 0, nil
 }
 
-// CheckStateful should be faster than EvalStateful.  It can perform
+// CheckContract should be faster than EvalContract.  It can perform
 // static checks and reject programs that are invalid. Prior to v4,
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
-func CheckStateful(program []byte, params EvalParams) error {
-	params.runModeFlags = runModeApplication
-	return check(program, params)
+func CheckContract(program []byte, params *EvalParams) error {
+	return check(program, params, runModeApplication)
 }
 
-// Check should be faster than Eval.  It can perform static checks and
-// reject programs that are invalid. Prior to v4, these static checks
-// include a cost estimate that must be low enough (controlled by
-// params.Proto).
-func Check(program []byte, params EvalParams) error {
-	params.runModeFlags = runModeSignature
-	return check(program, params)
+// CheckSignature should be faster than EvalSignature.  It can perform static
+// checks and reject programs that are invalid. Prior to v4, these static checks
+// include a cost estimate that must be low enough (controlled by params.Proto).
+func CheckSignature(gi int, params *EvalParams) error {
+	return check(params.TxnGroup[gi].Lsig.Logic, params, runModeSignature)
 }
 
-func check(program []byte, params EvalParams) (err error) {
+func check(program []byte, params *EvalParams, mode runMode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
 			stlen := runtime.Stack(buf, false)
 			errstr := string(buf[:stlen])
 			if params.Trace != nil {
-				if sb, ok := params.Trace.(*strings.Builder); ok {
-					errstr += sb.String()
-				}
+				errstr += params.Trace.String()
 			}
 			err = PanicError{x, errstr}
 			params.log().Errorf("recovered panic in Check: %s", err)
@@ -609,36 +755,22 @@ func check(program []byte, params EvalParams) (err error) {
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
 		return errLogicSigNotSupported
 	}
-	version, vlen := binary.Uvarint(program)
-	if vlen <= 0 {
-		return errors.New("invalid version")
-	}
-	if version > EvalMaxVersion {
-		return fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
-	}
-	if version > params.Proto.LogicSigVersion {
-		return fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
-	}
 
-	var minVersion uint64
-	if params.MinTealVersion == nil {
-		minVersion = ComputeMinTealVersion(params.TxnGroup)
-	} else {
-		minVersion = *params.MinTealVersion
-	}
-	if version < minVersion {
-		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+	version, vlen, err := versionCheck(program, params)
+	if err != nil {
+		return err
 	}
 
 	var cx EvalContext
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
+	cx.runModeFlags = mode
 	cx.program = program
 	cx.branchTargets = make(map[int]bool)
 	cx.instructionStarts = make(map[int]bool)
 
-	maxCost := params.budget()
+	maxCost := cx.remainingBudget()
 	if version >= backBranchEnabledVersion {
 		maxCost = math.MaxInt32
 	}
@@ -664,6 +796,28 @@ func check(program []byte, params EvalParams) (err error) {
 	return nil
 }
 
+func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
+	version, vlen, err := transactions.ProgramVersion(program)
+	if err != nil {
+		return 0, 0, err
+	}
+	if version > EvalMaxVersion {
+		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
+	}
+	if version > params.Proto.LogicSigVersion {
+		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	}
+
+	if params.MinTealVersion == nil {
+		minVersion := ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
+		params.MinTealVersion = &minVersion
+	}
+	if version < *params.MinTealVersion {
+		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinTealVersion, version)
+	}
+	return version, vlen, nil
+}
+
 func opCompat(expected, got StackType) bool {
 	if expected == StackAny {
 		return true
@@ -685,8 +839,39 @@ func boolToUint(x bool) uint64 {
 	return 0
 }
 
-// MaxStackDepth should move to consensus params
+// MaxStackDepth should not change unless gated by a teal version change / consensus upgrade.
 const MaxStackDepth = 1000
+
+func (cx *EvalContext) remainingBudget() int {
+	if cx.runModeFlags == runModeSignature {
+		return int(cx.Proto.LogicSigMaxCost) - cx.cost
+	}
+
+	// restrict clear state programs from using more than standard unpooled budget
+	// cx.Txn is not set during check()
+	if cx.Proto.IsolateClearState && cx.Txn != nil && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		// Need not confirm that *cx.PooledApplicationBudget is also >0, as
+		// ClearState programs are only run if *cx.PooledApplicationBudget >
+		// MaxAppProgramCost at the start.
+		return cx.Proto.MaxAppProgramCost - cx.cost
+	}
+
+	if cx.PooledApplicationBudget != nil {
+		return *cx.PooledApplicationBudget
+	}
+	return cx.Proto.MaxAppProgramCost - cx.cost
+}
+
+func (cx *EvalContext) remainingInners() int {
+	if cx.Proto.EnableInnerTransactionPooling && cx.pooledAllowedInners != nil {
+		return *cx.pooledAllowedInners
+	}
+	// Before EnableInnerTransactionPooling, MaxInnerTransactions was the amount
+	// allowed in a single txn. No consensus version should enable inner app
+	// calls without turning on EnableInnerTransactionPoolin, else inner calls
+	// could keep branching with "width" MaxInnerTransactions
+	return cx.Proto.MaxInnerTransactions - len(cx.Txn.EvalDelta.InnerTxns)
+}
 
 func (cx *EvalContext) step() {
 	opcode := cx.program[cx.pc]
@@ -721,9 +906,20 @@ func (cx *EvalContext) step() {
 		return
 	}
 	cx.cost += deets.Cost
-	if cx.cost > cx.budget() {
-		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: remaining budget is %d but program cost was %d",
-			cx.pc, spec.Name, cx.budget(), cx.cost)
+	if cx.PooledApplicationBudget != nil {
+		*cx.PooledApplicationBudget -= deets.Cost
+	}
+
+	if cx.remainingBudget() < 0 {
+		// We're not going to execute the instruction, so give the cost back.
+		// This only matters if this is an inner ClearState - the caller should
+		// not be over debited. (Normally, failure causes total txtree failure.)
+		cx.cost -= deets.Cost
+		if cx.PooledApplicationBudget != nil {
+			*cx.PooledApplicationBudget += deets.Cost
+		}
+		cx.err = fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
+			cx.pc, spec.Name, cx.cost)
 		return
 	}
 
@@ -1031,15 +1227,33 @@ func opMulw(cx *EvalContext) {
 	cx.stack[last].Uint = low
 }
 
+func opDivw(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	pprev := last - 2
+	hi := cx.stack[pprev].Uint
+	lo := cx.stack[prev].Uint
+	y := cx.stack[last].Uint
+	// These two clauses catch what will cause panics in bits.Div64, so we get
+	// nicer errors.
+	if y == 0 {
+		cx.err = errors.New("divw 0")
+		return
+	}
+	if y <= hi {
+		cx.err = fmt.Errorf("divw overflow: %d <= %d", y, hi)
+		return
+	}
+	quo, _ := bits.Div64(hi, lo, y)
+	cx.stack = cx.stack[:prev] // pop 2
+	cx.stack[pprev].Uint = quo
+}
+
 func opLt(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := cx.stack[prev].Uint < cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1062,11 +1276,7 @@ func opAnd(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) && (cx.stack[last].Uint != 0)
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1074,11 +1284,7 @@ func opOr(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cond := (cx.stack[prev].Uint != 0) || (cx.stack[last].Uint != 0)
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1097,11 +1303,7 @@ func opEq(cx *EvalContext) {
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
 	}
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(cond)
 	cx.stack[prev].Bytes = nil
 	cx.stack = cx.stack[:last]
 }
@@ -1114,11 +1316,7 @@ func opNeq(cx *EvalContext) {
 func opNot(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	cond := cx.stack[last].Uint == 0
-	if cond {
-		cx.stack[last].Uint = 1
-	} else {
-		cx.stack[last].Uint = 0
-	}
+	cx.stack[last].Uint = boolToUint(cond)
 }
 
 func opLen(cx *EvalContext) {
@@ -1385,6 +1583,19 @@ func opBytesMul(cx *EvalContext) {
 	opBytesBinOp(cx, result, result.Mul)
 }
 
+func opBytesSqrt(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	if len(cx.stack[last].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
+
+	val := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	val.Sqrt(val)
+	cx.stack[last].Bytes = val.Bytes()
+}
+
 func opBytesLt(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
@@ -1397,11 +1608,7 @@ func opBytesLt(cx *EvalContext) {
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
-	if lhs.Cmp(rhs) < 0 {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) < 0)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1432,11 +1639,7 @@ func opBytesEq(cx *EvalContext) {
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
-	if lhs.Cmp(rhs) == 0 {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
+	cx.stack[prev].Uint = boolToUint(lhs.Cmp(rhs) == 0)
 	cx.stack = cx.stack[:last]
 }
 
@@ -1754,7 +1957,7 @@ func opDup2(cx *EvalContext) {
 }
 
 func opDig(cx *EvalContext) {
-	depth := int(uint(cx.program[cx.pc+1]))
+	depth := int(cx.program[cx.pc+1])
 	idx := len(cx.stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
 	// so we can't expect our stack to be prechecked.
@@ -1884,62 +2087,56 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	if groupIndex < 0 {
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
-	cx := EvalContext{EvalParams: EvalParams{GroupIndex: uint64(groupIndex)}}
+	var cx EvalContext
+	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
 	fs := txnFieldSpecByField[field]
-	sv, err := cx.txnFieldToStack(txn, fs, arrayFieldIdx, uint64(groupIndex))
+	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, false)
 	return sv.toTealValue(), err
 }
 
-func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex uint64) transactions.Txid {
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
+		return txn.ID()
+	}
+
 	// Initialize txidCache if necessary
-	if cx.txidCache == nil {
-		cx.txidCache = make(map[uint64]transactions.Txid, len(cx.TxnGroup))
+	if cx.EvalParams.txidCache == nil {
+		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
 
 	// Hashes are expensive, so we cache computed TxIDs
-	txid, ok := cx.txidCache[groupIndex]
+	txid, ok := cx.EvalParams.txidCache[groupIndex]
 	if !ok {
-		txid = txn.ID()
-		cx.txidCache[groupIndex] = txid
+		if cx.caller != nil {
+			innerOffset := len(cx.caller.Txn.EvalDelta.InnerTxns)
+			txid = txn.InnerID(cx.caller.Txn.ID(), innerOffset+groupIndex)
+		} else {
+			txid = txn.ID()
+		}
+		cx.EvalParams.txidCache[groupIndex] = txid
 	}
 
 	return txid
 }
 
-func (cx *EvalContext) itxnFieldToStack(itxn *transactions.SignedTxnWithAD, fs txnFieldSpec, arrayFieldIdx uint64) (sv stackValue, err error) {
+func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
-		switch fs.field {
-		case Logs:
-			if arrayFieldIdx >= uint64(len(itxn.EvalDelta.Logs)) {
-				err = fmt.Errorf("invalid Logs index %d", arrayFieldIdx)
-				return
-			}
-			sv.Bytes = nilToEmpty([]byte(itxn.EvalDelta.Logs[arrayFieldIdx]))
-		case NumLogs:
-			sv.Uint = uint64(len(itxn.EvalDelta.Logs))
-		case CreatedAssetID:
-			sv.Uint = uint64(itxn.ApplyData.ConfigAsset)
-		case CreatedApplicationID:
-			sv.Uint = uint64(itxn.ApplyData.ApplicationID)
-		default:
-			err = fmt.Errorf("invalid txn field %d", fs.field)
+		if cx.runModeFlags == runModeSignature {
+			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
-		return
+		if cx.version < txnEffectsVersion && !inner {
+			return sv, errors.New("Unable to obtain effects from top-level transactions")
+		}
 	}
-
-	if fs.field == GroupIndex || fs.field == TxID {
-		err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
-	} else {
-		sv, err = cx.txnFieldToStack(&itxn.Txn, fs, arrayFieldIdx, 0)
-	}
-	return
-}
-
-func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFieldSpec, arrayFieldIdx uint64, groupIndex uint64) (sv stackValue, err error) {
-	if fs.effects {
-		return sv, errors.New("Unable to obtain effects from top-level transactions")
+	if inner {
+		// Before we had inner apps, we did not allow these, since we had no inner groups.
+		if cx.version < innerAppsEnabledVersion && (fs.field == GroupIndex || fs.field == TxID) {
+			err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
+			return
+		}
 	}
 	err = nil
+	txn := &stxn.SignedTxn.Txn
 	switch fs.field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
@@ -1961,6 +2158,8 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFiel
 		sv.Bytes = txn.VotePK[:]
 	case SelectionPK:
 		sv.Bytes = txn.SelectionPK[:]
+	case StateProofPK:
+		sv.Bytes = txn.StateProofPK[:]
 	case VoteFirst:
 		sv.Uint = uint64(txn.VoteFirst)
 	case VoteLast:
@@ -1984,7 +2183,7 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFiel
 	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
 	case GroupIndex:
-		sv.Uint = groupIndex
+		sv.Uint = uint64(groupIndex)
 	case TxID:
 		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
@@ -2089,230 +2288,215 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, fs txnFiel
 		sv.Uint = boolToUint(txn.AssetFrozen)
 	case ExtraProgramPages:
 		sv.Uint = uint64(txn.ExtraProgramPages)
+
+	case Logs:
+		if arrayFieldIdx >= uint64(len(stxn.EvalDelta.Logs)) {
+			err = fmt.Errorf("invalid Logs index %d", arrayFieldIdx)
+			return
+		}
+		sv.Bytes = nilToEmpty([]byte(stxn.EvalDelta.Logs[arrayFieldIdx]))
+	case NumLogs:
+		sv.Uint = uint64(len(stxn.EvalDelta.Logs))
+	case LastLog:
+		if logs := len(stxn.EvalDelta.Logs); logs > 0 {
+			sv.Bytes = nilToEmpty([]byte(stxn.EvalDelta.Logs[logs-1]))
+		} else {
+			sv.Bytes = nilToEmpty(nil)
+		}
+	case CreatedAssetID:
+		sv.Uint = uint64(stxn.ApplyData.ConfigAsset)
+	case CreatedApplicationID:
+		sv.Uint = uint64(stxn.ApplyData.ApplicationID)
+
 	default:
-		err = fmt.Errorf("invalid txn field %d", fs.field)
+		err = fmt.Errorf("invalid txn field %s", fs.field)
 		return
 	}
 
-	txnFieldType := TxnFieldTypes[fs.field]
-	if !typecheck(txnFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), txnFieldType.String(), sv.argType().String())
+	if !typecheck(fs.ftype, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return
 }
 
-func opTxn(cx *EvalContext) {
-	field := TxnField(cx.program[cx.pc+1])
+func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSpec, error) {
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
+		return nil, fmt.Errorf("invalid txn field %d", field)
 	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
+	if expectArray != fs.array {
+		if expectArray {
+			return nil, fmt.Errorf("unsupported array field %d", field)
+		}
+		return nil, fmt.Errorf("invalid txn field %d", field)
 	}
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, 0, cx.GroupIndex)
+	return &fs, nil
+}
+
+type txnSource int
+
+const (
+	srcGroup txnSource = iota
+	srcInner
+	srcInnerGroup
+)
+
+// opTxnImpl implements all of the txn variants.  Each form of txn opcode should
+// be able to get its work done with one call here, after collecting the args in
+// the most straightforward way possible. They ought to do no error checking, so
+// that it is all collected here.
+func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai uint64, expectArray bool) (sv stackValue, err error) {
+	fs, err := cx.fetchField(field, expectArray)
+	if err != nil {
+		return sv, err
+	}
+
+	var group []transactions.SignedTxnWithAD
+	switch src {
+	case srcGroup:
+		if fs.effects && gi >= uint64(cx.GroupIndex) {
+			// Test mode so that error is clearer
+			if cx.runModeFlags == runModeSignature {
+				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
+			}
+			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.GroupIndex)
+		}
+		group = cx.TxnGroup
+	case srcInner:
+		group = cx.getLastInner()
+	case srcInnerGroup:
+		group = cx.getLastInnerGroup()
+	}
+
+	// We cast the length up, rather than gi down, in case gi overflows `int`.
+	if gi >= uint64(len(group)) {
+		return sv, fmt.Errorf("txn index %d, len(group) is %d", gi, len(group))
+	}
+	tx := &group[gi]
+
+	// int(gi) is safe because gi < len(group). Slices in Go cannot exceed `int`
+	sv, err = cx.txnFieldToStack(tx, fs, ai, int(gi), src != srcGroup)
+	if err != nil {
+		return sv, err
+	}
+
+	return sv, nil
+}
+
+func opTxn(cx *EvalContext) {
+	gi := uint64(cx.GroupIndex)
+	field := TxnField(cx.program[cx.pc+1])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack = append(cx.stack, sv)
 }
 
 func opTxna(cx *EvalContext) {
+	gi := uint64(cx.GroupIndex)
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("txna unsupported field %d", field)
-		return
-	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
+	ai := uint64(cx.program[cx.pc+2])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack = append(cx.stack, sv)
 }
 
 func opTxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
+	gi := uint64(cx.GroupIndex)
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("txnas unsupported field %d", field)
-		return
-	}
-	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, fs, arrayFieldIdx, cx.GroupIndex)
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack[last] = sv
 }
 
 func opGtxn(cx *EvalContext) {
-	gtxid := cx.program[cx.pc+1]
-	if int(gtxid) >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	}
-	tx := &cx.TxnGroup[gtxid].Txn
+	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	var sv stackValue
-	var err error
-	if field == GroupIndex {
-		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
-		sv.Uint = uint64(gtxid)
-	} else {
-		sv, err = cx.txnFieldToStack(tx, fs, 0, uint64(gtxid))
-		if err != nil {
-			cx.err = err
-			return
-		}
-	}
-	cx.stack = append(cx.stack, sv)
-}
 
-func opGtxna(cx *EvalContext) {
-	gtxid := int(uint(cx.program[cx.pc+1]))
-	if gtxid >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	}
-	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(cx.program[cx.pc+2])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
-		return
-	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
+	cx.stack = append(cx.stack, sv)
+}
+
+func opGtxna(cx *EvalContext) {
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+	ai := uint64(cx.program[cx.pc+3])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
 	cx.stack = append(cx.stack, sv)
 }
 
 func opGtxnas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	gtxid := cx.program[cx.pc+1]
-	if int(gtxid) >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gtxnas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	}
-	tx := &cx.TxnGroup[gtxid].Txn
+	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxnas unsupported field %d", field)
-		return
-	}
-	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, uint64(gtxid))
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack[last] = sv
 }
 
 func opGtxns(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := cx.stack[last].Uint
-	if gtxid >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gtxns lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	}
-	tx := &cx.TxnGroup[gtxid].Txn
+
+	gi := cx.stack[last].Uint
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
+	if err != nil {
+		cx.err = err
 		return
 	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	var sv stackValue
-	var err error
-	if field == GroupIndex {
-		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
-		sv.Uint = gtxid
-	} else {
-		sv, err = cx.txnFieldToStack(tx, fs, 0, gtxid)
-		if err != nil {
-			cx.err = err
-			return
-		}
-	}
+
 	cx.stack[last] = sv
 }
 
 func opGtxnsa(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	gtxid := cx.stack[last].Uint
-	if gtxid >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	}
-	tx := &cx.TxnGroup[gtxid].Txn
+
+	gi := cx.stack[last].Uint
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
-		return
-	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
+	ai := uint64(cx.program[cx.pc+2])
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack[last] = sv
 }
 
@@ -2320,53 +2504,24 @@ func opGtxnsas(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
-	gtxid := cx.stack[prev].Uint
-	if gtxid >= uint64(len(cx.TxnGroup)) {
-		cx.err = fmt.Errorf("gtxnsas lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
-		return
-	}
-	tx := &cx.TxnGroup[gtxid].Txn
+	gi := cx.stack[prev].Uint
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid txn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("gtxnsas unsupported field %d", field)
-		return
-	}
-	arrayFieldIdx := cx.stack[last].Uint
-	sv, err := cx.txnFieldToStack(tx, fs, arrayFieldIdx, gtxid)
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack[prev] = sv
 	cx.stack = cx.stack[:last]
 }
 
 func opItxn(cx *EvalContext) {
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid itxn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if ok {
-		cx.err = fmt.Errorf("invalid itxn field %d", field)
-		return
-	}
 
-	if len(cx.InnerTxns) == 0 {
-		cx.err = fmt.Errorf("no inner transaction available %d", field)
-		return
-	}
-
-	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
-	sv, err := cx.itxnFieldToStack(itxn, fs, 0)
+	sv, err := cx.opTxnImpl(0, srcInner, field, 0, false)
 	if err != nil {
 		cx.err = err
 		return
@@ -2376,62 +2531,138 @@ func opItxn(cx *EvalContext) {
 
 func opItxna(cx *EvalContext) {
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid itxn field %d", field)
-		return
-	}
-	_, ok = txnaFieldSpecByField[field]
-	if !ok {
-		cx.err = fmt.Errorf("itxna unsupported field %d", field)
-		return
-	}
-	arrayFieldIdx := uint64(cx.program[cx.pc+2])
+	ai := uint64(cx.program[cx.pc+2])
 
-	if len(cx.InnerTxns) == 0 {
-		cx.err = fmt.Errorf("no inner transaction available %d", field)
-		return
-	}
-
-	itxn := &cx.InnerTxns[len(cx.InnerTxns)-1]
-	sv, err := cx.itxnFieldToStack(itxn, fs, arrayFieldIdx)
+	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		cx.err = err
 		return
 	}
+
 	cx.stack = append(cx.stack, sv)
 }
 
-func opGaidImpl(cx *EvalContext, groupIdx uint64, opName string) (sv stackValue, err error) {
-	if groupIdx >= uint64(len(cx.TxnGroup)) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
+func opItxnas(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	field := TxnField(cx.program[cx.pc+1])
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
+	if err != nil {
+		cx.err = err
 		return
-	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, groupIdx)
+	}
+
+	cx.stack[last] = sv
+}
+
+func (cx *EvalContext) getLastInner() []transactions.SignedTxnWithAD {
+	inners := cx.Txn.EvalDelta.InnerTxns
+	// If there are no inners yet, return empty slice, which will result in error
+	if len(inners) == 0 {
+		return inners
+	}
+	return inners[len(inners)-1:]
+}
+
+func (cx *EvalContext) getLastInnerGroup() []transactions.SignedTxnWithAD {
+	inners := cx.Txn.EvalDelta.InnerTxns
+	// If there are no inners yet, return empty slice, which will result in error
+	if len(inners) == 0 {
+		return inners
+	}
+	gid := inners[len(inners)-1].Txn.Group
+	// If last inner was a singleton, return it as a slice.
+	if gid.IsZero() {
+		return inners[len(inners)-1:]
+	}
+	// Look back for the first non-matching inner (by group) to find beginning
+	for i := len(inners) - 2; i >= 0; i-- {
+		if inners[i].Txn.Group != gid {
+			return inners[i+1:]
+		}
+	}
+	// All have the same (non-zero) group. Return all
+	return inners
+}
+
+func opGitxn(cx *EvalContext) {
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+
+	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, 0, false)
+	if err != nil {
+		cx.err = err
 		return
-	} else if groupIdx == cx.GroupIndex {
+	}
+
+	cx.stack = append(cx.stack, sv)
+}
+
+func opGitxna(cx *EvalContext) {
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+	ai := uint64(cx.program[cx.pc+3])
+
+	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack = append(cx.stack, sv)
+}
+
+func opGitxnas(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	gi := uint64(cx.program[cx.pc+1])
+	field := TxnField(cx.program[cx.pc+2])
+	ai := cx.stack[last].Uint
+
+	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last] = sv
+}
+
+func opGaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err error) {
+	if giw >= uint64(len(cx.TxnGroup)) {
+		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, giw, len(cx.TxnGroup))
+		return
+	}
+	// Is now assured smalled than a len() so fits in int.
+	gi := int(giw)
+	if gi > cx.GroupIndex {
+		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, gi)
+		return
+	}
+	if gi == cx.GroupIndex {
 		err = fmt.Errorf("%s is only for accessing creatable IDs of previous txns, use `global CurrentApplicationID` instead to access the current app's creatable ID", opName)
 		return
-	} else if txn := cx.TxnGroup[groupIdx].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
-		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, groupIdx)
+	}
+	if txn := cx.TxnGroup[gi].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
+		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, gi)
 		return
 	}
 
-	cid, err := cx.getCreatableID(groupIdx)
-	if cid == 0 {
-		err = fmt.Errorf("%s can't read creatable ID from txn with group index %d because the txn did not create anything", opName, groupIdx)
-		return
+	if aid := cx.TxnGroup[gi].ApplyData.ConfigAsset; aid != 0 {
+		return stackValue{Uint: uint64(aid)}, nil
 	}
-
-	sv = stackValue{
-		Uint: cid,
+	if aid := cx.TxnGroup[gi].ApplyData.ApplicationID; aid != 0 {
+		return stackValue{Uint: uint64(aid)}, nil
 	}
+	err = fmt.Errorf("%s: index %d did not create anything", opName, gi)
 	return
 }
 
 func opGaid(cx *EvalContext) {
-	groupIdx := cx.program[cx.pc+1]
-	sv, err := opGaidImpl(cx, uint64(groupIdx), "gaid")
+	gi := uint64(cx.program[cx.pc+1])
+	sv, err := opGaidImpl(cx, gi, "gaid")
 	if err != nil {
 		cx.err = err
 		return
@@ -2442,8 +2673,9 @@ func opGaid(cx *EvalContext) {
 
 func opGaids(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := cx.stack[last].Uint
-	sv, err := opGaidImpl(cx, groupIdx, "gaids")
+	gi := cx.stack[last].Uint
+
+	sv, err := opGaidImpl(cx, gi, "gaids")
 	if err != nil {
 		cx.err = err
 		return
@@ -2473,59 +2705,29 @@ func (cx *EvalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
-func (cx *EvalContext) getApplicationID() (uint64, error) {
-	if cx.Ledger == nil {
-		return 0, fmt.Errorf("ledger not available")
-	}
-	return uint64(cx.Ledger.ApplicationID()), nil
-}
-
-func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
-	if cx.Ledger == nil {
-		return basics.Address{}, fmt.Errorf("ledger not available")
-	}
-
-	// Initialize appAddrCache if necessary
-	if cx.appAddrCache == nil {
-		cx.appAddrCache = make(map[basics.AppIndex]basics.Address)
-	}
-
-	appID := cx.Ledger.ApplicationID()
-	// Hashes are expensive, so we cache computed app addrs
-	appAddr, ok := cx.appAddrCache[appID]
+// getApplicationAddress memoizes app.Address() across a tx group's evaluation
+func (cx *EvalContext) getApplicationAddress(app basics.AppIndex) basics.Address {
+	/* Do not instantiate the cache here, that would mask a programming error.
+	   The cache must be instantiated at EvalParams construction time, so that
+	   proper sharing with inner EvalParams can work. */
+	appAddr, ok := cx.appAddrCache[app]
 	if !ok {
-		appAddr = appID.Address()
-		cx.appAddrCache[appID] = appAddr
+		appAddr = app.Address()
+		cx.appAddrCache[app] = appAddr
 	}
 
-	return appAddr, nil
-}
-
-func (cx *EvalContext) getCreatableID(groupIndex uint64) (cid uint64, err error) {
-	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
-	}
-	gi := int(groupIndex)
-	if gi < 0 {
-		return 0, fmt.Errorf("groupIndex %d too high", groupIndex)
-	}
-	return uint64(cx.Ledger.GetCreatableID(gi)), nil
+	return appAddr
 }
 
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	if cx.Ledger == nil {
 		return nil, fmt.Errorf("ledger not available")
 	}
-	_, creator, err := cx.Ledger.AppParams(cx.Ledger.ApplicationID())
+	_, creator, err := cx.Ledger.AppParams(cx.appID)
 	if err != nil {
 		return nil, fmt.Errorf("No params for current app")
 	}
 	return creator[:], nil
-}
-
-func (cx *EvalContext) getGroupID() []byte {
-	return cx.Txn.Txn.Group[:]
 }
 
 var zeroAddress basics.Address
@@ -2549,15 +2751,29 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case LatestTimestamp:
 		sv.Uint, err = cx.getLatestTimestamp()
 	case CurrentApplicationID:
-		sv.Uint, err = cx.getApplicationID()
+		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
-		var addr basics.Address
-		addr, err = cx.getApplicationAddress()
+		addr := cx.getApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
 	case GroupID:
-		sv.Bytes = cx.getGroupID()
+		sv.Bytes = cx.Txn.Txn.Group[:]
+	case OpcodeBudget:
+		sv.Uint = uint64(cx.remainingBudget())
+	case CallerApplicationID:
+		if cx.caller != nil {
+			sv.Uint = uint64(cx.caller.appID)
+		} else {
+			sv.Uint = 0
+		}
+	case CallerApplicationAddress:
+		if cx.caller != nil {
+			addr := cx.caller.getApplicationAddress(cx.caller.appID)
+			sv.Bytes = addr[:]
+		} else {
+			sv.Bytes = zeroAddress[:]
+		}
 	default:
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
@@ -2573,11 +2789,11 @@ func opGlobal(cx *EvalContext) {
 	globalField := GlobalField(cx.program[cx.pc+1])
 	fs, ok := globalFieldSpecByField[globalField]
 	if !ok || fs.version > cx.version {
-		cx.err = fmt.Errorf("invalid global field %d", globalField)
+		cx.err = fmt.Errorf("invalid global field %s", globalField)
 		return
 	}
 	if (cx.runModeFlags & fs.mode) == 0 {
-		cx.err = fmt.Errorf("global[%d] not allowed in current mode", globalField)
+		cx.err = fmt.Errorf("global[%s] not allowed in current mode", globalField)
 		return
 	}
 
@@ -2631,11 +2847,7 @@ func opEd25519verify(cx *EvalContext) {
 	copy(sig[:], cx.stack[prev].Bytes)
 
 	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
-	if sv.Verify(msg, sig) {
-		cx.stack[pprev].Uint = 1
-	} else {
-		cx.stack[pprev].Uint = 0
-	}
+	cx.stack[pprev].Uint = boolToUint(sv.Verify(msg, sig, cx.Proto.EnableBatchVerification))
 	cx.stack[pprev].Bytes = nil
 	cx.stack = cx.stack[:prev]
 }
@@ -2690,11 +2902,7 @@ func opEcdsaVerify(cx *EvalContext) {
 
 	result := secp256k1.VerifySignature(pubkey, msg, signature)
 
-	if result {
-		cx.stack[fifth].Uint = 1
-	} else {
-		cx.stack[fifth].Uint = 0
-	}
+	cx.stack[fifth].Uint = boolToUint(result)
 	cx.stack[fifth].Bytes = nil
 	cx.stack = cx.stack[:fourth]
 }
@@ -2832,32 +3040,31 @@ func opStores(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opGloadImpl(cx *EvalContext, groupIdx uint64, scratchIdx byte, opName string) (scratchValue stackValue, err error) {
-	if groupIdx >= uint64(len(cx.TxnGroup)) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
-		return
-	} else if int(scratchIdx) >= len(cx.scratch) {
-		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
-		return
-	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
-		err = fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
-		return
-	} else if groupIdx == cx.GroupIndex {
-		err = fmt.Errorf("can't use %s on self, use load instead", opName)
-		return
-	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
-		return
+func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stackValue, error) {
+	var none stackValue
+	if gi >= len(cx.TxnGroup) {
+		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
+	}
+	if int(scratchIdx) >= len(cx.scratch) {
+		return none, fmt.Errorf("invalid Scratch index %d", scratchIdx)
+	}
+	if cx.TxnGroup[gi].Txn.Type != protocol.ApplicationCallTx {
+		return none, fmt.Errorf("can't use %s on non-app call txn with index %d", opName, gi)
+	}
+	if gi == cx.GroupIndex {
+		return none, fmt.Errorf("can't use %s on self, use load instead", opName)
+	}
+	if gi > cx.GroupIndex {
+		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, gi)
 	}
 
-	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(scratchIdx)
-	return
+	return cx.pastScratch[gi][scratchIdx], nil
 }
 
 func opGload(cx *EvalContext) {
-	groupIdx := uint64(cx.program[cx.pc+1])
+	gi := int(cx.program[cx.pc+1])
 	scratchIdx := cx.program[cx.pc+2]
-	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
+	scratchValue, err := opGloadImpl(cx, gi, scratchIdx, "gload")
 	if err != nil {
 		cx.err = err
 		return
@@ -2868,15 +3075,43 @@ func opGload(cx *EvalContext) {
 
 func opGloads(cx *EvalContext) {
 	last := len(cx.stack) - 1
-	groupIdx := cx.stack[last].Uint
+	gi := cx.stack[last].Uint
+	if gi >= uint64(len(cx.TxnGroup)) {
+		cx.err = fmt.Errorf("gloads lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
+		return
+	}
 	scratchIdx := cx.program[cx.pc+1]
-	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gloads")
+	scratchValue, err := opGloadImpl(cx, int(gi), scratchIdx, "gloads")
 	if err != nil {
 		cx.err = err
 		return
 	}
 
 	cx.stack[last] = scratchValue
+}
+
+func opGloadss(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	gi := cx.stack[prev].Uint
+	if gi >= uint64(len(cx.TxnGroup)) {
+		cx.err = fmt.Errorf("gloadss lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
+		return
+	}
+	scratchIdx := cx.stack[last].Uint
+	if scratchIdx >= 256 {
+		cx.err = fmt.Errorf("gloadss scratch index >= 256 (%d)", scratchIdx)
+		return
+	}
+	scratchValue, err := opGloadImpl(cx, int(gi), byte(scratchIdx), "gloadss")
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[prev] = scratchValue
+	cx.stack = cx.stack[:last]
 }
 
 func opConcat(cx *EvalContext) {
@@ -3122,14 +3357,19 @@ func opExtract64Bits(cx *EvalContext) {
 	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
-// accountReference yields the address and Accounts offset designated
-// by a stackValue. If the stackValue is the app account, it need not
-// be in the Accounts array, therefore len(Accounts) + 1 is returned
-// as the index. This unusual convention is based on the existing
-// convention that 0 is the sender, 1-len(Accounts) are indexes into
-// Accounts array, and so len+1 is the next available value.  This
-// will allow encoding into EvalDelta efficiently when it becomes
-// necessary (when apps change local state on their own account).
+// accountReference yields the address and Accounts offset designated by a
+// stackValue. If the stackValue is the app account or an account of an app in
+// created.apps, and it is not be in the Accounts array, then len(Accounts) + 1
+// is returned as the index. This would let us catch the mistake if the index is
+// used for set/del. If the txn somehow "psychically" predicted the address, and
+// therefore it IS in txn.Accounts, then happy day, we can set/del it.  Return
+// the proper index.
+
+// If we ever want apps to be able to change local state on these accounts
+// (which includes this app's own account!), we will need a change to
+// EvalDelta's on disk format, so that the addr can be encoded explicitly rather
+// than by index into txn.Accounts.
+
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
@@ -3141,60 +3381,84 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	}
 	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
 
+	invalidIndex := uint64(len(cx.Txn.Txn.Accounts) + 1)
+	// Allow an address for an app that was created in group
+	if err != nil && cx.version >= createdResourcesVersion {
+		for _, appID := range cx.created.apps {
+			createdAddress := cx.getApplicationAddress(appID)
+			if addr == createdAddress {
+				return addr, invalidIndex, nil
+			}
+		}
+	}
+
+	// this app's address is also allowed
 	if err != nil {
-		// Application address is acceptable. index is meaningless though
-		appAddr, _ := cx.getApplicationAddress()
+		appAddr := cx.getApplicationAddress(cx.appID)
 		if appAddr == addr {
-			return addr, uint64(len(cx.Txn.Txn.Accounts) + 1), nil
+			return addr, invalidIndex, nil
 		}
 	}
 
 	return addr, idx, err
 }
 
-type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, error)
-
-func opBalanceQuery(cx *EvalContext, query opQuery, item string) error {
-	last := len(cx.stack) - 1 // account (index or actual address)
-
-	addr, _, err := cx.accountReference(cx.stack[last])
-	if err != nil {
-		return err
+func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Address, uint64, error) {
+	addr, accountIdx, err := cx.accountReference(account)
+	if err == nil && accountIdx > uint64(len(cx.Txn.Txn.Accounts)) {
+		// There was no error, but accountReference has signaled that accountIdx
+		// is not for mutable ops (because it can't encode it in EvalDelta)
+		// This also tells us that account.address() will work.
+		addr, _ := account.address()
+		err = fmt.Errorf("invalid Account reference for mutation %s", addr)
 	}
-
-	microAlgos, err := query(addr, cx.Proto)
-	if err != nil {
-		return fmt.Errorf("failed to fetch %s of %v: %w", item, addr, err)
-	}
-
-	cx.stack[last].Bytes = nil
-	cx.stack[last].Uint = microAlgos.Raw
-	return nil
+	return addr, accountIdx, err
 }
+
 func opBalance(cx *EvalContext) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
+	last := len(cx.stack) - 1 // account (index or actual address)
 
-	balanceQuery := func(addr basics.Address, _ *config.ConsensusParams) (basics.MicroAlgos, error) {
-		return cx.Ledger.Balance(addr)
-	}
-	err := opBalanceQuery(cx, balanceQuery, "balance")
+	addr, _, err := cx.accountReference(cx.stack[last])
 	if err != nil {
 		cx.err = err
+		return
 	}
+
+	account, err := cx.Ledger.AccountData(addr)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = account.MicroAlgos.Raw
 }
+
 func opMinBalance(cx *EvalContext) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
+	last := len(cx.stack) - 1 // account (index or actual address)
 
-	err := opBalanceQuery(cx, cx.Ledger.MinBalance, "minimum balance")
+	addr, _, err := cx.accountReference(cx.stack[last])
 	if err != nil {
 		cx.err = err
+		return
 	}
+
+	account, err := cx.Ledger.AccountData(addr)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = account.MinBalance(cx.Proto).Raw
 }
 
 func opAppOptedIn(cx *EvalContext) {
@@ -3224,12 +3488,8 @@ func opAppOptedIn(cx *EvalContext) {
 		return
 	}
 
+	cx.stack[prev].Uint = boolToUint(optedIn)
 	cx.stack[prev].Bytes = nil
-	if optedIn {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
 
 	cx.stack = cx.stack[:last]
 }
@@ -3372,11 +3632,28 @@ func opAppLocalPut(cx *EvalContext) {
 		return
 	}
 
-	addr, accountIdx, err := cx.accountReference(cx.stack[pprev])
-	if err == nil {
-		err = cx.Ledger.SetLocal(addr, key, sv.toTealValue(), accountIdx)
+	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[pprev])
+	if err != nil {
+		cx.err = err
+		return
 	}
 
+	// if writing the same value, don't record in EvalDelta, matching ledger
+	// behavior with previous BuildEvalDelta mechanism
+	etv, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	tv := sv.toTealValue()
+	if !ok || tv != etv {
+		if _, ok := cx.Txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
+			cx.Txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
+		}
+		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
+	}
+	err = cx.Ledger.SetLocal(addr, cx.appID, key, tv, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3397,7 +3674,19 @@ func opAppGlobalPut(cx *EvalContext) {
 		return
 	}
 
-	err := cx.Ledger.SetGlobal(key, sv.toTealValue())
+	// if writing the same value, don't record in EvalDelta, matching ledger
+	// behavior with previous BuildEvalDelta mechanism
+	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	tv := sv.toTealValue()
+	if !ok || tv != etv {
+		cx.Txn.EvalDelta.GlobalDelta[key] = tv.ToValueDelta()
+	}
+
+	err = cx.Ledger.SetGlobal(cx.appID, key, tv)
 	if err != nil {
 		cx.err = err
 		return
@@ -3417,10 +3706,28 @@ func opAppLocalDel(cx *EvalContext) {
 		return
 	}
 
-	addr, accountIdx, err := cx.accountReference(cx.stack[prev])
-	if err == nil {
-		err = cx.Ledger.DelLocal(addr, key, accountIdx)
+	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
+	if err != nil {
+		cx.err = err
+		return
 	}
+
+	// if deleting a non-existent value, don't record in EvalDelta, matching
+	// ledger behavior with previous BuildEvalDelta mechanism
+	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
+		if err != nil {
+			cx.err = err
+			return
+		}
+		if _, ok := cx.Txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
+			cx.Txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
+		}
+		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
+			Action: basics.DeleteAction,
+		}
+	}
+
+	err = cx.Ledger.DelLocal(addr, cx.appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3439,7 +3746,19 @@ func opAppGlobalDel(cx *EvalContext) {
 		return
 	}
 
-	err := cx.Ledger.DelGlobal(key)
+	// if deleting a non-existent value, don't record in EvalDelta, matching
+	// ledger behavior with previous BuildEvalDelta mechanism
+	if _, ok, err := cx.Ledger.GetGlobal(cx.appID, key); ok {
+		if err != nil {
+			cx.err = err
+			return
+		}
+		cx.Txn.EvalDelta.GlobalDelta[key] = basics.ValueDelta{
+			Action: basics.DeleteAction,
+		}
+	}
+
+	err := cx.Ledger.DelGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -3449,40 +3768,42 @@ func opAppGlobalDel(cx *EvalContext) {
 
 // We have a difficult naming problem here. In some opcodes, TEAL
 // allows (and used to require) ASAs and Apps to to be referenced by
-// their "index" in an app call txn's foeign-apps or foreign-assets
+// their "index" in an app call txn's foreign-apps or foreign-assets
 // arrays.  That was a small integer, no more than 2 or so, and was
 // often called an "index".  But it was not a basics.AssetIndex or
 // basics.ApplicationIndex.
 
 func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		if ref == 0 {
-			return cx.Ledger.ApplicationID(), nil
-		}
-		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
+		if ref == 0 || ref == uint64(cx.appID) {
+			return cx.appID, nil
 		}
 		for _, appID := range cx.Txn.Txn.ForeignApps {
 			if appID == basics.AppIndex(ref) {
 				return appID, nil
 			}
 		}
-		// It should be legal to use your own app id, which
-		// can't be in ForeignApps during creation, because it
-		// is unknown then.  But it can be discovered in the
-		// app code.  It's tempting to combine this with the
-		// == 0 test, above, but it must come after the check
-		// for being below len(ForeignApps)
-		if ref == uint64(cx.Ledger.ApplicationID()) {
-			return cx.Ledger.ApplicationID(), nil
+		// or was created in group
+		if cx.version >= createdResourcesVersion {
+			for _, appID := range cx.created.apps {
+				if appID == basics.AppIndex(ref) {
+					return appID, nil
+				}
+			}
+		}
+		// Allow use of indexes, but this comes last so that clear advice can be
+		// given to anyone who cares about semantics in the first few rounds of
+		// a new network - don't use indexes for references, use the App ID
+		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
+			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 		}
 	} else {
 		// Old rules
+		if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
+			return cx.appID, nil
+		}
 		if foreign {
 			// In old versions, a foreign reference must be an index in ForeignAssets or 0
-			if ref == 0 {
-				return cx.Ledger.ApplicationID(), nil
-			}
 			if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
 				return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 			}
@@ -3496,14 +3817,24 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 
 func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		// In recent versions, accept either kind of ASA reference
-		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
-		}
 		for _, assetID := range cx.Txn.Txn.ForeignAssets {
 			if assetID == basics.AssetIndex(ref) {
 				return assetID, nil
 			}
+		}
+		// or was created in group
+		if cx.version >= createdResourcesVersion {
+			for _, assetID := range cx.created.asas {
+				if assetID == basics.AssetIndex(ref) {
+					return assetID, nil
+				}
+			}
+		}
+		// Allow use of indexes, but this comes last so that clear advice can be
+		// given to anyone who cares about semantics in the first few rounds of
+		// a new network - don't use indexes for references, use the asa ID.
+		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
+			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
 		}
 	} else {
 		// Old rules
@@ -3648,10 +3979,53 @@ func opAppParamsGet(cx *EvalContext) {
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
 }
 
+func opAcctParamsGet(cx *EvalContext) {
+	last := len(cx.stack) - 1 // acct
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, _, err := cx.accountReference(cx.stack[last])
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	paramField := AcctParamsField(cx.program[cx.pc+1])
+	fs, ok := acctParamsFieldSpecByField[paramField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid acct_params_get field %d", paramField)
+		return
+	}
+
+	account, err := cx.Ledger.AccountData(addr)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	exist := boolToUint(account.MicroAlgos.Raw > 0)
+
+	var value stackValue
+
+	switch fs.field {
+	case AcctBalance:
+		value.Uint = account.MicroAlgos.Raw
+	case AcctMinBalance:
+		value.Uint = account.MinBalance(cx.Proto).Raw
+	case AcctAuthAddr:
+		value.Bytes = account.AuthAddr[:]
+	}
+	cx.stack[last] = value
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
+}
+
 func opLog(cx *EvalContext) {
 	last := len(cx.stack) - 1
 
-	if len(cx.Logs) == MaxLogCalls {
+	if len(cx.Txn.EvalDelta.Logs) >= MaxLogCalls {
 		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
 		return
 	}
@@ -3661,41 +4035,38 @@ func opLog(cx *EvalContext) {
 		cx.err = fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, MaxLogSize)
 		return
 	}
-	cx.Logs = append(cx.Logs, string(log.Bytes))
+	cx.Txn.EvalDelta.Logs = append(cx.Txn.EvalDelta.Logs, string(log.Bytes))
 	cx.stack = cx.stack[:last]
 }
 
-func authorizedSender(cx *EvalContext, addr basics.Address) bool {
-	appAddr, err := cx.getApplicationAddress()
-	if err != nil {
-		return false
-	}
+func authorizedSender(cx *EvalContext, addr basics.Address) error {
 	authorizer, err := cx.Ledger.Authorizer(addr)
 	if err != nil {
-		return false
+		return err
 	}
-	return appAddr == authorizer
+	if cx.getApplicationAddress(cx.appID) != authorizer {
+		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.getApplicationAddress(cx.appID), authorizer)
+	}
+	return nil
 }
 
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr, err := cx.getApplicationAddress()
-	if err != nil {
-		return err
-	}
+	addr := cx.getApplicationAddress(cx.appID)
 
 	// For compatibility with v5, in which failures only occurred in the submit,
-	// we only fail here if we are OVER the MaxInnerTransactions limit.  Thus
-	// this allows construction of one more Inner than is actually allowed, and
-	// will fail in submit. (But we do want the check here, so this can't become
-	// unbounded.)  The MaxTxGroupSize check can be, and is, precise.
-	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
-		len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
-		return errors.New("attempt to create too many inner transactions")
+	// we only fail here if we are already over the max inner limit.  Thus this
+	// allows construction of one more Inner than is actually allowed, and will
+	// fail in submit. (But we do want the check here, so this can't become
+	// unbounded.)  The MaxTxGroupSize check can be, and is, precise. (That is,
+	// if we are at max group size, we can panic now, since we are trying to add
+	// too many)
+	if len(cx.subtxns) > cx.remainingInners() || len(cx.subtxns) >= cx.Proto.MaxTxGroupSize {
+		return fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 	}
 
-	stxn := transactions.SignedTxn{}
+	stxn := transactions.SignedTxnWithAD{}
 
 	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
 	groupPaid := uint64(0)
@@ -3730,6 +4101,10 @@ func opTxBegin(cx *EvalContext) {
 		cx.err = errors.New("itxn_begin without itxn_submit")
 		return
 	}
+	if cx.Proto.IsolateClearState && cx.Txn.Txn.OnCompletion == transactions.ClearStateOC {
+		cx.err = errors.New("clear state programs can not issue inner transactions")
+		return
+	}
 	cx.err = addInnerTxn(cx)
 }
 
@@ -3757,25 +4132,67 @@ func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
 // don't need (or want!) to allow low numbers to represent the asset at that
 // index in ForeignAssets array.
 func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
-	aid, err := sv.uint()
+	uint, err := sv.uint()
 	if err != nil {
 		return basics.AssetIndex(0), err
 	}
+	aid := basics.AssetIndex(uint)
+
 	// Ensure that aid is in Foreign Assets
 	for _, assetID := range cx.Txn.Txn.ForeignAssets {
-		if assetID == basics.AssetIndex(aid) {
-			return basics.AssetIndex(aid), nil
+		if assetID == aid {
+			return aid, nil
 		}
 	}
+	// or was created in group
+	if cx.version >= createdResourcesVersion {
+		for _, assetID := range cx.created.asas {
+			if assetID == aid {
+				return aid, nil
+			}
+		}
+	}
+
 	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
 }
 
-func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *transactions.Transaction) (err error) {
+// availableApp is used instead of appReference for more recent (stateful)
+// opcodes that don't need (or want!) to allow low numbers to represent the app
+// at that index in ForeignApps array.
+func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
+	uint, err := sv.uint()
+	if err != nil {
+		return basics.AppIndex(0), err
+	}
+	aid := basics.AppIndex(uint)
+
+	// Ensure that aid is in Foreign Apps
+	for _, appID := range cx.Txn.Txn.ForeignApps {
+		if appID == aid {
+			return aid, nil
+		}
+	}
+	// or was created in group
+	if cx.version >= createdResourcesVersion {
+		for _, appID := range cx.created.apps {
+			if appID == aid {
+				return aid, nil
+			}
+		}
+	}
+	// Or, it can be the current app
+	if cx.appID == aid {
+		return aid, nil
+	}
+
+	return 0, fmt.Errorf("invalid App reference %d", aid)
+}
+
+func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *transactions.Transaction) (err error) {
 	switch fs.field {
 	case Type:
 		if sv.Bytes == nil {
-			err = fmt.Errorf("Type arg not a byte array")
-			return
+			return fmt.Errorf("Type arg not a byte array")
 		}
 		txType := string(sv.Bytes)
 		ver, ok := innerTxnTypes[txType]
@@ -3810,11 +4227,10 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// round, and separation by MaxLifetime (check lifetime in submit, not here)
 	case Note:
 		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
-			err = fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
-		} else {
-			txn.Note = make([]byte, len(sv.Bytes))
-			copy(txn.Note[:], sv.Bytes)
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
 		}
+		txn.Note = make([]byte, len(sv.Bytes))
+		copy(txn.Note, sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
@@ -3825,16 +4241,19 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	// KeyReg
 	case VotePK:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("%s must be 32 bytes", fs.field)
-		} else {
-			copy(txn.VotePK[:], sv.Bytes)
+			return fmt.Errorf("%s must be 32 bytes", fs.field)
 		}
+		copy(txn.VotePK[:], sv.Bytes)
 	case SelectionPK:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("%s must be 32 bytes", fs.field)
-		} else {
-			copy(txn.SelectionPK[:], sv.Bytes)
+			return fmt.Errorf("%s must be 32 bytes", fs.field)
 		}
+		copy(txn.SelectionPK[:], sv.Bytes)
+	case StateProofPK:
+		if len(sv.Bytes) != 64 {
+			return fmt.Errorf("%s must be 64 bytes", fs.field)
+		}
+		copy(txn.StateProofPK[:], sv.Bytes)
 	case VoteFirst:
 		var round uint64
 		round, err = sv.uint()
@@ -3891,10 +4310,9 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 		txn.AssetParams.URL, err = sv.string(cx.Proto.MaxAssetURLBytes)
 	case ConfigAssetMetadataHash:
 		if len(sv.Bytes) != 32 {
-			err = fmt.Errorf("%s must be 32 bytes", fs.field)
-		} else {
-			copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
+			return fmt.Errorf("%s must be 32 bytes", fs.field)
 		}
+		copy(txn.AssetParams.MetadataHash[:], sv.Bytes)
 	case ConfigAssetManager:
 		txn.AssetParams.Manager, err = sv.address()
 	case ConfigAssetReserve:
@@ -3911,10 +4329,96 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs txnFieldSpec, txn *tr
 	case FreezeAssetFrozen:
 		txn.AssetFrozen, err = sv.bool()
 
-	// appl needs to wait. Can't call AVM from AVM.
-
+	// ApplicationCall
+	case ApplicationID:
+		txn.ApplicationID, err = cx.availableApp(sv)
+	case OnCompletion:
+		var onc uint64
+		onc, err = sv.uintMaxed(uint64(transactions.DeleteApplicationOC))
+		txn.OnCompletion = transactions.OnCompletion(onc)
+	case ApplicationArgs:
+		if sv.Bytes == nil {
+			return fmt.Errorf("ApplicationArg is not a byte array")
+		}
+		total := len(sv.Bytes)
+		for _, arg := range txn.ApplicationArgs {
+			total += len(arg)
+		}
+		if total > cx.Proto.MaxAppTotalArgLen {
+			return errors.New("total application args length too long")
+		}
+		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
+			return errors.New("too many application args")
+		}
+		new := make([]byte, len(sv.Bytes))
+		copy(new, sv.Bytes)
+		txn.ApplicationArgs = append(txn.ApplicationArgs, new)
+	case Accounts:
+		var new basics.Address
+		new, err = cx.availableAccount(sv)
+		if err != nil {
+			return
+		}
+		if len(txn.Accounts) >= cx.Proto.MaxAppTxnAccounts {
+			return errors.New("too many foreign accounts")
+		}
+		txn.Accounts = append(txn.Accounts, new)
+	case ApprovalProgram:
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		if len(sv.Bytes) > maxPossible {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
+		}
+		txn.ApprovalProgram = make([]byte, len(sv.Bytes))
+		copy(txn.ApprovalProgram, sv.Bytes)
+	case ClearStateProgram:
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		if len(sv.Bytes) > maxPossible {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
+		}
+		txn.ClearStateProgram = make([]byte, len(sv.Bytes))
+		copy(txn.ClearStateProgram, sv.Bytes)
+	case Assets:
+		var new basics.AssetIndex
+		new, err = cx.availableAsset(sv)
+		if err != nil {
+			return
+		}
+		if len(txn.ForeignAssets) >= cx.Proto.MaxAppTxnForeignAssets {
+			return errors.New("too many foreign assets")
+		}
+		txn.ForeignAssets = append(txn.ForeignAssets, new)
+	case Applications:
+		var new basics.AppIndex
+		new, err = cx.availableApp(sv)
+		if err != nil {
+			return
+		}
+		if len(txn.ForeignApps) >= cx.Proto.MaxAppTxnForeignApps {
+			return errors.New("too many foreign apps")
+		}
+		txn.ForeignApps = append(txn.ForeignApps, new)
+	case GlobalNumUint:
+		txn.GlobalStateSchema.NumUint, err =
+			sv.uintMaxed(cx.Proto.MaxGlobalSchemaEntries)
+	case GlobalNumByteSlice:
+		txn.GlobalStateSchema.NumByteSlice, err =
+			sv.uintMaxed(cx.Proto.MaxGlobalSchemaEntries)
+	case LocalNumUint:
+		txn.LocalStateSchema.NumUint, err =
+			sv.uintMaxed(cx.Proto.MaxLocalSchemaEntries)
+	case LocalNumByteSlice:
+		txn.LocalStateSchema.NumByteSlice, err =
+			sv.uintMaxed(cx.Proto.MaxLocalSchemaEntries)
+	case ExtraProgramPages:
+		var epp uint64
+		epp, err =
+			sv.uintMaxed(uint64(cx.Proto.MaxExtraAppProgramPages))
+		if err != nil {
+			return
+		}
+		txn.ExtraProgramPages = uint32(epp)
 	default:
-		return fmt.Errorf("invalid itxn_field %s", fs.field)
+		err = fmt.Errorf("invalid itxn_field %s", fs.field)
 	}
 	return
 }
@@ -3933,7 +4437,7 @@ func opTxField(cx *EvalContext) {
 		return
 	}
 	sv := cx.stack[last]
-	cx.err = cx.stackIntoTxnField(sv, fs, &cx.subtxns[itx].Txn)
+	cx.err = cx.stackIntoTxnField(sv, &fs, &cx.subtxns[itx].Txn)
 	cx.stack = cx.stack[:last] // pop
 }
 
@@ -3943,10 +4447,11 @@ func opTxSubmit(cx *EvalContext) {
 		return
 	}
 
-	// Should never trigger, since itxn_next checks these too.
-	if len(cx.InnerTxns)+len(cx.subtxns) > cx.Proto.MaxInnerTransactions ||
-		len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
-		cx.err = errors.New("too many inner transactions")
+	// Should rarely trigger, since itxn_next checks these too. (but that check
+	// must be imperfect, see its comment) In contrast to that check, subtxns is
+	// already populated here.
+	if len(cx.subtxns) > cx.remainingInners() || len(cx.subtxns) > cx.Proto.MaxTxGroupSize {
+		cx.err = fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 		return
 	}
 
@@ -3977,34 +4482,106 @@ func opTxSubmit(cx *EvalContext) {
 		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
+	// All subtxns will have zero'd GroupID since GroupID can't be set in
+	// AVM. (no need to blank it out before hashing for TxID)
+	var group transactions.TxGroup
+	var parent transactions.Txid
+	isGroup := len(cx.subtxns) > 1
+	if isGroup {
+		parent = cx.Txn.ID()
+	}
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the
 		// transaction pool. Namely that any transaction that makes it
 		// to Perform (which is equivalent to eval.applyTransaction)
 		// is authorized, and WellFormed.
-		if !authorizedSender(cx, cx.subtxns[itx].Txn.Sender) {
-			cx.err = fmt.Errorf("unauthorized")
-			return
-		}
-
-		// Recall that WellFormed does not care about individual
-		// transaction fees because of fee pooling. So we check below.
-		cx.err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
-		if cx.err != nil {
-			return
-		}
-
-		ad, err := cx.Ledger.Perform(&cx.subtxns[itx].Txn, *cx.Specials)
+		err := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
 		if err != nil {
 			cx.err = err
 			return
 		}
 
-		cx.InnerTxns = append(cx.InnerTxns, transactions.SignedTxnWithAD{
-			SignedTxn: cx.subtxns[itx],
-			ApplyData: ad,
-		})
+		// Recall that WellFormed does not care about individual
+		// transaction fees because of fee pooling. Checked above.
+		cx.err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		if cx.err != nil {
+			return
+		}
+
+		// Disallow reentrancy and limit inner app call depth
+		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
+			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
+				cx.err = fmt.Errorf("attempt to self-call")
+				return
+			}
+			depth := 0
+			for parent := cx.caller; parent != nil; parent = parent.caller {
+				if parent.appID == cx.subtxns[itx].Txn.ApplicationID {
+					cx.err = fmt.Errorf("attempt to re-enter %d", parent.appID)
+					return
+				}
+				depth++
+			}
+			if depth >= maxAppCallDepth {
+				cx.err = fmt.Errorf("appl depth (%d) exceeded", depth)
+				return
+			}
+
+			// Can't call version < innerAppsEnabledVersion, and apps with such
+			// versions will always match, so just check approval program
+			// version.
+			program := cx.subtxns[itx].Txn.ApprovalProgram
+			if cx.subtxns[itx].Txn.ApplicationID != 0 {
+				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+				if err != nil {
+					cx.err = err
+					return
+				}
+				program = app.ApprovalProgram
+			}
+			v, _, err := transactions.ProgramVersion(program)
+			if err != nil {
+				cx.err = err
+				return
+			}
+			if v < innerAppsEnabledVersion {
+				cx.err = fmt.Errorf("inner app call with version %d < %d", v, innerAppsEnabledVersion)
+				return
+			}
+		}
+
+		if isGroup {
+			innerOffset := len(cx.Txn.EvalDelta.InnerTxns)
+			group.TxGroupHashes = append(group.TxGroupHashes,
+				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
+		}
 	}
+
+	if isGroup {
+		groupID := crypto.HashObj(group)
+		for itx := range cx.subtxns {
+			cx.subtxns[itx].Txn.Group = groupID
+		}
+	}
+
+	// Decrement allowed inners *before* execution, else runaway recursion is
+	// not noticed.
+	if cx.pooledAllowedInners != nil {
+		*cx.pooledAllowedInners -= len(cx.subtxns)
+	}
+
+	ep := NewInnerEvalParams(cx.subtxns, cx)
+	for i := range ep.TxnGroup {
+		err := cx.Ledger.Perform(i, ep)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		// This is mostly a no-op, because Perform does its work "in-place", but
+		// RecordAD has some further responsibilities.
+		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
+	}
+	cx.Txn.EvalDelta.InnerTxns = append(cx.Txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 }
 
@@ -4038,7 +4615,7 @@ func (cx *EvalContext) PcDetails() (pc int, dis string) {
 
 func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 	decoded := make([]byte, encoding.DecodedLen(len(encoded)))
-	n, err := encoding.Strict().Decode(decoded, encoded)
+	n, err := encoding.Decode(decoded, encoded)
 	if err != nil {
 		return decoded[:0], err
 	}
@@ -4058,5 +4635,6 @@ func opBase64Decode(cx *EvalContext) {
 	if encodingField == StdEncoding {
 		encoding = base64.StdEncoding
 	}
+	encoding = encoding.Strict()
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
 }
