@@ -90,6 +90,7 @@ int 2
 	// make transaction group: app call + sample payment
 	txn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: addr,
 				Fee:    basics.MicroAlgos{Raw: 100},
@@ -109,22 +110,15 @@ int 2
 	a.NoError(err)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	pse := logic.MakePastSideEffects(1)
-	ep := logic.EvalParams{
-		Txn:             &txn,
-		Proto:           &proto,
-		TxnGroup:        []transactions.SignedTxn{txn},
-		GroupIndex:      0,
-		PastSideEffects: pse,
-	}
-	pass, delta, err := ba.StatefulEval(ep, appIdx, program)
+	ep := logic.NewEvalParams([]transactions.SignedTxnWithAD{{SignedTxn: txn}}, &proto, &transactions.SpecialAddresses{})
+	pass, delta, err := ba.StatefulEval(0, ep, appIdx, program)
 	a.NoError(err)
 	a.True(pass)
-	a.Equal(1, len(delta.GlobalDelta))
+	a.Len(delta.GlobalDelta, 1)
 	a.Equal(basics.SetUintAction, delta.GlobalDelta["gkeyint"].Action)
 	a.Equal(uint64(3), delta.GlobalDelta["gkeyint"].Uint)
-	a.Equal(1, len(delta.LocalDeltas))
-	a.Equal(1, len(delta.LocalDeltas[0]))
+	a.Len(delta.LocalDeltas, 1)
+	a.Len(delta.LocalDeltas[0], 1)
 	a.Equal(basics.SetUintAction, delta.LocalDeltas[0]["lkeyint"].Action)
 	a.Equal(uint64(2), delta.LocalDeltas[0]["lkeyint"].Uint)
 }
