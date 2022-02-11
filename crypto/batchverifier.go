@@ -129,7 +129,7 @@ func (b *BatchVerifier) Verify() error {
 	if b.useBatchVerification {
 		var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
 		for i, m := range b.messages {
-			messages[i] = hashRep(m)
+			messages[i] = HashRep(m)
 		}
 		if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
 			return nil

@@ -736,6 +736,8 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 		return l.afrz(txn.Txn.Sender, txn.Txn.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
 		return l.appl(txn.Txn.Sender, txn.Txn.ApplicationCallTxnFields, &txn.ApplyData, gi, ep)
+	case protocol.KeyRegistrationTx:
+		return nil // For now, presume success in test ledger
 	default:
 		return fmt.Errorf("%s txn in AVM", txn.Txn.Type)
 	}
