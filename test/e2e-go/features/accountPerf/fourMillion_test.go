@@ -146,11 +146,11 @@ func signerGrpTxn(
 }
 
 func Test5MAssetsScenario1(t *testing.T) {
-	test5MAssets(t, 1)
+	test5MAssets(t, 2)
 }
 
 func Test5MAssetsScenario2(t *testing.T) {
-	test5MAssets(t, 2)
+	test5MAssets(t, 1)
 }
 
 func test5MAssets(t *testing.T, scenario int) {
@@ -367,8 +367,8 @@ func scenarioA(
 
 	client := fixture.LibGoalClient
 
-	numberOfAccounts := uint64(6000)  // 6K
-	numberOfAssets := uint64(6000000) // 6M
+	numberOfAccounts := uint64(2000000) // 6K
+	numberOfAssets := uint64(60)     // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -521,7 +521,7 @@ func scenarioA(
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
-
+	/*
 	// Verify the assets are transfered here
 	t0 := time.Now()
 	info, err := client.AccountInformationV2(ownAllAccount.pk.String())
@@ -536,6 +536,7 @@ func scenarioA(
 		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
 	}
 	require.Equal(t, totalAssetAmount, tAssetAmt)
+*/
 }
 
 // create 6M unique assets, all created by a single account.
@@ -549,9 +550,9 @@ func scenarioB(
 	tLife uint64,
 	stopChan <-chan struct{}) {
 
-	client := fixture.LibGoalClient
+	//	client := fixture.LibGoalClient
 
-	numberOfAssets := uint64(600000) // 6M
+	numberOfAssets := uint64(60) // 6M
 	totalAssetAmount := uint64(0)
 
 	defer func() {
@@ -592,7 +593,7 @@ func scenarioB(
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
-
+	/*
 	// Verify the assets are transfered here
 	t0 := time.Now()
 	info, err := client.AccountInformationV2(baseAcct.pk.String())
@@ -607,6 +608,7 @@ func scenarioB(
 		fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
 	}
 	require.Equal(t, totalAssetAmount, tAssetAmt)
+*/
 }
 
 func handleError(err error, message string, errChan chan<- error) {
