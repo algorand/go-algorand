@@ -613,10 +613,11 @@ var innerTxnObjIDPrefix = fmt.Sprintf("%s_id", innerTxnsObjID)
 var innerNestedTxnObjIDPrefix = fmt.Sprintf("%s_nested", innerTxnsObjID)
 
 func encodeNestedObjID(groupIndexes []int, prefix string) string {
-	encodedItxnID := prefix
+	encodedElements := []string{prefix}
 	for _, i := range groupIndexes {
-		encodedItxnID = fmt.Sprintf("%s_%d", encodedItxnID, i)
+		encodedElements = append(encodedElements, strconv.Itoa(i))
 	}
+	encodedItxnID := strings.Join(encodedElements, "_")
 	return encodedItxnID
 }
 
