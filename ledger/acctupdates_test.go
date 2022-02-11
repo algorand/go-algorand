@@ -1194,70 +1194,14 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
+		copy(addr[:], addrbuf)
 
-		ad := data.GetAccountData()
-		if data.TotalAppParams > 0 {
-			ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		}
-		if data.TotalAppLocalStates > 0 {
-			ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-		}
-		if data.TotalAssetParams > 0 {
-			ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-		}
-		if data.TotalAssets > 0 {
-			ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-		}
-
-		err = func() (err error) {
-			// make a scope to use defer
-			var resRows *sql.Rows
-			resRows, err = tx.Query("SELECT aidx, data FROM resources where addrid = ?", rowid)
-			if err != nil {
-				return
-			}
-			defer resRows.Close()
-
-			for resRows.Next() {
-				var buf []byte
-				var aidx int64
-				err = resRows.Scan(&aidx, &buf)
-				if err != nil {
-					return
-				}
-				var resData resourcesData
-				err = protocol.Decode(buf, &resData)
-				if err != nil {
-					return
-				}
-				if resData.ResourceFlags == resourceFlagsNotHolding {
-					return fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), rowid.Int64, aidx)
-				}
-				if resData.IsApp() {
-					if resData.IsOwning() {
-						ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
-					}
-					if resData.IsHolding() {
-						ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
-					}
-				} else if resData.IsAsset() {
-					if resData.IsOwning() {
-						ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
-					}
-					if resData.IsHolding() {
-						ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
-					}
-				} else {
-					return err
-				}
-			}
-			return
-		}()
+		var ad basics.AccountData
+		ad, err = loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
 		if err != nil {
 			return
 		}
 
-		copy(addr[:], addrbuf)
 		bals[addr] = ad
 	}
 
