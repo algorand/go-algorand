@@ -423,7 +423,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 	}
 
 	if record.AssetParams == nil && record.AssetHolding == nil {
-		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+		return notFound(ctx, errors.New(errAccountAssetDoesNotExist), errAccountAssetDoesNotExist, v2.Log)
 	}
 
 	// return msgpack response
@@ -476,7 +476,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 	}
 
 	if record.AppParams == nil && record.AppLocalState == nil {
-		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+		return notFound(ctx, errors.New(errAccountAppDoesNotExist), errAccountAppDoesNotExist, v2.Log)
 	}
 
 	// return msgpack response
