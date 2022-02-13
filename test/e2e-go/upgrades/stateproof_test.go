@@ -85,11 +85,9 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
-	consensus := getStateProofConsensus()
 
 	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesWithoutStateProofPartkeys.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
 	defer fixture.Shutdown()
 	lastValid := uint64(1000 * 5)
 
