@@ -308,7 +308,7 @@ func Migrate(partDB db.Accessor) error {
 			return err
 		}
 
-		return merklesignature.InstallDatabase(tx)
+		return merklesignature.InstallStateProofTable(tx)
 	})
 }
 

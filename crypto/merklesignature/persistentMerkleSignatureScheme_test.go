@@ -48,7 +48,7 @@ func TestSecretsDatabaseUpgrade(t *testing.T) {
 	a.NoError(err)
 
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := InstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
+		err := InstallStateProofTable(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
 			return err
 		}
@@ -56,6 +56,9 @@ func TestSecretsDatabaseUpgrade(t *testing.T) {
 	})
 
 	a.NoError(err)
+	version, err := getStateProofTableSchemaVersions(*store)
+	a.NoError(err)
+	a.Equal(merkleSignatureSchemaVersion, version)
 }
 
 func TestFetchRestoreAllSecrets(t *testing.T) {
@@ -113,4 +116,20 @@ func createTestDB(a *require.Assertions) *db.Accessor {
 	a.NoError(err)
 
 	return &store
+}
+
+func getStateProofTableSchemaVersions(db db.Accessor) (int, error) {
+	var version int
+	err := db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		row := tx.QueryRow("SELECT version FROM schema where tablename = ?", merkleSignatureTableSchemaName)
+
+		err = row.Scan(&version)
+		if err != nil {
+			return
+		}
+
+		return
+	})
+
+	return version, err
 }
