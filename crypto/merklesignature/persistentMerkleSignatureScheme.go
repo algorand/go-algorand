@@ -41,7 +41,8 @@ var (
 	errKeyDecodeError  = errors.New("failed to decode stateproof key")
 )
 
-func MerkleSignatureInstallDatabase(tx *sql.Tx) error {
+// InstallDatabase creates (or migrates if exists already) the StateProofKeys database table
+func InstallDatabase(tx *sql.Tx) error {
 	var schemaVersion sql.NullInt32
 	err := tx.QueryRow("SELECT version FROM schema where tablename = ?", merkleSignatureTableSchemaName).Scan(&schemaVersion)
 	switch err {
@@ -99,7 +100,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 	round := indexToRound(s.FirstValid, s.Interval, 0)
 	encodedKey := protocol.GetEncodingBuf()
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := MerkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
+		err := InstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
 			return err
 		}
