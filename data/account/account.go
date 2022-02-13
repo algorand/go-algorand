@@ -196,10 +196,14 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 
 // RestoreParticipationWithSecrets restores a Participation from a database
 // handle. In addition, this function also restores all stateproof secrets
-func RestoreParticipationWithSecrets(store db.Accessor) (acc PersistedParticipation, err error) {
+func RestoreParticipationWithSecrets(store db.Accessor) (PersistedParticipation, error) {
 	persistedParticipation, err := RestoreParticipation(store)
 	if err != nil {
 		return PersistedParticipation{}, err
+	}
+
+	if persistedParticipation.StateProofSecrets == nil { // no state proof keys to restore
+		return persistedParticipation, nil
 	}
 
 	err = persistedParticipation.StateProofSecrets.RestoreAllSecrets(store)
