@@ -122,14 +122,13 @@ func getStateProofTableSchemaVersions(db db.Accessor) (int, error) {
 	var version int
 	err := db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		row := tx.QueryRow("SELECT version FROM schema where tablename = ?", merkleSignatureTableSchemaName)
-
-		err = row.Scan(&version)
-		if err != nil {
-			return
-		}
-
-		return
+		return row.Scan(&version)
 	})
-
-	return version, err
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return version, nil
 }
