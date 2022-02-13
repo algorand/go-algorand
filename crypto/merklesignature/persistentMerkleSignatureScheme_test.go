@@ -48,7 +48,7 @@ func TestSecretsDatabaseUpgrade(t *testing.T) {
 	a.NoError(err)
 
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := merkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
+		err := MerkleSignatureInstallDatabase(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
 			return err
 		}

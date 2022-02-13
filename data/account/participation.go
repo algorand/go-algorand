@@ -303,7 +303,12 @@ func (part PersistedParticipation) Persist() error {
 // Calls through to the migration helper and returns the result.
 func Migrate(partDB db.Accessor) error {
 	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return partMigrate(tx)
+		err := partMigrate(tx)
+		if err != nil {
+			return err
+		}
+
+		return merklesignature.MerkleSignatureInstallDatabase(tx)
 	})
 }
 
