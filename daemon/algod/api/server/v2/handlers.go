@@ -278,10 +278,13 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	// should we skip fetching apps and assets?
 	if params.Exclude != nil {
-		if *params.Exclude == "all" {
+		switch *params.Exclude {
+		case "all":
 			return v2.basicAccountInformation(ctx, addr, handle, contentType)
+		case "none", "":
+		default:
+			return badRequest(ctx, err, errFailedToParseExclude, v2.Log)
 		}
-		return badRequest(ctx, err, errFailedToParseExclude, v2.Log)
 	}
 
 	myLedger := v2.Node.LedgerForAPI()

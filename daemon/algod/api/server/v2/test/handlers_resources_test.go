@@ -134,11 +134,10 @@ func setupTestForLargeResources(t *testing.T, acctSize, maxResults int) (handler
 	return
 }
 
-func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int, excludeAll bool, expectedCode int) {
+func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int, exclude string, expectedCode int) {
 	handlers, ctx, rec, addr := setupTestForLargeResources(t, acctSize, maxResults)
 	params := generatedV2.AccountInformationParams{}
-	if excludeAll {
-		exclude := "all"
+	if exclude != "" {
 		params.Exclude = &exclude
 	}
 	err := handlers.AccountInformation(ctx, addr.String(), params)
@@ -157,12 +156,12 @@ func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int
 	case 400:
 		require.Equal(t, float64(maxResults), ret["max-results"])
 	case 200:
-		if excludeAll {
+		if exclude == "all" {
 			require.Nil(t, ret["apps-local-state"])
 			require.Nil(t, ret["assets"])
 			require.Nil(t, ret["created-apps"])
 			require.Nil(t, ret["created-assets"])
-		} else {
+		} else if exclude == "none" {
 			require.Equal(t, acctSize, len(ret["apps-local-state"].([]interface{}))+
 				len(ret["assets"].([]interface{}))+
 				len(ret["created-apps"].([]interface{}))+
@@ -174,8 +173,9 @@ func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int
 func TestAccountInformationResourceLimits(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accountInformationResourceLimitsTest(t, 99, 100, false, 200)  // under limit
-	accountInformationResourceLimitsTest(t, 101, 100, false, 400) // over limit
-	accountInformationResourceLimitsTest(t, 100, 100, false, 200) // at limit
-	accountInformationResourceLimitsTest(t, 101, 100, true, 200)  // over limit with exclude=all
+	accountInformationResourceLimitsTest(t, 99, 100, "", 200)      // under limit
+	accountInformationResourceLimitsTest(t, 101, 100, "", 400)     // over limit
+	accountInformationResourceLimitsTest(t, 100, 100, "", 200)     // at limit
+	accountInformationResourceLimitsTest(t, 101, 100, "all", 200)  // over limit with exclude=all
+	accountInformationResourceLimitsTest(t, 101, 100, "none", 400) // over limit with exclude=none
 }
