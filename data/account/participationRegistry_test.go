@@ -944,7 +944,6 @@ func (k keypairs) findPairForSpecificRound(round uint64) merklesignature.KeyRoun
 	return merklesignature.KeyRoundPair{}
 }
 
-// Test the recording function.
 func TestDeleteStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
