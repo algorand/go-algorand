@@ -170,7 +170,7 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 	if rnd.LastRound == 0 {
 		t.Fatal("it is currently round 0 but we need to wait for a transaction that might happen this round but we'll never know if that happens because ConfirmedRound==0 is indestinguishable from not having happened")
 	}
-	timeoutTime := time.Now().Add(30 * time.Second)
+	timeoutTime := time.Now().Add(timeout)
 	for {
 		tx, err = testClient.TransactionInformation(fromAddress, txID)
 		if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
