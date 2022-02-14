@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// Package v1 defines models exposed by algod rest api
+// Package v2 defines models exposed by algod rest api
 package v2
 
 import (
