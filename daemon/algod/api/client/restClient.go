@@ -359,7 +359,7 @@ type rawFormat struct {
 
 type accountInformationParams struct {
 	Format  string `url:"format"`
-	Include string `url:"include"`
+	Exclude string `url:"exclude"`
 }
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
@@ -410,9 +410,9 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
 	var infoParams accountInformationParams
 	if includeCreatables {
-		infoParams = accountInformationParams{Include: "all", Format: "json"}
+		infoParams = accountInformationParams{Exclude: "", Format: "json"}
 	} else {
-		infoParams = accountInformationParams{Include: "none", Format: "json"}
+		infoParams = accountInformationParams{Exclude: "all", Format: "json"}
 	}
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), infoParams)
 	return

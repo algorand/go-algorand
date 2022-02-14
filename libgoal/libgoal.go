@@ -19,7 +19,6 @@ package libgoal
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -35,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -675,7 +675,7 @@ func (c *Client) AccountApplicationInformation(accountAddress string, applicatio
 }
 
 // RawAccountApplicationInformation gets account information about a given app.
-func (c *Client) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (accountResource ledgercore.AccountResourceModel, err error) {
+func (c *Client) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (accountResource modelV2.AccountResourceModel, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
@@ -697,7 +697,7 @@ func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) 
 }
 
 // RawAccountAssetInformation gets account information about a given app.
-func (c *Client) RawAccountAssetInformation(accountAddress string, assetID uint64) (accountResource ledgercore.AccountResourceModel, err error) {
+func (c *Client) RawAccountAssetInformation(accountAddress string, assetID uint64) (accountResource modelV2.AccountResourceModel, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte

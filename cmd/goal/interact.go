@@ -673,7 +673,7 @@ var appQueryCmd = &cobra.Command{
 			// Fetching local state. Get account information
 			ai, err := client.RawAccountApplicationInformation(account, appIdx)
 			if err != nil {
-				reportErrorf(errorRequestFail, err)
+				reportErrorf(errorAccountNotOptedInToApp, err)
 			}
 
 			kv := ai.AppLocalState.KeyValue
@@ -690,7 +690,7 @@ var appQueryCmd = &cobra.Command{
 			// Get creator information
 			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
-				reportErrorf(errorRequestFail, err)
+				reportErrorf(errorAccountNotOptedInToApp, err)
 			}
 
 			kv := ai.AppParams.GlobalState

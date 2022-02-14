@@ -28,34 +28,6 @@ type AccountResource struct {
 	AppParams     *basics.AppParams
 }
 
-// AccountResourceModel used to encode AccountResource
-type AccountResourceModel struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	AssetParams   basics.AssetParams   `codec:"asset-params"`
-	AssetHolding  basics.AssetHolding  `codec:"asset-holding"`
-	AppLocalState basics.AppLocalState `codec:"app-local-state"`
-	AppParams     basics.AppParams     `codec:"app-params"`
-}
-
-// AccountResourceToAccountResourceModel converts AccountResource to AccountResourceModel
-func (resource *AccountResource) AccountResourceToAccountResourceModel() AccountResourceModel {
-	resourceModel := AccountResourceModel{}
-	if resource.AssetParams != nil {
-		resourceModel.AssetParams = *resource.AssetParams
-	}
-	if resource.AssetHolding != nil {
-		resourceModel.AssetHolding = *resource.AssetHolding
-	}
-	if resource.AppParams != nil {
-		resourceModel.AppParams = *resource.AppParams
-	}
-	if resource.AppLocalState != nil {
-		resourceModel.AppLocalState = *resource.AppLocalState
-	}
-	return resourceModel
-}
-
 // AssignAccountResourceToAccountData assignes the Asset/App params/holdings contained
 // in the AccountResource to the given basics.AccountData, creating maps if necessary.
 func AssignAccountResourceToAccountData(cindex basics.CreatableIndex, resource AccountResource, ad *basics.AccountData) {
