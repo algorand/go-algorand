@@ -134,9 +134,14 @@ func setupTestForLargeResources(t *testing.T, acctSize, maxResults int) (handler
 	return
 }
 
-func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int, expectedCode int) {
+func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int, excludeAll bool, expectedCode int) {
 	handlers, ctx, rec, addr := setupTestForLargeResources(t, acctSize, maxResults)
-	err := handlers.AccountInformation(ctx, addr.String(), generatedV2.AccountInformationParams{})
+	params := generatedV2.AccountInformationParams{}
+	if excludeAll {
+		exclude := "all"
+		params.Exclude = &exclude
+	}
+	err := handlers.AccountInformation(ctx, addr.String(), params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 
@@ -152,17 +157,25 @@ func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int
 	case 400:
 		require.Equal(t, float64(maxResults), ret["max-results"])
 	case 200:
-		require.Equal(t, acctSize, len(ret["apps-local-state"].([]interface{}))+
-			len(ret["assets"].([]interface{}))+
-			len(ret["created-apps"].([]interface{}))+
-			len(ret["created-assets"].([]interface{})))
+		if excludeAll {
+			require.Nil(t, ret["apps-local-state"])
+			require.Nil(t, ret["assets"])
+			require.Nil(t, ret["created-apps"])
+			require.Nil(t, ret["created-assets"])
+		} else {
+			require.Equal(t, acctSize, len(ret["apps-local-state"].([]interface{}))+
+				len(ret["assets"].([]interface{}))+
+				len(ret["created-apps"].([]interface{}))+
+				len(ret["created-assets"].([]interface{})))
+		}
 	}
 }
 
 func TestAccountInformationResourceLimits(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	accountInformationResourceLimitsTest(t, 99, 100, 200)  // under limit
-	accountInformationResourceLimitsTest(t, 101, 100, 400) // over limit
-	accountInformationResourceLimitsTest(t, 100, 100, 200) // at limit
+	accountInformationResourceLimitsTest(t, 99, 100, false, 200)  // under limit
+	accountInformationResourceLimitsTest(t, 101, 100, false, 400) // over limit
+	accountInformationResourceLimitsTest(t, 100, 100, false, 200) // at limit
+	accountInformationResourceLimitsTest(t, 101, 100, true, 200)  // over limit with exclude=all
 }
