@@ -299,6 +299,15 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
+	// Make a simpler EvalParams that is good enough to evaluate LogicSigs.
+	if apps == 0 {
+		return &EvalParams{
+			TxnGroup: txgroup,
+			Proto:    proto,
+			Specials: specials,
+		}
+	}
+
 	minTealVersion := ComputeMinTealVersion(txgroup, false)
 
 	var pooledApplicationBudget *int
@@ -430,6 +439,11 @@ func (ep EvalParams) log() logging.Logger {
 // package. For example, after a acfg transaction is processed, the AD created
 // by the acfg is added to the EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
+	if ep.created == nil {
+		// This is a simplified ep. It won't be used for app evaluation, and
+		// shares the TxnGroup memory with the caller.  Don't touch anything!
+		return
+	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
 		ep.created.asas = append(ep.created.asas, aid)
