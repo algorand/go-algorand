@@ -145,6 +145,10 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	_, richAccountLatestRound = fixture.GetBalanceAndRound(richAccount)
 
+	// making certain sClient has the same blocks as pClient.
+	_, err = sClient.WaitForRound(richAccountLatestRound)
+	a.NoError(err)
+
 	blk, err := sClient.Block(richAccountLatestRound)
 	a.NoError(err)
 	a.Equal(blk.CurrentProtocol, protocolCheck)
