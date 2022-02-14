@@ -250,7 +250,7 @@ func TestTransactionsByAddr(t *testing.T) {
 	rnd, err := testClient.Status()
 	a.NoError(err)
 	t.Logf("rnd[%d] created txn %s", rnd.LastRound, txID)
-	_, err = waitForTransaction(t, testClient, someAddress, txID.String(), 15*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID.String(), 30*time.Second)
 	a.NoError(err)
 
 	// what is my round?
@@ -468,7 +468,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	note := make([]byte, maxTxnNoteBytes)
 	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, note, "", 0, 0)
 	a.NoError(err)
-	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
+	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 	a.Equal(note, txStatus.Note)
 }
@@ -494,7 +494,7 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 	t.Log(string(protocol.EncodeJSON(tx)))
 	a.NoError(err)
 	t.Log(tx.ID().String())
-	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 }
 
@@ -519,7 +519,7 @@ func TestAccountBalance(t *testing.T) {
 	a.NoError(err)
 	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(toAddress)
@@ -584,7 +584,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(someAddress)
@@ -1220,7 +1220,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformationV2(someAddress)
