@@ -46,9 +46,9 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	a.NoError(err)
 	richAccount := accountList[0].Address
-	_, richAccountLatestRound := fixture.GetBalanceAndRound(richAccount)
+	latestRound := fetchLatestRound(fixture, a)
 
-	minTxnFee, minAcctBalance, err := fixture.MinFeeAndBalance(richAccountLatestRound)
+	minTxnFee, minAcctBalance, err := fixture.MinFeeAndBalance(latestRound)
 	a.NoError(err)
 
 	transactionFee := minTxnFee
@@ -57,7 +57,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	initialAmt, err := sClient.GetBalance(sAccount)
 	a.NoError(err)
 
-	fixture.SendMoneyAndWait(richAccountLatestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
+	fixture.SendMoneyAndWait(latestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
 	newAmt, err := sClient.GetBalance(sAccount)
 	a.NoError(err)
@@ -73,7 +73,8 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	startTime := time.Now()
 	for time.Since(startTime) < 2*time.Minute {
-		_, currentRound := fixture.GetBalanceAndRound(richAccount)
+		currentRound := fetchLatestRound(fixture, a)
+
 		// account adds part key
 		partKeyFirstValid := uint64(0)
 		partKeyValidityPeriod := uint64(10)
@@ -143,19 +144,19 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	// Now we want to send a transaction to the account and test that
 	// it was taken offline after we sent it something
 
-	_, richAccountLatestRound = fixture.GetBalanceAndRound(richAccount)
+	latestRound = fetchLatestRound(fixture, a)
 
 	// making certain sClient has the same blocks as pClient.
 	_, err = sClient.WaitForRound(uint64(lastValidRound + 1))
 	a.NoError(err)
 
-	blk, err := sClient.Block(richAccountLatestRound)
+	blk, err := sClient.Block(latestRound)
 	a.NoError(err)
 	a.Equal(blk.CurrentProtocol, protocolCheck)
 
-	sendMoneyTxn := fixture.SendMoneyAndWait(richAccountLatestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
+	sendMoneyTxn := fixture.SendMoneyAndWait(latestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
-	txnConfirmed = fixture.WaitForTxnConfirmation(richAccountLatestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.TxID)
+	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.TxID)
 	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformation(sAccount)
@@ -163,6 +164,12 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	// The account should be equal to the target status now
 	a.Equal(finalStatus.String(), newAccountStatus.Status)
+}
+
+func fetchLatestRound(fixture *fixtures.RestClientFixture, a *require.Assertions) uint64 {
+	status, err := fixture.LibGoalClient.Status()
+	a.NoError(err)
+	return status.LastRound
 }
 
 // TestParticipationAccountsExpirationFuture tests that sending a transaction to an account with
