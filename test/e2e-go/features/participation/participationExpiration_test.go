@@ -110,14 +110,24 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.NoError(err)
 	seededRound := sNodeStatus.LastRound
 
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, sAccount, onlineTxID)
-	sNodeStatus, _ = sClient.Status()
+	txnConfirmed := fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, sAccount, onlineTxID)
+	a.True(txnConfirmed)
+
 	newAccountStatus, err = pClient.AccountInformation(sAccount)
 	a.NoError(err)
 	a.Equal(basics.Online.String(), newAccountStatus.Status)
-	sAccountData, err := sClient.AccountData(sAccount)
+
+	// get the round number of the primary node
+	pNodeStatus, err := pClient.Status()
 	a.NoError(err)
 
+	// ensure the secondary node reaches that number
+	_, err = sClient.WaitForRound(pNodeStatus.LastRound)
+	a.NoError(err)
+
+	// get the account data ( which now is syncronized across the network )
+	sAccountData, err := sClient.AccountData(sAccount)
+	a.NoError(err)
 	lastValidRound := sAccountData.VoteLastValid
 
 	a.Equal(basics.Round(partKeyLastValid), lastValidRound)
@@ -139,9 +149,10 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.NoError(err)
 	a.Equal(blk.CurrentProtocol, protocolCheck)
 
-	fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
+	sendMoneyTxn := fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
-	err = fixture.WaitForRoundWithTimeout(uint64(initialRound) + 3)
+	txnConfirmed = fixture.WaitForTxnConfirmation(initialRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.TxID)
+	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformation(sAccount)
 	a.NoError(err)
