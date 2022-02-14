@@ -46,9 +46,9 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	a.NoError(err)
 	richAccount := accountList[0].Address
-	_, initialRound := fixture.GetBalanceAndRound(richAccount)
+	_, richAccountLatestRound := fixture.GetBalanceAndRound(richAccount)
 
-	minTxnFee, minAcctBalance, err := fixture.MinFeeAndBalance(initialRound)
+	minTxnFee, minAcctBalance, err := fixture.MinFeeAndBalance(richAccountLatestRound)
 	a.NoError(err)
 
 	transactionFee := minTxnFee
@@ -57,7 +57,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	initialAmt, err := sClient.GetBalance(sAccount)
 	a.NoError(err)
 
-	fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
+	fixture.SendMoneyAndWait(richAccountLatestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
 	newAmt, err := sClient.GetBalance(sAccount)
 	a.NoError(err)
@@ -143,15 +143,15 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	// Now we want to send a transaction to the account and test that
 	// it was taken offline after we sent it something
 
-	_, initialRound = fixture.GetBalanceAndRound(richAccount)
+	_, richAccountLatestRound = fixture.GetBalanceAndRound(richAccount)
 
-	blk, err := sClient.Block(initialRound)
+	blk, err := sClient.Block(richAccountLatestRound)
 	a.NoError(err)
 	a.Equal(blk.CurrentProtocol, protocolCheck)
 
-	sendMoneyTxn := fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
+	sendMoneyTxn := fixture.SendMoneyAndWait(richAccountLatestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
-	txnConfirmed = fixture.WaitForTxnConfirmation(initialRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.TxID)
+	txnConfirmed = fixture.WaitForTxnConfirmation(richAccountLatestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.TxID)
 	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformation(sAccount)
