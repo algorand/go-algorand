@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -376,8 +377,8 @@ func scenarioA(
 
 	client := fixture.LibGoalClient
 
-	numberOfAccounts := uint64(6000) // 6K
-	numberOfAssets := uint64(2000000)     // 6M
+	numberOfAccounts := uint64(6000)  // 6K
+	numberOfAssets := uint64(2000000) // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -635,7 +636,7 @@ func scenarioD(
 
 	client := fixture.LibGoalClient
 
-	numberOfApps := uint64(200) // 6M
+	numberOfApps := uint64(1000000) // 6M
 	defer func() {
 		close(txnChan)
 		close(txnGrpChan)
@@ -647,8 +648,9 @@ func scenarioD(
 	var err error
 
 	globalStateCheck := make([]bool, numberOfApps)
-	
-	fmt.Println("Creating accounts...")
+	appCallFields := make([]transactions.ApplicationCallTxnFields, numberOfApps)
+
+	fmt.Println("Creating applications ...")
 
 	// create 6M apps
 	for asi := uint64(0); asi < numberOfApps; asi++ {
@@ -662,6 +664,7 @@ func scenarioD(
 			fmt.Printf("create app %d / %d\n", asi, numberOfApps)
 		}
 		atx := makeAppTransaction(t, client, asi, firstValid, baseAcct.pk, tLife, genesisHash)
+		appCallFields[asi] = atx.ApplicationCallTxnFields
 		counter, txnGroup = queueTransaction(baseAcct.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
 
 		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
@@ -672,43 +675,29 @@ func scenarioD(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
 
-	// check creator's balance record for the app entry and the state changes
-	ad, err := client.AccountData(baseAcct.pk.String())
-	require.NoError(t, err)
+	// check the app in the account
+	checked := uint64(0)
 
-	appCounter := 0
-	a := require.New(t)
-	schema := basics.StateSchema{
-		NumUint: 1,
-	}
-
-	for appIdx, params := range ad.AppParams {
+	for i := uint64(0); checked < numberOfApps; i++ {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
 		default:
 		}
 
-		if int(appCounter)%printFreequency == 0 {
-			fmt.Printf("check app params %d / %d\n", appCounter, numberOfApps)
+		app, err := client.ApplicationInformation(i)
+		if err != nil {
+			continue
 		}
+		if int(checked)%printFreequency == 0 {
+			fmt.Printf("check app params %d / %d\n", checked, numberOfApps)
+		}
+		checkApplicationParams(t, appCallFields[(*app.Params.GlobalState)[0].Value.Uint], app.Params, baseAcct.pk.String(), &globalStateCheck)
+		checked++
+	}
+	for _, x := range globalStateCheck {
+		require.True(t, x)
 
-		a.Equal(schema, params.LocalStateSchema)
-		a.Equal(schema, params.GlobalStateSchema)
-		a.Equal(1, len(params.GlobalState))
-		value, ok := params.GlobalState["counter"]
-		a.True(ok)
-		a.False(globalStateCheck[value.Uint])
-		globalStateCheck[value.Uint] = true
-
-		state, ok := ad.AppLocalStates[appIdx]
-		a.True(ok)
-		a.Equal(schema, state.Schema)
-		a.Equal(1, len(state.KeyValue))
-		value, ok = state.KeyValue["counter"]
-		a.True(ok)
-		a.Equal(uint64(1), value.Uint)
-		appCounter++
 	}
 }
 
@@ -894,7 +883,24 @@ func makeOptInApp(
 		LastValid:   basics.Round(round + tLife),
 		GenesisHash: genesisHash,
 	}
-
 	return
 }
 
+func checkApplicationParams(
+	t *testing.T,
+	acTF transactions.ApplicationCallTxnFields,
+	app generated.ApplicationParams,
+	creator string,
+	globalStateCheck *[]bool) {
+
+	require.Equal(t, acTF.ApprovalProgram, app.ApprovalProgram)
+	require.Equal(t, acTF.ClearStateProgram, app.ClearStateProgram)
+	require.Equal(t, creator, app.Creator)
+	require.False(t, (*globalStateCheck)[(*app.GlobalState)[0].Value.Uint])
+	(*globalStateCheck)[(*app.GlobalState)[0].Value.Uint] = true
+
+	require.Equal(t, acTF.GlobalStateSchema.NumByteSlice, app.GlobalStateSchema.NumByteSlice)
+	require.Equal(t, acTF.GlobalStateSchema.NumUint, app.GlobalStateSchema.NumUint)
+	require.Equal(t, acTF.LocalStateSchema.NumByteSlice, app.LocalStateSchema.NumByteSlice)
+	require.Equal(t, acTF.LocalStateSchema.NumUint, app.LocalStateSchema.NumUint)
+}
