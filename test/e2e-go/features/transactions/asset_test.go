@@ -469,7 +469,7 @@ func TestAssetInformation(t *testing.T) {
 	a.Equal(len(info.AssetParams), 0)
 
 	// There should be no assets to start with
-	info2, err := client.AccountInformationV2(account0)
+	info2, err := client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	a.Equal(len(*info2.CreatedAssets), 0)
@@ -497,7 +497,7 @@ func TestAssetInformation(t *testing.T) {
 	}
 
 	// Check that AssetInformationV2 returns the correct AssetParams
-	info2, err = client.AccountInformationV2(account0)
+	info2, err = client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	for _, cp := range *info2.CreatedAssets {

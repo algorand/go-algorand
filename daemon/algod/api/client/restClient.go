@@ -357,6 +357,11 @@ type rawFormat struct {
 	Format string `url:"format"`
 }
 
+type accountInformationParams struct {
+	Format  string `url:"format"`
+	Exclude string `url:"exclude"`
+}
+
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
@@ -402,8 +407,14 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 }
 
 // AccountInformationV2 gets the AccountData associated with the passed address
-func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
+func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
+	var infoParams accountInformationParams
+	if includeCreatables {
+		infoParams = accountInformationParams{Exclude: "", Format: "json"}
+	} else {
+		infoParams = accountInformationParams{Exclude: "all", Format: "json"}
+	}
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), infoParams)
 	return
 }
 
@@ -450,6 +461,34 @@ func (client RestClient) PendingTransactionInformation(transactionID string) (re
 func (client RestClient) PendingTransactionInformationV2(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)
+	return
+}
+
+// AccountApplicationInformation gets account information about a given app.
+func (client RestClient) AccountApplicationInformation(accountAddress string, applicationID uint64) (response generatedV2.AccountApplicationResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), nil)
+	return
+}
+
+// RawAccountApplicationInformation gets account information about a given app.
+func (client RestClient) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), rawFormat{Format: "msgpack"})
+	response = blob
+	return
+}
+
+// AccountAssetInformation gets account information about a given app.
+func (client RestClient) AccountAssetInformation(accountAddress string, assetID uint64) (response generatedV2.AccountAssetResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
+	return
+}
+
+// RawAccountAssetInformation gets account information about a given app.
+func (client RestClient) RawAccountAssetInformation(accountAddress string, assetID uint64) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), rawFormat{Format: "msgpack"})
+	response = blob
 	return
 }
 

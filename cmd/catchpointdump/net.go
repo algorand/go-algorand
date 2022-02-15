@@ -43,7 +43,7 @@ var networkName string
 var round int
 var relayAddress string
 var singleCatchpoint bool
-var downloadOnly bool
+var loadOnly bool
 
 const (
 	escapeCursorUp   = string("\033[A") // Cursor Up
@@ -57,7 +57,7 @@ func init() {
 	netCmd.Flags().IntVarP(&round, "round", "r", 0, "Specify the round number ( i.e. 7700000 )")
 	netCmd.Flags().StringVarP(&relayAddress, "relay", "p", "", "Relay address to use ( i.e. r-ru.algorand-mainnet.network:4160 )")
 	netCmd.Flags().BoolVarP(&singleCatchpoint, "single", "s", true, "Download/process only from a single relay")
-	netCmd.Flags().BoolVarP(&downloadOnly, "download", "l", false, "Download only, do not process")
+	netCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
 	netCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 }
 
@@ -97,9 +97,9 @@ var netCmd = &cobra.Command{
 					},
 				}},
 			}
-			err = makeFileDump(addr, tarName, genesisInitState)
+			err = loadAndDump(addr, tarName, genesisInitState)
 			if err != nil {
-				reportInfof("failed to make a dump from tar file for '%s' : %v", addr, err)
+				reportInfof("failed to load/dump from tar file for '%s' : %v", addr, err)
 				continue
 			}
 			// clear possible errors from previous run: at this point we've been succeed
@@ -253,24 +253,26 @@ func downloadCatchpoint(addr string, round int) (tarName string, err error) {
 	}
 }
 
-func makeFileDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
-	deleteLedgerFiles := func() {
+func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
+	deleteLedgerFiles := func(deleteTracker bool) {
 		os.Remove("./ledger.block.sqlite")
 		os.Remove("./ledger.block.sqlite-shm")
 		os.Remove("./ledger.block.sqlite-wal")
-		os.Remove("./ledger.tracker.sqlite")
-		os.Remove("./ledger.tracker.sqlite-shm")
-		os.Remove("./ledger.tracker.sqlite-wal")
+		if deleteTracker {
+			os.Remove("./ledger.tracker.sqlite")
+			os.Remove("./ledger.tracker.sqlite-shm")
+			os.Remove("./ledger.tracker.sqlite-wal")
+		}
 	}
 	// delete current ledger files.
-	deleteLedgerFiles()
+	deleteLedgerFiles(true)
 	cfg := config.GetDefaultLocal()
 	l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 	if err != nil {
 		reportErrorf("Unable to open ledger : %v", err)
 	}
 
-	defer deleteLedgerFiles()
+	defer deleteLedgerFiles(!loadOnly)
 	defer l.Close()
 
 	catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
@@ -297,15 +299,17 @@ func makeFileDump(addr string, tarFile string, genesisInitState ledgercore.InitS
 		reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 	}
 
-	dirName := "./" + strings.Split(networkName, ".")[0] + "/" + strings.Split(addr, ".")[0]
-	outFile, err := os.OpenFile(dirName+"/"+strconv.FormatUint(uint64(round), 10)+".dump", os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
-	if err != nil {
-		return err
+	if !loadOnly {
+		dirName := "./" + strings.Split(networkName, ".")[0] + "/" + strings.Split(addr, ".")[0]
+		outFile, err := os.OpenFile(dirName+"/"+strconv.FormatUint(uint64(round), 10)+".dump", os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+		if err != nil {
+			return err
+		}
+		defer outFile.Close()
+		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+		if err != nil {
+			return err
+		}
 	}
-	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
-	if err != nil {
-		return err
-	}
-	outFile.Close()
 	return nil
 }

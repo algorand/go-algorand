@@ -671,18 +671,12 @@ var appQueryCmd = &cobra.Command{
 		var tealval basics.TealValue
 		if scope == "local" {
 			// Fetching local state. Get account information
-			ad, err := client.AccountData(account)
+			ai, err := client.RawAccountApplicationInformation(account, appIdx)
 			if err != nil {
-				reportErrorf(errorRequestFail, err)
-			}
-
-			// Get application local state
-			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
-			if !ok {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
-			kv := local.KeyValue
+			kv := ai.AppLocalState.KeyValue
 			tealval = kv[meta.Key]
 		}
 
@@ -694,18 +688,12 @@ var appQueryCmd = &cobra.Command{
 			}
 
 			// Get creator information
-			ad, err := client.AccountData(app.Params.Creator)
+			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
-				reportErrorf(errorRequestFail, err)
+				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
-			// Get app params
-			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
-			if !ok {
-				reportErrorf(errorNoSuchApplication, appIdx)
-			}
-
-			kv := params.GlobalState
+			kv := ai.AppParams.GlobalState
 			tealval = kv[meta.Key]
 		}
 
