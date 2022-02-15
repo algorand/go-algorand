@@ -1006,6 +1006,10 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 
 func insertStateProofToRegistry(part account.PersistedParticipation, node *AlgorandFullNode) error {
 	partID := part.ID()
+	// in case there are no state proof keys for that participant
+	if part.StateProofSecrets == nil {
+		return nil
+	}
 	keys := part.StateProofSecrets.GetAllKeys()
 	keysSinger := make(account.StateProofKeys, len(keys))
 	for i := uint64(0); i < uint64(len(keys)); i++ {
