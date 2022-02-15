@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pooldata"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -276,7 +277,8 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 
 func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transactions.SignedTxn) (err error) {
 	// should all have same number of elements
-	if len(stub.VotePK)/len(crypto.OneTimeSignatureVerifier{}) != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/len(crypto.VRFVerifier{}) != len(stub.VoteKeyDilution) {
+	if len(stub.VotePK)/len(crypto.OneTimeSignatureVerifier{}) != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/len(crypto.VRFVerifier{}) != len(stub.VoteKeyDilution) ||
+		len(stub.StateProofPK)/merklesignature.MerkleSignatureSchemeRootSize != len(stub.VoteKeyDilution) {
 		return errDataMissing
 	}
 	err = stub.BitmaskKeys.iterate(int(stub.TotalTransactionsCount), len(stub.VoteKeyDilution), func(i int, index int) error {
@@ -285,7 +287,11 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 		if err != nil {
 			return err
 		}
-		return nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], len(crypto.VRFVerifier{}))
+		err = nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], len(crypto.VRFVerifier{}))
+		if err != nil {
+			return err
+		}
+		return nextSlice(&stub.StateProofPK, signedTxns[i].Txn.StateProofPK[:], merklesignature.MerkleSignatureSchemeRootSize)
 	})
 	if err != nil {
 		return err
@@ -610,8 +616,9 @@ func (stub *txGroupsEncodingStub) reconstructCompactCertTxnFields(signedTxns []t
 }
 
 func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskSigCommit.iterate(int(stub.TotalTransactionsCount), len(stub.SigCommit)/crypto.DigestSize, func(i int, index int) error {
-		return nextSlice(&stub.SigCommit, signedTxns[i].Txn.Cert.SigCommit[:], crypto.DigestSize)
+	err = stub.BitmaskSigCommit.iterate(int(stub.TotalTransactionsCount), len(stub.SigCommit), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.SigCommit = stub.SigCommit[index]
+		return nil
 	})
 	if err != nil {
 		return err
@@ -623,20 +630,61 @@ func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.Sign
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskSigProofs.iterate(int(stub.TotalTransactionsCount), len(stub.SigProofs), func(i int, index int) error {
-		signedTxns[i].Txn.Cert.SigProofs = stub.SigProofs[index]
+
+	err = stub.BitmaskSigProofsPath.iterate(int(stub.TotalTransactionsCount), len(stub.SigProofsPath), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.SigProofs.Path = stub.SigProofsPath[index]
+		// default to sumhash; might be overridden next.
+		signedTxns[i].Txn.Cert.SigProofs.HashFactory.HashType = crypto.Sumhash
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskPartProofs.iterate(int(stub.TotalTransactionsCount), len(stub.PartProofs), func(i int, index int) error {
-		signedTxns[i].Txn.Cert.PartProofs = stub.PartProofs[index]
+
+	// marker bitmask.
+	err = stub.BitmaskSigProofsHashType.iterate(int(stub.TotalTransactionsCount), int(stub.TotalTransactionsCount), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.SigProofs.HashFactory.HashType = crypto.Sha512_256
 		return nil
 	})
 	if err != nil {
 		return err
 	}
+
+	err = stub.BitmaskSigProofsTreeDepth.iterate(int(stub.TotalTransactionsCount), len(stub.SigProofsTreeDepth), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.SigProofs.TreeDepth = stub.SigProofsTreeDepth[index]
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = stub.BitmaskPartProofsPath.iterate(int(stub.TotalTransactionsCount), len(stub.PartProofsPath), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.PartProofs.Path = stub.PartProofsPath[index]
+		// default to sumhash; might be overridden next.
+		signedTxns[i].Txn.Cert.PartProofs.HashFactory.HashType = crypto.Sumhash
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// marker bitmask.
+	err = stub.BitmaskPartProofsHashType.iterate(int(stub.TotalTransactionsCount), int(stub.TotalTransactionsCount), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.PartProofs.HashFactory.HashType = crypto.Sha512_256
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = stub.BitmaskPartProofsTreeDepth.iterate(int(stub.TotalTransactionsCount), len(stub.PartProofsTreeDepth), func(i int, index int) error {
+		signedTxns[i].Txn.Cert.PartProofs.TreeDepth = stub.PartProofsTreeDepth[index]
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
 	err = stub.BitmaskReveals.iterate(int(stub.TotalTransactionsCount), len(stub.Reveals), func(i int, index int) error {
 		signedTxns[i].Txn.Cert.Reveals = stub.Reveals[index]
 		return nil

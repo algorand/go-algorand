@@ -252,66 +252,6 @@ func BenchmarkUnmarshalassetIndices(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalcertProofs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := certProofs{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingcertProofs(t *testing.T) {
-	protocol.RunEncodingTest(t, &certProofs{})
-}
-
-func BenchmarkMarshalMsgcertProofs(b *testing.B) {
-	v := certProofs{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgcertProofs(b *testing.B) {
-	v := certProofs{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalcertProofs(b *testing.B) {
-	v := certProofs{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestMarshalUnmarshalencodedApplicationCallTxnFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := encodedApplicationCallTxnFields{}
@@ -1200,6 +1140,66 @@ func BenchmarkAppendMsgencodedTxns(b *testing.B) {
 
 func BenchmarkUnmarshalencodedTxns(b *testing.B) {
 	v := encodedTxns{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalmerkleProofPath(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := merkleProofPath{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingmerkleProofPath(t *testing.T) {
+	protocol.RunEncodingTest(t, &merkleProofPath{})
+}
+
+func BenchmarkMarshalMsgmerkleProofPath(b *testing.B) {
+	v := merkleProofPath{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgmerkleProofPath(b *testing.B) {
+	v := merkleProofPath{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalmerkleProofPath(b *testing.B) {
+	v := merkleProofPath{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

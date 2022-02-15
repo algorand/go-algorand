@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -307,17 +308,19 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxnHeader() {
 
 func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
-	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || txn.Txn.VoteKeyDilution != 0 {
+	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || txn.Txn.VoteKeyDilution != 0 || !txn.Txn.StateProofPK.MsgIsZero() {
 		if len(stub.BitmaskKeys) == 0 {
 			stub.BitmaskKeys = make(bitmask, bitmaskLen)
 			stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*crypto.PublicKeyByteLength)
 			stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*crypto.VrfPubkeyByteLength)
 			stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
+			stub.StateProofPK = make([]byte, 0, stub.TotalTransactionsCount*merklesignature.MerkleSignatureSchemeRootSize)
 		}
 		stub.BitmaskKeys.setBit(i)
 		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
 		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
 		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
+		stub.StateProofPK = append(stub.StateProofPK, txn.Txn.StateProofPK[:]...)
 	}
 	if !txn.Txn.VoteFirst.MsgIsZero() {
 		if len(stub.BitmaskVoteFirst) == 0 {
@@ -747,10 +750,10 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 	if !txn.Txn.Cert.SigCommit.MsgIsZero() {
 		if len(stub.BitmaskSigCommit) == 0 {
 			stub.BitmaskSigCommit = make(bitmask, bitmaskLen)
-			stub.SigCommit = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
+			stub.SigCommit = make([]crypto.GenericDigest, 0, stub.TotalTransactionsCount)
 		}
 		stub.BitmaskSigCommit.setBit(i)
-		stub.SigCommit = append(stub.SigCommit, txn.Txn.Cert.SigCommit[:]...)
+		stub.SigCommit = append(stub.SigCommit, txn.Txn.Cert.SigCommit)
 	}
 	if txn.Txn.Cert.SignedWeight != 0 {
 		if len(stub.BitmaskSignedWeight) == 0 {
@@ -760,22 +763,52 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 		stub.BitmaskSignedWeight.setBit(i)
 		stub.SignedWeight = append(stub.SignedWeight, txn.Txn.Cert.SignedWeight)
 	}
-	if txn.Txn.Cert.SigProofs != nil {
-		if len(stub.BitmaskSigProofs) == 0 {
-			stub.BitmaskSigProofs = make(bitmask, bitmaskLen)
-			stub.SigProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
+	if len(txn.Txn.Cert.SigProofs.Path) > 0 {
+		if len(stub.SigProofsPath) == 0 {
+			stub.BitmaskSigProofsPath = make(bitmask, bitmaskLen)
+			stub.SigProofsPath = make([]merkleProofPath, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskSigProofs.setBit(i)
-		stub.SigProofs = append(stub.SigProofs, txn.Txn.Cert.SigProofs)
+		stub.BitmaskSigProofsPath.setBit(i)
+		stub.SigProofsPath = append(stub.SigProofsPath, txn.Txn.Cert.SigProofs.Path)
 	}
-	if txn.Txn.Cert.PartProofs != nil {
-		if len(stub.BitmaskPartProofs) == 0 {
-			stub.BitmaskPartProofs = make(bitmask, bitmaskLen)
-			stub.PartProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
+	if txn.Txn.Cert.SigProofs.HashFactory.HashType != crypto.Sumhash {
+		if len(stub.BitmaskSigProofsHashType) == 0 {
+			stub.BitmaskSigProofsHashType = make(bitmask, bitmaskLen)
 		}
-		stub.BitmaskPartProofs.setBit(i)
-		stub.PartProofs = append(stub.PartProofs, txn.Txn.Cert.PartProofs)
+		stub.BitmaskSigProofsHashType.setBit(i)
 	}
+	if txn.Txn.Cert.SigProofs.TreeDepth > 0 {
+		if len(stub.SigProofsTreeDepth) == 0 {
+			stub.BitmaskSigProofsTreeDepth = make(bitmask, bitmaskLen)
+			stub.SigProofsTreeDepth = make([]uint8, 0, stub.TotalTransactionsCount)
+		}
+		stub.BitmaskSigProofsTreeDepth.setBit(i)
+		stub.SigProofsTreeDepth = append(stub.SigProofsTreeDepth, txn.Txn.Cert.SigProofs.TreeDepth)
+	}
+
+	if len(txn.Txn.Cert.PartProofs.Path) > 0 {
+		if len(stub.PartProofsPath) == 0 {
+			stub.BitmaskPartProofsPath = make(bitmask, bitmaskLen)
+			stub.PartProofsPath = make([]merkleProofPath, 0, stub.TotalTransactionsCount)
+		}
+		stub.BitmaskPartProofsPath.setBit(i)
+		stub.PartProofsPath = append(stub.PartProofsPath, txn.Txn.Cert.PartProofs.Path)
+	}
+	if txn.Txn.Cert.PartProofs.HashFactory.HashType != crypto.Sumhash {
+		if len(stub.BitmaskPartProofsHashType) == 0 {
+			stub.BitmaskPartProofsHashType = make(bitmask, bitmaskLen)
+		}
+		stub.BitmaskPartProofsHashType.setBit(i)
+	}
+	if txn.Txn.Cert.PartProofs.TreeDepth > 0 {
+		if len(stub.PartProofsTreeDepth) == 0 {
+			stub.BitmaskPartProofsTreeDepth = make(bitmask, bitmaskLen)
+			stub.PartProofsTreeDepth = make([]uint8, 0, stub.TotalTransactionsCount)
+		}
+		stub.BitmaskPartProofsTreeDepth.setBit(i)
+		stub.PartProofsTreeDepth = append(stub.PartProofsTreeDepth, txn.Txn.Cert.PartProofs.TreeDepth)
+	}
+
 	if txn.Txn.Cert.Reveals != nil {
 		if len(stub.BitmaskReveals) == 0 {
 			stub.BitmaskReveals = make(bitmask, bitmaskLen)
@@ -789,7 +822,11 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 func (stub *txGroupsEncodingStub) finishDeconstructCert() {
 	stub.BitmaskSigCommit.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskSignedWeight.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskSigProofs.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskPartProofs.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSigProofsPath.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSigProofsHashType.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSigProofsTreeDepth.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskPartProofsPath.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskPartProofsHashType.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskPartProofsTreeDepth.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskReveals.trimBitmask(int(stub.TotalTransactionsCount))
 }

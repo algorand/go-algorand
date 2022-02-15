@@ -460,6 +460,15 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 				CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
 				require.True(t, ok)
 				txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+
+				txn.Txn.CompactCertTxnFields.Cert.SigProofs.HashFactory.HashType %= crypto.MaxHashType
+				if len(txn.Txn.CompactCertTxnFields.Cert.SigProofs.Path) == 0 {
+					txn.Txn.CompactCertTxnFields.Cert.SigProofs.HashFactory.HashType = 0
+				}
+				txn.Txn.CompactCertTxnFields.Cert.PartProofs.HashFactory.HashType %= crypto.MaxHashType
+				if len(txn.Txn.CompactCertTxnFields.Cert.PartProofs.Path) == 0 {
+					txn.Txn.CompactCertTxnFields.Cert.PartProofs.HashFactory.HashType = 0
+				}
 			default:
 				require.Fail(t, "unsupported txntype for txnsync msg encoding")
 			}
