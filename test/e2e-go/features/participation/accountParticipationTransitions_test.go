@@ -71,6 +71,7 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	return status
 }
 
+// TODO: figure out what's the purpose of this test and fix it
 func TestKeyRegistration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Skipf("Skipping flaky test. Re-enable with #3255")
@@ -102,7 +103,7 @@ func TestKeyRegistration(t *testing.T) {
 	sAccount := accountResponse.Address
 
 	// Add an overlapping participation keys for the account on round 1 and 2
-	last := uint64(6_000_000)
+	last := uint64(3_000)
 	numNew := 2
 	for i := 0; i < numNew; i++ {
 		response, part, err := installParticipationKey(t, sClient, sAccount, 0, last+uint64(i))
@@ -153,7 +154,7 @@ func TestKeyRegistration(t *testing.T) {
 	require.Len(t, keys, 3)
 	for _, k := range keys {
 		switch k.Key.VoteLastValid {
-		case 3_000_000:
+		case 1_500:
 			checkKey(k, 1, lookback, lookback, "keys[0]")
 		case last:
 			checkKey(k, lookback+1, lookback+1, lookback+1, "keys[1]")

@@ -54,7 +54,7 @@ type Balances interface {
 	// StatefulEval executes a TEAL program in stateful mode on the balances.
 	// It returns whether the program passed and its error.  It also returns
 	// an EvalDelta that contains the changes made by the program.
-	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta transactions.EvalDelta, err error)
+	StatefulEval(gi int, params *logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta transactions.EvalDelta, err error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?

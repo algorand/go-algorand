@@ -144,6 +144,7 @@ type encodedKeyregTxnFields struct {
 	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroups"`
 	BitmaskKeys             bitmask        `codec:"votekbm"`
 	BitmaskNonparticipation bitmask        `codec:"nonpartbm"`
+	StateProofPK            []byte         `codec:"stproof,allocbound=maxEncodedTransactionGroups*merklesignature.MerkleSignatureSchemeRootSize"`
 }
 
 type encodedPaymentTxnFields struct {
@@ -302,8 +303,8 @@ type encodedCompactCertTxnFields struct {
 	encodedCert
 }
 
-//msgp:allocbound certProofs compactcert.MaxProofDigests
-type certProofs []crypto.Digest
+//msgp:allocbound merkleProofPath (merklearray.MaxNumLeavesOnEncodedTree/2)
+type merkleProofPath []crypto.GenericDigest
 
 //msgp:allocbound revealMap compactcert.MaxReveals
 type revealMap map[uint64]compactcert.Reveal
@@ -315,17 +316,23 @@ type SortUint64 = compactcert.SortUint64
 type encodedCert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
-	SigCommit        []byte  `codec:"certc,allocbound=maxAddressBytes"`
-	BitmaskSigCommit bitmask `codec:"certcbm"`
+	SigCommit        []crypto.GenericDigest `codec:"certc,allocbound=maxEncodedTransactionGroups"`
+	BitmaskSigCommit bitmask                `codec:"certcbm"`
 
 	SignedWeight        []uint64 `codec:"certw,allocbound=maxEncodedTransactionGroups"`
 	BitmaskSignedWeight bitmask  `codec:"certwbm"`
 
-	SigProofs        []certProofs `codec:"certS,allocbound=maxEncodedTransactionGroups"`
-	BitmaskSigProofs bitmask      `codec:"certSbm"`
+	SigProofsPath             []merkleProofPath `codec:"certspp,allocbound=maxEncodedTransactionGroups"`
+	BitmaskSigProofsPath      bitmask           `codec:"certsppbm"`
+	BitmaskSigProofsHashType  bitmask           `codec:"certsphtbm"`
+	SigProofsTreeDepth        []uint8           `codec:"certsptd,allocbound=maxEncodedTransactionGroups"`
+	BitmaskSigProofsTreeDepth bitmask           `codec:"certsptdbm"`
 
-	PartProofs        []certProofs `codec:"certP,allocbound=maxEncodedTransactionGroups"`
-	BitmaskPartProofs bitmask      `codec:"certPbm"`
+	PartProofsPath             []merkleProofPath `codec:"certppp,allocbound=maxEncodedTransactionGroups"`
+	BitmaskPartProofsPath      bitmask           `codec:"certpppbm"`
+	BitmaskPartProofsHashType  bitmask           `codec:"certpphtbm"`
+	PartProofsTreeDepth        []uint8           `codec:"certpptd,allocbound=maxEncodedTransactionGroups"`
+	BitmaskPartProofsTreeDepth bitmask           `codec:"certpptdbm"`
 
 	Reveals        []revealMap `codec:"certr,allocbound=maxEncodedTransactionGroups"`
 	BitmaskReveals bitmask     `codec:"certrbm"`

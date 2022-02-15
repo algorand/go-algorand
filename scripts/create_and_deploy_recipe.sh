@@ -27,7 +27,8 @@ if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
 fi
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-export GOPATH=$(go env GOPATH)
+GOPATH=$(go env GOPATH)
+export GOPATH=${GOPATH%:*}
 
 # Anchor our repo root reference location
 REPO_ROOT=${SCRIPTPATH}/..

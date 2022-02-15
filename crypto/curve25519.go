@@ -210,7 +210,7 @@ func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 // cryptographic secrets.
 func (s *SignatureSecrets) Sign(message Hashable) Signature {
 	cryptoSigSecretsSignTotal.Inc(map[string]string{})
-	return s.SignBytes(hashRep(message))
+	return s.SignBytes(HashRep(message))
 }
 
 // SignBytes signs a message directly, without first hashing.
@@ -227,7 +227,7 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 //
 func (v SignatureVerifier) Verify(message Hashable, sig Signature, useBatchVerificationCompatibleVersion bool) bool {
 	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), hashRep(message), ed25519Signature(sig), useBatchVerificationCompatibleVersion)
+	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig), useBatchVerificationCompatibleVersion)
 }
 
 // VerifyBytes verifies a signature, where the message is not hashed first.
