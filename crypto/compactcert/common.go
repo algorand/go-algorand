@@ -29,12 +29,12 @@ import (
 type coinChoice struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	J            uint64        `codec:"j"`
-	SignedWeight uint64        `codec:"sigweight"`
-	ProvenWeight uint64        `codec:"provenweight"`
-	Sigcom       crypto.Digest `codec:"sigcom"`
-	Partcom      crypto.Digest `codec:"partcom"`
-	MsgHash      crypto.Digest `codec:"msghash"`
+	J            uint64               `codec:"j"`
+	SignedWeight uint64               `codec:"sigweight"`
+	ProvenWeight uint64               `codec:"provenweight"`
+	Sigcom       crypto.GenericDigest `codec:"sigcom"`
+	Partcom      crypto.GenericDigest `codec:"partcom"`
+	MsgHash      crypto.GenericDigest `codec:"msghash"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

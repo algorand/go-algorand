@@ -19,6 +19,8 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -688,6 +690,10 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	badTx.ApplicationID = 0
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
 	a.Error(err)
+	a.Contains(err.Error(), "ApprovalProgram: invalid program (empty)")
+	badTx.ApprovalProgram = []byte{242}
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
 	a.Contains(err.Error(), "ApprovalProgram: invalid version")
 
 	correctAppCall.ApplicationID = appIdx
@@ -1078,6 +1084,21 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteKeyDilution: proto.DefaultKeyDilution,
 		VoteFirst:       0,
 		VoteLast:        10000,
+	}
+
+	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	if proto.EnableStateProofKeyregCheck {
+		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
+		store, err := db.MakeAccessor("test-DB", false, true)
+		a.NoError(err)
+		defer store.Close()
+		root, err := account.GenerateRoot(store)
+		a.NoError(err)
+		p, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(frst), basics.Round(lst), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		signer := p.Participation.StateProofSecrets
+		require.NoError(t, err)
+
+		correctKeyregFields.StateProofPK = *(signer.GetVerifier())
 	}
 
 	correctKeyreg := transactions.Transaction{

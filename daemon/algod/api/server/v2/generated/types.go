@@ -88,6 +88,9 @@ type AccountParticipation struct {
 	// \[sel\] Selection public key (if any) currently registered for this round.
 	SelectionParticipationKey []byte `json:"selection-participation-key"`
 
+	// \[stprf\] Root of the state proof key (if any)
+	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
+
 	// \[voteFst\] First round for which this participation is valid.
 	VoteFirstValid uint64 `json:"vote-first-valid"`
 
@@ -311,11 +314,14 @@ type DryrunTxnResult struct {
 	Disassembly []string `json:"disassembly"`
 
 	// Application state delta.
-	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
-	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
-	Logs             *[][]byte            `json:"logs,omitempty"`
+	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
+
+	// Disassembled lsig program line by line.
+	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
+	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
+	Logs                *[][]byte      `json:"logs,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -654,6 +660,11 @@ type PostTransactionsResponse struct {
 // ProofResponse defines model for ProofResponse.
 type ProofResponse struct {
 
+	// The type of hash function used to create the proof, must be one of:
+	// * sumhash
+	// * sha512_256
+	Hashtype string `json:"hashtype"`
+
 	// Index of the transaction in the block's payset.
 	Idx uint64 `json:"idx"`
 
@@ -662,6 +673,9 @@ type ProofResponse struct {
 
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // SupplyResponse defines model for SupplyResponse.

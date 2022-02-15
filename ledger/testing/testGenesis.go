@@ -87,7 +87,6 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 	blk.BlockHeader.GenesisID = "test"
 	blk.FeeSink = testSinkAddr
 	blk.RewardsPool = testPoolAddr
-
 	crypto.RandBytes(blk.BlockHeader.GenesisHash[:])
 
 	addrs := []basics.Address{}

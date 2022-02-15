@@ -58,7 +58,7 @@ var databaseCmd = &cobra.Command{
 			}
 			defer outFile.Close()
 		}
-		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile)
+		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile, nil)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
