@@ -53,6 +53,7 @@ type DebugAdapter interface {
 // Control interface for execution control
 type Control interface {
 	Step()
+	StepOver()
 	Resume()
 	SetBreakpoint(line int) error
 	RemoveBreakpoint(line int) error
@@ -182,6 +183,25 @@ func (s *session) Step() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.debugConfig = debugConfig{BreakAtLine: stepBreak}
+	}()
+
+	s.resume()
+}
+
+func (s *session) StepOver() {
+	currentLine := s.line.Load()
+	// Get the first TEAL opcode in the line
+	currentOp := strings.Fields(s.lines[currentLine])[0]
+
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		// Step over a function call (callsub op).
+		if currentOp == "callsub" {
+			s.setBreakpoint(currentLine + 1)
+		} else {
+			s.debugConfig = debugConfig{BreakAtLine: stepBreak}
+		}
 	}()
 
 	s.resume()

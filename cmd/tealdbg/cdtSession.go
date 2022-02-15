@@ -480,7 +480,15 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 			events = append(events, &evDestroyed)
 		}
 		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
-	case "Debugger.stepOver", "Debugger.stepInto":
+	case "Debugger.stepOver":
+		state.lastAction.Store("step")
+		s.debugger.StepOver()
+		if state.completed.IsSet() {
+			evDestroyed := s.makeContextDestroyedEvent()
+			events = append(events, &evDestroyed)
+		}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
+	case "Debugger.stepInto":
 		state.lastAction.Store("step")
 		s.debugger.Step()
 		if state.completed.IsSet() {
