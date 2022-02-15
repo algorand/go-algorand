@@ -901,7 +901,7 @@ func opSHA256(cx *EvalContext) {
 	cx.stack[last].Bytes = hash[:]
 }
 
-// The NIST SHA3-256 is implemented for compatability with ICON
+// The NIST SHA3-256 is implemented for compatibility with ICON
 func opSHA3_256(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	hasher := sha3.New256()
