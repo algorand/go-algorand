@@ -595,6 +595,10 @@ var createCmd = &cobra.Command{
 		secondChoicePath := filepath.Join("var", "lib", "algorand", "genesis", newNodeNetwork, "genesis.json")
 		thirdChoicePath := filepath.Join(exePath, "genesisfiles", "genesis", newNodeNetwork, "genesis.json")
 		paths := []string{firstChoicePath, secondChoicePath, thirdChoicePath}
+		if gopath := os.Getenv("GOPATH"); len(gopath) > 0 {
+			fourthChoicePath := filepath.Join(gopath, "src", "github.com", "algorand", "go-algorand", "installer", "genesis", newNodeNetwork, "genesis.json")
+			paths = append(paths, fourthChoicePath)
+		}
 		correctPath := ""
 		for _, pathCandidate := range paths {
 			if util.FileExists(pathCandidate) {
