@@ -56,7 +56,7 @@ const (
 	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn
-	EncodedMaxAppLocalStates = 64
+	EncodedMaxAppLocalStates = 6000001
 
 	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
