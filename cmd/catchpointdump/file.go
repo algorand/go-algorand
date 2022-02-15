@@ -48,6 +48,7 @@ var excludedFields *cmdutil.CobraStringSliceValue = cmdutil.MakeCobraStringSlice
 func init() {
 	fileCmd.Flags().StringVarP(&tarFile, "tar", "t", "", "Specify the tar file to process")
 	fileCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. tracker.dump.txt )")
+	fileCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
 	fileCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 }
 
@@ -88,9 +89,11 @@ var fileCmd = &cobra.Command{
 		defer os.Remove("./ledger.block.sqlite")
 		defer os.Remove("./ledger.block.sqlite-shm")
 		defer os.Remove("./ledger.block.sqlite-wal")
-		defer os.Remove("./ledger.tracker.sqlite")
-		defer os.Remove("./ledger.tracker.sqlite-shm")
-		defer os.Remove("./ledger.tracker.sqlite-wal")
+		if !loadOnly {
+			defer os.Remove("./ledger.tracker.sqlite")
+			defer os.Remove("./ledger.tracker.sqlite-shm")
+			defer os.Remove("./ledger.tracker.sqlite-wal")
+		}
 		defer l.Close()
 
 		catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
@@ -111,18 +114,20 @@ var fileCmd = &cobra.Command{
 			reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 		}
 
-		outFile := os.Stdout
-		if outFileName != "" {
-			outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
-			if err != nil {
-				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
+		if !loadOnly {
+			outFile := os.Stdout
+			if outFileName != "" {
+				outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+				if err != nil {
+					reportErrorf("Unable to create file '%s' : %v", outFileName, err)
+				}
+				defer outFile.Close()
 			}
-			defer outFile.Close()
-		}
 
-		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
-		if err != nil {
-			reportErrorf("Unable to print account database : %v", err)
+			err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+			if err != nil {
+				reportErrorf("Unable to print account database : %v", err)
+			}
 		}
 	},
 }
