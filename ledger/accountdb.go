@@ -1273,6 +1273,7 @@ type resourcesData struct {
 	// to just being the owner of the asset. A comparison against the empty structure doesn't work here -
 	// since both the holdings and the parameters are allowed to be all at their default values.
 	ResourceFlags resourceFlags `codec:"y"`
+
 	// UpdateRound is the round that modified this resource last. Since we want all the nodes to have the exact same
 	// value for this field, we'll be setting the value of this field to zero *before* the EnableAccountDataResourceSeparation
 	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the

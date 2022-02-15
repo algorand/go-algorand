@@ -476,7 +476,10 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 // LookupAccount uses the accounts tracker to return the account state (without
 // resources) for a given address, for a given round. The returned account values
 // reflect the changes of all blocks up to and including the returned round number.
-func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
+// The returned AccountData contains the rewards applied up to that round number,
+// and the additional withoutRewards return value contains the value before rewards
+// were applied.
+func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, withoutRewards basics.MicroAlgos, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
@@ -486,7 +489,7 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (ledgerc
 	}
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
-	withoutRewards := data.MicroAlgos
+	withoutRewards = data.MicroAlgos
 	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
 
 	return data, rnd, withoutRewards, nil

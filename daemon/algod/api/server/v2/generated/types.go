@@ -770,8 +770,8 @@ type AccountInformationParams struct {
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
 
-	// Whether to include asset holdings, application local state, created asset parameters, or created application parameters. Defaults to `all`.
-	Include *string `json:"include,omitempty"`
+	// When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
+	Exclude *string `json:"exclude,omitempty"`
 }
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
