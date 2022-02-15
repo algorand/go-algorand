@@ -30,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -1071,6 +1072,7 @@ type baseOnlineAccountData struct {
 
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"A"`
 	SelectionID     crypto.VRFVerifier              `codec:"B"`
+	StateProofID    merklesignature.Verifier        `codec:"F"`
 	VoteFirstValid  basics.Round                    `codec:"C"`
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
@@ -1117,6 +1119,7 @@ func (ba *baseAccountData) IsEmpty() bool {
 		ba.TotalAppLocalStates == 0 &&
 		ba.VoteID.MsgIsZero() &&
 		ba.SelectionID.MsgIsZero() &&
+		ba.StateProofID.MsgIsZero() &&
 		ba.VoteFirstValid == 0 &&
 		ba.VoteLastValid == 0 &&
 		ba.VoteKeyDilution == 0
@@ -1133,6 +1136,7 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
 	ba.VoteID = ad.VoteID
 	ba.SelectionID = ad.SelectionID
+	ba.StateProofID = ad.StateProofID
 	ba.VoteFirstValid = ad.VoteFirstValid
 	ba.VoteLastValid = ad.VoteLastValid
 	ba.VoteKeyDilution = ad.VoteKeyDilution
@@ -1153,6 +1157,7 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
 	ba.VoteID = ad.VoteID
 	ba.SelectionID = ad.SelectionID
+	ba.StateProofID = ad.StateProofID
 	ba.VoteFirstValid = ad.VoteFirstValid
 	ba.VoteLastValid = ad.VoteLastValid
 	ba.VoteKeyDilution = ad.VoteKeyDilution
@@ -1187,6 +1192,7 @@ func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 		VotingData: ledgercore.VotingData{
 			VoteID:          ba.VoteID,
 			SelectionID:     ba.SelectionID,
+			StateProofID:    ba.StateProofID,
 			VoteFirstValid:  ba.VoteFirstValid,
 			VoteLastValid:   ba.VoteLastValid,
 			VoteKeyDilution: ba.VoteKeyDilution,
@@ -1202,6 +1208,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 		RewardedMicroAlgos: ba.RewardedMicroAlgos,
 		VoteID:             ba.VoteID,
 		SelectionID:        ba.SelectionID,
+		StateProofID:       ba.StateProofID,
 		VoteFirstValid:     ba.VoteFirstValid,
 		VoteLastValid:      ba.VoteLastValid,
 		VoteKeyDilution:    ba.VoteKeyDilution,

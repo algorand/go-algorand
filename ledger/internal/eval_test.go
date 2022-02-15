@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1094,5 +1095,6 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
 	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
 	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
+	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
 
 }

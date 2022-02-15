@@ -36,6 +36,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -562,6 +563,8 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.Address]basics.AccountData) {
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 	updates = make(map[basics.Address]basics.AccountData, numAccounts)
 
 	for i := 0; i < numAccounts; i++ {
@@ -573,6 +576,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 			RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
 			VoteID:             secrets.OneTimeSignatureVerifier,
 			SelectionID:        pubVrfKey,
+			StateProofID:       stateProofID,
 			VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 			VoteLastValid:      basics.Round(0x000ffffffffffffff),
 			VoteKeyDilution:    0x000ffffffffffffff,
@@ -827,6 +831,8 @@ func TestAccountsReencoding(t *testing.T) {
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
@@ -847,6 +853,7 @@ func TestAccountsReencoding(t *testing.T) {
 				RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
 				VoteID:             secrets.OneTimeSignatureVerifier,
 				SelectionID:        pubVrfKey,
+				StateProofID:       stateProofID,
 				VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 				VoteLastValid:      basics.Round(0x000ffffffffffffff),
 				VoteKeyDilution:    0x000ffffffffffffff,

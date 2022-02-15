@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -51,8 +52,9 @@ type AccountBaseData struct {
 
 // VotingData holds participation information
 type VotingData struct {
-	VoteID      crypto.OneTimeSignatureVerifier
-	SelectionID crypto.VRFVerifier
+	VoteID       crypto.OneTimeSignatureVerifier
+	SelectionID  crypto.VRFVerifier
+	StateProofID merklesignature.Verifier
 
 	VoteFirstValid  basics.Round
 	VoteLastValid   basics.Round
@@ -82,6 +84,7 @@ func ToAccountData(acct basics.AccountData) AccountData {
 		VotingData: VotingData{
 			VoteID:          acct.VoteID,
 			SelectionID:     acct.SelectionID,
+			StateProofID:    acct.StateProofID,
 			VoteFirstValid:  acct.VoteFirstValid,
 			VoteLastValid:   acct.VoteLastValid,
 			VoteKeyDilution: acct.VoteKeyDilution,
@@ -99,6 +102,7 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 
 	a.VoteID = acct.VoteID
 	a.SelectionID = acct.SelectionID
+	a.StateProofID = acct.StateProofID
 	a.VoteFirstValid = acct.VoteFirstValid
 	a.VoteLastValid = acct.VoteLastValid
 	a.VoteKeyDilution = acct.VoteKeyDilution
@@ -124,6 +128,7 @@ func (u *AccountData) ClearOnlineState() {
 	u.VoteKeyDilution = 0
 	u.VoteID = crypto.OneTimeSignatureVerifier{}
 	u.SelectionID = crypto.VRFVerifier{}
+	u.StateProofID = merklesignature.Verifier{}
 }
 
 // MinBalance computes the minimum balance requirements for an account based on
@@ -159,6 +164,7 @@ func (u *AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLev
 		MicroAlgosWithRewards: microAlgos,
 		VoteID:                u.VoteID,
 		SelectionID:           u.SelectionID,
+		StateProofID:          u.StateProofID,
 		VoteFirstValid:        u.VoteFirstValid,
 		VoteLastValid:         u.VoteLastValid,
 		VoteKeyDilution:       u.VoteKeyDilution,
