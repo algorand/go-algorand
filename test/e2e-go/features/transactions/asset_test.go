@@ -632,13 +632,13 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	err = client0.BroadcastTransactionGroup(stxns)
 	a.NoError(err)
 
-	status0, err := fixture.LibGoalClient.Status()
+	status0, err := client0.Status()
 	a.NoError(err)
 
 	confirmed := fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
 	a.True(confirmed)
 
-	status0, err = fixture.LibGoalClient.Status()
+	status0, err = client0.Status()
 	a.NoError(err)
 
 	// wait for client1 to reach the same round as client0
@@ -660,12 +660,12 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 	txids[txid] = account0
 
-	status0, err = fixture.LibGoalClient.Status()
+	status0, err = client0.Status()
 	a.NoError(err)
 	confirmed = fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
 	a.True(confirmed)
 
-	status0, err = fixture.LibGoalClient.Status()
+	status0, err = client0.Status()
 	a.NoError(err)
 
 	// wait for client1 to reach the same round as client0
