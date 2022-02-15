@@ -1793,10 +1793,9 @@ func accountDataToOnline(address basics.Address, ad ledgercore.AccountData, prot
 		MicroAlgos:              ad.MicroAlgos,
 		RewardsBase:             ad.RewardsBase,
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
-		VoteID:                  ad.VoteID,
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
-		VoteKeyDilution:         ad.VoteKeyDilution,
+		StateProofID:            ad.StateProofID,
 	}
 }
 

@@ -73,7 +73,7 @@ func RandomAssetParams() basics.AssetParams {
 	ap := basics.AssetParams{
 		Total:         crypto.RandUint64(),
 		Decimals:      uint32(crypto.RandUint64() % 20),
-		DefaultFrozen: (crypto.RandUint64()%2 == 0),
+		DefaultFrozen: crypto.RandUint64()%2 == 0,
 		UnitName:      fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff)),
 		AssetName:     fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff)),
 		URL:           fmt.Sprintf("url%x", uint32(crypto.RandUint64()%0x7fffffff)),
@@ -89,7 +89,7 @@ func RandomAssetParams() basics.AssetParams {
 // RandomAssetHolding creates a random basics.AssetHolding.
 // If forceFrozen is set the Frozen field is set to True to prevent possible empty AssetHolding struct
 func RandomAssetHolding(forceFrozen bool) basics.AssetHolding {
-	frozen := (crypto.RandUint64()%2 == 0)
+	frozen := crypto.RandUint64()%2 == 0
 	if forceFrozen {
 		frozen = true
 	}
@@ -192,6 +192,7 @@ func RandomFullAccountData(rewardsLevel uint64, knownCreatables map[basics.Creat
 
 	crypto.RandBytes(data.VoteID[:])
 	crypto.RandBytes(data.SelectionID[:])
+	crypto.RandBytes(data.StateProofID[:])
 	data.VoteFirstValid = basics.Round(crypto.RandUint64())
 	data.VoteLastValid = basics.Round(crypto.RandUint64())
 	data.VoteKeyDilution = crypto.RandUint64()
