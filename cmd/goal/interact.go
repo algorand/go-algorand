@@ -574,7 +574,7 @@ var appExecuteCmd = &cobra.Command{
 		if appIdx == 0 {
 			switch onCompletion {
 			case transactions.CloseOutOC, transactions.ClearStateOC:
-				reportWarnf("OnCompletion %s may be ill-formed when creating an application", onCompletion)
+				reportWarnf("Warning: OnCompletion %s may be ill-formed when creating an application", onCompletion)
 			}
 		}
 

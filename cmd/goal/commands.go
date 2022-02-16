@@ -518,15 +518,13 @@ func reportInfof(format string, args ...interface{}) {
 }
 
 func reportWarnln(args ...interface{}) {
-	fmt.Print("Warning: ")
-
 	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
-			fmt.Println(infoNonPrintableCharacters)
+			fmt.Fprintln(os.Stderr, infoNonPrintableCharacters)
 		}
 
-		fmt.Println(line)
+		fmt.Fprintln(os.Stderr, line)
 	}
 }
 

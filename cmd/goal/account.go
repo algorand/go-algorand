@@ -1369,7 +1369,7 @@ var importRootKeysCmd = &cobra.Command{
 			if err != nil {
 				// If error is 'like' "key already exists", treat as warning and not an error
 				if strings.Contains(err.Error(), "key already exists") {
-					reportWarnf(errorRequestFail, err.Error()+"\n > Key File: "+filename)
+					reportWarnf("Warning: "+errorRequestFail, err.Error()+"\n > Key File: "+filename)
 				} else {
 					reportErrorf(errorRequestFail, err)
 				}

@@ -141,7 +141,7 @@ var assetCmd = &cobra.Command{
 
 func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	if cmd.Flags().Changed("asset") {
-		reportWarnln("The [--asset] flag is deprecated and will be removed in a future release, use [--unitname] instead.")
+		reportWarnln("Warning: The [--asset] flag is deprecated and will be removed in a future release, use [--unitname] instead.")
 	}
 
 	if cmd.Flags().Changed("asset") && cmd.Flags().Changed("unitname") {
