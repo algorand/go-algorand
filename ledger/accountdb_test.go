@@ -422,8 +422,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, false)
-	_, err = accountsInit(tx, accts, proto)
-	require.NoError(t, err)
+	_ = accountsInitTest(t, tx, accts, proto)
 	checkAccounts(t, tx, 0, accts)
 	require.True(t, allAccountsHaveStateProofPKs(accts))
 }
