@@ -74,7 +74,7 @@ type StateDelta struct {
 	// Accts AccountDeltas
 
 	// modified new accounts
-	NewAccts NewAccountDeltas
+	Accts AccountDeltas
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]basics.Round
@@ -153,8 +153,8 @@ type AssetResourceRecord struct {
 	Holding AssetHoldingDelta
 }
 
-// NewAccountDeltas stores ordered accounts and allows fast lookup by address
-type NewAccountDeltas struct {
+// AccountDeltas stores ordered accounts and allows fast lookup by address
+type AccountDeltas struct {
 	// Actual data. If an account is deleted, `accts` contains a balance record
 	// with empty `AccountData`.
 	accts []NewBalanceRecord
@@ -175,7 +175,7 @@ type NewAccountDeltas struct {
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
-		NewAccts: MakeNewAccountDeltas(hint),
+		Accts:    MakeAccountDeltas(hint),
 		Txids:    make(map[transactions.Txid]basics.Round, hint),
 		Txleases: make(map[Txlease]basics.Round, hint),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
@@ -189,9 +189,9 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 	}
 }
 
-// MakeNewAccountDeltas creates account delta
-func MakeNewAccountDeltas(hint int) NewAccountDeltas {
-	return NewAccountDeltas{
+// MakeAccountDeltas creates account delta
+func MakeAccountDeltas(hint int) AccountDeltas {
+	return AccountDeltas{
 		accts:      make([]NewBalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
 
@@ -201,7 +201,7 @@ func MakeNewAccountDeltas(hint int) NewAccountDeltas {
 }
 
 // GetData lookups AccountData by address
-func (ad NewAccountDeltas) GetData(addr basics.Address) (AccountData, bool) {
+func (ad AccountDeltas) GetData(addr basics.Address) (AccountData, bool) {
 	idx, ok := ad.acctsCache[addr]
 	if !ok {
 		return AccountData{}, false
@@ -210,7 +210,7 @@ func (ad NewAccountDeltas) GetData(addr basics.Address) (AccountData, bool) {
 }
 
 // GetAppParams returns app params delta value
-func (ad NewAccountDeltas) GetAppParams(addr basics.Address, aidx basics.AppIndex) (AppParamsDelta, bool) {
+func (ad AccountDeltas) GetAppParams(addr basics.Address, aidx basics.AppIndex) (AppParamsDelta, bool) {
 	if idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]; ok {
 		result := ad.appResources[idx].Params
 		return result, result.Deleted || result.Params != nil
@@ -219,7 +219,7 @@ func (ad NewAccountDeltas) GetAppParams(addr basics.Address, aidx basics.AppInde
 }
 
 // GetAssetParams returns asset params delta value
-func (ad NewAccountDeltas) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (AssetParamsDelta, bool) {
+func (ad AccountDeltas) GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (AssetParamsDelta, bool) {
 	if idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]; ok {
 		result := ad.assetResources[idx].Params
 		return result, result.Deleted || result.Params != nil
@@ -228,7 +228,7 @@ func (ad NewAccountDeltas) GetAssetParams(addr basics.Address, aidx basics.Asset
 }
 
 // GetAppLocalState returns app local state delta value
-func (ad NewAccountDeltas) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (AppLocalStateDelta, bool) {
+func (ad AccountDeltas) GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (AppLocalStateDelta, bool) {
 	if idx, ok := ad.appResourcesCache[AccountApp{addr, aidx}]; ok {
 		result := ad.appResources[idx].State
 		return result, result.Deleted || result.LocalState != nil
@@ -237,7 +237,7 @@ func (ad NewAccountDeltas) GetAppLocalState(addr basics.Address, aidx basics.App
 }
 
 // GetAssetHolding returns asset holding delta value
-func (ad NewAccountDeltas) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (AssetHoldingDelta, bool) {
+func (ad AccountDeltas) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (AssetHoldingDelta, bool) {
 	if idx, ok := ad.assetResourcesCache[AccountAsset{addr, aidx}]; ok {
 		result := ad.assetResources[idx].Holding
 		return result, result.Deleted || result.Holding != nil
@@ -246,7 +246,7 @@ func (ad NewAccountDeltas) GetAssetHolding(addr basics.Address, aidx basics.Asse
 }
 
 // ModifiedAccounts returns list of addresses of modified accounts
-func (ad NewAccountDeltas) ModifiedAccounts() []basics.Address {
+func (ad AccountDeltas) ModifiedAccounts() []basics.Address {
 	result := make([]basics.Address, len(ad.accts))
 	for i := 0; i < len(ad.accts); i++ {
 		result[i] = ad.accts[i].Addr
@@ -283,7 +283,7 @@ func (ad NewAccountDeltas) ModifiedAccounts() []basics.Address {
 }
 
 // MergeAccounts applies other accounts into this StateDelta accounts
-func (ad *NewAccountDeltas) MergeAccounts(other NewAccountDeltas) {
+func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
 	for new := range other.accts {
 		addr := other.accts[new].Addr
 		acct := other.accts[new].AccountData
@@ -303,7 +303,7 @@ func (ad *NewAccountDeltas) MergeAccounts(other NewAccountDeltas) {
 }
 
 // GetResource looks up a pair of app or asset resources, given its index and type.
-func (ad NewAccountDeltas) GetResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ret AccountResource, ok bool) {
+func (ad AccountDeltas) GetResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ret AccountResource, ok bool) {
 	switch ctype {
 	case basics.AssetCreatable:
 		aa := AccountAsset{addr, basics.AssetIndex(aidx)}
@@ -326,18 +326,18 @@ func (ad NewAccountDeltas) GetResource(addr basics.Address, aidx basics.Creatabl
 }
 
 // Len returns number of stored accounts
-func (ad *NewAccountDeltas) Len() int {
+func (ad *AccountDeltas) Len() int {
 	return len(ad.accts)
 }
 
 // GetByIdx returns address and AccountData
 // It does NOT check boundaries.
-func (ad *NewAccountDeltas) GetByIdx(i int) (basics.Address, AccountData) {
+func (ad *AccountDeltas) GetByIdx(i int) (basics.Address, AccountData) {
 	return ad.accts[i].Addr, ad.accts[i].AccountData
 }
 
 // Upsert adds ledgercore.AccountData into deltas
-func (ad *NewAccountDeltas) Upsert(addr basics.Address, data AccountData) {
+func (ad *AccountDeltas) Upsert(addr basics.Address, data AccountData) {
 	if idx, exist := ad.acctsCache[addr]; exist { // nil map lookup is OK
 		ad.accts[idx] = NewBalanceRecord{Addr: addr, AccountData: data}
 		return
@@ -353,7 +353,7 @@ func (ad *NewAccountDeltas) Upsert(addr basics.Address, data AccountData) {
 }
 
 // UpsertAppResource adds AppParams and AppLocalState delta
-func (ad *NewAccountDeltas) UpsertAppResource(addr basics.Address, aidx basics.AppIndex, params AppParamsDelta, state AppLocalStateDelta) {
+func (ad *AccountDeltas) UpsertAppResource(addr basics.Address, aidx basics.AppIndex, params AppParamsDelta, state AppLocalStateDelta) {
 	key := AccountApp{addr, aidx}
 	value := AppResourceRecord{aidx, addr, params, state}
 	if idx, exist := ad.appResourcesCache[key]; exist {
@@ -371,7 +371,7 @@ func (ad *NewAccountDeltas) UpsertAppResource(addr basics.Address, aidx basics.A
 }
 
 // UpsertAssetResource adds AssetParams and AssetHolding delta
-func (ad *NewAccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.AssetIndex, params AssetParamsDelta, holding AssetHoldingDelta) {
+func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.AssetIndex, params AssetParamsDelta, holding AssetHoldingDelta) {
 	key := AccountAsset{addr, aidx}
 	value := AssetResourceRecord{aidx, addr, params, holding}
 	if idx, exist := ad.assetResourcesCache[key]; exist {
@@ -392,21 +392,21 @@ func (ad *NewAccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
-	if uint64(cap(sd.NewAccts.accts)-len(sd.NewAccts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
-		accts := make([]NewBalanceRecord, len(sd.NewAccts.acctsCache))
-		copy(accts, sd.NewAccts.accts)
-		sd.NewAccts.accts = accts
+	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+		accts := make([]NewBalanceRecord, len(sd.Accts.acctsCache))
+		copy(accts, sd.Accts.accts)
+		sd.Accts.accts = accts
 	}
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
 	// realloc if original allocation capacity greater than length of data, and space difference is significant
-	if 2*sd.initialTransactionsCount > len(sd.NewAccts.acctsCache) &&
-		uint64(2*sd.initialTransactionsCount-len(sd.NewAccts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
-		acctsCache := make(map[basics.Address]int, len(sd.NewAccts.acctsCache))
-		for k, v := range sd.NewAccts.acctsCache {
+	if 2*sd.initialTransactionsCount > len(sd.Accts.acctsCache) &&
+		uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
+		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v
 		}
-		sd.NewAccts.acctsCache = acctsCache
+		sd.Accts.acctsCache = acctsCache
 	}
 
 	// TxLeases takes up 112 bytes per entry, and is saved for 1000 rounds
@@ -431,7 +431,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 
 // GetBasicsAccountData returns basics account data for some specific address
 // Currently is only used in tests
-func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.AccountData, bool) {
+func (ad AccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.AccountData, bool) {
 	idx, ok := ad.acctsCache[addr]
 	if !ok {
 		return basics.AccountData{}, false
@@ -489,7 +489,7 @@ func (ad NewAccountDeltas) GetBasicsAccountData(addr basics.Address) (basics.Acc
 }
 
 // ToModifiedCreatables is only used in tests, to create a map of ModifiedCreatable.
-func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]struct{}) map[basics.CreatableIndex]ModifiedCreatable {
+func (ad AccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]struct{}) map[basics.CreatableIndex]ModifiedCreatable {
 	result := make(map[basics.CreatableIndex]ModifiedCreatable, len(ad.appResources)+len(ad.assetResources))
 	for aapp, idx := range ad.appResourcesCache {
 		rec := ad.appResources[idx]
@@ -533,7 +533,7 @@ func (ad NewAccountDeltas) ToModifiedCreatables(seen map[basics.CreatableIndex]s
 }
 
 // AccumulateDeltas adds delta into base accounts map in-place
-func AccumulateDeltas(base map[basics.Address]basics.AccountData, deltas NewAccountDeltas) map[basics.Address]basics.AccountData {
+func AccumulateDeltas(base map[basics.Address]basics.AccountData, deltas AccountDeltas) map[basics.Address]basics.AccountData {
 	for i := 0; i < deltas.Len(); i++ {
 		addr, _ := deltas.GetByIdx(i)
 		if acct, ok := deltas.GetData(addr); ok {
@@ -616,7 +616,7 @@ func AccumulateDeltas(base map[basics.Address]basics.AccountData, deltas NewAcco
 }
 
 // ApplyToBasicsAccountData applies partial delta from "ad" to a full account data "prev" and returns a deep copy
-func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basics.AccountData) (result basics.AccountData) {
+func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basics.AccountData) (result basics.AccountData) {
 	// set the base part of account data (balance, status, voting data...)
 	acct, ok := ad.GetData(addr)
 	if !ok {
@@ -709,11 +709,11 @@ func (ad NewAccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev ba
 }
 
 // GetAllAppResources returns all AppResourceRecords
-func (ad *NewAccountDeltas) GetAllAppResources() []AppResourceRecord {
+func (ad *AccountDeltas) GetAllAppResources() []AppResourceRecord {
 	return ad.appResources
 }
 
 // GetAllAssetResources returns all AssetResourceRecords
-func (ad *NewAccountDeltas) GetAllAssetResources() []AssetResourceRecord {
+func (ad *AccountDeltas) GetAllAssetResources() []AssetResourceRecord {
 	return ad.assetResources
 }

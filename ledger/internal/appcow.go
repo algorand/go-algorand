@@ -660,7 +660,7 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			// from TEAL by writing into KV store.
 			// This is OK although KV deletion and allocation must be preceded by updating counters in base account record,
 			// so ensure the base record was updated and placed into deltas
-			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
 				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
 			// fetch AppLocalState to store along with deleted AppParams
@@ -668,9 +668,9 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
-			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, ledgercore.AppParamsDelta{Deleted: true}, state)
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, ledgercore.AppParamsDelta{Deleted: true}, state)
 		case allocAction:
-			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
 				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
 			fallthrough
@@ -707,12 +707,12 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
-			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, state)
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, params, state)
 		}
 	} else {
 		switch storeDelta.action {
 		case deallocAction:
-			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
 				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
 			// fetch AppParams to store along with deleted AppLocalState
@@ -720,9 +720,9 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
-			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, ledgercore.AppLocalStateDelta{Deleted: true})
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, params, ledgercore.AppLocalStateDelta{Deleted: true})
 		case allocAction:
-			if _, ok := cb.mods.NewAccts.GetData(addr); !ok {
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
 				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
 			fallthrough
@@ -760,7 +760,7 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 			if err != nil {
 				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
 			}
-			cb.mods.NewAccts.UpsertAppResource(addr, aapp.aidx, params, states)
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, params, states)
 		}
 	}
 	return nil

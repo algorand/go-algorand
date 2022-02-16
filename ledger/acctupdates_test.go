@@ -453,7 +453,7 @@ func TestAcctUpdates(t *testing.T) {
 	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates ledgercore.NewAccountDeltas
+		var updates ledgercore.AccountDeltas
 		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
@@ -475,7 +475,7 @@ func TestAcctUpdates(t *testing.T) {
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
@@ -507,7 +507,7 @@ func TestAcctUpdates(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var updates ledgercore.NewAccountDeltas
+	var updates ledgercore.AccountDeltas
 	for addr, acctData := range accts[dbRound] {
 		updates.Upsert(addr, ledgercore.ToAccountData(acctData))
 	}
@@ -583,7 +583,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -671,7 +671,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		blk.CurrentProtocol = protocolVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -799,7 +799,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		blk.CurrentProtocol = testProtocolVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -960,7 +960,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 			delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, len(updates), 0)
 			for addr, ad := range updates {
-				delta.NewAccts.Upsert(addr, ad)
+				delta.Accts.Upsert(addr, ad)
 			}
 			au.newBlock(blk, delta)
 			ml.trackers.committedUpTo(i)
@@ -1271,7 +1271,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 			b.N = 500
 		}
 		window := 5000
-		accountDeltas := make([]ledgercore.NewAccountDeltas, b.N)
+		accountDeltas := make([]ledgercore.AccountDeltas, b.N)
 		addrs := make([]basics.Address, b.N*window)
 		for i := 0; i < len(addrs); i++ {
 			addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
@@ -1303,7 +1303,7 @@ func TestCompactDeltas(t *testing.T) {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
-	accountDeltas := make([]ledgercore.NewAccountDeltas, 1)
+	accountDeltas := make([]ledgercore.AccountDeltas, 1)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1)
 	creatableDeltas[0] = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	accountDeltas[0].Upsert(addrs[0], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 2}}})
@@ -1334,7 +1334,7 @@ func TestCompactDeltas(t *testing.T) {
 	baseAccounts.init(nil, 100, 80)
 
 	// add another round
-	accountDeltas = append(accountDeltas, ledgercore.NewAccountDeltas{})
+	accountDeltas = append(accountDeltas, ledgercore.AccountDeltas{})
 	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable))
 	accountDeltas[1].Upsert(addrs[0], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 3}}})
 	accountDeltas[1].Upsert(addrs[3], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 8}}})
@@ -1380,7 +1380,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	baseResources.init(nil, 100, 80)
 
 	// check empty deltas do no produce empty resourcesData records
-	accountDeltas := make([]ledgercore.NewAccountDeltas, 1)
+	accountDeltas := make([]ledgercore.AccountDeltas, 1)
 	accountDeltas[0].UpsertAppResource(addrs[0], 100, ledgercore.AppParamsDelta{Deleted: true}, ledgercore.AppLocalStateDelta{})
 	accountDeltas[0].UpsertAppResource(addrs[1], 101, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
 	accountDeltas[0].UpsertAssetResource(addrs[2], 102, ledgercore.AssetParamsDelta{Deleted: true}, ledgercore.AssetHoldingDelta{})
@@ -1408,7 +1408,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	// check actual data on non-empty input
-	accountDeltas = make([]ledgercore.NewAccountDeltas, 1)
+	accountDeltas = make([]ledgercore.AccountDeltas, 1)
 	// addr 0 has app params and a local state for another app
 	appParams100 := basics.AppParams{ApprovalProgram: []byte{100}}
 	appLocalState200 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"200": basics.TealValue{Type: basics.TealBytesType, Bytes: "200"}}}
@@ -1510,7 +1510,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	}
 
 	// add another round
-	accountDeltas = append(accountDeltas, ledgercore.NewAccountDeltas{})
+	accountDeltas = append(accountDeltas, ledgercore.AccountDeltas{})
 	accountDeltas[1].Upsert(addrs[0], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 3}}})
 	accountDeltas[1].Upsert(addrs[3], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 8}}})
 
@@ -1601,7 +1601,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		blk.CurrentProtocol = protocolVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
@@ -1701,7 +1701,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		blk.CurrentProtocol = initProtocolVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
@@ -1737,7 +1737,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		blk.CurrentProtocol = newVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
@@ -1820,7 +1820,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		blk.CurrentProtocol = initProtocolVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
@@ -1855,7 +1855,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		blk.CurrentProtocol = newVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
@@ -1892,7 +1892,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		blk.CurrentProtocol = newVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
@@ -1964,7 +1964,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3+2+2); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates ledgercore.NewAccountDeltas
+		var updates ledgercore.AccountDeltas
 
 		// test 1: modify state as needed for the tests: create, delete, create
 		// expect no errors on accounts writing
@@ -2034,7 +2034,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = testProtocolVersion
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
@@ -2203,7 +2203,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates ledgercore.NewAccountDeltas
+		var updates ledgercore.AccountDeltas
 		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
@@ -2225,7 +2225,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		blk.CurrentProtocol = testProtocolVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.NewAccts.MergeAccounts(updates)
+		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		au.newBlock(blk, delta)

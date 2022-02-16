@@ -37,7 +37,7 @@ func TestAccountDeltas(t *testing.T) {
 
 	a := require.New(t)
 
-	ad := NewAccountDeltas{}
+	ad := AccountDeltas{}
 	data, ok := ad.GetData(basics.Address{})
 	a.False(ok)
 	a.Equal(AccountData{}, data)
@@ -76,7 +76,7 @@ func TestAccountDeltas(t *testing.T) {
 
 	a.Equal([]basics.Address{addr}, ad.ModifiedAccounts())
 
-	ad2 := NewAccountDeltas{}
+	ad2 := AccountDeltas{}
 	ad2.Upsert(addr, sample2)
 	ad.MergeAccounts(ad2)
 	a.Equal(1, ad.Len())

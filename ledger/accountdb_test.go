@@ -178,7 +178,7 @@ func TestAccountDBInit(t *testing.T) {
 }
 
 // creatablesFromUpdates calculates creatables from updates
-func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.NewAccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
+func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
 	known := make(map[basics.CreatableIndex]struct{}, len(seen))
 	for aidx := range seen {
 		known[aidx] = struct{}{}
@@ -194,7 +194,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates l
 	return updates.ToModifiedCreatables(known)
 }
 
-func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.NewAccountDeltas) map[basics.Address]basics.AccountData {
+func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.AccountDeltas) map[basics.Address]basics.AccountData {
 	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
 	for addr, ad := range base {
 		result[addr] = ad
@@ -245,15 +245,15 @@ func TestAccountDBRound(t *testing.T) {
 	baseAccounts.init(nil, 100, 80)
 	baseResources.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
-		var updates ledgercore.NewAccountDeltas
+		var updates ledgercore.AccountDeltas
 		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
 		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 		accts = applyPartialDeltas(accts, updates)
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegment)
 
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), true, baseAccounts)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
@@ -284,7 +284,7 @@ func TestAccountDBRound(t *testing.T) {
 	}
 
 	// test the accounts totals
-	var updates ledgercore.NewAccountDeltas
+	var updates ledgercore.AccountDeltas
 	for addr, acctData := range newacctsTotals {
 		updates.Upsert(addr, acctData)
 	}
@@ -312,11 +312,11 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	type testfunc func(basics.Address) ([]ledgercore.NewAccountDeltas, int, int)
+	type testfunc func(basics.Address) ([]ledgercore.AccountDeltas, int, int)
 	var tests = []testfunc{
-		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+		func(addr basics.Address) ([]ledgercore.AccountDeltas, int, int) {
 			const numRounds = 4
-			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas := make([]ledgercore.AccountDeltas, numRounds)
 			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
 			accountDeltas[0].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
 			// transfer some asset
@@ -327,9 +327,9 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			accountDeltas[3].Upsert(addr, ledgercore.AccountData{})
 			return accountDeltas, 2, 3
 		},
-		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+		func(addr basics.Address) ([]ledgercore.AccountDeltas, int, int) {
 			const numRounds = 4
-			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas := make([]ledgercore.AccountDeltas, numRounds)
 			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
 			accountDeltas[1].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
 			// close out the asset
@@ -2518,7 +2518,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	err = mock.setResource(addr1, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppLocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
 	a.NoError(err)
 
-	updates := make([]ledgercore.NewAccountDeltas, 4)
+	updates := make([]ledgercore.AccountDeltas, 4)
 	// payment addr1 -> observer
 	updates[0].Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 9000000}, TotalAppLocalStates: 1}})
 	updates[0].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 11000000}, TotalAppParams: 1}})
@@ -2614,7 +2614,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	err = mock.setResource(addr1, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppLocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
 	a.NoError(err)
 
-	updates := make([]ledgercore.NewAccountDeltas, 3)
+	updates := make([]ledgercore.AccountDeltas, 3)
 	// fund addr2, opt-in, delete app, move funds
 	updates[0].Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAppLocalStates: 1}})
 	updates[0].UpsertAppResource(addr2, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})

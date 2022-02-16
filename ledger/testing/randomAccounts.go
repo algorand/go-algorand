@@ -284,23 +284,23 @@ func RandomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 }
 
 // RandomDeltas generates a random set of accounts delta
-func RandomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
+func RandomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
 	updates, totals, imbalance, _ = RandomDeltasImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
 // RandomDeltasFull generates a random set of accounts delta
-func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
+func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
 	updates, totals, imbalance, lastCreatableID = RandomDeltasImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
 // RandomDeltasImpl generates a random set of accounts delta
-func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
+func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	totals = make(map[basics.Address]ledgercore.AccountData)
 
-	updates = ledgercore.MakeNewAccountDeltas(len(base))
+	updates = ledgercore.MakeAccountDeltas(len(base))
 
 	// copy base -> totals
 	for addr, data := range base {
@@ -487,19 +487,19 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 }
 
 // RandomDeltasBalanced generates a random set of accounts delta
-func RandomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData) {
+func RandomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData) {
 	updates, totals, _ = RandomDeltasBalancedImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
 // RandomDeltasBalancedFull generates a random set of accounts delta
-func RandomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
+func RandomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
 	updates, totals, lastCreatableID = RandomDeltasBalancedImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
 // RandomDeltasBalancedImpl generates a random set of accounts delta
-func RandomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
+func RandomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
 	var imbalance int64
 	if simple {
 		updates, totals, imbalance = RandomDeltas(niter, base, rewardsLevel)
