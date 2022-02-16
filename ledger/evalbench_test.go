@@ -104,14 +104,12 @@ type BenchAppOptInsTxnGenerator struct {
 	Program             []byte
 	OptedInAccts        []basics.Address
 	OptedInAcctsIndices []int
+	MaxAppsOptedIn      int
 }
 
 func (g *BenchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) ([]transactions.SignedTxn, int) {
 	maxLocalSchemaEntries := config.Consensus[g.Proto].MaxLocalSchemaEntries
-	maxAppsOptedIn := config.Consensus[g.Proto].MaxAppsOptedIn
-	if maxAppsOptedIn == 0 {
-		maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
-	}
+	maxAppsOptedIn := g.MaxAppsOptedIn
 
 	// this function might create too much transaction even to fit into a single block
 	// estimate number of smaller blocks needed in order to set LastValid properly
@@ -240,9 +238,10 @@ func BenchmarkBlockEvaluatorDiskNoCrypto(b *testing.B) {
 
 func BenchmarkBlockEvaluatorDiskAppOptIns(b *testing.B) {
 	g := BenchAppOptInsTxnGenerator{
-		NumApps: 500,
-		Proto:   protocol.ConsensusFuture,
-		Program: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+		NumApps:        500,
+		Proto:          protocol.ConsensusFuture,
+		Program:        []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+		MaxAppsOptedIn: config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }
@@ -281,9 +280,10 @@ done:
 	require.NoError(b, err)
 	prog := ops.Program
 	g := BenchAppOptInsTxnGenerator{
-		NumApps: 500,
-		Proto:   protocol.ConsensusFuture,
-		Program: prog,
+		NumApps:        500,
+		Proto:          protocol.ConsensusFuture,
+		Program:        prog,
+		MaxAppsOptedIn: config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }
@@ -316,12 +316,14 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	testingLog := logging.TestingLog(b)
+	testingLog.SetLevel(logging.Error)
+	l, err := OpenLedger(testingLog, dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer testLedgerCleanup(l, dbName, inMem)
 
 	dbName2 := dbName + "_2"
-	l2, err := OpenLedger(logging.Base(), dbName2, inMem, genesisInitState, cfg)
+	l2, err := OpenLedger(testingLog, dbName2, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer testLedgerCleanup(l2, dbName2, inMem)
 
@@ -341,14 +343,51 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		}()
 	}
 
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	// test speed of block building
+	numTxns := 50000
+
+	validatedBlock := benchmarkPreparePaymentTransactionsTesting(b, numTxns, txnSource, genesisInitState, addrs, keys, l, l2)
+
+	blockBuildDone := time.Now()
+	setupTime := blockBuildDone.Sub(start)
+	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
+
+	err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	require.NoError(b, err)
+
+	avbDone := time.Now()
+	avbTime := avbDone.Sub(blockBuildDone)
+	b.ReportMetric(float64(avbTime)/float64(numTxns), "ns/AddValidatedBlock_tx")
+
+	// test speed of block validation
+	// This should be the same as the eval line in ledger.go AddBlock()
+	// This is pulled out to isolate Eval() time from db ops of AddValidatedBlock()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if withCrypto {
+			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
+		} else {
+			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
+		}
+		require.NoError(b, err)
+	}
+
+	abDone := time.Now()
+	abTime := abDone.Sub(avbDone)
+	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
+
+	b.StopTimer()
+}
+
+func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSource BenchTxnGenerator, genesisInitState ledgercore.InitState, addrs []basics.Address, keys []*crypto.SignatureSecrets, l, l2 *Ledger) *ledgercore.ValidatedBlock {
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
 
 	// apply initialization transations if any
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
@@ -360,7 +399,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		// there are might more transactions than MaxTxnBytesPerBlock allows
 		// so make smaller blocks to fit
 		for i, stxn := range initSignedTxns {
-			err = bev.Transaction(stxn, transactions.ApplyData{})
+			err := bev.Transaction(stxn, transactions.ApplyData{})
 			require.NoError(b, err)
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
 				validatedBlock, err = bev.GenerateBlock()
@@ -396,11 +435,6 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	}
 
 	setupDone := time.Now()
-	setupTime := setupDone.Sub(start)
-	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
-
-	// test speed of block building
-	numTxns := 50000
 
 	for i := 0; i < numTxns; i++ {
 		stxn := txnSource.Txn(b, addrs, keys, newBlock.Round(), genHash)
@@ -415,29 +449,5 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	blockBuildTime := blockBuildDone.Sub(setupDone)
 	b.ReportMetric(float64(blockBuildTime)/float64(numTxns), "ns/block_build_tx")
 
-	err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
-	require.NoError(b, err)
-
-	avbDone := time.Now()
-	avbTime := avbDone.Sub(blockBuildDone)
-	b.ReportMetric(float64(avbTime)/float64(numTxns), "ns/AddValidatedBlock_tx")
-
-	// test speed of block validation
-	// This should be the same as the eval line in ledger.go AddBlock()
-	// This is pulled out to isolate Eval() time from db ops of AddValidatedBlock()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if withCrypto {
-			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
-		} else {
-			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
-		}
-		require.NoError(b, err)
-	}
-
-	abDone := time.Now()
-	abTime := abDone.Sub(avbDone)
-	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
-
-	b.StopTimer()
+	return validatedBlock
 }
