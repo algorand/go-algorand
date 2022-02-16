@@ -488,7 +488,7 @@ func (cs *roundCowState) CloseAccount(addr basics.Address) error {
 }
 
 func (cs *roundCowState) putAccount(addr basics.Address, acct ledgercore.AccountData) error {
-	cs.mods.NewAccts.Upsert(addr, acct)
+	cs.mods.Accts.Upsert(addr, acct)
 	return nil
 }
 
@@ -1334,7 +1334,7 @@ func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
 
 	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
 		accountAddr := modifiedAccounts[i]
-		acctDelta, found := eval.state.mods.NewAccts.GetData(accountAddr)
+		acctDelta, found := eval.state.mods.Accts.GetData(accountAddr)
 		if !found {
 			continue
 		}

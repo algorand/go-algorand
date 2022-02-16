@@ -127,7 +127,7 @@ func TestPayAction(t *testing.T) {
 	vb = endBlock(t, l, eval)
 
 	deltas := vb.Delta()
-	require.Contains(t, deltas.NewAccts.ModifiedAccounts(), addrs[2])
+	require.Contains(t, deltas.Accts.ModifiedAccounts(), addrs[2])
 
 	payInBlock := vb.Block().Payset[0]
 	rewards := payInBlock.ApplyData.SenderRewards.Raw

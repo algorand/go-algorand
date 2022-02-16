@@ -191,7 +191,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
-	ad, _ := deltas.NewAccts.GetBasicsAccountData(addr)
+	ad, _ := deltas.Accts.GetBasicsAccountData(addr)
 	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
@@ -589,10 +589,10 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	// convert deltas into balance records
 	// the code assumes all modified accounts has entries in NewAccts.accts
 	// to enforce this fact we call ModifiedAccounts() with a panic as a side effect
-	deltas.NewAccts.ModifiedAccounts()
-	for i := 0; i < deltas.NewAccts.Len(); i++ {
-		addr, _ := deltas.NewAccts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
-		accountData, _ := deltas.NewAccts.GetBasicsAccountData(addr)
+	deltas.Accts.ModifiedAccounts()
+	for i := 0; i < deltas.Accts.Len(); i++ {
+		addr, _ := deltas.Accts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
+		accountData, _ := deltas.Accts.GetBasicsAccountData(addr)
 		newBalances[addr] = accountData
 	}
 	ledger.roundBalances[vb.Block().Round()] = newBalances
@@ -992,7 +992,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	require.Error(t, err)
 
 	eval.block.ExpiredParticipationAccounts = []basics.Address{{}}
-	eval.state.mods.NewAccts = ledgercore.NewAccountDeltas{}
+	eval.state.mods.Accts = ledgercore.AccountDeltas{}
 	eval.state.lookupParent = &failRoundCowParent{}
 	err = eval.endOfBlock()
 	require.Error(t, err)
