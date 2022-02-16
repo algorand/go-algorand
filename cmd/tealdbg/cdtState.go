@@ -839,6 +839,7 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 	fields := prepareGlobals(s.globals)
 	desc = make([]cdt.RuntimePropertyDescriptor, len(fields))
 	for i, field := range fields {
+		// We need to dynamically override this field with the proper value each step.
 		if field.Name == "OpcodeBudget" {
 			field.Value = strconv.Itoa(s.opcodeBudget)
 		}
@@ -899,8 +900,16 @@ func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, pre
 
 	logs := makeArray("logs", len(txn.EvalDelta.Logs), encodeLogsID(groupIndexes))
 	innerTxns := makeArray("innerTxns", len(txn.EvalDelta.InnerTxns), encodeNestedInnerTxnID(groupIndexes))
-	createdApplicationID := fieldDesc{Name: "CreatedApplicationID", Value: strconv.Itoa(int(txn.ApplicationID)), Type: "number"}
-	configAsset := fieldDesc{Name: "CreatedAssetID", Value: strconv.Itoa(int(txn.ConfigAsset)), Type: "number"}
+	createdApplicationID := fieldDesc{
+		Name:  "CreatedApplicationID",
+		Value: strconv.FormatUint(uint64(txn.ApplicationID), 10),
+		Type:  "number",
+	}
+	configAsset := fieldDesc{
+		Name:  "CreatedAssetID",
+		Value: strconv.FormatUint(uint64(txn.ConfigAsset), 10),
+		Type:  "number",
+	}
 	desc = append(
 		desc,
 		logs,
