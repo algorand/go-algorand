@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -636,7 +637,7 @@ func scenarioD(
 
 	client := fixture.LibGoalClient
 
-	numberOfApps := uint64(1000000) // 6M
+	numberOfApps := uint64(100000) // 6M
 	defer func() {
 		close(txnChan)
 		close(txnGrpChan)
@@ -675,26 +676,54 @@ func scenarioD(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
 
-	// check the app in the account
-	checked := uint64(0)
+	// check the results in parallel
+	parallelCheckers := 8
+	checkAppChan := make(chan uint64, 1)
+	checkResChan := make(chan uint64, parallelCheckers)
+	var wg sync.WaitGroup
+	var globalStateCheckMu deadlock.Mutex
 
-	for i := uint64(0); checked < numberOfApps; i++ {
+	for p := 0; p < parallelCheckers; p++ {
+		wg.Add(1)
+		go func() {
+			for i := range checkAppChan {
+				app, err := client.ApplicationInformation(i)
+				if err != nil {
+					continue
+				}
+				checkResChan <- 1
+				checkApplicationParams(
+					t,
+					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
+					app.Params,
+					baseAcct.pk.String(),
+					&globalStateCheck,
+					globalStateCheckMu)
+			}
+			wg.Done()
+		}()
+	}
+
+	checked := uint64(0)
+	for i := uint64(0); checked < numberOfApps;  {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
+		case val := <-checkResChan:
+			checked += val
+		case checkAppChan <- i:
+			i++
 		default:
+			time.Sleep(10*time.Millisecond)
 		}
 
-		app, err := client.ApplicationInformation(i)
-		if err != nil {
-			continue
-		}
 		if int(checked)%printFreequency == 0 {
 			fmt.Printf("check app params %d / %d\n", checked, numberOfApps)
 		}
-		checkApplicationParams(t, appCallFields[(*app.Params.GlobalState)[0].Value.Uint], app.Params, baseAcct.pk.String(), &globalStateCheck)
-		checked++
 	}
+	close(checkAppChan)
+	wg.Wait()
+
 	for _, x := range globalStateCheck {
 		require.True(t, x)
 
@@ -891,13 +920,19 @@ func checkApplicationParams(
 	acTF transactions.ApplicationCallTxnFields,
 	app generated.ApplicationParams,
 	creator string,
-	globalStateCheck *[]bool) {
+	globalStateCheck *[]bool,
+	globalStateCheckMu deadlock.Mutex) {
 
 	require.Equal(t, acTF.ApprovalProgram, app.ApprovalProgram)
 	require.Equal(t, acTF.ClearStateProgram, app.ClearStateProgram)
 	require.Equal(t, creator, app.Creator)
-	require.False(t, (*globalStateCheck)[(*app.GlobalState)[0].Value.Uint])
+
+	var oldVal bool
+	globalStateCheckMu.Lock()
+	oldVal = (*globalStateCheck)[(*app.GlobalState)[0].Value.Uint]
 	(*globalStateCheck)[(*app.GlobalState)[0].Value.Uint] = true
+	globalStateCheckMu.Unlock()
+	require.False(t, oldVal)
 
 	require.Equal(t, acTF.GlobalStateSchema.NumByteSlice, app.GlobalStateSchema.NumByteSlice)
 	require.Equal(t, acTF.GlobalStateSchema.NumUint, app.GlobalStateSchema.NumUint)
