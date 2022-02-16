@@ -760,6 +760,8 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 		}
 		tmp := genesisInitState.Accounts[addr]
 		tmp.Status = basics.Online
+		crypto.RandBytes(tmp.StateProofID[:])
+		crypto.RandBytes(tmp.SelectionID[:])
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -819,6 +821,11 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
 	require.NoError(t, err)
+
+	acctData, _ := blkEval.state.lookup(recvAddr)
+
+	require.Equal(t, merklesignature.Verifier{}, acctData.StateProofID)
+	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
 
 	badBlock := *validatedBlock
 
