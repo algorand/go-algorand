@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ import (
 )
 
 const numberOfThreads = 256
-const printFreequency = 200
+const printFreequency = 1000
 const groupTransactions = true
 const channelDepth = 100
 
@@ -637,7 +638,7 @@ func scenarioD(
 
 	client := fixture.LibGoalClient
 
-	numberOfApps := uint64(100000) // 6M
+	numberOfApps := uint64(600000) // 6M
 	defer func() {
 		close(txnChan)
 		close(txnGrpChan)
@@ -677,8 +678,8 @@ func scenarioD(
 	require.NoError(t, err)
 
 	// check the results in parallel
-	parallelCheckers := 8
-	checkAppChan := make(chan uint64, 1)
+	parallelCheckers := numberOfThreads
+	checkAppChan := make(chan uint64, parallelCheckers)
 	checkResChan := make(chan uint64, parallelCheckers)
 	var wg sync.WaitGroup
 	var globalStateCheckMu deadlock.Mutex
@@ -686,12 +687,27 @@ func scenarioD(
 	for p := 0; p < parallelCheckers; p++ {
 		wg.Add(1)
 		go func() {
+			lastAppId := uint64(0)
 			for i := range checkAppChan {
-				app, err := client.ApplicationInformation(i)
-				if err != nil {
+				var app generated.Application
+				cont := false
+				for {
+					app, err = client.ApplicationInformation(i)
+					if err != nil {
+						if strings.Contains(err.Error(), "application does not exist") {
+							cont = true
+							break
+						}
+						time.Sleep(time.Millisecond * 100)
+						continue
+					}
+					break
+				}
+				if cont {
 					continue
 				}
 				checkResChan <- 1
+				lastAppId = i
 				checkApplicationParams(
 					t,
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
@@ -700,12 +716,13 @@ func scenarioD(
 					&globalStateCheck,
 					globalStateCheckMu)
 			}
+			fmt.Printf("Last app id: %d\n", lastAppId)
 			wg.Done()
 		}()
 	}
 
 	checked := uint64(0)
-	for i := uint64(0); checked < numberOfApps;  {
+	for i := uint64(0); checked < numberOfApps; {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
@@ -714,9 +731,8 @@ func scenarioD(
 		case checkAppChan <- i:
 			i++
 		default:
-			time.Sleep(10*time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
-
 		if int(checked)%printFreequency == 0 {
 			fmt.Printf("check app params %d / %d\n", checked, numberOfApps)
 		}
