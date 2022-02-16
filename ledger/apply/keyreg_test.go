@@ -196,7 +196,7 @@ func TestKeyregApply(t *testing.T) {
 	}
 }
 
-func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
+func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal *keyregTestBalances) {
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
 
