@@ -1,4 +1,6 @@
 {
+    "NetAddress": "{{NetworkPort}}",
+    "APIEndpoint": "{{APIEndpoint}}",
     "APIToken": "{{APIToken}}",
     "EnableBlockStats": false,
     "EnableTelemetry": false,
