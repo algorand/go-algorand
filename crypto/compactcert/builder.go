@@ -201,17 +201,17 @@ func (b *Builder) Build() (*Cert, error) {
 
 	var proofPositions []uint64
 
-	for j := uint64(0); j < nr; j++ {
-		choice := coinChoice{
-			J:            j,
-			SignedWeight: c.SignedWeight,
-			ProvenWeight: b.ProvenWeight,
-			Sigcom:       c.SigCommit,
-			Partcom:      b.parttree.Root(),
-			Msg:          b.Params.StateProofMessageHash,
-		}
+	choice := coinChoiceSeed{
+		SignedWeight: c.SignedWeight,
+		ProvenWeight: b.ProvenWeight,
+		Sigcom:       c.SigCommit,
+		Partcom:      b.parttree.Root(),
+		MsgHash:      b.Msg,
+	}
+	coinHash := MakeCoinHash(choice)
 
-		coin := hashCoin(choice)
+	for j := uint64(0); j < nr; j++ {
+		coin := coinHash.getNextCoin()
 		pos, err := b.coinIndex(coin)
 		if err != nil {
 			return nil, err

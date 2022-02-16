@@ -132,9 +132,9 @@ func BenchmarkUnmarshalReveal(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalStateProofMessageHash(t *testing.T) {
+func TestMarshalUnmarshalcoinChoiceSeed(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := StateProofMessageHash{}
+	v := coinChoiceSeed{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -153,12 +153,12 @@ func TestMarshalUnmarshalStateProofMessageHash(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingStateProofMessageHash(t *testing.T) {
-	protocol.RunEncodingTest(t, &StateProofMessageHash{})
+func TestRandomizedEncodingcoinChoiceSeed(t *testing.T) {
+	protocol.RunEncodingTest(t, &coinChoiceSeed{})
 }
 
-func BenchmarkMarshalMsgStateProofMessageHash(b *testing.B) {
-	v := StateProofMessageHash{}
+func BenchmarkMarshalMsgcoinChoiceSeed(b *testing.B) {
+	v := coinChoiceSeed{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -166,8 +166,8 @@ func BenchmarkMarshalMsgStateProofMessageHash(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgStateProofMessageHash(b *testing.B) {
-	v := StateProofMessageHash{}
+func BenchmarkAppendMsgcoinChoiceSeed(b *testing.B) {
+	v := coinChoiceSeed{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -178,68 +178,8 @@ func BenchmarkAppendMsgStateProofMessageHash(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalStateProofMessageHash(b *testing.B) {
-	v := StateProofMessageHash{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalcoinChoice(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := coinChoice{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingcoinChoice(t *testing.T) {
-	protocol.RunEncodingTest(t, &coinChoice{})
-}
-
-func BenchmarkMarshalMsgcoinChoice(b *testing.B) {
-	v := coinChoice{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgcoinChoice(b *testing.B) {
-	v := coinChoice{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalcoinChoice(b *testing.B) {
-	v := coinChoice{}
+func BenchmarkUnmarshalcoinChoiceSeed(b *testing.B) {
+	v := coinChoiceSeed{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

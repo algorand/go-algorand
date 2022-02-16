@@ -18,45 +18,7 @@ package compactcert
 
 import (
 	"fmt"
-	"math/big"
-
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/protocol"
 )
-
-// The coinChoice type defines the fields that go into the hash for choosing
-// the index of the coin to reveal as part of the compact certificate.
-type coinChoice struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	J            uint64                `codec:"j"`
-	SignedWeight uint64                `codec:"sigweight"`
-	ProvenWeight uint64                `codec:"provenweight"`
-	Sigcom       crypto.GenericDigest  `codec:"sigcom"`
-	Partcom      crypto.GenericDigest  `codec:"partcom"`
-	Msg          StateProofMessageHash `codec:"msg"`
-}
-
-// ToBeHashed implements the crypto.Hashable interface.
-func (cc coinChoice) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertCoin, protocol.Encode(&cc)
-}
-
-// hashCoin returns a number in [0, choice.SignedWeight) with a nearly uniform
-// distribution, "randomized" by all of the fields in choice.
-func hashCoin(choice coinChoice) uint64 {
-	h := crypto.HashObj(choice)
-
-	i := &big.Int{}
-	i.SetBytes(h[:])
-
-	w := &big.Int{}
-	w.SetUint64(choice.SignedWeight)
-
-	res := &big.Int{}
-	res.Mod(i, w)
-	return res.Uint64()
-}
 
 // numReveals computes the number of reveals necessary to achieve the desired
 // security parameters.  See section 8 of the ``Compact Certificates''

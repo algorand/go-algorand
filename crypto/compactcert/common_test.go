@@ -19,72 +19,8 @@ package compactcert
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-func TestHashCoin(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var slots [32]uint64
-	var sigcom = make(crypto.GenericDigest, HashSize)
-	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = StateProofMessageHash{}
-
-	crypto.RandBytes(sigcom[:])
-	crypto.RandBytes(partcom[:])
-	crypto.RandBytes(msgHash[:])
-
-	for j := uint64(0); j < 1000; j++ {
-		choice := coinChoice{
-			J:            j,
-			SignedWeight: uint64(len(slots)),
-			ProvenWeight: uint64(len(slots)),
-			Sigcom:       sigcom,
-			Partcom:      partcom,
-			Msg:          msgHash,
-		}
-
-		coin := hashCoin(choice)
-		if coin >= uint64(len(slots)) {
-			t.Errorf("hashCoin out of bounds")
-		}
-
-		slots[coin]++
-	}
-
-	for i, count := range slots {
-		if count < 3 {
-			t.Errorf("slot %d too low: %d", i, count)
-		}
-		if count > 100 {
-			t.Errorf("slot %d too high: %d", i, count)
-		}
-	}
-}
-
-func BenchmarkHashCoin(b *testing.B) {
-	var sigcom = make(crypto.GenericDigest, HashSize)
-	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = StateProofMessageHash{}
-
-	crypto.RandBytes(sigcom[:])
-	crypto.RandBytes(partcom[:])
-	crypto.RandBytes(msgHash[:])
-
-	for i := 0; i < b.N; i++ {
-		choice := coinChoice{
-			J:            uint64(i),
-			SignedWeight: 1024,
-			ProvenWeight: 1024,
-			Sigcom:       sigcom,
-			Partcom:      partcom,
-			Msg:          msgHash,
-		}
-
-		hashCoin(choice)
-	}
-}
 
 func TestNumReveals(t *testing.T) {
 	partitiontest.PartitionTest(t)

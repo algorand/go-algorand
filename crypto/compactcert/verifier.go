@@ -94,17 +94,17 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 
+	choice := coinChoiceSeed{
+		SignedWeight: c.SignedWeight,
+		ProvenWeight: v.ProvenWeight,
+		Sigcom:       c.SigCommit,
+		Partcom:      v.partcom,
+		MsgHash:      v.Msg,
+	}
+	coinHash := MakeCoinHash(choice)
 	for j := uint64(0); j < nr; j++ {
-		choice := coinChoice{
-			J:            j,
-			SignedWeight: c.SignedWeight,
-			ProvenWeight: v.ProvenWeight,
-			Sigcom:       c.SigCommit,
-			Partcom:      v.partcom,
-			Msg:          msghash,
-		}
 
-		coin := hashCoin(choice)
+		coin := coinHash.getNextCoin()
 		matchingReveal := false
 		for _, r := range c.Reveals {
 			if r.SigSlot.L <= coin && coin < r.SigSlot.L+r.Part.Weight {
