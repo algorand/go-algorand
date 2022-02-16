@@ -467,7 +467,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		}
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = testProtocolVersion
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta := ledgercore.MakeStateDelta(basics.Round(i), rewardLevel, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals

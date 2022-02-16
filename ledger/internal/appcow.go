@@ -557,10 +557,7 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 				}
 
 				d := sdelta.kvCow.serialize()
-				// noEmptyDeltas restricts producing empty local deltas in general
-				// but allows it for a period of time when a buggy version was live
-				noEmptyDeltas := cb.proto.NoEmptyLocalDeltas || (cb.mods.Hdr.CurrentProtocol == protocol.ConsensusV24) && (cb.mods.Hdr.NextProtocol != protocol.ConsensusV26)
-				if !noEmptyDeltas || len(d) != 0 {
+				if !cb.noEmptyDeltas || len(d) != 0 {
 					evalDelta.LocalDeltas[addrOffset] = d
 				}
 			}

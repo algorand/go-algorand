@@ -107,7 +107,7 @@ type modsData struct {
 
 func getCow(creatables []modsData) *roundCowState {
 	cs := &roundCowState{
-		mods:  ledgercore.MakeStateDelta(&bookkeeping.BlockHeader{}, 0, 2, 0),
+		mods:  ledgercore.MakeStateDelta(0, 0, 0, 2, 0),
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
@@ -425,9 +425,11 @@ func TestCowBuildDelta(t *testing.T) {
 
 	// check v26 behavior for empty deltas
 	txn.Sender = sender
-	cow.mods.Hdr = &bookkeeping.BlockHeader{
+	hdr := bookkeeping.BlockHeader{
 		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: protocol.ConsensusV25},
 	}
+	cow1 := makeRoundCowState(nil, hdr, config.Consensus[protocol.ConsensusV26], 0, ledgercore.AccountTotals{}, 0)
+	cow.noEmptyDeltas = cow1.noEmptyDeltas
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
@@ -438,9 +440,9 @@ func TestCowBuildDelta(t *testing.T) {
 		ed,
 	)
 
-	// check v27 behavior for empty deltas
-	cow.mods.Hdr = nil
-	cow.proto = config.Consensus[protocol.ConsensusCurrentVersion]
+	// check v27+ behavior for empty deltas
+	cow1 = makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion], 0, ledgercore.AccountTotals{}, 0)
+	cow.noEmptyDeltas = cow1.noEmptyDeltas
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
@@ -1059,7 +1061,7 @@ func TestCowGetters(t *testing.T) {
 	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
 	round := basics.Round(1234)
-	c.mods.Hdr.Round = round
+	c.mods.Round = round
 	ts := int64(11223344)
 	c.mods.PrevTimestamp = ts
 

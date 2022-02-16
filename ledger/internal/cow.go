@@ -78,6 +78,9 @@ type roundCowState struct {
 	compatibilityMode bool
 	// cache mainaining accountIdx used in getKey for local keys access
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
+	// noEmptyDeltas restricts producing empty local deltas
+	// but allows it for a period of time when a buggy version was live
+	noEmptyDeltas bool
 
 	// prevTotals contains the accounts totals for the previous round. It's being used to calculate the totals for the new round
 	// so that we could perform the validation test on these to ensure the block evaluator generate a valid changeset.
@@ -89,7 +92,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 		lookupParent: b,
 		commitParent: nil,
 		proto:        proto,
-		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
+		mods:         ledgercore.MakeStateDelta(hdr.Round, hdr.RewardsLevel, prevTimestamp, hint, 0),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 		prevTotals:   prevTotals,
 	}
@@ -103,6 +106,9 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 		cb.compatibilityMode = true
 		cb.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
+	// noEmptyDeltas restricts producing empty local deltas in general
+	// but allows it for a period of time when a buggy version was live
+	cb.noEmptyDeltas = proto.NoEmptyLocalDeltas || (hdr.CurrentProtocol == protocol.ConsensusV24) && (hdr.NextProtocol != protocol.ConsensusV26)
 	return &cb
 }
 
@@ -123,11 +129,11 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 }
 
 func (cb *roundCowState) rewardsLevel() uint64 {
-	return cb.mods.Hdr.RewardsLevel
+	return cb.mods.RewardsLevel
 }
 
 func (cb *roundCowState) round() basics.Round {
-	return cb.mods.Hdr.Round
+	return cb.mods.Round
 }
 
 func (cb *roundCowState) prevTimestamp() int64 {
@@ -198,7 +204,7 @@ func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid trans
 
 	if cb.proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
 		expires, ok := cb.mods.Txleases[txl]
-		if ok && cb.mods.Hdr.Round <= expires {
+		if ok && cb.round() <= expires {
 			return ledgercore.MakeLeaseInLedgerError(txid, txl)
 		}
 	}
@@ -242,7 +248,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
+		mods:         ledgercore.MakeStateDelta(cb.round(), cb.rewardsLevel(), cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 
@@ -250,6 +256,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 		ch.compatibilityMode = cb.compatibilityMode
 		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
+	ch.noEmptyDeltas = cb.noEmptyDeltas
 	return &ch
 }
 
@@ -307,7 +314,7 @@ func (cb *roundCowState) CalculateTotals() error {
 	}
 	totals := cb.prevTotals
 	var ot basics.OverflowTracker
-	totals.ApplyRewards(cb.mods.Hdr.RewardsLevel, &ot)
+	totals.ApplyRewards(cb.rewardsLevel(), &ot)
 
 	for i := 0; i < cb.mods.Accts.Len(); i++ {
 		accountAddr, updatedAccountData := cb.mods.Accts.GetByIdx(i)
@@ -320,7 +327,7 @@ func (cb *roundCowState) CalculateTotals() error {
 	}
 
 	if ot.Overflowed {
-		return fmt.Errorf("roundCowState: CalculateTotals %d overflowed totals", cb.mods.Hdr.Round)
+		return fmt.Errorf("roundCowState: CalculateTotals %d overflowed totals", cb.round())
 	}
 	if totals.All() != cb.prevTotals.All() {
 		return fmt.Errorf("roundCowState: CalculateTotals sum of money changed from %d to %d", cb.prevTotals.All().Raw, totals.All().Raw)

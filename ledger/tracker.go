@@ -671,7 +671,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		}
 
 		// prepare for the next iteration.
-		accLedgerEval.prevHeader = *delta.Hdr
+		accLedgerEval.prevHeader = blk.BlockHeader
 	}
 
 	if blockRetrievalError != nil {

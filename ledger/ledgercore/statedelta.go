@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -85,8 +84,9 @@ type StateDelta struct {
 	// new creatables creator lookup table
 	Creatables map[basics.CreatableIndex]ModifiedCreatable
 
-	// new block header; read-only
-	Hdr *bookkeeping.BlockHeader
+	// new block header fields
+	Round        basics.Round
+	RewardsLevel uint64
 
 	// next round for which we expect a compact cert.
 	// zero if no compact cert is expected.
@@ -173,14 +173,15 @@ type AccountDeltas struct {
 // MakeStateDelta creates a new instance of StateDelta.
 // hint is amount of transactions for evaluation, 2 * hint is for sender and receiver balance records.
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
+func MakeStateDelta(round basics.Round, rewardsLevel uint64, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts:    MakeAccountDeltas(hint),
 		Txids:    make(map[transactions.Txid]basics.Round, hint),
 		Txleases: make(map[Txlease]basics.Round, hint),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
 		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
-		Hdr:                      hdr,
+		Round:                    round,
+		RewardsLevel:             rewardsLevel,
 		CompactCertNext:          compactCertNext,
 		PrevTimestamp:            prevTimestamp,
 		ModifiedAssetHoldings:    make(map[AccountAsset]bool, hint),
