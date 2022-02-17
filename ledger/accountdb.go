@@ -160,6 +160,12 @@ type persistedAccountData struct {
 //msgp:ignore persistedResourcesData
 type persistedResourcesData struct {
 	// addrid is the rowid of the account address that holds this resource.
+	// it is used in update/delete operations so must be filled for existing records.
+	// resolution is a multi stage process:
+	// - baseResources cache might have valid entries
+	// - baseAccount cache might have an entry for the address with rowid set
+	// - when loading non-cached resources in resourcesLoadOld
+	// - when creating new accounts in accountsNewRound
 	addrid int64
 	// creatable index
 	aidx basics.CreatableIndex
@@ -407,6 +413,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				newEntry.newResource.SetAssetData(res.Params, res.Holding)
+				// baseResources caches deleted entries, and they have addrid = 0
+				// need to handle this and prevent such entries to be treated as fully resolved
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
