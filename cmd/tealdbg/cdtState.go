@@ -112,37 +112,6 @@ func (s *cdtState) Update(state cdtStateUpdate) {
 	s.globals[logic.OpcodeBudget].Uint = uint64(state.opcodeBudget)
 }
 
-const localScopeObjID = "localScopeObjId"
-const globalScopeObjID = "globalScopeObjID"
-const globalsObjID = "globalsObjID"
-const txnObjID = "txnObjID"
-const gtxnObjID = "gtxnObjID"
-const stackObjID = "stackObjID"
-const scratchObjID = "scratchObjID"
-const tealErrorID = "tealErrorID"
-const appGlobalObjID = "appGlobalObjID"
-const appLocalsObjID = "appLocalsObjID"
-const txnArrayFieldObjID = "txnArrayField"
-const logsObjID = "logsObjID"
-const innerTxnsObjID = "innerTxnsObjID"
-
-type objectDescFn func(s *cdtState, preview bool) []cdt.RuntimePropertyDescriptor
-
-var objectDescMap = map[string]objectDescFn{
-	globalScopeObjID: makeGlobalScope,
-	localScopeObjID:  makeLocalScope,
-	globalsObjID:     makeGlobals,
-	txnObjID:         makeTxn,
-	gtxnObjID:        makeTxnGroup,
-	stackObjID:       makeStack,
-	scratchObjID:     makeScratch,
-	tealErrorID:      makeTealError,
-	appGlobalObjID:   makeAppGlobalState,
-	appLocalsObjID:   makeAppLocalsState,
-	logsObjID:        makeLogsState,
-	innerTxnsObjID:   makeInnerTxnsState,
-}
-
 func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.RuntimePropertyDescriptor, err error) {
 	maker, ok := objectDescMap[objID]
 	if !ok {
@@ -591,8 +560,6 @@ func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 	return p
 }
 
-var gtxnObjIDPrefix = fmt.Sprintf("%s_gid_", gtxnObjID)
-
 func encodeGroupTxnID(groupIndex int) string {
 	return gtxnObjIDPrefix + strconv.Itoa(groupIndex)
 }
@@ -605,10 +572,6 @@ func decodeGroupTxnID(objID string) (int, bool) {
 	}
 	return 0, false
 }
-
-var logObjIDPrefix = fmt.Sprintf("%s_id", logsObjID)
-var innerTxnObjIDPrefix = fmt.Sprintf("%s_id", innerTxnsObjID)
-var innerNestedTxnObjIDPrefix = fmt.Sprintf("%s_nested", innerTxnsObjID)
 
 func encodeNestedObjID(groupIndexes []int, prefix string) string {
 	encodedElements := []string{prefix}
@@ -695,8 +658,6 @@ func decodeArraySlice(objID string) (string, int, int, bool) {
 	return "", 0, 0, false
 }
 
-var appGlobalObjIDPrefix = fmt.Sprintf("%s_", appGlobalObjID)
-
 func encodeAppGlobalAppID(key string) string {
 	return appGlobalObjIDPrefix + key
 }
@@ -710,8 +671,6 @@ func decodeAppGlobalAppID(objID string) (uint64, bool) {
 	return 0, false
 }
 
-var appLocalsObjIDPrefix = fmt.Sprintf("%s_", appLocalsObjID)
-
 func encodeAppLocalsAddr(addr string) string {
 	return appLocalsObjIDPrefix + addr
 }
@@ -722,8 +681,6 @@ func decodeAppLocalsAddr(objID string) (string, bool) {
 	}
 	return "", false
 }
-
-var appLocalAppIDPrefix = fmt.Sprintf("%s__", appLocalsObjID)
 
 func encodeAppLocalsAppID(addr string, appID string) string {
 	return fmt.Sprintf("%s%s_%s", appLocalAppIDPrefix, addr, appID)
@@ -739,8 +696,6 @@ func decodeAppLocalsAppID(objID string) (string, uint64, bool) {
 	}
 	return "", 0, false
 }
-
-var txnArrayFieldPrefix = fmt.Sprintf("%s__", txnArrayFieldObjID)
 
 func encodeTxnArrayField(groupIndex int, field int) string {
 	return fmt.Sprintf("%s%d_%d", txnArrayFieldPrefix, groupIndex, field)
@@ -830,7 +785,6 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 			desc = append(desc, global)
 		}
 		if len(s.AppState.locals) > 0 {
-			local = makeObject("appLocals", appLocalsObjID)
 			desc = append(desc, local)
 		}
 	}
