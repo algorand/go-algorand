@@ -169,7 +169,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		state.Update(cdtStateUpdate{
 			dbgState.Stack, dbgState.Scratch,
 			0, 0, "",
-			s.debugger.GetStates(nil),
+			dbgState.OpcodeBudget, s.debugger.GetStates(nil),
 		})
 
 		hash := sha256.Sum256([]byte(state.disassembly)) // some random hash
@@ -247,7 +247,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				state.Update(cdtStateUpdate{
 					dbgState.Stack, dbgState.Scratch,
 					dbgState.PC, dbgState.Line, dbgState.Error,
-					appState,
+					dbgState.OpcodeBudget, appState,
 				})
 				dbgStateMu.Unlock()
 
