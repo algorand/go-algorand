@@ -1072,10 +1072,10 @@ type baseOnlineAccountData struct {
 
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"A"`
 	SelectionID     crypto.VRFVerifier              `codec:"B"`
-	StateProofID    merklesignature.Verifier        `codec:"F"`
 	VoteFirstValid  basics.Round                    `codec:"C"`
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
+	StateProofID    merklesignature.Verifier        `codec:"F"`
 }
 
 type baseAccountData struct {

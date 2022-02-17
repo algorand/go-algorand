@@ -285,5 +285,4 @@ func TestOnlineAccountData(t *testing.T) {
 	require.Equal(t, ad.MicroAlgos, oad.MicroAlgosWithRewards)
 	require.Equal(t, ad.VoteID, oad.VoteID)
 	require.Equal(t, ad.SelectionID, oad.SelectionID)
-	require.Equal(t, ad.StateProofID, oad.StateProofID)
 }

@@ -102,9 +102,8 @@ func UnmarshalStatus(value string) (s Status, err error) {
 type OnlineAccountData struct {
 	MicroAlgosWithRewards MicroAlgos
 
-	VoteID       crypto.OneTimeSignatureVerifier
-	SelectionID  crypto.VRFVerifier
-	StateProofID merklesignature.Verifier
+	VoteID      crypto.OneTimeSignatureVerifier
+	SelectionID crypto.VRFVerifier
 
 	VoteFirstValid  Round
 	VoteLastValid   Round
@@ -421,7 +420,6 @@ func (u *AccountData) ClearOnlineState() {
 	u.VoteKeyDilution = 0
 	u.VoteID = crypto.OneTimeSignatureVerifier{}
 	u.SelectionID = crypto.VRFVerifier{}
-	u.StateProofID = merklesignature.Verifier{}
 }
 
 // Money returns the amount of MicroAlgos associated with the user's account
@@ -537,7 +535,6 @@ func (u AccountData) OnlineAccountData() OnlineAccountData {
 
 		VoteID:          u.VoteID,
 		SelectionID:     u.SelectionID,
-		StateProofID:    u.StateProofID,
 		VoteFirstValid:  u.VoteFirstValid,
 		VoteLastValid:   u.VoteLastValid,
 		VoteKeyDilution: u.VoteKeyDilution,
