@@ -1200,7 +1200,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 
 // compactCertVotersAndTotal returns the expected values of CompactCertVoters
 // and CompactCertVotersTotal for a block.
-func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, total basics.MicroAlgos, err error) {
+func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.GenericDigest, total basics.MicroAlgos, err error) {
 	if eval.proto.CompactCertRounds == 0 {
 		return
 	}
@@ -1292,7 +1292,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if err != nil {
 			return err
 		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters != expectedVoters {
+		if !eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEqual(expectedVoters) {
 			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
 		}
 		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {

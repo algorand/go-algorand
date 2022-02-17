@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -108,6 +109,8 @@ func makeString(len int) string {
 func getSampleAccountData() AccountData {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 
 	return AccountData{
 		Status:             NotParticipating,
@@ -116,6 +119,7 @@ func getSampleAccountData() AccountData {
 		RewardedMicroAlgos: MicroAlgos{},
 		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
 		SelectionID:        vrfSecrets.PK,
+		StateProofID:       stateProofID,
 		VoteFirstValid:     Round(0x1234123412341234),
 		VoteLastValid:      Round(0x1234123412341234),
 		VoteKeyDilution:    0x1234123412341234,

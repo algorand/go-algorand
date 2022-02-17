@@ -113,6 +113,11 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 		},
 	}
 
+	if record.StateProof != nil {
+		tmp := record.StateProof[:]
+		participationKey.Key.StateProofKey = &tmp
+	}
+
 	// These are pointers but should always be present.
 	if record.Voting != nil {
 		participationKey.Key.VoteParticipationKey = record.Voting.OneTimeSignatureVerifier[:]
@@ -368,6 +373,10 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			VoteLastValid:             uint64(record.VoteLastValid),
 			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
+		if !record.StateProofID.IsEmpty() {
+			tmp := record.StateProofID[:]
+			apiParticipation.StateProofKey = &tmp
+		}
 	}
 
 	pendingRewards, overflowed := basics.OSubA(record.MicroAlgos, amountWithoutPendingRewards)
@@ -590,16 +599,18 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			}
 
 			proofconcat := make([]byte, 0)
-			for _, proofelem := range proof {
+			for _, proofelem := range proof.Path {
 				proofconcat = append(proofconcat, proofelem[:]...)
 			}
 
 			stibhash := block.Payset[idx].Hash()
 
 			response := generated.ProofResponse{
-				Proof:    proofconcat,
-				Stibhash: stibhash[:],
-				Idx:      uint64(idx),
+				Proof:     proofconcat,
+				Stibhash:  stibhash[:],
+				Idx:       uint64(idx),
+				Treedepth: uint64(proof.TreeDepth),
+				Hashtype:  proof.HashFactory.HashType.String(),
 			}
 
 			return ctx.JSON(http.StatusOK, response)
