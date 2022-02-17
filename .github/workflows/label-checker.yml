@@ -10,6 +10,5 @@ jobs:
     runs-on: ubuntu-latest
     name: Check PR Type label is set
     steps:
-      - name: Failed to find proper PR Type label
-        run: |
-          exit(1)
+      - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
+        run: exit 1
