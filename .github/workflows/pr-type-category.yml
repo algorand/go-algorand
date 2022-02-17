@@ -31,5 +31,5 @@ jobs:
           if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
             exit 1
           fi
-      - name: "Found at least one PR Type label. Good job!"
+      - name: "Found at least one PR Type label and Category in the title. Good job!"
         run: exit 0
