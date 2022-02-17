@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"os"
 	"time"
 
@@ -726,6 +727,13 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 	vb := ledgercore.MakeValidatedBlock(blk, delta)
 	return &vb, nil
+}
+
+// CompactCertParams computes the parameters for building or verifying
+// a compact cert for block hdr, using voters from block votersHdr.
+// TODO Stateproof: rename this
+func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+	return internal.CompactCertParams(msg, votersHdr, hdr)
 }
 
 // AcceptableCompactCertWeight computes the acceptable signed weight

@@ -21,13 +21,12 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -63,7 +62,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	p, err := CompactCertParams(msg, votersHdr, hdr)
+	p, err := ledger.CompactCertParams(msg, votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -78,48 +77,6 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 
 	ccw.builders[rnd] = res
 	return res, nil
-}
-
-// CompactCertParams computes the parameters for building or verifying
-// a compact cert for block hdr, using voters from block votersHdr.
-// TODO Stateproof: rename this
-func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
-	proto := config.Consensus[votersHdr.CurrentProtocol]
-
-	if proto.CompactCertRounds == 0 {
-		err = fmt.Errorf("compact certs not enabled")
-		return
-	}
-
-	if votersHdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
-		err = fmt.Errorf("votersHdr %d not a multiple of %d",
-			votersHdr.Round, proto.CompactCertRounds)
-		return
-	}
-
-	if hdr.Round != votersHdr.Round+basics.Round(proto.CompactCertRounds) {
-		err = fmt.Errorf("certifying block %d not %d ahead of voters %d",
-			hdr.Round, proto.CompactCertRounds, votersHdr.Round)
-		return
-	}
-
-	totalWeight := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64()
-	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.CompactCertWeightThreshold), 1<<32)
-	if overflowed {
-		err = fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
-			hdr.Round, totalWeight, proto.CompactCertWeightThreshold)
-		return
-	}
-
-	res = compactcert.Params{
-		Msg:          msg,
-		ProvenWeight: provenWeight,
-		SigRound:     hdr.Round,
-		SecKQ:        proto.CompactCertSecKQ,
-
-		EnableBatchVerification: proto.EnableBatchVerification,
-	}
-	return
 }
 
 func (ccw *Worker) initBuilders() {

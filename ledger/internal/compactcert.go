@@ -18,10 +18,9 @@ package internal
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/compactcert"
 
 	"github.com/algorand/go-algorand/config"
-	cc "github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -103,7 +102,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 }
 
 // validateCompactCert checks that a compact cert is valid.
-func validateCompactCert(certHdr bookkeeping.BlockHeader, cert cc.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round, msg []byte) error {
+func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round, msg []byte) error {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
@@ -131,11 +130,53 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert cc.Cert, votersHd
 			atRound, cert.SignedWeight, acceptableWeight)
 	}
 
-	ccParams, err := compactcert.CompactCertParams(msg, votersHdr, certHdr)
+	ccParams, err := CompactCertParams(msg, votersHdr, certHdr)
 	if err != nil {
 		return err
 	}
 
-	verif := cc.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters)
+	verif := compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters)
 	return verif.Verify(&cert)
+}
+
+// CompactCertParams computes the parameters for building or verifying
+// a compact cert for block hdr, using voters from block votersHdr.
+// TODO Stateproof: rename this
+func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+	proto := config.Consensus[votersHdr.CurrentProtocol]
+
+	if proto.CompactCertRounds == 0 {
+		err = fmt.Errorf("compact certs not enabled")
+		return
+	}
+
+	if votersHdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
+		err = fmt.Errorf("votersHdr %d not a multiple of %d",
+			votersHdr.Round, proto.CompactCertRounds)
+		return
+	}
+
+	if hdr.Round != votersHdr.Round+basics.Round(proto.CompactCertRounds) {
+		err = fmt.Errorf("certifying block %d not %d ahead of voters %d",
+			hdr.Round, proto.CompactCertRounds, votersHdr.Round)
+		return
+	}
+
+	totalWeight := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64()
+	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.CompactCertWeightThreshold), 1<<32)
+	if overflowed {
+		err = fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
+			hdr.Round, totalWeight, proto.CompactCertWeightThreshold)
+		return
+	}
+
+	res = compactcert.Params{
+		Msg:          msg,
+		ProvenWeight: provenWeight,
+		SigRound:     hdr.Round,
+		SecKQ:        proto.CompactCertSecKQ,
+
+		EnableBatchVerification: proto.EnableBatchVerification,
+	}
+	return
 }
