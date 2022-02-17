@@ -1,7 +1,7 @@
 name: Label Check
 on:
   pull_request:
-    types: [opened, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 jobs:
   check_label:
     if: |
