@@ -63,7 +63,7 @@ func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan
 			break
 		}
 		var err error
-		for x := 0; x < 100; x++ { // retry only 50 times
+		for x := 0; x < 50; x++ { // retry only 50 times
 			_, err = c.BroadcastTransaction(*stxn)
 			if err == nil {
 				break
@@ -84,7 +84,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 			break
 		}
 		var err error
-		for x := 0; x < 20; x++ { // retry only 20 times
+		for x := 0; x < 50; x++ { // retry only 50 times
 			err = c.BroadcastTransactionGroup(stxns)
 			if err == nil {
 				break
@@ -100,6 +100,21 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 		}
 	}
 	queueWg.Done()
+}
+
+func getAccountInformation(
+	client libgoal.Client,
+	address string) (info generated.Account, err error) {
+
+	for x := 0; x < 50; x++ { // retry only 50 times
+		info, err = client.AccountInformationV2(address)
+		if err == nil {
+			break
+		}
+		fmt.Printf("AccountInformationV2[%d]: %s", x, err)
+		time.Sleep(time.Millisecond * 256)
+	}
+	return
 }
 
 func signer(
@@ -465,7 +480,7 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := client.AccountInformationV2(nacc.pk.String())
+		info, err := getAccountInformation(client, nacc.pk.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -504,7 +519,7 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := client.AccountInformationV2(nacc.pk.String())
+		info, err := getAccountInformation(client, nacc.pk.String())
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -729,7 +744,7 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := client.AccountInformationV2(nacc.pk.String())
+		info, err := getAccountInformation(client, nacc.pk.String())
 		require.NoError(t, err)
 		for appi, app := range *info.CreatedApps {
 			select {
@@ -771,7 +786,7 @@ func scenarioC(
 	*/
 	// Make an app call to each of them
 	for acci, nacc := range keys {
-		info, err := client.AccountInformationV2(nacc.pk.String())
+		info, err := getAccountInformation(client, nacc.pk.String())
 		require.NoError(t, err)
 		for appi, app := range *info.CreatedApps {
 			select {
