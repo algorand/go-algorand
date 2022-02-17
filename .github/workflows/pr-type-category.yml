@@ -26,10 +26,10 @@ jobs:
             contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
             contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
           )
-      - name: "PR Category is missing from PR title. Please add it like '<category>: ...'"
+      - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'"
         run: |
-          if [[ ! "${{ github.event.pull_request.title }}" =~ ^.+\: ]]; then
-          exit 1
+          if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
+            exit 1
           fi
       - name: "Found at least one PR Type label. Good job!"
         run: exit 0
