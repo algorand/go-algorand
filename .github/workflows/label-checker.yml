@@ -1,0 +1,17 @@
+name: Label Check
+on:
+  pull_request:
+    types: [labeled, unlabeled]
+
+jobs:
+  check_label:
+    if: |
+      !contains(github.event.pull_request.labels.*.name, 'New Feature') &&
+      !contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
+      !contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+    runs-on: ubuntu-latest
+    name: Check PR Type label is set
+    steps:
+      - run: |
+        exit("Could not find proper PR Type label. \
+          Please add one of the following labels: 'New Feature', 'Enhancement', or 'Bug-Fix'")
