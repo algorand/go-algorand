@@ -139,7 +139,7 @@ func (cs *roundCowState) putAppParams(addr basics.Address, aidx basics.AppIndex,
 	if err != nil {
 		return err
 	}
-	cs.mods.NewAccts.UpsertAppResource(addr, aidx, params, state)
+	cs.mods.Accts.UpsertAppResource(addr, aidx, params, state)
 	return nil
 }
 
@@ -152,7 +152,7 @@ func (cs *roundCowState) putAppLocalState(addr basics.Address, aidx basics.AppIn
 	if err != nil {
 		return err
 	}
-	cs.mods.NewAccts.UpsertAppResource(addr, aidx, params, state)
+	cs.mods.Accts.UpsertAppResource(addr, aidx, params, state)
 	return nil
 }
 
@@ -165,7 +165,7 @@ func (cs *roundCowState) putAssetHolding(addr basics.Address, aidx basics.AssetI
 	if err != nil {
 		return err
 	}
-	cs.mods.NewAccts.UpsertAssetResource(addr, aidx, params, data)
+	cs.mods.Accts.UpsertAssetResource(addr, aidx, params, data)
 	return nil
 }
 
@@ -178,12 +178,12 @@ func (cs *roundCowState) putAssetParams(addr basics.Address, aidx basics.AssetIn
 	if err != nil {
 		return err
 	}
-	cs.mods.NewAccts.UpsertAssetResource(addr, aidx, data, holding)
+	cs.mods.Accts.UpsertAssetResource(addr, aidx, data, holding)
 	return nil
 }
 
 func (cs *roundCowState) DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error {
-	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+	if _, ok := cs.mods.Accts.GetData(addr); !ok {
 		return fmt.Errorf("DeleteAppParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
@@ -191,7 +191,7 @@ func (cs *roundCowState) DeleteAppParams(addr basics.Address, aidx basics.AppInd
 }
 
 func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error {
-	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+	if _, ok := cs.mods.Accts.GetData(addr); !ok {
 		return fmt.Errorf("DeleteAppLocalState: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
@@ -199,7 +199,7 @@ func (cs *roundCowState) DeleteAppLocalState(addr basics.Address, aidx basics.Ap
 }
 
 func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error {
-	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+	if _, ok := cs.mods.Accts.GetData(addr); !ok {
 		return fmt.Errorf("DeleteAssetHolding: %s not found in deltas for %d", addr.String(), aidx)
 	}
 
@@ -207,7 +207,7 @@ func (cs *roundCowState) DeleteAssetHolding(addr basics.Address, aidx basics.Ass
 }
 
 func (cs *roundCowState) DeleteAssetParams(addr basics.Address, aidx basics.AssetIndex) error {
-	if _, ok := cs.mods.NewAccts.GetData(addr); !ok {
+	if _, ok := cs.mods.Accts.GetData(addr); !ok {
 		return fmt.Errorf("DeleteAssetParams: %s not found in deltas for %d", addr.String(), aidx)
 	}
 

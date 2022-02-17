@@ -69,6 +69,10 @@ func AccountDataToAccount(
 			VoteLastValid:             uint64(record.VoteLastValid),
 			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
+		if !record.StateProofID.IsEmpty() {
+			tmp := record.StateProofID[:]
+			apiParticipation.StateProofKey = &tmp
+		}
 	}
 
 	createdApps := make([]generated.Application, 0, len(record.AppParams))

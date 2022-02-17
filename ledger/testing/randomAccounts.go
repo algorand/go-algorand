@@ -73,7 +73,7 @@ func RandomAssetParams() basics.AssetParams {
 	ap := basics.AssetParams{
 		Total:         crypto.RandUint64(),
 		Decimals:      uint32(crypto.RandUint64() % 20),
-		DefaultFrozen: (crypto.RandUint64()%2 == 0),
+		DefaultFrozen: crypto.RandUint64()%2 == 0,
 		UnitName:      fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff)),
 		AssetName:     fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff)),
 		URL:           fmt.Sprintf("url%x", uint32(crypto.RandUint64()%0x7fffffff)),
@@ -89,7 +89,7 @@ func RandomAssetParams() basics.AssetParams {
 // RandomAssetHolding creates a random basics.AssetHolding.
 // If forceFrozen is set the Frozen field is set to True to prevent possible empty AssetHolding struct
 func RandomAssetHolding(forceFrozen bool) basics.AssetHolding {
-	frozen := (crypto.RandUint64()%2 == 0)
+	frozen := crypto.RandUint64()%2 == 0
 	if forceFrozen {
 		frozen = true
 	}
@@ -192,6 +192,7 @@ func RandomFullAccountData(rewardsLevel uint64, knownCreatables map[basics.Creat
 
 	crypto.RandBytes(data.VoteID[:])
 	crypto.RandBytes(data.SelectionID[:])
+	crypto.RandBytes(data.StateProofID[:])
 	data.VoteFirstValid = basics.Round(crypto.RandUint64())
 	data.VoteLastValid = basics.Round(crypto.RandUint64())
 	data.VoteKeyDilution = crypto.RandUint64()
@@ -284,23 +285,23 @@ func RandomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 }
 
 // RandomDeltas generates a random set of accounts delta
-func RandomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
+func RandomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
 	updates, totals, imbalance, _ = RandomDeltasImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
 // RandomDeltasFull generates a random set of accounts delta
-func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
+func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
 	updates, totals, imbalance, lastCreatableID = RandomDeltasImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
 // RandomDeltasImpl generates a random set of accounts delta
-func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
+func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	totals = make(map[basics.Address]ledgercore.AccountData)
 
-	updates = ledgercore.MakeNewAccountDeltas(len(base))
+	updates = ledgercore.MakeAccountDeltas(len(base))
 
 	// copy base -> totals
 	for addr, data := range base {
@@ -487,19 +488,19 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 }
 
 // RandomDeltasBalanced generates a random set of accounts delta
-func RandomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData) {
+func RandomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData) {
 	updates, totals, _ = RandomDeltasBalancedImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
 // RandomDeltasBalancedFull generates a random set of accounts delta
-func RandomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
+func RandomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
 	updates, totals, lastCreatableID = RandomDeltasBalancedImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
 // RandomDeltasBalancedImpl generates a random set of accounts delta
-func RandomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.NewAccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
+func RandomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, lastCreatableID uint64) {
 	var imbalance int64
 	if simple {
 		updates, totals, imbalance = RandomDeltas(niter, base, rewardsLevel)

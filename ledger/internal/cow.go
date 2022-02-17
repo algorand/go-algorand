@@ -146,7 +146,7 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountData, err error) {
-	d, ok := cb.mods.NewAccts.GetData(addr)
+	d, ok := cb.mods.Accts.GetData(addr)
 	if ok {
 		return d, nil
 	}
@@ -155,7 +155,7 @@ func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountDat
 }
 
 func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
-	params, ok := cb.mods.NewAccts.GetAppParams(addr, aidx)
+	params, ok := cb.mods.Accts.GetAppParams(addr, aidx)
 	if ok {
 		return params, ok, nil
 	}
@@ -164,7 +164,7 @@ func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppInd
 }
 
 func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
-	params, ok := cb.mods.NewAccts.GetAssetParams(addr, aidx)
+	params, ok := cb.mods.Accts.GetAssetParams(addr, aidx)
 	if ok {
 		return params, ok, nil
 	}
@@ -173,7 +173,7 @@ func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.Asse
 }
 
 func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
-	state, ok := cb.mods.NewAccts.GetAppLocalState(addr, aidx)
+	state, ok := cb.mods.Accts.GetAppLocalState(addr, aidx)
 	if ok {
 		return state, ok, nil
 	}
@@ -182,7 +182,7 @@ func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.Ap
 }
 
 func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
-	holding, ok := cb.mods.NewAccts.GetAssetHolding(addr, aidx)
+	holding, ok := cb.mods.Accts.GetAssetHolding(addr, aidx)
 	if ok {
 		return holding, ok, nil
 	}
@@ -254,7 +254,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 }
 
 func (cb *roundCowState) commitToParent() {
-	cb.commitParent.mods.NewAccts.MergeAccounts(cb.mods.NewAccts)
+	cb.commitParent.mods.Accts.MergeAccounts(cb.mods.Accts)
 
 	for txid, lv := range cb.mods.Txids {
 		cb.commitParent.mods.Txids[txid] = lv
@@ -291,7 +291,7 @@ func (cb *roundCowState) commitToParent() {
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
-	return cb.mods.NewAccts.ModifiedAccounts()
+	return cb.mods.Accts.ModifiedAccounts()
 }
 
 // errUnsupportedChildCowTotalCalculation is returned by CalculateTotals when called by a child roundCowState instance
@@ -309,8 +309,8 @@ func (cb *roundCowState) CalculateTotals() error {
 	var ot basics.OverflowTracker
 	totals.ApplyRewards(cb.mods.Hdr.RewardsLevel, &ot)
 
-	for i := 0; i < cb.mods.NewAccts.Len(); i++ {
-		accountAddr, updatedAccountData := cb.mods.NewAccts.GetByIdx(i)
+	for i := 0; i < cb.mods.Accts.Len(); i++ {
+		accountAddr, updatedAccountData := cb.mods.Accts.GetByIdx(i)
 		previousAccountData, lookupError := cb.lookupParent.lookup(accountAddr)
 		if lookupError != nil {
 			return fmt.Errorf("roundCowState.CalculateTotals unable to load account data for address %v", accountAddr)

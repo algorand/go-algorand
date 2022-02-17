@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -160,8 +161,9 @@ type AccountData struct {
 	// the past week".
 	RewardedMicroAlgos MicroAlgos `codec:"ern"`
 
-	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID crypto.VRFVerifier              `codec:"sel"`
+	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID  crypto.VRFVerifier              `codec:"sel"`
+	StateProofID merklesignature.Verifier        `codec:"stprf"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`
@@ -418,6 +420,7 @@ func (u *AccountData) ClearOnlineState() {
 	u.VoteKeyDilution = 0
 	u.VoteID = crypto.OneTimeSignatureVerifier{}
 	u.SelectionID = crypto.VRFVerifier{}
+	u.StateProofID = merklesignature.Verifier{}
 }
 
 // Money returns the amount of MicroAlgos associated with the user's account
@@ -451,7 +454,7 @@ func WithUpdatedRewards(
 		rewardsBaseOut := rewardsLevelIn
 		// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
 		// this rewardAlgos counter could potentially roll over.
-		rewardedMicroAlgosOut := MicroAlgos{Raw: (rewardedMicroAlgosIn.Raw + rewards.Raw)}
+		rewardedMicroAlgosOut := MicroAlgos{Raw: rewardedMicroAlgosIn.Raw + rewards.Raw}
 		return microAlgosOut, rewardedMicroAlgosOut, rewardsBaseOut
 	}
 	return microAlgosIn, rewardedMicroAlgosIn, rewardsBaseIn

@@ -102,7 +102,7 @@ func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 	return hdr, nil
 }
 
-func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.NewAccountDeltas) {
+func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {
 	for i := 0; i < delta.Len(); i++ {
 		addr, data := delta.GetByIdx(i)
 		d, err := cow.lookup(addr)
@@ -127,7 +127,7 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, ledgercore.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates ledgercore.NewAccountDeltas) {
+func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
 	for i := 0; i < updates.Len(); i++ {
 		addr, delta := updates.GetByIdx(i)
 		cow.putAccount(addr, delta)

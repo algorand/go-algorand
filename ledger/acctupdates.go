@@ -137,7 +137,7 @@ type accountUpdates struct {
 	cachedDBRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	deltas []ledgercore.NewAccountDeltas
+	deltas []ledgercore.AccountDeltas
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
@@ -801,22 +801,22 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.cachedDBRound, len(au.deltas))
 	}
-	au.deltas = append(au.deltas, delta.NewAccts)
+	au.deltas = append(au.deltas, delta.Accts)
 	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
-	au.deltasAccum = append(au.deltasAccum, delta.NewAccts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
+	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	au.baseAccounts.flushPendingWrites()
 	au.baseResources.flushPendingWrites()
 
-	for i := 0; i < delta.NewAccts.Len(); i++ {
-		addr, data := delta.NewAccts.GetByIdx(i)
+	for i := 0; i < delta.Accts.Len(); i++ {
+		addr, data := delta.Accts.GetByIdx(i)
 		macct := au.accounts[addr]
 		macct.ndeltas++
 		macct.data = data
 		au.accounts[addr] = macct
 	}
-	for _, res := range delta.NewAccts.GetAllAssetResources() {
+	for _, res := range delta.Accts.GetAllAssetResources() {
 		key := accountCreatable{
 			address: res.Addr,
 			index:   basics.CreatableIndex(res.Aidx),
@@ -827,7 +827,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		mres.ndeltas++
 		au.resources.set(key, mres)
 	}
-	for _, res := range delta.NewAccts.GetAllAppResources() {
+	for _, res := range delta.Accts.GetAllAppResources() {
 		key := accountCreatable{
 			address: res.Addr,
 			index:   basics.CreatableIndex(res.Aidx),
@@ -1475,7 +1475,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	au.accountsMu.RLock()
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	dcc.deltas = make([]ledgercore.NewAccountDeltas, offset)
+	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset)
 	dcc.roundTotals = au.roundTotals[offset]
 	copy(dcc.deltas, au.deltas[:offset])

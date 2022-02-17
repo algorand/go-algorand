@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -191,7 +192,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
-	ad, _ := deltas.NewAccts.GetBasicsAccountData(addr)
+	ad, _ := deltas.Accts.GetBasicsAccountData(addr)
 	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
@@ -589,10 +590,10 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	// convert deltas into balance records
 	// the code assumes all modified accounts has entries in NewAccts.accts
 	// to enforce this fact we call ModifiedAccounts() with a panic as a side effect
-	deltas.NewAccts.ModifiedAccounts()
-	for i := 0; i < deltas.NewAccts.Len(); i++ {
-		addr, _ := deltas.NewAccts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
-		accountData, _ := deltas.NewAccts.GetBasicsAccountData(addr)
+	deltas.Accts.ModifiedAccounts()
+	for i := 0; i < deltas.Accts.Len(); i++ {
+		addr, _ := deltas.Accts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
+		accountData, _ := deltas.Accts.GetBasicsAccountData(addr)
 		newBalances[addr] = accountData
 	}
 	ledger.roundBalances[vb.Block().Round()] = newBalances
@@ -798,6 +799,8 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 		}
 		tmp := genesisInitState.Accounts[addr]
 		tmp.Status = basics.Online
+		crypto.RandBytes(tmp.StateProofID[:])
+		crypto.RandBytes(tmp.SelectionID[:])
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -857,6 +860,11 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
 	require.NoError(t, err)
+
+	acctData, _ := blkEval.state.lookup(recvAddr)
+
+	require.Equal(t, merklesignature.Verifier{}, acctData.StateProofID)
+	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
 
 	badBlock := *validatedBlock
 
@@ -992,7 +1000,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	require.Error(t, err)
 
 	eval.block.ExpiredParticipationAccounts = []basics.Address{{}}
-	eval.state.mods.NewAccts = ledgercore.NewAccountDeltas{}
+	eval.state.mods.Accts = ledgercore.AccountDeltas{}
 	eval.state.lookupParent = &failRoundCowParent{}
 	err = eval.endOfBlock()
 	require.Error(t, err)
@@ -1023,7 +1031,16 @@ func TestExpiredAccountGeneration(t *testing.T) {
 			continue
 		}
 		tmp := genesisInitState.Accounts[addr]
+
+		// make up online account data
 		tmp.Status = basics.Online
+		tmp.VoteFirstValid = basics.Round(1)
+		tmp.VoteLastValid = basics.Round(100)
+		tmp.VoteKeyDilution = 0x1234123412341234
+		crypto.RandBytes(tmp.SelectionID[:])
+		crypto.RandBytes(tmp.VoteID[:])
+		crypto.RandBytes(tmp.StateProofID[:])
+
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -1094,5 +1111,5 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
 	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
 	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
-
+	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
 }

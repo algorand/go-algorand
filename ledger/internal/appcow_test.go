@@ -838,7 +838,7 @@ func TestApplyStorageDelta(t *testing.T) {
 		cow := makeRoundCowState(
 			nil, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
 			0, ledgercore.AccountTotals{}, 0)
-		cow.mods.NewAccts.Upsert(
+		cow.mods.Accts.Upsert(
 			addr,
 			ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
 				TotalAppParams:      2,
@@ -852,8 +852,8 @@ func TestApplyStorageDelta(t *testing.T) {
 		state1 := basics.AppLocalState{KeyValue: make(basics.TealKeyValue)}
 		state2 := basics.AppLocalState{KeyValue: kv}
 
-		cow.mods.NewAccts.UpsertAppResource(addr, 1, ledgercore.AppParamsDelta{Params: &params1}, ledgercore.AppLocalStateDelta{LocalState: &state1})
-		cow.mods.NewAccts.UpsertAppResource(addr, 2, ledgercore.AppParamsDelta{Params: &params2}, ledgercore.AppLocalStateDelta{LocalState: &state2})
+		cow.mods.Accts.UpsertAppResource(addr, 1, ledgercore.AppParamsDelta{Params: &params1}, ledgercore.AppLocalStateDelta{LocalState: &state1})
+		cow.mods.Accts.UpsertAppResource(addr, 2, ledgercore.AppParamsDelta{Params: &params2}, ledgercore.AppLocalStateDelta{LocalState: &state2})
 
 		return cow
 	}
@@ -872,13 +872,13 @@ func TestApplyStorageDelta(t *testing.T) {
 	}
 
 	getAllFromCow := func(cow *roundCowState) (*basics.AppParams, *basics.AppParams, *basics.AppLocalState, *basics.AppLocalState) {
-		params1, ok := cow.mods.NewAccts.GetAppParams(addr, 1)
+		params1, ok := cow.mods.Accts.GetAppParams(addr, 1)
 		a.True(ok)
-		params2, ok := cow.mods.NewAccts.GetAppParams(addr, 2)
+		params2, ok := cow.mods.Accts.GetAppParams(addr, 2)
 		a.True(ok)
-		state1, ok := cow.mods.NewAccts.GetAppLocalState(addr, 1)
+		state1, ok := cow.mods.Accts.GetAppLocalState(addr, 1)
 		a.True(ok)
-		state2, ok := cow.mods.NewAccts.GetAppLocalState(addr, 2)
+		state2, ok := cow.mods.Accts.GetAppLocalState(addr, 2)
 		a.True(ok)
 		return params1.Params, params2.Params, state1.LocalState, state2.LocalState
 	}
@@ -963,7 +963,7 @@ func TestApplyStorageDelta(t *testing.T) {
 	cow = makeRoundCowState(
 		nil, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
 		0, ledgercore.AccountTotals{}, 0)
-	cow.mods.NewAccts.Upsert(
+	cow.mods.Accts.Upsert(
 		addr,
 		ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
 			TotalAppParams:      1,
@@ -976,10 +976,10 @@ func TestApplyStorageDelta(t *testing.T) {
 
 	err := applyStorageDelta(cow, addr, storagePtr{1, true}, &sd)
 	a.NoError(err)
-	params1d, ok := cow.mods.NewAccts.GetAppParams(addr, 1)
+	params1d, ok := cow.mods.Accts.GetAppParams(addr, 1)
 	params1 = params1d.Params
 	a.True(ok)
-	state1d, ok := cow.mods.NewAccts.GetAppLocalState(addr, 1)
+	state1d, ok := cow.mods.Accts.GetAppLocalState(addr, 1)
 	state1 = state1d.LocalState
 	a.False(ok)
 	a.Nil(params1)
@@ -987,10 +987,10 @@ func TestApplyStorageDelta(t *testing.T) {
 
 	err = applyStorageDelta(cow, addr, storagePtr{1, false}, &sd)
 	a.NoError(err)
-	params1d, ok = cow.mods.NewAccts.GetAppParams(addr, 1)
+	params1d, ok = cow.mods.Accts.GetAppParams(addr, 1)
 	params1 = params1d.Params
 	a.True(ok)
-	state1d, ok = cow.mods.NewAccts.GetAppLocalState(addr, 1)
+	state1d, ok = cow.mods.Accts.GetAppLocalState(addr, 1)
 	state1 = state1d.LocalState
 	a.True(ok)
 	a.Nil(params1)
@@ -1078,7 +1078,7 @@ func TestCowGet(t *testing.T) {
 
 	addr1 := ledgertesting.RandomAddress()
 	bre := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}
-	c.mods.NewAccts.Upsert(addr1, ledgercore.ToAccountData(bre))
+	c.mods.Accts.Upsert(addr1, ledgercore.ToAccountData(bre))
 
 	bra, err := c.Get(addr1, true)
 	a.NoError(err)

@@ -61,6 +61,10 @@ EXTLDFLAGS := -static -static-libstdc++ -static-libgcc
 export GOBUILDMODE := -buildmode=exe
 endif
 
+ifeq ($(SHORT_PART_PERIOD), 1)
+export SHORT_PART_PERIOD_FLAG := -s
+endif
+
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
@@ -76,7 +80,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert ./data/account ./daemon/algod/api/spec/v2
 
 default: build
 
@@ -290,7 +294,7 @@ gen/%/genesis.dump: gen/%/genesis.json
 	./scripts/dump_genesis.sh $< > $@
 
 gen/%/genesis.json: gen/%.json gen/generate.go buildsrc
-	$(GOPATH1)/bin/genesis -q -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
+	$(GOPATH1)/bin/genesis -q $(SHORT_PART_PERIOD_FLAG) -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
 
 gen: $(addsuffix gen, $(NETWORKS)) mainnetgen
 

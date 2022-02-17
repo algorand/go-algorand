@@ -30,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -159,6 +160,12 @@ type persistedAccountData struct {
 //msgp:ignore persistedResourcesData
 type persistedResourcesData struct {
 	// addrid is the rowid of the account address that holds this resource.
+	// it is used in update/delete operations so must be filled for existing records.
+	// resolution is a multi stage process:
+	// - baseResources cache might have valid entries
+	// - baseAccount cache might have an entry for the address with rowid set
+	// - when loading non-cached resources in resourcesLoadOld
+	// - when creating new accounts in accountsNewRound
 	addrid int64
 	// creatable index
 	aidx basics.CreatableIndex
@@ -361,10 +368,10 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 	return
 }
 
-// makeCompactResourceDeltas takes an array of NewAccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
+// makeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -406,6 +413,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.NewAccountDeltas, base
 					newResource: makeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				newEntry.newResource.SetAssetData(res.Params, res.Holding)
+				// baseResources caches deleted entries, and they have addrid = 0
+				// need to handle this and prevent such entries to be treated as fully resolved
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
 				existingAcctCacheEntry := has && baseResourceData.addrid != 0
 				if existingAcctCacheEntry {
@@ -579,7 +588,7 @@ func (a *compactResourcesDeltas) updateOld(idx int, old persistedResourcesData) 
 // makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.NewAccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -1074,6 +1083,7 @@ type baseOnlineAccountData struct {
 	VoteFirstValid  basics.Round                    `codec:"C"`
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
+	StateProofID    merklesignature.Verifier        `codec:"F"`
 }
 
 type baseAccountData struct {
@@ -1117,6 +1127,7 @@ func (ba *baseAccountData) IsEmpty() bool {
 		ba.TotalAppLocalStates == 0 &&
 		ba.VoteID.MsgIsZero() &&
 		ba.SelectionID.MsgIsZero() &&
+		ba.StateProofID.MsgIsZero() &&
 		ba.VoteFirstValid == 0 &&
 		ba.VoteLastValid == 0 &&
 		ba.VoteKeyDilution == 0
@@ -1133,6 +1144,7 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
 	ba.VoteID = ad.VoteID
 	ba.SelectionID = ad.SelectionID
+	ba.StateProofID = ad.StateProofID
 	ba.VoteFirstValid = ad.VoteFirstValid
 	ba.VoteLastValid = ad.VoteLastValid
 	ba.VoteKeyDilution = ad.VoteKeyDilution
@@ -1153,6 +1165,7 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
 	ba.VoteID = ad.VoteID
 	ba.SelectionID = ad.SelectionID
+	ba.StateProofID = ad.StateProofID
 	ba.VoteFirstValid = ad.VoteFirstValid
 	ba.VoteLastValid = ad.VoteLastValid
 	ba.VoteKeyDilution = ad.VoteKeyDilution
@@ -1187,6 +1200,7 @@ func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 		VotingData: ledgercore.VotingData{
 			VoteID:          ba.VoteID,
 			SelectionID:     ba.SelectionID,
+			StateProofID:    ba.StateProofID,
 			VoteFirstValid:  ba.VoteFirstValid,
 			VoteLastValid:   ba.VoteLastValid,
 			VoteKeyDilution: ba.VoteKeyDilution,
@@ -1202,6 +1216,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 		RewardedMicroAlgos: ba.RewardedMicroAlgos,
 		VoteID:             ba.VoteID,
 		SelectionID:        ba.SelectionID,
+		StateProofID:       ba.StateProofID,
 		VoteFirstValid:     ba.VoteFirstValid,
 		VoteLastValid:      ba.VoteLastValid,
 		VoteKeyDilution:    ba.VoteKeyDilution,
@@ -1793,10 +1808,9 @@ func accountDataToOnline(address basics.Address, ad ledgercore.AccountData, prot
 		MicroAlgos:              ad.MicroAlgos,
 		RewardsBase:             ad.RewardsBase,
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
-		VoteID:                  ad.VoteID,
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
-		VoteKeyDilution:         ad.VoteKeyDilution,
+		StateProofID:            ad.StateProofID,
 	}
 }
 

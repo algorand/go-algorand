@@ -36,6 +36,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -97,11 +98,11 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-	require.Equal(t, totals.Online.Money.Raw, totalOnline, "mismatching total online money")
-	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
-	require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
-	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
-	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
+	require.Equal(t, totalOnline, totals.Online.Money.Raw, "mismatching total online money")
+	require.Equal(t, totalOffline, totals.Offline.Money.Raw)
+	require.Equal(t, totalNotPart, totals.NotParticipating.Money.Raw)
+	require.Equal(t, totalOnline+totalOffline, totals.Participating().Raw)
+	require.Equal(t, totalOnline+totalOffline+totalNotPart, totals.All().Raw)
 
 	d, err := aq.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
@@ -178,7 +179,7 @@ func TestAccountDBInit(t *testing.T) {
 }
 
 // creatablesFromUpdates calculates creatables from updates
-func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.NewAccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
+func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
 	known := make(map[basics.CreatableIndex]struct{}, len(seen))
 	for aidx := range seen {
 		known[aidx] = struct{}{}
@@ -194,7 +195,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates l
 	return updates.ToModifiedCreatables(known)
 }
 
-func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.NewAccountDeltas) map[basics.Address]basics.AccountData {
+func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.AccountDeltas) map[basics.Address]basics.AccountData {
 	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
 	for addr, ad := range base {
 		result[addr] = ad
@@ -245,15 +246,15 @@ func TestAccountDBRound(t *testing.T) {
 	baseAccounts.init(nil, 100, 80)
 	baseResources.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
-		var updates ledgercore.NewAccountDeltas
+		var updates ledgercore.AccountDeltas
 		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
 		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
 		accts = applyPartialDeltas(accts, updates)
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegment)
 
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), true, baseAccounts)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.NewAccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
@@ -284,7 +285,7 @@ func TestAccountDBRound(t *testing.T) {
 	}
 
 	// test the accounts totals
-	var updates ledgercore.NewAccountDeltas
+	var updates ledgercore.AccountDeltas
 	for addr, acctData := range newacctsTotals {
 		updates.Upsert(addr, acctData)
 	}
@@ -312,11 +313,11 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	type testfunc func(basics.Address) ([]ledgercore.NewAccountDeltas, int, int)
+	type testfunc func(basics.Address) ([]ledgercore.AccountDeltas, int, int)
 	var tests = []testfunc{
-		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+		func(addr basics.Address) ([]ledgercore.AccountDeltas, int, int) {
 			const numRounds = 4
-			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas := make([]ledgercore.AccountDeltas, numRounds)
 			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
 			accountDeltas[0].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
 			// transfer some asset
@@ -327,9 +328,9 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			accountDeltas[3].Upsert(addr, ledgercore.AccountData{})
 			return accountDeltas, 2, 3
 		},
-		func(addr basics.Address) ([]ledgercore.NewAccountDeltas, int, int) {
+		func(addr basics.Address) ([]ledgercore.AccountDeltas, int, int) {
 			const numRounds = 4
-			accountDeltas := make([]ledgercore.NewAccountDeltas, numRounds)
+			accountDeltas := make([]ledgercore.AccountDeltas, numRounds)
 			accountDeltas[0].Upsert(addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}}})
 			accountDeltas[1].UpsertAssetResource(addr, 100, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
 			// close out the asset
@@ -409,7 +410,33 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 	}
 }
 
-// checkCreatables compares the expected database image to the actual database content
+func TestAccountStorageWithStateProofID(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := ledgertesting.RandomAccounts(20, false)
+	_ = accountsInitTest(t, tx, accts, proto)
+	checkAccounts(t, tx, 0, accts)
+	require.True(t, allAccountsHaveStateProofPKs(accts))
+}
+
+func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
+	for _, data := range accts {
+		if data.StateProofID.IsEmpty() {
+			return false
+		}
+	}
+	return true
+}
+
+// checkCreatables compares the expected database image to the actual databse content
 func checkCreatables(t *testing.T,
 	tx *sql.Tx, iteration int,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
@@ -535,6 +562,8 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.Address]basics.AccountData) {
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 	updates = make(map[basics.Address]basics.AccountData, numAccounts)
 
 	for i := 0; i < numAccounts; i++ {
@@ -546,6 +575,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 			RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
 			VoteID:             secrets.OneTimeSignatureVerifier,
 			SelectionID:        pubVrfKey,
+			StateProofID:       stateProofID,
 			VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 			VoteLastValid:      basics.Round(0x000ffffffffffffff),
 			VoteKeyDilution:    0x000ffffffffffffff,
@@ -613,7 +643,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	prevHash := crypto.Digest{}
 	for _, accountBalance := range bal {
 		encodedAccountBalance := protocol.Encode(&accountBalance)
-		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
+		prevHash = crypto.Hash(append(encodedAccountBalance, []byte(prevHash[:])...))
 	}
 	require.Equal(b, b.N, len(bal))
 }
@@ -800,6 +830,8 @@ func TestAccountsReencoding(t *testing.T) {
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
@@ -820,6 +852,7 @@ func TestAccountsReencoding(t *testing.T) {
 				RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
 				VoteID:             secrets.OneTimeSignatureVerifier,
 				SelectionID:        pubVrfKey,
+				StateProofID:       stateProofID,
 				VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 				VoteLastValid:      basics.Round(0x000ffffffffffffff),
 				VoteKeyDilution:    0x000ffffffffffffff,
@@ -2073,7 +2106,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	}
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"UpdateRound":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -2518,7 +2551,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 	err = mock.setResource(addr1, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppLocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
 	a.NoError(err)
 
-	updates := make([]ledgercore.NewAccountDeltas, 4)
+	updates := make([]ledgercore.AccountDeltas, 4)
 	// payment addr1 -> observer
 	updates[0].Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 9000000}, TotalAppLocalStates: 1}})
 	updates[0].Upsert(observer, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 11000000}, TotalAppParams: 1}})
@@ -2614,7 +2647,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	err = mock.setResource(addr1, basics.CreatableIndex(aidx), ledgercore.AccountResource{AppLocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
 	a.NoError(err)
 
-	updates := make([]ledgercore.NewAccountDeltas, 3)
+	updates := make([]ledgercore.AccountDeltas, 3)
 	// fund addr2, opt-in, delete app, move funds
 	updates[0].Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAppLocalStates: 1}})
 	updates[0].UpsertAppResource(addr2, aidx, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
