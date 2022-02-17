@@ -13,5 +13,5 @@ jobs:
     name: Check PR Type label is set
     steps:
       - run: |
-        exit("Could not find proper PR Type label. \
+          exit("Could not find proper PR Type label. \
           Please add one of the following labels: 'New Feature', 'Enhancement', or 'Bug-Fix'")
