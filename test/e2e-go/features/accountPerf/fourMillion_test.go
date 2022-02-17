@@ -158,6 +158,10 @@ func Test5MAssetsScenario2(t *testing.T) {
 	test5MAssets(t, 2)
 }
 
+func Test5MAssetsScenario3(t *testing.T) {
+	test5MAssets(t, 3)
+}
+
 func Test5MAssetsScenario4(t *testing.T) {
 	test5MAssets(t, 4)
 }
@@ -266,6 +270,8 @@ func test5MAssets(t *testing.T, scenario int) {
 		scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
 	case 2:
 		scenarioB(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
+	case 3:
+		scenarioC(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
 	case 4:
 		scenarioD(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
 
@@ -380,7 +386,7 @@ func scenarioA(
 	client := fixture.LibGoalClient
 
 	numberOfAccounts := uint64(6000)  // 6K
-	numberOfAssets := uint64(2000000) // 6M
+	numberOfAssets := uint64(6000000) // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -398,28 +404,20 @@ func scenarioA(
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
 
-	fmt.Println("Creating accounts...")
-
 	// create 6K accounts
-	keys := generateKeys(int(numberOfAccounts))
-	for i, key := range keys {
-		select {
-		case <-stopChan:
-			require.Fail(t, "Test errored")
-		default:
-		}
-		if i%printFreequency == 0 {
-			fmt.Println("account create txn: ", i)
-		}
-		txn := sendAlgoTransaction(t, firstValid, baseAcct.pk, key.pk, balance, tLife, genesisHash)
-		counter, txnGroup = queueTransaction(baseAcct.sk, txn, txnChan, txnGrpChan, counter, txnGroup)
-
-		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
-		require.NoError(t, err)
-	}
-	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
-	require.NoError(t, err)
+	firstValid, counter, keys := createAccounts(
+		t,
+		fixture,
+		numberOfAccounts,
+		baseAcct,
+		firstValid,
+		balance,
+		counter,
+		tLife,
+		genesisHash,
+		txnChan,
+		txnGrpChan,
+		stopChan)
 
 	fmt.Println("Creating assets...")
 
@@ -577,7 +575,7 @@ func scenarioB(
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
 
-	fmt.Println("Creating accounts...")
+	fmt.Println("Creating assets..")
 
 	// create 6M unique assets by a single account
 	assetAmount := uint64(100)
@@ -623,6 +621,264 @@ func scenarioB(
 	*/
 }
 
+// create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them.
+// Make an app call to each of them, and make sure the app store some information into the local storage.
+func scenarioC(
+	t *testing.T,
+	fixture *fixtures.RestClientFixture,
+	baseAcct psKey,
+	genesisHash crypto.Digest,
+	txnChan chan<- *txnKey,
+	txnGrpChan chan<- []txnKey,
+	tLife uint64,
+	stopChan <-chan struct{}) {
+
+	client := fixture.LibGoalClient
+
+	numberOfAccounts := uint64(6000) // 6K
+	numberOfApps := uint64(6000000)  // 6M
+	appsPerAccount := (numberOfApps + (numberOfAccounts - 1)) / numberOfAccounts
+
+	balance := uint64(200000000) // 100300000 for (1002 assets)  99363206259 below min 99363300000 (993632 assets)
+
+	defer func() {
+		close(txnChan)
+		close(txnGrpChan)
+	}()
+
+	firstValid := uint64(2)
+	counter := uint64(0)
+	txnGroup := make([]txnKey, 0, maxTxGroupSize)
+	var err error
+
+	//	globalStateCheck := make([]bool, numberOfApps)
+	appCallFields := make([]transactions.ApplicationCallTxnFields, numberOfApps)
+
+	// create 6K accounts
+	firstValid, counter, keys := createAccounts(
+		t,
+		fixture,
+		numberOfAccounts,
+		baseAcct,
+		firstValid,
+		balance,
+		counter,
+		tLife,
+		genesisHash,
+		txnChan,
+		txnGrpChan,
+		stopChan)
+
+	fmt.Println("Creating applications ...")
+
+	// create 6M unique apps by a different 6,000 accounts
+	for nai, na := range keys {
+		for appi := uint64(0); appi < appsPerAccount; appi++ {
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+
+			if int(appi)%printFreequency == 0 && int(nai)%printFreequency == 0 {
+				fmt.Printf("create app %d / %d for account %d / %d\n", appi, appsPerAccount, nai, numberOfAccounts)
+			}
+			atx := makeAppTransaction(t, client, appi, firstValid, na.pk, tLife, genesisHash)
+			appCallFields[appi] = atx.ApplicationCallTxnFields
+			counter, txnGroup = queueTransaction(na.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
+
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			require.NoError(t, err)
+		}
+	}
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
+
+	fmt.Println("Opt-in applications...")
+
+	// have a single account opted in all of them
+	ownAllAccount := keys[numberOfAccounts-1]
+	// make ownAllAccount very rich
+	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
+	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	/*
+		for _, nacc := range keys {
+			info1, err := client.AccountInformationV2(nacc.pk.String())
+			require.NoError(t, err)
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+			for xxx := range *info1.AppsLocalState {
+				fmt.Printf("%+v\n\n", (*(*info1.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
+			}
+			for _, xxx := range *info1.CreatedApps {
+				fmt.Printf("g %+v\n", (*xxx.Params.GlobalState)[0].Value.Uint)
+			}
+
+		}
+	*/
+	for acci, nacc := range keys {
+		if nacc == ownAllAccount {
+			continue
+		}
+		info, err := client.AccountInformationV2(nacc.pk.String())
+		require.NoError(t, err)
+		for appi, app := range *info.CreatedApps {
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+
+			if acci%printFreequency == 0 && appi%printFreequency == 0 {
+				fmt.Printf("Opting into Application acct: %d app %d\n", acci, app.Id)
+			}
+			optInTx := makeOptInAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
+			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
+
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			require.NoError(t, err)
+		}
+	}
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
+	/*
+		for _, nacc := range keys {
+			info1, err := client.AccountInformationV2(nacc.pk.String())
+			require.NoError(t, err)
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+			for xxx := range *info1.AppsLocalState {
+				fmt.Printf("%+v\n\n", (*(*info1.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
+			}
+			for _, xxx := range *info1.CreatedApps {
+				fmt.Printf("g %+v\n", (*xxx.Params.GlobalState)[0].Value.Uint)
+			}
+
+		}
+	*/
+	// Make an app call to each of them
+	for acci, nacc := range keys {
+		info, err := client.AccountInformationV2(nacc.pk.String())
+		require.NoError(t, err)
+		for appi, app := range *info.CreatedApps {
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+
+			if acci%printFreequency == 0 && appi%printFreequency == 0 {
+				fmt.Printf("Calling Application acct: %d app %d\n", acci, app.Id)
+			}
+
+			optInTx := callAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
+			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
+
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			require.NoError(t, err)
+		}
+	}
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
+	/*
+		for _, nacc := range keys {
+			info1, err := client.AccountInformationV2(nacc.pk.String())
+			require.NoError(t, err)
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			default:
+			}
+			for xxx := range *info1.AppsLocalState {
+				fmt.Printf("%+v\n", (*(*info1.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
+			}
+			for _, xxx := range *info1.CreatedApps {
+				fmt.Printf("g %+v\n", (*xxx.Params.GlobalState)[0].Value.Uint)
+			}
+		}
+	*/
+	// make sure the app store some information into the local storage
+	/*
+		// check the results in parallel
+		parallelCheckers := numberOfThreads
+		checkAppChan := make(chan uint64, parallelCheckers)
+		checkResChan := make(chan uint64, parallelCheckers)
+		var wg sync.WaitGroup
+		var globalStateCheckMu deadlock.Mutex
+
+		for p := 0; p < parallelCheckers; p++ {
+			wg.Add(1)
+			go func() {
+				lastAppId := uint64(0)
+				for i := range checkAppChan {
+					var app generated.Application
+					cont := false
+					for {
+						app, err = client.ApplicationInformation(i)
+						if err != nil {
+							if strings.Contains(err.Error(), "application does not exist") {
+								cont = true
+								break
+							}
+							time.Sleep(time.Millisecond * 100)
+							continue
+						}
+						break
+					}
+					if cont {
+						continue
+					}
+					checkResChan <- 1
+					lastAppId = i
+					checkApplicationParams(
+						t,
+						appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
+						app.Params,
+						baseAcct.pk.String(),
+						&globalStateCheck,
+						globalStateCheckMu)
+				}
+				fmt.Printf("Last app id: %d\n", lastAppId)
+				wg.Done()
+			}()
+		}
+
+		checked := uint64(0)
+		for i := uint64(0); checked < numberOfApps; {
+			select {
+			case <-stopChan:
+				require.Fail(t, "Test errored")
+			case val := <-checkResChan:
+				checked += val
+			case checkAppChan <- i:
+				i++
+			default:
+				time.Sleep(10 * time.Millisecond)
+			}
+			if int(checked)%printFreequency == 0 {
+				fmt.Printf("check app params %d / %d\n", checked, numberOfApps)
+			}
+		}
+		close(checkAppChan)
+		wg.Wait()
+
+		for _, x := range globalStateCheck {
+			require.True(t, x)
+
+		}*/
+}
+
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them. Make an app call to each of them, and make sure the app store some information into the local storage.
 //func scenarioC(
 // create 6M unique apps by a single account. Opt-into all the applications and make sure the app stores information to both the local and global storage.
@@ -638,7 +894,7 @@ func scenarioD(
 
 	client := fixture.LibGoalClient
 
-	numberOfApps := uint64(600000) // 6M
+	numberOfApps := uint64(6000000) // 6M
 	defer func() {
 		close(txnChan)
 		close(txnGrpChan)
@@ -862,7 +1118,7 @@ func makeAppTransaction(
 byte b64 Y291bnRlcg== // counter
 dup
 app_global_get
-int %d
+int 1
 +
 app_global_put  // update the counter
 int 0
@@ -880,7 +1136,7 @@ int 1  // increment
 +
 app_local_put
 int 1
-`, counter)
+`)
 
 	approvalOps, err := logic.AssembleString(prog)
 	require.NoError(t, err)
@@ -909,7 +1165,7 @@ int 1
 	return
 }
 
-func makeOptInApp(
+func makeOptInAppTransaction(
 	t *testing.T,
 	client libgoal.Client,
 	appIdx basics.AppIndex,
@@ -954,4 +1210,68 @@ func checkApplicationParams(
 	require.Equal(t, acTF.GlobalStateSchema.NumUint, app.GlobalStateSchema.NumUint)
 	require.Equal(t, acTF.LocalStateSchema.NumByteSlice, app.LocalStateSchema.NumByteSlice)
 	require.Equal(t, acTF.LocalStateSchema.NumUint, app.LocalStateSchema.NumUint)
+}
+
+func createAccounts(
+	t *testing.T,
+	fixture *fixtures.RestClientFixture,
+	numberOfAccounts uint64,
+	baseAcct psKey,
+	firstValid uint64,
+	balance uint64,
+	counter uint64,
+	tLife uint64,
+	genesisHash crypto.Digest,
+	txnChan chan<- *txnKey,
+	txnGrpChan chan<- []txnKey,
+	stopChan <-chan struct{}) (newFirstValid uint64, newCounter uint64, keys []psKey) {
+
+	fmt.Println("Creating accounts...")
+
+	var err error
+	txnGroup := make([]txnKey, 0, maxTxGroupSize)
+
+	// create 6K accounts
+	keys = generateKeys(int(numberOfAccounts))
+	for i, key := range keys {
+		select {
+		case <-stopChan:
+			require.Fail(t, "Test errored")
+		default:
+		}
+		if i%printFreequency == 0 {
+			fmt.Println("account create txn: ", i)
+		}
+		txn := sendAlgoTransaction(t, firstValid, baseAcct.pk, key.pk, balance, tLife, genesisHash)
+		counter, txnGroup = queueTransaction(baseAcct.sk, txn, txnChan, txnGrpChan, counter, txnGroup)
+
+		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+		require.NoError(t, err)
+	}
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	require.NoError(t, err)
+	return firstValid, counter, keys
+}
+
+func callAppTransaction(
+	t *testing.T,
+	client libgoal.Client,
+	appIdx basics.AppIndex,
+	round uint64,
+	sender basics.Address,
+	tLife uint64,
+	genesisHash crypto.Digest) (appTx transactions.Transaction) {
+
+	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	appTx.Header = transactions.Header{
+		Sender:      sender,
+		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
+		FirstValid:  basics.Round(round),
+		LastValid:   basics.Round(round + tLife),
+		GenesisHash: genesisHash,
+	}
+	return
 }
