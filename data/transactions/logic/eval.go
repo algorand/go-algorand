@@ -31,6 +31,7 @@ import (
 	"runtime"
 	"strings"
 
+	"golang.org/x/crypto/bn256"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/algorand/go-algorand/config"
@@ -1247,6 +1248,29 @@ func opDivw(cx *EvalContext) {
 	quo, _ := bits.Div64(hi, lo, y)
 	cx.stack = cx.stack[:prev] // pop 2
 	cx.stack[pprev].Uint = quo
+}
+
+func opBn256Add(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	input := cx.stack[last].Bytes
+
+	a, ok := new(bn256.G1).Unmarshal(input[:64])
+	if !ok {
+		cx.err = errors.New("unmarshal failed")
+		return
+	}
+
+	b, ok := new(bn256.G1).Unmarshal(input[64:])
+	if !ok {
+		cx.err = errors.New("unmarshal failed")
+		return
+	}
+
+	res := new(bn256.G1).Add(a, b)
+	resBytes := res.Marshal()
+
+	cx.stack[last].Bytes = resBytes
 }
 
 func opLt(cx *EvalContext) {
