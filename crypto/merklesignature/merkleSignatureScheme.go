@@ -85,6 +85,9 @@ type (
 	}
 )
 
+// SchemeVersion is the current version of merkleSignature
+const SchemeVersion = 0
+
 // CryptoPrimitivesID is an identification that the Merkle Signature Scheme uses a subset sum hash function
 // and a falcon signature scheme.
 var CryptoPrimitivesID = uint16(0)
@@ -224,8 +227,14 @@ func (v *Verifier) IsEmpty() bool {
 	return *v == [MerkleSignatureSchemeRootSize]byte{}
 }
 
+// ErrInvalidSignatureVersion is returned when the version of the signature is not matching the expected version
+var ErrInvalidSignatureVersion = fmt.Errorf("invalid signature version")
+
 // Verify verifies that a merklesignature sig is valid, on a specific round, under a given public key
-func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) error {
+func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature, version int) error {
+	if !sig.Signature.ValidateVersion(version) {
+		return ErrInvalidSignatureVersion
+	}
 
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
