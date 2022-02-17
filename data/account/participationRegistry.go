@@ -22,7 +22,6 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -288,7 +287,7 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 	registry := &participationDB{
 		log:            log,
 		store:          accessor,
-		writeQueue:     make(chan partDBWriteRecord, 10),
+		writeQueue:     make(chan opRequest, 10),
 		writeQueueDone: make(chan struct{}),
 		flushTimeout:   defaultTimeout,
 	}
@@ -402,7 +401,7 @@ type participationDB struct {
 	store db.Pair
 	mutex deadlock.RWMutex
 
-	writeQueue     chan partDBWriteRecord
+	writeQueue     chan opRequest
 	writeQueueDone chan struct{}
 
 	flushTimeout time.Duration
@@ -453,38 +452,14 @@ func (db *participationDB) initializeCache() error {
 
 func (db *participationDB) writeThread() {
 	defer close(db.writeQueueDone)
-	var err error
 	var lastErr error
-	for {
-		var wr partDBWriteRecord
-		var chanOk bool
-
-		// blocking read until next activity or close
-		wr, chanOk = <-db.writeQueue
-		if !chanOk {
-			return // chan closed
-		}
-
-		if len(wr.registerUpdated) != 0 {
-			err = db.registerInner(wr.registerUpdated)
-		} else if !wr.insertID.IsZero() {
-			if wr.insert != (Participation{}) {
-				err = db.insertInner(wr.insert, wr.insertID)
-			} else if len(wr.keys) != 0 {
-				err = db.appendKeysInner(wr.insertID, wr.keys)
-			}
-		} else if !wr.delete.IsZero() {
-			err = db.deleteInner(wr.delete)
-		} else if wr.flushResultChannel != nil {
-			err = db.flushInner()
-		}
-		if err != nil {
+	for op := range db.writeQueue {
+		if err := op.operation.apply(db); err != nil {
 			lastErr = err
 		}
 
-		if wr.flushResultChannel != nil {
-			wr.flushResultChannel <- lastErr
-			lastErr = nil
+		if op.flush != nil {
+			op.flush <- lastErr
 		}
 	}
 }
@@ -502,53 +477,6 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 		return fmt.Errorf("unexpected number of %s rows affected, expected 1 found %d", operationName, rows)
 	}
 	return nil
-}
-
-func (db *participationDB) insertInner(record Participation, id ParticipationID) (err error) {
-	var rawVRF []byte
-	var rawVoting []byte
-	var rawStateProofContext []byte
-
-	if record.VRF != nil {
-		rawVRF = protocol.Encode(record.VRF)
-	}
-	if record.Voting != nil {
-		voting := record.Voting.Snapshot()
-		rawVoting = protocol.Encode(&voting)
-	}
-
-	// This contains all the state proof data except for the actual secret keys (stored in a different table)
-	if record.StateProofSecrets != nil {
-		rawStateProofContext = protocol.Encode(&record.StateProofSecrets.SignerContext)
-	}
-
-	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		result, err := tx.Exec(
-			insertKeysetQuery,
-			id[:],
-			record.Parent[:],
-			record.FirstValid,
-			record.LastValid,
-			record.KeyDilution,
-			rawVRF,
-			rawStateProofContext)
-		if err = verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
-			return err
-		}
-		pk, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("unable to get pk from keyset: %w", err)
-		}
-
-		// Create Rolling entry
-		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
-		if err = verifyExecWithOneRowEffected(err, result, "insert rolling"); err != nil {
-			return err
-		}
-
-		return nil
-	})
-	return err
 }
 
 func (db *participationDB) appendKeysInner(id ParticipationID, keys StateProofKeys) error {
@@ -582,125 +510,6 @@ func (db *participationDB) appendKeysInner(id ParticipationID, keys StateProofKe
 	return err
 }
 
-func (db *participationDB) registerInner(updated map[ParticipationID]updatingParticipationRecord) error {
-	var cacheDeletes []ParticipationID
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// Disable active key if there is one
-		for id, record := range updated {
-			err := updateRollingFields(ctx, tx, record.ParticipationRecord)
-			// Repair the case when no keys were updated
-			if err == ErrNoKeyForID {
-				db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
-				cacheDeletes = append(cacheDeletes, id)
-				if !record.required {
-					err = nil
-				}
-			}
-			if err != nil {
-				return fmt.Errorf("unable to disable old key when registering %s: %w", id, err)
-			}
-		}
-		return nil
-	})
-
-	// Update cache
-	if err == nil && len(cacheDeletes) != 0 {
-		db.mutex.Lock()
-		defer db.mutex.Unlock()
-		for _, id := range cacheDeletes {
-			delete(db.cache, id)
-			delete(db.dirty, id)
-		}
-	}
-	return err
-}
-
-func (db *participationDB) deleteInner(id ParticipationID) error {
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// Fetch primary key
-		var pk int
-		row := tx.QueryRow(selectPK, id[:])
-		err := row.Scan(&pk)
-		if err == sql.ErrNoRows {
-			// nothing to do.
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
-		}
-
-		// Delete rows
-		result, err := tx.Exec(deleteKeysets, pk)
-		if err = verifyExecWithOneRowEffected(err, result, "delete keyset"); err != nil {
-			return err
-		}
-
-		result, err = tx.Exec(deleteRolling, pk)
-		if err = verifyExecWithOneRowEffected(err, result, "delete rolling"); err != nil {
-			return err
-		}
-
-		return nil
-	})
-	return err
-}
-
-func (db *participationDB) flushInner() error {
-	var dirty map[ParticipationID]struct{}
-	db.mutex.Lock()
-	if len(db.dirty) != 0 {
-		dirty = db.dirty
-		db.dirty = make(map[ParticipationID]struct{})
-	} else {
-		dirty = nil
-	}
-
-	var needsUpdate []ParticipationRecord
-	// Verify that the dirty flag has not desynchronized from the cache.
-	for id := range dirty {
-		if rec, ok := db.cache[id]; !ok {
-			db.log.Warnf("participationDB fixing dirty flag de-synchronization for %s", id)
-			delete(db.cache, id)
-		} else {
-			needsUpdate = append(needsUpdate, rec)
-		}
-	}
-	db.mutex.Unlock()
-
-	if dirty == nil {
-		return nil
-	}
-
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var errorStr strings.Builder
-		for _, record := range needsUpdate {
-			err := updateRollingFields(ctx, tx, record)
-			// This should only be updating key usage so ignoring missing keys is not a problem.
-			if err != nil && err != ErrNoKeyForID {
-				if errorStr.Len() > 0 {
-					errorStr.WriteString(", ")
-				}
-				errorStr.WriteString(err.Error())
-			}
-		}
-		if errorStr.Len() > 0 {
-			return errors.New(errorStr.String())
-		}
-		return nil
-	})
-
-	if err != nil {
-		// put back what we didn't finish with
-		db.mutex.Lock()
-		for id, v := range dirty {
-			db.dirty[id] = v
-		}
-		db.mutex.Unlock()
-	}
-
-	return err
-}
-
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -712,9 +521,11 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		return id, ErrAlreadyInserted
 	}
 
-	db.writeQueue <- partDBWriteRecord{
-		insertID: id,
-		insert:   record,
+	db.writeQueue <- opRequest{
+		operation: insertOp{
+			id:     id,
+			record: record,
+		},
 	}
 
 	// Make some copies.
@@ -767,9 +578,11 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) e
 	}
 
 	// Update the DB asynchronously.
-	db.writeQueue <- partDBWriteRecord{
-		insertID: id,
-		keys:     keys,
+	db.writeQueue <- opRequest{
+		operation: appendKeysOp{
+			id:   id,
+			keys: keys,
+		},
 	}
 	return nil
 }
@@ -786,8 +599,8 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	delete(db.cache, id)
 
 	// do the db part async
-	db.writeQueue <- partDBWriteRecord{
-		delete: id,
+	db.writeQueue <- opRequest{
+		operation: deleteOp{id},
 	}
 	return nil
 }
@@ -1100,8 +913,10 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 
 	if len(updated) != 0 {
-		db.writeQueue <- partDBWriteRecord{
-			registerUpdated: updated,
+		db.writeQueue <- opRequest{
+			operation: registerOp{
+				updated: updated,
+			},
 		}
 		db.mutex.Lock()
 		for id, record := range updated {
@@ -1163,8 +978,9 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 func (db *participationDB) Flush(timeout time.Duration) error {
 	resultCh := make(chan error, 1)
 	timeoutCh := time.After(timeout)
-	writeRecord := partDBWriteRecord{
-		flushResultChannel: resultCh,
+	writeRecord := opRequest{
+		operation: flushOp{},
+		flush:     resultCh,
 	}
 
 	select {

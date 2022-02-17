@@ -717,8 +717,8 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            false,
 	}
 
-	registry.writeQueue <- partDBWriteRecord{
-		registerUpdated: updates,
+	registry.writeQueue <- opRequest{
+		operation: registerOp{updates},
 	}
 
 	a.NoError(registry.Flush(defaultTimeout))
@@ -729,8 +729,8 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            true,
 	}
 
-	registry.writeQueue <- partDBWriteRecord{
-		registerUpdated: updates,
+	registry.writeQueue <- opRequest{
+		operation: registerOp{updates},
 	}
 
 	err = registry.Flush(defaultTimeout)
