@@ -639,7 +639,7 @@ func scenarioC(
 	numberOfApps := uint64(6000000)  // 6M
 	appsPerAccount := (numberOfApps + (numberOfAccounts - 1)) / numberOfAccounts
 
-	balance := uint64(200000000) // 100300000 for (1002 assets)  99363206259 below min 99363300000 (993632 assets)
+	balance := uint64(1000000000) // balance 199226999 below min 199275000
 
 	defer func() {
 		close(txnChan)
