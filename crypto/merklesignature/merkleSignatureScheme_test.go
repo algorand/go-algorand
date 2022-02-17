@@ -190,7 +190,7 @@ func TestSignatureStructure(t *testing.T) {
 	a.NoError(err)
 	a.Equal(*proof, sig.Proof)
 
-	a.NotEqual(nil, sig.ByteSignature)
+	a.NotEqual(nil, sig.Signature)
 }
 
 func genMsgForTest() []byte {
@@ -265,7 +265,7 @@ func TestBadRound(t *testing.T) {
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	hashable, sig = makeSig(signer, start+1, a)
+	msg, sig = makeSig(signer, start+1, a)
 	err = signer.GetVerifier().Verify(start, msg, sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
@@ -299,13 +299,13 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 }
 
 func copySig(sig Signature) Signature {
-	bsig := make([]byte, len(sig.ByteSignature))
-	copy(bsig, sig.ByteSignature)
+	bsig := make([]byte, len(sig.Signature))
+	copy(bsig, sig.Signature)
 
 	return Signature{
-		ByteSignature: bsig,
-		Proof:         copyProof(sig.Proof),
-		VerifyingKey:  sig.VerifyingKey,
+		Signature:    bsig,
+		Proof:        copyProof(sig.Proof),
+		VerifyingKey: sig.VerifyingKey,
 	}
 }
 
@@ -317,10 +317,10 @@ func TestIncorrectByteSignature(t *testing.T) {
 	msg, sig := makeSig(signer, start, a)
 
 	sig2 := sig
-	bs := make([]byte, len(sig.ByteSignature))
-	copy(bs, sig2.ByteSignature)
+	bs := make([]byte, len(sig.Signature))
+	copy(bs, sig2.Signature)
 	bs[0]++
-	sig2.ByteSignature = bs
+	sig2.Signature = bs
 
 	err := signer.GetVerifier().Verify(start, msg, sig2)
 	a.Error(err)

@@ -170,13 +170,13 @@ func (s *Signer) Sign(msg []byte) (Signature, error) {
 		return Signature{}, err
 	}
 
-	sig, err := signingKey.SignBytes(msg)
+	sig, err := key.SignBytes(msg)
 	if err != nil {
 		return Signature{}, err
 	}
 
 	return Signature{
-		ByteSignature:    sig,
+		Signature:        sig,
 		Proof:            *proof,
 		VerifyingKey:     *s.SigningKey.GetVerifyingKey(),
 		MerkleArrayIndex: index,
@@ -255,7 +255,7 @@ func (v *Verifier) Verify(round uint64, msg []byte, sig Signature) error {
 	}
 
 	// verify that the signature is valid under the ephemeral public key
-	err = sig.VerifyingKey.VerifyBytes(msg, sig.ByteSignature)
+	err = sig.VerifyingKey.VerifyBytes(msg, sig.Signature)
 	if err != nil {
 		return fmt.Errorf("%w - %v", ErrSignatureSchemeVerificationFailed, err)
 	}

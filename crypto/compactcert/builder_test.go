@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type testMessage string
+type testMessage []byte
 
 const compactCertRoundsForTests = 256
 const compactCertSecKQForTests = 128

@@ -276,16 +276,16 @@ func TestWorkerAllSigs(t *testing.T) {
 
 			require.Equal(t, tx.Txn.CertRound, basics.Round(iter+2)*basics.Round(proto.CompactCertRounds))
 
-			signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
+			msg, err := GenerateStateProofMessage(s, tx.Txn.CertRound)
 			require.NoError(t, err)
 
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Msg:          signedHdr,
+				Msg:          msg,
 				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(signedHdr.Round),
+				SigRound:     tx.Txn.CertRound,
 				SecKQ:        proto.CompactCertSecKQ,
 			}
 
@@ -339,16 +339,16 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
 	require.Equal(t, tx.Txn.CertRound, 2*basics.Round(proto.CompactCertRounds))
 
-	signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
+	msg, err := GenerateStateProofMessage(s, tx.Txn.CertRound)
 	require.NoError(t, err)
 
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
 	ccparams := compactcert.Params{
-		Msg:          signedHdr,
+		Msg:          msg,
 		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(signedHdr.Round),
+		SigRound:     basics.Round(tx.Txn.CertRound),
 		SecKQ:        proto.CompactCertSecKQ,
 	}
 

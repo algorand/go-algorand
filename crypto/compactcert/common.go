@@ -34,7 +34,7 @@ type coinChoice struct {
 	ProvenWeight uint64               `codec:"provenweight"`
 	Sigcom       crypto.GenericDigest `codec:"sigcom"`
 	Partcom      crypto.GenericDigest `codec:"partcom"`
-	MsgHash      crypto.GenericDigest `codec:"msghash"`
+	Msg          []byte               `codec:"msg"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

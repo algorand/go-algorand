@@ -24,7 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	cc "github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -348,7 +348,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert compactcert.Cert, atRound basics.Round, validate bool) error {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert cc.Cert, atRound basics.Round, validate bool) error {
 	if certType != protocol.CompactCertBasic {
 		return fmt.Errorf("compact cert type %d not supported", certType)
 	}
@@ -370,7 +370,8 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Com
 		}
 
 		var msg []byte
-		// TODO Or: generate commitment message (the one signed on by the compact certificate)
+		//TODO Stateproof: generate stateproof message here (need to chane its Ledger interface parameter)
+		// compactcert.GenerateStateProofMessage(cs.lookupParent, atRound)
 		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 		if err != nil {
 			return err

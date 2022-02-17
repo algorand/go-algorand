@@ -27,6 +27,7 @@ import (
 type CompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+	// TODO Stateproof: should we rename CertRound to something more representative?
 	CertRound basics.Round             `codec:"certrnd"`
 	CertType  protocol.CompactCertType `codec:"certtype"`
 	Cert      compactcert.Cert         `codec:"cert"`

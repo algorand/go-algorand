@@ -23,12 +23,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -41,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
+	"github.com/algorand/go-deadlock"
 )
 
 // Ledger is a database storing the contents of the ledger.
@@ -728,12 +726,6 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 	vb := ledgercore.MakeValidatedBlock(blk, delta)
 	return &vb, nil
-}
-
-// CompactCertParams computes the parameters for building or verifying
-// a compact cert for block hdr, using voters from block votersHdr.
-func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
-	return internal.CompactCertParams(votersHdr, hdr)
 }
 
 // AcceptableCompactCertWeight computes the acceptable signed weight

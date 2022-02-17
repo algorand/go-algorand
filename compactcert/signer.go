@@ -73,7 +73,7 @@ restart:
 				goto restart
 			}
 
-			//commitment, err := generateSignableCommitment(ccw.ledger, nextrnd)
+			//commitment, err := GenerateStateProofMessage(ccw.ledger, nextrnd)
 			//if err != nil {
 			//	// TODO: Log error
 			//	continue
@@ -89,9 +89,10 @@ restart:
 	}
 }
 
-// Builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
+// GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
-func generateSignableCommitment(ledger Ledger, compactCertRound basics.Round) ([]byte, error) {
+// This is the message the Compact Certificate will attest to.
+func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round) ([]byte, error) {
 	interval := 256 // TODO: replace by interval from block header
 	blockHeaders := make([]crypto.Hashable, interval)
 	firstRound := compactCertRound - basics.Round(interval) + 1
@@ -157,9 +158,9 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
-		commitment, err := generateSignableCommitment(ccw.ledger, hdr.Round)
+		commitment, err := GenerateStateProofMessage(ccw.ledger, hdr.Round)
 		if err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): generateSignableCommitment: %v", hdr.Round, err)
+			ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 			continue
 		}
 		sig, err := key.StateProofSecrets.Sign(commitment)

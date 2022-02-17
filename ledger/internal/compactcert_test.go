@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// TODO Stateproof: need to update this test to use some proper message to verify with the compact cert
 func TestValidateCompactCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -38,9 +39,10 @@ func TestValidateCompactCert(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var nextCertRnd basics.Round
 	var atRound basics.Round
+	var msg []byte
 
 	// will definitely fail with nothing set up
-	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	t.Log(err)
 	require.NotNil(t, err)
 
@@ -50,32 +52,32 @@ func TestValidateCompactCert(t *testing.T) {
 	proto.CompactCertRounds = 2
 	config.Consensus[certHdr.CurrentProtocol] = proto
 
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.NotNil(t, err)
 
 	certHdr.Round = 4
 	votersHdr.Round = 4
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.NotNil(t, err)
 
 	votersHdr.Round = 2
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.NotNil(t, err)
 
 	nextCertRnd = 4
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.NotNil(t, err)
 
 	votersHdr.CurrentProtocol = certHdr.CurrentProtocol
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.NotNil(t, err)
@@ -84,13 +86,13 @@ func TestValidateCompactCert(t *testing.T) {
 	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
 	cc.CompactCertVotersTotal.Raw = 100
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.NotNil(t, err)
 
 	cert.SignedWeight = 101
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.NotNil(t, err)
