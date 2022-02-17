@@ -198,7 +198,10 @@ func (s *session) StepOver() {
 		defer s.mu.Unlock()
 		// Step over a function call (callsub op).
 		if currentOp == "callsub" {
-			s.setBreakpoint(currentLine + 1)
+			err := s.setBreakpoint(currentLine + 1)
+			if err != nil {
+				s.debugConfig = debugConfig{BreakAtLine: stepBreak}
+			}
 		} else {
 			s.debugConfig = debugConfig{BreakAtLine: stepBreak}
 		}
