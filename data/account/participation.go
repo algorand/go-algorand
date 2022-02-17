@@ -48,7 +48,7 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// StateProofSecrets is used to sign compact certificates. might be nil
+	// StateProofSecrets is used to sign compact certificates.
 	StateProofSecrets *merklesignature.Secrets
 
 	// The first and last rounds for which this account is valid, respectively.
@@ -222,7 +222,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 
 	// TODO: change to ConsensusCurrentVersion when updated
 	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
 
 	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
 		return PersistedParticipation{}, fmt.Errorf("the validity period for mss is too large: the limit is %d", maxValidPeriod)
@@ -303,7 +303,12 @@ func (part PersistedParticipation) Persist() error {
 // Calls through to the migration helper and returns the result.
 func Migrate(partDB db.Accessor) error {
 	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return partMigrate(tx)
+		err := partMigrate(tx)
+		if err != nil {
+			return err
+		}
+
+		return merklesignature.InstallStateProofTable(tx)
 	})
 }
 

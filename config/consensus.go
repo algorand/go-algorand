@@ -1057,9 +1057,31 @@ func initConsensusProtocols() {
 	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
 	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
 
+	v31 := v30
+	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v31.EnableBatchVerification = true
+	v31.RewardsCalculationFix = true
+	v31.MaxProposedExpiredOnlineAccounts = 32
+
+	// Enable TEAL 6 / AVM 1.1
+	v31.LogicSigVersion = 6
+	v31.EnableInnerTransactionPooling = true
+	v31.IsolateClearState = true
+
+	// stat proof key registration
+	v31.EnableStateProofKeyregCheck = true
+
+	// Maximum validity period for key registration, to prevent generating too many StateProof keys
+	v31.MaxKeyregValidPeriod = 256*(1<<16) - 1
+
+	Consensus[protocol.ConsensusV31] = v31
+
+	// v30 can be upgraded to v31, with an update delay of 7 days ( see calculation above )
+	v30.ApprovedUpgrades[protocol.ConsensusV31] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v30
+	vFuture := v31
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -1071,23 +1093,6 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
-
-	// Enable TEAL 6 / AVM 1.1
-	vFuture.LogicSigVersion = 6
-	vFuture.EnableInnerTransactionPooling = true
-	vFuture.IsolateClearState = true
-
-	vFuture.MaxProposedExpiredOnlineAccounts = 32
-
-	vFuture.EnableBatchVerification = true
-
-	vFuture.RewardsCalculationFix = true
-
-	// stat proof key registration
-	vFuture.EnableStateProofKeyregCheck = true
-
-	// Maximum validity period for key registration, to prevent generating too many StateProof keys
-	vFuture.MaxKeyregValidPeriod = 256*(1<<16) - 1
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

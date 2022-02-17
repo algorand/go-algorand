@@ -66,6 +66,7 @@ func TestBlockEvaluatorFeeSink(t *testing.T) {
 	l := newTestLedger(t, genesisBalances)
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
@@ -952,9 +953,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	err = eval.endOfBlock()
 	require.Error(t, err)
 
-	eval.block.ExpiredParticipationAccounts = []basics.Address{
-		basics.Address{},
-	}
+	eval.block.ExpiredParticipationAccounts = []basics.Address{{}}
 	eval.state.mods.Accts = ledgercore.AccountDeltas{}
 	eval.state.lookupParent = &failRoundCowParent{}
 	err = eval.endOfBlock()

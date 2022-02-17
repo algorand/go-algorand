@@ -205,9 +205,15 @@ func TestRetrieveFromDBAtVersion1(t *testing.T) {
 	retrivedPart, err := RestoreParticipation(partDB)
 	a.NoError(err)
 	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
+
+	retrivedPart, err = RestoreParticipationWithSecrets(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
 }
 
-func TestRetriveFromDBAtVersion2(t *testing.T) {
+func TestRetrieveFromDBAtVersion2(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -222,6 +228,18 @@ func TestRetriveFromDBAtVersion2(t *testing.T) {
 	retrivedPart, err := RestoreParticipation(partDB)
 	a.NoError(err)
 	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
+	versions, err := getSchemaVersions(partDB)
+	a.NoError(err)
+	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
+
+	retrivedPart, err = RestoreParticipationWithSecrets(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
+	versions, err = getSchemaVersions(partDB)
+	a.NoError(err)
+	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
 }
 
 func TestKeyRegCreation(t *testing.T) {
@@ -244,6 +262,14 @@ func closeDBS(dbAccessor ...db.Accessor) {
 	}
 }
 
+func assertStateProofTablesExists(a *require.Assertions, store db.Accessor) {
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("select count(*) From StateProofKeys;")
+		return err
+	})
+	a.NoError(err)
+
+}
 func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
 	a.NotNil(retrivedPart)
 	a.Nil(retrivedPart.StateProofSecrets)
@@ -462,9 +488,8 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
@@ -481,8 +506,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
 	crypto.RandBytes(address[:])
@@ -499,19 +523,19 @@ func TestKeyregValidityPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	// setup patched version
-	version := config.Consensus[protocol.ConsensusFuture]
-	oldValue := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
+	// Patch the global consensus variable since FillDBWithParticipationKeys uses is to check the validity period
+	// this allows us to reduce the runtime of the test while checking the logic of FillDBWithParticipationKeys
+	version := config.Consensus[protocol.ConsensusCurrentVersion]
+	oldValue := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
 	version.MaxKeyregValidPeriod = 256*(1<<4) - 1
-	config.Consensus[protocol.ConsensusFuture] = version
+	config.Consensus[protocol.ConsensusCurrentVersion] = version
 	defer func() {
 		version.MaxKeyregValidPeriod = oldValue
-		config.Consensus[protocol.ConsensusFuture] = version
+		config.Consensus[protocol.ConsensusCurrentVersion] = version
 	}()
 
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod
-	dilution := config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution
+	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
 
