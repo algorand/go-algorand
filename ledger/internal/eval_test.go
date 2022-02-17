@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -760,6 +761,8 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 		}
 		tmp := genesisInitState.Accounts[addr]
 		tmp.Status = basics.Online
+		crypto.RandBytes(tmp.StateProofID[:])
+		crypto.RandBytes(tmp.SelectionID[:])
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -819,6 +822,11 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
 	require.NoError(t, err)
+
+	acctData, _ := blkEval.state.lookup(recvAddr)
+
+	require.Equal(t, merklesignature.Verifier{}, acctData.StateProofID)
+	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
 
 	badBlock := *validatedBlock
 
@@ -985,7 +993,16 @@ func TestExpiredAccountGeneration(t *testing.T) {
 			continue
 		}
 		tmp := genesisInitState.Accounts[addr]
+
+		// make up online account data
 		tmp.Status = basics.Online
+		tmp.VoteFirstValid = basics.Round(1)
+		tmp.VoteLastValid = basics.Round(100)
+		tmp.VoteKeyDilution = 0x1234123412341234
+		crypto.RandBytes(tmp.SelectionID[:])
+		crypto.RandBytes(tmp.VoteID[:])
+		crypto.RandBytes(tmp.StateProofID[:])
+
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -1056,5 +1073,5 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
 	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
 	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
-
+	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
 }
