@@ -41,7 +41,7 @@ import (
 )
 
 const numberOfThreads = 256
-const printFreequency = 1000
+const printFreequency = 400
 const groupTransactions = true
 const channelDepth = 100
 
@@ -700,7 +700,7 @@ func scenarioC(
 			}
 
 			if int(appi)%printFreequency == 0 && int(nai)%printFreequency == 0 {
-				fmt.Printf("create app %d / %d for account %d / %d\n", appi, appsPerAccount, nai, numberOfAccounts)
+				fmt.Printf("scenario3: create app %d / %d for account %d / %d\n", appi, appsPerAccount, nai, numberOfAccounts)
 			}
 			atx := makeAppTransaction(t, client, appi, firstValid, na.pk, tLife, genesisHash)
 			appCallFields[appi] = atx.ApplicationCallTxnFields
@@ -755,7 +755,7 @@ func scenarioC(
 			}
 
 			if acci%printFreequency == 0 && appi%printFreequency == 0 {
-				fmt.Printf("Opting into Application acct: %d app %d\n", acci, app.Id)
+				fmt.Printf("scenario3: Opting into Application acct: %d app %d\n", acci, app.Id)
 			}
 			optInTx := makeOptInAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
@@ -797,7 +797,7 @@ func scenarioC(
 			}
 
 			if acci%printFreequency == 0 && appi%printFreequency == 0 {
-				fmt.Printf("Calling Application acct: %d app %d\n", acci, app.Id)
+				fmt.Printf("scenario3: Calling Application acct: %d app %d\n", acci, app.Id)
 			}
 
 			optInTx := callAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
@@ -938,7 +938,7 @@ func scenarioD(
 		}
 
 		if int(asi)%printFreequency == 0 {
-			fmt.Printf("create app %d / %d\n", asi, numberOfApps)
+			fmt.Printf("scenario4: create app %d / %d\n", asi, numberOfApps)
 		}
 		atx := makeAppTransaction(t, client, asi, firstValid, baseAcct.pk, tLife, genesisHash)
 		appCallFields[asi] = atx.ApplicationCallTxnFields
@@ -991,7 +991,7 @@ func scenarioD(
 					&globalStateCheck,
 					globalStateCheckMu)
 			}
-			fmt.Printf("Last app id: %d\n", lastAppId)
+			fmt.Printf("scenario4: Last app id: %d\n", lastAppId)
 			wg.Done()
 		}()
 	}
@@ -1009,7 +1009,7 @@ func scenarioD(
 			time.Sleep(10 * time.Millisecond)
 		}
 		if int(checked)%printFreequency == 0 {
-			fmt.Printf("check app params %d / %d\n", checked, numberOfApps)
+			fmt.Printf("scenario4: check app params %d / %d\n", checked, numberOfApps)
 		}
 	}
 	close(checkAppChan)
