@@ -12,6 +12,6 @@ jobs:
     steps:
       - run: |
           echo "================================================================================"
-          echo " >>> ERROR <<< >>> ERROR <<< >>> ERROR <<< >>> ERROR <<< "
-          exit(" >>> Could not find proper PR Type label. \
-          Please add one of the following labels: 'New Feature', 'Enhancement', or 'Bug-Fix' <<<")
+          echo "=== ERROR === ERROR === ERROR === ERROR === ERROR ==="
+          exit("Could not find proper PR Type label. \
+          Please add one of the following labels: 'New Feature', 'Enhancement', or 'Bug-Fix'")
