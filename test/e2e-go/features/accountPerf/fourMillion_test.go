@@ -91,6 +91,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 			}
 			fmt.Printf("broadcastTransactionGroups[%d]: %s\n", x, err)
 			if strings.Contains(err.Error(), "already in ledger") {
+				err = nil
 				break
 			}
 			time.Sleep(time.Millisecond * 256)
