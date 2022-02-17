@@ -369,8 +369,6 @@ func (s *session) GetStates(st *logic.DebugState) AppState {
 		newStates.innerTxns = changes.InnerTxns
 	}
 
-	newStates.opcodeBudget = st.OpcodeBudget
-
 	return newStates
 }
 

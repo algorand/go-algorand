@@ -42,12 +42,13 @@ type cdtState struct {
 	globals     []basics.TealValue
 
 	// mutable program state
-	mu      deadlock.Mutex
-	stack   []basics.TealValue
-	scratch []basics.TealValue
-	pc      atomicInt
-	line    atomicInt
-	err     atomicString
+	mu           deadlock.Mutex
+	stack        []basics.TealValue
+	scratch      []basics.TealValue
+	pc           atomicInt
+	line         atomicInt
+	err          atomicString
+	opcodeBudget int
 	AppState
 
 	// debugger states
@@ -58,11 +59,12 @@ type cdtState struct {
 }
 
 type cdtStateUpdate struct {
-	stack   []basics.TealValue
-	scratch []basics.TealValue
-	pc      int
-	line    int
-	err     string
+	stack        []basics.TealValue
+	scratch      []basics.TealValue
+	pc           int
+	line         int
+	err          string
+	opcodeBudget int
 
 	AppState
 }
@@ -73,6 +75,8 @@ const (
 	noHint typeHint = iota
 	addressHint
 )
+
+const opcodeBudgetFieldIdx = 12
 
 var txnFileTypeHints = map[logic.TxnField]typeHint{
 	logic.Sender:              addressHint,
@@ -107,6 +111,8 @@ func (s *cdtState) Update(state cdtStateUpdate) {
 	s.stack = state.stack
 	s.scratch = state.scratch
 	s.AppState = state.AppState
+	// We need to dynamically override opcodeBudget with the proper value each step.
+	s.globals[opcodeBudgetFieldIdx].Uint = uint64(state.opcodeBudget)
 }
 
 const localScopeObjID = "localScopeObjId"
@@ -839,10 +845,6 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 	fields := prepareGlobals(s.globals)
 	desc = make([]cdt.RuntimePropertyDescriptor, len(fields))
 	for i, field := range fields {
-		// We need to dynamically override this field with the proper value each step.
-		if field.Name == "OpcodeBudget" {
-			field.Value = strconv.Itoa(s.opcodeBudget)
-		}
 		desc[i] = makePrimitive(field)
 	}
 	return

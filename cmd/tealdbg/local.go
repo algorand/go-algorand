@@ -158,13 +158,12 @@ type evalResult struct {
 
 // AppState encapsulates information about execution of stateful teal program
 type AppState struct {
-	appIdx       basics.AppIndex
-	schemas      basics.StateSchemas
-	global       map[basics.AppIndex]basics.TealKeyValue
-	locals       map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
-	logs         []string
-	innerTxns    []transactions.SignedTxnWithAD
-	opcodeBudget int
+	appIdx    basics.AppIndex
+	schemas   basics.StateSchemas
+	global    map[basics.AppIndex]basics.TealKeyValue
+	locals    map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
+	logs      []string
+	innerTxns []transactions.SignedTxnWithAD
 }
 
 func cloneInners(a []transactions.SignedTxnWithAD) (b []transactions.SignedTxnWithAD) {
@@ -194,7 +193,6 @@ func (a *AppState) clone() (b AppState) {
 	b.logs = make([]string, len(a.logs))
 	copy(b.logs, a.logs)
 	b.innerTxns = cloneInners(a.innerTxns)
-	b.opcodeBudget = a.opcodeBudget
 	return
 }
 
@@ -203,8 +201,7 @@ func (a *AppState) empty() bool {
 		len(a.global) == 0 &&
 		len(a.locals) == 0 &&
 		len(a.logs) == 0 &&
-		len(a.innerTxns) == 0 &&
-		a.opcodeBudget == 0
+		len(a.innerTxns) == 0
 }
 
 type modeType int
