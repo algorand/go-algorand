@@ -42,13 +42,12 @@ type cdtState struct {
 	globals     []basics.TealValue
 
 	// mutable program state
-	mu           deadlock.Mutex
-	stack        []basics.TealValue
-	scratch      []basics.TealValue
-	pc           atomicInt
-	line         atomicInt
-	err          atomicString
-	opcodeBudget int
+	mu      deadlock.Mutex
+	stack   []basics.TealValue
+	scratch []basics.TealValue
+	pc      atomicInt
+	line    atomicInt
+	err     atomicString
 	AppState
 
 	// debugger states
@@ -75,8 +74,6 @@ const (
 	noHint typeHint = iota
 	addressHint
 )
-
-const opcodeBudgetFieldIdx = 12
 
 var txnFileTypeHints = map[logic.TxnField]typeHint{
 	logic.Sender:              addressHint,
@@ -112,7 +109,7 @@ func (s *cdtState) Update(state cdtStateUpdate) {
 	s.scratch = state.scratch
 	s.AppState = state.AppState
 	// We need to dynamically override opcodeBudget with the proper value each step.
-	s.globals[opcodeBudgetFieldIdx].Uint = uint64(state.opcodeBudget)
+	s.globals[logic.OpcodeBudget].Uint = uint64(state.opcodeBudget)
 }
 
 const localScopeObjID = "localScopeObjId"
