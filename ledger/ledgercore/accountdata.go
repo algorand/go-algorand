@@ -123,11 +123,7 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // ClearOnlineState resets the account's fields to indicate that the account is an offline account
 func (u *AccountData) ClearOnlineState() {
 	u.Status = basics.Offline
-	u.VoteFirstValid = basics.Round(0)
-	u.VoteLastValid = basics.Round(0)
-	u.VoteKeyDilution = 0
-	u.VoteID = crypto.OneTimeSignatureVerifier{}
-	u.SelectionID = crypto.VRFVerifier{}
+	u.VotingData = VotingData{}
 }
 
 // MinBalance computes the minimum balance requirements for an account based on
