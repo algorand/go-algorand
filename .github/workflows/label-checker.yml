@@ -26,5 +26,8 @@ jobs:
             contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
             contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
           )
+      - name: Checking PR Title
+        run: |
+          [[ {{ github.event.pull_request.title }} =~ ^.+\: ]]
       - name: "Found at least one PR Type label. Good job!"
         run: exit 0
