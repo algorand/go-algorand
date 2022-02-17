@@ -28,6 +28,6 @@ jobs:
           )
       - name: Checking PR Title
         run: |
-          [[ {{ github.event.pull_request.title }} =~ ^.+\: ]]
+          [[ ${{ github.event.pull_request.title }} =~ ^.+\: ]]
       - name: "Found at least one PR Type label. Good job!"
         run: exit 0
