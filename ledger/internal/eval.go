@@ -1579,9 +1579,36 @@ transactionGroupLoop:
 				return ledgercore.StateDelta{}, txgroup.err
 			}
 
-			for _, br := range txgroup.balances {
-				base.accounts[br.Addr] = br.AccountData
-				// TODO: pull needed resources into cache?
+			for _, br := range txgroup.accounts {
+				base.accounts[*br.address] = *br.data
+			}
+			for _, lr := range txgroup.resources {
+				if lr.address == nil {
+					continue
+				}
+				if lr.creatableType == basics.AssetCreatable {
+					if lr.resource.AssetHolding != nil {
+						base.assets[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetHolding{value: *lr.resource.AssetHolding, exists: true}
+					} else {
+						base.assets[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetHolding{exists: false}
+					}
+					if lr.resource.AssetParams != nil {
+						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{value: *lr.resource.AssetParams, exists: true}
+					} else {
+						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{exists: false}
+					}
+				} else {
+					if lr.resource.AppLocalState != nil {
+						base.appLocalStates[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppLocalState{value: *lr.resource.AppLocalState, exists: true}
+					} else {
+						base.appLocalStates[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppLocalState{exists: false}
+					}
+					if lr.resource.AppParams != nil {
+						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{value: *lr.resource.AppParams, exists: true}
+					} else {
+						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{exists: false}
+					}
+				}
 			}
 			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {
@@ -1620,20 +1647,4 @@ transactionGroupLoop:
 	}
 
 	return eval.state.deltas(), nil
-}
-
-// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
-type loadedTransactionGroup struct {
-	// group is the transaction group
-	group []transactions.SignedTxnWithAD
-	// balances is a list of all the balances that the transaction group refer to and are needed.
-	balances []ledgercore.NewBalanceRecord
-	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
-	// one of the entries in the balances would be uninitialized.
-	err error
-}
-
-// Return the maximum number of addresses referenced in any given transaction.
-func maxAddressesInTxn(proto *config.ConsensusParams) int {
-	return 7 + proto.MaxAppTxnAccounts
 }
