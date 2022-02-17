@@ -63,11 +63,11 @@ func AccountDataToAccount(
 	var apiParticipation *generated.AccountParticipation
 	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
 		apiParticipation = &generated.AccountParticipation{
+			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],
 			VoteFirstValid:            uint64(record.VoteFirstValid),
-			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 			VoteLastValid:             uint64(record.VoteLastValid),
-			VoteParticipationKey:      record.VoteID[:],
+			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
 		if !record.StateProofID.IsEmpty() {
 			tmp := record.StateProofID[:]
