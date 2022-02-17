@@ -18,23 +18,11 @@ package internal
 
 import (
 	"context"
-	//"errors"
-	//"fmt"
-	//"sync"
 
 	"github.com/algorand/go-algorand/config"
-	//"github.com/algorand/go-algorand/crypto"
-	//"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
-	//"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	//"github.com/algorand/go-algorand/data/transactions/logic"
-	//"github.com/algorand/go-algorand/data/transactions/verify"
-	//"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	//"github.com/algorand/go-algorand/logging"
-	//"github.com/algorand/go-algorand/protocol"
-	//"github.com/algorand/go-algorand/util/execpool"
 )
 
 // groupTask helps to organize the account loading for each transaction group.
@@ -85,7 +73,6 @@ func initAccount(addr basics.Address, wg *groupTask, accountTasks map[basics.Add
 func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
-
 		defer close(outChan)
 
 		accountTasks := make(map[basics.Address]*addrTask)
