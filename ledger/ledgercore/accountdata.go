@@ -128,7 +128,6 @@ func (u *AccountData) ClearOnlineState() {
 	u.VoteKeyDilution = 0
 	u.VoteID = crypto.OneTimeSignatureVerifier{}
 	u.SelectionID = crypto.VRFVerifier{}
-	u.StateProofID = merklesignature.Verifier{}
 }
 
 // MinBalance computes the minimum balance requirements for an account based on
@@ -164,7 +163,6 @@ func (u *AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLev
 		MicroAlgosWithRewards: microAlgos,
 		VoteID:                u.VoteID,
 		SelectionID:           u.SelectionID,
-		StateProofID:          u.StateProofID,
 		VoteFirstValid:        u.VoteFirstValid,
 		VoteLastValid:         u.VoteLastValid,
 		VoteKeyDilution:       u.VoteKeyDilution,
