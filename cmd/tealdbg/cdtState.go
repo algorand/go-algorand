@@ -785,6 +785,7 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 			desc = append(desc, global)
 		}
 		if len(s.AppState.locals) > 0 {
+			local = makeObject("appLocals", appLocalsObjID)
 			desc = append(desc, local)
 		}
 	}
