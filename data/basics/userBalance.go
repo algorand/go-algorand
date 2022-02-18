@@ -420,6 +420,7 @@ func (u *AccountData) ClearOnlineState() {
 	u.VoteKeyDilution = 0
 	u.VoteID = crypto.OneTimeSignatureVerifier{}
 	u.SelectionID = crypto.VRFVerifier{}
+	u.StateProofID = merklesignature.Verifier{}
 }
 
 // Money returns the amount of MicroAlgos associated with the user's account
