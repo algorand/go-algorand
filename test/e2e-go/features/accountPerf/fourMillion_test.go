@@ -112,7 +112,7 @@ func getAccountInformation(
 		if err == nil {
 			break
 		}
-		fmt.Printf("AccountInformationV2[%d]: %s", x, err)
+		fmt.Printf("AccountInformationV2[%d]: %s\n", x, err)
 		time.Sleep(time.Millisecond * 256)
 	}
 	return
@@ -677,7 +677,7 @@ func scenarioC(
 	firstValid, counter, keys := createAccounts(
 		t,
 		fixture,
-		numberOfAccounts,
+		numberOfAccounts+1, // make an additional account which will opt in and call all the apps
 		baseAcct,
 		firstValid,
 		balance,
@@ -688,10 +688,21 @@ func scenarioC(
 		txnGrpChan,
 		stopChan)
 
+	// have a single account opted in all of them
+	ownAllAccount := keys[numberOfAccounts]
+	// make ownAllAccount very rich
+	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
+	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
+
 	fmt.Println("Creating applications ...")
 
 	// create 6M unique apps by a different 6,000 accounts
 	for nai, na := range keys {
+		if nacc == ownAllAccount {
+			continue
+		}
 		for appi := uint64(0); appi < appsPerAccount; appi++ {
 			select {
 			case <-stopChan:
@@ -716,13 +727,6 @@ func scenarioC(
 
 	fmt.Println("Opt-in applications...")
 
-	// have a single account opted in all of them
-	ownAllAccount := keys[numberOfAccounts-1]
-	// make ownAllAccount very rich
-	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
-	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
-	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 	/*
 		for _, nacc := range keys {
 			info1, err := client.AccountInformationV2(nacc.pk.String())
@@ -787,6 +791,9 @@ func scenarioC(
 	*/
 	// Make an app call to each of them
 	for acci, nacc := range keys {
+		if nacc == ownAllAccount {
+			continue
+		}
 		info, err := getAccountInformation(client, nacc.pk.String())
 		require.NoError(t, err)
 		for appi, app := range *info.CreatedApps {
