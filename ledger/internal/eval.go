@@ -1584,6 +1584,12 @@ transactionGroupLoop:
 			}
 			for _, lr := range txgroup.resources {
 				if lr.address == nil {
+					// we attempted to look for the creator, and failed.
+					if lr.creatableType == basics.AssetCreatable {
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AssetCreatable}] = foundAddress{exists: false}
+					} else {
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AppCreatable}] = foundAddress{exists: false}
+					}
 					continue
 				}
 				if lr.creatableType == basics.AssetCreatable {
@@ -1594,8 +1600,10 @@ transactionGroupLoop:
 					}
 					if lr.resource.AssetParams != nil {
 						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{value: *lr.resource.AssetParams, exists: true}
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AssetCreatable}] = foundAddress{address: *lr.address, exists: true}
 					} else {
 						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{exists: false}
+
 					}
 				} else {
 					if lr.resource.AppLocalState != nil {
@@ -1605,6 +1613,7 @@ transactionGroupLoop:
 					}
 					if lr.resource.AppParams != nil {
 						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{value: *lr.resource.AppParams, exists: true}
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AppCreatable}] = foundAddress{address: *lr.address, exists: true}
 					} else {
 						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{exists: false}
 					}

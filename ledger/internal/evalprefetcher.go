@@ -91,7 +91,7 @@ type preloaderTask struct {
 	creatableType basics.CreatableType
 	// a list of transaction group tasks that depends on this address
 	groups []*groupTask
-	// a list of indices into the groupTask.balances where the address would be stored
+	// a list of indices into the groupTask.balances or groupTask.resources where the address would be stored
 	groupIndices []int
 }
 
@@ -268,7 +268,6 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 		}
 		gr.done = make(chan error, gr.balancesCount)
 		usedBalances += gr.balancesCount
-
 	}
 
 	// create few go-routines to load asyncroniously the account data.
@@ -306,7 +305,7 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 						}
 					} else {
 						if task.address == nil {
-							// start off by figuring out the creator.
+							// start off by figuring out the creator in case it's a global resource.
 							creator, ok, err := l.GetCreatorForRound(rnd, task.creatableIndex, task.creatableType)
 							if err != nil {
 								// there was an error loading that entry.
@@ -329,27 +328,28 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 								}
 								continue
 							}
-							resource, err := l.LookupResource(rnd, creator, task.creatableIndex, task.creatableType)
-							if err != nil {
-								// there was an error loading that entry.
-								for _, wg := range task.groups {
-									// notify the channel of the error.
-									wg.done <- err
-								}
-								continue
+							task.address = &creator
+						}
+						resource, err := l.LookupResource(rnd, *task.address, task.creatableIndex, task.creatableType)
+						if err != nil {
+							// there was an error loading that entry.
+							for _, wg := range task.groups {
+								// notify the channel of the error.
+								wg.done <- err
 							}
-							re := loadedResourcesEntry{
-								resource:       &resource,
-								address:        &creator,
-								creatableIndex: task.creatableIndex,
-								creatableType:  task.creatableType,
-							}
-							// update all the group tasks with the new acquired balance.
-							for i, wg := range task.groups {
-								wg.resources[task.groupIndices[i]] = re
-								// write a nil to indicate that we're loaded one entry.
-								wg.done <- nil
-							}
+							continue
+						}
+						re := loadedResourcesEntry{
+							resource:       &resource,
+							address:        task.address,
+							creatableIndex: task.creatableIndex,
+							creatableType:  task.creatableType,
+						}
+						// update all the group tasks with the new acquired balance.
+						for i, wg := range task.groups {
+							wg.resources[task.groupIndices[i]] = re
+							// write a nil to indicate that we're loaded one entry.
+							wg.done <- nil
 						}
 					}
 				case <-ctx.Done():
