@@ -192,14 +192,14 @@ func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
 	}
 }
 
-func (cx *EvalContext) refreshDebugState(err error) *DebugState {
+func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
 	ds := cx.debugState
 
 	// Update pc, line, error, stack, and scratch space
 	ds.PC = cx.pc
 	ds.Line = ds.PCToLine(cx.pc)
-	if err != nil {
-		ds.Error = err.Error()
+	if evalError != nil {
+		ds.Error = evalError.Error()
 	}
 
 	stack := make([]basics.TealValue, len(cx.stack))
