@@ -290,6 +290,8 @@ func TestAccountDBRound(t *testing.T) {
 }
 
 func TestAccountStorageWithStateProofID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs, _ := dbOpenTest(t, true)
