@@ -18,6 +18,7 @@ package internal
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -32,7 +33,9 @@ type loadedAccountDataEntry struct {
 }
 
 type loadedResourcesEntry struct {
-	resource       *ledgercore.AccountResource
+	// resource is the loaded resource entry. unless address is nil, resource would always contain a valid ledgercore.AccountResource pointer.
+	resource *ledgercore.AccountResource
+	// address might be empty if the resource does not exist. In that case creatableIndex and creatableType would still be valid while resource would be nil.
 	address        *basics.Address
 	creatableIndex basics.CreatableIndex
 	creatableType  basics.CreatableType
@@ -60,11 +63,6 @@ func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, g
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go loadAccountsInner(ctx, l, rnd, groups, feeSinkAddr, consensusParams, outChan)
 	return outChan
-}
-
-// Return the maximum number of addresses referenced in any given transaction.
-func maxAddressesInTxn(proto *config.ConsensusParams) int {
-	return 7 + proto.MaxAppTxnAccounts
 }
 
 // groupTask helps to organize the account loading for each transaction group.
@@ -95,12 +93,50 @@ type preloaderTask struct {
 	groupIndices []int
 }
 
+// preloaderTaskQueue is a dynamic linked list of enqueued entries, optimized for non-syncronized insertion and
+// syncronized extraction
+type preloaderTaskQueue struct {
+	next    *preloaderTaskQueue
+	used    int
+	entries []*preloaderTask
+	baseIdx int
+}
+
+// enqueue places the queued entry on the queue, returning the latest queue
+// ( in case the current "page" ran out of space )
+func (pq *preloaderTaskQueue) enqueue(t *preloaderTask) *preloaderTaskQueue {
+	if pq.used == cap(pq.entries) {
+		// allocate next.
+		pq.next = &preloaderTaskQueue{
+			entries: make([]*preloaderTask, pq.used*2),
+			used:    1,
+			baseIdx: pq.baseIdx + pq.used,
+		}
+		pq.next.entries[0] = t
+		return pq.next
+	}
+	pq.entries[pq.used] = t
+	pq.used++
+	return pq
+}
+
+func (pq *preloaderTaskQueue) getTaskAtIndex(idx int) (*preloaderTaskQueue, *preloaderTask) {
+	localIdx := idx - pq.baseIdx
+	if pq.used > localIdx {
+		return pq, pq.entries[localIdx]
+	}
+	if pq.next != nil {
+		return pq.next.getTaskAtIndex(idx)
+	}
+	return pq, nil
+}
+
 type accountCreatableKey struct {
 	address basics.Address
 	cidx    basics.CreatableIndex
 }
 
-func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTasks map[basics.Address]*preloaderTask, addressesCh chan *preloaderTask) {
+func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTasks map[basics.Address]*preloaderTask, queue **preloaderTaskQueue) {
 	if task, have := accountTasks[*addr]; !have {
 		task := &preloaderTask{
 			address:      addr,
@@ -111,7 +147,7 @@ func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTask
 		task.groupIndices[0] = wg.balancesCount
 
 		accountTasks[*addr] = task
-		addressesCh <- task
+		*queue = (*queue).enqueue(task)
 	} else {
 		task.groups = append(task.groups, wg)
 		task.groupIndices = append(task.groupIndices, wg.balancesCount)
@@ -120,7 +156,7 @@ func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTask
 	return
 }
 
-func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wg *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask, addressesCh chan *preloaderTask) {
+func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wg *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask, queue **preloaderTaskQueue) {
 	key := accountCreatableKey{
 		cidx: cidx,
 	}
@@ -139,7 +175,7 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 		task.groupIndices[0] = wg.resourcesCount
 
 		resourceTasks[key] = task
-		addressesCh <- task
+		*queue = (*queue).enqueue(task)
 	} else {
 		task.groups = append(task.groups, wg)
 		task.groupIndices = append(task.groupIndices, wg.resourcesCount)
@@ -153,13 +189,16 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
-	addressesCh := make(chan *preloaderTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams)) // TODO : !!!
+	tasksQueue := preloaderTaskQueue{
+		entries: make([]*preloaderTask, len(groups)*2),
+	}
 	// totalBalances counts the total number of balances over all the transaction groups
 	totalBalances := 0
 	totalResources := 0
 
 	// iterate over the transaction groups and add all their account addresses to the list
 	groupsReady := make([]groupTask, len(groups))
+	queue := &tasksQueue
 	for i := range groups {
 		task := &groupsReady[i]
 		for j := range groups[i] {
@@ -167,61 +206,61 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 			switch stxn.Txn.Type {
 			case protocol.PaymentTx:
 				if !stxn.Txn.Receiver.IsZero() {
-					loadAccountsAddAccountTask(&stxn.Txn.Receiver, task, accountTasks, addressesCh)
+					loadAccountsAddAccountTask(&stxn.Txn.Receiver, task, accountTasks, &queue)
 				}
 				if !stxn.Txn.CloseRemainderTo.IsZero() {
-					loadAccountsAddAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks, addressesCh)
+					loadAccountsAddAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks, &queue)
 				}
 			case protocol.AssetConfigTx:
 				if stxn.Txn.ConfigAsset != 0 {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, &queue)
 				}
 			case protocol.AssetTransferTx:
 				if !stxn.Txn.Sender.IsZero() {
-					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
+					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, &queue)
 				}
 				if !stxn.Txn.AssetSender.IsZero() {
 					if stxn.Txn.XferAsset != 0 {
-						loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
+						loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, &queue)
 					}
-					loadAccountsAddAccountTask(&stxn.Txn.AssetSender, task, accountTasks, addressesCh)
+					loadAccountsAddAccountTask(&stxn.Txn.AssetSender, task, accountTasks, &queue)
 				}
 				if !stxn.Txn.AssetReceiver.IsZero() {
 					if stxn.Txn.XferAsset != 0 {
-						loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
+						loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, &queue)
 					}
-					loadAccountsAddAccountTask(&stxn.Txn.AssetReceiver, task, accountTasks, addressesCh)
+					loadAccountsAddAccountTask(&stxn.Txn.AssetReceiver, task, accountTasks, &queue)
 				}
 				if !stxn.Txn.AssetCloseTo.IsZero() {
 					if stxn.Txn.XferAsset != 0 {
-						loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
+						loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, &queue)
 					}
-					loadAccountsAddAccountTask(&stxn.Txn.AssetCloseTo, task, accountTasks, addressesCh)
+					loadAccountsAddAccountTask(&stxn.Txn.AssetCloseTo, task, accountTasks, &queue)
 				}
 			case protocol.AssetFreezeTx:
 				if !stxn.Txn.FreezeAccount.IsZero() {
 					if stxn.Txn.FreezeAsset != 0 {
-						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
-						loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
+						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, &queue)
+						loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, &queue)
 					}
-					loadAccountsAddAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks, addressesCh)
+					loadAccountsAddAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks, &queue)
 				}
 			case protocol.ApplicationCallTx:
 				if stxn.Txn.ApplicationID != 0 {
 					// load the global - so that we'll have the program
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, addressesCh)
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, &queue)
 					// load the local - so that we'll have the local state
-					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, addressesCh)
+					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, &queue)
 				}
 				for _, fa := range stxn.Txn.ForeignApps {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AppCreatable, task, resourceTasks, addressesCh)
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AppCreatable, task, resourceTasks, &queue)
 				}
 				for _, fa := range stxn.Txn.ForeignAssets {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AssetCreatable, task, resourceTasks, addressesCh)
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AssetCreatable, task, resourceTasks, &queue)
 				}
 				for ixa := range stxn.Txn.Accounts {
 					if !stxn.Txn.Accounts[ixa].IsZero() {
-						loadAccountsAddAccountTask(&stxn.Txn.Accounts[ixa], task, accountTasks, addressesCh)
+						loadAccountsAddAccountTask(&stxn.Txn.Accounts[ixa], task, accountTasks, &queue)
 					}
 				}
 			case protocol.CompactCertTx:
@@ -232,7 +271,7 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 			}
 			// If you add new addresses here, also add them in getTxnAddresses().
 			if !stxn.Txn.Sender.IsZero() {
-				loadAccountsAddAccountTask(&stxn.Txn.Sender, task, accountTasks, addressesCh)
+				loadAccountsAddAccountTask(&stxn.Txn.Sender, task, accountTasks, &queue)
 			}
 		}
 		totalBalances += task.balancesCount
@@ -243,10 +282,9 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 	if len(groupsReady) > 0 {
 		// the feeSinkAddr is known to be non-empty, so we don't need to test for that.
 		prevBalance := groupsReady[0].balancesCount
-		loadAccountsAddAccountTask(&feeSinkAddr, &groupsReady[0], accountTasks, addressesCh)
+		loadAccountsAddAccountTask(&feeSinkAddr, &groupsReady[0], accountTasks, &queue)
 		totalBalances += groupsReady[0].balancesCount - prevBalance
 	}
-	close(addressesCh)
 
 	// update all the groups task :
 	// allocate the correct number of balances, as well as
@@ -265,68 +303,54 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 		gr.done = make(chan error, gr.balancesCount)
 		usedBalances += gr.balancesCount
 	}
+	taskIdx := int64(-1)
 
 	// create few go-routines to load asyncroniously the account data.
 	for i := 0; i < asyncAccountLoadingThreadCount; i++ {
 		go func() {
+			queue := &tasksQueue
+			var task *preloaderTask
 			for {
 				select {
-				case task, ok := <-addressesCh:
-					// load the address
-					if !ok {
-						// the channel got closed, which mean we're done.
-						return
+				case <-ctx.Done():
+					// if the context was canceled, abort right away.
+					return
+				default:
+					// context isn't canceled. keep going.
+				}
+				nextTaskIdx := atomic.AddInt64(&taskIdx, 1)
+				queue, task = queue.getTaskAtIndex(int(nextTaskIdx))
+				if task == nil {
+					// no more tasks.
+					return
+				}
+
+				if task.creatableIndex == 0 {
+					// lookup the account data directly from the ledger.
+					acctData, _, err := l.LookupWithoutRewards(rnd, *task.address)
+					br := loadedAccountDataEntry{
+						address: task.address,
+						data:    &acctData,
 					}
-					if task.creatableIndex == 0 {
-						// lookup the account data directly from the ledger.
-						acctData, _, err := l.LookupWithoutRewards(rnd, *task.address)
-						br := loadedAccountDataEntry{
-							address: task.address,
-							data:    &acctData,
-						}
-						// if there is no error..
-						if err == nil {
-							// update all the group tasks with the new acquired balance.
-							for i, wg := range task.groups {
-								wg.balances[task.groupIndices[i]] = br
-								// write a nil to indicate that we're loaded one entry.
-								wg.done <- nil
-							}
-						} else {
-							// there was an error loading that entry.
-							for _, wg := range task.groups {
-								// notify the channel of the error.
-								wg.done <- err
-							}
+					// if there is no error..
+					if err == nil {
+						// update all the group tasks with the new acquired balance.
+						for i, wg := range task.groups {
+							wg.balances[task.groupIndices[i]] = br
+							// write a nil to indicate that we're loaded one entry.
+							wg.done <- nil
 						}
 					} else {
-						if task.address == nil {
-							// start off by figuring out the creator in case it's a global resource.
-							creator, ok, err := l.GetCreatorForRound(rnd, task.creatableIndex, task.creatableType)
-							if err != nil {
-								// there was an error loading that entry.
-								for _, wg := range task.groups {
-									// notify the channel of the error.
-									wg.done <- err
-								}
-								continue
-							}
-							if !ok {
-								re := loadedResourcesEntry{
-									creatableIndex: task.creatableIndex,
-									creatableType:  task.creatableType,
-								}
-								// update all the group tasks with the new acquired balance.
-								for i, wg := range task.groups {
-									wg.resources[task.groupIndices[i]] = re
-									// write a nil to indicate that we're loaded one entry.
-									wg.done <- nil
-								}
-								continue
-							}
-							task.address = &creator
+						// there was an error loading that entry.
+						for _, wg := range task.groups {
+							// notify the channel of the error.
+							wg.done <- err
 						}
-						resource, err := l.LookupResource(rnd, *task.address, task.creatableIndex, task.creatableType)
+					}
+				} else {
+					if task.address == nil {
+						// start off by figuring out the creator in case it's a global resource.
+						creator, ok, err := l.GetCreatorForRound(rnd, task.creatableIndex, task.creatableType)
 						if err != nil {
 							// there was an error loading that entry.
 							for _, wg := range task.groups {
@@ -335,24 +359,43 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 							}
 							continue
 						}
-						re := loadedResourcesEntry{
-							resource:       &resource,
-							address:        task.address,
-							creatableIndex: task.creatableIndex,
-							creatableType:  task.creatableType,
+						if !ok {
+							re := loadedResourcesEntry{
+								creatableIndex: task.creatableIndex,
+								creatableType:  task.creatableType,
+							}
+							// update all the group tasks with the new acquired balance.
+							for i, wg := range task.groups {
+								wg.resources[task.groupIndices[i]] = re
+								// write a nil to indicate that we're loaded one entry.
+								wg.done <- nil
+							}
+							continue
 						}
-						// update all the group tasks with the new acquired balance.
-						for i, wg := range task.groups {
-							wg.resources[task.groupIndices[i]] = re
-							// write a nil to indicate that we're loaded one entry.
-							wg.done <- nil
-						}
+						task.address = &creator
 					}
-				case <-ctx.Done():
-					// if the context was canceled, abort right away.
-					return
+					resource, err := l.LookupResource(rnd, *task.address, task.creatableIndex, task.creatableType)
+					if err != nil {
+						// there was an error loading that entry.
+						for _, wg := range task.groups {
+							// notify the channel of the error.
+							wg.done <- err
+						}
+						continue
+					}
+					re := loadedResourcesEntry{
+						resource:       &resource,
+						address:        task.address,
+						creatableIndex: task.creatableIndex,
+						creatableType:  task.creatableType,
+					}
+					// update all the group tasks with the new acquired balance.
+					for i, wg := range task.groups {
+						wg.resources[task.groupIndices[i]] = re
+						// write a nil to indicate that we're loaded one entry.
+						wg.done <- nil
+					}
 				}
-
 			}
 		}()
 	}

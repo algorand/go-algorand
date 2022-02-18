@@ -296,6 +296,9 @@ func BenchmarkBlockEvaluatorDiskAppOptIns(b *testing.B) {
 }
 
 func BenchmarkBlockEvaluatorDiskAppCalls(b *testing.B) {
+	if b.N < 4 {
+		b.N = 4
+	}
 	// program sets all 16 available keys of len 64 bytes to same values of 64 bytes
 	source := `#pragma version 5
 	txn OnCompletion
@@ -407,8 +410,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	config.Consensus[protocol.ConsensusVersion(dbName)] = cparams
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
 	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	cfg.CatchpointTracking = -1
+	cfg.Archival = false
 	testingLog := logging.TestingLog(b)
 	testingLog.SetLevel(logging.Error)
 	l, err := OpenLedger(testingLog, dbName, inMem, genesisInitState, cfg)
@@ -481,7 +483,6 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
-
 	// apply initialization transations if any
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
 	if len(initSignedTxns) > 0 {
