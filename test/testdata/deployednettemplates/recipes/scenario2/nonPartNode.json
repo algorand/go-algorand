@@ -1,5 +1,4 @@
 {
-    "NetAddress": "{{NetworkPort}}",
     "APIEndpoint": "{{APIEndpoint}}",
     "APIToken": "{{APIToken}}",
     "ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }"
