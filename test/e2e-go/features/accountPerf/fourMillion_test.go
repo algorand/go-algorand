@@ -700,7 +700,7 @@ func scenarioC(
 
 	// create 6M unique apps by a different 6,000 accounts
 	for nai, na := range keys {
-		if nacc == ownAllAccount {
+		if na == ownAllAccount {
 			continue
 		}
 		for appi := uint64(0); appi < appsPerAccount; appi++ {
