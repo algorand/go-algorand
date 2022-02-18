@@ -1261,7 +1261,7 @@ func opBn256Add(cx *EvalContext) {
 		return
 	}
 
-	b, ok := new(bn256.G1).Unmarshal(input[64:])
+	b, ok := new(bn256.G1).Unmarshal(input[64:128])
 	if !ok {
 		cx.err = errors.New("unmarshal failed")
 		return
@@ -1271,6 +1271,52 @@ func opBn256Add(cx *EvalContext) {
 	resBytes := res.Marshal()
 
 	cx.stack[last].Bytes = resBytes
+}
+
+func opBn256ScalarMul(cx *EvalContext) {
+	last := len(cx.stack) - 1
+
+	input := cx.stack[last].Bytes
+
+	a, ok := new(bn256.G1).Unmarshal(input[:64])
+	if !ok {
+		cx.err = errors.New("unmarshal failed")
+		return
+	}
+
+	k := new(big.Int).SetBytes(input[64:96])
+
+	res := new(bn256.G1).ScalarMult(a, k)
+	resBytes := res.Marshal()
+
+	cx.stack[last].Bytes = resBytes
+}
+
+func opBn256Pairing(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	g1bytes := cx.stack[prev].Bytes
+	g2bytes := cx.stack[last].Bytes
+
+	g1, ok := new(bn256.G1).Unmarshal(g1bytes[:64])
+	if !ok {
+		cx.err = errors.New("unmarshal failed")
+		return
+	}
+
+	g2, ok := new(bn256.G2).Unmarshal(g2bytes[:128])
+	if !ok {
+		cx.err = errors.New("unmarshal failed")
+		return
+	}
+
+	res := bn256.Pair(g1, g2)
+	resBytes := res.Marshal()
+
+	cx.stack[prev].Bytes = resBytes[0:64]
+	cx.stack[last].Bytes = resBytes[64:128]
+	cx.stack = append(cx.stack, stackValue{Bytes: resBytes[128:192]}, stackValue{Bytes: resBytes[192:256]}, stackValue{Bytes: resBytes[256:320]}, stackValue{Bytes: resBytes[320:384]})
 }
 
 func opLt(cx *EvalContext) {
