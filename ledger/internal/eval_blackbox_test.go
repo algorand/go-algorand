@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -795,182 +794,6 @@ func TestMinBalanceChanges(t *testing.T) {
 	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
 }
 
-// Test that ModifiedAssetHoldings in StateDelta is set correctly.
-func TestModifiedAssetHoldings(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
-
-	const assetid basics.AssetIndex = 1
-
-	createTxn := txntest.Txn{
-		Type:   "acfg",
-		Sender: addrs[0],
-		Fee:    2000,
-		AssetParams: basics.AssetParams{
-			Total:    3,
-			Decimals: 0,
-			Manager:  addrs[0],
-			Reserve:  addrs[0],
-			Freeze:   addrs[0],
-			Clawback: addrs[0],
-		},
-	}
-
-	optInTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		Fee:           2000,
-		XferAsset:     assetid,
-		AssetAmount:   0,
-		AssetReceiver: addrs[1],
-	}
-
-	eval := nextBlock(t, l, true, nil)
-	txns(t, l, eval, &createTxn, &optInTxn)
-	vb := endBlock(t, l, eval)
-
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[0],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[1],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
-
-	optOutTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		Fee:           1000,
-		XferAsset:     assetid,
-		AssetReceiver: addrs[0],
-		AssetCloseTo:  addrs[0],
-	}
-
-	closeTxn := txntest.Txn{
-		Type:        "acfg",
-		Sender:      addrs[0],
-		Fee:         1000,
-		ConfigAsset: assetid,
-	}
-
-	eval = nextBlock(t, l, true, nil)
-	txns(t, l, eval, &optOutTxn, &closeTxn)
-	vb = endBlock(t, l, eval)
-
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[0],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[1],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
-}
-
-// Test that ModifiedAppLocalStates in StateDelta is set correctly.
-func TestModifiedAppLocalStates(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
-
-	const appid basics.AppIndex = 1
-
-	createTxn := txntest.Txn{
-		Type:            "appl",
-		Sender:          addrs[0],
-		ApprovalProgram: "int 1",
-	}
-
-	optInTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: appid,
-		OnCompletion:  transactions.OptInOC,
-	}
-
-	eval := nextBlock(t, l, true, nil)
-	txns(t, l, eval, &createTxn, &optInTxn)
-	vb := endBlock(t, l, eval)
-
-	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
-	{
-		aa := ledgercore.AccountApp{
-			Address: addrs[1],
-			App:     appid,
-		}
-		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-
-		state, ok := vb.Delta().Accts.GetAppLocalState(addrs[1], appid)
-		require.True(t, ok)
-		require.NotNil(t, state)
-
-		params, ok := vb.Delta().Accts.GetAppParams(addrs[0], appid)
-		require.True(t, ok)
-		require.NotNil(t, params)
-	}
-
-	optOutTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: appid,
-		OnCompletion:  transactions.CloseOutOC,
-	}
-
-	closeTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[0],
-		ApplicationID: appid,
-		OnCompletion:  transactions.DeleteApplicationOC,
-	}
-
-	eval = nextBlock(t, l, true, nil)
-	txns(t, l, eval, &optOutTxn, &closeTxn)
-	vb = endBlock(t, l, eval)
-
-	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
-	{
-		aa := ledgercore.AccountApp{
-			Address: addrs[1],
-			App:     appid,
-		}
-		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
-}
-
 // TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
 func TestDeleteNonExistantKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1065,7 +888,20 @@ func TestAppInsMinBalance(t *testing.T) {
 	txns1 := append(txnsCreate, txnsOptIn...)
 	txns(t, l, eval, txns1...)
 	vb := endBlock(t, l, eval)
-	require.Len(t, vb.Delta().ModifiedAppLocalStates, 50)
+	mods := vb.Delta()
+	appAppResources := mods.Accts.GetAllAppResources()
+	appParamsCount := 0
+	appLocalStatesCount := 0
+	for _, ap := range appAppResources {
+		if ap.Params.Params != nil {
+			appParamsCount++
+		}
+		if ap.State.LocalState != nil {
+			appLocalStatesCount++
+		}
+	}
+	require.Equal(t, appLocalStatesCount, 50)
+	require.Equal(t, appParamsCount, 50)
 }
 
 // TestLogsInBlock ensures that logs appear in the block properly

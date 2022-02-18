@@ -95,11 +95,6 @@ type StateDelta struct {
 	// previous block timestamp
 	PrevTimestamp int64
 
-	// Modified local creatable states. The value is true if the creatable local state
-	// is created and false if deleted. Used by indexer.
-	ModifiedAssetHoldings  map[AccountAsset]bool
-	ModifiedAppLocalStates map[AccountApp]bool
-
 	// initial hint for allocating data structures for StateDelta
 	initialTransactionsCount int
 
@@ -183,8 +178,6 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 		Hdr:                      hdr,
 		CompactCertNext:          compactCertNext,
 		PrevTimestamp:            prevTimestamp,
-		ModifiedAssetHoldings:    make(map[AccountAsset]bool, hint),
-		ModifiedAppLocalStates:   make(map[AccountApp]bool, hint),
 		initialTransactionsCount: hint,
 	}
 }
