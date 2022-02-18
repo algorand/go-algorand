@@ -26,38 +26,6 @@ import (
 // These functions ensure roundCowState satisfies the methods for
 // accessing asset and app data in the apply.Balances interface.
 
-func (cs *roundCowState) CountAppParams(addr basics.Address) (int, error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return 0, err
-	}
-	return int(acct.TotalAppParams), nil
-}
-
-func (cs *roundCowState) CountAppLocalState(addr basics.Address) (int, error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return 0, err
-	}
-	return int(acct.TotalAppLocalStates), nil
-}
-
-func (cs *roundCowState) CountAssetHolding(addr basics.Address) (int, error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return 0, err
-	}
-	return int(acct.TotalAssets), nil
-}
-
-func (cs *roundCowState) CountAssetParams(addr basics.Address) (int, error) {
-	acct, err := cs.lookup(addr)
-	if err != nil {
-		return 0, err
-	}
-	return int(acct.TotalAssetParams), nil
-}
-
 func (cs *roundCowState) GetAppParams(addr basics.Address, aidx basics.AppIndex) (ret basics.AppParams, ok bool, err error) {
 	var d ledgercore.AppParamsDelta
 	d, ok, err = cs.lookupAppParams(addr, aidx, false)
