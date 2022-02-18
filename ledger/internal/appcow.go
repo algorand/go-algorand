@@ -248,14 +248,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 			Creator: addr,
 			Created: true,
 		}
-	} else {
-		aa := ledgercore.AccountApp{
-			Address: addr,
-			App:     aidx,
-		}
-		cb.mods.ModifiedAppLocalStates[aa] = true
 	}
-
 	return nil
 }
 
@@ -287,14 +280,7 @@ func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex
 			Creator: addr,
 			Created: false,
 		}
-	} else {
-		aa := ledgercore.AccountApp{
-			Address: addr,
-			App:     aidx,
-		}
-		cb.mods.ModifiedAppLocalStates[aa] = false
 	}
-
 	return nil
 }
 
