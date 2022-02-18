@@ -153,19 +153,10 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
-	addressesCh := make(chan *preloaderTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams))
+	addressesCh := make(chan *preloaderTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams)) // TODO : !!!
 	// totalBalances counts the total number of balances over all the transaction groups
 	totalBalances := 0
 	totalResources := 0
-
-	// add the fee sink address to the accountTasks/addressesCh so that it will be loaded first.
-	if len(groups) > 0 {
-		task := &preloaderTask{
-			address: &feeSinkAddr,
-		}
-		addressesCh <- task
-		accountTasks[feeSinkAddr] = task
-	}
 
 	// iterate over the transaction groups and add all their account addresses to the list
 	groupsReady := make([]groupTask, len(groups))
@@ -186,6 +177,9 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
 				}
 			case protocol.AssetTransferTx:
+				if !stxn.Txn.Sender.IsZero() {
+					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
+				}
 				if !stxn.Txn.AssetSender.IsZero() {
 					if stxn.Txn.XferAsset != 0 {
 						loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
@@ -206,7 +200,8 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 				}
 			case protocol.AssetFreezeTx:
 				if !stxn.Txn.FreezeAccount.IsZero() {
-					if stxn.Txn.XferAsset != 0 {
+					if stxn.Txn.FreezeAsset != 0 {
+						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
 						loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, addressesCh)
 					}
 					loadAccountsAddAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks, addressesCh)
@@ -247,12 +242,13 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 	// Add fee sink to the first group
 	if len(groupsReady) > 0 {
 		// the feeSinkAddr is known to be non-empty, so we don't need to test for that.
+		prevBalance := groupsReady[0].balancesCount
 		loadAccountsAddAccountTask(&feeSinkAddr, &groupsReady[0], accountTasks, addressesCh)
-		totalBalances++
+		totalBalances += groupsReady[0].balancesCount - prevBalance
 	}
 	close(addressesCh)
 
-	// updata all the groups task :
+	// update all the groups task :
 	// allocate the correct number of balances, as well as
 	// enough space on the "done" channel.
 	allBalances := make([]loadedAccountDataEntry, totalBalances)
@@ -364,7 +360,7 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 	// iterate on the transaction groups tasks. This array retains the original order.
 	for i, wg := range groupsReady {
 		// Wait to receive wg.balancesCount nil error messages, one for each address referenced in this txn group.
-		for j := 0; j < wg.balancesCount; j++ {
+		for j := 0; j < wg.balancesCount+wg.resourcesCount; j++ {
 			select {
 			case err := <-wg.done:
 				if err != nil {
