@@ -248,7 +248,7 @@ func (g *benchAppOptInsTxnGenerator) generateAppCallTransaction(tb testing.TB, a
 	}
 
 	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
+		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         minFee,
@@ -258,9 +258,10 @@ func (g *benchAppOptInsTxnGenerator) generateAppCallTransaction(tb testing.TB, a
 			Note:        ledgertesting.RandomNote(),
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApprovalProgram: g.Program,
-			ApplicationID:   appIdx,
-			OnCompletion:    transactions.NoOpOC,
+			ApprovalProgram:   g.Program,
+			ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+			ApplicationID:     appIdx,
+			OnCompletion:      transactions.NoOpOC,
 		},
 	}
 	stxn := txn.Sign(keys[senderIdx])
@@ -296,8 +297,8 @@ func BenchmarkBlockEvaluatorDiskAppOptIns(b *testing.B) {
 }
 
 func BenchmarkBlockEvaluatorDiskAppCalls(b *testing.B) {
-	if b.N < 4 {
-		b.N = 4
+	if b.N < 2 {
+		b.N = 2
 	}
 	// program sets all 16 available keys of len 64 bytes to same values of 64 bytes
 	source := `#pragma version 5
@@ -335,7 +336,7 @@ done:
 		NumApps:          500,
 		Proto:            protocol.ConsensusFuture,
 		Program:          prog,
-		MaxAppsOptedIn:   50,
+		MaxAppsOptedIn:   8,
 		TransactionsType: protocol.ApplicationCallTx,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
