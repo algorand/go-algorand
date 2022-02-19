@@ -300,7 +300,7 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 			gr.resources = allResources[usedResources : usedResources+gr.resourcesCount]
 			usedResources += gr.resourcesCount
 		}
-		gr.done = make(chan error, gr.balancesCount)
+		gr.done = make(chan error, gr.balancesCount+gr.resourcesCount)
 		usedBalances += gr.balancesCount
 	}
 	taskIdx := int64(-1)
