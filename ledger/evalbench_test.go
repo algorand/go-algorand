@@ -245,6 +245,7 @@ func (g *benchAppOptInsTxnGenerator) generateAppCallTransaction(tb testing.TB, a
 			appIdx = curAppIdx
 			break
 		}
+		appEntryIdx--
 	}
 
 	txn := transactions.Transaction{
