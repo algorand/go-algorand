@@ -17,8 +17,6 @@
 package compactcert
 
 import (
-	"context"
-	"database/sql"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -162,31 +160,4 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) []account.Participatio
 		safeToDeleteIds = append(safeToDeleteIds, ids[i])
 	}
 	return safeToDeleteIds
-}
-
-// LatestSigsFromThisNode returns information about compact cert signatures from
-// this node's participation keys that are already stored durably on disk.  In
-// particular, we return the round nunmber of the latest block signed with each
-// account's participation key.  This is intended for use by the ephemeral key
-// logic: since we already have these signatures stored on disk, it is safe to
-// delete the corresponding ephemeral private keys.
-func (ccw *Worker) LatestSigsFromThisNode() (map[basics.Address]basics.Round, error) {
-	res := make(map[basics.Address]basics.Round)
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		sigs, err := getPendingSigsFromThisNode(tx)
-		if err != nil {
-			return err
-		}
-
-		for rnd, psigs := range sigs {
-			for _, psig := range psigs {
-				if res[psig.signer] < rnd {
-					res[psig.signer] = rnd
-				}
-			}
-		}
-
-		return nil
-	})
-	return res, err
 }
