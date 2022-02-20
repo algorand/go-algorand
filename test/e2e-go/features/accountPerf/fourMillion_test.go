@@ -108,7 +108,7 @@ func getAccountInformation(
 	address string) (info generated.Account, err error) {
 
 	for x := 0; x < 50; x++ { // retry only 50 times
-		info, err = client.AccountInformationV2(address)
+		info, err = client.AccountInformationV2(address, true)
 		if err == nil {
 			break
 		}
@@ -727,24 +727,6 @@ func scenarioC(
 
 	fmt.Println("Opt-in applications...")
 
-	/*
-		for _, nacc := range keys {
-			info1, err := client.AccountInformationV2(nacc.pk.String())
-			require.NoError(t, err)
-			select {
-			case <-stopChan:
-				require.Fail(t, "Test errored")
-			default:
-			}
-			for xxx := range *info1.AppsLocalState {
-				fmt.Printf("%+v\n\n", (*(*info1.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
-			}
-			for _, xxx := range *info1.CreatedApps {
-				fmt.Printf("g %+v\n", (*xxx.Params.GlobalState)[0].Value.Uint)
-			}
-
-		}
-	*/
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
@@ -771,24 +753,7 @@ func scenarioC(
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
-	/*
-		for _, nacc := range keys {
-			info1, err := client.AccountInformationV2(nacc.pk.String())
-			require.NoError(t, err)
-			select {
-			case <-stopChan:
-				require.Fail(t, "Test errored")
-			default:
-			}
-			for xxx := range *info1.AppsLocalState {
-				fmt.Printf("%+v\n\n", (*(*info1.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
-			}
-			for _, xxx := range *info1.CreatedApps {
-				fmt.Printf("g %+v\n", (*xxx.Params.GlobalState)[0].Value.Uint)
-			}
 
-		}
-	*/
 	// Make an app call to each of them
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
@@ -817,92 +782,33 @@ func scenarioC(
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
-	/*
-		for _, nacc := range keys {
-			info1, err := client.AccountInformationV2(nacc.pk.String())
+
+	for _, nacc := range keys {
+		if nacc == ownAllAccount {
+			fmt.Println("owner") //continue
+		}
+		info, err := getAccountInformation(client, nacc.pk.String())
+		require.NoError(t, err)
+
+		for _, capp := range *info.CreatedApps {
+			appInfo, err := client.AccountApplicationInformation(ownAllAccount.pk.String(), capp.Id)
 			require.NoError(t, err)
-			select {
-			case <-stopChan:
-				require.Fail(t, "Test errored")
-			default:
+			require.Equal(t, uint64(2), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
+		}
+
+		/*
+			for xxx := range *info.AppsLocalState {
+				fmt.Printf("%+v\n", (*(*info.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
 			}
-			for xxx := range *info1.AppsLocalState {
-				fmt.Printf("%+v\n", (*(*info1.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
-			}
-			for _, xxx := range *info1.CreatedApps {
+			for _, xxx := range *info.CreatedApps {
 				fmt.Printf("g %+v\n", (*xxx.Params.GlobalState)[0].Value.Uint)
-			}
-		}
-	*/
-	// make sure the app store some information into the local storage
-	/*
-		// check the results in parallel
-		parallelCheckers := numberOfThreads
-		checkAppChan := make(chan uint64, parallelCheckers)
-		checkResChan := make(chan uint64, parallelCheckers)
-		var wg sync.WaitGroup
-		var globalStateCheckMu deadlock.Mutex
 
-		for p := 0; p < parallelCheckers; p++ {
-			wg.Add(1)
-			go func() {
-				lastAppId := uint64(0)
-				for i := range checkAppChan {
-					var app generated.Application
-					cont := false
-					for {
-						app, err = client.ApplicationInformation(i)
-						if err != nil {
-							if strings.Contains(err.Error(), "application does not exist") {
-								cont = true
-								break
-							}
-							time.Sleep(time.Millisecond * 100)
-							continue
-						}
-						break
-					}
-					if cont {
-						continue
-					}
-					checkResChan <- 1
-					lastAppId = i
-					checkApplicationParams(
-						t,
-						appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
-						app.Params,
-						baseAcct.pk.String(),
-						&globalStateCheck,
-						globalStateCheckMu)
-				}
-				fmt.Printf("Last app id: %d\n", lastAppId)
-				wg.Done()
-			}()
-		}
+				app, err := client.ApplicationInformation(xxx.Id)
+				require.NoError(t, err)
+				fmt.Println(app)
+			}*/
+	}
 
-		checked := uint64(0)
-		for i := uint64(0); checked < numberOfApps; {
-			select {
-			case <-stopChan:
-				require.Fail(t, "Test errored")
-			case val := <-checkResChan:
-				checked += val
-			case checkAppChan <- i:
-				i++
-			default:
-				time.Sleep(10 * time.Millisecond)
-			}
-			if int(checked)%printFreequency == 0 {
-				fmt.Printf("check app params %d / %d\n", checked, numberOfApps)
-			}
-		}
-		close(checkAppChan)
-		wg.Wait()
-
-		for _, x := range globalStateCheck {
-			require.True(t, x)
-
-		}*/
 }
 
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them. Make an app call to each of them, and make sure the app store some information into the local storage.
