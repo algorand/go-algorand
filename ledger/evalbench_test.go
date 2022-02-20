@@ -100,18 +100,18 @@ func (g *BenchPaymentTxnGenerator) Txn(tb testing.TB, addrs []basics.Address, ke
 // benchAppOptInsTxnGenerator generates payment transactions acrosss accounts that have
 // opted into applications.
 type benchAppOptInsTxnGenerator struct {
-	NumApps             int
-	Proto               protocol.ConsensusVersion
-	Program             []byte
-	OptedInAccts        []basics.Address
-	OptedInAcctsIndices []int
-	MaxAppsOptedIn      int
-	TransactionsType    protocol.TxType
-	AppsOptedIn         map[basics.Address]map[basics.AppIndex]struct{}
+	NumApps               int
+	MaxLocalSchemaEntries uint64
+	Program               []byte
+	OptedInAccts          []basics.Address
+	OptedInAcctsIndices   []int
+	MaxAppsOptedIn        int
+	TransactionsType      protocol.TxType
+	AppsOptedIn           map[basics.Address]map[basics.AppIndex]struct{}
 }
 
 func (g *benchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) ([]transactions.SignedTxn, int) {
-	maxLocalSchemaEntries := config.Consensus[g.Proto].MaxLocalSchemaEntries
+	maxLocalSchemaEntries := g.MaxLocalSchemaEntries
 	maxAppsOptedIn := g.MaxAppsOptedIn
 
 	// this function might create more transactions than a single block could contain.
@@ -288,11 +288,11 @@ func BenchmarkBlockEvaluatorDiskNoCrypto(b *testing.B) {
 
 func BenchmarkBlockEvaluatorDiskAppOptIns(b *testing.B) {
 	g := benchAppOptInsTxnGenerator{
-		NumApps:          500,
-		Proto:            protocol.ConsensusFuture,
-		Program:          []byte{0x02, 0x20, 0x01, 0x01, 0x22},
-		MaxAppsOptedIn:   config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
-		TransactionsType: protocol.PaymentTx,
+		NumApps:               500,
+		MaxLocalSchemaEntries: config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries,
+		Program:               []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+		MaxAppsOptedIn:        config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
+		TransactionsType:      protocol.PaymentTx,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }
@@ -334,11 +334,11 @@ done:
 	require.NoError(b, err)
 	prog := ops.Program
 	g := benchAppOptInsTxnGenerator{
-		NumApps:          500,
-		Proto:            protocol.ConsensusFuture,
-		Program:          prog,
-		MaxAppsOptedIn:   8,
-		TransactionsType: protocol.ApplicationCallTx,
+		NumApps:               500,
+		MaxLocalSchemaEntries: config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries,
+		Program:               prog,
+		MaxAppsOptedIn:        8,
+		TransactionsType:      protocol.ApplicationCallTx,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }
@@ -377,11 +377,11 @@ done:
 	require.NoError(b, err)
 	prog := ops.Program
 	g := benchAppOptInsTxnGenerator{
-		NumApps:          500,
-		Proto:            protocol.ConsensusFuture,
-		Program:          prog,
-		MaxAppsOptedIn:   config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
-		TransactionsType: protocol.PaymentTx,
+		NumApps:               500,
+		MaxLocalSchemaEntries: config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries,
+		Program:               prog,
+		MaxAppsOptedIn:        config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
+		TransactionsType:      protocol.PaymentTx,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }

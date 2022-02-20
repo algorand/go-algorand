@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base32"
 	"fmt"
+	"unsafe"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -124,5 +125,8 @@ func (addr *Address) UnmarshalText(text []byte) error {
 
 // IsZero checks if an address is the zero value.
 func (addr Address) IsZero() bool {
-	return addr == Address{}
+	return *(*uint64)(unsafe.Pointer(&addr[0]))|
+		*(*uint64)(unsafe.Pointer(&addr[8]))|
+		*(*uint64)(unsafe.Pointer(&addr[16]))|
+		*(*uint64)(unsafe.Pointer(&addr[24])) == 0
 }

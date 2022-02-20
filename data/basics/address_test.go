@@ -150,3 +150,44 @@ func BenchmarkUnmarshalChecksumAddress(b *testing.B) {
 		}
 	}
 }
+
+// IsZeroSlow checks if an address is the zero value.
+func (addr Address) IsZeroSlow() bool {
+	return addr == Address{}
+}
+
+func BenchmarkAddressIsZero(b *testing.B) {
+	b.Run("false", func(b *testing.B) {
+		addr, err := UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
+		require.NoError(b, err)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addr.IsZero()
+		}
+	})
+	b.Run("true", func(b *testing.B) {
+		var addr Address
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addr.IsZero()
+		}
+	})
+}
+
+func BenchmarkAddressIsZeroSlow(b *testing.B) {
+	b.Run("false", func(b *testing.B) {
+		addr, err := UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
+		require.NoError(b, err)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addr.IsZeroSlow()
+		}
+	})
+	b.Run("true", func(b *testing.B) {
+		var addr Address
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addr.IsZeroSlow()
+		}
+	})
+}

@@ -490,3 +490,115 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkPrefetcherApps(b *testing.B) {
+	acctAddrPtr := func(i int) (o *basics.Address) {
+		o = new(basics.Address)
+		o[0] = byte(i)
+		o[1] = byte(i >> 8)
+		o[2] = byte(i >> 16)
+		return
+	}
+	acctAddr := func(i int) (o basics.Address) {
+		t := *acctAddrPtr(i)
+		copy(o[:], t[:])
+		return
+	}
+
+	txnGroupLen := 16
+	groups := make([][]transactions.SignedTxnWithAD, 1+b.N/txnGroupLen)
+	for grpIdx := range groups {
+		groups[grpIdx] = make([]transactions.SignedTxnWithAD, txnGroupLen)
+		for txnIdx := range groups[grpIdx] {
+			groups[grpIdx][txnIdx].SignedTxn = transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+					Header: transactions.Header{
+						Sender: acctAddr(grpIdx + txnIdx),
+					},
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: 10,
+						Accounts: []basics.Address{
+							acctAddr(grpIdx + txnIdx + 1),
+							acctAddr(grpIdx + txnIdx + 1),
+						},
+						ForeignApps: []basics.AppIndex{
+							2001,
+							2002,
+						},
+						ForeignAssets: []basics.AssetIndex{
+							1001,
+						},
+					},
+				},
+			}
+		}
+	}
+	rnd := basics.Round(5)
+	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	var ledger = &prefetcherTestLedger{
+		round:    rnd,
+		balances: make(map[basics.Address]ledgercore.AccountData),
+		creators: make(map[basics.CreatableIndex]basics.Address),
+	}
+	ledger.balances[acctAddr(1)] = ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
+	}
+
+	b.ResetTimer()
+	preloadedTxnGroupsCh := loadAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	for k := range preloadedTxnGroupsCh {
+		require.NoError(b, k.err)
+	}
+}
+
+func BenchmarkPrefetcherPayment(b *testing.B) {
+	acctAddrPtr := func(i int) (o *basics.Address) {
+		o = new(basics.Address)
+		o[0] = byte(i)
+		o[1] = byte(i >> 8)
+		o[2] = byte(i >> 16)
+		return
+	}
+	acctAddr := func(i int) (o basics.Address) {
+		t := *acctAddrPtr(i)
+		copy(o[:], t[:])
+		return
+	}
+
+	txnGroupLen := 16
+	groups := make([][]transactions.SignedTxnWithAD, 1+b.N/txnGroupLen)
+	for grpIdx := range groups {
+		groups[grpIdx] = make([]transactions.SignedTxnWithAD, txnGroupLen)
+		for txnIdx := range groups[grpIdx] {
+			groups[grpIdx][txnIdx].SignedTxn = transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender: acctAddr(grpIdx + txnIdx),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver:         acctAddr(grpIdx + txnIdx + 1),
+						CloseRemainderTo: acctAddr(grpIdx + txnIdx + 2),
+					},
+				},
+			}
+		}
+	}
+	rnd := basics.Round(5)
+	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	var ledger = &prefetcherTestLedger{
+		round:    rnd,
+		balances: make(map[basics.Address]ledgercore.AccountData),
+		creators: make(map[basics.CreatableIndex]basics.Address),
+	}
+	ledger.balances[acctAddr(1)] = ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
+	}
+
+	b.ResetTimer()
+	preloadedTxnGroupsCh := loadAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	for k := range preloadedTxnGroupsCh {
+		require.NoError(b, k.err)
+	}
+}
