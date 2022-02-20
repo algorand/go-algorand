@@ -1240,15 +1240,18 @@ func (db *participationDB) deleteStateProofKeysInner(wr partDBWriteRecord) error
 
 		// Fetch primary key
 		var pk int
-		row := tx.QueryRow(selectPK, wr.deleteStateProofKeys.ParticipationID[:])
-		err := row.Scan(&pk)
+		selectStatement, err := tx.Prepare(selectPK)
 		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
+			return fmt.Errorf("unable to select primary key : %w", err)
+		}
+		row := selectStatement.QueryRow(wr.deleteStateProofKeys.ParticipationID[:])
+		if err := row.Scan(&pk); err != nil {
+			return fmt.Errorf("unable to scan primary key: %w", err)
 		}
 
 		stmt, err := tx.Prepare(deleteStateProofKeysQuery)
 		if err != nil {
-			return fmt.Errorf("unable to prepare state proof insert: %w", err)
+			return fmt.Errorf("unable to delete state proof keys: %w", err)
 		}
 		_, err = stmt.Exec(pk, wr.deleteStateProofKeys.Round)
 		return err
