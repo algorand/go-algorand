@@ -18,9 +18,7 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -50,9 +48,6 @@ type loadedResourcesEntry struct {
 
 // loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
-	// group is the transaction group
-	group []transactions.SignedTxnWithAD
-
 	// accounts is a list of all the accounts balance records that the transaction group refer to and are needed.
 	accounts []loadedAccountDataEntry
 
@@ -64,12 +59,30 @@ type loadedTransactionGroup struct {
 	err error
 }
 
+// accountPrefetcher used to prefetch accounts balances and resources before the evaluator is being called.
+type accountPrefetcher struct {
+	ledger          LedgerForEvaluator
+	rnd             basics.Round
+	groups          [][]transactions.SignedTxnWithAD
+	feeSinkAddr     basics.Address
+	consensusParams config.ConsensusParams
+	outChan         chan loadedTransactionGroup
+}
+
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
-func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
-	outChan := make(chan loadedTransactionGroup, len(groups))
-	go loadAccountsInner(ctx, l, rnd, groups, feeSinkAddr, consensusParams, outChan)
-	return outChan
+func prefetchAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan loadedTransactionGroup {
+	prefetcher := &accountPrefetcher{
+		ledger:          l,
+		rnd:             rnd,
+		groups:          groups,
+		feeSinkAddr:     feeSinkAddr,
+		consensusParams: consensusParams,
+		outChan:         make(chan loadedTransactionGroup, len(groups)),
+	}
+
+	go prefetcher.prefetch(ctx)
+	return prefetcher.outChan
 }
 
 // groupTask helps to organize the account loading for each transaction group.
@@ -83,9 +96,10 @@ type groupTask struct {
 	resources []loadedResourcesEntry
 	// resourcesCount is the number of resources that nees to be loaded per transaction group
 	resourcesCount int
-	// incompleteCount is the number of resources+balances still pending and need to be loaded.
+	// incompleteCount is the number of resources+balances still pending and need to be loaded
 	incompleteCount int64
-	err             error
+	// err indicates the error code ( if any ) that was received from the ledger during execution
+	err error
 }
 
 // preloaderTask manage the loading of a single element, whether it's a resource or an account address.
@@ -203,28 +217,39 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 	return
 }
 
-func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams, outChan chan loadedTransactionGroup) {
-	defer close(outChan)
-	start := time.Now()
-	defer func() {
-		d := time.Since(start)
-		fmt.Printf("total loadAccountsInner time is %v for %d entries, avg %d ns\n", d, len(groups), int(d.Nanoseconds())/len(groups))
-	}()
+var loadDuration int64
+
+func (p *accountPrefetcher) prefetch(ctx context.Context) {
+	defer close(p.outChan)
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
-	tasksQueue := allocPreloaderQueue(len(groups))
+	tasksQueue := allocPreloaderQueue(len(p.groups))
 
 	// totalBalances counts the total number of balances over all the transaction groups
 	totalBalances := 0
 	totalResources := 0
 
+	groupsReady := make([]groupTask, len(p.groups))
+
+	// Add fee sink to the first group
+	if len(p.groups) > 0 {
+		// the feeSinkAddr is known to be non-empty
+		feeSinkPreloader := &preloaderTask{
+			address:      &p.feeSinkAddr,
+			groups:       []*groupTask{&groupsReady[0]},
+			groupIndices: []int{0},
+		}
+		groupsReady[0].balancesCount = 1
+		accountTasks[p.feeSinkAddr] = feeSinkPreloader
+		tasksQueue.enqueue(feeSinkPreloader)
+	}
+
 	// iterate over the transaction groups and add all their account addresses to the list
-	groupsReady := make([]groupTask, len(groups))
 	queue := &tasksQueue
-	for i := range groups {
+	for i := range p.groups {
 		task := &groupsReady[i]
-		for j := range groups[i] {
-			stxn := &groups[i][j]
+		for j := range p.groups[i] {
+			stxn := &p.groups[i][j]
 			switch stxn.Txn.Type {
 			case protocol.PaymentTx:
 				if !stxn.Txn.Receiver.IsZero() {
@@ -272,7 +297,8 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 					// load the global - so that we'll have the program
 					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
 					// load the local - so that we'll have the local state
-					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
+					// this is something we need to decide if we want to enable, since not every application call would use local storage.
+					//loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
 				}
 				for _, fa := range stxn.Txn.ForeignApps {
 					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AppCreatable, task, resourceTasks, queue)
@@ -302,18 +328,6 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 		queue = queue.expand()
 	}
 
-	initialIterationDuration := time.Since(start)
-	fmt.Printf("total loadAccountsInner initial iteration duration is %v for %d entries, avg %d ns\n", initialIterationDuration, len(groups), int(initialIterationDuration.Nanoseconds())/len(groups))
-	secondPartStart := time.Now()
-
-	// Add fee sink to the first group
-	if len(groupsReady) > 0 {
-		// the feeSinkAddr is known to be non-empty, so we don't need to test for that.
-		prevBalance := groupsReady[0].balancesCount
-		loadAccountsAddAccountTask(&feeSinkAddr, &groupsReady[0], accountTasks, queue)
-		totalBalances += groupsReady[0].balancesCount - prevBalance
-	}
-
 	// find the number of tasks
 	tasksCount := int64(0)
 	for lastQueueEntry := &tasksQueue; ; lastQueueEntry = lastQueueEntry.next {
@@ -331,7 +345,7 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 	usedBalances := 0
 	usedResources := 0
 
-	groupDoneCh := make(chan int, asyncAccountLoadingThreadCount)
+	groupDoneCh := make(chan int, len(groupsReady))
 	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
 		gr := &groupsReady[grpIdx]
@@ -352,54 +366,57 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 	defer atomic.StoreInt64(&taskIdx, tasksCount)
 	// create few go-routines to load asyncroniously the account data.
 	for i := 0; i < asyncAccountLoadingThreadCount; i++ {
-		go evalPrefetcherAsyncThread(&tasksQueue, &taskIdx, l, rnd, groupDoneCh)
+		go p.asyncPrefetchRoutine(&tasksQueue, &taskIdx, groupDoneCh)
 	}
 
-	secondPartDuration := time.Since(secondPartStart)
-	fmt.Printf("total loadAccountsInner second iteration duration is %v for %d entries, avg %d ns\n", secondPartDuration, len(groups), int(secondPartDuration.Nanoseconds())/len(groups))
-
 	// iterate on the transaction groups tasks. This array retains the original order.
-	lastFlushedIdx := -1
 	completed := make(map[int]bool)
-	for i := range groupsReady {
+	for i := 0; i < len(p.groups); {
 	wait:
-		if groupIncompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount); groupIncompleteCount != 0 {
-			if groupIncompleteCount != dependencyFreeGroup {
-				select {
-				case doneIdx := <-groupDoneCh:
-					if doneIdx < 0 {
-						doneIdx = -doneIdx
-						// if there is an error, report the error to the output channel.
-						outChan <- loadedTransactionGroup{
-							group: groups[doneIdx],
-							err:   groupsReady[doneIdx].err,
-						}
-						return
+		if atomic.LoadInt64(&groupsReady[i].incompleteCount) > 0 {
+			select {
+			case doneIdx := <-groupDoneCh:
+				if doneIdx < 0 {
+					doneIdx = -doneIdx
+					// if there is an error, report the error to the output channel.
+					p.outChan <- loadedTransactionGroup{
+						err: groupsReady[doneIdx].err,
 					}
-					completed[doneIdx] = true
-					if doneIdx > i {
-						goto wait
-					}
-				case <-ctx.Done():
 					return
 				}
+				if doneIdx > i {
+					// mark future txn as ready.
+					completed[doneIdx] = true
+					goto wait
+				} else if doneIdx < i {
+					// it was already processed.
+					goto wait
+				}
+			case <-ctx.Done():
+				return
 			}
 		}
-		for next := lastFlushedIdx + 1; next <= i; next++ {
-			if !completed[next] && next < i {
-				break
+		next := i
+		for ; next < len(p.groups); next++ {
+			if !completed[next] {
+				if next > i {
+					i = next
+					goto wait
+				}
+				// next == i
 			}
+
 			delete(completed, next)
-			lastFlushedIdx = next
 
 			// if we had no error, write the result to the output channel.
 			// this write will not block since we preallocated enough space on the channel.
-			outChan <- loadedTransactionGroup{
-				group:     groups[next],
+			p.outChan <- loadedTransactionGroup{
 				accounts:  groupsReady[next].balances,
 				resources: groupsReady[next].resources,
 			}
 		}
+		// if we get to this point, it means taht we have no more transaction to process.
+		break
 	}
 }
 
@@ -431,8 +448,9 @@ func (wg *groupTask) markCompletionAcctError(err error, groupDoneCh chan int) {
 	}
 }
 
-func evalPrefetcherAsyncThread(queue *preloaderTaskQueue, taskIdx *int64, l LedgerForEvaluator, rnd basics.Round, groupDoneCh chan int) {
+func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *int64, groupDoneCh chan int) {
 	var task *preloaderTask
+	var err error
 	for {
 		nextTaskIdx := atomic.AddInt64(taskIdx, 1)
 		queue, task = queue.getTaskAtIndex(int(nextTaskIdx))
@@ -442,14 +460,12 @@ func evalPrefetcherAsyncThread(queue *preloaderTaskQueue, taskIdx *int64, l Ledg
 		}
 		if task.creatableIndex == 0 {
 			// lookup the account data directly from the ledger.
-			acctData, _, err := l.LookupWithoutRewards(rnd, *task.address)
+			var acctData ledgercore.AccountData
+			acctData, _, err = p.ledger.LookupWithoutRewards(p.rnd, *task.address)
 			// if there was an error..
 			if err != nil {
 				// there was an error loading that entry.
-				for _, wg := range task.groups {
-					wg.markCompletionAcctError(err, groupDoneCh)
-				}
-				return
+				break
 			}
 			br := loadedAccountDataEntry{
 				address: task.address,
@@ -463,14 +479,12 @@ func evalPrefetcherAsyncThread(queue *preloaderTaskQueue, taskIdx *int64, l Ledg
 		}
 		if task.address == nil {
 			// start off by figuring out the creator in case it's a global resource.
-			creator, ok, err := l.GetCreatorForRound(rnd, task.creatableIndex, task.creatableType)
+			var creator basics.Address
+			var ok bool
+			creator, ok, err = p.ledger.GetCreatorForRound(p.rnd, task.creatableIndex, task.creatableType)
 			if err != nil {
 				// there was an error loading that entry.
-				for _, wg := range task.groups {
-					// notify the channel of the error.
-					wg.markCompletionAcctError(err, groupDoneCh)
-				}
-				return
+				break
 			}
 			if !ok {
 				re := loadedResourcesEntry{
@@ -485,14 +499,11 @@ func evalPrefetcherAsyncThread(queue *preloaderTaskQueue, taskIdx *int64, l Ledg
 			}
 			task.address = &creator
 		}
-		resource, err := l.LookupResource(rnd, *task.address, task.creatableIndex, task.creatableType)
+		var resource ledgercore.AccountResource
+		resource, err = p.ledger.LookupResource(p.rnd, *task.address, task.creatableIndex, task.creatableType)
 		if err != nil {
 			// there was an error loading that entry.
-			for _, wg := range task.groups {
-				// notify the channel of the error.
-				wg.markCompletionAcctError(err, groupDoneCh)
-			}
-			return
+			break
 		}
 		re := loadedResourcesEntry{
 			resource:       &resource,
@@ -503,6 +514,13 @@ func evalPrefetcherAsyncThread(queue *preloaderTaskQueue, taskIdx *int64, l Ledg
 		// update all the group tasks with the new acquired balance.
 		for i, wg := range task.groups {
 			wg.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
+		}
+	}
+	// if we got here, it means that there was an error.
+	if task != nil {
+		for _, wg := range task.groups {
+			// notify the channel of the error.
+			wg.markCompletionAcctError(err, groupDoneCh)
 		}
 	}
 }

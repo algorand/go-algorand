@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -1537,12 +1536,12 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
-	paysetgroupsCh := loadAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	paysetgroupsPreloadedResourcesCh := prefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
 	// ensure that before we exit from this method, the account loading is no longer active.
 	defer func() {
 		accountLoadingCancel()
 		// wait for the paysetgroupsCh to get closed.
-		for range paysetgroupsCh {
+		for range paysetgroupsPreloadedResourcesCh {
 		}
 	}()
 
@@ -1563,12 +1562,11 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	base := eval.state.lookupParent.(*roundCowBase)
-	start := time.Now()
-	var execDur time.Duration
+	txnGroupIndex := 0
 transactionGroupLoop:
 	for {
 		select {
-		case txgroup, ok := <-paysetgroupsCh:
+		case txgroup, ok := <-paysetgroupsPreloadedResourcesCh:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
@@ -1576,7 +1574,9 @@ transactionGroupLoop:
 			}
 
 			for _, br := range txgroup.accounts {
-				base.accounts[*br.address] = *br.data
+				if _, have := base.accounts[*br.address]; !have {
+					base.accounts[*br.address] = *br.data
+				}
 			}
 			for _, lr := range txgroup.resources {
 				if lr.address == nil {
@@ -1615,13 +1615,12 @@ transactionGroupLoop:
 					}
 				}
 			}
-			execStart := time.Now()
 			sizeBefore := len(base.accounts)
-			err = eval.TransactionGroup(txgroup.group)
+			err = eval.TransactionGroup(paysetgroups[txnGroupIndex])
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}
-			execDur += time.Since(execStart)
+			txnGroupIndex++
 			sizeAfter := len(base.accounts)
 			if sizeBefore != sizeAfter {
 				fmt.Printf("account was loaded during TransactionGroup execution\n")
@@ -1635,8 +1634,6 @@ transactionGroupLoop:
 			}
 		}
 	}
-	d := time.Since(start)
-	fmt.Printf("total eval load time is %v, exec duration %v\n", d, execDur)
 
 	// Finally, process any pending end-of-block state changes.
 	err = eval.endOfBlock()

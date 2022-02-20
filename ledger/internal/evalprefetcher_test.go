@@ -436,7 +436,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		groups[0] = make([]transactions.SignedTxnWithAD, 1)
 		groups[0][0].SignedTxn = txn.signedTxn
 
-		preloadedTxnGroupsCh := loadAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+		preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
 
 		for loadedTxnGroup := range preloadedTxnGroupsCh {
 			require.NoError(t, loadedTxnGroup.err)
@@ -546,7 +546,7 @@ func BenchmarkPrefetcherApps(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := loadAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
 	for k := range preloadedTxnGroupsCh {
 		require.NoError(b, k.err)
 	}
@@ -597,7 +597,7 @@ func BenchmarkPrefetcherPayment(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := loadAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
 	for k := range preloadedTxnGroupsCh {
 		require.NoError(b, k.err)
 	}
