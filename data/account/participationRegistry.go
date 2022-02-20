@@ -446,6 +446,7 @@ func (db *participationDB) writeThread() {
 
 		if op.flush != nil {
 			op.flush <- lastErr
+			lastErr = nil
 		}
 	}
 }
