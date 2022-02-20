@@ -783,30 +783,23 @@ func scenarioC(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
 
-	for _, nacc := range keys {
+	for kid, nacc := range keys {
 		if nacc == ownAllAccount {
-			fmt.Println("owner") //continue
+			continue
 		}
 		info, err := getAccountInformation(client, nacc.pk.String())
 		require.NoError(t, err)
 
-		for _, capp := range *info.CreatedApps {
+		for appid, capp := range *info.CreatedApps {
 			appInfo, err := client.AccountApplicationInformation(ownAllAccount.pk.String(), capp.Id)
-			require.NoError(t, err)
-			require.Equal(t, uint64(2), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
-		}
-
-		/*
-			for xxx := range *info.AppsLocalState {
-				fmt.Printf("%+v\n", (*(*info.AppsLocalState)[xxx].KeyValue)[0].Value.Uint)
+			// require.NoError(t, err)
+			if err != nil {
+				fmt.Printf("kid: %d  appid: %d error %s\n\n", kid, appid, err)
+				continue
 			}
-			for _, xxx := range *info.CreatedApps {
-				fmt.Printf("g %+v\n", (*xxx.Params.GlobalState)[0].Value.Uint)
-
-				app, err := client.ApplicationInformation(xxx.Id)
-				require.NoError(t, err)
-				fmt.Println(app)
-			}*/
+			require.Equal(t, uint64(2), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
+			require.Equal(t, uint64(3), (*capp.Params.GlobalState)[0].Value.Uint)
+		}
 	}
 
 }
