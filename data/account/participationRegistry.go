@@ -477,7 +477,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	}
 
 	db.writeQueue <- opRequest{
-		operation: insertOp{
+		operation: &insertOp{
 			id:     id,
 			record: record,
 		},
@@ -534,7 +534,7 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) e
 
 	// Update the DB asynchronously.
 	db.writeQueue <- opRequest{
-		operation: appendKeysOp{
+		operation: &appendKeysOp{
 			id:   id,
 			keys: keys,
 		},
@@ -555,7 +555,7 @@ func (db *participationDB) Delete(id ParticipationID) error {
 
 	// do the db part async
 	db.writeQueue <- opRequest{
-		operation: deleteOp{id},
+		operation: &deleteOp{id},
 	}
 	return nil
 }
@@ -869,7 +869,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 
 	if len(updated) != 0 {
 		db.writeQueue <- opRequest{
-			operation: registerOp{
+			operation: &registerOp{
 				updated: updated,
 			},
 		}
@@ -934,7 +934,7 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 	resultCh := make(chan error, 1)
 	timeoutCh := time.After(timeout)
 	writeRecord := opRequest{
-		operation:  flushOp{},
+		operation:  &flushOp{},
 		errChannel: resultCh,
 	}
 

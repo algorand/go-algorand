@@ -54,7 +54,7 @@ type appendKeysOp struct {
 	keys StateProofKeys
 }
 
-func (r registerOp) apply(db *participationDB) error {
+func (r *registerOp) apply(db *participationDB) error {
 	var cacheDeletes []ParticipationID
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Disable active key if there is one
@@ -87,7 +87,7 @@ func (r registerOp) apply(db *participationDB) error {
 	return err
 }
 
-func (i insertOp) apply(db *participationDB) (err error) {
+func (i *insertOp) apply(db *participationDB) (err error) {
 	var rawVRF []byte
 	var rawVoting []byte
 	var rawStateProofContext []byte
@@ -134,7 +134,7 @@ func (i insertOp) apply(db *participationDB) (err error) {
 	return err
 }
 
-func (d deleteOp) apply(db *participationDB) error {
+func (d *deleteOp) apply(db *participationDB) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
@@ -165,7 +165,7 @@ func (d deleteOp) apply(db *participationDB) error {
 }
 
 // flush does nothing, but is called specifically to flush errors from the db
-func (f flushOp) apply(db *participationDB) error {
+func (f *flushOp) apply(db *participationDB) error {
 	var dirty map[ParticipationID]struct{}
 	db.mutex.Lock()
 	if len(db.dirty) != 0 {
@@ -221,7 +221,7 @@ func (f flushOp) apply(db *participationDB) error {
 	return err
 }
 
-func (a appendKeysOp) apply(db *participationDB) error {
+func (a *appendKeysOp) apply(db *participationDB) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Fetch primary key
 		var pk int
