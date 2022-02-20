@@ -30,8 +30,8 @@ type dbOp interface {
 }
 
 type opRequest struct {
-	operation dbOp
-	flush     chan error
+	operation  dbOp
+	errChannel chan error
 }
 
 type flushOp struct{} // does nothing but flushes the latest error.

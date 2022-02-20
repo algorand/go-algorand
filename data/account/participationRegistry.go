@@ -444,8 +444,8 @@ func (db *participationDB) writeThread() {
 			lastErr = err
 		}
 
-		if op.flush != nil {
-			op.flush <- lastErr
+		if op.errChannel != nil {
+			op.errChannel <- lastErr
 			lastErr = nil
 		}
 	}
@@ -935,8 +935,8 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 	resultCh := make(chan error, 1)
 	timeoutCh := time.After(timeout)
 	writeRecord := opRequest{
-		operation: flushOp{},
-		flush:     resultCh,
+		operation:  flushOp{},
+		errChannel: resultCh,
 	}
 
 	select {
