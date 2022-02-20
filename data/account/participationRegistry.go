@@ -413,20 +413,6 @@ type updatingParticipationRecord struct {
 	required bool
 }
 
-// partDBWriteRecord event object sent to the writeThread to facilitate async
-// database writes. Only one set of event fields should be set at a time.
-type partDBWriteRecord struct {
-	insertID ParticipationID
-	insert   Participation
-	keys     StateProofKeys
-
-	registerUpdated map[ParticipationID]updatingParticipationRecord
-
-	delete ParticipationID
-
-	flushResultChannel chan error
-}
-
 func (db *participationDB) initializeCache() error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -477,37 +463,6 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 		return fmt.Errorf("unexpected number of %s rows affected, expected 1 found %d", operationName, rows)
 	}
 	return nil
-}
-
-func (db *participationDB) appendKeysInner(id ParticipationID, keys StateProofKeys) error {
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// Fetch primary key
-		var pk int
-		row := tx.QueryRow(selectPK, id[:])
-		err := row.Scan(&pk)
-		if err == sql.ErrNoRows {
-			// nothing to do.
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
-		}
-
-		stmt, err := tx.Prepare(appendStateProofKeysQuery)
-		if err != nil {
-			return fmt.Errorf("unable to prepare state proof insert: %w", err)
-		}
-
-		for _, key := range keys {
-			result, err := stmt.Exec(pk, key.Round, protocol.Encode(key.Key))
-			if err = verifyExecWithOneRowEffected(err, result, "append keys"); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-	return err
 }
 
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
