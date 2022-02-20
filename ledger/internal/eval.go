@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -57,11 +58,6 @@ var ErrNotInCowCache = errors.New("can't find object in roundCowBase")
 // helps to avoid re-allocating storage during the evaluation/validation which
 // is considerably slower.
 const averageEncodedTxnSizeHint = 150
-
-// asyncAccountLoadingThreadCount controls how many go routines would be used
-// to load the account data before the Eval() start processing individual
-// transaction group.
-const asyncAccountLoadingThreadCount = 4
 
 // Creatable represent a single creatable object.
 type creatable struct {
@@ -1564,11 +1560,11 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 		txvalidator.txgroups = paysetgroups
 		txvalidator.done = make(chan error, 1)
 		go txvalidator.run()
-
 	}
 
 	base := eval.state.lookupParent.(*roundCowBase)
-
+	start := time.Now()
+	var execDur time.Duration
 transactionGroupLoop:
 	for {
 		select {
@@ -1619,9 +1615,16 @@ transactionGroupLoop:
 					}
 				}
 			}
+			execStart := time.Now()
+			sizeBefore := len(base.accounts)
 			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
+			}
+			execDur += time.Since(execStart)
+			sizeAfter := len(base.accounts)
+			if sizeBefore != sizeAfter {
+				fmt.Printf("account was loaded during TransactionGroup execution\n")
 			}
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
@@ -1632,6 +1635,8 @@ transactionGroupLoop:
 			}
 		}
 	}
+	d := time.Since(start)
+	fmt.Printf("total eval load time is %v, exec duration %v\n", d, execDur)
 
 	// Finally, process any pending end-of-block state changes.
 	err = eval.endOfBlock()

@@ -18,7 +18,9 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -26,6 +28,11 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+// asyncAccountLoadingThreadCount controls how many go routines would be used
+// to load the account data before the Eval() start processing individual
+// transaction group.
+const asyncAccountLoadingThreadCount = 4
 
 type loadedAccountDataEntry struct {
 	address *basics.Address
@@ -198,7 +205,11 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 
 func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams, outChan chan loadedTransactionGroup) {
 	defer close(outChan)
-
+	start := time.Now()
+	defer func() {
+		d := time.Since(start)
+		fmt.Printf("total loadAccountsInner time is %v for %d entries, avg %d ns\n", d, len(groups), int(d.Nanoseconds())/len(groups))
+	}()
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 	tasksQueue := allocPreloaderQueue(len(groups))
@@ -291,6 +302,10 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 		queue = queue.expand()
 	}
 
+	initialIterationDuration := time.Since(start)
+	fmt.Printf("total loadAccountsInner initial iteration duration is %v for %d entries, avg %d ns\n", initialIterationDuration, len(groups), int(initialIterationDuration.Nanoseconds())/len(groups))
+	secondPartStart := time.Now()
+
 	// Add fee sink to the first group
 	if len(groupsReady) > 0 {
 		// the feeSinkAddr is known to be non-empty, so we don't need to test for that.
@@ -317,6 +332,7 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 	usedResources := 0
 
 	groupDoneCh := make(chan int, asyncAccountLoadingThreadCount)
+	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
 		gr := &groupsReady[grpIdx]
 		gr.groupTaskIndex = grpIdx
@@ -327,6 +343,9 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 			usedResources += gr.resourcesCount
 		}
 		usedBalances += gr.balancesCount
+		if gr.incompleteCount == 0 {
+			gr.incompleteCount = dependencyFreeGroup
+		}
 	}
 
 	taskIdx := int64(-1)
@@ -336,29 +355,34 @@ func loadAccountsInner(ctx context.Context, l LedgerForEvaluator, rnd basics.Rou
 		go evalPrefetcherAsyncThread(&tasksQueue, &taskIdx, l, rnd, groupDoneCh)
 	}
 
+	secondPartDuration := time.Since(secondPartStart)
+	fmt.Printf("total loadAccountsInner second iteration duration is %v for %d entries, avg %d ns\n", secondPartDuration, len(groups), int(secondPartDuration.Nanoseconds())/len(groups))
+
 	// iterate on the transaction groups tasks. This array retains the original order.
 	lastFlushedIdx := -1
 	completed := make(map[int]bool)
 	for i := range groupsReady {
 	wait:
-		if atomic.LoadInt64(&groupsReady[i].incompleteCount) != 0 {
-			select {
-			case doneIdx := <-groupDoneCh:
-				if doneIdx < 0 {
-					doneIdx = -doneIdx
-					// if there is an error, report the error to the output channel.
-					outChan <- loadedTransactionGroup{
-						group: groups[doneIdx],
-						err:   groupsReady[doneIdx].err,
+		if groupIncompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount); groupIncompleteCount != 0 {
+			if groupIncompleteCount != dependencyFreeGroup {
+				select {
+				case doneIdx := <-groupDoneCh:
+					if doneIdx < 0 {
+						doneIdx = -doneIdx
+						// if there is an error, report the error to the output channel.
+						outChan <- loadedTransactionGroup{
+							group: groups[doneIdx],
+							err:   groupsReady[doneIdx].err,
+						}
+						return
 					}
+					completed[doneIdx] = true
+					if doneIdx > i {
+						goto wait
+					}
+				case <-ctx.Done():
 					return
 				}
-				completed[doneIdx] = true
-				if doneIdx > i {
-					goto wait
-				}
-			case <-ctx.Done():
-				return
 			}
 		}
 		for next := lastFlushedIdx + 1; next <= i; next++ {
@@ -419,10 +443,6 @@ func evalPrefetcherAsyncThread(queue *preloaderTaskQueue, taskIdx *int64, l Ledg
 		if task.creatableIndex == 0 {
 			// lookup the account data directly from the ledger.
 			acctData, _, err := l.LookupWithoutRewards(rnd, *task.address)
-			br := loadedAccountDataEntry{
-				address: task.address,
-				data:    &acctData,
-			}
 			// if there was an error..
 			if err != nil {
 				// there was an error loading that entry.
@@ -430,6 +450,10 @@ func evalPrefetcherAsyncThread(queue *preloaderTaskQueue, taskIdx *int64, l Ledg
 					wg.markCompletionAcctError(err, groupDoneCh)
 				}
 				return
+			}
+			br := loadedAccountDataEntry{
+				address: task.address,
+				data:    &acctData,
 			}
 			// update all the group tasks with the new acquired balance.
 			for i, wg := range task.groups {
