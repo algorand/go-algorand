@@ -1615,16 +1615,11 @@ transactionGroupLoop:
 					}
 				}
 			}
-			sizeBefore := len(base.accounts)
 			err = eval.TransactionGroup(paysetgroups[txnGroupIndex])
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}
 			txnGroupIndex++
-			sizeAfter := len(base.accounts)
-			if sizeBefore != sizeAfter {
-				fmt.Printf("account was loaded during TransactionGroup execution\n")
-			}
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
