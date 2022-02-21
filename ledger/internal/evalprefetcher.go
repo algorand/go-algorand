@@ -373,7 +373,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	completed := make(map[int]bool)
 	for i := 0; i < len(p.groups); {
 	wait:
-		if incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount); incompleteCount > 0 {
+		if incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount); incompleteCount > 0 || (incompleteCount != dependencyFreeGroup && !completed[i]) {
 			select {
 			case doneIdx := <-groupDoneCh:
 				if doneIdx < 0 {
@@ -395,8 +395,6 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			}
-		} else if incompleteCount > dependencyFreeGroup && !completed[i] {
-			goto wait
 		}
 		next := i
 		for ; next < len(p.groups); next++ {
