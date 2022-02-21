@@ -415,12 +415,13 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					creatableType:  basics.AppCreatable,
 					resource:       nil,
 				},
+				/* - if we'll decide that we want to perfetch the account local state, then this should be enabled.
 				{
 					address:        acctAddrPtr(1),
 					creatableIndex: 10,
 					creatableType:  basics.AppCreatable,
 					resource:       &ledgercore.AccountResource{},
-				},
+				},*/
 				{
 					address:        nil,
 					creatableIndex: 10,
