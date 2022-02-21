@@ -57,7 +57,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
-	msg, err := GenerateStateProofMessage(ccw.ledger, hdr.Round)
+	msg, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, hdrProto.CompactCertRounds)
 	if err != nil {
 		return builder{}, err
 	}
