@@ -84,13 +84,15 @@ func (p *SingleLeafProof) ToProof() *Proof {
 }
 
 // GetConcatenatedProof concats the verification path to a single slice
-// This function converts an empty element (i.e has missing child)
-// into a sequence of 0s [0...0]
+// This function converts an empty element in the path (i.e occurs when the tree is not a full tree)
+// into a sequence of digest result of zero.
 func (p *SingleLeafProof) GetConcatenatedProof() []byte {
 	digestSize := p.HashFactory.NewHash().Size()
 	proofconcat := make([]byte, digestSize*int(p.TreeDepth))
 	for i := 0; i < int(p.TreeDepth); i++ {
-		copy(proofconcat[i*digestSize:(i+1)*digestSize], p.Path[i])
+		if p.Path[i] != nil {
+			copy(proofconcat[i*digestSize:(i+1)*digestSize], p.Path[i])
+		}
 	}
 	return proofconcat
 }
