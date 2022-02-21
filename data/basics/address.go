@@ -125,8 +125,14 @@ func (addr *Address) UnmarshalText(text []byte) error {
 
 // IsZero checks if an address is the zero value.
 func (addr Address) IsZero() bool {
-	return *(*uint64)(unsafe.Pointer(&addr[0]))|
-		*(*uint64)(unsafe.Pointer(&addr[8]))|
-		*(*uint64)(unsafe.Pointer(&addr[16]))|
-		*(*uint64)(unsafe.Pointer(&addr[24])) == 0
+	// the following ensures that the bounds checking would be performed only once.
+	_ = addr[24]
+	// we use this dummy branching to ensure we would get better performance
+	// on both the negative and positive use cases.
+	if *(*uint64)(unsafe.Pointer(&addr[0])) == 0 {
+		return *(*uint64)(unsafe.Pointer(&addr[8]))|
+			*(*uint64)(unsafe.Pointer(&addr[16]))|
+			*(*uint64)(unsafe.Pointer(&addr[24])) == 0
+	}
+	return false
 }

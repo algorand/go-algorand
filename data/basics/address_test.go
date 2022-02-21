@@ -156,38 +156,112 @@ func (addr Address) IsZeroSlow() bool {
 	return addr == Address{}
 }
 
-func BenchmarkAddressIsZero(b *testing.B) {
-	b.Run("false", func(b *testing.B) {
-		addr, err := UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
-		require.NoError(b, err)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			addr.IsZero()
-		}
-	})
-	b.Run("true", func(b *testing.B) {
+func TestAddressIsZero(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	addr, err := UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
+	require.NoError(t, err)
+	require.False(t, addr.IsZero())
+	require.False(t, addr.IsZeroSlow())
+	var zeroAddr Address
+	require.True(t, zeroAddr.IsZero())
+	require.True(t, zeroAddr.IsZeroSlow())
+	for i := 0; i < len(zeroAddr)*8; i++ {
 		var addr Address
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			addr.IsZero()
-		}
-	})
+		// set the i-th bit
+		addr[i/8] = 1 << (i % 8)
+		require.False(t, addr.IsZero())
+		require.False(t, addr.IsZeroSlow())
+		// clear the i-th bit
+		addr[i/8] ^= 1 << (i % 8)
+		require.True(t, addr.IsZero())
+		require.True(t, addr.IsZeroSlow())
+	}
 }
 
-func BenchmarkAddressIsZeroSlow(b *testing.B) {
-	b.Run("false", func(b *testing.B) {
-		addr, err := UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
+func BenchmarkAddressIsZero(b *testing.B) {
+	smallPrime := 100003
+	largePrime := 199967
+	b.Run("negative", func(b *testing.B) {
+		addrs := make([]Address, smallPrime)
+		var err error
+		addrs[0], err = UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
 		require.NoError(b, err)
+		for i := range addrs {
+			copy(addrs[i][:], addrs[0][:])
+		}
+		cur := 0
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			addr.IsZeroSlow()
+			addrs[cur].IsZero()
+			cur = (cur + largePrime) % smallPrime
 		}
 	})
-	b.Run("true", func(b *testing.B) {
-		var addr Address
+	b.Run("negative(ref)", func(b *testing.B) {
+		addrs := make([]Address, smallPrime)
+		var err error
+		addrs[0], err = UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
+		require.NoError(b, err)
+		for i := range addrs {
+			copy(addrs[i][:], addrs[0][:])
+		}
+		cur := 0
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			addr.IsZeroSlow()
+			addrs[cur].IsZeroSlow()
+			cur = (cur + largePrime) % smallPrime
+		}
+	})
+	b.Run("positive", func(b *testing.B) {
+		addrs := make([]Address, smallPrime)
+		cur := 0
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addrs[cur].IsZero()
+			cur = (cur + largePrime) % smallPrime
+		}
+	})
+	b.Run("positive(ref)", func(b *testing.B) {
+		addrs := make([]Address, smallPrime)
+		cur := 0
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addrs[cur].IsZeroSlow()
+			cur = (cur + largePrime) % smallPrime
+		}
+	})
+	b.Run("interleaved", func(b *testing.B) {
+		addrs := make([]Address, smallPrime)
+		var err error
+		addrs[0], err = UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
+		require.NoError(b, err)
+		for i := range addrs {
+			if i%2 == 1 {
+				copy(addrs[i][:], addrs[0][:])
+			}
+		}
+		cur := 0
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addrs[cur].IsZero()
+			cur = (cur + largePrime) % smallPrime
+		}
+	})
+	b.Run("interleaved(ref)", func(b *testing.B) {
+		addrs := make([]Address, smallPrime)
+		var err error
+		addrs[0], err = UnmarshalChecksumAddress("J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU")
+		require.NoError(b, err)
+		for i := range addrs {
+			if i%2 == 1 {
+				copy(addrs[i][:], addrs[0][:])
+			}
+		}
+		cur := 0
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			addrs[cur].IsZeroSlow()
+			cur = (cur + largePrime) % smallPrime
 		}
 	})
 }
