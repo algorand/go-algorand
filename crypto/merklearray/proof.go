@@ -82,3 +82,15 @@ func (p *SingleLeafProof) GetFixedLengthHashableRepresentation() []byte {
 func (p *SingleLeafProof) ToProof() *Proof {
 	return &p.Proof
 }
+
+// GetConcatenatedProof concats the verification path to a single slice
+// This function converts an empty element (i.e has missing child)
+// into a sequence of 0s [0...0]
+func (p *SingleLeafProof) GetConcatenatedProof() []byte {
+	digestSize := p.HashFactory.NewHash().Size()
+	proofconcat := make([]byte, digestSize*int(p.TreeDepth))
+	for i := 0; i < int(p.TreeDepth); i++ {
+		copy(proofconcat[i*digestSize:(i+1)*digestSize], p.Path[i])
+	}
+	return proofconcat
+}

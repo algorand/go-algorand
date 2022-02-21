@@ -76,7 +76,8 @@ func TestTxnMerkleProof(t *testing.T) {
 
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
-	for i := 0; i < 10; i++ {
+	// we do not want to have a full tree in order the catch an empty element edge case
+	for i := 0; i < 4; i++ {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
@@ -87,17 +88,17 @@ func TestTxnMerkleProof(t *testing.T) {
 	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
 	a.NoError(err)
 
-	for i := 0; i < 10; i++ {
+	txid := tx.ID()
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	a.NoError(err)
+
+	for i := 0; i < 4; i++ {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
 		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, 1000, 10000000, nil)
 		a.NoError(err)
 	}
-
-	txid := tx.ID()
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
-	a.NoError(err)
 
 	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound)
 	a.NoError(err)
@@ -128,7 +129,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems[proofresp.Idx] = &element
 	err = merklearray.Verify(blk.TxnRoot.ToSlice(), elems, &proof)
 	if err != nil {
-		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v", blk.TxnRoot.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash)
+		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnRoot.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
 		a.NoError(err)
 	}
 
