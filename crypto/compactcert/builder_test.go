@@ -48,10 +48,6 @@ func hashBytes(hash hash.Hash, m []byte) []byte {
 	return outhash
 }
 
-func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Message, []byte(m)
-}
-
 func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklesignature.Verifier) []basics.Participant {
 	parts := make([]basics.Participant, 0, numberOfParticipant)
 
@@ -297,14 +293,14 @@ func TestSimulateSignatureVerification(t *testing.T) {
 
 	signer := generateTestSigner(50, 100, 1, a)
 	sigRound := uint64(55)
-	hashable := testMessage("testMessage")
-	sig, err := signer.GetSigner(sigRound).Sign(hashable)
+	msg := testMessage("testMessage")
+	sig, err := signer.GetSigner(sigRound).Sign(msg)
 	a.NoError(err)
 
 	genericKey := signer.GetVerifier()
 	sigBytes, err := sig.GetFixedLengthHashableRepresentation()
 	a.NoError(err)
-	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 5, 6)
+	checkSignature(a, sigBytes, genericKey, sigRound, msg, 5, 6)
 }
 
 // The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall compcatcert verification)
@@ -328,7 +324,7 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 0, 0)
 }
 
-func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesignature.Verifier, round uint64, message crypto.Hashable, expectedIndex uint64, expectedPathLen uint8) {
+func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesignature.Verifier, round uint64, message []byte, expectedIndex uint64, expectedPathLen uint8) {
 	a.Equal(len(sigBytes), 4366)
 
 	parsedBytes := 0
@@ -396,7 +392,7 @@ func hashEphemeralPublicKeyLeaf(round uint64, falconPK [falcon.PublicKeySize]byt
 	return leafHash
 }
 
-func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes int, message crypto.Hashable) (int, [falcon.PublicKeySize]byte) {
+func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes int, message []byte) (int, [falcon.PublicKeySize]byte) {
 	var falconSig [falcon.CTSignatureSize]byte
 	copy(falconSig[:], sigBytes[parsedBytes:parsedBytes+1538])
 	parsedBytes += 1538
@@ -407,8 +403,7 @@ func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes i
 	parsedBytes += 1793
 	ephemeralPk := falcon.PublicKey(falconPK)
 
-	msgBytes := crypto.Hash(crypto.HashRep(message))
-	err := ephemeralPk.VerifyCTSignature(ctSign, msgBytes[:])
+	err := ephemeralPk.VerifyCTSignature(ctSign, message)
 	a.NoError(err)
 	return parsedBytes, falconPK
 }

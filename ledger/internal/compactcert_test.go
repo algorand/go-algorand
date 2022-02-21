@@ -152,8 +152,11 @@ func TestCompactCertParams(t *testing.T) {
 
 	var votersHdr bookkeeping.BlockHeader
 	var hdr bookkeeping.BlockHeader
+	var msg []byte
 
-	res, err := CompactCertParams(votersHdr, hdr)
+	msg = []byte("testest")
+
+	res, err := CompactCertParams(msg, votersHdr, hdr)
 	require.Error(t, err) // not enabled
 
 	votersHdr.CurrentProtocol = "TestCompactCertParams"
@@ -161,16 +164,16 @@ func TestCompactCertParams(t *testing.T) {
 	proto.CompactCertRounds = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
-	res, err = CompactCertParams(votersHdr, hdr)
+	res, err = CompactCertParams(msg, votersHdr, hdr)
 	require.Error(t, err) // wrong round
 
 	votersHdr.Round = 2
 	hdr.Round = 3
-	res, err = CompactCertParams(votersHdr, hdr)
+	res, err = CompactCertParams(msg, votersHdr, hdr)
 	require.Error(t, err) // wrong round
 
 	hdr.Round = 4
-	res, err = CompactCertParams(votersHdr, hdr)
+	res, err = CompactCertParams(msg, votersHdr, hdr)
 	require.NoError(t, err)
 	require.Equal(t, hdr.Round, res.SigRound)
 
