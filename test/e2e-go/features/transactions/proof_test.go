@@ -78,7 +78,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
 	// we do not want to have a full tree in order the catch an empty element edge case
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
@@ -92,14 +92,6 @@ func TestTxnMerkleProof(t *testing.T) {
 	txid := tx.ID()
 	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
 	a.NoError(err)
-
-	for i := 0; i < 4; i++ {
-		accti, err := client.GenerateAddress(walletHandle)
-		a.NoError(err)
-
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, 1000, 10000000, nil)
-		a.NoError(err)
-	}
 
 	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound)
 	a.NoError(err)
