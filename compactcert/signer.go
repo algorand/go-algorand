@@ -19,6 +19,7 @@ package compactcert
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -39,6 +40,23 @@ type sigFromAddr struct {
 	Signer basics.Address            `codec:"signer"`
 	Round  basics.Round              `codec:"rnd"`
 	Sig    merklesignature.Signature `codec:"sig"`
+}
+
+// The Array implementation for block headers, required to build the merkle tree from them.
+//msgp:ignore
+type blockHeadersArray struct {
+	blockHeaders []bookkeeping.BlockHeader
+}
+
+func (b blockHeadersArray) Length() uint64 {
+	return uint64(len(b.blockHeaders))
+}
+
+func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
+	if pos >= b.Length() {
+		return nil, fmt.Errorf("pos %d out of array bound %d", pos, b.Length())
+	}
+	return b.blockHeaders[pos], nil
 }
 
 func (ccw *Worker) signer(latest basics.Round) {
@@ -94,7 +112,8 @@ restart:
 // This is the message the Compact Certificate will attest to.
 func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round) ([]byte, error) {
 	interval := 256 // TODO: replace by interval from block header
-	blockHeaders := make([]crypto.Hashable, interval)
+	var blkHdrArr blockHeadersArray
+	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, interval)
 	firstRound := compactCertRound - basics.Round(interval) + 1
 	for i := 0; i < interval; i++ {
 		rnd := firstRound + basics.Round(i)
@@ -102,11 +121,11 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round) ([]
 		if err != nil {
 			return nil, err
 		}
-		blockHeaders[i] = hdr
+		blkHdrArr.blockHeaders[i] = hdr
 	}
 
 	// Build merkle tree from encoded headers
-	tree, err := merklearray.Build(merklearray.ArrayWrapper{Data: blockHeaders}, crypto.HashFactory{HashType: crypto.Sha512_256})
+	tree, err := merklearray.Build(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		return nil, err
 	}

@@ -17,7 +17,6 @@
 package merklearray
 
 import "github.com/algorand/go-algorand/crypto"
-import "errors"
 
 // An Array represents a dense array of leaf elements that are
 // combined into a Merkle tree. The Marshal method returns a byte slice that represents the object
@@ -32,21 +31,4 @@ type Array interface {
 
 	// Marshal Returns a hash representation of the element located in position pos
 	Marshal(pos uint64) (crypto.Hashable, error)
-}
-
-// ArrayWrapper provides a simple implementation of the Array interface for a slice of data
-type ArrayWrapper struct {
-	Data []crypto.Hashable
-}
-
-func (a ArrayWrapper) Length() uint64 {
-	return uint64(len(a.Data))
-}
-
-func (a ArrayWrapper) Marshal(pos uint64) (crypto.Hashable, error) {
-	if int(pos) > len(a.Data) {
-		return nil, errors.New("element out of range")
-	}
-
-	return a.Data[pos], nil
 }
