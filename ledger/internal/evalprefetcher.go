@@ -92,7 +92,7 @@ type groupTask struct {
 	balances []loadedAccountDataEntry
 	// balancesCount is the number of balances that nees to be loaded per transaction group
 	balancesCount int
-	// resources contains the loaded resoruces each of the transaction groups have
+	// resources contains the loaded resources each of the transaction groups have
 	resources []loadedResourcesEntry
 	// resourcesCount is the number of resources that nees to be loaded per transaction group
 	resourcesCount int
@@ -373,7 +373,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	completed := make(map[int]bool)
 	for i := 0; i < len(p.groups); {
 	wait:
-		if atomic.LoadInt64(&groupsReady[i].incompleteCount) > 0 {
+		if incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount); incompleteCount > 0 {
 			select {
 			case doneIdx := <-groupDoneCh:
 				if doneIdx < 0 {
@@ -395,6 +395,8 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			}
+		} else if incompleteCount > dependencyFreeGroup && !completed[i] {
+			goto wait
 		}
 		next := i
 		for ; next < len(p.groups); next++ {
@@ -415,7 +417,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				resources: groupsReady[next].resources,
 			}
 		}
-		// if we get to this point, it means taht we have no more transaction to process.
+		// if we get to this point, it means that we have no more transaction to process.
 		break
 	}
 }
