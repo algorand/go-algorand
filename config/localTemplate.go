@@ -464,11 +464,19 @@ func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
 	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)
 }
 
-// SaveToDisk writes the Local settings into a root/ConfigFilename file
+// SaveToDisk writes the non-default Local settings into a root/ConfigFilename file
 func (cfg Local) SaveToDisk(root string) error {
 	configpath := filepath.Join(root, ConfigFilename)
 	filename := os.ExpandEnv(configpath)
 	return cfg.SaveToFile(filename)
+}
+
+// SaveAllToDisk writes the all Local settings into a root/ConfigFilename file
+func (cfg Local) SaveAllToDisk(root string) error {
+	configpath := filepath.Join(root, ConfigFilename)
+	filename := os.ExpandEnv(configpath)
+	prettyPrint := true
+	return codecs.SaveObjectToFile(filename, cfg, prettyPrint)
 }
 
 // SaveToFile saves the config to a specific filename, allowing overriding the default name
