@@ -348,7 +348,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert cc.Cert, atRound basics.Round, validate bool) error {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert cc.Cert, certMsg []byte, atRound basics.Round, validate bool) error {
 	if certType != protocol.CompactCertBasic {
 		return fmt.Errorf("compact cert type %d not supported", certType)
 	}
@@ -369,10 +369,7 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Com
 			return err
 		}
 
-		var msg []byte
-		//TODO Stateproof: generate stateproof message here (need to chane its Ledger interface parameter)
-		// compactcert.GenerateStateProofMessage(cs.lookupParent, atRound)
-		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, certMsg)
 		if err != nil {
 			return err
 		}
@@ -959,7 +956,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.Header.FirstValid, eval.validate)
+			err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.CertMsg, tx.Header.FirstValid, eval.validate)
 		}
 
 	default:

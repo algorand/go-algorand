@@ -31,7 +31,7 @@ type CompactCertTxnFields struct {
 	CertRound basics.Round             `codec:"certrnd"`
 	CertType  protocol.CompactCertType `codec:"certtype"`
 	Cert      compactcert.Cert         `codec:"cert"`
-	// TODO Stateproof: add CertMsg field
+	CertMsg   []byte                   `codec:"certmsg"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,

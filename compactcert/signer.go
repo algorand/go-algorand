@@ -19,6 +19,7 @@ package compactcert
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -42,6 +43,9 @@ type sigFromAddr struct {
 	Sig    merklesignature.Signature `codec:"sig"`
 }
 
+var errInvalidParams = errors.New("provided parameters are invalid")
+var errOutOfBound = errors.New("request pos is out of array bounds")
+
 // The Array implementation for block headers, required to build the merkle tree from them.
 //msgp:ignore
 type blockHeadersArray struct {
@@ -54,7 +58,7 @@ func (b blockHeadersArray) Length() uint64 {
 
 func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= b.Length() {
-		return nil, fmt.Errorf("pos %d out of array bound %d", pos, b.Length())
+		return nil, fmt.Errorf("%w: pos - %d, array length - %d", errOutOfBound, pos, b.Length())
 	}
 	return b.blockHeaders[pos], nil
 }
@@ -106,11 +110,13 @@ restart:
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
 // This is the message the Compact Certificate will attest to.
 func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) ([]byte, error) {
-	interval := int(compactCertInterval)
+	if compactCertRound < basics.Round(compactCertInterval) {
+		return nil, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
+	}
 	var blkHdrArr blockHeadersArray
-	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, interval)
-	firstRound := compactCertRound - basics.Round(interval) + 1
-	for i := 0; i < interval; i++ {
+	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, compactCertInterval)
+	firstRound := compactCertRound - basics.Round(compactCertInterval) + 1
+	for i := uint64(0); i < compactCertInterval; i++ {
 		rnd := firstRound + basics.Round(i)
 		hdr, err := ledger.BlockHdr(rnd)
 		if err != nil {
@@ -120,7 +126,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 	}
 
 	// Build merkle tree from encoded headers
-	tree, err := merklearray.Build(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha512_256})
 	if err != nil {
 		return nil, err
 	}
