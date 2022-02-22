@@ -226,7 +226,13 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 
-	var maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * (p.consensusParams.MaxAppTxnAccounts + p.consensusParams.MaxAppTxnForeignApps + p.consensusParams.MaxAppTxnForeignAssets)
+	var maxTxnGroupEntries int
+	if p.consensusParams.Application {
+		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * (p.consensusParams.MaxAppTxnAccounts + p.consensusParams.MaxAppTxnForeignApps + p.consensusParams.MaxAppTxnForeignAssets)
+	} else {
+		// 8 is the number of resources+account used in the AssetTransferTx, which is the largest one.
+		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * 8
+	}
 
 	tasksQueue := allocPreloaderQueue(len(p.groups), maxTxnGroupEntries)
 
