@@ -27,10 +27,13 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
 func TestMetricsReload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	mt := metricsTracker{}
 	accts := ledgertesting.RandomAccounts(1, true)
 	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
