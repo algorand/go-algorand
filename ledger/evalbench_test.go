@@ -97,27 +97,29 @@ func (g *BenchPaymentTxnGenerator) Txn(tb testing.TB, addrs []basics.Address, ke
 	return stxn
 }
 
-// BenchAppTxnGenerator generates app opt in transactions
-type BenchAppOptInsTxnGenerator struct {
-	NumApps             int
-	Proto               protocol.ConsensusVersion
-	Program             []byte
-	OptedInAccts        []basics.Address
-	OptedInAcctsIndices []int
+// benchAppOptInsTxnGenerator generates payment transactions acrosss accounts that have
+// opted into applications.
+type benchAppOptInsTxnGenerator struct {
+	NumApps               int
+	MaxLocalSchemaEntries uint64
+	Program               []byte
+	ClearProgram          []byte
+	OptedInAccts          []basics.Address
+	OptedInAcctsIndices   []int
+	MaxAppsOptedIn        int
+	TransactionsType      protocol.TxType
+	AppsOptedIn           map[basics.Address]map[basics.AppIndex]struct{}
 }
 
-func (g *BenchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) ([]transactions.SignedTxn, int) {
-	maxLocalSchemaEntries := config.Consensus[g.Proto].MaxLocalSchemaEntries
-	maxAppsOptedIn := config.Consensus[g.Proto].MaxAppsOptedIn
-	if maxAppsOptedIn == 0 {
-		maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
-	}
+func (g *benchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) ([]transactions.SignedTxn, int) {
+	maxLocalSchemaEntries := g.MaxLocalSchemaEntries
+	maxAppsOptedIn := g.MaxAppsOptedIn
 
-	// this function might create too much transaction even to fit into a single block
+	// this function might create more transactions than a single block could contain.
 	// estimate number of smaller blocks needed in order to set LastValid properly
-	const numAccts = 10000
-	const maxTxnPerBlock = 10000
-	expectedTxnNum := g.NumApps + numAccts*maxAppsOptedIn
+	var optedInAccts = len(addrs) / 2
+	const maxTxnPerBlock = 3000
+	expectedTxnNum := g.NumApps + optedInAccts*maxAppsOptedIn/2
 	expectedNumOfBlocks := expectedTxnNum/maxTxnPerBlock + 1
 
 	createTxns := make([]transactions.SignedTxn, 0, g.NumApps)
@@ -144,34 +146,26 @@ func (g *BenchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 		createTxns = append(createTxns, stxn)
 	}
 
-	appsOptedIn := make(map[basics.Address]map[basics.AppIndex]struct{}, numAccts)
+	g.AppsOptedIn = make(map[basics.Address]map[basics.AppIndex]struct{}, optedInAccts)
+	appsOptedIn := g.AppsOptedIn
 
-	optInTxns := make([]transactions.SignedTxn, 0, numAccts*maxAppsOptedIn)
+	optInTxns := make([]transactions.SignedTxn, 0, optedInAccts*maxAppsOptedIn/2)
+	require.True(tb, g.NumApps > maxAppsOptedIn)
+	optedInAddrIdx := rand.Perm(len(addrs))
+	for i := 0; i < optedInAccts; i++ {
+		senderIdx := optedInAddrIdx[i]
+		sender := addrs[senderIdx]
 
-	for i := 0; i < numAccts; i++ {
-		var senderIdx int
-		var sender basics.Address
-		for {
-			senderIdx = rand.Intn(len(addrs))
-			sender = addrs[senderIdx]
-			if len(appsOptedIn[sender]) < maxAppsOptedIn {
-				appsOptedIn[sender] = make(map[basics.AppIndex]struct{}, maxAppsOptedIn)
-				break
-			}
-		}
 		g.OptedInAccts = append(g.OptedInAccts, sender)
 		g.OptedInAcctsIndices = append(g.OptedInAcctsIndices, senderIdx)
 
-		acctOptIns := appsOptedIn[sender]
-		for j := 0; j < maxAppsOptedIn; j++ {
+		acctOptIns := make(map[basics.AppIndex]struct{}, maxAppsOptedIn)
+
+		appIdxPerm := rand.Perm(g.NumApps)
+		for j := 0; j < rand.Int()%(maxAppsOptedIn+1); j++ {
 			var appIdx basics.AppIndex
-			for {
-				appIdx = basics.AppIndex(rand.Intn(g.NumApps) + 1)
-				if _, ok := acctOptIns[appIdx]; !ok {
-					acctOptIns[appIdx] = struct{}{}
-					break
-				}
-			}
+			appIdx = basics.AppIndex(appIdxPerm[j] + 1)
+			acctOptIns[appIdx] = struct{}{}
 
 			txn := transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
@@ -196,7 +190,19 @@ func (g *BenchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 	return append(createTxns, optInTxns...), maxTxnPerBlock
 }
 
-func (g *BenchAppOptInsTxnGenerator) Txn(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) transactions.SignedTxn {
+func (g *benchAppOptInsTxnGenerator) Txn(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) transactions.SignedTxn {
+	switch g.TransactionsType {
+	case protocol.PaymentTx:
+		return g.generatePaymentTransaction(tb, addrs, keys, rnd, gh)
+	case protocol.ApplicationCallTx:
+		return g.generateAppCallTransaction(tb, addrs, keys, rnd, gh)
+	default:
+		tb.FailNow()
+		return transactions.SignedTxn{}
+	}
+}
+
+func (g *benchAppOptInsTxnGenerator) generatePaymentTransaction(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) transactions.SignedTxn {
 	idx := rand.Intn(len(g.OptedInAcctsIndices))
 	senderIdx := g.OptedInAcctsIndices[idx]
 	sender := addrs[senderIdx]
@@ -221,6 +227,47 @@ func (g *BenchAppOptInsTxnGenerator) Txn(tb testing.TB, addrs []basics.Address, 
 	return stxn
 }
 
+func (g *benchAppOptInsTxnGenerator) generateAppCallTransaction(tb testing.TB, addrs []basics.Address, keys []*crypto.SignatureSecrets, rnd basics.Round, gh crypto.Digest) transactions.SignedTxn {
+	var senderIdx int
+	for {
+		idx := rand.Intn(len(g.OptedInAcctsIndices))
+		senderIdx = g.OptedInAcctsIndices[idx]
+		if len(g.AppsOptedIn[addrs[senderIdx]]) > 0 {
+			break
+		}
+	}
+	sender := addrs[senderIdx]
+	// pick a random app.
+	var appIdx basics.AppIndex
+
+	appEntryIdx := rand.Intn(len(g.AppsOptedIn[addrs[senderIdx]]))
+	for curAppIdx := range g.AppsOptedIn[addrs[senderIdx]] {
+		if appEntryIdx == 0 {
+			appIdx = curAppIdx
+			break
+		}
+		appEntryIdx--
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			Fee:         minFee,
+			FirstValid:  rnd,
+			LastValid:   rnd,
+			GenesisHash: gh,
+			Note:        ledgertesting.RandomNote(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: appIdx,
+			OnCompletion:  transactions.NoOpOC,
+		},
+	}
+	stxn := txn.Sign(keys[senderIdx])
+	return stxn
+}
+
 func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {
 	g := BenchPaymentTxnGenerator{}
 	benchmarkBlockEvaluator(b, true, true, protocol.ConsensusCurrentVersion, &g)
@@ -239,10 +286,71 @@ func BenchmarkBlockEvaluatorDiskNoCrypto(b *testing.B) {
 }
 
 func BenchmarkBlockEvaluatorDiskAppOptIns(b *testing.B) {
-	g := BenchAppOptInsTxnGenerator{
-		NumApps: 500,
-		Proto:   protocol.ConsensusFuture,
-		Program: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+	progSrc := `#pragma version 2
+	intcblock 1
+	intc_0`
+	ops, err := logic.AssembleString(progSrc)
+	require.NoError(b, err)
+	g := benchAppOptInsTxnGenerator{
+		NumApps:               500,
+		MaxLocalSchemaEntries: config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries,
+		Program:               ops.Program,
+		ClearProgram:          ops.Program,
+		MaxAppsOptedIn:        config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
+		TransactionsType:      protocol.PaymentTx,
+	}
+	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
+}
+
+func BenchmarkBlockEvaluatorDiskAppCalls(b *testing.B) {
+	if b.N < 2 {
+		b.N = 2
+	}
+	// program sets all 16 available keys of len 64 bytes to same values of 64 bytes
+	source := `#pragma version 5
+	txn OnCompletion
+	int OptIn
+	==
+	bz done
+	int 0
+	store 0 // save loop var
+loop:
+	int 0  // acct index
+	byte "012345678901234567890123456789012345678901234567890123456789ABC0"
+	int 63
+	load 0 // loop var
+	int 0x41
+	+
+	setbyte // str[63] = chr(i + 'A')
+	dup  // value is the same as key
+	app_local_put
+	load 0  // loop var
+	int 1
+	+
+	dup
+	store 0 // save loop var
+	int 16
+	<
+	bnz loop
+done:
+	int 1
+`
+	programOps, err := logic.AssembleString(source)
+	require.NoError(b, err)
+
+	clearProgramSrc := `#pragma version 2
+	intcblock 1
+	intc_0`
+	clearProgramOps, err := logic.AssembleString(clearProgramSrc)
+	require.NoError(b, err)
+
+	g := benchAppOptInsTxnGenerator{
+		NumApps:               45000,
+		MaxLocalSchemaEntries: config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries,
+		Program:               programOps.Program,
+		ClearProgram:          clearProgramOps.Program,
+		MaxAppsOptedIn:        2,
+		TransactionsType:      protocol.ApplicationCallTx,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }
@@ -277,13 +385,22 @@ loop:
 done:
 	int 1
 `
-	ops, err := logic.AssembleString(source)
+	programOps, err := logic.AssembleString(source)
 	require.NoError(b, err)
-	prog := ops.Program
-	g := BenchAppOptInsTxnGenerator{
-		NumApps: 500,
-		Proto:   protocol.ConsensusFuture,
-		Program: prog,
+
+	clearProgramSrc := `#pragma version 2
+	intcblock 1
+	intc_0`
+	clearProgramOps, err := logic.AssembleString(clearProgramSrc)
+	require.NoError(b, err)
+
+	g := benchAppOptInsTxnGenerator{
+		NumApps:               500,
+		MaxLocalSchemaEntries: config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries,
+		Program:               programOps.Program,
+		ClearProgram:          clearProgramOps.Program,
+		MaxAppsOptedIn:        config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn,
+		TransactionsType:      protocol.PaymentTx,
 	}
 	benchmarkBlockEvaluator(b, false, false, protocol.ConsensusFuture, &g)
 }
@@ -303,7 +420,6 @@ func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
 
 // this variant focuses on benchmarking ledger.go `Eval()`, the rest is setup, it runs Eval() b.N times.
 func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto protocol.ConsensusVersion, txnSource BenchTxnGenerator) {
-
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() { deadlock.Opts.Disable = deadlockDisable }()
@@ -315,13 +431,15 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	config.Consensus[protocol.ConsensusVersion(dbName)] = cparams
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
 	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	cfg.Archival = false
+	testingLog := logging.TestingLog(b)
+	testingLog.SetLevel(logging.Error)
+	l, err := OpenLedger(testingLog, dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer testLedgerCleanup(l, dbName, inMem)
 
 	dbName2 := dbName + "_2"
-	l2, err := OpenLedger(logging.Base(), dbName2, inMem, genesisInitState, cfg)
+	l2, err := OpenLedger(testingLog, dbName2, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer testLedgerCleanup(l2, dbName2, inMem)
 
@@ -341,15 +459,51 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		}()
 	}
 
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	// test speed of block building
+	numTxns := 50000
+
+	validatedBlock := benchmarkPreparePaymentTransactionsTesting(b, numTxns, txnSource, genesisInitState, addrs, keys, l, l2)
+
+	blockBuildDone := time.Now()
+	setupTime := blockBuildDone.Sub(start)
+	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
+
+	err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	require.NoError(b, err)
+
+	avbDone := time.Now()
+	avbTime := avbDone.Sub(blockBuildDone)
+	b.ReportMetric(float64(avbTime)/float64(numTxns), "ns/AddValidatedBlock_tx")
+
+	// test speed of block validation
+	// This should be the same as the eval line in ledger.go AddBlock()
+	// This is pulled out to isolate Eval() time from db ops of AddValidatedBlock()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if withCrypto {
+			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
+		} else {
+			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
+		}
+		require.NoError(b, err)
+	}
+
+	abDone := time.Now()
+	abTime := abDone.Sub(avbDone)
+	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
+
+	b.StopTimer()
+}
+
+func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSource BenchTxnGenerator, genesisInitState ledgercore.InitState, addrs []basics.Address, keys []*crypto.SignatureSecrets, l, l2 *Ledger) *ledgercore.ValidatedBlock {
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
 	// apply initialization transations if any
 	initSignedTxns, maxTxnPerBlock := txnSource.Prepare(b, addrs, keys, newBlock.Round(), genHash)
 	if len(initSignedTxns) > 0 {
@@ -360,7 +514,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		// there are might more transactions than MaxTxnBytesPerBlock allows
 		// so make smaller blocks to fit
 		for i, stxn := range initSignedTxns {
-			err = bev.Transaction(stxn, transactions.ApplyData{})
+			err := bev.Transaction(stxn, transactions.ApplyData{})
 			require.NoError(b, err)
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
 				validatedBlock, err = bev.GenerateBlock()
@@ -396,11 +550,6 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	}
 
 	setupDone := time.Now()
-	setupTime := setupDone.Sub(start)
-	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
-
-	// test speed of block building
-	numTxns := 50000
 
 	for i := 0; i < numTxns; i++ {
 		stxn := txnSource.Txn(b, addrs, keys, newBlock.Round(), genHash)
@@ -415,29 +564,5 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	blockBuildTime := blockBuildDone.Sub(setupDone)
 	b.ReportMetric(float64(blockBuildTime)/float64(numTxns), "ns/block_build_tx")
 
-	err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
-	require.NoError(b, err)
-
-	avbDone := time.Now()
-	avbTime := avbDone.Sub(blockBuildDone)
-	b.ReportMetric(float64(avbTime)/float64(numTxns), "ns/AddValidatedBlock_tx")
-
-	// test speed of block validation
-	// This should be the same as the eval line in ledger.go AddBlock()
-	// This is pulled out to isolate Eval() time from db ops of AddValidatedBlock()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if withCrypto {
-			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
-		} else {
-			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
-		}
-		require.NoError(b, err)
-	}
-
-	abDone := time.Now()
-	abTime := abDone.Sub(avbDone)
-	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
-
-	b.StopTimer()
+	return validatedBlock
 }
