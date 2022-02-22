@@ -119,17 +119,17 @@ type preloaderTask struct {
 // preloaderTaskQueue is a dynamic linked list of enqueued entries, optimized for non-syncronized insertion and
 // syncronized extraction
 type preloaderTaskQueue struct {
-	next    *preloaderTaskQueue
-	used    int
-	entries []*preloaderTask
-	baseIdx int
+	next               *preloaderTaskQueue
+	used               int
+	entries            []*preloaderTask
+	baseIdx            int
+	maxTxnGroupEntries int
 }
 
-const maxTxnGroupEntries = 100
-
-func allocPreloaderQueue(count int) preloaderTaskQueue {
+func allocPreloaderQueue(count int, maxTxnGroupEntries int) preloaderTaskQueue {
 	return preloaderTaskQueue{
-		entries: make([]*preloaderTask, count*2+maxTxnGroupEntries*2),
+		entries:            make([]*preloaderTask, count*2+maxTxnGroupEntries*2),
+		maxTxnGroupEntries: maxTxnGroupEntries,
 	}
 }
 
@@ -142,7 +142,7 @@ func (pq *preloaderTaskQueue) enqueue(t *preloaderTask) {
 }
 
 func (pq *preloaderTaskQueue) expand() *preloaderTaskQueue {
-	if cap(pq.entries)-pq.used < maxTxnGroupEntries {
+	if cap(pq.entries)-pq.used < pq.maxTxnGroupEntries {
 		pq.next = &preloaderTaskQueue{
 			entries: make([]*preloaderTask, cap(pq.entries)*2),
 			used:    0,
@@ -170,6 +170,9 @@ type accountCreatableKey struct {
 }
 
 func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTasks map[basics.Address]*preloaderTask, queue *preloaderTaskQueue) {
+	if addr.IsZero() {
+		return
+	}
 	if task, have := accountTasks[*addr]; !have {
 		task := &preloaderTask{
 			address:      addr,
@@ -190,6 +193,9 @@ func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTask
 }
 
 func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wg *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask, queue *preloaderTaskQueue) {
+	if cidx == 0 {
+		return
+	}
 	key := accountCreatableKey{
 		cidx: cidx,
 	}
@@ -223,7 +229,10 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	defer close(p.outChan)
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
-	tasksQueue := allocPreloaderQueue(len(p.groups))
+
+	var maxTxnGroupEntries = config.MaxTxGroupSize * (config.MaxAppTxnAccounts + config.MaxAppTxnForeignApps + config.MaxAppTxnForeignAssets)
+
+	tasksQueue := allocPreloaderQueue(len(p.groups), maxTxnGroupEntries)
 
 	// totalBalances counts the total number of balances over all the transaction groups
 	totalBalances := 0
@@ -252,44 +261,28 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			stxn := &p.groups[i][j]
 			switch stxn.Txn.Type {
 			case protocol.PaymentTx:
-				if !stxn.Txn.Receiver.IsZero() {
-					loadAccountsAddAccountTask(&stxn.Txn.Receiver, task, accountTasks, queue)
-				}
-				if !stxn.Txn.CloseRemainderTo.IsZero() {
-					loadAccountsAddAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks, queue)
-				}
+				loadAccountsAddAccountTask(&stxn.Txn.Receiver, task, accountTasks, queue)
+				loadAccountsAddAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks, queue)
 			case protocol.AssetConfigTx:
-				if stxn.Txn.ConfigAsset != 0 {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, queue)
-				}
+				loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, queue)
 			case protocol.AssetTransferTx:
-				if !stxn.Txn.Sender.IsZero() {
-					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-				}
+				loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 				if !stxn.Txn.AssetSender.IsZero() {
-					if stxn.Txn.XferAsset != 0 {
-						loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					}
+					loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 					loadAccountsAddAccountTask(&stxn.Txn.AssetSender, task, accountTasks, queue)
 				}
 				if !stxn.Txn.AssetReceiver.IsZero() {
-					if stxn.Txn.XferAsset != 0 {
-						loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					}
+					loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 					loadAccountsAddAccountTask(&stxn.Txn.AssetReceiver, task, accountTasks, queue)
 				}
 				if !stxn.Txn.AssetCloseTo.IsZero() {
-					if stxn.Txn.XferAsset != 0 {
-						loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					}
+					loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 					loadAccountsAddAccountTask(&stxn.Txn.AssetCloseTo, task, accountTasks, queue)
 				}
 			case protocol.AssetFreezeTx:
 				if !stxn.Txn.FreezeAccount.IsZero() {
-					if stxn.Txn.FreezeAsset != 0 {
-						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
-						loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					}
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
 					loadAccountsAddAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks, queue)
 				}
 			case protocol.ApplicationCallTx:
@@ -307,9 +300,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 					loadAccountsAddResourceTask(nil, basics.CreatableIndex(fa), basics.AssetCreatable, task, resourceTasks, queue)
 				}
 				for ixa := range stxn.Txn.Accounts {
-					if !stxn.Txn.Accounts[ixa].IsZero() {
-						loadAccountsAddAccountTask(&stxn.Txn.Accounts[ixa], task, accountTasks, queue)
-					}
+					loadAccountsAddAccountTask(&stxn.Txn.Accounts[ixa], task, accountTasks, queue)
 				}
 			case protocol.CompactCertTx:
 				fallthrough

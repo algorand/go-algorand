@@ -499,6 +499,21 @@ var MaxAvailableAppProgramLen int
 // to be taken offline, that would be proposed to be taken offline.
 var MaxProposedExpiredOnlineAccounts int
 
+// MaxAppTxnAccounts is the maximum number of accounts in the ApplicationCall Accounts field.
+// this determines, in part, the maximum number of balance records
+// accessed by a single transaction
+var MaxAppTxnAccounts int
+
+// MaxAppTxnForeignApps is the maximum number of app ids in the ApplicationCall ForeignApps field.
+// these are the only applications besides the called application for
+// which global state may be read in the transaction
+var MaxAppTxnForeignApps int
+
+// MaxAppTxnForeignAssets is the maximum number of asset ids in the ApplicationCall ForeignAssets
+// field. these are the only assets for which the asset parameters may
+// be read in the transaction
+var MaxAppTxnForeignAssets int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -536,6 +551,9 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
+	checkSetMax(p.MaxAppTxnAccounts, &MaxAppTxnAccounts)
+	checkSetMax(p.MaxAppTxnForeignApps, &MaxAppTxnForeignApps)
+	checkSetMax(p.MaxAppTxnForeignAssets, &MaxAppTxnForeignAssets)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
