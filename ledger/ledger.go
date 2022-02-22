@@ -438,13 +438,6 @@ func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound
 	return l.accts.voters.getVoters(rnd)
 }
 
-// GetLastBlockHeaders - optimisation to retrieve the last %num% block headers required for generating the
-// State Proof message, instead of having the query them one by one.
-func (l *Ledger) GetLastBlockHeaders(rnd basics.Round, num int) []bookkeeping.BlockHeader {
-	// TODO Or: implement and use for building compact cert commitment message
-	return nil
-}
-
 // ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
