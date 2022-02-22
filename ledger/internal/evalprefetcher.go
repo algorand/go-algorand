@@ -228,7 +228,8 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 
 	var maxTxnGroupEntries int
 	if p.consensusParams.Application {
-		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * (p.consensusParams.MaxAppTxnAccounts + p.consensusParams.MaxAppTxnForeignApps + p.consensusParams.MaxAppTxnForeignAssets)
+		// the extra two are for the sender account data, plus the application global state
+		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * (2 + p.consensusParams.MaxAppTxnAccounts + p.consensusParams.MaxAppTxnForeignApps + p.consensusParams.MaxAppTxnForeignAssets)
 	} else {
 		// 8 is the number of resources+account used in the AssetTransferTx, which is the largest one.
 		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * 8
