@@ -704,7 +704,7 @@ func TestApplyChild(t *testing.T) {
 		a.Empty(delta.action)
 		a.Empty(*delta.counts)
 		a.Empty(*delta.maxCounts)
-		a.Equal(0, len(delta.kvCow))
+		a.Zero(len(delta.kvCow))
 	}
 
 	parent.applyChild(&child)
@@ -895,9 +895,9 @@ func TestApplyStorageDelta(t *testing.T) {
 	// no op
 	cow := applyAll(kv, &sdu)
 	params1, params2, state1, state2 := getAllFromCow(cow)
-	a.Equal(0, len(params1.GlobalState))
+	a.Zero(len(params1.GlobalState))
 	a.Equal(len(kv), len(params2.GlobalState))
-	a.Equal(0, len(state1.KeyValue))
+	a.Zero(len(state1.KeyValue))
 	a.Equal(len(kv), len(state2.KeyValue))
 
 	// check dealloc action
