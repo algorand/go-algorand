@@ -189,7 +189,6 @@ func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTask
 		task.groupIndices = append(task.groupIndices, wg.balancesCount)
 	}
 	wg.balancesCount++
-	return
 }
 
 func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wg *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask, queue *preloaderTaskQueue) {
@@ -220,10 +219,7 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 		task.groupIndices = append(task.groupIndices, wg.resourcesCount)
 	}
 	wg.resourcesCount++
-	return
 }
-
-var loadDuration int64
 
 func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	defer close(p.outChan)
