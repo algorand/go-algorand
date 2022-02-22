@@ -47,7 +47,7 @@ func TestAccountDeltas(t *testing.T) {
 	a.False(ok)
 	a.Equal(AccountData{}, data)
 
-	a.Equal(0, ad.Len())
+	a.Zero(ad.Len())
 	a.Panics(func() { ad.GetByIdx(0) })
 
 	a.Equal([]basics.Address{}, ad.ModifiedAccounts())

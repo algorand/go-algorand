@@ -411,6 +411,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 }
 
 func TestAccountStorageWithStateProofID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs, _ := dbOpenTest(t, true)
@@ -1061,7 +1063,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(-1, idx)
 	a.Equal(accountDelta{}, data)
 
-	a.Equal(0, ad.len())
+	a.Zero(ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
 	sample1 := accountDelta{newAcct: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}, address: addr}
@@ -1156,7 +1158,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(-1, idx)
 	a.Equal(resourceDelta{}, data)
 
-	a.Equal(0, ad.len())
+	a.Zero(ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
 	sample1 := resourceDelta{newResource: resourcesData{Total: 123}, address: addr, oldResource: persistedResourcesData{aidx: 1}}

@@ -356,11 +356,11 @@ func TestAppCallCloneEmpty(t *testing.T) {
 
 	var ls map[basics.AppIndex]basics.AppLocalState
 	cls := cloneAppLocalStates(ls)
-	a.Equal(0, len(cls))
+	a.Zero(len(cls))
 
 	var ap map[basics.AppIndex]basics.AppParams
 	cap := cloneAppParams(ap)
-	a.Equal(0, len(cap))
+	a.Zero(len(cap))
 }
 
 func TestAppCallGetParam(t *testing.T) {
@@ -417,7 +417,7 @@ func TestAppCallAddressByIndex(t *testing.T) {
 	addr, err = ac.AddressByIndex(1, sender)
 	a.Error(err)
 	a.Contains(err.Error(), "invalid Account reference 1")
-	a.Equal(0, len(ac.Accounts))
+	a.Zero(len(ac.Accounts))
 
 	acc0 := getRandomAddress(a)
 	ac.Accounts = []basics.Address{acc0}
@@ -535,8 +535,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 	err := ApplicationCall(ac, h, b, nil, 0, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "ApplicationCall cannot have nil ApplyData")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppParams)
+	a.Zero(b.put)
+	a.Zero(b.putAppParams)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
@@ -546,8 +546,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "applications not supported")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppParams)
+	a.Zero(b.put)
+	a.Zero(b.putAppParams)
 
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
@@ -579,8 +579,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "already found app with index")
 	a.Equal(uint64(0), uint64(b.allocatedAppIdx))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppParams)
+	a.Zero(b.put)
+	a.Zero(b.putAppParams)
 	// ensure original balance record in the mock was not changed
 	// this ensure proper cloning and any in-intended in-memory modifications
 	//
@@ -690,8 +690,8 @@ func TestAppCallOptIn(t *testing.T) {
 	err := optInApplication(b, sender, appIdx, params)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot opt in app")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.put)
+	a.Zero(b.putAppLocalState)
 
 	b.SetProto(protocol.ConsensusFuture)
 	err = optInApplication(b, sender, appIdx, params)
@@ -709,8 +709,8 @@ func TestAppCallOptIn(t *testing.T) {
 	err = optInApplication(b, sender, appIdx, params)
 	a.Error(err)
 	a.Contains(err.Error(), "has already opted in to app")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.put)
+	a.Zero(b.putAppLocalState)
 
 	b.ResetWrites()
 
@@ -842,9 +842,9 @@ func TestAppCallClearState(t *testing.T) {
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "is not currently opted in to app")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppLocalState)
-	a.Equal(0, b.deleteAppLocalState)
+	a.Zero(b.put)
+	a.Zero(b.putAppLocalState)
+	a.Zero(b.deleteAppLocalState)
 
 	// check non-existing app with empty opt-in
 	b.balances[sender] = basics.AccountData{
@@ -853,10 +853,10 @@ func TestAppCallClearState(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.putAppLocalState)
 	a.Equal(1, b.deleteAppLocalState)
 	br := b.putBalances[sender]
-	a.Equal(0, len(br.AppLocalStates))
+	a.Zero(len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	// check original balance record not changed
 	br = b.balances[sender]
@@ -873,10 +873,10 @@ func TestAppCallClearState(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.putAppLocalState)
 	a.Equal(1, b.deleteAppLocalState)
 	br = b.putBalances[sender]
-	a.Equal(0, len(br.AppLocalStates))
+	a.Zero(len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 
@@ -901,10 +901,10 @@ func TestAppCallClearState(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.putAppLocalState)
 	a.Equal(1, b.deleteAppLocalState)
 	br = b.putBalances[sender]
-	a.Equal(0, len(br.AppLocalStates))
+	a.Zero(len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.StateDelta(nil), ad.EvalDelta.GlobalDelta)
 
@@ -918,10 +918,10 @@ func TestAppCallClearState(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.putAppLocalState)
 	a.Equal(1, b.deleteAppLocalState)
 	br = b.putBalances[sender]
-	a.Equal(0, len(br.AppLocalStates))
+	a.Zero(len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.StateDelta(nil), ad.EvalDelta.GlobalDelta)
 
@@ -935,7 +935,7 @@ func TestAppCallClearState(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
 	br = b.putBalances[sender]
-	a.Equal(0, len(br.AppLocalStates))
+	a.Zero(len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.StateDelta(nil), ad.EvalDelta.GlobalDelta)
 
@@ -950,10 +950,10 @@ func TestAppCallClearState(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.putAppLocalState)
 	a.Equal(1, b.deleteAppLocalState)
 	a.Equal(appIdx, b.deAllocatedAppIdx)
-	a.Equal(0, len(br.AppLocalStates))
+	a.Zero(len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(transactions.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 
@@ -1012,9 +1012,9 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppLocalState)
-	a.Equal(0, b.deleteAppLocalState)
+	a.Zero(b.put)
+	a.Zero(b.putAppLocalState)
+	a.Zero(b.deleteAppLocalState)
 	br := b.balances[creator]
 	a.Equal(cbr, br)
 	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
@@ -1025,9 +1025,9 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "is not opted in to any app")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppLocalState)
-	a.Equal(0, b.deleteAppLocalState)
+	a.Zero(b.put)
+	a.Zero(b.putAppLocalState)
+	a.Zero(b.deleteAppLocalState)
 	br = b.balances[creator]
 	a.Equal(cbr, br)
 	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
@@ -1043,13 +1043,13 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
-	a.Equal(0, b.putAppLocalState)
+	a.Zero(b.putAppLocalState)
 	a.Equal(1, b.deleteAppLocalState)
 	br = b.putBalances[creator]
 	a.NotEqual(cbr, br)
 	a.Equal(basics.TealKeyValue(nil), br.AppParams[appIdx].GlobalState)
 	br = b.putBalances[sender]
-	a.Equal(0, len(br.AppLocalStates))
+	a.Zero(len(br.AppLocalStates))
 	a.Equal(transactions.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
 
@@ -1111,8 +1111,8 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppParams)
+	a.Zero(b.put)
+	a.Zero(b.putAppParams)
 	br := b.balances[creator]
 	a.Equal(cbr, br)
 	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
@@ -1122,7 +1122,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[sender] = basics.AccountData{}
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(0, b.put)
+	a.Zero(b.put)
 	a.Equal(1, b.putAppParams)
 	br = b.balances[creator]
 	a.Equal(cbr, br)
@@ -1268,9 +1268,9 @@ func TestAppCallApplyDelete(t *testing.T) {
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putAppParams)
-	a.Equal(0, b.deleteAppParams)
+	a.Zero(b.put)
+	a.Zero(b.putAppParams)
+	a.Zero(b.deleteAppParams)
 	br := b.balances[creator]
 	a.Equal(cbr, br)
 	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
@@ -1286,7 +1286,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.NoError(err)
 	a.Equal(appIdx, b.deAllocatedAppIdx)
 	a.Equal(1, b.put)
-	a.Equal(0, b.putAppParams)
+	a.Zero(b.putAppParams)
 	a.Equal(1, b.deleteAppParams)
 	br = b.balances[creator]
 	a.Equal(cbr, br)
@@ -1318,7 +1318,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		a.NoError(err)
 		a.Equal(appIdx, b.deAllocatedAppIdx)
 		a.Equal(1, b.put)
-		a.Equal(0, b.putAppParams)
+		a.Zero(b.putAppParams)
 		a.Equal(1, b.deleteAppParams)
 		br = b.balances[creator]
 		a.Equal(cbr, br)

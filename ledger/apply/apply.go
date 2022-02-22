@@ -39,29 +39,24 @@ type Balances interface {
 	CloseAccount(basics.Address) error
 
 	// Methods for accessing app and asset data:
-	// CountX returns the number of AppParams, AppLocalState, AssetHolding, or AssetParams associated with an account.
 	// GetX returns the app or asset data associated with a given address and app/asset index.
 	// HasX checks when an account has data associated with a given address and app/asset index.
 	// PutX updates or creates app or asset data for an address and app/asset index.
 	// DeleteX deletes the app or asset data associated with an address and app/asset index.
 
-	// CountAppParams(addr basics.Address) (int, error)
 	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
 	PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error
 	DeleteAppParams(addr basics.Address, aidx basics.AppIndex) error
 
-	// CountAppLocalState(addr basics.Address) (int, error)
 	GetAppLocalState(addr basics.Address, aidx basics.AppIndex) (basics.AppLocalState, bool, error)
 	HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (bool, error)
 	PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error
 	DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error
 
-	// CountAssetHolding(addr basics.Address) (int, error)
 	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
 	PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error
 	DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error
 
-	// CountAssetParams(addr basics.Address) (int, error)
 	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
 	HasAssetParams(addr basics.Address, aidx basics.AssetIndex) (bool, error)
 	PutAssetParams(addr basics.Address, aidx basics.AssetIndex, data basics.AssetParams) error

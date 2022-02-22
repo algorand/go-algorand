@@ -44,7 +44,7 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	voteVerifier := MakeAsyncVoteVerifier(&expiredExecPool{mainPool})
 	defer voteVerifier.Quit()
 	verifyErr := voteVerifier.verifyVote(context.Background(), nil, unauthenticatedVote{}, 0, message{}, make(chan<- asyncVerifyVoteResponse, 1))
-	require.Error(t, context.Canceled, verifyErr)
+	require.Equal(t, context.Canceled, verifyErr)
 	verifyEqVoteErr := voteVerifier.verifyEqVote(context.Background(), nil, unauthenticatedEquivocationVote{}, 0, message{}, make(chan<- asyncVerifyVoteResponse, 1))
-	require.Error(t, context.Canceled, verifyEqVoteErr)
+	require.Equal(t, context.Canceled, verifyEqVoteErr)
 }
