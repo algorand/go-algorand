@@ -414,29 +414,29 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	}
 }
 
-func (wg *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, groupDoneCh chan int) {
-	wg.balances[idx] = br
-	if 0 == atomic.AddInt64(&wg.incompleteCount, -1) {
-		groupDoneCh <- wg.groupTaskIndex
+func (gt *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, groupDoneCh chan int) {
+	gt.balances[idx] = br
+	if 0 == atomic.AddInt64(&gt.incompleteCount, -1) {
+		groupDoneCh <- gt.groupTaskIndex
 	}
 }
 
-func (wg *groupTask) markCompletionResource(idx int, res loadedResourcesEntry, groupDoneCh chan int) {
-	wg.resources[idx] = res
-	if 0 == atomic.AddInt64(&wg.incompleteCount, -1) {
-		groupDoneCh <- wg.groupTaskIndex
+func (gt *groupTask) markCompletionResource(idx int, res loadedResourcesEntry, groupDoneCh chan int) {
+	gt.resources[idx] = res
+	if 0 == atomic.AddInt64(&gt.incompleteCount, -1) {
+		groupDoneCh <- gt.groupTaskIndex
 	}
 }
 
-func (wg *groupTask) markCompletionAcctError(err error, groupDoneCh chan int) {
+func (gt *groupTask) markCompletionAcctError(err error, groupDoneCh chan int) {
 	for {
-		curVal := atomic.LoadInt64(&wg.incompleteCount)
+		curVal := atomic.LoadInt64(&gt.incompleteCount)
 		if curVal <= 0 {
 			return
 		}
-		if atomic.CompareAndSwapInt64(&wg.incompleteCount, curVal, 0) {
-			wg.err = err
-			groupDoneCh <- -wg.groupTaskIndex
+		if atomic.CompareAndSwapInt64(&gt.incompleteCount, curVal, 0) {
+			gt.err = err
+			groupDoneCh <- -gt.groupTaskIndex
 			return
 		}
 	}
