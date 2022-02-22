@@ -30,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -177,7 +178,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 		Round:        l.Latest() + 1,
 		Branch:       genBlk.Hash(),
 		TimeStamp:    0,
-		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: genBlk.UpgradeState,
 	}
 
@@ -690,9 +691,15 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	t.Run("Happy path", func(t *testing.T) {
 		// Create test object to append.
-		keys := make(account.StateProofKeys)
-		keys[100] = []byte{100}
-		keys[101] = []byte{101}
+		keys := make(account.StateProofKeys, 2)
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
+
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
+
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
@@ -709,8 +716,12 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 		require.Equal(t, id, mockNode.id)
 		require.Len(t, mockNode.keys, 2)
-		require.Equal(t, mockNode.keys[100], keys[100])
-		require.Equal(t, mockNode.keys[101], keys[101])
+		require.Equal(t, mockNode.keys[0].Round, keys[0].Round)
+		require.Equal(t, mockNode.keys[0].Key, keys[0].Key)
+
+		require.Equal(t, mockNode.keys[1].Round, keys[1].Round)
+		require.Equal(t, mockNode.keys[1].Key, keys[1].Key)
+
 	})
 
 	t.Run("Invalid body", func(t *testing.T) {
@@ -731,7 +742,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	t.Run("Empty body", func(t *testing.T) {
 		// Create test object with no keys to append.
-		keys := make(account.StateProofKeys)
+		keys := make(account.StateProofKeys, 0)
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
@@ -759,9 +770,15 @@ func TestAppendParticipationKeys(t *testing.T) {
 			Shutdown: make(chan struct{}),
 		}
 
-		keys := make(account.StateProofKeys)
-		keys[100] = []byte{100}
-		keys[101] = []byte{101}
+		keys := make(account.StateProofKeys, 2)
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
+
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
+
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.

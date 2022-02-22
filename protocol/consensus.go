@@ -164,6 +164,13 @@ const ConsensusV30 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bc36005dbd776e6d1eaf0c560619bb183215645c",
 )
 
+// ConsensusV31 enables the batch verification for ed25519 signatures, Fix reward calculation issue, introduces the ability
+// to force an expired participation offline, enables TEAL 6 ( AVM 1.1 ) and add support for creating
+// state proof keys.
+const ConsensusV31 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/85e6db1fdbdef00aa232c75199e10dc5fe9498f6",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -176,7 +183,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV30
+const ConsensusCurrentVersion = ConsensusV31
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

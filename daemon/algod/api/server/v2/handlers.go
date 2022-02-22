@@ -95,6 +95,11 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 		},
 	}
 
+	if record.StateProof != nil {
+		tmp := record.StateProof[:]
+		participationKey.Key.StateProofKey = &tmp
+	}
+
 	// These are pointers but should always be present.
 	if record.Voting != nil {
 		participationKey.Key.VoteParticipationKey = record.Voting.OneTimeSignatureVerifier[:]
@@ -383,22 +388,19 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
 			}
 
-			proof, err := tree.Prove([]uint64{uint64(idx)})
+			proof, err := tree.ProveSingleLeaf(uint64(idx))
 			if err != nil {
 				return internalError(ctx, err, "generating proof", v2.Log)
-			}
-
-			proofconcat := make([]byte, 0)
-			for _, proofelem := range proof {
-				proofconcat = append(proofconcat, proofelem[:]...)
 			}
 
 			stibhash := block.Payset[idx].Hash()
 
 			response := generated.ProofResponse{
-				Proof:    proofconcat,
-				Stibhash: stibhash[:],
-				Idx:      uint64(idx),
+				Proof:     proof.GetConcatenatedProof(),
+				Stibhash:  stibhash[:],
+				Idx:       uint64(idx),
+				Treedepth: uint64(proof.TreeDepth),
+				Hashtype:  proof.HashFactory.HashType.String(),
 			}
 
 			return ctx.JSON(http.StatusOK, response)
