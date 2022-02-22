@@ -303,6 +303,12 @@ func BenchmarkBlockEvaluatorDiskAppOptIns(b *testing.B) {
 }
 
 func BenchmarkBlockEvaluatorDiskAppCalls(b *testing.B) {
+	// Go normally starts measuring the benchmark run time with b.N = 1, and then
+	// adjusts b.N if the runtime is less than a second. In this case, the runtime
+	// of the test for b.N = 1 is about 0.7 second, which cause the benchmark to be
+	// executed twice. Running it twice would not be an issue on it's own; however,
+	// the setup time for this test is 1.5 minutes long. By setting the b.N = 2, we
+	// set up for success on the first iteration, and preventing a second iteration.
 	if b.N < 2 {
 		b.N = 2
 	}
