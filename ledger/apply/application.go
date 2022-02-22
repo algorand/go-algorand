@@ -68,11 +68,6 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// look up how many apps they have
 	totalAppParams := record.TotalAppParams
 
-	if !balances.ConsensusParams().Application {
-		err = fmt.Errorf("cannot create app for %s: applications not supported", creator.String())
-		return
-	}
-
 	// Make sure the creator isn't already at the app creation max
 	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
 	if maxAppsCreated > 0 && totalAppParams >= uint64(maxAppsCreated) {
@@ -226,10 +221,6 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	record, err := balances.Get(sender, false)
 	if err != nil {
 		return err
-	}
-
-	if !balances.ConsensusParams().Application {
-		return fmt.Errorf("cannot opt in app %d for %s: applications not supported", appIdx, sender.String())
 	}
 
 	// If the user has already opted in, fail
