@@ -226,7 +226,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 
-	var maxTxnGroupEntries = config.MaxTxGroupSize * (config.MaxAppTxnAccounts + config.MaxAppTxnForeignApps + config.MaxAppTxnForeignAssets)
+	var maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * (p.consensusParams.MaxAppTxnAccounts + p.consensusParams.MaxAppTxnForeignApps + p.consensusParams.MaxAppTxnForeignAssets)
 
 	tasksQueue := allocPreloaderQueue(len(p.groups), maxTxnGroupEntries)
 
