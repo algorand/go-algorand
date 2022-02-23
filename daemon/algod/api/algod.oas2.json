@@ -1595,8 +1595,8 @@
         "rewards",
         "status",
         "min-balance",
-        "total-apps-local-state",
-        "total-assets",
+        "total-apps-opted-in",
+        "total-assets-opted-in",
         "total-created-apps",
         "total-created-assets"
       ],
@@ -1624,8 +1624,8 @@
             "$ref": "#/definitions/ApplicationLocalState"
           }
         },
-        "total-apps-local-state": {
-          "description": "The count of all application local data (AppLocalState objects) stored in this account.",
+        "total-apps-opted-in": {
+          "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
           "type": "integer"
         },
         "apps-total-schema": {
@@ -1643,8 +1643,8 @@
             "$ref": "#/definitions/AssetHolding"
           }
         },
-        "total-assets": {
-          "description": "The count of all assets (AssetHolding objects) held by this account.",
+        "total-assets-opted-in": {
+          "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
           "type": "integer"
         },
         "created-apps": {
@@ -2257,10 +2257,10 @@
         "max-results": {
           "type": "integer"
         },
-        "total-apps-local-state": {
+        "total-apps-opted-in": {
           "type": "integer"
         },
-        "total-assets": {
+        "total-assets-opted-in": {
           "type": "integer"
         },
         "total-created-apps": {

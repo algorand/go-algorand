@@ -149,7 +149,7 @@ func accountInformationResourceLimitsTest(t *testing.T, acctSize, maxResults int
 	require.NoError(t, err)
 
 	// totals should be present in both 200 and 400
-	require.Equal(t, float64(acctSize), ret["total-apps-local-state"].(float64)+ret["total-assets"].(float64)+ret["total-created-apps"].(float64)+ret["total-created-assets"].(float64))
+	require.Equal(t, float64(acctSize), ret["total-apps-opted-in"].(float64)+ret["total-assets-opted-in"].(float64)+ret["total-created-apps"].(float64)+ret["total-created-assets"].(float64))
 
 	// check totals
 	switch rec.Code {
