@@ -941,9 +941,8 @@ func TestFlushResetsLastError(t *testing.T) {
 	defer registryCloseTest(t, registry)
 
 	access, err := db.MakeAccessor("stateprooftest", false, true)
-	if err != nil {
-		panic(err)
-	}
+	a.NoError(err)
+
 	root, err := GenerateRoot(access)
 	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
 	access.Close()
