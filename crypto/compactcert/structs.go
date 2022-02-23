@@ -75,7 +75,7 @@ type Cert struct {
 	// to the corresponding elements from the sigs and participants
 	// arrays.
 	Reveals                map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
-	MerkleSignatureVersion uint64            `codec:"v"`
+	MerkleSignatureVersion int32             `codec:"v"`
 }
 
 // SortUint64 implements sorting by uint64 keys for
