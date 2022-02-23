@@ -552,5 +552,5 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 
 	err = builder.Add(uint64(0), sig, true)
 	a.Error(err)
-	a.Equal(merklesignature.ErrInvalidSignatureVersion, err)
+	a.ErrorIs(err, merklesignature.ErrInvalidSignatureVersion)
 }
