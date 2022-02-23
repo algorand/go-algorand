@@ -352,6 +352,7 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
 		stxn.Txn.CertRound = rnd
 		stxn.Txn.Cert = *cert
+		stxn.Txn.CertMsg = b.Msg
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)
