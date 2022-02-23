@@ -44,6 +44,8 @@ const numberOfThreads = 256
 const printFreequency = 400
 const groupTransactions = true
 const channelDepth = 100
+const sixMillion = 6000000
+const sixThousand = 6000
 
 var maxTxGroupSize int
 
@@ -113,6 +115,22 @@ func getAccountInformation(
 			break
 		}
 		fmt.Printf("AccountInformationV2[%d]: %s\n", x, err)
+		time.Sleep(time.Millisecond * 256)
+	}
+	return
+}
+
+func getAccountApplicationInformation(
+	client libgoal.Client,
+	address string,
+	appId uint64) (appInfo generated.AccountApplicationResponse, err error) {
+
+	for x := 0; x < 50; x++ { // retry only 50 times
+		appInfo, err = client.AccountApplicationInformation(address, appId)
+		if err == nil {
+			break
+		}
+		fmt.Printf("AccountApplicationInformation[%d]: %s\n", x, err)
 		time.Sleep(time.Millisecond * 256)
 	}
 	return
@@ -404,8 +422,8 @@ func scenarioA(
 
 	client := fixture.LibGoalClient
 
-	numberOfAccounts := uint64(6000)  // 6K
-	numberOfAssets := uint64(6000000) // 6M
+	numberOfAccounts := uint64(sixThousand)  // 6K
+	numberOfAssets := uint64(sixMillion) // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -581,7 +599,7 @@ func scenarioB(
 
 	//	client := fixture.LibGoalClient
 
-	numberOfAssets := uint64(6000000) // 6M
+	numberOfAssets := uint64(sixMillion) // 6M
 	totalAssetAmount := uint64(0)
 
 	defer func() {
@@ -654,8 +672,8 @@ func scenarioC(
 
 	client := fixture.LibGoalClient
 
-	numberOfAccounts := uint64(6000) // 6K
-	numberOfApps := uint64(6000000)  // 6M
+	numberOfAccounts := uint64(sixThousand) // 6K
+	numberOfApps := uint64(sixMillion)  // 6M
 	appsPerAccount := (numberOfApps + (numberOfAccounts - 1)) / numberOfAccounts
 
 	balance := uint64(1000000000) // balance 199226999 below min 199275000
@@ -791,8 +809,7 @@ func scenarioC(
 		require.NoError(t, err)
 
 		for appid, capp := range *info.CreatedApps {
-			appInfo, err := client.AccountApplicationInformation(ownAllAccount.pk.String(), capp.Id)
-			// require.NoError(t, err)
+			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id)
 			if err != nil {
 				fmt.Printf("kid: %d  appid: %d error %s\n\n", kid, appid, err)
 				continue
@@ -819,7 +836,7 @@ func scenarioD(
 
 	client := fixture.LibGoalClient
 
-	numberOfApps := uint64(6000000) // 6M
+	numberOfApps := uint64(sixMillion) // 6M
 	defer func() {
 		close(txnChan)
 		close(txnGrpChan)
