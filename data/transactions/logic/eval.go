@@ -3045,10 +3045,7 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 	if gi >= len(cx.TxnGroup) {
 		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
 	}
-	if cx.pastScratch[gi] == nil {
-		return none, fmt.Errorf("TxnGroup[%d] does not have any stored scratch slots", gi)
-	}
-	if int(scratchIdx) >= len(cx.pastScratch[gi]) {
+	if int(scratchIdx) >= len(cx.scratch) {
 		return none, fmt.Errorf("invalid Scratch index %d", scratchIdx)
 	}
 	if cx.TxnGroup[gi].Txn.Type != protocol.ApplicationCallTx {
