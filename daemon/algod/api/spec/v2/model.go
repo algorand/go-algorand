@@ -30,7 +30,7 @@ type AccountAssetModel struct {
 	AssetHolding basics.AssetHolding `codec:"asset-holding"`
 }
 
-// AccountAssetModel is returned by AccountApplicationInformation when msgpack format is specified
+// AccountApplicationModel is returned by AccountApplicationInformation when msgpack format is specified
 type AccountApplicationModel struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
