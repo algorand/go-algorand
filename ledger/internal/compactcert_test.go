@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TODO Stateproof: need to update this test to use some proper message to verify with the compact cert
 func TestValidateCompactCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -39,7 +38,7 @@ func TestValidateCompactCert(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var nextCertRnd basics.Round
 	var atRound basics.Round
-	var msg []byte
+	msg := []byte("this is an arbitrary message")
 
 	// will definitely fail with nothing set up
 	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)

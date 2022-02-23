@@ -49,6 +49,10 @@ func (cc CompactCertTxnFields) Empty() bool {
 	if len(cc.Cert.Reveals) != 0 {
 		return false
 	}
+	if cc.CertMsg != nil {
+		return false
+	}
+
 	return true
 }
 

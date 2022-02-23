@@ -103,6 +103,7 @@ type Txn struct {
 	CertRound basics.Round
 	CertType  protocol.CompactCertType
 	Cert      compactcert.Cert
+	CertMsg   []byte
 }
 
 // Noted returns a new Txn with the given note field.
@@ -244,6 +245,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			CertRound: tx.CertRound,
 			CertType:  tx.CertType,
 			Cert:      tx.Cert,
+			CertMsg:   tx.CertMsg,
 		},
 	}
 }
