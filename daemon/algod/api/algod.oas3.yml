@@ -823,12 +823,12 @@
             "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
             "type": "string"
           },
-          "total-apps-local-state": {
-            "description": "The count of all application local data (AppLocalState objects) stored in this account.",
+          "total-apps-opted-in": {
+            "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
             "type": "integer"
           },
-          "total-assets": {
-            "description": "The count of all assets (AssetHolding objects) held by this account.",
+          "total-assets-opted-in": {
+            "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
             "type": "integer"
           },
           "total-created-apps": {
@@ -849,8 +849,8 @@
           "rewards",
           "round",
           "status",
-          "total-apps-local-state",
-          "total-assets",
+          "total-apps-opted-in",
+          "total-assets-opted-in",
           "total-created-apps",
           "total-created-assets"
         ],
@@ -868,10 +868,10 @@
           "message": {
             "type": "string"
           },
-          "total-apps-local-state": {
+          "total-apps-opted-in": {
             "type": "integer"
           },
-          "total-assets": {
+          "total-assets-opted-in": {
             "type": "integer"
           },
           "total-created-apps": {
