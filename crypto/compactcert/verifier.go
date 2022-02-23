@@ -62,9 +62,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		err = r.Part.PK.Verify(
 			uint64(v.SigRound),
 			v.Msg,
-			r.SigSlot.Sig.Signature,
-			int(c.MerkleSignatureVersion),
-		)
+			r.SigSlot.Sig.Signature)
 
 		if err != nil {
 			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)

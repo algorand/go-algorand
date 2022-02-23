@@ -230,12 +230,16 @@ func (v *Verifier) IsEmpty() bool {
 // ErrInvalidSignatureVersion is returned when the version of the signature is not matching the expected version
 var ErrInvalidSignatureVersion = fmt.Errorf("invalid signature version")
 
-// Verify verifies that a merklesignature sig is valid, on a specific round, under a given public key
-func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature, version int) error {
+// ValidateSigVersion validates that the version of the signature is matching the expected version
+func (v *Verifier) ValidateSigVersion(sig Signature, version int) error {
 	if !sig.Signature.ValidateVersion(version) {
 		return ErrInvalidSignatureVersion
 	}
+	return nil
+}
 
+// Verify verifies that a merklesignature sig is valid, on a specific round, under a given public key
+func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) error {
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
