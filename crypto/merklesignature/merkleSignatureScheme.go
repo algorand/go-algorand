@@ -98,6 +98,7 @@ var (
 	ErrDivisorIsZero                     = errors.New("received zero Interval")
 	ErrNoStateProofKeyForRound           = errors.New("no stateproof key exists for this round")
 	ErrSignatureSchemeVerificationFailed = errors.New("merkle signature verification failed")
+	ErrInvalidSignatureVersion           = fmt.Errorf("invalid signature version")
 )
 
 // New creates secrets needed for the merkle signature scheme.
@@ -226,9 +227,6 @@ func (s *Secrets) GetSigner(round uint64) *Signer {
 func (v *Verifier) IsEmpty() bool {
 	return *v == [MerkleSignatureSchemeRootSize]byte{}
 }
-
-// ErrInvalidSignatureVersion is returned when the version of the signature is not matching the expected version
-var ErrInvalidSignatureVersion = fmt.Errorf("invalid signature version")
 
 // ValidateSigVersion validates that the version of the signature is matching the expected version
 func (s *Signature) ValidateSigVersion(version int) error {
