@@ -231,8 +231,8 @@ func (v *Verifier) IsEmpty() bool {
 var ErrInvalidSignatureVersion = fmt.Errorf("invalid signature version")
 
 // ValidateSigVersion validates that the version of the signature is matching the expected version
-func (v *Verifier) ValidateSigVersion(sig Signature, version int) error {
-	if !sig.Signature.ValidateVersion(version) {
+func (s *Signature) ValidateSigVersion(version int) error {
+	if !s.Signature.ValidateVersion(version) {
 		return ErrInvalidSignatureVersion
 	}
 	return nil
