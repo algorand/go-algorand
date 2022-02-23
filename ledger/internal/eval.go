@@ -1536,12 +1536,12 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
-	paysetgroupsPreloadedResourcesCh := prefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	preloadedTxnsData := prefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
 	// ensure that before we exit from this method, the account loading is no longer active.
 	defer func() {
 		accountLoadingCancel()
 		// wait for the paysetgroupsCh to get closed.
-		for range paysetgroupsPreloadedResourcesCh {
+		for range preloadedTxnsData {
 		}
 	}()
 
@@ -1566,7 +1566,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 transactionGroupLoop:
 	for {
 		select {
-		case txgroup, ok := <-paysetgroupsPreloadedResourcesCh:
+		case txgroup, ok := <-preloadedTxnsData:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
