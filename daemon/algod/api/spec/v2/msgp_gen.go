@@ -7,21 +7,29 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// AccountResourceModel
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
+// AccountApplicationModel
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
+// AccountAssetModel
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AccountResourceModel) MarshalMsg(b []byte) (o []byte) {
+func (z *AccountApplicationModel) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
 	if (*z).AppLocalState.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -29,14 +37,6 @@ func (z *AccountResourceModel) MarshalMsg(b []byte) (o []byte) {
 	if (*z).AppParams.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
-	}
-	if (*z).AssetHolding.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
-	if (*z).AssetParams.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -51,27 +51,17 @@ func (z *AccountResourceModel) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xaa, 0x61, 0x70, 0x70, 0x2d, 0x70, 0x61, 0x72, 0x61, 0x6d, 0x73)
 			o = (*z).AppParams.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "asset-holding"
-			o = append(o, 0xad, 0x61, 0x73, 0x73, 0x65, 0x74, 0x2d, 0x68, 0x6f, 0x6c, 0x64, 0x69, 0x6e, 0x67)
-			o = (*z).AssetHolding.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "asset-params"
-			o = append(o, 0xac, 0x61, 0x73, 0x73, 0x65, 0x74, 0x2d, 0x70, 0x61, 0x72, 0x61, 0x6d, 0x73)
-			o = (*z).AssetParams.MarshalMsg(o)
-		}
 	}
 	return
 }
 
-func (_ *AccountResourceModel) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AccountResourceModel)
+func (_ *AccountApplicationModel) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AccountApplicationModel)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AccountResourceModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -82,22 +72,6 @@ func (z *AccountResourceModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).AssetParams.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "AssetHolding")
-				return
-			}
 		}
 		if zb0001 > 0 {
 			zb0001--
@@ -128,7 +102,7 @@ func (z *AccountResourceModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0002 {
-			(*z) = AccountResourceModel{}
+			(*z) = AccountApplicationModel{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -138,18 +112,6 @@ func (z *AccountResourceModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "asset-params":
-				bts, err = (*z).AssetParams.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "AssetParams")
-					return
-				}
-			case "asset-holding":
-				bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "AssetHolding")
-					return
-				}
 			case "app-local-state":
 				bts, err = (*z).AppLocalState.UnmarshalMsg(bts)
 				if err != nil {
@@ -175,18 +137,147 @@ func (z *AccountResourceModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *AccountResourceModel) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AccountResourceModel)
+func (_ *AccountApplicationModel) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AccountApplicationModel)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *AccountResourceModel) Msgsize() (s int) {
-	s = 1 + 13 + (*z).AssetParams.Msgsize() + 14 + (*z).AssetHolding.Msgsize() + 16 + (*z).AppLocalState.Msgsize() + 11 + (*z).AppParams.Msgsize()
+func (z *AccountApplicationModel) Msgsize() (s int) {
+	s = 1 + 16 + (*z).AppLocalState.Msgsize() + 11 + (*z).AppParams.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *AccountResourceModel) MsgIsZero() bool {
-	return ((*z).AssetParams.MsgIsZero()) && ((*z).AssetHolding.MsgIsZero()) && ((*z).AppLocalState.MsgIsZero()) && ((*z).AppParams.MsgIsZero())
+func (z *AccountApplicationModel) MsgIsZero() bool {
+	return ((*z).AppLocalState.MsgIsZero()) && ((*z).AppParams.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *AccountAssetModel) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).AssetHolding.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).AssetParams.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "asset-holding"
+			o = append(o, 0xad, 0x61, 0x73, 0x73, 0x65, 0x74, 0x2d, 0x68, 0x6f, 0x6c, 0x64, 0x69, 0x6e, 0x67)
+			o = (*z).AssetHolding.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "asset-params"
+			o = append(o, 0xac, 0x61, 0x73, 0x73, 0x65, 0x74, 0x2d, 0x70, 0x61, 0x72, 0x61, 0x6d, 0x73)
+			o = (*z).AssetParams.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *AccountAssetModel) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AccountAssetModel)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AssetHolding")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = AccountAssetModel{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "asset-params":
+				bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "AssetParams")
+					return
+				}
+			case "asset-holding":
+				bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "AssetHolding")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *AccountAssetModel) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AccountAssetModel)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *AccountAssetModel) Msgsize() (s int) {
+	s = 1 + 13 + (*z).AssetParams.Msgsize() + 14 + (*z).AssetHolding.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *AccountAssetModel) MsgIsZero() bool {
+	return ((*z).AssetParams.MsgIsZero()) && ((*z).AssetHolding.MsgIsZero())
 }
