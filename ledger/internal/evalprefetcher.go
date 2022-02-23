@@ -69,7 +69,7 @@ type accountPrefetcher struct {
 	outChan         chan loadedTransactionGroup
 }
 
-// loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
+// prefetchAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
 func prefetchAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan loadedTransactionGroup {
 	prefetcher := &accountPrefetcher{
@@ -169,7 +169,7 @@ type accountCreatableKey struct {
 	cidx    basics.CreatableIndex
 }
 
-func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTasks map[basics.Address]*preloaderTask, queue *preloaderTaskQueue) {
+func loadAccountsAddAccountTask(addr *basics.Address, wt *groupTask, accountTasks map[basics.Address]*preloaderTask, queue *preloaderTaskQueue) {
 	if addr.IsZero() {
 		return
 	}
@@ -179,19 +179,19 @@ func loadAccountsAddAccountTask(addr *basics.Address, wg *groupTask, accountTask
 			groups:       make([]*groupTask, 1, 4),
 			groupIndices: make([]int, 1, 4),
 		}
-		task.groups[0] = wg
-		task.groupIndices[0] = wg.balancesCount
+		task.groups[0] = wt
+		task.groupIndices[0] = wt.balancesCount
 
 		accountTasks[*addr] = task
 		queue.enqueue(task)
 	} else {
-		task.groups = append(task.groups, wg)
-		task.groupIndices = append(task.groupIndices, wg.balancesCount)
+		task.groups = append(task.groups, wt)
+		task.groupIndices = append(task.groupIndices, wt.balancesCount)
 	}
-	wg.balancesCount++
+	wt.balancesCount++
 }
 
-func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wg *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask, queue *preloaderTaskQueue) {
+func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask, queue *preloaderTaskQueue) {
 	if cidx == 0 {
 		return
 	}
@@ -209,18 +209,21 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 			creatableIndex: cidx,
 			creatableType:  ctype,
 		}
-		task.groups[0] = wg
-		task.groupIndices[0] = wg.resourcesCount
+		task.groups[0] = wt
+		task.groupIndices[0] = wt.resourcesCount
 
 		resourceTasks[key] = task
 		queue.enqueue(task)
 	} else {
-		task.groups = append(task.groups, wg)
-		task.groupIndices = append(task.groupIndices, wg.resourcesCount)
+		task.groups = append(task.groups, wt)
+		task.groupIndices = append(task.groupIndices, wt.resourcesCount)
 	}
-	wg.resourcesCount++
+	wt.resourcesCount++
 }
 
+// prefetch would process the input transaction groups by analyzing each of the transaction groups and building
+// an execution queue that would allow us to fetch all the dependencies for the input transaction groups in order
+// and output these onto a channel.
 func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	defer close(p.outChan)
 	accountTasks := make(map[basics.Address]*preloaderTask)
@@ -367,7 +370,8 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	completed := make(map[int]bool)
 	for i := 0; i < len(p.groups); {
 	wait:
-		if incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount); incompleteCount > 0 || (incompleteCount != dependencyFreeGroup && !completed[i]) {
+		incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount)
+		if incompleteCount > 0 || (incompleteCount != dependencyFreeGroup && !completed[i]) {
 			select {
 			case doneIdx := <-groupDoneCh:
 				if doneIdx < 0 {
@@ -416,14 +420,14 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 
 func (gt *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, groupDoneCh chan int) {
 	gt.balances[idx] = br
-	if 0 == atomic.AddInt64(&gt.incompleteCount, -1) {
+	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
 		groupDoneCh <- gt.groupTaskIndex
 	}
 }
 
 func (gt *groupTask) markCompletionResource(idx int, res loadedResourcesEntry, groupDoneCh chan int) {
 	gt.resources[idx] = res
-	if 0 == atomic.AddInt64(&gt.incompleteCount, -1) {
+	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
 		groupDoneCh <- gt.groupTaskIndex
 	}
 }
