@@ -210,16 +210,16 @@ func TestBlockEvaluator(t *testing.T) {
 
 	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 
-	bal0new, err := l.LookupAgreement(newBlock.Round(), addrs[0])
+	bal0new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[0])
 	require.NoError(t, err)
-	bal1new, err := l.LookupAgreement(newBlock.Round(), addrs[1])
+	bal1new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[1])
 	require.NoError(t, err)
-	bal2new, err := l.LookupAgreement(newBlock.Round(), addrs[2])
+	bal2new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[2])
 	require.NoError(t, err)
 
-	require.Equal(t, bal0new.MicroAlgosWithRewards.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
-	require.Equal(t, bal1new.MicroAlgosWithRewards.Raw, bal1.MicroAlgos.Raw+100)
-	require.Equal(t, bal2new.MicroAlgosWithRewards.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
+	require.Equal(t, bal0new.MicroAlgos.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
+	require.Equal(t, bal1new.MicroAlgos.Raw, bal1.MicroAlgos.Raw+100)
+	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
 }
 
 func TestRekeying(t *testing.T) {
