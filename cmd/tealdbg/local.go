@@ -535,13 +535,14 @@ func (r *LocalRunner) RunAll() error {
 	start := time.Now()
 
 	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
-	ep.Debugger = r.debugger
 
 	var last error
 	for i := range r.runs {
 		run := &r.runs[i]
-		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
-
+		if r.debugger != nil {
+			r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
+			ep.Debugger = r.debugger
+		}
 		run.result.pass, run.result.err = run.eval(int(run.groupIndex), ep)
 		if run.result.err != nil {
 			failed++

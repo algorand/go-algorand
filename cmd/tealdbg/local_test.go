@@ -1452,3 +1452,404 @@ func TestGroupTxnIdx(t *testing.T) {
 	a.NoError(err)
 	a.True(pass)
 }
+
+func TestRunAllGloads(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// Transaction group with 5 transactions
+	// 1. Payment txn to app A
+	// 2. Payment txn to app B
+	// 3. AppCreate txn
+	// 4. App call to app A
+	// 5. App call to app B with gload on app A scratch slot and gaid on txn 3
+	ddrBlob := `{
+		"accounts": [
+		  {
+			"address": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+			"amount": 3999997358471000,
+			"amount-without-pending-rewards": 3999997358471000,
+			"apps-total-schema": {
+			  "num-byte-slice": 0,
+			  "num-uint": 2
+			},
+			"created-apps": [
+			  {
+				"id": 39,
+				"params": {
+				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+				  "clear-state-program": "BoEB",
+				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+				  "global-state-schema": {
+					"num-byte-slice": 0,
+					"num-uint": 1
+				  },
+				  "local-state-schema": {
+					"num-byte-slice": 1,
+					"num-uint": 1
+				  }
+				}
+			  },
+			  {
+				"id": 45,
+				"params": {
+				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+				  "clear-state-program": "BoEB",
+				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+				  "global-state-schema": {
+					"num-byte-slice": 0,
+					"num-uint": 1
+				  },
+				  "local-state-schema": {
+					"num-byte-slice": 1,
+					"num-uint": 1
+				  }
+				}
+			  }
+			],
+			"min-balance": 357000,
+			"participation": {
+			  "selection-participation-key": "ZNiFSD82lnUrGxVsoCHs8cgVLUa8U0c3i7IslQ0AkY4=",
+			  "state-proof-key": "paupaTUqHOcGOPKBocOOFUudy2MTomIwj+RqL9LR2/c8pnQ1jMTAb7mylq8fxYR+zcfL4rFA20yxInIfEd/Q3g==",
+			  "vote-first-valid": 0,
+			  "vote-key-dilution": 10000,
+			  "vote-last-valid": 3000000,
+			  "vote-participation-key": "0mbTP4EWCucq2UpwFtB+wCrxtTmqiLcW013osw0sRng="
+			},
+			"pending-rewards": 0,
+			"rewards": 0,
+			"round": 32,
+			"status": "Online"
+		  },
+		  {
+			"address": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+			"amount": 97998000,
+			"amount-without-pending-rewards": 97998000,
+			"assets": [
+			  {
+				"amount": 1000000,
+				"asset-id": 38,
+				"creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				"is-frozen": false
+			  },
+			  {
+				"amount": 1000000,
+				"asset-id": 44,
+				"creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				"is-frozen": false
+			  }
+			],
+			"created-assets": [
+			  {
+				"index": 38,
+				"params": {
+				  "clawback": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "decimals": 3,
+				  "freeze": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "manager": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "name-b64": "AAAAAAAAAAA=",
+				  "reserve": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "total": 1000000,
+				  "unit-name-b64": "AA==",
+				  "url-b64": "AAAAAAAAAAA="
+				}
+			  },
+			  {
+				"index": 44,
+				"params": {
+				  "clawback": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "decimals": 3,
+				  "freeze": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "manager": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "name-b64": "AAAAAAAAAAA=",
+				  "reserve": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "total": 1000000,
+				  "unit-name-b64": "AA==",
+				  "url-b64": "AAAAAAAAAAA="
+				}
+			  }
+			],
+			"min-balance": 300000,
+			"pending-rewards": 0,
+			"rewards": 0,
+			"round": 32,
+			"status": "Offline"
+		  },
+		  {
+			"address": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+			"amount": 3999997358471000,
+			"amount-without-pending-rewards": 3999997358471000,
+			"apps-total-schema": {
+			  "num-byte-slice": 0,
+			  "num-uint": 2
+			},
+			"created-apps": [
+			  {
+				"id": 39,
+				"params": {
+				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+				  "clear-state-program": "BoEB",
+				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+				  "global-state-schema": {
+					"num-byte-slice": 0,
+					"num-uint": 1
+				  },
+				  "local-state-schema": {
+					"num-byte-slice": 1,
+					"num-uint": 1
+				  }
+				}
+			  },
+			  {
+				"id": 45,
+				"params": {
+				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+				  "clear-state-program": "BoEB",
+				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+				  "global-state-schema": {
+					"num-byte-slice": 0,
+					"num-uint": 1
+				  },
+				  "local-state-schema": {
+					"num-byte-slice": 1,
+					"num-uint": 1
+				  }
+				}
+			  }
+			],
+			"min-balance": 357000,
+			"participation": {
+			  "selection-participation-key": "ZNiFSD82lnUrGxVsoCHs8cgVLUa8U0c3i7IslQ0AkY4=",
+			  "state-proof-key": "paupaTUqHOcGOPKBocOOFUudy2MTomIwj+RqL9LR2/c8pnQ1jMTAb7mylq8fxYR+zcfL4rFA20yxInIfEd/Q3g==",
+			  "vote-first-valid": 0,
+			  "vote-key-dilution": 10000,
+			  "vote-last-valid": 3000000,
+			  "vote-participation-key": "0mbTP4EWCucq2UpwFtB+wCrxtTmqiLcW013osw0sRng="
+			},
+			"pending-rewards": 0,
+			"rewards": 0,
+			"round": 32,
+			"status": "Online"
+		  },
+		  {
+			"address": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+			"amount": 3999997358471000,
+			"amount-without-pending-rewards": 3999997358471000,
+			"apps-total-schema": {
+			  "num-byte-slice": 0,
+			  "num-uint": 2
+			},
+			"created-apps": [
+			  {
+				"id": 39,
+				"params": {
+				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+				  "clear-state-program": "BoEB",
+				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+				  "global-state-schema": {
+					"num-byte-slice": 0,
+					"num-uint": 1
+				  },
+				  "local-state-schema": {
+					"num-byte-slice": 1,
+					"num-uint": 1
+				  }
+				}
+			  },
+			  {
+				"id": 45,
+				"params": {
+				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+				  "clear-state-program": "BoEB",
+				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+				  "global-state-schema": {
+					"num-byte-slice": 0,
+					"num-uint": 1
+				  },
+				  "local-state-schema": {
+					"num-byte-slice": 1,
+					"num-uint": 1
+				  }
+				}
+			  }
+			],
+			"min-balance": 357000,
+			"participation": {
+			  "selection-participation-key": "ZNiFSD82lnUrGxVsoCHs8cgVLUa8U0c3i7IslQ0AkY4=",
+			  "state-proof-key": "paupaTUqHOcGOPKBocOOFUudy2MTomIwj+RqL9LR2/c8pnQ1jMTAb7mylq8fxYR+zcfL4rFA20yxInIfEd/Q3g==",
+			  "vote-first-valid": 0,
+			  "vote-key-dilution": 10000,
+			  "vote-last-valid": 3000000,
+			  "vote-participation-key": "0mbTP4EWCucq2UpwFtB+wCrxtTmqiLcW013osw0sRng="
+			},
+			"pending-rewards": 0,
+			"rewards": 0,
+			"round": 32,
+			"status": "Online"
+		  },
+		  {
+			"address": "Y5BFRELEVAJKE4F7M2DTJIA2YKQE5RXC6ZOASH2KRNANQLBB32JEVVQLVI",
+			"amount": 59500000,
+			"amount-without-pending-rewards": 59500000,
+			"min-balance": 100000,
+			"pending-rewards": 0,
+			"rewards": 0,
+			"round": 32,
+			"status": "Offline"
+		  }
+		],
+		"apps": [
+		  {
+			"id": 32,
+			"params": {
+			  "approval-program": "BiABAzEYQQA/MRYWsIFjNQGxIrIQgcCEPbIiIrIjgAEAsiWACAAAAAAAAAAAsiaACAAAAAAAAAAAsicyCklKsimyKrIrsiyzgQE=",
+			  "clear-state-program": "BoEB",
+			  "creator": "ECX2MGUEG2XHTJLE3ZLJ5TN3HUEBFEWQTN6A22JR5USO5SRW5MBGA4HJN4",
+			  "global-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  },
+			  "local-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  }
+			}
+		  },
+		  {
+			"id": 1380011588,
+			"params": {
+			  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+			  "clear-state-program": "BoEB",
+			  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+			  "global-state-schema": {
+				"num-byte-slice": 0,
+				"num-uint": 1
+			  },
+			  "local-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  }
+			}
+		  },
+		  {
+			"id": 34,
+			"params": {
+			  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+			  "clear-state-program": "BoEB",
+			  "creator": "JG4FCMNYOV5UCHFXDDQN6VBFE2CMXT2UPGJQBNETCH47PDJ5AZXSINXPCY",
+			  "global-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  },
+			  "local-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  }
+			}
+		  }
+		],
+		"latest-timestamp": 1645245312,
+		"protocol-version": "future",
+		"round": 32,
+		"sources": null,
+		"txns": [
+		  {
+		"sig": "vGqxKnL+fdnoou67v0b/ut2Hg0oJb4WCfFyoS9fFCZ/nauWIwl9BOrlsJCF3do+umh8Ch9K/5PycR1NUXhi2BA==",
+		"txn": {
+		  "amt": 34300000,
+		  "fee": 1000,
+		  "fv": 31,
+		  "gen": "sandnet-v1",
+		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
+		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
+		  "lv": 1031,
+		  "rcv": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "type": "pay"
+		}
+	  },
+		  {
+		"sig": "WRznoi6GwJ6f99HevuT5LlciOzAneZIe6KENibhawLNTl/b/dRyEss/+LGOTii70wsO+1eMeF8kJ+Y3F+rRrBA==",
+		"txn": {
+		  "amt": 14000000,
+		  "fee": 1000,
+		  "fv": 31,
+		  "gen": "sandnet-v1",
+		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
+		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
+		  "lv": 1031,
+		  "rcv": "Y5BFRELEVAJKE4F7M2DTJIA2YKQE5RXC6ZOASH2KRNANQLBB32JEVVQLVI",
+		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "type": "pay"
+		}
+	  },
+		  {
+		"sig": "R064xUOBT25Py35X4nyMNFN7cXFfc1rB8HtXKA1qjZpbyZbfNVGh9ZIesGFycB7RKD2u+skmVTYb3bawnUuQAA==",
+		"txn": {
+		  "apid": 32,
+		  "fee": 1000,
+		  "fv": 31,
+		  "gen": "sandnet-v1",
+		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
+		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
+		  "lv": 1031,
+		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "type": "appl"
+		}
+	  },
+		  {
+		"sig": "xmNqXs0z8UrBxBXZDSdfVZYuGnn/B1CGDq2xMp6Swq0AozHvMoqgTMBKXUACPfnBdjZCT/LXItWAK3iNP3k7CQ==",
+		"txn": {
+		  "apap": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+		  "apgs": {
+			"nui": 1
+		  },
+		  "apls": {
+			"nbs": 1,
+			"nui": 1
+		  },
+		  "apsu": "BoEB",
+		  "fee": 1000,
+		  "fv": 31,
+		  "gen": "sandnet-v1",
+		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
+		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
+		  "lv": 1031,
+		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "type": "appl"
+		}
+	  },
+		  {
+		"sig": "fQLG6fezHdqVQncU8zXigiPB2depfHBEjOyVkeZhiCebY3GJH0Hjbokt5/3WBnmYB6P1FlJbOcANPu5W+uf6DA==",
+		"txn": {
+		  "apid": 34,
+		  "fee": 1000,
+		  "fv": 31,
+		  "gen": "sandnet-v1",
+		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
+		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
+		  "lv": 1031,
+		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "type": "appl"
+		}
+	  }
+		]
+	  }`
+
+	ds := DebugParams{
+		Proto:      string(protocol.ConsensusCurrentVersion),
+		DdrBlob:    []byte(ddrBlob),
+		GroupIndex: 4,
+		RunMode:    "application",
+	}
+
+	local := MakeLocalRunner(nil)
+	err := local.Setup(&ds)
+	a.NoError(err)
+
+	err = local.RunAll()
+	a.NoError(err)
+}
