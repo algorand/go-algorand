@@ -122,8 +122,8 @@ func TestFalconSignature_ValidateVersion(t *testing.T) {
 	byteSig, err := key.Sign(msg)
 	a.NoError(err)
 
-	a.True(byteSig.ValidateVersion(falcon.CurrentSaltVersion))
+	a.True(byteSig.IsVersionEqual(falcon.CurrentSaltVersion))
 
 	byteSig[1]++
-	a.False(byteSig.ValidateVersion(falcon.CurrentSaltVersion))
+	a.False(byteSig.IsVersionEqual(falcon.CurrentSaltVersion))
 }

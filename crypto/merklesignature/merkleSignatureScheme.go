@@ -230,7 +230,7 @@ func (v *Verifier) IsEmpty() bool {
 
 // ValidateSigVersion validates that the version of the signature is matching the expected version
 func (s *Signature) ValidateSigVersion(version int) error {
-	if !s.Signature.ValidateVersion(version) {
+	if !s.Signature.IsVersionEqual(version) {
 		return ErrInvalidSignatureVersion
 	}
 	return nil
