@@ -513,3 +513,44 @@ func TestCoinIndex(t *testing.T) {
 		require.Equal(t, pos, uint64(i))
 	}
 }
+
+func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// setting up a builder
+	a := require.New(t)
+	currentRound := basics.Round(compactCertRoundsForTests)
+
+	totalWeight := 10000000
+	npartHi := 1
+	npartLo := 9
+
+	param := Params{
+		Msg:          testMessage("hello world"),
+		ProvenWeight: uint64(totalWeight / 2),
+		SigRound:     currentRound,
+		SecKQ:        compactCertSecKQForTests,
+	}
+
+	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
+	var parts []basics.Participant
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
+
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	builder, err := MkBuilder(param, parts, partcom)
+	a.NoError(err)
+
+	// actual test:
+	signerInRound := key.GetSigner(uint64(currentRound))
+	sig, err := signerInRound.Sign(param.Msg)
+	require.NoError(t, err, "failed to create keys")
+	// Corrupting the version of the signature:
+	sig.Signature[1]++
+
+	err = builder.Add(uint64(0), sig, true)
+	a.Error(err)
+	a.ErrorIs(err, merklesignature.ErrInvalidSignatureVersion)
+}

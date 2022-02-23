@@ -54,8 +54,8 @@ import (
 func (z *Cert) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(5)
-	var zb0003Mask uint8 /* 6 bits */
+	zb0003Len := uint32(6)
+	var zb0003Mask uint8 /* 7 bits */
 	if (*z).PartProofs.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x1
@@ -72,9 +72,13 @@ func (z *Cert) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x10
 	}
-	if (*z).SignedWeight == 0 {
+	if (*z).MerkleSignatureVersion == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x20
+	}
+	if (*z).SignedWeight == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x40
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
@@ -115,6 +119,11 @@ func (z *Cert) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
+			// string "v"
+			o = append(o, 0xa1, 0x76)
+			o = msgp.AppendInt32(o, (*z).MerkleSignatureVersion)
+		}
+		if (zb0003Mask & 0x40) == 0 { // if not empty
 			// string "w"
 			o = append(o, 0xa1, 0x77)
 			o = msgp.AppendUint64(o, (*z).SignedWeight)
@@ -210,6 +219,14 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0003 > 0 {
+			zb0003--
+			(*z).MerkleSignatureVersion, bts, err = msgp.ReadInt32Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MerkleSignatureVersion")
+				return
+			}
+		}
+		if zb0003 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -290,6 +307,12 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).Reveals[zb0001] = zb0002
 				}
+			case "v":
+				(*z).MerkleSignatureVersion, bts, err = msgp.ReadInt32Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MerkleSignatureVersion")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -318,12 +341,13 @@ func (z *Cert) Msgsize() (s int) {
 			s += 0 + msgp.Uint64Size + zb0002.Msgsize()
 		}
 	}
+	s += 2 + msgp.Int32Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Cert) MsgIsZero() bool {
-	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && ((*z).SigProofs.MsgIsZero()) && ((*z).PartProofs.MsgIsZero()) && (len((*z).Reveals) == 0)
+	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && ((*z).SigProofs.MsgIsZero()) && ((*z).PartProofs.MsgIsZero()) && (len((*z).Reveals) == 0) && ((*z).MerkleSignatureVersion == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

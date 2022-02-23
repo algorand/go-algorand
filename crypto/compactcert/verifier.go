@@ -46,6 +46,12 @@ func (v *Verifier) Verify(c *Cert) error {
 	if c.SignedWeight <= v.ProvenWeight {
 		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
+	version := int(c.MerkleSignatureVersion)
+	for _, reveal := range c.Reveals {
+		if err := reveal.SigSlot.Sig.Signature.ValidateSigVersion(version); err != nil {
+			return err
+		}
+	}
 
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
@@ -62,7 +68,8 @@ func (v *Verifier) Verify(c *Cert) error {
 		err = r.Part.PK.Verify(
 			uint64(v.SigRound),
 			v.Msg,
-			r.SigSlot.Sig.Signature)
+			r.SigSlot.Sig.Signature,
+		)
 
 		if err != nil {
 			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)

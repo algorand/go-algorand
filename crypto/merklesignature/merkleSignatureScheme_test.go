@@ -147,14 +147,12 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	a.Nil(k)
 
 	signer = generateTestSigner(1000, 1100, 101, a)
-	intervalRounds := make([]uint64, 0)
 	for i := uint64(1000); i <= 1100; i++ {
 		if i%101 == 0 {
-			intervalRounds = append(intervalRounds, i)
+			a.NotNil(signer.GetKey(i))
 			continue
 		}
-		k := signer.GetKey(i)
-		a.Nil(k)
+		a.Nil(signer.GetKey(i))
 	}
 }
 

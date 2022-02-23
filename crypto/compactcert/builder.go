@@ -100,6 +100,9 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 
 	// Check signature
 	if verifySig {
+		if err := sig.ValidateSigVersion(merklesignature.SchemeVersion); err != nil {
+			return err
+		}
 		if err := p.PK.Verify(uint64(b.SigRound), b.Msg, sig); err != nil {
 			return err
 		}
@@ -182,9 +185,10 @@ func (b *Builder) Build() (*Cert, error) {
 
 	// Reveal sufficient number of signatures
 	c := &Cert{
-		SigCommit:    sigtree.Root(),
-		SignedWeight: b.signedWeight,
-		Reveals:      make(map[uint64]Reveal),
+		SigCommit:              sigtree.Root(),
+		SignedWeight:           b.signedWeight,
+		Reveals:                make(map[uint64]Reveal),
+		MerkleSignatureVersion: merklesignature.SchemeVersion,
 	}
 
 	nr, err := b.numReveals(b.signedWeight)

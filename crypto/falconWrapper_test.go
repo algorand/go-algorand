@@ -108,3 +108,22 @@ func TestFalconsFormatConversion(t *testing.T) {
 
 	a.Equal(ctFormat[:], rawFormat)
 }
+
+func TestFalconSignature_ValidateVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	msg := TestingHashable{data: []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")}
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	byteSig, err := key.Sign(msg)
+	a.NoError(err)
+
+	a.True(byteSig.IsVersionEqual(falcon.CurrentSaltVersion))
+
+	byteSig[1]++
+	a.False(byteSig.IsVersionEqual(falcon.CurrentSaltVersion))
+}

@@ -74,7 +74,8 @@ type Cert struct {
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
 	// arrays.
-	Reveals map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
+	Reveals                map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
+	MerkleSignatureVersion int32             `codec:"v"`
 }
 
 // SortUint64 implements sorting by uint64 keys for

@@ -119,3 +119,8 @@ func NewFalconSigner() (*FalconSigner, error) {
 	}
 	return &signer, nil
 }
+
+// IsVersionEqual of the signature matches the given version
+func (z FalconSignature) IsVersionEqual(version int) bool {
+	return (*cfalcon.CompressedSignature)(&z).SaltVersion() == version
+}
