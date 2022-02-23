@@ -1802,7 +1802,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // the full AccountData because we need to store a large number of these
 // in memory (say, 1M), and storing that many AccountData could easily
 // cause us to run out of memory.
-func accountDataToOnline(address basics.Address, ad ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
+func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
 	return &ledgercore.OnlineAccount{
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
@@ -2256,7 +2256,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 
 		copy(addr[:], addrbuf)
 		ad := data.GetLedgerCoreAccountData()
-		res[addr] = accountDataToOnline(addr, ad, proto)
+		res[addr] = accountDataToOnline(addr, &ad, proto)
 	}
 
 	return res, rows.Err()
