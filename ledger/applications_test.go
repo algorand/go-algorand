@@ -135,6 +135,8 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal2)
 
 	var expectedCreatorBase, expectedCreatorResource, expectedUserOptInBase, expectedUserOptInResource, expectedUserLocalBase, expectedUserLocalResource []byte
+	// the difference between these encoded structure is the UpdateRound variable. This variable is not being set before
+	// the consensus upgrade, and affects only nodes that have been updated.
 	if proto.EnableAccountDataResourceSeparation {
 		expectedCreatorBase, err = hex.DecodeString("85a16101a162ce009d2290a16704a16b01a17a01")
 		a.NoError(err)
