@@ -28,10 +28,10 @@ type CompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// TODO Stateproof: should we rename CertRound to something more representative?
-	CertRound basics.Round             `codec:"certrnd"`
-	CertType  protocol.CompactCertType `codec:"certtype"`
-	Cert      compactcert.Cert         `codec:"cert"`
-	CertMsg   []byte                   `codec:"certmsg"`
+	CertRound basics.Round             `codec:"crtrnd"`
+	CertType  protocol.CompactCertType `codec:"crttype"`
+	Cert      compactcert.Cert         `codec:"crt"`
+	CertMsg   []byte                   `codec:"crtmsg"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,

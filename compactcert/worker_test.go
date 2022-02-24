@@ -276,7 +276,7 @@ func TestWorkerAllSigs(t *testing.T) {
 
 			require.Equal(t, tx.Txn.CertRound, basics.Round(iter+2)*basics.Round(proto.CompactCertRounds))
 
-			msg, err := GenerateStateProofMessage(s, tx.Txn.CertRound, proto.CompactCertRounds) // TODO: remove? IsEqual?
+			msg, err := GenerateStateProofMessage(s, tx.Txn.CertRound, proto.CompactCertRounds)
 			require.NoError(t, err)
 			require.Equal(t, msg, tx.Txn.CertMsg)
 
@@ -342,6 +342,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	msg, err := GenerateStateProofMessage(s, tx.Txn.CertRound, proto.CompactCertRounds)
 	require.NoError(t, err)
+	require.Equal(t, msg, tx.Txn.CertMsg)
 
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 	require.False(t, overflowed)

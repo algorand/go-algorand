@@ -23,6 +23,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -39,7 +41,6 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/algorand/go-deadlock"
 )
 
 // Ledger is a database storing the contents of the ledger.
@@ -726,7 +727,6 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 // CompactCertParams computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-// TODO Stateproof: rename this
 func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
 	return internal.CompactCertParams(msg, votersHdr, hdr)
 }

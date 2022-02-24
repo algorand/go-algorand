@@ -103,7 +103,6 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 
 // CompactCertParams computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-// TODO Stateproof: rename this
 func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
