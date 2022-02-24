@@ -173,7 +173,7 @@ const ConsensusV31 = ConsensusVersion(
 
 // ConsensusV32 enables the unlimited assets.
 const ConsensusV32 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/todo-fill-this-up-when-available",
+	"https://github.com/algorandfoundation/specs/tree/d5ac876d7ede07367dbaa26e149aa42589aac1f7",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
