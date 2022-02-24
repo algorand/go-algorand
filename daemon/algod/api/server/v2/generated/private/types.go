@@ -94,17 +94,6 @@ type Account struct {
 	TotalCreatedAssets uint64 `json:"total-created-assets"`
 }
 
-// AccountErrorResponse defines model for AccountErrorResponse.
-type AccountErrorResponse struct {
-	Data               *string `json:"data,omitempty"`
-	MaxResults         *uint64 `json:"max-results,omitempty"`
-	Message            string  `json:"message"`
-	TotalAppsOptedIn   *uint64 `json:"total-apps-opted-in,omitempty"`
-	TotalAssetsOptedIn *uint64 `json:"total-assets-opted-in,omitempty"`
-	TotalCreatedApps   *uint64 `json:"total-created-apps,omitempty"`
-	TotalCreatedAssets *uint64 `json:"total-created-assets,omitempty"`
-}
-
 // AccountParticipation defines model for AccountParticipation.
 type AccountParticipation struct {
 
@@ -133,6 +122,17 @@ type AccountStateDelta struct {
 
 	// Application state delta.
 	Delta StateDelta `json:"delta"`
+}
+
+// AccountsErrorResponse defines model for AccountsErrorResponse.
+type AccountsErrorResponse struct {
+	Data               *string `json:"data,omitempty"`
+	MaxResults         *uint64 `json:"max-results,omitempty"`
+	Message            string  `json:"message"`
+	TotalAppsOptedIn   *uint64 `json:"total-apps-opted-in,omitempty"`
+	TotalAssetsOptedIn *uint64 `json:"total-assets-opted-in,omitempty"`
+	TotalCreatedApps   *uint64 `json:"total-created-apps,omitempty"`
+	TotalCreatedAssets *uint64 `json:"total-created-assets,omitempty"`
 }
 
 // Application defines model for Application.
