@@ -779,10 +779,10 @@ type ApplicationCallTransactionType struct {
 // CompactCertTransactionType contains the additional fields for a compact cert transaction
 // swagger:model CompactCertTransactionType
 type CompactCertTransactionType struct {
-	// CertRound is the round whose block this compact cert refers to.
+	// CertIntervalLatestRound is the latest round in the interval this compact cert attests to.
 	//
 	// required: true
-	CertRound uint64 `json:"rnd"`
+	CertIntervalLatestRound uint64 `json:"rnd"`
 
 	// Cert is the msgpack encoding of the compact cert.
 	//

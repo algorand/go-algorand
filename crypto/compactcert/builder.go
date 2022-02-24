@@ -103,7 +103,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 		if err := sig.ValidateSigVersion(merklesignature.SchemeVersion); err != nil {
 			return err
 		}
-		if err := p.PK.Verify(uint64(b.SigRound), b.Msg, sig); err != nil {
+		if err := p.PK.VerifyBytes(uint64(b.SigRound), b.Msg, sig); err != nil {
 			return err
 		}
 	}
@@ -197,7 +197,6 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
-	msgHash := crypto.GenericHashObj(hfactory.NewHash(), b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{
@@ -206,7 +205,7 @@ func (b *Builder) Build() (*Cert, error) {
 			ProvenWeight: b.ProvenWeight,
 			Sigcom:       c.SigCommit,
 			Partcom:      b.parttree.Root(),
-			MsgHash:      msgHash,
+			Msg:          b.Msg,
 		}
 
 		coin := hashCoin(choice)

@@ -42,7 +42,7 @@ func TestHashCoin(t *testing.T) {
 			ProvenWeight: uint64(len(slots)),
 			Sigcom:       sigcom,
 			Partcom:      partcom,
-			MsgHash:      msgHash,
+			Msg:          msgHash,
 		}
 
 		coin := hashCoin(choice)
@@ -79,7 +79,7 @@ func BenchmarkHashCoin(b *testing.B) {
 			ProvenWeight: 1024,
 			Sigcom:       sigcom,
 			Partcom:      partcom,
-			MsgHash:      msgHash,
+			Msg:          msgHash,
 		}
 
 		hashCoin(choice)

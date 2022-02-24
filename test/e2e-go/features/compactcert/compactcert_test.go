@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	cc "github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -118,12 +118,12 @@ func TestCompactCerts(t *testing.T) {
 			res, err := restClient.TransactionsByAddr(transactions.CompactCertSender.String(), 0, rnd, 4)
 			r.NoError(err)
 
-			var compactCert compactcert.Cert
+			var compactCert cc.Cert
 			compactCertFound := false
 			for _, txn := range res.Transactions {
 				r.Equal(txn.Type, string(protocol.CompactCertTx))
 				r.True(txn.CompactCert != nil)
-				if txn.CompactCert.CertRound == nextCertRound {
+				if txn.CompactCert.CertIntervalLatestRound == nextCertRound {
 					err = protocol.Decode(txn.CompactCert.Cert, &compactCert)
 					r.NoError(err)
 					compactCertFound = true
@@ -141,19 +141,21 @@ func TestCompactCerts(t *testing.T) {
 			err = protocol.Decode(nextCertBlockRaw, &nextCertBlockDecoded)
 			r.NoError(err)
 
-			var votersRoot = make([]byte, compactcert.HashSize)
+			var votersRoot = make([]byte, cc.HashSize)
 			copy(votersRoot[:], lastCertBlock.CompactCertVoters)
 
 			provenWeight, overflowed := basics.Muldiv(lastCertBlock.CompactCertVotersTotal, uint64(consensusParams.CompactCertWeightThreshold), 1<<32)
 			r.False(overflowed)
 
-			ccparams := compactcert.Params{
-				Msg:          nextCertBlockDecoded.Block.BlockHeader,
+			//compactcert.GenerateStateProofMessage() // TODO Stateproof: fix
+
+			ccparams := cc.Params{
+				Msg:          []byte{}, // nextCertBlockDecoded.Block.BlockHeader,
 				ProvenWeight: provenWeight,
 				SigRound:     basics.Round(nextCertBlock.Round),
 				SecKQ:        consensusParams.CompactCertSecKQ,
 			}
-			verif := compactcert.MkVerifier(ccparams, votersRoot)
+			verif := cc.MkVerifier(ccparams, votersRoot)
 			err = verif.Verify(&compactCert)
 			r.NoError(err)
 

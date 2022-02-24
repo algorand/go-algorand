@@ -270,26 +270,27 @@ func TestWorkerAllSigs(t *testing.T) {
 		for {
 			tx := <-s.txmsg
 			require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
-			if tx.Txn.CertRound < basics.Round(iter+2)*basics.Round(proto.CompactCertRounds) {
+			if tx.Txn.CertIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.CompactCertRounds) {
 				continue
 			}
 
-			require.Equal(t, tx.Txn.CertRound, basics.Round(iter+2)*basics.Round(proto.CompactCertRounds))
+			require.Equal(t, tx.Txn.CertIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.CompactCertRounds))
 
-			signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
+			msg, err := GenerateStateProofMessage(s, tx.Txn.CertIntervalLatestRound, proto.CompactCertRounds)
 			require.NoError(t, err)
+			require.Equal(t, msg, tx.Txn.CertMsg)
 
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Msg:          signedHdr,
+				Msg:          tx.Txn.CertMsg,
 				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(signedHdr.Round),
+				SigRound:     tx.Txn.CertIntervalLatestRound,
 				SecKQ:        proto.CompactCertSecKQ,
 			}
 
-			voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
+			voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 			require.NoError(t, err)
 
 			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
@@ -337,22 +338,23 @@ func TestWorkerPartialSigs(t *testing.T) {
 	s.advanceLatest(proto.CompactCertRounds / 2)
 	tx := <-s.txmsg
 	require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
-	require.Equal(t, tx.Txn.CertRound, 2*basics.Round(proto.CompactCertRounds))
+	require.Equal(t, tx.Txn.CertIntervalLatestRound, 2*basics.Round(proto.CompactCertRounds))
 
-	signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
+	msg, err := GenerateStateProofMessage(s, tx.Txn.CertIntervalLatestRound, proto.CompactCertRounds)
 	require.NoError(t, err)
+	require.Equal(t, msg, tx.Txn.CertMsg)
 
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
 	ccparams := compactcert.Params{
-		Msg:          signedHdr,
+		Msg:          msg,
 		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(signedHdr.Round),
+		SigRound:     basics.Round(tx.Txn.CertIntervalLatestRound),
 		SecKQ:        proto.CompactCertSecKQ,
 	}
 
-	voters, err := s.CompactCertVoters(tx.Txn.CertRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
+	voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 	require.NoError(t, err)
 
 	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())

@@ -57,7 +57,12 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
-	p, err := ledger.CompactCertParams(votersHdr, hdr)
+	msg, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, hdrProto.CompactCertRounds)
+	if err != nil {
+		return builder{}, err
+	}
+
+	p, err := ledger.CompactCertParams(msg, votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -345,8 +350,9 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.FirstValid = firstValid
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
-		stxn.Txn.CertRound = rnd
+		stxn.Txn.CertIntervalLatestRound = rnd
 		stxn.Txn.Cert = *cert
+		stxn.Txn.CertMsg = b.Msg
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)

@@ -727,8 +727,8 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 // CompactCertParams computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
-	return internal.CompactCertParams(votersHdr, hdr)
+func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+	return internal.CompactCertParams(msg, votersHdr, hdr)
 }
 
 // AcceptableCompactCertWeight computes the acceptable signed weight

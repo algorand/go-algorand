@@ -65,7 +65,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		parts[pos] = r.Part
 
 		// verify that the msg and the signature is valid under the given participant's Pk
-		err = r.Part.PK.Verify(
+		err = r.Part.PK.VerifyBytes(
 			uint64(v.SigRound),
 			v.Msg,
 			r.SigSlot.Sig.Signature,
@@ -92,8 +92,6 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 
-	msgHash := crypto.GenericHashObj(c.PartProofs.HashFactory.NewHash(), v.Msg)
-
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{
 			J:            j,
@@ -101,7 +99,7 @@ func (v *Verifier) Verify(c *Cert) error {
 			ProvenWeight: v.ProvenWeight,
 			Sigcom:       c.SigCommit,
 			Partcom:      v.partcom,
-			MsgHash:      msgHash,
+			Msg:          v.Msg,
 		}
 
 		coin := hashCoin(choice)

@@ -24,7 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	cc "github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -348,7 +348,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert compactcert.Cert, atRound basics.Round, validate bool) error {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert cc.Cert, certMsg []byte, atRound basics.Round, validate bool) error {
 	if certType != protocol.CompactCertBasic {
 		return fmt.Errorf("compact cert type %d not supported", certType)
 	}
@@ -369,7 +369,7 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Com
 			return err
 		}
 
-		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, certMsg)
 		if err != nil {
 			return err
 		}
@@ -950,13 +950,13 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
 
 	case protocol.CompactCertTx:
-		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
+		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending on
 		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
 		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.Header.FirstValid, eval.validate)
+			err = balances.compactCert(tx.CertIntervalLatestRound, tx.CertType, tx.Cert, tx.CertMsg, tx.Header.FirstValid, eval.validate)
 		}
 
 	default:

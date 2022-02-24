@@ -353,8 +353,8 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 
 func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	cc := v1.CompactCertTransactionType{
-		CertRound: uint64(tx.CompactCertTxnFields.CertRound),
-		Cert:      protocol.Encode(&tx.CompactCertTxnFields.Cert),
+		CertIntervalLatestRound: uint64(tx.CompactCertTxnFields.CertIntervalLatestRound),
+		Cert:                    protocol.Encode(&tx.CompactCertTxnFields.Cert),
 	}
 
 	return v1.Transaction{

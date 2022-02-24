@@ -100,9 +100,10 @@ type Txn struct {
 	ClearStateProgram interface{} // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
-	CertRound basics.Round
-	CertType  protocol.CompactCertType
-	Cert      compactcert.Cert
+	CertIntervalLatestRound basics.Round
+	CertType                protocol.CompactCertType
+	Cert                    compactcert.Cert
+	CertMsg                 []byte
 }
 
 // Noted returns a new Txn with the given note field.
@@ -241,9 +242,10 @@ func (tx Txn) Txn() transactions.Transaction {
 			ExtraProgramPages: tx.ExtraProgramPages,
 		},
 		CompactCertTxnFields: transactions.CompactCertTxnFields{
-			CertRound: tx.CertRound,
-			CertType:  tx.CertType,
-			Cert:      tx.Cert,
+			CertIntervalLatestRound: tx.CertIntervalLatestRound,
+			CertType:                tx.CertType,
+			Cert:                    tx.Cert,
+			CertMsg:                 tx.CertMsg,
 		},
 	}
 }

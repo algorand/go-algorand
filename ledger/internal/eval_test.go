@@ -206,6 +206,8 @@ func TestCowCompactCert(t *testing.T) {
 	var cert compactcert.Cert
 	var atRound basics.Round
 	var validate bool
+	var msg []byte
+
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
@@ -215,7 +217,7 @@ func TestCowCompactCert(t *testing.T) {
 		0, ledgercore.AccountTotals{}, 0)
 
 	certType = protocol.CompactCertType(1234) // bad cert type
-	err := c0.compactCert(certRnd, certType, cert, atRound, validate)
+	err := c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no certRnd block
@@ -223,7 +225,7 @@ func TestCowCompactCert(t *testing.T) {
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
 	certRnd = 3
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no votersRnd block
@@ -241,18 +243,18 @@ func TestCowCompactCert(t *testing.T) {
 	blocks[certHdr.Round] = certHdr
 	certRnd = certHdr.Round
 	blockErr[13] = noBlockErr
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// validate fail
 	certHdr.Round = 1
 	certRnd = certHdr.Round
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// fall through to no err
 	validate = false
-	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
 	require.NoError(t, err)
 
 	// 100% coverage
