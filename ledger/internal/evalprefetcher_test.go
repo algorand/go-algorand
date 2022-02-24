@@ -550,11 +550,12 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 	addressCount := 0
 	uniqueAccounts := make(map[basics.Address]bool)
 	for k := range preloadedTxnGroupsCh {
-		groupsCount++
 		addressCount += len(k.accounts)
 		for _, acct := range k.accounts {
 			uniqueAccounts[*acct.address] = true
 		}
+		require.Equal(t, txnGroups[groupsCount], k.txnGroup)
+		groupsCount++
 	}
 	require.Equal(t, len(txnGroups), groupsCount)
 	// the +1 below is for the fee sink address.
