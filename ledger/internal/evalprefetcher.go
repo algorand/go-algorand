@@ -142,7 +142,6 @@ func allocPreloaderQueue(count int, maxTxnGroupEntries int) preloaderTaskQueue {
 func (pq *preloaderTaskQueue) enqueue(t *preloaderTask) {
 	pq.entries[pq.used] = t
 	pq.used++
-	return
 }
 
 func (pq *preloaderTaskQueue) expand() *preloaderTaskQueue {
