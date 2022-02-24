@@ -48,6 +48,9 @@ type loadedResourcesEntry struct {
 
 // loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
+	// the transaction group
+	txnGroup []transactions.SignedTxnWithAD
+
 	// accounts is a list of all the accounts balance records that the transaction group refer to and are needed.
 	accounts []loadedAccountDataEntry
 
@@ -97,6 +100,7 @@ type groupTask struct {
 	// resourcesCount is the number of resources that nees to be loaded per transaction group
 	resourcesCount int
 	// incompleteCount is the number of resources+balances still pending and need to be loaded
+	// this variable is used by as atomic variable to synchronize the readiness of the group taks.
 	incompleteCount int64
 	// err indicates the error code ( if any ) that was received from the ledger during execution
 	err error
@@ -110,7 +114,7 @@ type preloaderTask struct {
 	creatableIndex basics.CreatableIndex
 	// resource type
 	creatableType basics.CreatableType
-	// a list of transaction group tasks that depends on this address
+	// a list of transaction group tasks that depends on this address or resource
 	groups []*groupTask
 	// a list of indices into the groupTask.balances or groupTask.resources where the address would be stored
 	groupIndices []int
@@ -342,6 +346,14 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	usedBalances := 0
 	usedResources := 0
 
+	// groupDoneCh is used to communicate the completion signal for a single
+	// resource/address load between the go-routines and the main output channel
+	// writer loop. The various go-routines would write to the channel the index
+	// of the task that is complete and ready to be sent. If there is an error
+	// ( i.e. database error ) when processing a task, the go-routine would write
+	// the negative value for that task index. This creates a problem for index 0,
+	// which is why every negative number would be decrement by 1. ( this optimizes
+	// for success, which is the normal operation )
 	groupDoneCh := make(chan int, len(groupsReady))
 	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
@@ -375,7 +387,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			select {
 			case doneIdx := <-groupDoneCh:
 				if doneIdx < 0 {
-					doneIdx = -doneIdx
+					doneIdx = -(doneIdx + 1)
 					// if there is an error, report the error to the output channel.
 					p.outChan <- loadedTransactionGroup{
 						err: groupsReady[doneIdx].err,
@@ -409,6 +421,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			// if we had no error, write the result to the output channel.
 			// this write will not block since we preallocated enough space on the channel.
 			p.outChan <- loadedTransactionGroup{
+				txnGroup:  p.groups[next],
 				accounts:  groupsReady[next].balances,
 				resources: groupsReady[next].resources,
 			}
@@ -421,6 +434,8 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 func (gt *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, groupDoneCh chan int) {
 	gt.balances[idx] = br
 	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
+		// groupDoneCh reports back the group index that is complete and ready to be
+		// sent back on the channel.
 		groupDoneCh <- gt.groupTaskIndex
 	}
 }
@@ -428,6 +443,8 @@ func (gt *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, grou
 func (gt *groupTask) markCompletionResource(idx int, res loadedResourcesEntry, groupDoneCh chan int) {
 	gt.resources[idx] = res
 	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
+		// groupDoneCh reports back the group index that is complete and ready to be
+		// sent back on the channel.
 		groupDoneCh <- gt.groupTaskIndex
 	}
 }
@@ -440,7 +457,10 @@ func (gt *groupTask) markCompletionAcctError(err error, groupDoneCh chan int) {
 		}
 		if atomic.CompareAndSwapInt64(&gt.incompleteCount, curVal, 0) {
 			gt.err = err
-			groupDoneCh <- -gt.groupTaskIndex
+			// groupDoneCh reports back the negative group index that could not
+			// complete. As mentioned above, we subtract additional 1 here
+			// in order to distinguish from the success case of index 0.
+			groupDoneCh <- -gt.groupTaskIndex - 1
 			return
 		}
 	}
@@ -470,8 +490,8 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 				data:    &acctData,
 			}
 			// update all the group tasks with the new acquired balance.
-			for i, wg := range task.groups {
-				wg.markCompletionAcct(task.groupIndices[i], br, groupDoneCh)
+			for i, wt := range task.groups {
+				wt.markCompletionAcct(task.groupIndices[i], br, groupDoneCh)
 			}
 			continue
 		}
@@ -490,8 +510,8 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 					creatableType:  task.creatableType,
 				}
 				// update all the group tasks with the new acquired balance.
-				for i, wg := range task.groups {
-					wg.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
+				for i, wt := range task.groups {
+					wt.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
 				}
 				continue
 			}
@@ -510,15 +530,14 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			creatableType:  task.creatableType,
 		}
 		// update all the group tasks with the new acquired balance.
-		for i, wg := range task.groups {
-			wg.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
+		for i, wt := range task.groups {
+			wt.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
 		}
 	}
 	// if we got here, it means that there was an error.
-	if task != nil {
-		for _, wg := range task.groups {
-			// notify the channel of the error.
-			wg.markCompletionAcctError(err, groupDoneCh)
-		}
+	// in every case we get here, the task is gurenteed to be a non-nil.
+	for _, wt := range task.groups {
+		// notify the channel of the error.
+		wt.markCompletionAcctError(err, groupDoneCh)
 	}
 }

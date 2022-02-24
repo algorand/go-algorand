@@ -1562,7 +1562,6 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	base := eval.state.lookupParent.(*roundCowBase)
-	txnGroupIndex := 0
 transactionGroupLoop:
 	for {
 		select {
@@ -1615,11 +1614,10 @@ transactionGroupLoop:
 					}
 				}
 			}
-			err = eval.TransactionGroup(paysetgroups[txnGroupIndex])
+			err = eval.TransactionGroup(txgroup.txnGroup)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}
-			txnGroupIndex++
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
