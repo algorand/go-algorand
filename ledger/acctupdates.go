@@ -562,6 +562,8 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 
+	au.log.Warnf("accountUpdates: committedRound: %d lookback: %d newBase: %d", committedRound, dcr.lookback, committedRound-dcr.lookback)
+
 	if committedRound < dcr.lookback {
 		return nil
 	}
@@ -582,7 +584,11 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 
 	offset = uint64(newBase - dbRound)
 
+	au.log.Warnf("accountUpdates: voters newBase: %d, offset: %d", newBase, offset)
+
 	offset = au.consecutiveVersion(offset)
+
+	au.log.Warnf("accountUpdates: consecutiveVersion offset: %d", offset)
 
 	// calculate the number of pending deltas
 	dcr.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
