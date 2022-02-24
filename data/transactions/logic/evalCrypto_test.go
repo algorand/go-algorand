@@ -24,8 +24,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	mrand "math/rand"
 	"testing"
 
+	"github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -520,5 +522,119 @@ pop
 pop
 int 1`
 		benchmarkEcdsa(b, source)
+	})
+}
+
+type benchmarkBn256Data struct {
+	ab       []byte
+	ak       []byte
+	g1       []byte
+	g2       []byte
+	programs []byte
+}
+
+func benchmarkBn256DataGenData(b *testing.B) (data []benchmarkBn256Data) {
+	data = make([]benchmarkBn256Data, b.N)
+	var g1Gen bn254.G1Jac
+	var g1GenAff bn254.G1Affine
+	g1Gen.X.SetString("1")
+	g1Gen.Y.SetString("2")
+	g1Gen.Z.SetString("1")
+	g1GenAff.FromJacobian(&g1Gen)
+	var a bn254.G1Affine
+	a.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
+	var g2Gen bn254.G2Jac
+	var g2GenAff bn254.G2Affine
+	g2Gen.X.SetString("10857046999023057135944570762232829481370756359578518086990519993285655852781",
+		"11559732032986387107991004021392285783925812861821192530917403151452391805634")
+	g2Gen.Y.SetString("8495653923123431417604973247489272438418190587263600148770280649306958101930",
+		"4082367875863433681332203403145435568316851327593401208105741076214120093531")
+	g2Gen.Z.SetString("1",
+		"0")
+	g2GenAff.FromJacobian(&g2Gen)
+
+	for i := 0; i < b.N; i++ {
+		var a bn254.G1Affine
+		a.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
+
+		var b bn254.G1Affine
+		b.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
+
+		// _, aa, _ := bn256.RandomG1(rand.Reader)
+		var aa bn254.G1Affine
+		aa.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
+		bytes := make([]byte, 32)
+		rand.Read(bytes)
+
+		data[i].ab = append(a.Marshal(), b.Marshal()...)
+		data[i].ak = append(aa.Marshal(), bytes...)
+
+		data[i].g1 = a.Marshal()
+
+		var g2 bn254.G2Affine
+		g2.ScalarMultiplication(&g2GenAff, new(big.Int).SetUint64(mrand.Uint64()))
+		data[i].g2 = g2.Marshal()
+	}
+	return data
+}
+
+func benchmarkBn256(b *testing.B, source string) {
+	data := benchmarkBn256DataGenData(b)
+	ops, err := AssembleStringWithVersion(source, 6)
+	require.NoError(b, err)
+	for i := 0; i < b.N; i++ {
+		data[i].programs = ops.Program
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = data[i].programs
+		txn.Lsig.Args = [][]byte{data[i].ab, data[i].ak, data[i].g1, data[i].g2}
+		ep := defaultEvalParams(&txn)
+		pass, err := EvalSignature(0, ep)
+		if !pass {
+			b.Log(hex.EncodeToString(data[i].programs))
+			b.Log(ep.Trace.String())
+		}
+		if err != nil {
+			require.NoError(b, err)
+		}
+		if !pass {
+			require.True(b, pass)
+		}
+	}
+}
+
+func BenchmarkBn256(b *testing.B) {
+	b.Run("bn256 add", func(b *testing.B) {
+		source := `#pragma version 6
+arg 0
+bn256_add
+pop
+int 1
+`
+		benchmarkBn256(b, source)
+	})
+
+	b.Run("bn256 scalar mul", func(b *testing.B) {
+		source := `#pragma version 6
+arg 1
+bn256_scalar_mul
+pop
+int 1
+`
+		benchmarkBn256(b, source)
+	})
+
+	b.Run("bn256 pairing", func(b *testing.B) {
+		source := `#pragma version 6
+arg 2
+arg 3
+bn256_pairing
+pop
+int 1
+`
+		benchmarkBn256(b, source)
 	})
 }
