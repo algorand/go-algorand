@@ -432,7 +432,7 @@ type Local struct {
 	RestConnectionsHardLimit uint64 `version[20]:"2048"`
 
 	// MaxAccountsAPIResults limits the total number of assets and applications per account that will be
-	// provided by the REST API before returning a 413 Payload Too Large. Set zero for no limit.
+	// provided by the REST API before returning a 400 Bad Request. Set zero for no limit.
 	MaxAccountsAPIResults uint64 `version[21]:"1000000"`
 }
 
