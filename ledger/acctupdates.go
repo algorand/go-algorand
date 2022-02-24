@@ -434,7 +434,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 					continue
 				}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, d, proto)
+				modifiedAccounts[addr] = accountDataToOnline(addr, &d, proto)
 			}
 		}
 

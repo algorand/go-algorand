@@ -38,11 +38,17 @@ import (
 //                  ||     ||
 
 type roundCowParent interface {
+	// lookup retrieves data about an address, eventually querying the ledger if the address was not found in cache.
 	lookup(basics.Address) (ledgercore.AccountData, error)
-	lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error)
-	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error)
-	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error)
-	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error)
+
+	// lookupAppParams, lookupAssetParams, lookupAppLocalState, and lookupAssetHolding retrieve data for a given address and ID.
+	// If cacheOnly is set, the ledger DB will not be queried, and only the cache will be consulted.
+	// This is used when we know a given value is already in cache (from a previous query for that same address and ID),
+	// and would rather have an error returned if that assumption is wrong, rather than hit the ledger.
+	lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error)
+	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error)
+	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error)
+	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error)
 
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
@@ -154,40 +160,40 @@ func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountDat
 	return cb.lookupParent.lookup(addr)
 }
 
-func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
+func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	params, ok := cb.mods.Accts.GetAppParams(addr, aidx)
 	if ok {
 		return params, ok, nil
 	}
 
-	return cb.lookupParent.lookupAppParams(addr, aidx, fromCache)
+	return cb.lookupParent.lookupAppParams(addr, aidx, cacheOnly)
 }
 
-func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
+func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error) {
 	params, ok := cb.mods.Accts.GetAssetParams(addr, aidx)
 	if ok {
 		return params, ok, nil
 	}
 
-	return cb.lookupParent.lookupAssetParams(addr, aidx, fromCache)
+	return cb.lookupParent.lookupAssetParams(addr, aidx, cacheOnly)
 }
 
-func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
+func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	state, ok := cb.mods.Accts.GetAppLocalState(addr, aidx)
 	if ok {
 		return state, ok, nil
 	}
 
-	return cb.lookupParent.lookupAppLocalState(addr, aidx, fromCache)
+	return cb.lookupParent.lookupAppLocalState(addr, aidx, cacheOnly)
 }
 
-func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
+func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error) {
 	holding, ok := cb.mods.Accts.GetAssetHolding(addr, aidx)
 	if ok {
 		return holding, ok, nil
 	}
 
-	return cb.lookupParent.lookupAssetHolding(addr, aidx, fromCache)
+	return cb.lookupParent.lookupAssetHolding(addr, aidx, cacheOnly)
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {

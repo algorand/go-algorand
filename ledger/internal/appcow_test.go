@@ -47,19 +47,19 @@ func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.AccountData, erro
 	return ledgercore.AccountData{}, nil
 }
 
-func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppParamsDelta, bool, error) {
+func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	return ledgercore.AppParamsDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetParamsDelta, bool, error) {
+func (ml *emptyLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error) {
 	return ledgercore.AssetParamsDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, fromCache bool) (ledgercore.AppLocalStateDelta, bool, error) {
+func (ml *emptyLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error) {
 	return ledgercore.AppLocalStateDelta{}, true, nil
 }
 
-func (ml *emptyLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, fromCache bool) (ledgercore.AssetHoldingDelta, bool, error) {
+func (ml *emptyLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error) {
 	return ledgercore.AssetHoldingDelta{}, true, nil
 }
 
