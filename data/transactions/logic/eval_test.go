@@ -206,7 +206,7 @@ func TestTxnFieldToTealValue(t *testing.T) {
 
 	for _, value := range values {
 		txn.FirstValid = basics.Round(value)
-		tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 0)
+		tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 0, false)
 		require.NoError(t, err)
 		require.Equal(t, basics.TealUintType, tealValue.Type)
 		require.Equal(t, value, tealValue.Uint)
@@ -216,7 +216,7 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	field = FirstValid
 	value := uint64(1)
 	txn.FirstValid = basics.Round(value)
-	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 10)
+	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 10, false)
 	require.NoError(t, err)
 	require.Equal(t, basics.TealUintType, tealValue.Type)
 	require.Equal(t, value, tealValue.Uint)
@@ -226,17 +226,17 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	sender := basics.Address{}
 	addr, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
 	txn.Accounts = []basics.Address{addr}
-	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 0)
+	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, basics.TealBytesType, tealValue.Type)
 	require.Equal(t, string(sender[:]), tealValue.Bytes)
 
-	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 1)
+	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 1, false)
 	require.NoError(t, err)
 	require.Equal(t, basics.TealBytesType, tealValue.Type)
 	require.Equal(t, string(addr[:]), tealValue.Bytes)
 
-	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 100)
+	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 100, false)
 	require.Error(t, err)
 	require.Equal(t, basics.TealUintType, tealValue.Type)
 	require.Equal(t, uint64(0), tealValue.Uint)
@@ -1376,6 +1376,31 @@ assert
 txn StateProofPK
 len
 int 64
+==
+assert
+
+gtxn 2 CreatedAssetID
+int 0
+==
+assert
+
+gtxn 2 CreatedApplicationID
+int 0
+==
+assert
+
+gtxn 2 NumLogs
+int 2
+==
+assert
+
+gtxn 2 Logs 1
+byte "prefilled"
+==
+assert
+
+gtxn 2 LastLog
+byte "prefilled"
 ==
 assert
 

@@ -1,0 +1,37 @@
+name: Check PR category and type
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+jobs:
+  check_label:
+    runs-on: ubuntu-latest
+    name: Check PR Category and Type
+    steps:
+      - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
+        run: exit 1
+        if: |
+          !contains(github.event.pull_request.labels.*.name, 'New Feature') &&
+          !contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
+          !contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+      - name: "Found more than one PR Type label. Please add only one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
+        run: exit 1
+        if: |
+          (
+            contains(github.event.pull_request.labels.*.name, 'New Feature') &&
+            contains(github.event.pull_request.labels.*.name, 'Enhancement')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'New Feature') &&
+            contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+          ) || (
+            contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
+            contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
+          )
+      - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'"
+        run: |
+          if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
+            exit 1
+          fi
+      - name: "Found at least one PR Type label and Category in the title. Good job!"
+        run: exit 0

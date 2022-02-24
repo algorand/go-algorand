@@ -959,7 +959,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		}
 
 	default:
-		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
+		err = fmt.Errorf("unknown transaction type %v", tx.Type)
 	}
 
 	// Record first, so that details can all be used in logic evaluation, even
@@ -1298,12 +1298,12 @@ func (validator *evalTxValidator) run() {
 	}
 }
 
-// Eval is the main evaluator entrypoint.
+// Eval is the main evaluator entrypoint (in addition to StartEvaluator)
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
-// Validate: Eval(ctx, l, blk, true, txcache, executionPool, true)
-// AddBlock: Eval(context.Background(), l, blk, false, txcache, nil, true)
-// tracker:  Eval(context.Background(), l, blk, false, txcache, nil, false)
+// Validate: Eval(ctx, l, blk, true, txcache, executionPool)
+// AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
+// tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
 func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	eval, err := StartEvaluator(l, blk.BlockHeader,
 		EvaluatorOptions{
