@@ -1083,9 +1083,35 @@ func initConsensusProtocols() {
 	// v30 can be upgraded to v31, with an update delay of 7 days ( see calculation above )
 	v30.ApprovedUpgrades[protocol.ConsensusV31] = 140000
 
+	v32 := v31
+	v32.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable extended application storage; binaries that contain support for this
+	// flag would already be restructuring their internal storage for extended
+	// application storage, and therefore would not produce catchpoints and/or
+	// catchpoint labels prior to this feature being enabled.
+	v32.EnableAccountDataResourceSeparation = true
+
+	// Remove limits on MinimumBalance
+	v32.MaximumMinimumBalance = 0
+
+	// Remove limits on assets / account.
+	v32.MaxAssetsPerAccount = 0
+
+	// Remove limits on maximum number of apps a single account can create
+	v32.MaxAppsCreated = 0
+
+	// Remove limits on maximum number of apps a single account can opt into
+	v32.MaxAppsOptedIn = 0
+
+	Consensus[protocol.ConsensusV32] = v32
+
+	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
+	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v31
+	vFuture := v32
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -1097,24 +1123,6 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
-
-	// Enable extended application storage; binaries that contain support for this
-	// flag would already be restructuring their internal storage for extended
-	// application storage, and therefore would not produce catchpoints and/or
-	// catchpoint labels prior to this feature being enabled.
-	vFuture.EnableAccountDataResourceSeparation = true
-
-	// Remove limits on MinimumBalance
-	vFuture.MaximumMinimumBalance = 0
-
-	// Remove limits on assets / account.
-	vFuture.MaxAssetsPerAccount = 0
-
-	// Remove limits on maximum number of apps a single account can create
-	vFuture.MaxAppsCreated = 0
-
-	// Remove limits on maximum number of apps a single account can opt into
-	vFuture.MaxAppsOptedIn = 0
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
