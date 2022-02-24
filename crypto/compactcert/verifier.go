@@ -65,7 +65,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		parts[pos] = r.Part
 
 		// verify that the msg and the signature is valid under the given participant's Pk
-		err = r.Part.PK.Verify(
+		err = r.Part.PK.VerifyBytes(
 			uint64(v.SigRound),
 			v.Msg,
 			r.SigSlot.Sig.Signature,

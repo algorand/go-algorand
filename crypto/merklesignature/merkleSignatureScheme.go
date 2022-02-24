@@ -152,8 +152,8 @@ func (s *SignerContext) GetVerifier() *Verifier {
 	return &ver
 }
 
-// Sign signs a given message. The signature is valid on a specific round
-func (s *Signer) Sign(msg []byte) (Signature, error) {
+// SignBytes signs a given message. The signature is valid on a specific round
+func (s *Signer) SignBytes(msg []byte) (Signature, error) {
 	key := s.SigningKey
 	// Possible since there may not be a StateProof key for this specific round
 	if key == nil {
@@ -236,8 +236,8 @@ func (s *Signature) ValidateSigVersion(version int) error {
 	return nil
 }
 
-// Verify verifies that a merklesignature sig is valid, on a specific round, under a given public key
-func (v *Verifier) Verify(round uint64, msg []byte, sig Signature) error {
+// VerifyBytes verifies that a merklesignature sig is valid, on a specific round, under a given public key
+func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,

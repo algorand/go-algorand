@@ -103,7 +103,7 @@ func TestBuildVerify(t *testing.T) {
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.Sign(param.Msg)
+	sig, err := signerInRound.SignBytes(param.Msg)
 	require.NoError(t, err, "failed to create keys")
 
 	for i := 0; i < npart; i++ {
@@ -249,7 +249,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		sig, err := key.GetSigner(uint64(currentRound)).Sign(param.Msg)
+		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(param.Msg)
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
 
@@ -294,7 +294,7 @@ func TestSimulateSignatureVerification(t *testing.T) {
 	signer := generateTestSigner(50, 100, 1, a)
 	sigRound := uint64(55)
 	msg := testMessage("testMessage")
-	sig, err := signer.GetSigner(sigRound).Sign(msg)
+	sig, err := signer.GetSigner(sigRound).SignBytes(msg)
 	a.NoError(err)
 
 	genericKey := signer.GetVerifier()
@@ -314,14 +314,14 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	signer := generateTestSigner(1, compactCertRoundsForTests, compactCertRoundsForTests, a)
 
 	sigRound := uint64(compactCertRoundsForTests)
-	hashable := testMessage("testMessage")
-	sig, err := signer.GetSigner(sigRound).Sign(hashable)
+	msg := testMessage("testMessage")
+	sig, err := signer.GetSigner(sigRound).SignBytes(msg)
 	a.NoError(err)
 
 	genericKey := signer.GetVerifier()
 	sigBytes, err := sig.GetFixedLengthHashableRepresentation()
 	a.NoError(err)
-	checkSignature(a, sigBytes, genericKey, sigRound, hashable, 0, 0)
+	checkSignature(a, sigBytes, genericKey, sigRound, msg, 0, 0)
 }
 
 func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesignature.Verifier, round uint64, message []byte, expectedIndex uint64, expectedPathLen uint8) {
@@ -443,7 +443,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		}
 
 		signerInRound := signer.GetSigner(uint64(currentRound))
-		sig, err := signerInRound.Sign(param.Msg)
+		sig, err := signerInRound.SignBytes(param.Msg)
 		require.NoError(b, err, "failed to create keys")
 
 		partkeys = append(partkeys, signer)
@@ -540,7 +540,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 
 	// actual test:
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.Sign(param.Msg)
+	sig, err := signerInRound.SignBytes(param.Msg)
 	require.NoError(t, err, "failed to create keys")
 	// Corrupting the version of the signature:
 	sig.Signature[1]++

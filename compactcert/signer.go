@@ -183,7 +183,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 			continue
 		}
-		sig, err := key.StateProofSecrets.Sign(commitment)
+		sig, err := key.StateProofSecrets.SignBytes(commitment)
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
 			continue

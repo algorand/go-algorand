@@ -103,7 +103,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 		if err := sig.ValidateSigVersion(merklesignature.SchemeVersion); err != nil {
 			return err
 		}
-		if err := p.PK.Verify(uint64(b.SigRound), b.Msg, sig); err != nil {
+		if err := p.PK.VerifyBytes(uint64(b.SigRound), b.Msg, sig); err != nil {
 			return err
 		}
 	}
