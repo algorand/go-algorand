@@ -317,7 +317,7 @@ var OpSpecs = []OpSpec{
 	{0x97, "divw", opDivw, asmDefault, disDefault, twoInts.plus(oneInt), oneInt, 6, modeAny, opDefault},
 	{0x98, "bn256_add", opBn256Add, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(218)},
 	{0x99, "bn256_scalar_mul", opBn256ScalarMul, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(1208)},
-	{0x9a, "bn256_pairing", opBn256Pairing, asmDefault, disDefault, twoBytes, oneBytes, 6, modeAny, costly(11599)},
+	{0x9a, "bn256_pairing", opBn256Pairing, asmDefault, disDefault, twoBytes, oneBytes, 6, modeAny, costly(10599)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
