@@ -1541,23 +1541,23 @@ func (z *CompactCertTxnFields) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "cert"
-			o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
+			// string "crt"
+			o = append(o, 0xa3, 0x63, 0x72, 0x74)
 			o = (*z).Cert.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "certmsg"
-			o = append(o, 0xa7, 0x63, 0x65, 0x72, 0x74, 0x6d, 0x73, 0x67)
+			// string "crtmsg"
+			o = append(o, 0xa6, 0x63, 0x72, 0x74, 0x6d, 0x73, 0x67)
 			o = msgp.AppendBytes(o, (*z).CertMsg)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "certrnd"
-			o = append(o, 0xa7, 0x63, 0x65, 0x72, 0x74, 0x72, 0x6e, 0x64)
+			// string "crtrnd"
+			o = append(o, 0xa6, 0x63, 0x72, 0x74, 0x72, 0x6e, 0x64)
 			o = (*z).CertIntervalLatestRound.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "certtype"
-			o = append(o, 0xa8, 0x63, 0x65, 0x72, 0x74, 0x74, 0x79, 0x70, 0x65)
+			// string "crttype"
+			o = append(o, 0xa7, 0x63, 0x72, 0x74, 0x74, 0x79, 0x70, 0x65)
 			o = (*z).CertType.MarshalMsg(o)
 		}
 	}
@@ -1586,7 +1586,7 @@ func (z *CompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			zb0001--
 			bts, err = (*z).CertIntervalLatestRound.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CertRound")
+				err = msgp.WrapError(err, "struct-from-array", "CertIntervalLatestRound")
 				return
 			}
 		}
@@ -1637,25 +1637,25 @@ func (z *CompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "certrnd":
+			case "crtrnd":
 				bts, err = (*z).CertIntervalLatestRound.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CertRound")
+					err = msgp.WrapError(err, "CertIntervalLatestRound")
 					return
 				}
-			case "certtype":
+			case "crttype":
 				bts, err = (*z).CertType.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
-			case "cert":
+			case "crt":
 				bts, err = (*z).Cert.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cert")
 					return
 				}
-			case "certmsg":
+			case "crtmsg":
 				(*z).CertMsg, bts, err = msgp.ReadBytesBytes(bts, (*z).CertMsg)
 				if err != nil {
 					err = msgp.WrapError(err, "CertMsg")
@@ -1681,7 +1681,7 @@ func (_ *CompactCertTxnFields) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CompactCertTxnFields) Msgsize() (s int) {
-	s = 1 + 8 + (*z).CertIntervalLatestRound.Msgsize() + 9 + (*z).CertType.Msgsize() + 5 + (*z).Cert.Msgsize() + 8 + msgp.BytesPrefixSize + len((*z).CertMsg)
+	s = 1 + 7 + (*z).CertIntervalLatestRound.Msgsize() + 8 + (*z).CertType.Msgsize() + 4 + (*z).Cert.Msgsize() + 7 + msgp.BytesPrefixSize + len((*z).CertMsg)
 	return
 }
 
@@ -4300,23 +4300,23 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 		zb0006Len--
 		zb0006Mask |= 0x8000000
 	}
-	if (*z).CompactCertTxnFields.Cert.MsgIsZero() {
+	if (*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero() {
 		zb0006Len--
 		zb0006Mask |= 0x10000000
 	}
-	if len((*z).CompactCertTxnFields.CertMsg) == 0 {
+	if (*z).CompactCertTxnFields.Cert.MsgIsZero() {
 		zb0006Len--
 		zb0006Mask |= 0x20000000
 	}
-	if (*z).CompactCertTxnFields.CertIntervalLatestRound.MsgIsZero() {
+	if len((*z).CompactCertTxnFields.CertMsg) == 0 {
 		zb0006Len--
 		zb0006Mask |= 0x40000000
 	}
-	if (*z).CompactCertTxnFields.CertType.MsgIsZero() {
+	if (*z).CompactCertTxnFields.CertIntervalLatestRound.MsgIsZero() {
 		zb0006Len--
 		zb0006Mask |= 0x80000000
 	}
-	if (*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero() {
+	if (*z).CompactCertTxnFields.CertType.MsgIsZero() {
 		zb0006Len--
 		zb0006Mask |= 0x100000000
 	}
@@ -4535,29 +4535,29 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).AssetConfigTxnFields.ConfigAsset.MarshalMsg(o)
 		}
 		if (zb0006Mask & 0x10000000) == 0 { // if not empty
-			// string "cert"
-			o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
-			o = (*z).CompactCertTxnFields.Cert.MarshalMsg(o)
-		}
-		if (zb0006Mask & 0x20000000) == 0 { // if not empty
-			// string "certmsg"
-			o = append(o, 0xa7, 0x63, 0x65, 0x72, 0x74, 0x6d, 0x73, 0x67)
-			o = msgp.AppendBytes(o, (*z).CompactCertTxnFields.CertMsg)
-		}
-		if (zb0006Mask & 0x40000000) == 0 { // if not empty
-			// string "certrnd"
-			o = append(o, 0xa7, 0x63, 0x65, 0x72, 0x74, 0x72, 0x6e, 0x64)
-			o = (*z).CompactCertTxnFields.CertIntervalLatestRound.MarshalMsg(o)
-		}
-		if (zb0006Mask & 0x80000000) == 0 { // if not empty
-			// string "certtype"
-			o = append(o, 0xa8, 0x63, 0x65, 0x72, 0x74, 0x74, 0x79, 0x70, 0x65)
-			o = (*z).CompactCertTxnFields.CertType.MarshalMsg(o)
-		}
-		if (zb0006Mask & 0x100000000) == 0 { // if not empty
 			// string "close"
 			o = append(o, 0xa5, 0x63, 0x6c, 0x6f, 0x73, 0x65)
 			o = (*z).PaymentTxnFields.CloseRemainderTo.MarshalMsg(o)
+		}
+		if (zb0006Mask & 0x20000000) == 0 { // if not empty
+			// string "crt"
+			o = append(o, 0xa3, 0x63, 0x72, 0x74)
+			o = (*z).CompactCertTxnFields.Cert.MarshalMsg(o)
+		}
+		if (zb0006Mask & 0x40000000) == 0 { // if not empty
+			// string "crtmsg"
+			o = append(o, 0xa6, 0x63, 0x72, 0x74, 0x6d, 0x73, 0x67)
+			o = msgp.AppendBytes(o, (*z).CompactCertTxnFields.CertMsg)
+		}
+		if (zb0006Mask & 0x80000000) == 0 { // if not empty
+			// string "crtrnd"
+			o = append(o, 0xa6, 0x63, 0x72, 0x74, 0x72, 0x6e, 0x64)
+			o = (*z).CompactCertTxnFields.CertIntervalLatestRound.MarshalMsg(o)
+		}
+		if (zb0006Mask & 0x100000000) == 0 { // if not empty
+			// string "crttype"
+			o = append(o, 0xa7, 0x63, 0x72, 0x74, 0x74, 0x79, 0x70, 0x65)
+			o = (*z).CompactCertTxnFields.CertType.MarshalMsg(o)
 		}
 		if (zb0006Mask & 0x200000000) == 0 { // if not empty
 			// string "fadd"
@@ -5149,7 +5149,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			zb0006--
 			bts, err = (*z).CompactCertTxnFields.CertIntervalLatestRound.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CertRound")
+				err = msgp.WrapError(err, "struct-from-array", "CertIntervalLatestRound")
 				return
 			}
 		}
@@ -5570,25 +5570,25 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
-			case "certrnd":
+			case "crtrnd":
 				bts, err = (*z).CompactCertTxnFields.CertIntervalLatestRound.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CertRound")
+					err = msgp.WrapError(err, "CertIntervalLatestRound")
 					return
 				}
-			case "certtype":
+			case "crttype":
 				bts, err = (*z).CompactCertTxnFields.CertType.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "CertType")
 					return
 				}
-			case "cert":
+			case "crt":
 				bts, err = (*z).CompactCertTxnFields.Cert.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cert")
 					return
 				}
-			case "certmsg":
+			case "crtmsg":
 				(*z).CompactCertTxnFields.CertMsg, bts, err = msgp.ReadBytesBytes(bts, (*z).CompactCertTxnFields.CertMsg)
 				if err != nil {
 					err = msgp.WrapError(err, "CertMsg")
@@ -5630,7 +5630,7 @@ func (z *Transaction) Msgsize() (s int) {
 	for zb0005 := range (*z).ApplicationCallTxnFields.ForeignAssets {
 		s += (*z).ApplicationCallTxnFields.ForeignAssets[zb0005].Msgsize()
 	}
-	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Uint32Size + 8 + (*z).CompactCertTxnFields.CertIntervalLatestRound.Msgsize() + 9 + (*z).CompactCertTxnFields.CertType.Msgsize() + 5 + (*z).CompactCertTxnFields.Cert.Msgsize() + 8 + msgp.BytesPrefixSize + len((*z).CompactCertTxnFields.CertMsg)
+	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Uint32Size + 7 + (*z).CompactCertTxnFields.CertIntervalLatestRound.Msgsize() + 8 + (*z).CompactCertTxnFields.CertType.Msgsize() + 4 + (*z).CompactCertTxnFields.Cert.Msgsize() + 7 + msgp.BytesPrefixSize + len((*z).CompactCertTxnFields.CertMsg)
 	return
 }
 
