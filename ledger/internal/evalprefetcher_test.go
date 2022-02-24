@@ -674,3 +674,18 @@ func BenchmarkPrefetcherPayment(b *testing.B) {
 		require.NoError(b, k.err)
 	}
 }
+func BenchmarkChannelWrites(b *testing.B) {
+	b.Run("groupTaskDone", func(b *testing.B) {
+		c := make(chan groupTaskDone, b.N)
+		for i := 0; i < b.N; i++ {
+			c <- groupTaskDone{groupIdx: i}
+		}
+	})
+
+	b.Run("int64", func(b *testing.B) {
+		c := make(chan int64, b.N)
+		for i := int64(0); i < int64(b.N); i++ {
+			c <- i
+		}
+	})
+}

@@ -102,8 +102,6 @@ type groupTask struct {
 	// incompleteCount is the number of resources+balances still pending and need to be loaded
 	// this variable is used by as atomic variable to synchronize the readiness of the group taks.
 	incompleteCount int64
-	// err indicates the error code ( if any ) that was received from the ledger during execution
-	err error
 }
 
 // preloaderTask manage the loading of a single element, whether it's a resource or an account address.
@@ -128,6 +126,11 @@ type preloaderTaskQueue struct {
 	entries            []*preloaderTask
 	baseIdx            int
 	maxTxnGroupEntries int
+}
+
+type groupTaskDone struct {
+	groupIdx int
+	err      error
 }
 
 func allocPreloaderQueue(count int, maxTxnGroupEntries int) preloaderTaskQueue {
@@ -349,12 +352,8 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	// groupDoneCh is used to communicate the completion signal for a single
 	// resource/address load between the go-routines and the main output channel
 	// writer loop. The various go-routines would write to the channel the index
-	// of the task that is complete and ready to be sent. If there is an error
-	// ( i.e. database error ) when processing a task, the go-routine would write
-	// the negative value for that task index. This creates a problem for index 0,
-	// which is why every negative number would be decrement by 1. ( this optimizes
-	// for success, which is the normal operation )
-	groupDoneCh := make(chan int, len(groupsReady))
+	// of the task that is complete and ready to be sent.
+	groupDoneCh := make(chan groupTaskDone, len(groupsReady))
 	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
 		gr := &groupsReady[grpIdx]
@@ -385,20 +384,19 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 		incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount)
 		if incompleteCount > 0 || (incompleteCount != dependencyFreeGroup && !completed[i]) {
 			select {
-			case doneIdx := <-groupDoneCh:
-				if doneIdx < 0 {
-					doneIdx = -(doneIdx + 1)
+			case done := <-groupDoneCh:
+				if done.err != nil {
 					// if there is an error, report the error to the output channel.
 					p.outChan <- loadedTransactionGroup{
-						err: groupsReady[doneIdx].err,
+						err: done.err,
 					}
 					return
 				}
-				if doneIdx > i {
+				if done.groupIdx > i {
 					// mark future txn as ready.
-					completed[doneIdx] = true
+					completed[done.groupIdx] = true
 					goto wait
-				} else if doneIdx < i {
+				} else if done.groupIdx < i {
 					// it was already processed.
 					goto wait
 				}
@@ -431,42 +429,34 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	}
 }
 
-func (gt *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, groupDoneCh chan int) {
+func (gt *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, groupDoneCh chan groupTaskDone) {
 	gt.balances[idx] = br
 	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
-		// groupDoneCh reports back the group index that is complete and ready to be
-		// sent back on the channel.
-		groupDoneCh <- gt.groupTaskIndex
+		groupDoneCh <- groupTaskDone{groupIdx: idx}
 	}
 }
 
-func (gt *groupTask) markCompletionResource(idx int, res loadedResourcesEntry, groupDoneCh chan int) {
+func (gt *groupTask) markCompletionResource(idx int, res loadedResourcesEntry, groupDoneCh chan groupTaskDone) {
 	gt.resources[idx] = res
 	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
-		// groupDoneCh reports back the group index that is complete and ready to be
-		// sent back on the channel.
-		groupDoneCh <- gt.groupTaskIndex
+		groupDoneCh <- groupTaskDone{groupIdx: idx}
 	}
 }
 
-func (gt *groupTask) markCompletionAcctError(err error, groupDoneCh chan int) {
+func (gt *groupTask) markCompletionAcctError(err error, groupDoneCh chan groupTaskDone) {
 	for {
 		curVal := atomic.LoadInt64(&gt.incompleteCount)
 		if curVal <= 0 {
 			return
 		}
 		if atomic.CompareAndSwapInt64(&gt.incompleteCount, curVal, 0) {
-			gt.err = err
-			// groupDoneCh reports back the negative group index that could not
-			// complete. As mentioned above, we subtract additional 1 here
-			// in order to distinguish from the success case of index 0.
-			groupDoneCh <- -gt.groupTaskIndex - 1
+			groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex, err: err}
 			return
 		}
 	}
 }
 
-func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *int64, groupDoneCh chan int) {
+func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *int64, groupDoneCh chan groupTaskDone) {
 	var task *preloaderTask
 	var err error
 	for {
