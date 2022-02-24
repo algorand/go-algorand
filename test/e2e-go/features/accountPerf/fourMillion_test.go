@@ -212,8 +212,8 @@ func test5MAssets(t *testing.T, scenario int) {
 	var hkWg sync.WaitGroup
 	var errWatcherWg sync.WaitGroup
 
-	maxTxGroupSize = config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeOneWalletFuture.json"))
+	maxTxGroupSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeOneWallet.json"))
 
 	for _, nodeDir := range fixture.NodeDataDirs() {
 		cfg, err := config.LoadConfigFromDisk(nodeDir)
