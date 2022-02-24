@@ -1624,10 +1624,6 @@
             "$ref": "#/definitions/ApplicationLocalState"
           }
         },
-        "total-apps-opted-in": {
-          "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
-          "type": "integer"
-        },
         "apps-total-schema": {
           "description": "\\[tsch\\] stores the sum of all of the local schemas and global schemas in this account.\n\nNote: the raw account uses `StateSchema` for this type.",
           "$ref": "#/definitions/ApplicationStateSchema"
@@ -1643,10 +1639,6 @@
             "$ref": "#/definitions/AssetHolding"
           }
         },
-        "total-assets-opted-in": {
-          "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
-          "type": "integer"
-        },
         "created-apps": {
           "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -\u003e AppParams` for this type.",
           "type": "array",
@@ -1654,20 +1646,12 @@
             "$ref": "#/definitions/Application"
           }
         },
-        "total-created-apps": {
-          "description": "The count of all apps (AppParams objects) created by this account.",
-          "type": "integer"
-        },
         "created-assets": {
           "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e AssetParams` for this type.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Asset"
           }
-        },
-        "total-created-assets": {
-          "description": "The count of all assets (AssetParams objects) created by this account.",
-          "type": "integer"
         },
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
