@@ -123,7 +123,7 @@ func TestCompactCerts(t *testing.T) {
 			for _, txn := range res.Transactions {
 				r.Equal(txn.Type, string(protocol.CompactCertTx))
 				r.True(txn.CompactCert != nil)
-				if txn.CompactCert.CertRound == nextCertRound {
+				if txn.CompactCert.CertIntervalLatestRound == nextCertRound {
 					err = protocol.Decode(txn.CompactCert.Cert, &compactCert)
 					r.NoError(err)
 					compactCertFound = true

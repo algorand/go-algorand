@@ -1433,10 +1433,10 @@
           "x-go-name": "Cert"
         },
         "rnd": {
-          "description": "CertRound is the round whose block this compact cert refers to.",
+          "description": "CertIntervalLatestRound is the latest round in the interval this compact cert attests to.",
           "type": "integer",
           "format": "uint64",
-          "x-go-name": "CertRound"
+          "x-go-name": "CertIntervalLatestRound"
         }
       },
       "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"

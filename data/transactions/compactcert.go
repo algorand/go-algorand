@@ -27,17 +27,16 @@ import (
 type CompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// TODO Stateproof: should we rename CertRound to something more representative?
-	CertRound basics.Round             `codec:"crtrnd"`
-	CertType  protocol.CompactCertType `codec:"crttype"`
-	Cert      compactcert.Cert         `codec:"crt"`
-	CertMsg   []byte                   `codec:"crtmsg"`
+	CertIntervalLatestRound basics.Round             `codec:"crtrnd"`
+	CertType                protocol.CompactCertType `codec:"crttype"`
+	Cert                    compactcert.Cert         `codec:"crt"`
+	CertMsg                 []byte                   `codec:"crtmsg"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,
 // in the sense of being omitted in a msgpack encoding.
 func (cc CompactCertTxnFields) Empty() bool {
-	if cc.CertRound != 0 {
+	if cc.CertIntervalLatestRound != 0 {
 		return false
 	}
 	if !cc.Cert.SigCommit.IsEmpty() || cc.Cert.SignedWeight != 0 {

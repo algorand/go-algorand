@@ -350,7 +350,7 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.FirstValid = firstValid
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
-		stxn.Txn.CertRound = rnd
+		stxn.Txn.CertIntervalLatestRound = rnd
 		stxn.Txn.Cert = *cert
 		stxn.Txn.CertMsg = b.Msg
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})

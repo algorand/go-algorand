@@ -956,7 +956,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.CertMsg, tx.Header.FirstValid, eval.validate)
+			err = balances.compactCert(tx.CertIntervalLatestRound, tx.CertType, tx.Cert, tx.CertMsg, tx.Header.FirstValid, eval.validate)
 		}
 
 	default:
