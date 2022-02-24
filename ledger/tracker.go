@@ -339,7 +339,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 		tr.log.Warnf("tracker: calling produceCommittingTask base: %d  offset: %d tracker: %T dbRound: %d, latestRound: %d", base, offset, lt, dbRound, blockqRound)
 		cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
 		if cdr == nil {
-			tr.log.Warnf("tracker: cdr == nil, tracker: %T", lt)  
+			tr.log.Warnf("tracker: cdr == nil, tracker: %T", lt)
 			break
 		}
 		tr.log.Warnf("tracker: cdr base %d  cdr offset %d tracker: %T", cdr.oldBase, cdr.offset, lt)
