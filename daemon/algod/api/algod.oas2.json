@@ -2699,7 +2699,7 @@
       }
     },
     "AccountApplicationResponse": {
-      "description": "AccountApplicationResponse describes the account's account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator.",
+      "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator.",
       "schema": {
         "type": "object",
         "required": [
