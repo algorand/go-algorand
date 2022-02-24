@@ -492,6 +492,76 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 	}
 }
 
+func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	acctAddrPtr := func(i int) (o *basics.Address) {
+		o = new(basics.Address)
+		o[0] = byte(i)
+		o[1] = byte(i >> 8)
+		o[2] = byte(i >> 16)
+		return
+	}
+	acctAddr := func(i int) (o basics.Address) {
+		t := *acctAddrPtr(i)
+		copy(o[:], t[:])
+		return
+	}
+
+	rnd := basics.Round(5)
+	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
+	var ledger = &prefetcherTestLedger{
+		round:    rnd,
+		balances: make(map[basics.Address]ledgercore.AccountData),
+		creators: make(map[basics.CreatableIndex]basics.Address),
+	}
+	ledger.balances[acctAddr(1)] = ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
+	}
+	type testTransactionCases struct {
+		signedTxn transactions.SignedTxn
+		accounts  []loadedAccountDataEntry
+		resources []loadedResourcesEntry
+	}
+
+	txnGroups := make([][]transactions.SignedTxnWithAD, 20000)
+	addr := 1
+	for i := range txnGroups {
+		txnGroups[i] = make([]transactions.SignedTxnWithAD, 16)
+		for k := range txnGroups[i] {
+			txnGroups[i][k].SignedTxn = transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender: acctAddr(1),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver:         acctAddr(addr),
+						CloseRemainderTo: acctAddr(addr + 1),
+					},
+				},
+			}
+			addr += 2
+		}
+	}
+	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, txnGroups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	groupsCount := 0
+	addressCount := 0
+	uniqueAccounts := make(map[basics.Address]bool)
+	for k := range preloadedTxnGroupsCh {
+		groupsCount++
+		addressCount += len(k.accounts)
+		for _, acct := range k.accounts {
+			uniqueAccounts[*acct.address] = true
+		}
+	}
+	require.Equal(t, len(txnGroups), groupsCount)
+	// the +1 below is for the fee sink address.
+	require.Equal(t, len(txnGroups)*16*3+1, addressCount)
+	require.Equal(t, len(txnGroups)*16*2+1, len(uniqueAccounts))
+}
+
 func BenchmarkPrefetcherApps(b *testing.B) {
 	acctAddrPtr := func(i int) (o *basics.Address) {
 		o = new(basics.Address)

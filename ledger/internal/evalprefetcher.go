@@ -148,9 +148,10 @@ func (pq *preloaderTaskQueue) enqueue(t *preloaderTask) {
 func (pq *preloaderTaskQueue) expand() *preloaderTaskQueue {
 	if cap(pq.entries)-pq.used < pq.maxTxnGroupEntries {
 		pq.next = &preloaderTaskQueue{
-			entries: make([]*preloaderTask, cap(pq.entries)*2),
-			used:    0,
-			baseIdx: pq.baseIdx + pq.used,
+			entries:            make([]*preloaderTask, cap(pq.entries)*2),
+			used:               0,
+			baseIdx:            pq.baseIdx + pq.used,
+			maxTxnGroupEntries: pq.maxTxnGroupEntries,
 		}
 		return pq.next
 	}
