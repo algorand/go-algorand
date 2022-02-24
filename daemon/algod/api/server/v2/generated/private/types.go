@@ -81,11 +81,11 @@ type Account struct {
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
 
-	// The count of all application local data (AppLocalState objects) stored in this account.
-	TotalAppsLocalState uint64 `json:"total-apps-local-state"`
+	// The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.
+	TotalAppsOptedIn uint64 `json:"total-apps-opted-in"`
 
-	// The count of all assets (AssetHolding objects) held by this account.
-	TotalAssets uint64 `json:"total-assets"`
+	// The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
+	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
 
 	// The count of all apps (AppParams objects) created by this account.
 	TotalCreatedApps uint64 `json:"total-created-apps"`
@@ -96,13 +96,13 @@ type Account struct {
 
 // AccountErrorResponse defines model for AccountErrorResponse.
 type AccountErrorResponse struct {
-	Data                *string `json:"data,omitempty"`
-	MaxResults          *uint64 `json:"max-results,omitempty"`
-	Message             string  `json:"message"`
-	TotalAppsLocalState *uint64 `json:"total-apps-local-state,omitempty"`
-	TotalAssets         *uint64 `json:"total-assets,omitempty"`
-	TotalCreatedApps    *uint64 `json:"total-created-apps,omitempty"`
-	TotalCreatedAssets  *uint64 `json:"total-created-assets,omitempty"`
+	Data               *string `json:"data,omitempty"`
+	MaxResults         *uint64 `json:"max-results,omitempty"`
+	Message            string  `json:"message"`
+	TotalAppsOptedIn   *uint64 `json:"total-apps-opted-in,omitempty"`
+	TotalAssetsOptedIn *uint64 `json:"total-assets-opted-in,omitempty"`
+	TotalCreatedApps   *uint64 `json:"total-created-apps,omitempty"`
+	TotalCreatedAssets *uint64 `json:"total-created-assets,omitempty"`
 }
 
 // AccountParticipation defines model for AccountParticipation.

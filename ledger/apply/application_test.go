@@ -486,11 +486,6 @@ func TestAppCallCreate(t *testing.T) {
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
-	b.SetProto(protocol.ConsensusV18) // pre-application.
-	_, err = createApplication(&ac, b, creator, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "applications not supported")
-
 	b.SetProto(protocol.ConsensusFuture)
 	ac.ApprovalProgram = []byte{1}
 	ac.ClearStateProgram = []byte{2}
@@ -541,13 +536,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
-
-	b.SetProto(protocol.ConsensusV18) // before applications support
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "applications not supported")
-	a.Zero(b.put)
-	a.Zero(b.putAppParams)
 
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
@@ -686,15 +674,8 @@ func TestAppCallOptIn(t *testing.T) {
 
 	var params basics.AppParams
 
-	b.SetProto(protocol.ConsensusV18) // before applications support.
-	err := optInApplication(b, sender, appIdx, params)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot opt in app")
-	a.Zero(b.put)
-	a.Zero(b.putAppLocalState)
-
 	b.SetProto(protocol.ConsensusFuture)
-	err = optInApplication(b, sender, appIdx, params)
+	err := optInApplication(b, sender, appIdx, params)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(1, b.putAppLocalState)

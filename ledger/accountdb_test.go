@@ -115,7 +115,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	for addr, data := range accts {
 		if data.Status == basics.Online {
 			ad := ledgercore.ToAccountData(data)
-			onlineAccounts[addr] = accountDataToOnline(addr, ad, proto)
+			onlineAccounts[addr] = accountDataToOnline(addr, &ad, proto)
 		}
 	}
 

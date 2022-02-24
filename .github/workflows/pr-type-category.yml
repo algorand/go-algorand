@@ -1,6 +1,8 @@
 name: Check PR category and type
 on:
   pull_request:
+    branches:
+      - master
     types: [opened, synchronize, reopened, labeled, unlabeled, edited]
 jobs:
   check_label:
