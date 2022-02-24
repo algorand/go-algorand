@@ -432,14 +432,14 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 func (gt *groupTask) markCompletionAcct(idx int, br loadedAccountDataEntry, groupDoneCh chan groupTaskDone) {
 	gt.balances[idx] = br
 	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
-		groupDoneCh <- groupTaskDone{groupIdx: idx}
+		groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex}
 	}
 }
 
 func (gt *groupTask) markCompletionResource(idx int, res loadedResourcesEntry, groupDoneCh chan groupTaskDone) {
 	gt.resources[idx] = res
 	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
-		groupDoneCh <- groupTaskDone{groupIdx: idx}
+		groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex}
 	}
 }
 
