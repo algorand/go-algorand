@@ -955,6 +955,10 @@ var readStateAppCmd = &cobra.Command{
 			// Fetching local state. Get account information
 			ai, err := client.RawAccountApplicationInformation(account, appIdx)
 			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			if ai.AppLocalState == nil {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
@@ -981,6 +985,10 @@ var readStateAppCmd = &cobra.Command{
 			// Get creator information
 			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			if ai.AppParams == nil {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 

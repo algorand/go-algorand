@@ -26,38 +26,30 @@ import (
 type AccountAssetModel struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	AssetParams  basics.AssetParams  `codec:"asset-params"`
-	AssetHolding basics.AssetHolding `codec:"asset-holding"`
+	AssetParams  *basics.AssetParams  `codec:"asset-params"`
+	AssetHolding *basics.AssetHolding `codec:"asset-holding"`
 }
 
 // AccountApplicationModel is returned by AccountApplicationInformation when msgpack format is specified
 type AccountApplicationModel struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	AppLocalState basics.AppLocalState `codec:"app-local-state"`
-	AppParams     basics.AppParams     `codec:"app-params"`
+	AppLocalState *basics.AppLocalState `codec:"app-local-state"`
+	AppParams     *basics.AppParams     `codec:"app-params"`
 }
 
 // AccountResourceToAccountAssetModel converts AccountResource to AccountAssetModel
 func AccountResourceToAccountAssetModel(resource ledgercore.AccountResource) AccountAssetModel {
-	resourceModel := AccountAssetModel{}
-	if resource.AssetParams != nil {
-		resourceModel.AssetParams = *resource.AssetParams
+	return AccountAssetModel{
+		AssetParams:  resource.AssetParams,
+		AssetHolding: resource.AssetHolding,
 	}
-	if resource.AssetHolding != nil {
-		resourceModel.AssetHolding = *resource.AssetHolding
-	}
-	return resourceModel
 }
 
 // AccountResourceToAccountApplicationModel converts AccountResource to AccountApplicationModel
 func AccountResourceToAccountApplicationModel(resource ledgercore.AccountResource) AccountApplicationModel {
-	resourceModel := AccountApplicationModel{}
-	if resource.AppParams != nil {
-		resourceModel.AppParams = *resource.AppParams
+	return AccountApplicationModel{
+		AppParams:     resource.AppParams,
+		AppLocalState: resource.AppLocalState,
 	}
-	if resource.AppLocalState != nil {
-		resourceModel.AppLocalState = *resource.AppLocalState
-	}
-	return resourceModel
 }

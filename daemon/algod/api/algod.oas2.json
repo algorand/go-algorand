@@ -2676,7 +2676,7 @@
       }
     },
     "AccountAssetResponse": {
-      "description": "AccountAssetResponse describes the asset data for a specific account and asset ID.",
+      "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator.",
       "schema": {
         "type": "object",
         "required": [
@@ -2699,7 +2699,7 @@
       }
     },
     "AccountApplicationResponse": {
-      "description": "AccountApplicationResponse describes the application data for a specific account and application ID.",
+      "description": "AccountApplicationResponse describes the account's account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator.",
       "schema": {
         "type": "object",
         "required": [
