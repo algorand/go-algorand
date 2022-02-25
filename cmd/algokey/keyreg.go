@@ -54,12 +54,7 @@ const (
 	minFee  uint64 = 1000
 )
 
-type networkGenesis struct {
-	id   string
-	hash crypto.Digest
-}
-
-var validNetworks map[string]networkGenesis
+var validNetworks map[string]crypto.Digest
 var validNetworkList []string
 
 func init() {
@@ -79,31 +74,22 @@ func init() {
 	}
 
 	keyregCmd.Flags().Uint64Var(&params.fee, "fee", minFee, "transaction fee")
-	keyregCmd.Flags().Uint64Var(&params.firstValid, "first-valid", 0, "first round where the transaction may be committed to the ledger")
-	keyregCmd.MarkFlagRequired("first-valid") // nolint:errcheck
-	keyregCmd.Flags().Uint64Var(&params.lastValid, "last-valid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to first-valid + %d", txnLife))
+	keyregCmd.Flags().Uint64Var(&params.firstValid, "firstvalid", 0, "first round where the transaction may be committed to the ledger")
+	keyregCmd.MarkFlagRequired("firstvalid") // nolint:errcheck
+	keyregCmd.Flags().Uint64Var(&params.lastValid, "lastvalid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to firstvalid + %d", txnLife))
 	keyregCmd.Flags().StringVar(&params.network, "network", "mainnet", "the network where the provided keys will be registered, one of mainnet/testnet/betanet")
 	keyregCmd.MarkFlagRequired("network") // nolint:errcheck
 	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
-	keyregCmd.Flags().StringVar(&params.txFile, "tx-file", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
-	keyregCmd.MarkFlagRequired("tx-file") // nolint:errcheck
-	keyregCmd.Flags().StringVar(&params.partkeyFile, "partkey-file", "", "participation keys to register, file is opened to fetch metadata for the transaction, mutually exclusive with account")
-	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account address to bring offline, mutually exclusive with partkey-file")
+	keyregCmd.Flags().StringVarP(&params.txFile, "outputFile", "o", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
+	keyregCmd.Flags().StringVar(&params.partkeyFile, "keyfile", "", "participation keys to register, file is opened to fetch metadata for the transaction, mutually exclusive with account")
+	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account address to bring offline, mutually exclusive with keyfile")
 
 	// TODO: move 'bundleGenesisInject' into something that can be imported here instead of using constants.
-	validNetworks = map[string]networkGenesis{
-		"mainnet": {
-			id:   "mainnet-v1",
-			hash: mustConvertB64ToDigest("wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=")},
-		"testnet": {
-			id:   "testnet-v1",
-			hash: mustConvertB64ToDigest("SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=")},
-		"betanet": {
-			id:   "betanet-v1",
-			hash: mustConvertB64ToDigest("mFgazF+2uRS1tMiL9dsj01hJGySEmPN28B/TjjvpVW0=")},
-		"devnet": {
-			id:   "devnet-v1",
-			hash: mustConvertB64ToDigest("sC3P7e2SdbqKJK0tbiCdK9tdSpbe6XeCGKdoNzmlj0E=")},
+	validNetworks = map[string]crypto.Digest{
+		"mainnet": mustConvertB64ToDigest("wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8="),
+		"testnet": mustConvertB64ToDigest("SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI="),
+		"betanet": mustConvertB64ToDigest("mFgazF+2uRS1tMiL9dsj01hJGySEmPN28B/TjjvpVW0="),
+		"devnet":  mustConvertB64ToDigest("sC3P7e2SdbqKJK0tbiCdK9tdSpbe6XeCGKdoNzmlj0E="),
 	}
 	validNetworkList = make([]string, 0, len(validNetworks))
 	for k := range validNetworks {
@@ -125,23 +111,22 @@ func mustConvertB64ToDigest(b64 string) (digest crypto.Digest) {
 	return
 }
 
-func getGenesisInformation(network string) (string, crypto.Digest, error) {
+func getGenesisInformation(network string) (crypto.Digest, error) {
 	// For testing purposes, there is a secret option to override the genesis information.
-	idOverride := os.Getenv("ALGOKEY_GENESIS_ID")
 	hashOverride := os.Getenv("ALGOKEY_GENESIS_HASH")
-	if idOverride != "" && hashOverride != "" {
-		return idOverride, mustConvertB64ToDigest(hashOverride), nil
+	if hashOverride != "" {
+		return mustConvertB64ToDigest(hashOverride), nil
 	}
 
 	// Otherwise check that network matches one of the known networks.
 	gen, ok := validNetworks[strings.ToLower(network)]
 	if !ok {
-		return "", crypto.Digest{}, fmt.Errorf("unknown network '%s' provided. Supported networks: %s",
+		return crypto.Digest{}, fmt.Errorf("unknown network '%s' provided. Supported networks: %s",
 			network,
 			strings.Join(validNetworkList, ", "))
 	}
 
-	return gen.id, gen.hash, nil
+	return gen, nil
 }
 
 func run(params keyregCmdParams) error {
@@ -152,7 +137,7 @@ func run(params keyregCmdParams) error {
 
 	if !params.offline {
 		if params.partkeyFile == "" {
-			return errors.New("must provide --partkey-file when registering participation keys")
+			return errors.New("must provide --keyfile when registering participation keys")
 		}
 		if params.addr != "" {
 			return errors.New("do not provide --address when registering participation keys")
@@ -162,7 +147,7 @@ func run(params keyregCmdParams) error {
 			return errors.New("must provide --address when bringing an account offline")
 		}
 		if params.partkeyFile != "" {
-			return errors.New("do not provide --partkey-file when bringing an account offline")
+			return errors.New("do not provide --keyfile when bringing an account offline")
 		}
 	}
 
@@ -176,11 +161,15 @@ func run(params keyregCmdParams) error {
 	}
 
 	if params.partkeyFile != "" && !util.FileExists(params.partkeyFile) {
-		return fmt.Errorf("cannot access partkey-file '%s'", params.partkeyFile)
+		return fmt.Errorf("cannot access keyfile '%s'", params.partkeyFile)
+	}
+
+	if params.txFile == "" {
+		params.txFile = fmt.Sprintf("%s.tx", params.partkeyFile)
 	}
 
 	if util.FileExists(params.txFile) || params.txFile == stdoutFilenameValue {
-		return fmt.Errorf("tx-file '%s' already exists", params.partkeyFile)
+		return fmt.Errorf("outputFile '%s' already exists", params.partkeyFile)
 	}
 
 	// Lookup information from partkey file
@@ -188,24 +177,25 @@ func run(params keyregCmdParams) error {
 	if params.partkeyFile != "" {
 		partDB, err := db.MakeErasableAccessor(params.partkeyFile)
 		if err != nil {
-			return fmt.Errorf("cannot open partkey %s: %v", params.partkeyFile, err)
+			return fmt.Errorf("cannot open keyfile %s: %v", params.partkeyFile, err)
 		}
 
 		partkey, err := account.RestoreParticipation(partDB)
 		if err != nil {
-			return fmt.Errorf("cannot load partkey %s: %v", params.partkeyFile, err)
+			return fmt.Errorf("cannot load keyfile %s: %v", params.partkeyFile, err)
 		}
+		defer partkey.Close()
 
 		part = &partkey.Participation
 
 		if params.firstValid < uint64(part.FirstValid) {
-			return fmt.Errorf("first-valid (%d) is earlier than the key first valid (%d)", params.firstValid, part.FirstValid)
+			return fmt.Errorf("firstvalid (%d) should be greater than or equal to the first valid participation key (%d)", params.firstValid, part.FirstValid)
 		}
 	}
 
 	validRange := params.lastValid - params.firstValid
 	if validRange > txnLife {
-		return fmt.Errorf("first-valid (%d) is %d greater than last-valid (%d). last-valid may not be greater than first-valid + %d", params.firstValid, validRange, params.lastValid, txnLife)
+		return fmt.Errorf("firstvalid (%d) is %d greater than lastvalid (%d). lastvalid may not be greater than firstvalid + %d", params.firstValid, validRange, params.lastValid, txnLife)
 	}
 
 	var txn transactions.Transaction
@@ -231,7 +221,7 @@ func run(params keyregCmdParams) error {
 	}
 
 	var err error
-	txn.GenesisID, txn.GenesisHash, err = getGenesisInformation(params.network)
+	txn.GenesisHash, err = getGenesisInformation(params.network)
 	if err != nil {
 		return err
 	}
@@ -256,7 +246,7 @@ func run(params keyregCmdParams) error {
 	}
 
 	if params.offline {
-		fmt.Printf("Account key unregister transaction written to '%s'.\n", params.txFile)
+		fmt.Printf("Account key go offline transaction written to '%s'.\n", params.txFile)
 	} else {
 		fmt.Printf("Key registration transaction written to '%s'.\n", params.txFile)
 	}
