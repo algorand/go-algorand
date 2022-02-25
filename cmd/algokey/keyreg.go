@@ -32,15 +32,17 @@ type keyregCmdParams struct {
 	addr        string
 }
 
-type networkGenesis struct {
-	id   string
-	hash crypto.Digest
-}
-
+// There is no node to query, so we do our best here.
 const (
 	txnLife uint64 = 1000
 	minFee  uint64 = 1000
 )
+
+type networkGenesis struct {
+	id   string
+	hash crypto.Digest
+}
+var validNetworks map[string]networkGenesis
 
 func init() {
 	var params keyregCmdParams
@@ -69,21 +71,9 @@ func init() {
 	keyregCmd.MarkFlagRequired("tx-file")
 	keyregCmd.Flags().StringVar(&params.partkeyFile, "partkey-file", "", "participation keys to register, file is opened to fetch metadata for the transaction, mutually exclusive with account")
 	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account address to bring offline, mutually exclusive with partkey-file")
-}
 
-func mustConvertB64ToDigest(b64 string) (digest crypto.Digest) {
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to decode digest: %w", err)
-		os.Exit(1)
-	}
-	copy(digest[:], data)
-	return
-}
-
-func Run(params keyregCmdParams) error {
-	// TODO: move 'bundleGenesisInject' into something that can be imported here.
-	validNetworks := map[string]networkGenesis{
+	// TODO: move 'bundleGenesisInject' into something that can be imported here instead of using constants.
+	validNetworks = map[string]networkGenesis{
 		"mainnet": {
 			id:   "mainnet-v1",
 			hash: mustConvertB64ToDigest("wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=")},
@@ -95,9 +85,25 @@ func Run(params keyregCmdParams) error {
 			hash: mustConvertB64ToDigest("mFgazF+2uRS1tMiL9dsj01hJGySEmPN28B/TjjvpVW0=")},
 		"devnet": {
 			id:   "devnet-v1",
-			hash: mustConvertB64ToDigest("")},
+			hash: mustConvertB64ToDigest("sC3P7e2SdbqKJK0tbiCdK9tdSpbe6XeCGKdoNzmlj0E=")},
 	}
+}
 
+func mustConvertB64ToDigest(b64 string) (digest crypto.Digest) {
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to decode digest '%s': %s", b64, err)
+		os.Exit(1)
+	}
+	if len(data) != len(digest[:]) {
+		fmt.Fprintf(os.Stderr, "Unexpected decoded digest length decoding '%s'.", b64)
+		os.Exit(1)
+	}
+	copy(digest[:], data)
+	return
+}
+
+func Run(params keyregCmdParams) error {
 	validNetworkList := make([]string, 0, len(validNetworks))
 	for k, _ := range validNetworks {
 		validNetworkList = append(validNetworkList, k)
