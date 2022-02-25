@@ -477,12 +477,10 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		return id, ErrAlreadyInserted
 	}
 
-	db.writeQueue <- opRequest{
-		operation: &insertOp{
-			id:     id,
-			record: record,
-		},
-	}
+	db.writeQueue <- makeOpRequest(&insertOp{
+		id:     id,
+		record: record,
+	})
 
 	// Make some copies.
 	var vrf *crypto.VRFSecrets
@@ -534,12 +532,11 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) e
 	}
 
 	// Update the DB asynchronously.
-	db.writeQueue <- opRequest{
-		operation: &appendKeysOp{
-			id:   id,
-			keys: keys,
-		},
-	}
+	db.writeQueue <- makeOpRequest(&appendKeysOp{
+		id:   id,
+		keys: keys,
+	})
+
 	return nil
 }
 
@@ -555,9 +552,8 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	delete(db.cache, id)
 
 	// do the db part async
-	db.writeQueue <- opRequest{
-		operation: &deleteOp{id},
-	}
+	db.writeQueue <- makeOpRequest(&deleteOp{id})
+
 	return nil
 }
 
@@ -869,11 +865,8 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 
 	if len(updated) != 0 {
-		db.writeQueue <- opRequest{
-			operation: &registerOp{
-				updated: updated,
-			},
-		}
+		db.writeQueue <- makeOpRequest(&registerOp{updated: updated})
+
 		db.mutex.Lock()
 		for id, record := range updated {
 			delete(db.dirty, id)
@@ -934,10 +927,7 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 func (db *participationDB) Flush(timeout time.Duration) error {
 	resultCh := make(chan error, 1)
 	timeoutCh := time.After(timeout)
-	writeRecord := opRequest{
-		operation:  &flushOp{},
-		errChannel: resultCh,
-	}
+	writeRecord := makeOpRequestWithError(&flushOp{}, resultCh)
 
 	select {
 	case db.writeQueue <- writeRecord:

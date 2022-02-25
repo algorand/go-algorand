@@ -717,9 +717,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            false,
 	}
 
-	registry.writeQueue <- opRequest{
-		operation: &registerOp{updates},
-	}
+	registry.writeQueue <- makeOpRequest(&registerOp{updates})
 
 	a.NoError(registry.Flush(defaultTimeout))
 
@@ -729,9 +727,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            true,
 	}
 
-	registry.writeQueue <- opRequest{
-		operation: &registerOp{updates},
-	}
+	registry.writeQueue <- makeOpRequest(&registerOp{updates})
 
 	err = registry.Flush(defaultTimeout)
 	a.Contains(err.Error(), "unable to disable old key when registering")

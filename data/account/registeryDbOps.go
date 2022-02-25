@@ -54,6 +54,14 @@ type appendKeysOp struct {
 	keys StateProofKeys
 }
 
+func makeOpRequest(operation dbOp) opRequest {
+	return opRequest{operation: operation}
+}
+
+func makeOpRequestWithError(operation dbOp, errChan chan error) opRequest {
+	return opRequest{operation: operation, errChannel: errChan}
+}
+
 func (r *registerOp) apply(db *participationDB) error {
 	var cacheDeletes []ParticipationID
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
