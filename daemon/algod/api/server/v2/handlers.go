@@ -296,7 +296,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	myLedger := v2.Node.LedgerForAPI()
 
 	// count total # of resources, if max limit is set
-	if maxResults := v2.Node.Config().MaxAccountsAPIResults; maxResults != 0 {
+	if maxResults := v2.Node.Config().MaxAPIResourcesPerAccount; maxResults != 0 {
 		record, _, _, err := myLedger.LookupAccount(myLedger.Latest(), addr)
 		if err != nil {
 			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
