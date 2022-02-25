@@ -282,7 +282,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	}
 
 	if record.TotalAppLocalStates == 0 {
-		return fmt.Errorf("account %s is not opted in to any app, and in particular %d", sender.String(), appIdx)
+		return fmt.Errorf("account %v is not opted in to any app, and in particular %d", sender, appIdx)
 	}
 
 	// If they haven't opted in, that's an error

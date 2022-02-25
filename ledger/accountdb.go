@@ -1568,52 +1568,50 @@ func accountDataResources(
 	accountData *basics.AccountData, rowid int64,
 	outputResourceCb func(ctx context.Context, rowid int64, cidx basics.CreatableIndex, rd *resourcesData) error,
 ) error {
-	// does this account have any assets ?
-	if len(accountData.Assets) > 0 || len(accountData.AssetParams) > 0 {
-		for aidx, holding := range accountData.Assets {
-			var rd resourcesData
-			rd.SetAssetHolding(holding)
-			if ap, has := accountData.AssetParams[aidx]; has {
-				rd.SetAssetParams(ap, true)
-				delete(accountData.AssetParams, aidx)
-			}
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
+	// handle all the assets we can find:
+	for aidx, holding := range accountData.Assets {
+		var rd resourcesData
+		rd.SetAssetHolding(holding)
+		if ap, has := accountData.AssetParams[aidx]; has {
+			rd.SetAssetParams(ap, true)
+			delete(accountData.AssetParams, aidx)
 		}
-		for aidx, aparams := range accountData.AssetParams {
-			var rd resourcesData
-			rd.SetAssetParams(aparams, false)
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
 		}
 	}
-	// does this account have any applications ?
-	if len(accountData.AppLocalStates) > 0 || len(accountData.AppParams) > 0 {
-		for aidx, localState := range accountData.AppLocalStates {
-			var rd resourcesData
-			rd.SetAppLocalState(localState)
-			if ap, has := accountData.AppParams[aidx]; has {
-				rd.SetAppParams(ap, true)
-				delete(accountData.AppParams, aidx)
-			}
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
-		}
-		for aidx, aparams := range accountData.AppParams {
-			var rd resourcesData
-			rd.SetAppParams(aparams, false)
-			err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
-			if err != nil {
-				return err
-			}
+	for aidx, aparams := range accountData.AssetParams {
+		var rd resourcesData
+		rd.SetAssetParams(aparams, false)
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
 		}
 	}
+
+	// handle all the applications we can find:
+	for aidx, localState := range accountData.AppLocalStates {
+		var rd resourcesData
+		rd.SetAppLocalState(localState)
+		if ap, has := accountData.AppParams[aidx]; has {
+			rd.SetAppParams(ap, true)
+			delete(accountData.AppParams, aidx)
+		}
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+	for aidx, aparams := range accountData.AppParams {
+		var rd resourcesData
+		rd.SetAppParams(aparams, false)
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -2616,7 +2614,7 @@ func accountsNewRoundImpl(
 			} else {
 				// create a new entry.
 				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
-					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.newResource)
 					return
 				}
 				// check if we need to "upgrade" this insert operation into an update operation due to a scheduled
@@ -2650,7 +2648,7 @@ func accountsNewRoundImpl(
 				continue
 			} else {
 				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
-					err = fmt.Errorf("unknown creatable for addr %s (%d), aidx %d, data %v", addr.String(), addrid, aidx, data.newResource)
+					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, addrid, aidx, data.newResource)
 					return
 				}
 				var rowsAffected int64
