@@ -226,7 +226,7 @@
     },
     "/v2/accounts/{address}/assets/{asset-id}": {
       "get": {
-        "description": "Given a specific account public key, this call returns the account's asset holding and asset params (if they exist) about a given asset ID",
+        "description": "Given a specific account public key and asset ID, this call returns the account's asset holding and asset parameters (if either exist). Asset parameters will only be returned if the provided address is the asset's creator.",
         "produces": [
           "application/json",
           "application/msgpack"
@@ -303,7 +303,7 @@
     },
     "/v2/accounts/{address}/applications/{application-id}": {
       "get": {
-        "description": "Given a specific account public key, this call returns the account's application local state and application params (if they exist) about a given application ID",
+        "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
         "produces": [
           "application/json",
           "application/msgpack"
@@ -2676,7 +2676,7 @@
       }
     },
     "AccountAssetResponse": {
-      "description": "AccountAssetResponse describes the asset data for a specific account and asset ID.",
+      "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator.",
       "schema": {
         "type": "object",
         "required": [
@@ -2699,7 +2699,7 @@
       }
     },
     "AccountApplicationResponse": {
-      "description": "AccountApplicationResponse describes the application data for a specific account and application ID.",
+      "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator.",
       "schema": {
         "type": "object",
         "required": [

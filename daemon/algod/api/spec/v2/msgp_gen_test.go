@@ -12,9 +12,9 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-func TestMarshalUnmarshalAccountResourceModel(t *testing.T) {
+func TestMarshalUnmarshalAccountApplicationModel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := AccountResourceModel{}
+	v := AccountApplicationModel{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -33,12 +33,12 @@ func TestMarshalUnmarshalAccountResourceModel(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingAccountResourceModel(t *testing.T) {
-	protocol.RunEncodingTest(t, &AccountResourceModel{})
+func TestRandomizedEncodingAccountApplicationModel(t *testing.T) {
+	protocol.RunEncodingTest(t, &AccountApplicationModel{})
 }
 
-func BenchmarkMarshalMsgAccountResourceModel(b *testing.B) {
-	v := AccountResourceModel{}
+func BenchmarkMarshalMsgAccountApplicationModel(b *testing.B) {
+	v := AccountApplicationModel{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -46,8 +46,8 @@ func BenchmarkMarshalMsgAccountResourceModel(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgAccountResourceModel(b *testing.B) {
-	v := AccountResourceModel{}
+func BenchmarkAppendMsgAccountApplicationModel(b *testing.B) {
+	v := AccountApplicationModel{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -58,8 +58,68 @@ func BenchmarkAppendMsgAccountResourceModel(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalAccountResourceModel(b *testing.B) {
-	v := AccountResourceModel{}
+func BenchmarkUnmarshalAccountApplicationModel(b *testing.B) {
+	v := AccountApplicationModel{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalAccountAssetModel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := AccountAssetModel{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingAccountAssetModel(t *testing.T) {
+	protocol.RunEncodingTest(t, &AccountAssetModel{})
+}
+
+func BenchmarkMarshalMsgAccountAssetModel(b *testing.B) {
+	v := AccountAssetModel{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgAccountAssetModel(b *testing.B) {
+	v := AccountAssetModel{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalAccountAssetModel(b *testing.B) {
+	v := AccountAssetModel{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
