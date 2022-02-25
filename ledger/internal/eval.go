@@ -49,8 +49,10 @@ type LedgerForCowBase interface {
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
 
-// ErrNotInCowCache is returned when a lookup method requests a cached value, but it can't be found
-var ErrNotInCowCache = errors.New("can't find object in cow caches")
+// ErrNotInCowCache is returned when a lookup method requests a cached value, but it can't be found.
+// the error is always being invoked by the roundCowBase object, but it would typically propage upstream
+// through the roundCowState as a generic "missing object in cache".
+var ErrNotInCowCache = errors.New("can't find object in cow cache")
 
 // averageEncodedTxnSizeHint is an estimation for the encoded transaction size
 // which is used for preallocating memory upfront in the payset. Preallocating

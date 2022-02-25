@@ -856,36 +856,6 @@
         ],
         "type": "object"
       },
-      "AccountErrorResponse": {
-        "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
-        "properties": {
-          "data": {
-            "type": "string"
-          },
-          "max-results": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "total-apps-opted-in": {
-            "type": "integer"
-          },
-          "total-assets-opted-in": {
-            "type": "integer"
-          },
-          "total-created-apps": {
-            "type": "integer"
-          },
-          "total-created-assets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "type": "object"
-      },
       "AccountParticipation": {
         "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
         "properties": {
@@ -942,6 +912,36 @@
         "required": [
           "address",
           "delta"
+        ],
+        "type": "object"
+      },
+      "AccountsErrorResponse": {
+        "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
+        "properties": {
+          "data": {
+            "type": "string"
+          },
+          "max-results": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "total-apps-opted-in": {
+            "type": "integer"
+          },
+          "total-assets-opted-in": {
+            "type": "integer"
+          },
+          "total-created-apps": {
+            "type": "integer"
+          },
+          "total-created-assets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message"
         ],
         "type": "object"
       },
@@ -1819,12 +1819,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountErrorResponse"
+                  "$ref": "#/components/schemas/AccountsErrorResponse"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountErrorResponse"
+                  "$ref": "#/components/schemas/AccountsErrorResponse"
                 }
               }
             },

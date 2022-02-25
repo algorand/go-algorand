@@ -186,7 +186,7 @@
           "400": {
             "description": "Bad request",
             "schema": {
-              "$ref": "#/definitions/AccountErrorResponse"
+              "$ref": "#/definitions/AccountsErrorResponse"
             }
           },
           "401": {
@@ -2241,7 +2241,7 @@
         }
       }
     },
-    "AccountErrorResponse": {
+    "AccountsErrorResponse": {
       "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
       "type": "object",
       "required": [
