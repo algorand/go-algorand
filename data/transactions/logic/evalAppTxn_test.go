@@ -33,6 +33,8 @@ import (
 )
 
 func TestInnerTypesV5(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	v5, _, _ := MakeSampleEnvWithVersion(5)
 	// not alllowed in v5
 	TestApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", v5, "keyreg is not a valid Type for itxn_field")
@@ -43,6 +45,8 @@ func TestInnerTypesV5(t *testing.T) {
 }
 
 func TestCurrentInnerTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	TestApp(t, "itxn_submit; int 1;", ep, "itxn_submit without itxn_begin")
 	TestApp(t, "int pay; itxn_field TypeEnum; itxn_submit; int 1;", ep, "itxn_field without itxn_begin")
@@ -93,6 +97,8 @@ func TestCurrentInnerTypes(t *testing.T) {
 }
 
 func TestFieldTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, _, _ := MakeSampleEnv()
 	TestApp(t, "itxn_begin; byte \"pay\"; itxn_field Sender;", ep, "not an address")
 	TestApp(t, Obfuscate("itxn_begin; int 7; itxn_field Receiver;"), ep, "not an address")
@@ -117,6 +123,8 @@ func appAddr(id int) basics.Address {
 }
 
 func TestAppPay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   itxn_field Amount
@@ -162,6 +170,8 @@ func TestAppPay(t *testing.T) {
 }
 
 func TestAppAssetOptIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	// Establish 888 as the app id, and fund it.
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -221,6 +231,8 @@ int 1
 }
 
 func TestRekeyPay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   itxn_field Amount
@@ -244,6 +256,8 @@ func TestRekeyPay(t *testing.T) {
 }
 
 func TestRekeyBack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	payAndUnkey := `
   itxn_begin
   itxn_field Amount
@@ -268,6 +282,8 @@ func TestRekeyBack(t *testing.T) {
 }
 
 func TestDefaultSender(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   itxn_field Amount
@@ -287,6 +303,8 @@ func TestDefaultSender(t *testing.T) {
 }
 
 func TestAppAxfer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	axfer := `
   itxn_begin
   int 77
@@ -348,6 +366,8 @@ func TestAppAxfer(t *testing.T) {
 }
 
 func TestExtraFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   int 7; itxn_field AssetAmount;
@@ -368,6 +388,8 @@ func TestExtraFields(t *testing.T) {
 }
 
 func TestBadFieldV5(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   int 7; itxn_field AssetAmount;
@@ -390,6 +412,8 @@ func TestBadFieldV5(t *testing.T) {
 }
 
 func TestBadField(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   int 7; itxn_field AssetAmount;
@@ -413,6 +437,8 @@ func TestBadField(t *testing.T) {
 }
 
 func TestNumInnerShallow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   int 1
@@ -453,6 +479,8 @@ func TestNumInnerShallow(t *testing.T) {
 // TestNumInnerPooled ensures that inner call limits are pooled across app calls
 // in a group.
 func TestNumInnerPooled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   int 1
@@ -489,6 +517,8 @@ func TestNumInnerPooled(t *testing.T) {
 }
 
 func TestAssetCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	create := `
   itxn_begin
   int acfg
@@ -515,6 +545,8 @@ func TestAssetCreate(t *testing.T) {
 }
 
 func TestAssetFreeze(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	create := `
   itxn_begin
   int acfg                         ; itxn_field TypeEnum
@@ -704,6 +736,8 @@ func TestKeyReg(t *testing.T) {
 }
 
 func TestFieldSetting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
@@ -744,6 +778,8 @@ func TestFieldSetting(t *testing.T) {
 }
 
 func TestInnerGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Need both fees and both payments
@@ -762,6 +798,8 @@ txn Sender; itxn_field Receiver;
 }
 
 func TestInnerFeePooling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
@@ -828,6 +866,8 @@ txn Sender; itxn_field Receiver;
 // constructed not what can be submitted, so it tests what "bad" fields cause
 // immediate failures.
 func TestApplCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, _ := MakeSampleEnv()
 
 	p := "itxn_begin;"
@@ -912,6 +952,8 @@ func TestApplCreation(t *testing.T) {
 // error.  These are not exhaustive, but certainly demonstrate that
 // transactions.WellFormed is getting a crack at the txn.
 func TestApplSubmission(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Since the fee is moved first, fund the app
@@ -956,6 +998,8 @@ func TestApplSubmission(t *testing.T) {
 }
 
 func TestInnerApplCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
@@ -1021,6 +1065,8 @@ int 5000; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
 }
 
 func TestCreateOldAppFails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
@@ -1082,6 +1128,8 @@ int 1
 }
 
 func TestSelfReentrancy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
@@ -1096,6 +1144,8 @@ int 1
 }
 
 func TestIndirectReentrancy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	call888 := TestProg(t, `itxn_begin
 int appl;    itxn_field TypeEnum
@@ -1123,6 +1173,8 @@ int 1
 // TestInnerAppID ensures that inner app properly sees its AppId. This seems
 // needlessly picky to test, but the appID used to be stored outside the cx.
 func TestInnerAppID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	logID := TestProg(t, `global CurrentApplicationID; itob; log; int 1`, AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1149,6 +1201,8 @@ int 222
 // bit to create the call, and the app itself consumes 1, so it ends up being
 // about 690 (see next test).
 func TestInnerBudgetIncrement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1176,6 +1230,8 @@ itxn_submit;
 }
 
 func TestIncrementCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1207,6 +1263,8 @@ int 1
 
 // TestInnerTxIDs confirms that TxIDs are available and different
 func TestInnerTxIDs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	txid := TestProg(t, "txn TxID; log; int 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1235,6 +1293,8 @@ itxn Logs 0
 // TestInnerGroupIDs confirms that GroupIDs are unset on size one inner groups,
 // but set and unique on non-singletons
 func TestInnerGroupIDs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	gid := TestProg(t, "global GroupID; log; int 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1295,6 +1355,8 @@ itxn Logs 0
 
 // TestGtixn confirms access to itxn groups
 func TestGtixn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	two := TestProg(t, "byte 0x22; log; int 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1379,6 +1441,8 @@ int 1
 
 // TestGtxnLog confirms that gtxn can now access previous txn's Logs.
 func TestGtxnLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	two := TestProg(t, "byte 0x22; log; int 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1406,6 +1470,8 @@ int 1
 
 // TestGtxnApps confirms that gtxn can now access previous txn's created app id.
 func TestGtxnApps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	appcheck := TestProg(t, `
 gtxn 0 CreatedApplicationID; itob; log;
@@ -1451,6 +1517,8 @@ int 5001
 
 // TestGtxnAsa confirms that gtxn can now access previous txn's created asa id.
 func TestGtxnAsa(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	appcheck := TestProg(t, `
 gtxn 0 CreatedAssetID; itob; log;
@@ -1486,6 +1554,8 @@ int 5001
 
 // TestCallerGlobals checks that a called app can see its caller.
 func TestCallerGlobals(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	globals := TestProg(t, fmt.Sprintf(`
 global CallerApplicationID
@@ -1514,6 +1584,8 @@ int 1
 // TestNumInnerDeep ensures that inner call limits apply to inner calls of inner
 // transactions.
 func TestNumInnerDeep(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay := `
   itxn_begin
   int 1
@@ -1562,6 +1634,8 @@ itxn_submit
 // used.  This was not allowed until v6, because of the strict adherence to the
 // foreign-arrays rules.
 func TestCreateAndUse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	axfer := `
   itxn_begin
    int acfg;    itxn_field TypeEnum
@@ -1675,6 +1749,8 @@ func hexProgram(t *testing.T, source string) string {
 // TestCreateAndUseApp checks that an app can be created in an inner txn, and then
 // the address for it can be looked up.
 func TestCreateUseApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay5back := main(`
 itxn_begin
 int pay;    itxn_field TypeEnum
@@ -1707,6 +1783,8 @@ int 1
 // a pay can be done to the app's account.  This was not allowed until v6,
 // because of the strict adherence to the foreign-accounts rules.
 func TestCreateAndPay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pay5back := main(`
 itxn_begin
 int pay;    itxn_field TypeEnum
@@ -1748,6 +1826,8 @@ int 1
 // TestInnerGaid ensures there's no confusion over the tracking of ids
 // across multiple inner transaction groups
 func TestInnerGaid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	ep.Proto.MaxInnerTransactions = 100
 	// App to log the aid of slot[apparg[0]]
@@ -1838,6 +1918,8 @@ int 1
 
 // TestInnerCallDepth ensures that inner calls are limited in depth
 func TestInnerCallDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
@@ -1901,6 +1983,8 @@ done:
 }
 
 func TestInfiniteRecursion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := MakeSampleEnv()
 	source := `
 itxn_begin
