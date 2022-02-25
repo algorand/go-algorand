@@ -1624,6 +1624,10 @@
             "$ref": "#/definitions/ApplicationLocalState"
           }
         },
+        "total-apps-opted-in": {
+          "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
+          "type": "integer"
+        },
         "apps-total-schema": {
           "description": "\\[tsch\\] stores the sum of all of the local schemas and global schemas in this account.\n\nNote: the raw account uses `StateSchema` for this type.",
           "$ref": "#/definitions/ApplicationStateSchema"
@@ -1639,6 +1643,10 @@
             "$ref": "#/definitions/AssetHolding"
           }
         },
+        "total-assets-opted-in": {
+          "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
+          "type": "integer"
+        },
         "created-apps": {
           "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -\u003e AppParams` for this type.",
           "type": "array",
@@ -1646,12 +1654,20 @@
             "$ref": "#/definitions/Application"
           }
         },
+        "total-created-apps": {
+          "description": "The count of all apps (AppParams objects) created by this account.",
+          "type": "integer"
+        },
         "created-assets": {
           "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e AssetParams` for this type.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Asset"
           }
+        },
+        "total-created-assets": {
+          "description": "The count of all assets (AssetParams objects) created by this account.",
+          "type": "integer"
         },
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
@@ -1677,7 +1693,7 @@
           "type": "string"
         },
         "sig-type": {
-          "description": "Indicates what type of signature is used by this account, must be one of:\n* sig\n* msig\n* lsig\n* or null if unknown",
+          "description": "Indicates what type of signature is used by this account, must be one of:\n* sig\n* msig\n* lsig",
           "type": "string",
           "enum": [
             "sig",
@@ -1685,40 +1701,10 @@
             "lsig"
           ]
         },
-        "total-apps-opted-in": {
-          "description": "The count of all application local data (AppLocalState objects) stored in this account.",
-          "type": "integer"
-        },
-        "total-assets-opted-in": {
-          "description": "The count of all assets (AssetHolding objects) held by this account.",
-          "type": "integer"
-        },
-        "total-created-apps": {
-          "description": "The count of all apps (AppParams objects) created by this account.",
-          "type": "integer"
-        },
-        "total-created-assets": {
-          "description": "The count of all assets (AssetParams objects) created by this account.",
-          "type": "integer"
-        },
         "auth-addr": {
           "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
           "type": "string",
           "x-algorand-format": "Address"
-        },
-        "deleted": {
-          "description": "Whether or not this account is currently closed.",
-          "type": "boolean"
-        },
-        "created-at-round": {
-          "description": "Round during which this account first appeared in a transaction.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "closed-at-round": {
-          "description": "Round during which this account was most recently closed.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
         }
       }
     },
@@ -1774,20 +1760,6 @@
           "description": "unique asset identifier",
           "type": "integer"
         },
-        "deleted": {
-          "description": "Whether or not this asset is currently deleted.",
-          "type": "boolean"
-        },
-        "created-at-round": {
-          "description": "Round during which this asset was created.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "destroyed-at-round": {
-          "description": "Round during which this asset was destroyed.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
         "params": {
           "$ref": "#/definitions/AssetParams"
         }
@@ -1798,42 +1770,23 @@
       "type": "object",
       "required": [
         "asset-id",
-        "creator",
         "amount",
         "is-frozen"
       ],
       "properties": {
         "amount": {
           "description": "\\[a\\] number of units held.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
+           "type": "integer",
+           "x-algorand-format": "uint64"
         },
         "asset-id": {
           "description": "Asset ID of the holding.",
           "type": "integer",
           "x-go-name": "AssetID"
         },
-        "creator": {
-          "description": "Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.",
-          "type": "string"
-        },
         "is-frozen": {
           "description": "\\[f\\] whether or not the holding is frozen.",
           "type": "boolean"
-        },
-        "deleted": {
-          "description": "Whether or not the asset holding is currently deleted from its account.",
-          "type": "boolean"
-        },
-        "opted-in-at-round": {
-          "description": "Round during which the account opted into this asset holding.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "opted-out-at-round": {
-          "description": "Round during which the account opted out of this asset holding.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
         }
       }
     },
@@ -1944,20 +1897,6 @@
         "id": {
           "description": "The application which this local state is for.",
           "type": "integer"
-        },
-        "deleted": {
-          "description": "Whether or not the application local state is currently deleted from its account.",
-          "type": "boolean"
-        },
-        "opted-in-at-round": {
-          "description": "Round when the account opted into the application.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "closed-out-at-round": {
-          "description": "Round when account closed out of the application.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
         },
         "schema": {
           "description": "\\[hsch\\] schema.",
@@ -2135,20 +2074,6 @@
           "description": "\\[appidx\\] application index.",
           "type": "integer"
         },
-        "deleted": {
-          "description": "Whether or not this application is currently deleted.",
-          "type": "boolean"
-        },
-        "created-at-round": {
-          "description": "Round when this application was created.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "deleted-at-round": {
-          "description": "Round when this application was deleted.",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
         "params": {
           "description": "\\[appparams\\] application parameters.",
           "$ref": "#/definitions/ApplicationParams"
@@ -2303,18 +2228,16 @@
     },
     "ErrorResponse": {
       "description": "An error response with optional data field.",
-      "schema":{
-        "type": "object",
-        "required": [
-          "message"
-        ],
-        "properties": {
-          "data": {
-            "type": "object"
-          },
-          "message": {
-            "type": "string"
-          }
+      "type": "object",
+      "required": [
+        "message"
+      ],
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
         }
       }
     },
@@ -3002,9 +2925,18 @@
     "ParticipationKeysResponse": {
       "description": "A list of participation keys",
       "schema": {
-        "type": "array",
-        "items": {
-          "$ref": "#/definitions/ParticipationKey"
+	"description": "A list of participation keys",
+        "type": "object",
+        "required": [
+          "participation-keys"
+        ],
+        "properties": {
+          "participation-keys": {
+            "type": "array",
+            "items": {
+            "$ref": "#/definitions/ParticipationKey"
+            }
+          }
         }
       }
     },
