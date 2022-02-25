@@ -158,7 +158,7 @@ func run(params keyregCmdParams) error {
 			return errors.New("do not provide --address when registering participation keys")
 		}
 	} else {
-		if params.addr != "" {
+		if params.addr == "" {
 			return errors.New("must provide --address when bringing an account offline")
 		}
 		if params.partkeyFile != "" {
@@ -175,7 +175,7 @@ func run(params keyregCmdParams) error {
 		}
 	}
 
-	if !util.FileExists(params.partkeyFile) {
+	if params.partkeyFile != "" && !util.FileExists(params.partkeyFile) {
 		return fmt.Errorf("cannot access partkey-file '%s'", params.partkeyFile)
 	}
 
@@ -186,25 +186,26 @@ func run(params keyregCmdParams) error {
 	// Lookup information from partkey file
 	var part *account.Participation
 	if params.partkeyFile != "" {
-		partdb, err := db.MakeErasableAccessor(params.partkeyFile)
+		partDB, err := db.MakeErasableAccessor(params.partkeyFile)
 		if err != nil {
 			return fmt.Errorf("cannot open partkey %s: %v", params.partkeyFile, err)
 		}
 
-		partkey, err := account.RestoreParticipation(partdb)
+		partkey, err := account.RestoreParticipation(partDB)
 		if err != nil {
-			return fmt.Errorf("Cannot load partkey %s: %v", params.partkeyFile, err)
+			return fmt.Errorf("cannot load partkey %s: %v", params.partkeyFile, err)
 		}
 
 		part = &partkey.Participation
 		//accountAddress = part.Parent
 		//keyFirstValid = part.FirstValid
 		//keyLastValid = part.LastValid
+
+		if params.firstValid < uint64(part.FirstValid) {
+			return fmt.Errorf("first-valid (%d) is earlier than the key first valid (%d)", params.firstValid, part.FirstValid)
+		}
 	}
 
-	if params.firstValid < uint64(part.FirstValid) {
-		return fmt.Errorf("first-valid (%d) is earlier than the key first valid (%d)", params.firstValid, part.FirstValid)
-	}
 
 	validRange := params.lastValid - params.firstValid
 	if validRange > txnLife {
@@ -256,5 +257,10 @@ func run(params keyregCmdParams) error {
 		ioutil.WriteFile(params.txFile, data, 0600)
 	}
 
+	if params.offline {
+		fmt.Printf("Account key unregister transaction written to '%s'.\n", params.txFile)
+	} else {
+		fmt.Printf("Key registration transaction written to '%s'.\n", params.txFile)
+	}
 	return nil
 }
