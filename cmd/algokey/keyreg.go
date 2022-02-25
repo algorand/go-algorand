@@ -80,13 +80,13 @@ func init() {
 
 	keyregCmd.Flags().Uint64Var(&params.fee, "fee", minFee, "transaction fee")
 	keyregCmd.Flags().Uint64Var(&params.firstValid, "first-valid", 0, "first round where the transaction may be committed to the ledger")
-	keyregCmd.MarkFlagRequired("first-valid")
+	keyregCmd.MarkFlagRequired("first-valid") // nolint:errcheck
 	keyregCmd.Flags().Uint64Var(&params.lastValid, "last-valid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to first-valid + %d", txnLife))
 	keyregCmd.Flags().StringVar(&params.network, "network", "mainnet", "the network where the provided keys will be registered, one of mainnet/testnet/betanet")
-	keyregCmd.MarkFlagRequired("network")
+	keyregCmd.MarkFlagRequired("network") // nolint:errcheck
 	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
 	keyregCmd.Flags().StringVar(&params.txFile, "tx-file", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
-	keyregCmd.MarkFlagRequired("tx-file")
+	keyregCmd.MarkFlagRequired("tx-file") // nolint:errcheck
 	keyregCmd.Flags().StringVar(&params.partkeyFile, "partkey-file", "", "participation keys to register, file is opened to fetch metadata for the transaction, mutually exclusive with account")
 	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account address to bring offline, mutually exclusive with partkey-file")
 
@@ -197,15 +197,11 @@ func run(params keyregCmdParams) error {
 		}
 
 		part = &partkey.Participation
-		//accountAddress = part.Parent
-		//keyFirstValid = part.FirstValid
-		//keyLastValid = part.LastValid
 
 		if params.firstValid < uint64(part.FirstValid) {
 			return fmt.Errorf("first-valid (%d) is earlier than the key first valid (%d)", params.firstValid, part.FirstValid)
 		}
 	}
-
 
 	validRange := params.lastValid - params.firstValid
 	if validRange > txnLife {
@@ -254,7 +250,9 @@ func run(params keyregCmdParams) error {
 			return fmt.Errorf("failed to write transaction to stdout: %w", err)
 		}
 	} else {
-		ioutil.WriteFile(params.txFile, data, 0600)
+		if err = ioutil.WriteFile(params.txFile, data, 0600); err != nil {
+			return fmt.Errorf("failed to write transaction to '%s': %w", params.txFile, err)
+		}
 	}
 
 	if params.offline {
