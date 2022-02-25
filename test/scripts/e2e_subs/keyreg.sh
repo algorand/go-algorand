@@ -10,16 +10,15 @@ WALLET=$1
 gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
-ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 
 # secret algokey override
-export ALGOKEY_GENESIS_HASH=$(goal node status | grep 'Genesis hash:'|awk '{ print $3 }')
-
+ALGOKEY_GENESIS_HASH=$(goal node status | grep 'Genesis hash:'|awk '{ print $3 }')
+export ALGOKEY_GENESIS_HASH
 # Test key registration
 KEYS="${TEMPDIR}/foo.keys"
 TXN="${TEMPDIR}/keyreg.txn"
 STXN="${TEMPDIR}/keyreg.stxn"
-algokey part generate --first 1 --last 1000 --parent ${ACCOUNT} --keyfile "${KEYS}"
+algokey part generate --first 1 --last 1000 --parent "${ACCOUNT}" --keyfile "${KEYS}"
 algokey part keyreg --network placeholder --keyfile "${KEYS}" --firstvalid 1 --outputFile "${TXN}"
 # technically algokey could be used to sign at this point, that would require
 # exporting secrets from the wallet.
