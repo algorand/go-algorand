@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2022 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -26,7 +42,7 @@ type keyregCmdParams struct {
 	firstValid  uint64
 	lastValid   uint64
 	network     string
-	online      bool
+	offline     bool
 	txFile      string
 	partkeyFile string
 	addr        string
@@ -42,7 +58,9 @@ type networkGenesis struct {
 	id   string
 	hash crypto.Digest
 }
+
 var validNetworks map[string]networkGenesis
+var validNetworkList []string
 
 func init() {
 	var params keyregCmdParams
@@ -52,9 +70,9 @@ func init() {
 		Short: "Make key registration transaction",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			err := Run(params)
+			err := run(params)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, err.Error())
+				fmt.Fprintf(os.Stderr, "%s\n\n", err.Error())
 				os.Exit(1)
 			}
 		},
@@ -66,7 +84,7 @@ func init() {
 	keyregCmd.Flags().Uint64Var(&params.lastValid, "last-valid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to first-valid + %d", txnLife))
 	keyregCmd.Flags().StringVar(&params.network, "network", "mainnet", "the network where the provided keys will be registered, one of mainnet/testnet/betanet")
 	keyregCmd.MarkFlagRequired("network")
-	keyregCmd.Flags().BoolVar(&params.online, "online", true, "set account to online or offline")
+	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
 	keyregCmd.Flags().StringVar(&params.txFile, "tx-file", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
 	keyregCmd.MarkFlagRequired("tx-file")
 	keyregCmd.Flags().StringVar(&params.partkeyFile, "partkey-file", "", "participation keys to register, file is opened to fetch metadata for the transaction, mutually exclusive with account")
@@ -87,34 +105,52 @@ func init() {
 			id:   "devnet-v1",
 			hash: mustConvertB64ToDigest("sC3P7e2SdbqKJK0tbiCdK9tdSpbe6XeCGKdoNzmlj0E=")},
 	}
+	validNetworkList = make([]string, 0, len(validNetworks))
+	for k := range validNetworks {
+		validNetworkList = append(validNetworkList, k)
+	}
 }
 
 func mustConvertB64ToDigest(b64 string) (digest crypto.Digest) {
 	data, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to decode digest '%s': %s", b64, err)
+		fmt.Fprintf(os.Stderr, "Unable to decode digest '%s': %s\n\n", b64, err)
 		os.Exit(1)
 	}
 	if len(data) != len(digest[:]) {
-		fmt.Fprintf(os.Stderr, "Unexpected decoded digest length decoding '%s'.", b64)
+		fmt.Fprintf(os.Stderr, "Unexpected decoded digest length decoding '%s'.\n\n", b64)
 		os.Exit(1)
 	}
 	copy(digest[:], data)
 	return
 }
 
-func Run(params keyregCmdParams) error {
-	validNetworkList := make([]string, 0, len(validNetworks))
-	for k, _ := range validNetworks {
-		validNetworkList = append(validNetworkList, k)
+func getGenesisInformation(network string) (string, crypto.Digest, error) {
+	// For testing purposes, there is a secret option to override the genesis information.
+	idOverride := os.Getenv("ALGOKEY_GENESIS_ID")
+	hashOverride := os.Getenv("ALGOKEY_GENESIS_HASH")
+	if idOverride != "" && hashOverride != "" {
+		return idOverride, mustConvertB64ToDigest(hashOverride), nil
 	}
 
+	// Otherwise check that network matches one of the known networks.
+	gen, ok := validNetworks[strings.ToLower(network)]
+	if !ok {
+		return "", crypto.Digest{}, fmt.Errorf("unknown network '%s' provided. Supported networks: %s",
+			network,
+			strings.Join(validNetworkList, ", "))
+	}
+
+	return gen.id, gen.hash, nil
+}
+
+func run(params keyregCmdParams) error {
 	// Implicit last valid
 	if params.lastValid == 0 {
 		params.lastValid = params.firstValid + txnLife
 	}
 
-	if params.online {
+	if !params.offline {
 		if params.partkeyFile == "" {
 			return errors.New("must provide --partkey-file when registering participation keys")
 		}
@@ -176,7 +212,7 @@ func Run(params keyregCmdParams) error {
 	}
 
 	var txn transactions.Transaction
-	if params.online {
+	if !params.offline {
 		// Generate go-online transaction
 		txn = part.GenerateRegistrationTransaction(
 			basics.MicroAlgos{Raw: params.fee},
@@ -197,15 +233,11 @@ func Run(params keyregCmdParams) error {
 		}
 	}
 
-	gen, ok := validNetworks[strings.ToLower(params.network)]
-	if !ok {
-		return fmt.Errorf("unknown network '%s' provided. Supported networks: %s",
-			params.network,
-			strings.Join(validNetworkList, ", "))
+	var err error
+	txn.GenesisID, txn.GenesisHash, err = getGenesisInformation(params.network)
+	if err != nil {
+		return err
 	}
-
-	txn.GenesisID = gen.id
-	txn.GenesisHash = gen.hash
 
 	// Wrap in a transactions.SignedTxn with an empty sig.
 	// This way protocol.Encode will encode the transaction type
