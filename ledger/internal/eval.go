@@ -60,11 +60,6 @@ var ErrNotInCowCache = errors.New("can't find object in cow cache")
 // is considerably slower.
 const averageEncodedTxnSizeHint = 150
 
-// asyncAccountLoadingThreadCount controls how many go routines would be used
-// to load the account data before the Eval() start processing individual
-// transaction group.
-const asyncAccountLoadingThreadCount = 4
-
 // Creatable represent a single creatable object.
 type creatable struct {
 	cindex basics.CreatableIndex
@@ -1543,12 +1538,12 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
-	paysetgroupsCh := loadAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	preloadedTxnsData := prefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
 	// ensure that before we exit from this method, the account loading is no longer active.
 	defer func() {
 		accountLoadingCancel()
 		// wait for the paysetgroupsCh to get closed.
-		for range paysetgroupsCh {
+		for range preloadedTxnsData {
 		}
 	}()
 
@@ -1566,26 +1561,62 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 		txvalidator.txgroups = paysetgroups
 		txvalidator.done = make(chan error, 1)
 		go txvalidator.run()
-
 	}
 
 	base := eval.state.lookupParent.(*roundCowBase)
-
 transactionGroupLoop:
 	for {
 		select {
-		case txgroup, ok := <-paysetgroupsCh:
+		case txgroup, ok := <-preloadedTxnsData:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
 				return ledgercore.StateDelta{}, txgroup.err
 			}
 
-			for _, br := range txgroup.balances {
-				base.accounts[br.Addr] = br.AccountData
-				// TODO: pull needed resources into cache?
+			for _, br := range txgroup.accounts {
+				if _, have := base.accounts[*br.address]; !have {
+					base.accounts[*br.address] = *br.data
+				}
 			}
-			err = eval.TransactionGroup(txgroup.group)
+			for _, lr := range txgroup.resources {
+				if lr.address == nil {
+					// we attempted to look for the creator, and failed.
+					if lr.creatableType == basics.AssetCreatable {
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AssetCreatable}] = foundAddress{exists: false}
+					} else {
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AppCreatable}] = foundAddress{exists: false}
+					}
+					continue
+				}
+				if lr.creatableType == basics.AssetCreatable {
+					if lr.resource.AssetHolding != nil {
+						base.assets[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetHolding{value: *lr.resource.AssetHolding, exists: true}
+					} else {
+						base.assets[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetHolding{exists: false}
+					}
+					if lr.resource.AssetParams != nil {
+						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{value: *lr.resource.AssetParams, exists: true}
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AssetCreatable}] = foundAddress{address: *lr.address, exists: true}
+					} else {
+						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{exists: false}
+
+					}
+				} else {
+					if lr.resource.AppLocalState != nil {
+						base.appLocalStates[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppLocalState{value: *lr.resource.AppLocalState, exists: true}
+					} else {
+						base.appLocalStates[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppLocalState{exists: false}
+					}
+					if lr.resource.AppParams != nil {
+						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{value: *lr.resource.AppParams, exists: true}
+						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AppCreatable}] = foundAddress{address: *lr.address, exists: true}
+					} else {
+						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{exists: false}
+					}
+				}
+			}
+			err = eval.TransactionGroup(txgroup.txnGroup)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}
@@ -1622,188 +1653,4 @@ transactionGroupLoop:
 	}
 
 	return eval.state.deltas(), nil
-}
-
-// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
-type loadedTransactionGroup struct {
-	// group is the transaction group
-	group []transactions.SignedTxnWithAD
-	// balances is a list of all the balances that the transaction group refer to and are needed.
-	balances []ledgercore.NewBalanceRecord
-	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
-	// one of the entries in the balances would be uninitialized.
-	err error
-}
-
-// Return the maximum number of addresses referenced in any given transaction.
-func maxAddressesInTxn(proto *config.ConsensusParams) int {
-	return 7 + proto.MaxAppTxnAccounts
-}
-
-// loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
-// The order of the transaction groups returned by the channel is identical to the one in the input array.
-func loadAccounts(ctx context.Context, l LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
-	outChan := make(chan loadedTransactionGroup, len(groups))
-	go func() {
-		// groupTask helps to organize the account loading for each transaction group.
-		type groupTask struct {
-			// balances contains the loaded balances each transaction group have
-			balances []ledgercore.NewBalanceRecord
-			// balancesCount is the number of balances that nees to be loaded per transaction group
-			balancesCount int
-			// done is a waiting channel for all the account data for the transaction group to be loaded
-			done chan error
-		}
-		// addrTask manage the loading of a single account address.
-		type addrTask struct {
-			// account address to fetch
-			address basics.Address
-			// a list of transaction group tasks that depends on this address
-			groups []*groupTask
-			// a list of indices into the groupTask.balances where the address would be stored
-			groupIndices []int
-		}
-		defer close(outChan)
-
-		accountTasks := make(map[basics.Address]*addrTask)
-		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesInTxn(&consensusParams))
-		// totalBalances counts the total number of balances over all the transaction groups
-		totalBalances := 0
-
-		initAccount := func(addr basics.Address, wg *groupTask) {
-			if addr.IsZero() {
-				return
-			}
-			if task, have := accountTasks[addr]; !have {
-				task := &addrTask{
-					address:      addr,
-					groups:       make([]*groupTask, 1, 4),
-					groupIndices: make([]int, 1, 4),
-				}
-				task.groups[0] = wg
-				task.groupIndices[0] = wg.balancesCount
-
-				accountTasks[addr] = task
-				addressesCh <- task
-			} else {
-				task.groups = append(task.groups, wg)
-				task.groupIndices = append(task.groupIndices, wg.balancesCount)
-			}
-			wg.balancesCount++
-			totalBalances++
-		}
-		// add the fee sink address to the accountTasks/addressesCh so that it will be loaded first.
-		if len(groups) > 0 {
-			task := &addrTask{
-				address: feeSinkAddr,
-			}
-			addressesCh <- task
-			accountTasks[feeSinkAddr] = task
-		}
-
-		// iterate over the transaction groups and add all their account addresses to the list
-		groupsReady := make([]*groupTask, len(groups))
-		for i, group := range groups {
-			task := &groupTask{}
-			groupsReady[i] = task
-			for _, stxn := range group {
-				// If you add new addresses here, also add them in getTxnAddresses().
-				initAccount(stxn.Txn.Sender, task)
-				initAccount(stxn.Txn.Receiver, task)
-				initAccount(stxn.Txn.CloseRemainderTo, task)
-				initAccount(stxn.Txn.AssetSender, task)
-				initAccount(stxn.Txn.AssetReceiver, task)
-				initAccount(stxn.Txn.AssetCloseTo, task)
-				initAccount(stxn.Txn.FreezeAccount, task)
-				for _, xa := range stxn.Txn.Accounts {
-					initAccount(xa, task)
-				}
-			}
-		}
-
-		// Add fee sink to the first group
-		if len(groupsReady) > 0 {
-			initAccount(feeSinkAddr, groupsReady[0])
-		}
-		close(addressesCh)
-
-		// updata all the groups task :
-		// allocate the correct number of balances, as well as
-		// enough space on the "done" channel.
-		allBalances := make([]ledgercore.NewBalanceRecord, totalBalances)
-		usedBalances := 0
-		for _, gr := range groupsReady {
-			gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
-			gr.done = make(chan error, gr.balancesCount)
-			usedBalances += gr.balancesCount
-		}
-
-		// create few go-routines to load asyncroniously the account data.
-		for i := 0; i < asyncAccountLoadingThreadCount; i++ {
-			go func() {
-				for {
-					select {
-					case task, ok := <-addressesCh:
-						// load the address
-						if !ok {
-							// the channel got closed, which mean we're done.
-							return
-						}
-						// lookup the account data directly from the ledger.
-						acctData, _, err := l.LookupWithoutRewards(rnd, task.address)
-						br := ledgercore.NewBalanceRecord{
-							Addr:        task.address,
-							AccountData: acctData,
-						}
-						// if there is no error..
-						if err == nil {
-							// update all the group tasks with the new acquired balance.
-							for i, wg := range task.groups {
-								wg.balances[task.groupIndices[i]] = br
-								// write a nil to indicate that we're loaded one entry.
-								wg.done <- nil
-							}
-						} else {
-							// there was an error loading that entry.
-							for _, wg := range task.groups {
-								// notify the channel of the error.
-								wg.done <- err
-							}
-						}
-					case <-ctx.Done():
-						// if the context was canceled, abort right away.
-						return
-					}
-
-				}
-			}()
-		}
-
-		// iterate on the transaction groups tasks. This array retains the original order.
-		for i, wg := range groupsReady {
-			// Wait to receive wg.balancesCount nil error messages, one for each address referenced in this txn group.
-			for j := 0; j < wg.balancesCount; j++ {
-				select {
-				case err := <-wg.done:
-					if err != nil {
-						// if there is an error, report the error to the output channel.
-						outChan <- loadedTransactionGroup{
-							group: groups[i],
-							err:   err,
-						}
-						return
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-			// if we had no error, write the result to the output channel.
-			// this write will not block since we preallocated enough space on the channel.
-			outChan <- loadedTransactionGroup{
-				group:    groups[i],
-				balances: wg.balances,
-			}
-		}
-	}()
-	return outChan
 }
