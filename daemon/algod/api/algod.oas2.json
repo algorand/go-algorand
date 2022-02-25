@@ -1659,7 +1659,7 @@
           "type": "integer"
         },
         "created-assets": {
-          "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e AssetParams` for this type.",
+          "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e Asset` for this type.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Asset"
