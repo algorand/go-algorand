@@ -6,7 +6,7 @@ require (
 	github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
-	github.com/algorand/go-sumhash v0.0.0-20211021081112-0ea867c5153a
+	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64
 	github.com/algorand/msgp v1.1.49
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
