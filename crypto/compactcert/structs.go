@@ -42,7 +42,7 @@ type sigslotCommit struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Sig is a signature by the participant on the expected message.
-	Sig CompactOneTimeSignature `codec:"s"`
+	Sig merklesignature.Signature `codec:"s"`
 
 	// L is the total weight of signatures in lower-numbered slots.
 	// This is initialized once the builder has collected a sufficient

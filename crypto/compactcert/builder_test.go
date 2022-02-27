@@ -410,7 +410,7 @@ func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes i
 
 func findLInCert(a *require.Assertions, signature merklesignature.Signature, cert *Cert) uint64 {
 	for _, t := range cert.Reveals {
-		if bytes.Compare(t.SigSlot.Sig.Signature.Signature, signature.Signature) == 0 {
+		if bytes.Compare(t.SigSlot.Sig.Signature, signature.Signature) == 0 {
 			return t.SigSlot.L
 		}
 	}

@@ -110,7 +110,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
-	b.sigs[pos].Sig.Signature = sig
+	b.sigs[pos].Sig = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
 	b.sigsHasValidL = false

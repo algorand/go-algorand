@@ -48,7 +48,7 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 	version := int(c.MerkleSignatureVersion)
 	for _, reveal := range c.Reveals {
-		if err := reveal.SigSlot.Sig.Signature.ValidateSigVersion(version); err != nil {
+		if err := reveal.SigSlot.Sig.ValidateSigVersion(version); err != nil {
 			return err
 		}
 	}
@@ -68,7 +68,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		err = r.Part.PK.VerifyBytes(
 			uint64(v.SigRound),
 			v.Msg,
-			r.SigSlot.Sig.Signature,
+			r.SigSlot.Sig,
 		)
 
 		if err != nil {
