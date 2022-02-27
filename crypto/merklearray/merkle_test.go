@@ -17,6 +17,7 @@
 package merklearray
 
 import (
+	"encoding/base64"
 	"fmt"
 	"hash"
 	"runtime"
@@ -1059,6 +1060,46 @@ func TestVCProveSingleLeaf(t *testing.T) {
 	}
 }
 
+func TestMerkleBuiltCorrectly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	numLeaves := 123
+	leaves := make(TestArray, numLeaves)
+	for i := 0; i < numLeaves; i++ {
+		var data [crypto.DigestSize]byte
+		s := fmt.Sprint("Padding string 32 bytes ", i)
+		copy(data[:], s)
+		leaves[i] = data
+	}
+
+	// Test Merkle Tree
+	tree, err := Build(leaves, crypto.HashFactory{HashType: crypto.Sha256})
+	a.NoError(err)
+	a.Equal("VzXhjouoSyGARMmByGfl1EW+erqBi+BlEBVrUU+CB7s=", base64.StdEncoding.EncodeToString(tree.Root()))
+
+	tree, err = Build(leaves, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal("Vz2XFgmHpwg0dl46KMPKT9+QYi2RzNbQHM9P8IXvlu8=", base64.StdEncoding.EncodeToString(tree.Root()))
+
+	tree, err = Build(leaves, crypto.HashFactory{HashType: crypto.Sumhash})
+	a.NoError(err)
+	a.Equal("UQOucTzyflYooTNANiPCxOMqf6RIRJ6Plz4ZBDicxV0GXC7tKar/VmCsz80vViVcqv4eP412+J9s9RaH+LLlrA==", base64.StdEncoding.EncodeToString(tree.Root()))
+
+	// Test Vector Commitment
+	tree, err = BuildVectorCommitmentTree(leaves, crypto.HashFactory{HashType: crypto.Sha256})
+	a.NoError(err)
+	a.Equal("xNthvnJZnVXZNr7vk/g2c4jpKqnm8tcmuBdPkQZSbd0=", base64.StdEncoding.EncodeToString(tree.Root()))
+
+	tree, err = BuildVectorCommitmentTree(leaves, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+	a.Equal("o/zXOUPRgxJPmLVcd91d7C6Is7vZQ899cEczlkz4Z94=", base64.StdEncoding.EncodeToString(tree.Root()))
+
+	tree, err = BuildVectorCommitmentTree(leaves, crypto.HashFactory{HashType: crypto.Sumhash})
+	a.NoError(err)
+	a.Equal("rWQ1Ty8TLhALnEqOKy1vGcxC3hke/UQCS9E5ui28U56uJupplVSth3RvbY8x7+0FmioBbu5zQDVoWBbsvvetuA==", base64.StdEncoding.EncodeToString(tree.Root()))
+}
+
 func BenchmarkMerkleCommit(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
@@ -1088,6 +1129,7 @@ func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
 func BenchmarkMerkleProve1M(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sumhash) })
+	b.Run("sha256", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sha256) })
 }
 
 func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
@@ -1113,6 +1155,7 @@ func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
 func BenchmarkMerkleVerify1M(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sumhash) })
+	b.Run("sha256", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sha256) })
 }
 
 func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
