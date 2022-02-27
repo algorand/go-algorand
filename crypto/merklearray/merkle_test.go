@@ -1076,33 +1076,34 @@ func TestMerkleBuiltCorrectly(t *testing.T) {
 	// Test Merkle Tree
 	tree, err := Build(leaves, crypto.HashFactory{HashType: crypto.Sha256})
 	a.NoError(err)
-	a.Equal("VzXhjouoSyGARMmByGfl1EW+erqBi+BlEBVrUU+CB7s=", base64.StdEncoding.EncodeToString(tree.Root()))
+	a.Equal("VzXhjouoSyGARMmByGfl1EW+erqBi+BlEBVrUU+CB7s=", base64.StdEncoding.EncodeToString(tree.Root().ToSlice()))
 
 	tree, err = Build(leaves, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal("Vz2XFgmHpwg0dl46KMPKT9+QYi2RzNbQHM9P8IXvlu8=", base64.StdEncoding.EncodeToString(tree.Root()))
+	a.Equal("Vz2XFgmHpwg0dl46KMPKT9+QYi2RzNbQHM9P8IXvlu8=", base64.StdEncoding.EncodeToString(tree.Root().ToSlice()))
 
 	tree, err = Build(leaves, crypto.HashFactory{HashType: crypto.Sumhash})
 	a.NoError(err)
-	a.Equal("UQOucTzyflYooTNANiPCxOMqf6RIRJ6Plz4ZBDicxV0GXC7tKar/VmCsz80vViVcqv4eP412+J9s9RaH+LLlrA==", base64.StdEncoding.EncodeToString(tree.Root()))
+	a.Equal("4MWqlbtmf0LJwHdI0iT9nmIql1XWscuJVK2F1corxZLuEeNnE+6ZTHjnqlzLrn4xx6F+hR/mITmsDWLsX9K3Og==", base64.StdEncoding.EncodeToString(tree.Root().ToSlice()))
 
 	// Test Vector Commitment
 	tree, err = BuildVectorCommitmentTree(leaves, crypto.HashFactory{HashType: crypto.Sha256})
 	a.NoError(err)
-	a.Equal("xNthvnJZnVXZNr7vk/g2c4jpKqnm8tcmuBdPkQZSbd0=", base64.StdEncoding.EncodeToString(tree.Root()))
+	a.Equal("xNthvnJZnVXZNr7vk/g2c4jpKqnm8tcmuBdPkQZSbd0=", base64.StdEncoding.EncodeToString(tree.Root().ToSlice()))
 
 	tree, err = BuildVectorCommitmentTree(leaves, crypto.HashFactory{HashType: crypto.Sha512_256})
 	a.NoError(err)
-	a.Equal("o/zXOUPRgxJPmLVcd91d7C6Is7vZQ899cEczlkz4Z94=", base64.StdEncoding.EncodeToString(tree.Root()))
+	a.Equal("o/zXOUPRgxJPmLVcd91d7C6Is7vZQ899cEczlkz4Z94=", base64.StdEncoding.EncodeToString(tree.Root().ToSlice()))
 
 	tree, err = BuildVectorCommitmentTree(leaves, crypto.HashFactory{HashType: crypto.Sumhash})
 	a.NoError(err)
-	a.Equal("rWQ1Ty8TLhALnEqOKy1vGcxC3hke/UQCS9E5ui28U56uJupplVSth3RvbY8x7+0FmioBbu5zQDVoWBbsvvetuA==", base64.StdEncoding.EncodeToString(tree.Root()))
+	a.Equal("0BQMiqUEdyFAa0tBFct2JaarGIJoiFh4ZwPnvsvTYWtXQY3iGry9uEz1gtSu1CUN872jHaYjJYZhgmt4UmeI1Q==", base64.StdEncoding.EncodeToString(tree.Root().ToSlice()))
 }
 
 func BenchmarkMerkleCommit(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
+	b.Run("sha256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha256) })
 }
 
 func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
