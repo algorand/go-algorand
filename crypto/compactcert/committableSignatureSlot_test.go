@@ -42,7 +42,7 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 
 	sigs[0] = sigslot{
 		Weight:        60,
-		sigslotCommit: sigslotCommit{Sig: CompactOneTimeSignature{Signature: sig}, L: 60},
+		sigslotCommit: sigslotCommit{Sig: sig, L: 60},
 	}
 
 	hfactory := crypto.HashFactory{HashType: HashType}

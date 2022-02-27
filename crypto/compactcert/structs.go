@@ -31,18 +31,12 @@ type Params struct {
 	SecKQ        uint64       // Security parameter (k+q) from analysis document
 }
 
-// CompactOneTimeSignature is crypto.OneTimeSignature with omitempty
-type CompactOneTimeSignature struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	merklesignature.Signature
-}
-
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.
 type sigslotCommit struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Sig is a signature by the participant on the expected message.
-	Sig CompactOneTimeSignature `codec:"s"`
+	Sig merklesignature.Signature `codec:"s"`
 
 	// L is the total weight of signatures in lower-numbered slots.
 	// This is initialized once the builder has collected a sufficient
