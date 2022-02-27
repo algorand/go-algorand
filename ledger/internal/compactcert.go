@@ -108,7 +108,7 @@ func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookke
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
-		err = errCompCertNotEnabled
+		err = fmt.Errorf("compact certs not enabled")
 		return
 	}
 
@@ -142,8 +142,8 @@ func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookke
 }
 
 var (
-	errCompCertCrypto             = fmt.Errorf("compactcert crypto error")
-	errCompactCertParamCreation   = fmt.Errorf("compactcert param creation error")
+	errCompCertCrypto             = errors.New("compactcert crypto error")
+	errCompactCertParamCreation   = errors.New("compactcert param creation error")
 	errCompCertNotEnabled         = errors.New("compact certs not enabled")
 	errNotAtRightMultiple         = errors.New("cert is not in a valid round")
 	errInvalidVotersRound         = errors.New("invalid voters round")
