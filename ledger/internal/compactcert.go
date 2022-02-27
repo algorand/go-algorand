@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -107,7 +108,7 @@ func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookke
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
-		err = fmt.Errorf("compact certs not enabled")
+		err = errCompCertNotEnabled
 		return
 	}
 
@@ -140,40 +141,53 @@ func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookke
 	return
 }
 
+var (
+	errCompCertCrypto             = fmt.Errorf("compactcert crypto error")
+	errCompactCertParamCreation   = fmt.Errorf("compactcert param creation error")
+	errCompCertNotEnabled         = errors.New("compact certs not enabled")
+	errNotAtRightMultiple         = errors.New("cert is not in a valid round")
+	errInvalidVotersRound         = errors.New("invalid voters round")
+	errExpectedDifferentCertRound = errors.New("expected different cert round")
+	errInsufficientWeight         = errors.New("insufficient cert weight")
+)
+
 // validateCompactCert checks that a compact cert is valid.
 func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round, msg []byte) error {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
-		return fmt.Errorf("compact certs not enabled: rounds = %d", proto.CompactCertRounds)
+		return fmt.Errorf("rounds = %d: %w", proto.CompactCertRounds, errCompCertNotEnabled)
 	}
 
 	if certHdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
-		return fmt.Errorf("cert at %d for non-multiple of %d", certHdr.Round, proto.CompactCertRounds)
+		return fmt.Errorf("cert at %d for non-multiple of %d: %w", certHdr.Round, proto.CompactCertRounds, errNotAtRightMultiple)
 	}
 
 	votersRound := certHdr.Round.SubSaturate(basics.Round(proto.CompactCertRounds))
 	if votersRound != votersHdr.Round {
-		return fmt.Errorf("new cert is for %d (voters %d), but votersHdr from %d",
-			certHdr.Round, votersRound, votersHdr.Round)
+		return fmt.Errorf("new cert is for %d (voters %d), but votersHdr from %d: %w",
+			certHdr.Round, votersRound, votersHdr.Round, errInvalidVotersRound)
 	}
 
 	if nextCertRnd == 0 || nextCertRnd != certHdr.Round {
-		return fmt.Errorf("expecting cert for %d, but new cert is for %d (voters %d)",
-			nextCertRnd, certHdr.Round, votersRound)
+		return fmt.Errorf("expecting cert for %d, but new cert is for %d (voters %d):%w",
+			nextCertRnd, certHdr.Round, votersRound, errExpectedDifferentCertRound)
 	}
 
 	acceptableWeight := AcceptableCompactCertWeight(votersHdr, atRound, logging.Base())
 	if cert.SignedWeight < acceptableWeight {
-		return fmt.Errorf("insufficient weight at %d: %d < %d",
-			atRound, cert.SignedWeight, acceptableWeight)
+		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
+			atRound, cert.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
 
 	ccParams, err := CompactCertParams(msg, votersHdr, certHdr)
 	if err != nil {
-		return err
+		return fmt.Errorf("%v: %w", err, errCompactCertParamCreation)
 	}
 
-	verif := compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters)
-	return verif.Verify(&cert)
+	err = compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters).Verify(&cert)
+	if err != nil {
+		return fmt.Errorf("%v: %w", err, errCompCertCrypto)
+	}
+	return nil
 }

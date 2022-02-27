@@ -43,7 +43,7 @@ func TestValidateCompactCert(t *testing.T) {
 	// will definitely fail with nothing set up
 	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errCompCertNotEnabled)
 
 	certHdr.CurrentProtocol = "TestValidateCompactCert"
 	certHdr.Round = 1
@@ -54,32 +54,32 @@ func TestValidateCompactCert(t *testing.T) {
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errNotAtRightMultiple)
 
 	certHdr.Round = 4
 	votersHdr.Round = 4
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errInvalidVotersRound)
 
 	votersHdr.Round = 2
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errExpectedDifferentCertRound)
 
 	nextCertRnd = 4
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errCompactCertParamCreation)
 
 	votersHdr.CurrentProtocol = certHdr.CurrentProtocol
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errCompCertCrypto)
 
 	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
 	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
@@ -88,13 +88,13 @@ func TestValidateCompactCert(t *testing.T) {
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errInsufficientWeight)
 
 	cert.SignedWeight = 101
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.NotNil(t, err)
+	require.ErrorIs(t, err, errCompCertCrypto)
 
 	// Above cases leave validateCompactCert() with 100% coverage.
 	// crypto/compactcert.Verify has its own tests
