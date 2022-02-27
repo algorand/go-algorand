@@ -145,7 +145,7 @@ var (
 	errCompCertCrypto             = errors.New("compactcert crypto error")
 	errCompactCertParamCreation   = errors.New("compactcert param creation error")
 	errCompCertNotEnabled         = errors.New("compact certs not enabled")
-	errNotAtRightMultiple         = errors.New("cert is not in a valid round")
+	errNotAtRightMultiple         = errors.New("cert is not in a valid round multiple")
 	errInvalidVotersRound         = errors.New("invalid voters round")
 	errExpectedDifferentCertRound = errors.New("expected different cert round")
 	errInsufficientWeight         = errors.New("insufficient cert weight")
