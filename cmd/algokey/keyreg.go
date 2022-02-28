@@ -81,8 +81,8 @@ func init() {
 	keyregCmd.MarkFlagRequired("network") // nolint:errcheck
 	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
 	keyregCmd.Flags().StringVarP(&params.txFile, "outputFile", "o", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
-	keyregCmd.Flags().StringVar(&params.partkeyFile, "keyfile", "", "participation keys to register, file is opened to fetch metadata for the transaction, mutually exclusive with account")
-	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account address to bring offline, mutually exclusive with keyfile")
+	keyregCmd.Flags().StringVar(&params.partkeyFile, "keyfile", "", "participation keys to register, file is opened to fetch metadata for the transaction; only specify when bringing an account online to vote in Algorand consensus")
+	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account address to bring offline; only specify when taking an account offline from voting in Algorand consensus")
 
 	// TODO: move 'bundleGenesisInject' into something that can be imported here instead of using constants.
 	validNetworks = map[string]crypto.Digest{
@@ -193,13 +193,13 @@ func run(params keyregCmdParams) error {
 		part = &partkey.Participation
 
 		if params.firstValid < uint64(part.FirstValid) {
-			return fmt.Errorf("firstvalid (%d) should be greater than or equal to the first valid participation key (%d)", params.firstValid, part.FirstValid)
+			return fmt.Errorf("the transaction's firstvalid round (%d) field should be set greater than or equal to the participation key's first valid round (%d). The network will reject key registration transactions that are set to take effect before the participation key's first valid round", params.firstValid, part.FirstValid)
 		}
 	}
 
 	validRange := params.lastValid - params.firstValid
 	if validRange > txnLife {
-		return fmt.Errorf("firstvalid (%d) is %d greater than lastvalid (%d). lastvalid may not be greater than firstvalid + %d", params.firstValid, validRange, params.lastValid, txnLife)
+		return fmt.Errorf("the transaction's specified validity range must be less than or equal to 1000 rounds due to security constraints. Please enter a first valid round (%d) and last valid round (%d) whose difference is no more than 1000 rounds", params.firstValid, params.lastValid)
 	}
 
 	var txn transactions.Transaction
