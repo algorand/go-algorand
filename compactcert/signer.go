@@ -126,7 +126,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 	}
 
 	// Build merkle tree from encoded headers
-	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha512_256})
+	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
 	if err != nil {
 		return nil, err
 	}
