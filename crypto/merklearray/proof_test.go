@@ -132,3 +132,85 @@ func TestProofSerializationOneLeafTree(t *testing.T) {
 	}
 
 }
+
+func TestConcatenatedProofsMissingChild(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	array := make(TestArray, 7)
+	for i := 0; i < 7; i++ {
+		crypto.RandBytes(array[i][:])
+	}
+
+	tree, err := Build(array, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	p, err := tree.ProveSingleLeaf(6)
+	a.NoError(err)
+
+	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
+
+	computedPath := recomputePath(p)
+
+	newP.Path = computedPath
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, newP.ToProof())
+	a.NoError(err)
+}
+
+func TestConcatenatedProofsFullTree(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	array := make(TestArray, 8)
+	for i := 0; i < 8; i++ {
+		crypto.RandBytes(array[i][:])
+	}
+
+	tree, err := Build(array, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	p, err := tree.ProveSingleLeaf(6)
+	a.NoError(err)
+
+	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
+
+	computedPath := recomputePath(p)
+
+	newP.Path = computedPath
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, newP.ToProof())
+	a.NoError(err)
+}
+
+func TestConcatenatedProofsOneLeaf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	array := make(TestArray, 1)
+	crypto.RandBytes(array[0][:])
+
+	tree, err := Build(array, crypto.HashFactory{HashType: crypto.Sha512_256})
+	a.NoError(err)
+
+	p, err := tree.ProveSingleLeaf(0)
+	a.NoError(err)
+
+	newP := SingleLeafProof{Proof: Proof{TreeDepth: p.TreeDepth, Path: []crypto.GenericDigest{}, HashFactory: p.HashFactory}}
+
+	computedPath := recomputePath(p)
+
+	newP.Path = computedPath
+	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: array[0]}, newP.ToProof())
+	a.NoError(err)
+}
+
+func recomputePath(p *SingleLeafProof) []crypto.GenericDigest {
+	var computedPath []crypto.GenericDigest
+	proofconcat := p.GetConcatenatedProof()
+	for len(proofconcat) > 0 {
+		var d crypto.Digest
+		copy(d[:], proofconcat)
+		computedPath = append(computedPath, d[:])
+		proofconcat = proofconcat[len(d):]
+	}
+	return computedPath
+}

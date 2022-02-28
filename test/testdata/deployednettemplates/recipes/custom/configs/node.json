@@ -1,5 +1,4 @@
 {
-    "NetAddress": "{{NetworkPort}}",
     "APIEndpoint": "{{APIEndpoint}}",
     "APIToken": "{{APIToken}}",
     "EnableBlockStats": false,
@@ -10,7 +9,6 @@
     "ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0 }",
     "AltConfigs": [
         {
-            "NetAddress": "{{NetworkPort}}",
             "APIEndpoint": "{{APIEndpoint}}",
             "APIToken": "{{APIToken}}",
             "EnableBlockStats": true,
