@@ -135,6 +135,10 @@ func run(params keyregCmdParams) error {
 		params.lastValid = params.firstValid + txnLife
 	}
 
+	if params.fee < minFee {
+		return fmt.Errorf("the provided transaction fee (%d) is too low, the minimum fee is %d", params.fee, minFee)
+	}
+
 	if !params.offline {
 		if params.partkeyFile == "" {
 			return errors.New("must provide --keyfile when registering participation keys")
