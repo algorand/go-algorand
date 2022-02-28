@@ -2518,7 +2518,8 @@
           "hashtype": {
             "enum": [
               "sumhash",
-              "sha512_256"
+              "sha512_256",
+              "sha256"
             ],
             "type": "string",
             "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256"
