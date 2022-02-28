@@ -46,7 +46,7 @@ type Account struct {
 
 	// \[apar\] parameters of assets created by this account.
 	//
-	// Note: the raw account uses `map[int] -> AssetParams` for this type.
+	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
 	// MicroAlgo balance required by the account.

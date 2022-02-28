@@ -781,7 +781,7 @@
             "type": "array"
           },
           "created-assets": {
-            "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> AssetParams` for this type.",
+            "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> Asset` for this type.",
             "items": {
               "$ref": "#/components/schemas/Asset"
             },
