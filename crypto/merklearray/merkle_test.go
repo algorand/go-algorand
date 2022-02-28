@@ -766,46 +766,24 @@ var VCKATs = []KATElement{
 func TestMerkleTreeKATs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for j := 0; j < len(KATsSHA512_256); j++ {
-		a := make(TestArray, len(KATsSHA512_256[j].elements))
-		for i := 0; i < len(KATsSHA512_256[j].elements); i++ {
-			decodedBytes, err := hex.DecodeString(KATsSHA512_256[j].elements[i])
-			require.NoError(t, err)
-			copy(a[i][:], decodedBytes)
-		}
-		root := KATsSHA512_256[j].expectedRoot
-		tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
-		require.NoError(t, err)
-		root2 := hex.EncodeToString(tree.Root())
-		require.Equal(t, root, root2, "mismatched roots on KATsSHA512_256 index %d", j)
-	}
+	testMerkleTreeKATsAux(t, KATsSHA512_256, crypto.Sha512_256)
+	testMerkleTreeKATsAux(t, KATsSUMHASH, crypto.Sumhash)
+	testMerkleTreeKATsAux(t, KATsSHA256, crypto.Sha256)
+}
 
-	for j := 0; j < len(KATsSHA256); j++ {
-		a := make(TestArray, len(KATsSHA256[j].elements))
-		for i := 0; i < len(KATsSHA256[j].elements); i++ {
-			decodedBytes, err := hex.DecodeString(KATsSHA256[j].elements[i])
+func testMerkleTreeKATsAux(t *testing.T, KATs []KATElement, hashType crypto.HashType) {
+	for j := 0; j < len(KATs); j++ {
+		a := make(TestArray, len(KATs[j].elements))
+		for i := 0; i < len(KATs[j].elements); i++ {
+			decodedBytes, err := hex.DecodeString(KATs[j].elements[i])
 			require.NoError(t, err)
 			copy(a[i][:], decodedBytes)
 		}
-		root := KATsSHA256[j].expectedRoot
-		tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha256})
+		root := KATs[j].expectedRoot
+		tree, err := Build(a, crypto.HashFactory{HashType: hashType})
 		require.NoError(t, err)
 		root2 := hex.EncodeToString(tree.Root())
-		require.Equal(t, root, root2, "mismatched roots on KATsSHA256 index %d", j)
-	}
-
-	for j := 0; j < len(KATsSUMHASH); j++ {
-		a := make(TestArray, len(KATsSUMHASH[j].elements))
-		for i := 0; i < len(KATsSUMHASH[j].elements); i++ {
-			decodedBytes, err := hex.DecodeString(KATsSUMHASH[j].elements[i])
-			require.NoError(t, err)
-			copy(a[i][:], decodedBytes)
-		}
-		root := KATsSUMHASH[j].expectedRoot
-		tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sumhash})
-		require.NoError(t, err)
-		root2 := hex.EncodeToString(tree.Root())
-		require.Equal(t, root, root2, "mismatched roots on KATsSUMHASH index %d", j)
+		require.Equal(t, root, root2, "mismatched roots on KATs %s index %d", hashType.String(), j)
 	}
 }
 
