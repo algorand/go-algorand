@@ -1,5 +1,4 @@
 {
-    "NetAddress": "{{NetworkPort}}",
     "APIEndpoint": "{{APIEndpoint}}",
     "APIToken": "{{APIToken}}",
     "EnableBlockStats": true,

@@ -50,6 +50,8 @@ func (r *Registry) Register(metric Metric) {
 
 // Deregister removes the given metric to the registry
 func (r *Registry) Deregister(metric Metric) {
+	r.metricsMu.Lock()
+	defer r.metricsMu.Unlock()
 	for i, m := range r.metrics {
 		if m == metric {
 			r.metrics = append(r.metrics[:i], r.metrics[i+1:]...)
