@@ -86,3 +86,8 @@ func (m *Monotonic) Decode(data []byte) (Clock, error) {
 func (m *Monotonic) String() string {
 	return time.Time(m.zero).String()
 }
+
+// DurationUntil implements the Clock interface.
+func (m *Monotonic) DurationUntil(t time.Time) time.Duration {
+	return t.Sub(m.zero)
+}

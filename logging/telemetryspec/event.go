@@ -73,9 +73,10 @@ const BlockAcceptedEvent Event = "BlockAccepted"
 
 // BlockAcceptedEventDetails contains details for the BlockAcceptedEvent
 type BlockAcceptedEventDetails struct {
-	Address string
-	Hash    string
-	Round   uint64
+	Address     string
+	Hash        string
+	Round       uint64
+	ValidatedAt time.Duration
 }
 
 // TopAccountsEvent event

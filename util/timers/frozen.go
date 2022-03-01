@@ -55,3 +55,8 @@ func (m *Frozen) Decode([]byte) (Clock, error) {
 func (m *Frozen) String() string {
 	return ""
 }
+
+// DurationUntil implements the Clock interface.
+func (m *Frozen) DurationUntil(t time.Time) time.Duration {
+	return 0
+}
