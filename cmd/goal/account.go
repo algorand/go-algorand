@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -696,6 +696,8 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", localState.Id, usedInts, allocatedInts, usedBytes, allocatedBytes)
 	}
 
+	fmt.Fprintf(report, "Minimum Balance:\t%v microAlgos\n", account.MinBalance)
+
 	if hasError {
 		fmt.Fprint(os.Stderr, errorReport.String())
 	}
@@ -875,11 +877,19 @@ var addParticipationKeyCmd = &cobra.Command{
 		// Generate a participation keys database and install it
 		client := ensureFullClient(dataDir)
 
-		_, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+		reportInfof("Please stand by while generating keys. This might take a few minutes...")
+
+		var err error
+		participationGen := func() {
+			_, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+		}
+
+		util.RunFuncWithSpinningCursor(participationGen)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		fmt.Println("Participation key generation successful")
+
+		reportInfof("Participation key generation successful")
 	},
 }
 
@@ -938,6 +948,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 		if roundLastValid <= (currentRound + proto.MaxTxnLife) {
 			reportErrorf(errLastRoundInvalid, currentRound)
 		}
+		txRoundLastValid := currentRound + proto.MaxTxnLife
 
 		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 		parts, err := client.ListParticipationKeyFiles()
@@ -952,25 +963,35 @@ var renewParticipationKeyCmd = &cobra.Command{
 			}
 		}
 
-		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
+		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
 	},
 }
 
-func generateAndRegisterPartKey(address string, currentRound, lastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
+func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
-	part, keyPath, err := client.GenParticipationKeysTo(address, currentRound, lastValidRound, dilution, "")
-	if err != nil {
-		return fmt.Errorf(errorRequestFail, err)
+	var part algodAcct.Participation
+	var keyPath string
+	var err error
+	genFunc := func() {
+		part, keyPath, err = client.GenParticipationKeysTo(address, currentRound, keyLastValidRound, dilution, "")
+		if err != nil {
+			err = fmt.Errorf(errorRequestFail, err)
+		}
+		fmt.Println("Participation key generation successful")
 	}
-	fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, lastValidRound)
+	fmt.Println("Please stand by while generating keys. This might take a few minutes...")
+	util.RunFuncWithSpinningCursor(genFunc)
+	if err != nil {
+		return err
+	}
 
 	// Now register it as our new online participation key
 	goOnline := true
 	txFile := ""
-	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, lastValidRound, fee, leaseBytes, dataDir, client)
+	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
@@ -1027,6 +1048,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	if lastValidRound <= (currentRound + proto.MaxTxnLife) {
 		return fmt.Errorf(errLastRoundInvalid, currentRound)
 	}
+	txLastValidRound := currentRound + proto.MaxTxnLife
 
 	var anyErrors bool
 
@@ -1046,7 +1068,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 		}
 
 		address := renewPart.Address().String()
-		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
+		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, txLastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
 			anyErrors = true
@@ -1445,8 +1467,9 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
-				// PKI TODO: enable with state proof support.
-				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
+				if part.Key.StateProofKey != nil {
+					fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+				}
 			}
 		})
 	},

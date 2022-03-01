@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -359,6 +359,14 @@ func (s *session) GetStates(st *logic.DebugState) AppState {
 		applyDelta(delta, tkv)
 		local[appIdx] = tkv
 		newStates.locals[addr] = local
+	}
+
+	if len(changes.Logs) > 0 {
+		newStates.logs = changes.Logs
+	}
+
+	if len(changes.InnerTxns) > 0 {
+		newStates.innerTxns = changes.InnerTxns
 	}
 
 	return newStates

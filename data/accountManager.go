@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,42 +56,40 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 	return manager
 }
 
-// Keys returns a list of Participation accounts.
-func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participation) {
+// Keys returns a list of Participation accounts, and their keys/secrets for requested round.
+func (manager *AccountManager) Keys(rnd basics.Round) (out []account.ParticipationRecordForRound) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partKeys {
+	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(rnd, rnd) {
-			out = append(out, part.Participation)
+			partRndSecrets, err := manager.registry.GetForRound(part.ParticipationID, rnd)
+			if err != nil {
+				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				continue
+			}
+			out = append(out, partRndSecrets)
 		}
 	}
 	return out
+}
 
-	// PKI TODO: source keys from the registry.
-	// This kinda works, but voting keys are not updated.
-	/*
-		for _, record := range manager.registry.GetAll() {
-			part := account.Participation{
-				Parent:      record.Account,
-				VRF:         record.VRF,
-				Voting:      record.Voting,
-				FirstValid:  record.FirstValid,
-				LastValid:   record.LastValid,
-				KeyDilution: record.KeyDilution,
+// StateProofKeys returns a list of Participation accounts, and their stateproof secrets
+func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
+	for _, part := range manager.registry.GetAll() {
+		if part.OverlapsInterval(rnd, rnd) {
+			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ParticipationID, rnd)
+			if err != nil {
+				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				continue
 			}
-
-			if part.OverlapsInterval(rnd, rnd) {
-				out = append(out, part)
-
-				id := part.ID()
-				if !bytes.Equal(id[:], record.ParticipationID[:]) {
-					manager.log.Warnf("Participation IDs do not equal while fetching keys... %s != %s\n", id, record.ParticipationID)
-				}
-			}
+			out = append(out, partRndSecrets)
 		}
-		return out
-	*/
+	}
+	return out
 }
 
 // HasLiveKeys returns true if we have any Participation
@@ -100,7 +98,7 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partKeys {
+	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(from, to) {
 			return true
 		}

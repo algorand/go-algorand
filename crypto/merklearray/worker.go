@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,11 +66,6 @@ func newWorkerState(max uint64) *workerState {
 // is promising to process delta elements at the returned position.
 func (ws *workerState) next(delta uint64) uint64 {
 	return atomic.AddUint64(&ws.nextidx, delta) - delta
-}
-
-// When a worker is about to exit, it should call done.
-func (ws *workerState) done() {
-	ws.wg.Done()
 }
 
 // wait waits for all of the workers to finish.

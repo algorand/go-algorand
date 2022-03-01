@@ -71,6 +71,8 @@ libsodium_la_SOURCES = \
 	crypto_sign/ed25519/sign_ed25519.c \
 	crypto_sign/ed25519/ref10/keypair.c \
 	crypto_sign/ed25519/ref10/open.c \
+	crypto_sign/ed25519/ref10/open_bv_compat.c \
+	crypto_sign/ed25519/ref10/batch.c \
 	crypto_sign/ed25519/ref10/sign.c \
 	crypto_sign/ed25519/ref10/sign_ed25519_ref10.h \
 	crypto_stream/chacha20/stream_chacha20.c \

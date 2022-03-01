@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ func (balances mockBalances) DeallocateAsset(addr basics.Address, index basics.A
 	return nil
 }
 
-func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, transactions.EvalDelta, error) {
+func (balances mockBalances) StatefulEval(int, *logic.EvalParams, basics.AppIndex, []byte) (bool, transactions.EvalDelta, error) {
 	return false, transactions.EvalDelta{}, nil
 }
 

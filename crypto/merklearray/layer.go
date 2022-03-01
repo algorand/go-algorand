@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,39 +17,38 @@
 package merklearray
 
 import (
+	"hash"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// A layer of the Merkle tree consists of a dense array of hashes at that
+// A Layer of the Merkle tree consists of a dense array of hashes at that
 // level of the tree.  Hashes beyond the end of the array (e.g., if the
 // number of leaves is not an exact power of 2) are implicitly zero.
-type layer []crypto.Digest
+//msgp:allocbound Layer MaxNumLeavesOnEncodedTree
+type Layer []crypto.GenericDigest
 
 // A pair represents an internal node in the Merkle tree.
 type pair struct {
-	l crypto.Digest
-	r crypto.Digest
+	l              crypto.GenericDigest
+	r              crypto.GenericDigest
+	hashDigestSize int
 }
 
 func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
-	var buf [2 * crypto.DigestSize]byte
-	copy(buf[:crypto.DigestSize], p.l[:])
-	copy(buf[crypto.DigestSize:], p.r[:])
+	// hashing of internal node will always be fixed length.
+	// If one of the children is missing we use [0...0].
+	// The size of the slice is based on the relevant hash function output size
+	buf := make([]byte, 2*p.hashDigestSize)
+	copy(buf[:], p.l[:])
+	copy(buf[len(p.l):], p.r[:])
 	return protocol.MerkleArrayNode, buf[:]
 }
 
-// Hash implements an optimized version of crypto.HashObj(p).
-func (p *pair) Hash() crypto.Digest {
-	var buf [len(protocol.MerkleArrayNode) + 2*crypto.DigestSize]byte
-	s := buf[:0]
-	s = append(s, protocol.MerkleArrayNode...)
-	s = append(s, p.l[:]...)
-	s = append(s, p.r[:]...)
-	return crypto.Hash(s)
-}
+func upWorker(ws *workerState, in Layer, out Layer, h hash.Hash) {
+	defer ws.wg.Done()
 
-func upWorker(ws *workerState, in layer, out layer) {
 	ws.started()
 	batchSize := uint64(2)
 
@@ -61,31 +60,17 @@ func upWorker(ws *workerState, in layer, out layer) {
 
 		for i := off; i < off+batchSize && i < ws.maxidx; i += 2 {
 			var p pair
+			// we set the output size of the relevant hash function to the pair struct.
+			// This will allow us to allocate the hash input buffer for the internal node
+			p.hashDigestSize = h.Size()
 			p.l = in[i]
 			if i+1 < ws.maxidx {
 				p.r = in[i+1]
 			}
-			out[i/2] = p.Hash()
+
+			out[i/2] = crypto.GenericHashObj(h, &p)
 		}
 
 		batchSize += 2
 	}
-
-	ws.done()
-}
-
-// up takes a layer representing some level in the tree,
-// and returns the next-higher level in the tree,
-// represented as a layer.
-func (l layer) up() layer {
-	n := len(l)
-	res := make(layer, (uint64(n)+1)/2)
-
-	ws := newWorkerState(uint64(n))
-	for ws.nextWorker() {
-		go upWorker(ws, l, res)
-	}
-	ws.wait()
-
-	return res
 }

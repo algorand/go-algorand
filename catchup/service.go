@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -195,7 +195,11 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
-// Returns false if we couldn't fetch or write (i.e., if we failed even after a given number of retries or if we were told to abort.)
+// Returns false if we should stop trying to catch up.  This may occur for several reasons:
+//  - If the context is canceled (e.g. if the node is shutting down)
+//  - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
+//  - If the block is already in the ledger (e.g. if agreement service has already written it)
+//  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	i := 0
 	hasLookback := false
@@ -339,6 +343,12 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 					if err != nil {
 						if s.ctx.Err() != nil {
 							// if the context expired, just exit.
+							return false
+						}
+						if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
+							// the block was added to the ledger from elsewhere after fetching it here
+							// only the agreement could have added this block into the ledger, catchup is complete
+							s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
 							return false
 						}
 						s.log.Warnf("fetchAndWrite(%d): failed to validate block : %v", r, err)

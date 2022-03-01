@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -508,7 +508,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
 	}
 
-	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
+	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
 		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
 		block.CompactCertVoters = voters[:]
 	}

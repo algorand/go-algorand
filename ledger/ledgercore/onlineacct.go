@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 package ledgercore
 
 import (
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -31,8 +31,7 @@ type OnlineAccount struct {
 	MicroAlgos              basics.MicroAlgos
 	RewardsBase             uint64
 	NormalizedOnlineBalance uint64
-	VoteID                  crypto.OneTimeSignatureVerifier
 	VoteFirstValid          basics.Round
 	VoteLastValid           basics.Round
-	VoteKeyDilution         uint64
+	StateProofID            merklesignature.Verifier
 }

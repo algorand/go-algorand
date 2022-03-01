@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -298,12 +298,12 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 }
 
 func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams) error {
-	err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
+	err := logic.CheckContract(ac.ApprovalProgram, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
 
-	err = logic.CheckStateful(ac.ClearStateProgram, *evalParams)
+	err = logic.CheckContract(ac.ClearStateProgram, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
 	}
@@ -312,7 +312,7 @@ func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.
 }
 
 // ApplicationCall evaluates ApplicationCall transaction
-func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactions.Header, balances Balances, ad *transactions.ApplyData, evalParams *logic.EvalParams, txnCounter uint64) (err error) {
+func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactions.Header, balances Balances, ad *transactions.ApplyData, gi int, evalParams *logic.EvalParams, txnCounter uint64) (err error) {
 	defer func() {
 		// If we are returning a non-nil error, then don't return a
 		// non-empty EvalDelta. Not required for correctness.
@@ -342,11 +342,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		if err != nil {
 			return
 		}
-		// No separate config for activating storage in AD because
-		// inner transactions can't be turned on without this change.
-		if balances.ConsensusParams().MaxInnerTransactions > 0 {
-			ad.ApplicationID = appIdx
-		}
+		ad.ApplicationID = appIdx
 	}
 
 	// Fetch the application parameters, if they exist
@@ -364,6 +360,11 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
+		err := transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params)
+		if err != nil {
+			return err
+		}
+
 		err = checkPrograms(&ac, evalParams)
 		if err != nil {
 			return err
@@ -386,7 +387,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 
 		// If the app still exists, run the ClearStateProgram
 		if exists {
-			pass, evalDelta, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
+			pass, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
 			if err != nil {
 				// Fail on non-logic eval errors and ignore LogicEvalError errors
 				if _, ok := err.(ledgercore.LogicEvalError); !ok {
@@ -418,7 +419,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	}
 
 	// Execute the Approval program
-	approved, evalDelta, err := balances.StatefulEval(*evalParams, appIdx, params.ApprovalProgram)
+	approved, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ApprovalProgram)
 	if err != nil {
 		return err
 	}

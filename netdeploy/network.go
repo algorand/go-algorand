@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -265,8 +265,8 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 	var relayAddress string
 	var err error
 	for _, relayDir := range n.cfg.RelayDirs {
-		nodeFulllPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		nodeFullPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:    redirectOutput,
 			ExitErrorCallback: n.nodeExitCallback,
@@ -457,16 +457,16 @@ func (n Network) Delete(binDir string) error {
 // any of the nodes starts
 func (n Network) SetConsensus(binDir string, consensus config.ConsensusProtocols) error {
 	for _, relayDir := range n.cfg.RelayDirs {
-		relayFulllPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)
+		relayFullPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err
 		}
 	}
 	for _, nodeDir := range n.nodeDirs {
-		nodeFulllPath := n.getNodeFullPath(nodeDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		nodeFullPath := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err

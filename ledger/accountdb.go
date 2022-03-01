@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -688,10 +688,9 @@ func accountDataToOnline(address basics.Address, ad *basics.AccountData, proto c
 		MicroAlgos:              ad.MicroAlgos,
 		RewardsBase:             ad.RewardsBase,
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
-		VoteID:                  ad.VoteID,
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
-		VoteKeyDilution:         ad.VoteKeyDilution,
+		StateProofID:            ad.StateProofID,
 	}
 }
 
@@ -1228,7 +1227,7 @@ func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
 	}
 
 	if aff != 1 {
-		err = fmt.Errorf("updateAccountsRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
 		return
 	}
 	return

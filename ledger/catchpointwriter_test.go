@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -156,6 +157,10 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	fbc := catchpointFileBalancesChunk{}
 	for i := 0; i < 512; i++ {
 		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
@@ -167,6 +172,9 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, fbc, fbc2)
+	// Garbage collection helps prevent trashing
+	// for next tests
+	runtime.GC()
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {

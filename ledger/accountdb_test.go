@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -81,11 +81,11 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-	require.Equal(t, totals.Online.Money.Raw, totalOnline, "mismatching total online money")
-	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
-	require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
-	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
-	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
+	require.Equal(t, totalOnline, totals.Online.Money.Raw, "mismatching total online money")
+	require.Equal(t, totalOffline, totals.Offline.Money.Raw)
+	require.Equal(t, totalNotPart, totals.NotParticipating.Money.Raw)
+	require.Equal(t, totalOnline+totalOffline, totals.Participating().Raw)
+	require.Equal(t, totalOnline+totalOffline+totalNotPart, totals.All().Raw)
 
 	d, err := aq.lookup(ledgertesting.RandomAddress())
 	require.NoError(t, err)
@@ -287,6 +287,35 @@ func TestAccountDBRound(t *testing.T) {
 	actualTotals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
+}
+
+func TestAccountStorageWithStateProofID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := ledgertesting.RandomAccounts(20, false)
+	_, err = accountsInit(tx, accts, proto)
+	require.NoError(t, err)
+	checkAccounts(t, tx, 0, accts)
+	require.True(t, allAccountsHaveStateProofPKs(accts))
+}
+
+func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
+	for _, data := range accts {
+		if data.StateProofID.IsEmpty() {
+			return false
+		}
+	}
+	return true
 }
 
 // checkCreatables compares the expected database image to the actual databse content
@@ -496,7 +525,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	prevHash := crypto.Digest{}
 	for _, accountBalance := range bal {
 		encodedAccountBalance := protocol.Encode(&accountBalance)
-		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
+		prevHash = crypto.Hash(append(encodedAccountBalance, []byte(prevHash[:])...))
 	}
 	require.Equal(b, b.N, len(bal))
 }

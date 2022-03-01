@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,6 +64,7 @@ type TelemetryConfig struct {
 	FilePath           string       // Path to file on disk, if any
 	ChainID            string       `json:"-"`
 	SessionGUID        string       `json:"-"`
+	Version            string       `json:"-"`
 	UserName           string
 	Password           string
 }

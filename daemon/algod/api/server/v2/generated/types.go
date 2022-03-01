@@ -49,6 +49,11 @@ type Account struct {
 	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
+	// MicroAlgo balance required by the account.
+	//
+	// The requirement grows based on asset and application usage.
+	MinBalance uint64 `json:"min-balance"`
+
 	// AccountParticipation describes the parameters used by this account in consensus protocol.
 	Participation *AccountParticipation `json:"participation,omitempty"`
 
@@ -82,6 +87,9 @@ type AccountParticipation struct {
 
 	// \[sel\] Selection public key (if any) currently registered for this round.
 	SelectionParticipationKey []byte `json:"selection-participation-key"`
+
+	// \[stprf\] Root of the state proof key (if any)
+	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
 
 	// \[voteFst\] First round for which this participation is valid.
 	VoteFirstValid uint64 `json:"vote-first-valid"`
@@ -306,11 +314,14 @@ type DryrunTxnResult struct {
 	Disassembly []string `json:"disassembly"`
 
 	// Application state delta.
-	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
-	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
-	Logs             *[][]byte            `json:"logs,omitempty"`
+	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
+
+	// Disassembled lsig program line by line.
+	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
+	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
+	Logs                *[][]byte      `json:"logs,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -617,11 +628,7 @@ type NodeStatusResponse struct {
 }
 
 // ParticipationKeyResponse defines model for ParticipationKeyResponse.
-type ParticipationKeyResponse struct {
-
-	// Detailed description of a participation key
-	ParticipationKey string `json:"participationKey"`
-}
+type ParticipationKeyResponse ParticipationKey
 
 // ParticipationKeysResponse defines model for ParticipationKeysResponse.
 type ParticipationKeysResponse []ParticipationKey
@@ -639,7 +646,7 @@ type PendingTransactionsResponse struct {
 // PostParticipationResponse defines model for PostParticipationResponse.
 type PostParticipationResponse struct {
 
-	// encoding of the participation id.
+	// encoding of the participation ID.
 	PartId string `json:"partId"`
 }
 
@@ -653,6 +660,11 @@ type PostTransactionsResponse struct {
 // ProofResponse defines model for ProofResponse.
 type ProofResponse struct {
 
+	// The type of hash function used to create the proof, must be one of:
+	// * sumhash
+	// * sha512_256
+	Hashtype string `json:"hashtype"`
+
 	// Index of the transaction in the block's payset.
 	Idx uint64 `json:"idx"`
 
@@ -661,6 +673,9 @@ type ProofResponse struct {
 
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // SupplyResponse defines model for SupplyResponse.

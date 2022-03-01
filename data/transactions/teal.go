@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ type EvalDelta struct {
 
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 
-	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactions"`
+	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are

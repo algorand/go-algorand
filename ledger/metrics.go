@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,6 +40,18 @@ func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error
 }
 
 func (mt *metricsTracker) close() {
+	if mt.ledgerTransactionsTotal != nil {
+		mt.ledgerTransactionsTotal.Deregister(nil)
+		mt.ledgerTransactionsTotal = nil
+	}
+	if mt.ledgerRewardClaimsTotal != nil {
+		mt.ledgerRewardClaimsTotal.Deregister(nil)
+		mt.ledgerRewardClaimsTotal = nil
+	}
+	if mt.ledgerRound != nil {
+		mt.ledgerRound.Deregister(nil)
+		mt.ledgerRound = nil
+	}
 }
 
 func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {

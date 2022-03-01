@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -73,6 +73,7 @@ type NodeInterface interface {
 	ListParticipationKeys() ([]account.ParticipationRecord, error)
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
+	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -92,6 +93,11 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 			VoteLastValid:   uint64(record.LastValid),
 			VoteKeyDilution: record.KeyDilution,
 		},
+	}
+
+	if record.StateProof != nil {
+		tmp := record.StateProof[:]
+		participationKey.Key.StateProofKey = &tmp
 	}
 
 	// These are pointers but should always be present.
@@ -140,7 +146,6 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 // AddParticipationKey Add a participation key to the node
 // (POST /v2/participation)
 func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
-
 	buf := new(bytes.Buffer)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
@@ -212,6 +217,33 @@ func (v2 *Handlers) GetParticipationKeyByID(ctx echo.Context, participationID st
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// AppendKeys Append state proof keys to a participation key
+// (POST /v2/participation/{participation-id})
+func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
+	decodedParticipationID, err := account.ParseParticipationID(participationID)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	var keys account.StateProofKeys
+	dec := protocol.NewDecoder(ctx.Request().Body)
+	err = dec.Decode(&keys)
+	if err != nil {
+		err = fmt.Errorf("unable to parse keys from body: %w", err)
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	if len(keys) == 0 {
+		err = errors.New("empty request, please attach keys to request body")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	err = v2.Node.AppendParticipationKeys(decodedParticipationID, keys)
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+	return nil
+}
+
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodeParams) error {
@@ -237,6 +269,11 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	record, err := myLedger.Lookup(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	consensus, err := myLedger.ConsensusParams(lastRound)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
 	if handle == protocol.CodecHandle {
@@ -270,7 +307,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 	}
 
-	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards)
+	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, &consensus, amountWithoutPendingRewards)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
@@ -351,22 +388,19 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
 			}
 
-			proof, err := tree.Prove([]uint64{uint64(idx)})
+			proof, err := tree.ProveSingleLeaf(uint64(idx))
 			if err != nil {
 				return internalError(ctx, err, "generating proof", v2.Log)
-			}
-
-			proofconcat := make([]byte, 0)
-			for _, proofelem := range proof {
-				proofconcat = append(proofconcat, proofelem[:]...)
 			}
 
 			stibhash := block.Payset[idx].Hash()
 
 			response := generated.ProofResponse{
-				Proof:    proofconcat,
-				Stibhash: stibhash[:],
-				Idx:      uint64(idx),
+				Proof:     proof.GetConcatenatedProof(),
+				Stibhash:  stibhash[:],
+				Idx:       uint64(idx),
+				Treedepth: uint64(proof.TreeDepth),
+				Hashtype:  proof.HashFactory.HashType.String(),
 			}
 
 			return ctx.JSON(http.StatusOK, response)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -622,6 +622,11 @@ type accountUpdatesLedgerEvaluator struct {
 // GenesisHash returns the genesis hash
 func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
 	return aul.au.ledger.GenesisHash()
+}
+
+// GenesisProto returns the genesis consensus params
+func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams {
+	return aul.au.ledger.GenesisProto()
 }
 
 // CompactCertVoters returns the top online accounts at round rnd.
