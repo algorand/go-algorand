@@ -480,7 +480,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 	ledger := v2.Node.LedgerForAPI()
 
 	lastRound := ledger.Latest()
-	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(applicationID), basics.AssetCreatable)
+	record, err := ledger.LookupResource(lastRound, addr, basics.CreatableIndex(applicationID), basics.AppCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
