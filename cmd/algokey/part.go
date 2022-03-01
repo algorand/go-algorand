@@ -175,6 +175,7 @@ func init() {
 	partCmd.AddCommand(partGenerateCmd)
 	partCmd.AddCommand(partInfoCmd)
 	partCmd.AddCommand(partReparentCmd)
+	partCmd.AddCommand(keyregCmd)
 
 	partGenerateCmd.Flags().StringVar(&partKeyfile, "keyfile", "", "Participation key filename")
 	partGenerateCmd.Flags().Uint64Var(&partFirstRound, "first", 0, "First round for participation key")
