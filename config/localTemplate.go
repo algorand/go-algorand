@@ -434,7 +434,7 @@ type Local struct {
 	// MaxAPIResourcesPerAccount sets the maximum total number of resources (created assets, created apps,
 	// asset holdings, and application local state) per account that will be allowed in AccountInformation
 	// REST API responses before returning a 400 Bad Request. Set zero for no limit.
-	MaxAPIResourcesPerAccount uint64 `version[21]:"1000000"`
+	MaxAPIResourcesPerAccount uint64 `version[21]:"100000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
