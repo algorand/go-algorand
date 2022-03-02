@@ -35,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -66,9 +65,14 @@ const (
 
 var errBlockServiceClosed = errors.New("block service is shutting down")
 
+// LedgerForBlockService describes the Ledger methods used by BlockService.
+type LedgerForBlockService interface {
+	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
+}
+
 // BlockService represents the Block RPC API
 type BlockService struct {
-	ledger                  *data.Ledger
+	ledger                  LedgerForBlockService
 	genesisID               string
 	catchupReqs             chan network.IncomingMessage
 	stop                    chan struct{}
@@ -104,7 +108,7 @@ type fallbackEndpoints struct {
 }
 
 // MakeBlockService creates a BlockService around the provider Ledger and registers it for HTTP callback on the block serving path
-func MakeBlockService(log logging.Logger, config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
+func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForBlockService, net network.GossipNode, genesisID string) *BlockService {
 	service := &BlockService{
 		ledger:                  ledger,
 		genesisID:               genesisID,
@@ -382,7 +386,7 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 	return RawBlockBytes(bs.ledger, round)
 }
 
-func topicBlockBytes(log logging.Logger, dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
+func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) network.Topics {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
 		switch err.(type) {
@@ -408,7 +412,7 @@ func topicBlockBytes(log logging.Logger, dataLedger *data.Ledger, round basics.R
 }
 
 // RawBlockBytes return the msgpack bytes for a block
-func RawBlockBytes(l *data.Ledger, round basics.Round) ([]byte, error) {
+func RawBlockBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) {
 	blk, cert, err := l.EncodedBlockCert(round)
 	if err != nil {
 		return nil, err

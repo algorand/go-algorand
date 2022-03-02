@@ -192,7 +192,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
-	ad, _ := deltas.Accts.Get(addr)
+	ad, _ := deltas.Accts.GetBasicsAccountData(addr)
 	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
@@ -296,7 +296,7 @@ func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	eval := &BlockEvaluator{}
-	var rewardPoolBalance basics.AccountData
+	var rewardPoolBalance ledgercore.AccountData
 	rewardPoolBalance.MicroAlgos.Raw = 1234
 	var headerRound basics.Round
 	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
@@ -333,7 +333,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
 	genesisInitState.GenesisHash = testnetGenesisHash
 
-	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
+	rewardPoolBalance := ledgercore.ToAccountData(genesisInitState.Accounts[testPoolAddr])
 	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
@@ -461,7 +461,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 	var ot basics.OverflowTracker
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, acctData := range balances.Balances {
-		l.latestTotals.AddAccount(proto, acctData, &ot)
+		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
 	l.genesisProto = proto
 
@@ -523,8 +523,36 @@ func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTo
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
-	return ledger.roundBalances[rnd][addr], rnd, nil
+func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	ad := ledger.roundBalances[rnd][addr]
+	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+// LookupResource loads resources the requested round rnd.
+func (ledger *evalTestLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	res := ledgercore.AccountResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if ctype == basics.AppCreatable {
+		if params, ok := ad.AppParams[basics.AppIndex(cidx)]; ok {
+			res.AppParams = &params
+		}
+		if ls, ok := ad.AppLocalStates[basics.AppIndex(cidx)]; ok {
+			res.AppLocalState = &ls
+		}
+	} else if ctype == basics.AssetCreatable {
+		if params, ok := ad.AssetParams[basics.AssetIndex(cidx)]; ok {
+			res.AssetParams = &params
+		}
+		if h, ok := ad.Assets[basics.AssetIndex(cidx)]; ok {
+			res.AssetHolding = &h
+		}
+	} else {
+		return res, fmt.Errorf("unknown ctype %d", ctype)
+	}
+	return res, nil
 }
 
 // GenesisHash returns the genesis hash for this ledger.
@@ -556,10 +584,16 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
 		newBalances[k] = v
 	}
+
 	// update
 	deltas := vb.Delta()
-	for _, addr := range deltas.Accts.ModifiedAccounts() {
-		accountData, _ := deltas.Accts.Get(addr)
+	// convert deltas into balance records
+	// the code assumes all modified accounts has entries in NewAccts.accts
+	// to enforce this fact we call ModifiedAccounts() with a panic as a side effect
+	deltas.Accts.ModifiedAccounts()
+	for i := 0; i < deltas.Accts.Len(); i++ {
+		addr, _ := deltas.Accts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
+		accountData, _ := deltas.Accts.GetBasicsAccountData(addr)
 		newBalances[addr] = accountData
 	}
 	ledger.roundBalances[vb.Block().Round()] = newBalances
@@ -687,8 +721,12 @@ func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basic
 	return errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error) {
-	return basics.AccountData{}, basics.Round(0), errors.New("not implemented")
+func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+	return ledgercore.AccountResource{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -879,8 +917,8 @@ type failRoundCowParent struct {
 	roundCowBase
 }
 
-func (p *failRoundCowParent) lookup(basics.Address) (basics.AccountData, error) {
-	return basics.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
+func (p *failRoundCowParent) lookup(basics.Address) (ledgercore.AccountData, error) {
+	return ledgercore.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
 }
 
 // TestExpiredAccountGenerationWithDiskFailure tests edge cases where disk failures can lead to ledger look up failures

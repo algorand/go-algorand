@@ -37,6 +37,7 @@ var (
 var (
 	// the duration of which we'll keep a metric in-memory and keep reporting it.
 	// when a metric time expires, it would get removed.
+	// TODO: implement or remove
 	maxMetricRetensionDuration = time.Duration(5) * time.Minute
 )
 
