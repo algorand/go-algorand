@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -211,11 +210,11 @@ func TestBlockEvaluator(t *testing.T) {
 
 	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 
-	bal0new, err := l.Lookup(newBlock.Round(), addrs[0])
+	bal0new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[0])
 	require.NoError(t, err)
-	bal1new, err := l.Lookup(newBlock.Round(), addrs[1])
+	bal1new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[1])
 	require.NoError(t, err)
-	bal2new, err := l.Lookup(newBlock.Round(), addrs[2])
+	bal2new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[2])
 	require.NoError(t, err)
 
 	require.Equal(t, bal0new.MicroAlgos.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
@@ -447,8 +446,8 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	deltas := vb.Delta()
 
-	ad, _ := deltas.Accts.Get(addr)
-	state := ad.AppParams[1].GlobalState
+	params, _ := deltas.Accts.GetAppParams(addr, 1)
+	state := params.Params.GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
@@ -623,8 +622,7 @@ func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator
 
 // lookup gets the current accountdata for an address
 func lookup(t testing.TB, ledger *ledger.Ledger, addr basics.Address) basics.AccountData {
-	rnd := ledger.Latest()
-	ad, err := ledger.Lookup(rnd, addr)
+	ad, _, _, err := ledger.LookupLatest(addr)
 	require.NoError(t, err)
 	return ad
 }
@@ -748,18 +746,18 @@ func TestMinBalanceChanges(t *testing.T) {
 		AssetReceiver: addrs[5],
 	}
 
-	ad0init, err := l.Lookup(l.Latest(), addrs[0])
+	ad0init, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5init, err := l.Lookup(l.Latest(), addrs[5])
+	ad5init, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	eval := nextBlock(t, l, true, nil)
 	txns(t, l, eval, &createTxn, &optInTxn)
 	endBlock(t, l, eval)
 
-	ad0new, err := l.Lookup(l.Latest(), addrs[0])
+	ad0new, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5new, err := l.Lookup(l.Latest(), addrs[5])
+	ad5new, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	proto := l.GenesisProto()
@@ -787,181 +785,13 @@ func TestMinBalanceChanges(t *testing.T) {
 	txns(t, l, eval, &optOutTxn, &closeTxn)
 	endBlock(t, l, eval)
 
-	ad0final, err := l.Lookup(l.Latest(), addrs[0])
+	ad0final, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5final, err := l.Lookup(l.Latest(), addrs[5])
+	ad5final, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
 	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
 	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
-}
-
-// Test that ModifiedAssetHoldings in StateDelta is set correctly.
-func TestModifiedAssetHoldings(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
-
-	const assetid basics.AssetIndex = 1
-
-	createTxn := txntest.Txn{
-		Type:   "acfg",
-		Sender: addrs[0],
-		Fee:    2000,
-		AssetParams: basics.AssetParams{
-			Total:    3,
-			Decimals: 0,
-			Manager:  addrs[0],
-			Reserve:  addrs[0],
-			Freeze:   addrs[0],
-			Clawback: addrs[0],
-		},
-	}
-
-	optInTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		Fee:           2000,
-		XferAsset:     assetid,
-		AssetAmount:   0,
-		AssetReceiver: addrs[1],
-	}
-
-	eval := nextBlock(t, l, true, nil)
-	txns(t, l, eval, &createTxn, &optInTxn)
-	vb := endBlock(t, l, eval)
-
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[0],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[1],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
-
-	optOutTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		Fee:           1000,
-		XferAsset:     assetid,
-		AssetReceiver: addrs[0],
-		AssetCloseTo:  addrs[0],
-	}
-
-	closeTxn := txntest.Txn{
-		Type:        "acfg",
-		Sender:      addrs[0],
-		Fee:         1000,
-		ConfigAsset: assetid,
-	}
-
-	eval = nextBlock(t, l, true, nil)
-	txns(t, l, eval, &optOutTxn, &closeTxn)
-	vb = endBlock(t, l, eval)
-
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[0],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[1],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
-}
-
-// Test that ModifiedAppLocalStates in StateDelta is set correctly.
-func TestModifiedAppLocalStates(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
-
-	const appid basics.AppIndex = 1
-
-	createTxn := txntest.Txn{
-		Type:            "appl",
-		Sender:          addrs[0],
-		ApprovalProgram: "int 1",
-	}
-
-	optInTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: appid,
-		OnCompletion:  transactions.OptInOC,
-	}
-
-	eval := nextBlock(t, l, true, nil)
-	txns(t, l, eval, &createTxn, &optInTxn)
-	vb := endBlock(t, l, eval)
-
-	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
-	{
-		aa := ledgercore.AccountApp{
-			Address: addrs[1],
-			App:     appid,
-		}
-		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
-
-	optOutTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: appid,
-		OnCompletion:  transactions.CloseOutOC,
-	}
-
-	closeTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[0],
-		ApplicationID: appid,
-		OnCompletion:  transactions.DeleteApplicationOC,
-	}
-
-	eval = nextBlock(t, l, true, nil)
-	txns(t, l, eval, &optOutTxn, &closeTxn)
-	vb = endBlock(t, l, eval)
-
-	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
-	{
-		aa := ledgercore.AccountApp{
-			Address: addrs[1],
-			App:     appid,
-		}
-		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
 }
 
 // TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
@@ -1008,6 +838,7 @@ func TestAppInsMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusV30
 
 	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
@@ -1015,11 +846,11 @@ func TestAppInsMinBalance(t *testing.T) {
 
 	const appid basics.AppIndex = 1
 
-	maxAppsOptedIn := config.Consensus[protocol.ConsensusFuture].MaxAppsOptedIn
+	maxAppsOptedIn := config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	require.Greater(t, maxAppsOptedIn, 0)
-	maxAppsCreated := config.Consensus[protocol.ConsensusFuture].MaxAppsCreated
+	maxAppsCreated := config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 	require.Greater(t, maxAppsCreated, 0)
-	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries
+	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusV30].MaxLocalSchemaEntries
 	require.Greater(t, maxLocalSchemaEntries, uint64(0))
 
 	txnsCreate := make([]*txntest.Txn, 0, maxAppsOptedIn)
@@ -1057,7 +888,20 @@ func TestAppInsMinBalance(t *testing.T) {
 	txns1 := append(txnsCreate, txnsOptIn...)
 	txns(t, l, eval, txns1...)
 	vb := endBlock(t, l, eval)
-	require.Len(t, vb.Delta().ModifiedAppLocalStates, 50)
+	mods := vb.Delta()
+	appAppResources := mods.Accts.GetAllAppResources()
+	appParamsCount := 0
+	appLocalStatesCount := 0
+	for _, ap := range appAppResources {
+		if ap.Params.Params != nil {
+			appParamsCount++
+		}
+		if ap.State.LocalState != nil {
+			appLocalStatesCount++
+		}
+	}
+	require.Equal(t, appLocalStatesCount, 50)
+	require.Equal(t, appParamsCount, 50)
 }
 
 // TestLogsInBlock ensures that logs appear in the block properly
