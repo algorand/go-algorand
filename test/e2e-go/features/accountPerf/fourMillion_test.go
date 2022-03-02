@@ -89,6 +89,23 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 		for x := 0; x < 50; x++ { // retry only 50 times
 			err = c.BroadcastTransactionGroup(stxns)
 			if err == nil {
+
+				////////////////////
+				if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
+					stxns[0].Txn.ApplicationCallTxnFields.ApplicationID > 0 {
+					sender := stxns[0].Txn.Header.Sender
+					for _, tx := range stxns {
+						appId := tx.Txn.ApplicationCallTxnFields.ApplicationID
+						_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId))
+						if err != nil {
+							fmt.Printf("opt-in for appid %d failed! error %s\n\n", appId, err)
+							continue
+						}
+					}
+				}
+
+				/////////////////////
+
 				break
 			}
 			fmt.Printf("broadcastTransactionGroups[%d]: %s\n", x, err)
@@ -214,15 +231,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	var errWatcherWg sync.WaitGroup
 
 	maxTxGroupSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeOneWallet.json"))
-
-	for _, nodeDir := range fixture.NodeDataDirs() {
-		cfg, err := config.LoadConfigFromDisk(nodeDir)
-		require.NoError(t, err)
-		cfg.MaxAccountsAPIResults = 7000000
-		cfg.SaveToDisk(nodeDir)
-	}
-	fixture.Start()
+	fixture.Setup(t, filepath.Join("nettemplates", "DevModeOneWallet.json"))
 
 	defer func() {
 		hkWg.Wait()
@@ -773,6 +782,24 @@ func scenarioC(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
 
+	for kid, nacc := range keys {
+		if nacc == ownAllAccount {
+			continue
+		}
+		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioC verify accounts")
+		require.NoError(t, err)
+
+		for appid, capp := range *info.CreatedApps {
+			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id)
+			if err != nil {
+				fmt.Printf("kid: %d  appid: %d error %s\n\n", kid, appid, err)
+				continue
+			}
+			require.Equal(t, uint64(1), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
+			require.Equal(t, uint64(2), (*capp.Params.GlobalState)[0].Value.Uint)
+		}
+	}
+
 	// Make an app call to each of them
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
@@ -961,7 +988,7 @@ func handleError(err error, message string, errChan chan<- error) {
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
-	if force || counter+100 == tLife {
+	if force || counter == tLife {
 		fmt.Printf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
