@@ -430,6 +430,15 @@ type Local struct {
 	// The http server does not accept new connections as long we have this many
 	// (hard limit) connections already.
 	RestConnectionsHardLimit uint64 `version[20]:"2048"`
+
+	// AgreementVoteBufferSize sets the size of the buffer holding incoming votes.
+	AgreementVoteBufferSize uint64 `version[21]:"10000"`
+
+	// AgreementProposalBufferSize sets the size of the buffer holding incoming proposals.
+	AgreementProposalBufferSize uint64 `version[21]:"25"`
+
+	// AgreementBundleBufferSize sets the size of the buffer holding incoming bundle.
+	AgreementBundleBufferSize uint64 `version[21]:"7"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

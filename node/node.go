@@ -254,7 +254,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Accessor:       crashAccess,
 		Clock:          agreementClock,
 		Local:          node.config,
-		Network:        gossip.WrapNetwork(node.net, log),
+		Network:        gossip.WrapNetwork(node.net, log, cfg),
 		Ledger:         agreementLedger,
 		BlockFactory:   node,
 		BlockValidator: blockValidator,

@@ -132,7 +132,7 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 	n.agreementParams[nodeID] = agreement.Parameters{
 		Logger:                  logger,
 		Ledger:                  n.ledgers[nodeID],
-		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger),
+		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger, config.GetDefaultLocal()),
 		KeyManager:              agreementtest.SimpleKeyManager(n.accounts[nodeID : nodeID+1]),
 		BlockValidator:          n.blockValidator,
 		BlockFactory:            testBlockFactory{Owner: nodeID},
@@ -577,7 +577,7 @@ func (n *Fuzzer) CrashNode(nodeID int) {
 	n.facades[nodeID].ClearHandlers()
 	n.ledgers[nodeID].ClearNotifications()
 
-	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log)
+	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log, config.GetLocal())
 	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
 
 	cadaverFilename := fmt.Sprintf("%v-%v", n.networkName, nodeID)

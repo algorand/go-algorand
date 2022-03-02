@@ -153,7 +153,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 		Logger:         log,
 		Accessor:       accessor,
 		Clock:          stopwatch,
-		Network:        gossip.WrapNetwork(new(blackhole), log),
+		Network:        gossip.WrapNetwork(new(blackhole), log, config.GetDefaultLocal()),
 		Ledger:         ledger,
 		BlockFactory:   proposalFactory,
 		BlockValidator: proposalValidator,
