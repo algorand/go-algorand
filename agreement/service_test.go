@@ -71,7 +71,7 @@ func (c *testingClock) Zero() timers.Clock {
 	return c
 }
 
-func (c *testingClock) DurationUntil(t time.Time) time.Duration {
+func (c *testingClock) Since() time.Duration {
 	return 0
 }
 

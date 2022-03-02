@@ -190,7 +190,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
 
 		if e.t() == payloadVerified {
-			e = e.(messageEvent).AttachValidatedAt(s.Clock.DurationUntil(time.Now()))
+			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
 		}
 	}()
 

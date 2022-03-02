@@ -56,7 +56,7 @@ func (m *Frozen) String() string {
 	return ""
 }
 
-// DurationUntil implements the Clock interface.
-func (m *Frozen) DurationUntil(t time.Time) time.Duration {
+// Since implements the Clock interface.
+func (m *Frozen) Since() time.Duration {
 	return 0
 }

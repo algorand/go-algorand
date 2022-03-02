@@ -456,7 +456,7 @@ func (t *demuxTester) Decode([]byte) (timers.Clock, error) {
 }
 
 // implement timers.Clock
-func (t *demuxTester) DurationUntil(_ time.Time) time.Duration {
+func (t *demuxTester) Since(_ time.Time) time.Duration {
 	return 0
 }
 

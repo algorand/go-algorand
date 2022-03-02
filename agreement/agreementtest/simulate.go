@@ -82,7 +82,7 @@ func (i *instant) Zero() timers.Clock {
 	return i
 }
 
-func (i *instant) DurationUntil(t time.Time) time.Duration {
+func (i *instant) Since() time.Duration {
 	return 0
 }
 
