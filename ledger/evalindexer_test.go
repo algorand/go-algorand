@@ -362,7 +362,7 @@ func TestResourceCaching(t *testing.T) {
 		accountResource, err := ilc.LookupAsset(
 			basics.Round(0), address, basics.AssetIndex(7))
 		require.NoError(t, err)
-		expected := ledgercore.AccountResource{
+		expected := ledgercore.AssetResource{
 			AssetParams: &basics.AssetParams{
 				Total: 8,
 			},
