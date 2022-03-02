@@ -50,8 +50,11 @@ func (l *prefetcherTestLedger) LookupWithoutRewards(_ basics.Round, addr basics.
 	}
 	return ledgercore.AccountData{}, l.round, nil
 }
-func (l *prefetcherTestLedger) LookupResource(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.AccountResource, error) {
-	return ledgercore.AccountResource{}, nil
+func (l *prefetcherTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	return ledgercore.AppResource{}, nil
+}
+func (l *prefetcherTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	return ledgercore.AssetResource{}, nil
 }
 func (l *prefetcherTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, error) {
 	if addr, has := l.creators[cidx]; has {

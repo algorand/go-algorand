@@ -38,16 +38,16 @@ type AccountApplicationModel struct {
 	AppParams     *basics.AppParams     `codec:"app-params"`
 }
 
-// AccountResourceToAccountAssetModel converts AccountResource to AccountAssetModel
-func AccountResourceToAccountAssetModel(resource ledgercore.AccountResource) AccountAssetModel {
+// AssetResourceToAccountAssetModel converts AssetResource to AccountAssetModel
+func AssetResourceToAccountAssetModel(resource ledgercore.AssetResource) AccountAssetModel {
 	return AccountAssetModel{
 		AssetParams:  resource.AssetParams,
 		AssetHolding: resource.AssetHolding,
 	}
 }
 
-// AccountResourceToAccountApplicationModel converts AccountResource to AccountApplicationModel
-func AccountResourceToAccountApplicationModel(resource ledgercore.AccountResource) AccountApplicationModel {
+// AppResourceToAccountApplicationModel converts AppResource to AccountApplicationModel
+func AppResourceToAccountApplicationModel(resource ledgercore.AppResource) AccountApplicationModel {
 	return AccountApplicationModel{
 		AppParams:     resource.AppParams,
 		AppLocalState: resource.AppLocalState,

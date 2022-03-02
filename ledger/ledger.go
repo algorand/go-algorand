@@ -495,8 +495,20 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 	return data, rnd, withoutRewards, nil
 }
 
-// LookupResource loads a resource that matches the request parameters from the accounts update
-func (l *Ledger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+// LookupApplication loads an application resource that matches the request parameters from the ledger.
+func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+// LookupAsset loads an asset resource that matches the request parameters from the ledger.
+func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+// lookupResource loads a resource that matches the request parameters from the accounts update
+func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 

@@ -63,7 +63,10 @@ func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, er
 
 func (l *mockLedger) Latest() basics.Round { return l.latest }
 
-func (l *mockLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ar ledgercore.AccountResource, err error) {
+func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	panic("not implemented")
+}
+func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	panic("not implemented")
 }
 func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {

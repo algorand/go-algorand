@@ -83,7 +83,7 @@ func (il indexerLedgerForEvalImpl) LookupResources(addresses map[basics.Address]
 			}
 
 			c[creatable], err =
-				il.l.LookupResource(il.latestRound, address, creatable.Index, creatable.Type)
+				il.l.lookupResource(il.latestRound, address, creatable.Index, creatable.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -359,8 +359,8 @@ func TestResourceCaching(t *testing.T) {
 		assert.Equal(t, basics.Round(0), rnd)
 	}
 	{
-		accountResource, err := ilc.LookupResource(
-			basics.Round(0), address, basics.CreatableIndex(7), basics.AssetCreatable)
+		accountResource, err := ilc.LookupAsset(
+			basics.Round(0), address, basics.AssetIndex(7))
 		require.NoError(t, err)
 		expected := ledgercore.AccountResource{
 			AssetParams: &basics.AssetParams{

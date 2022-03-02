@@ -528,8 +528,18 @@ func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
-// LookupResource loads resources the requested round rnd.
-func (ledger *evalTestLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := ledger.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, err := ledger.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+// lookupResource loads resources the requested round rnd.
+func (ledger *evalTestLedger) lookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	res := ledgercore.AccountResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
@@ -725,7 +735,17 @@ func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (
 	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+func (l *testCowBaseLedger) lookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	return ledgercore.AccountResource{}, errors.New("not implemented")
 }
 

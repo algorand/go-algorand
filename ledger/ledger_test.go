@@ -19,13 +19,14 @@ package ledger
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/util/db"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime/pprof"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
 
 	"github.com/stretchr/testify/require"
 
@@ -801,7 +802,7 @@ int 1
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
@@ -832,17 +833,17 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
 	rnd = l.Latest()
-	acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctworRes, err = l.LookupResource(l.Latest()-1, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctworRes, err = l.LookupApplication(l.Latest()-1, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
-	acctRes, err = l.LookupResource(rnd, user, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctRes, err = l.LookupApplication(rnd, user, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
@@ -925,7 +926,7 @@ int 1                   // [1]
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
@@ -1002,7 +1003,7 @@ int 1                   // [1]
 
 			expected := uint64(base + value1 + value2)
 			rnd = l.Latest()
-			acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+			acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 			a.NoError(err)
 			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})
