@@ -577,7 +577,7 @@ func (n *Fuzzer) CrashNode(nodeID int) {
 	n.facades[nodeID].ClearHandlers()
 	n.ledgers[nodeID].ClearNotifications()
 
-	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log, config.GetLocal())
+	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log, config.GetDefaultLocal())
 	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
 
 	cadaverFilename := fmt.Sprintf("%v-%v", n.networkName, nodeID)
