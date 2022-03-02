@@ -20,9 +20,12 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    20,
+	Version:                                    21,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
+	AgreementBundleBufferSize:                  7,
+	AgreementProposalBufferSize:                25,
+	AgreementVoteBufferSize:                    10000,
 	AnnounceParticipationKey:                   true,
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
