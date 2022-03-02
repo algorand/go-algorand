@@ -501,7 +501,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 	// prepare JSON response
 	response := generated.AccountApplicationResponse{Round: uint64(lastRound)}
 
-	if record.AssetParams != nil {
+	if record.AppParams != nil {
 		app := AppParamsToApplication(addr.String(), basics.AppIndex(applicationID), record.AppParams)
 		response.CreatedApp = &app.Params
 	}
