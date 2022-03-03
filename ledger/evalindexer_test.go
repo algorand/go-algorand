@@ -48,8 +48,8 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 }
 
 // The value of the returned map is nil iff the account was not found.
-func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*basics.AccountData, error) {
-	res := make(map[basics.Address]*basics.AccountData)
+func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Address]struct{}) (map[basics.Address]*ledgercore.AccountData, error) {
+	res := make(map[basics.Address]*ledgercore.AccountData)
 
 	for address := range addresses {
 		accountData, _, err := il.l.LookupWithoutRewards(il.latestRound, address)
@@ -60,9 +60,33 @@ func (il indexerLedgerForEvalImpl) LookupWithoutRewards(addresses map[basics.Add
 		if accountData.IsZero() {
 			res[address] = nil
 		} else {
-			accountDataCopy := new(basics.AccountData)
+			accountDataCopy := new(ledgercore.AccountData)
 			*accountDataCopy = accountData
 			res[address] = accountDataCopy
+		}
+	}
+
+	return res, nil
+}
+
+// The value of the returned map is nil iff the account was not found.
+func (il indexerLedgerForEvalImpl) LookupResources(addresses map[basics.Address]map[Creatable]struct{}) (map[basics.Address]map[Creatable]ledgercore.AccountResource, error) {
+	res := make(map[basics.Address]map[Creatable]ledgercore.AccountResource)
+
+	var err error
+	for address, creatables := range addresses {
+		for creatable := range creatables {
+			c, ok := res[address]
+			if !ok {
+				c = make(map[Creatable]ledgercore.AccountResource)
+				res[address] = c
+			}
+
+			c[creatable], err =
+				il.l.LookupResource(il.latestRound, address, creatable.Index, creatable.Type)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -94,8 +118,9 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	crypto.RandBytes(genHash[:])
 	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusV24,
 		genesisBalances, "test", genHash)
+	require.NoError(t, err)
 
-	dbName := fmt.Sprintf("%s", t.Name())
+	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
@@ -195,8 +220,9 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	crypto.RandBytes(genHash[:])
 	block, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
 		genesisBalances, "test", genHash)
+	require.NoError(t, err)
 
-	dbName := fmt.Sprintf("%s", t.Name())
+	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
@@ -278,6 +304,11 @@ func TestResourceCaching(t *testing.T) {
 	_, err := rand.Read(address[:])
 	require.NoError(t, err)
 
+	creatable := Creatable{
+		Index: basics.CreatableIndex(7),
+		Type:  basics.AssetCreatable,
+	}
+
 	genesisInitState, _, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	genesisBalances := bookkeeping.GenesisBalances{
@@ -293,9 +324,23 @@ func TestResourceCaching(t *testing.T) {
 	block := bookkeeping.MakeBlock(genesisBlockHeader)
 
 	resources := EvalForIndexerResources{
-		Accounts: map[basics.Address]*basics.AccountData{
+		Accounts: map[basics.Address]*ledgercore.AccountData{
 			address: {
-				MicroAlgos: basics.MicroAlgos{Raw: 5},
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 5},
+				},
+			},
+		},
+		Resources: map[basics.Address]map[Creatable]ledgercore.AccountResource{
+			address: {
+				creatable: {
+					AssetParams: &basics.AssetParams{
+						Total: 8,
+					},
+					AssetHolding: &basics.AssetHolding{
+						Amount: 9,
+					},
+				},
 			},
 		},
 		Creators: map[Creatable]FoundAddress{
@@ -310,8 +355,22 @@ func TestResourceCaching(t *testing.T) {
 	{
 		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)
 		require.NoError(t, err)
-		assert.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 5}}, accountData)
+		assert.Equal(t, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 5}}}, accountData)
 		assert.Equal(t, basics.Round(0), rnd)
+	}
+	{
+		accountResource, err := ilc.LookupResource(
+			basics.Round(0), address, basics.CreatableIndex(7), basics.AssetCreatable)
+		require.NoError(t, err)
+		expected := ledgercore.AccountResource{
+			AssetParams: &basics.AssetParams{
+				Total: 8,
+			},
+			AssetHolding: &basics.AssetHolding{
+				Amount: 9,
+			},
+		}
+		assert.Equal(t, expected, accountResource)
 	}
 	{
 		address, found, err := ilc.GetCreatorForRound(basics.Round(0), basics.CreatableIndex(6), basics.AssetCreatable)

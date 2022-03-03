@@ -717,9 +717,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            false,
 	}
 
-	registry.writeQueue <- partDBWriteRecord{
-		registerUpdated: updates,
-	}
+	registry.writeQueue <- makeOpRequest(&registerOp{updates})
 
 	a.NoError(registry.Flush(defaultTimeout))
 
@@ -729,9 +727,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            true,
 	}
 
-	registry.writeQueue <- partDBWriteRecord{
-		registerUpdated: updates,
-	}
+	registry.writeQueue <- makeOpRequest(&registerOp{updates})
 
 	err = registry.Flush(defaultTimeout)
 	a.Contains(err.Error(), "unable to disable old key when registering")
@@ -931,4 +927,41 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 
 	a.Equal(*partPerRound.StateProofSecrets.SigningKey, *keys[0].Key)
 	a.Equal(CompactCertRounds, keys[0].Round)
+}
+
+// test that sets up an error that should come up while flushing, and ensures that flush resets the last error
+func TestFlushResetsLastError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry := getRegistry(t)
+	defer registryCloseTest(t, registry)
+
+	access, err := db.MakeAccessor("stateprooftest", false, true)
+	a.NoError(err)
+
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
+	access.Close()
+	a.NoError(err)
+
+	// Install a key for testing
+	id, err := registry.Insert(p.Participation)
+	a.NoError(err)
+	a.Equal(p.ID(), id)
+
+	// Append key
+	var keys StateProofKeys
+
+	keysRound := merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keys = append(keys, keysRound)
+
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	// The error doesn't happen until the data persists.
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	a.Error(registry.Flush(10 * time.Second))
+	a.NoError(registry.Flush(10 * time.Second))
 }
