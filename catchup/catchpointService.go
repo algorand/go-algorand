@@ -605,7 +605,6 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 			return nil, time.Duration(0), psp, false, nil
 		}
 		err = fmt.Errorf("fetchBlock: unable to obtain a list of peers to retrieve the latest block from : %w", err)
-		// this is a possible on startup, since the network package might have yet to retrieve the list of peers.
 		return nil, time.Duration(0), psp, true, cs.abort(err)
 	}
 	peer := psp.Peer
