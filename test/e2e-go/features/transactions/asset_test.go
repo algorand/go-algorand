@@ -232,9 +232,13 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
 
-	// Create max number of assets
+	// Create max number of assets, or 1000 if the number of assets are unlimitd.
+	maxAssetsCount := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
+	if maxAssetsCount == 0 {
+		maxAssetsCount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
+	}
 	txids := make(map[string]string)
-	for i := 0; i < config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount; i++ {
+	for i := 0; i < maxAssetsCount; i++ {
 		// re-generate wh, since this test takes a while and sometimes
 		// the wallet handle expires.
 		wh, err = client.GetUnencryptedWalletHandle()
@@ -273,7 +277,7 @@ func TestAssetConfig(t *testing.T) {
 	// Check that assets are visible
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount)
+	a.Equal(maxAssetsCount, len(info.AssetParams))
 	var assets []assetIDParams
 	for idx, cp := range info.AssetParams {
 		assets = append(assets, assetIDParams{idx, cp})
@@ -465,7 +469,7 @@ func TestAssetInformation(t *testing.T) {
 	a.Equal(len(info.AssetParams), 0)
 
 	// There should be no assets to start with
-	info2, err := client.AccountInformationV2(account0)
+	info2, err := client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	a.Equal(len(*info2.CreatedAssets), 0)
@@ -493,7 +497,7 @@ func TestAssetInformation(t *testing.T) {
 	}
 
 	// Check that AssetInformationV2 returns the correct AssetParams
-	info2, err = client.AccountInformationV2(account0)
+	info2, err = client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	for _, cp := range *info2.CreatedAssets {
@@ -632,9 +636,18 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	err = client0.BroadcastTransactionGroup(stxns)
 	a.NoError(err)
 
-	_, curRound := fixture.GetBalanceAndRound(account0)
-	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	status0, err := client0.Status()
+	a.NoError(err)
+
+	confirmed := fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
 	a.True(confirmed)
+
+	status0, err = client0.Status()
+	a.NoError(err)
+
+	// wait for client1 to reach the same round as client0
+	_, err = client1.WaitForRound(status0.LastRound)
+	a.NoError(err)
 
 	txids = make(map[string]string)
 
@@ -651,9 +664,17 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 	txids[txid] = account0
 
-	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	status0, err = client0.Status()
+	a.NoError(err)
+	confirmed = fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
 	a.True(confirmed)
+
+	status0, err = client0.Status()
+	a.NoError(err)
+
+	// wait for client1 to reach the same round as client0
+	_, err = client1.WaitForRound(status0.LastRound)
+	a.NoError(err)
 
 	// asset 3 (create + destroy) not available
 	_, err = client1.AssetInformation(assetID3)

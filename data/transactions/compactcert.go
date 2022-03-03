@@ -27,15 +27,16 @@ import (
 type CompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	CertRound basics.Round             `codec:"certrnd"`
-	CertType  protocol.CompactCertType `codec:"certtype"`
-	Cert      compactcert.Cert         `codec:"cert"`
+	CertIntervalLatestRound basics.Round             `codec:"crtrnd"`
+	CertType                protocol.CompactCertType `codec:"crttype"`
+	Cert                    compactcert.Cert         `codec:"crt"`
+	CertMsg                 []byte                   `codec:"crtmsg"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,
 // in the sense of being omitted in a msgpack encoding.
 func (cc CompactCertTxnFields) Empty() bool {
-	if cc.CertRound != 0 {
+	if cc.CertIntervalLatestRound != 0 {
 		return false
 	}
 	if !cc.Cert.SigCommit.IsEmpty() || cc.Cert.SignedWeight != 0 {
@@ -47,6 +48,10 @@ func (cc CompactCertTxnFields) Empty() bool {
 	if len(cc.Cert.Reveals) != 0 {
 		return false
 	}
+	if cc.CertMsg != nil {
+		return false
+	}
+
 	return true
 }
 

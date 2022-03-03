@@ -25,28 +25,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
-// call clone on each basics.AppParams -- callers must do that for any values where
-// they intend to modify a contained reference type.
-func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
-	res := make(map[basics.AppIndex]basics.AppParams, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
-}
-
-// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
-// call clone on each AppLocalState -- callers must do that for any values
-// where they intend to modify a contained reference type.
-func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
-	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
-}
-
 // getAppParams fetches the creator address and basics.AppParams for the app index,
 // if they exist. It does *not* clone the basics.AppParams, so the returned params
 // must not be modified directly.
@@ -61,12 +39,12 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 		return
 	}
 
-	record, err := balances.Get(creator, false)
+	var ok bool
+	params, ok, err = balances.GetAppParams(creator, aidx)
 	if err != nil {
 		return
 	}
 
-	params, ok := record.AppParams[aidx]
 	if !ok {
 		// This should never happen. If app exists then we should have
 		// found the creator successfully.
@@ -81,24 +59,37 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 // and returns the generated application ID
 func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, txnCounter uint64) (appIdx basics.AppIndex, err error) {
 	// Fetch the creator's (sender's) balance record
-	record, err := balances.Get(creator, false)
+	var record ledgercore.AccountData
+	record, err = balances.Get(creator, false)
 	if err != nil {
 		return
 	}
 
+	// look up how many apps they have
+	totalAppParams := record.TotalAppParams
+
 	// Make sure the creator isn't already at the app creation max
 	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
-	if len(record.AppParams) >= maxAppsCreated {
+	if maxAppsCreated > 0 && totalAppParams >= uint64(maxAppsCreated) {
 		err = fmt.Errorf("cannot create app for %s: max created apps per acct is %d", creator.String(), maxAppsCreated)
 		return
 	}
 
-	// Clone app params, so that we have a copy that is safe to modify
-	record.AppParams = cloneAppParams(record.AppParams)
-
 	// Allocate the new app params (+ 1 to match Assets Idx namespace)
 	appIdx = basics.AppIndex(txnCounter + 1)
-	record.AppParams[appIdx] = basics.AppParams{
+
+	// Sanity check that there isn't an app with this counter value.
+	var present bool
+	_, present, err = balances.GetAppParams(creator, appIdx)
+	if err != nil {
+		return
+	}
+	if present {
+		err = fmt.Errorf("already found app with index %d", appIdx)
+		return
+	}
+
+	params := basics.AppParams{
 		ApprovalProgram:   ac.ApprovalProgram,
 		ClearStateProgram: ac.ClearStateProgram,
 		StateSchemas: basics.StateSchemas{
@@ -114,6 +105,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
 	record.TotalAppSchema = totalSchema
+	record.TotalAppParams = basics.AddSaturate(record.TotalAppParams, 1)
 
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
@@ -123,6 +115,12 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Write back to the creator's balance record
 	err = balances.Put(creator, record)
+	if err != nil {
+		return 0, err
+	}
+
+	// Write new params
+	err = balances.PutAppParams(creator, appIdx, params)
 	if err != nil {
 		return 0, err
 	}
@@ -143,30 +141,38 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		return err
 	}
 
-	record.AppParams = cloneAppParams(record.AppParams)
+	var params basics.AppParams
+	params, _, err = balances.GetAppParams(creator, appIdx)
+	if err != nil {
+		return err
+	}
 
 	// Update the TotalAppSchema used for MinBalance calculation,
 	// since the creator no longer has to store the GlobalState
 	totalSchema := record.TotalAppSchema
-	globalSchema := record.AppParams[appIdx].GlobalStateSchema
+	globalSchema := params.GlobalStateSchema
 	totalSchema = totalSchema.SubSchema(globalSchema)
 	record.TotalAppSchema = totalSchema
+	record.TotalAppParams = basics.SubSaturate(record.TotalAppParams, 1)
 
 	// Delete app's extra program pages
 	totalExtraPages := record.TotalExtraAppPages
 	if totalExtraPages > 0 {
 		proto := balances.ConsensusParams()
 		if proto.EnableExtraPagesOnAppUpdate {
-			extraPages := record.AppParams[appIdx].ExtraProgramPages
+			extraPages := params.ExtraProgramPages
 			totalExtraPages = basics.SubSaturate32(totalExtraPages, extraPages)
 		}
 		record.TotalExtraAppPages = totalExtraPages
 	}
 
-	// Delete the AppParams
-	delete(record.AppParams, appIdx)
-
 	err = balances.Put(creator, record)
+	if err != nil {
+		return err
+	}
+
+	// Delete the AppParams
+	err = balances.DeleteAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
@@ -182,14 +188,12 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 
 func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
 	// Updating the application. Fetch the creator's balance record
-	record, err := balances.Get(creator, false)
+	params, _, err := balances.GetAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
 
 	// Fill in the new programs
-	record.AppParams = cloneAppParams(record.AppParams)
-	params := record.AppParams[appIdx]
 	proto := balances.ConsensusParams()
 	// when proto.EnableExtraPageOnAppUpdate is false, WellFormed rejects all updates with a multiple-page program
 	if proto.EnableExtraPagesOnAppUpdate {
@@ -210,8 +214,7 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
 
-	record.AppParams[appIdx] = params
-	return balances.Put(creator, record)
+	return balances.PutAppParams(creator, appIdx, params)
 }
 
 func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
@@ -221,20 +224,25 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	// If the user has already opted in, fail
-	_, ok := record.AppLocalStates[appIdx]
+	// future optimization: find a way to avoid testing this in case record.TotalAppLocalStates == 0.
+	ok, err := balances.HasAppLocalState(sender, appIdx)
+	if err != nil {
+		return err
+	}
 	if ok {
 		return fmt.Errorf("account %s has already opted in to app %d", sender.String(), appIdx)
 	}
 
+	totalAppLocalState := record.TotalAppLocalStates
+
 	// Make sure the user isn't already at the app opt-in max
 	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
-	if len(record.AppLocalStates) >= maxAppsOptedIn {
+	if maxAppsOptedIn > 0 && totalAppLocalState >= uint64(maxAppsOptedIn) {
 		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
 	}
 
 	// Write an AppLocalState, opting in the user
-	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-	record.AppLocalStates[appIdx] = basics.AppLocalState{
+	localState := basics.AppLocalState{
 		Schema: params.LocalStateSchema,
 	}
 
@@ -243,9 +251,16 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.AddSchema(params.LocalStateSchema)
 	record.TotalAppSchema = totalSchema
+	record.TotalAppLocalStates = basics.AddSaturate(record.TotalAppLocalStates, 1)
 
 	// Write opted-in user back to cow
 	err = balances.Put(sender, record)
+	if err != nil {
+		return err
+	}
+
+	// Write local state back to cow
+	err = balances.PutAppLocalState(sender, appIdx, localState)
 	if err != nil {
 		return err
 	}
@@ -266,8 +281,15 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 		return err
 	}
 
+	if record.TotalAppLocalStates == 0 {
+		return fmt.Errorf("account %v is not opted in to any app, and in particular %d", sender, appIdx)
+	}
+
 	// If they haven't opted in, that's an error
-	localState, ok := record.AppLocalStates[appIdx]
+	localState, ok, err := balances.GetAppLocalState(sender, appIdx)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return fmt.Errorf("account %s is not opted in to app %d", sender, appIdx)
 	}
@@ -277,13 +299,16 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.SubSchema(localState.Schema)
 	record.TotalAppSchema = totalSchema
-
-	// Delete the local state
-	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-	delete(record.AppLocalStates, appIdx)
+	record.TotalAppLocalStates = basics.SubSaturate(record.TotalAppLocalStates, 1)
 
 	// Write closed-out user back to cow
 	err = balances.Put(sender, record)
+	if err != nil {
+		return err
+	}
+
+	// Delete the local state
+	err = balances.DeleteAppLocalState(sender, appIdx)
 	if err != nil {
 		return err
 	}
@@ -376,11 +401,10 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == transactions.ClearStateOC {
 		// Ensure that the user is already opted in
-		record, err := balances.Get(header.Sender, false)
+		ok, err := balances.HasAppLocalState(header.Sender, appIdx)
 		if err != nil {
 			return err
 		}
-		_, ok := record.AppLocalStates[appIdx]
 		if !ok {
 			return fmt.Errorf("cannot clear state: %v is not currently opted in to app %d", header.Sender, appIdx)
 		}

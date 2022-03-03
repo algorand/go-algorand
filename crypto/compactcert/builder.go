@@ -100,14 +100,17 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 
 	// Check signature
 	if verifySig {
-		if err := p.PK.Verify(uint64(b.SigRound), b.Msg, sig); err != nil {
+		if err := sig.ValidateSigVersion(merklesignature.SchemeVersion); err != nil {
+			return err
+		}
+		if err := p.PK.VerifyBytes(uint64(b.SigRound), b.Msg, sig); err != nil {
 			return err
 		}
 	}
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
-	b.sigs[pos].Sig.Signature = sig
+	b.sigs[pos].Sig = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
 	b.sigsHasValidL = false
@@ -182,9 +185,10 @@ func (b *Builder) Build() (*Cert, error) {
 
 	// Reveal sufficient number of signatures
 	c := &Cert{
-		SigCommit:    sigtree.Root(),
-		SignedWeight: b.signedWeight,
-		Reveals:      make(map[uint64]Reveal),
+		SigCommit:              sigtree.Root(),
+		SignedWeight:           b.signedWeight,
+		Reveals:                make(map[uint64]Reveal),
+		MerkleSignatureVersion: merklesignature.SchemeVersion,
 	}
 
 	nr, err := b.numReveals(b.signedWeight)
@@ -193,7 +197,6 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
-	msgHash := crypto.GenericHashObj(hfactory.NewHash(), b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{
@@ -202,7 +205,7 @@ func (b *Builder) Build() (*Cert, error) {
 			ProvenWeight: b.ProvenWeight,
 			Sigcom:       c.SigCommit,
 			Partcom:      b.parttree.Root(),
-			MsgHash:      msgHash,
+			Msg:          b.Msg,
 		}
 
 		coin := hashCoin(choice)

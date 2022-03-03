@@ -37,12 +37,12 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 
 	message := testMessage("hello world")
-	sig, err := key.GetSigner(uint64(256)).Sign(message)
+	sig, err := key.GetSigner(uint64(256)).SignBytes(message)
 	a.NoError(err)
 
 	sigs[0] = sigslot{
 		Weight:        60,
-		sigslotCommit: sigslotCommit{Sig: CompactOneTimeSignature{Signature: sig}, L: 60},
+		sigslotCommit: sigslotCommit{Sig: sig, L: 60},
 	}
 
 	hfactory := crypto.HashFactory{HashType: HashType}

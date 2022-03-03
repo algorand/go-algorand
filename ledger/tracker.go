@@ -120,7 +120,7 @@ type ledgerTracker interface {
 	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
 	// Tracker might update own state in this case. For example, account updates tracker cancels
 	// scheduled catchpoint writing that deferred commit.
-	handleUnorderedCommit(uint64, basics.Round, basics.Round)
+	handleUnorderedCommit(*deferredCommitContext)
 
 	// close terminates the tracker, reclaiming any resources
 	// like open database connections or goroutines.  close may
@@ -199,10 +199,13 @@ type deferredCommitRange struct {
 
 	isCatchpointRound bool
 
-	// catchpointWriting is a pointer to a varible with the same name in the catchpointTracker.
+	// catchpointWriting is a pointer to a variable with the same name in the catchpointTracker.
 	// it's used in order to reset the catchpointWriting flag from the acctupdates's
 	// prepareCommit/commitRound ( which is called before the corresponding catchpoint tracker method )
 	catchpointWriting *int32
+
+	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
+	enableGeneratingCatchpointFiles bool
 }
 
 // deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
@@ -218,9 +221,11 @@ type deferredCommitContext struct {
 	deltas                 []ledgercore.AccountDeltas
 	roundTotals            ledgercore.AccountTotals
 	compactAccountDeltas   compactAccountDeltas
+	compactResourcesDeltas compactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts []persistedAccountData
+	updatedPersistedAccounts  []persistedAccountData
+	updatedPersistedResources map[basics.Address][]persistedResourcesData
 
 	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest
@@ -274,17 +279,21 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		if err != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
-			return fmt.Errorf("tracker %s failed to loadFromDisk : %v", trackerName, err)
+			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err)
 		}
 	}
 
 	err := tr.initializeTrackerCaches(l)
 	if err != nil {
-		return err
+		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
+
 	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
 	tr.accts.voters = &votersTracker{}
 	err = tr.accts.voters.loadFromDisk(l, tr.accts)
+	if err != nil {
+		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
+	}
 	return err
 }
 
@@ -417,13 +426,12 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 
 	offset := dcc.offset
 	dbRound := dcc.oldBase
-	lookback := dcc.lookback
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommit(offset, dbRound, lookback)
+			lt.handleUnorderedCommit(dcc)
 		}
 		tr.mu.RUnlock()
 		return
@@ -517,7 +525,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 	if lastBalancesRound < lastestBlockRound {
 		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to load block header %d : %w", lastBalancesRound, err)
 		}
 	}
 
@@ -595,6 +603,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		delta, err = l.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
 			close(blockEvalFailed)
+			err = fmt.Errorf("trackerEvalVerified failed : %w", err)
 			return
 		}
 		tr.newBlock(blk, delta)

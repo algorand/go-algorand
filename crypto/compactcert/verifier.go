@@ -46,6 +46,12 @@ func (v *Verifier) Verify(c *Cert) error {
 	if c.SignedWeight <= v.ProvenWeight {
 		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
+	version := int(c.MerkleSignatureVersion)
+	for _, reveal := range c.Reveals {
+		if err := reveal.SigSlot.Sig.ValidateSigVersion(version); err != nil {
+			return err
+		}
+	}
 
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
@@ -59,10 +65,11 @@ func (v *Verifier) Verify(c *Cert) error {
 		parts[pos] = r.Part
 
 		// verify that the msg and the signature is valid under the given participant's Pk
-		err = r.Part.PK.Verify(
+		err = r.Part.PK.VerifyBytes(
 			uint64(v.SigRound),
 			v.Msg,
-			r.SigSlot.Sig.Signature)
+			r.SigSlot.Sig,
+		)
 
 		if err != nil {
 			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)
@@ -85,8 +92,6 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 
-	msgHash := crypto.GenericHashObj(c.PartProofs.HashFactory.NewHash(), v.Msg)
-
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{
 			J:            j,
@@ -94,7 +99,7 @@ func (v *Verifier) Verify(c *Cert) error {
 			ProvenWeight: v.ProvenWeight,
 			Sigcom:       c.SigCommit,
 			Partcom:      v.partcom,
-			MsgHash:      msgHash,
+			Msg:          v.Msg,
 		}
 
 		coin := hashCoin(choice)

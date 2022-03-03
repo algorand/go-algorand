@@ -58,7 +58,7 @@ func (sc committableSignatureSlotArray) Marshal(pos uint64) (crypto.Hashable, er
 }
 
 func buildCommittableSignature(sigCommit sigslotCommit) (*committableSignatureSlot, error) {
-	if sigCommit.Sig.Signature.Signature == nil {
+	if sigCommit.Sig.Signature == nil {
 		return &committableSignatureSlot{isEmptySlot: true}, nil
 	}
 	sigBytes, err := sigCommit.Sig.GetFixedLengthHashableRepresentation()

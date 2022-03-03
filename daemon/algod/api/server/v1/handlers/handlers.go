@@ -353,8 +353,8 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 
 func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	cc := v1.CompactCertTransactionType{
-		CertRound: uint64(tx.CompactCertTxnFields.CertRound),
-		Cert:      protocol.Encode(&tx.CompactCertTxnFields.Cert),
+		CertIntervalLatestRound: uint64(tx.CompactCertTxnFields.CertIntervalLatestRound),
+		Cert:                    protocol.Encode(&tx.CompactCertTxnFields.Cert),
 	}
 
 	return v1.Transaction{
@@ -789,20 +789,13 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	ledger := ctx.Node.Ledger()
-	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, basics.Address(addr))
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
-		return
-	}
-	recordWithoutPendingRewards, _, err := ledger.LookupWithoutRewards(lastRound, basics.Address(addr))
+	record, lastRound, amountWithoutPendingRewards, err := ledger.LookupLatest(basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
 
 	amount := record.MicroAlgos
-	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
 	if overflowed {
 		err = fmt.Errorf("overflowed pending rewards: %v - %v", amount, amountWithoutPendingRewards)
@@ -1321,14 +1314,14 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, creator)
+	resource, err := ledger.LookupResource(lastRound, creator, basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
 
-	if asset, ok := record.AssetParams[aidx]; ok {
-		thisAssetParams := modelAssetParams(creator, asset)
+	if resource.AssetParams != nil {
+		thisAssetParams := modelAssetParams(creator, *resource.AssetParams)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
@@ -1421,20 +1414,18 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 	var result v1.AssetList
 	for _, aloc := range alocs {
 		// Fetch the asset parameters
-		creatorRecord, err := ledger.Lookup(lastRound, aloc.Creator)
+		record, err := ledger.LookupResource(lastRound, aloc.Creator, aloc.Index, basics.AssetCreatable)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 			return
 		}
 
-		// Ensure no race with asset deletion
-		rp, ok := creatorRecord.AssetParams[basics.AssetIndex(aloc.Index)]
-		if !ok {
+		if record.AssetParams == nil {
 			continue
 		}
 
 		// Append the result
-		params := modelAssetParams(aloc.Creator, rp)
+		params := modelAssetParams(aloc.Creator, *record.AssetParams)
 		result.Assets = append(result.Assets, v1.Asset{
 			AssetIndex:  uint64(aloc.Index),
 			AssetParams: params,

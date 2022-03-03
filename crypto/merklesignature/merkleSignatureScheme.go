@@ -85,6 +85,9 @@ type (
 	}
 )
 
+// SchemeVersion is the current version of merkleSignature
+const SchemeVersion = 0
+
 // CryptoPrimitivesID is an identification that the Merkle Signature Scheme uses a subset sum hash function
 // and a falcon signature scheme.
 var CryptoPrimitivesID = uint16(0)
@@ -95,6 +98,7 @@ var (
 	ErrDivisorIsZero                     = errors.New("received zero Interval")
 	ErrNoStateProofKeyForRound           = errors.New("no stateproof key exists for this round")
 	ErrSignatureSchemeVerificationFailed = errors.New("merkle signature verification failed")
+	ErrInvalidSignatureVersion           = fmt.Errorf("invalid signature version")
 )
 
 // New creates secrets needed for the merkle signature scheme.
@@ -148,8 +152,8 @@ func (s *SignerContext) GetVerifier() *Verifier {
 	return &ver
 }
 
-// Sign signs a hash of a given message. The signature is valid on a specific round
-func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
+// SignBytes signs a given message. The signature is valid on a specific round
+func (s *Signer) SignBytes(msg []byte) (Signature, error) {
 	key := s.SigningKey
 	// Possible since there may not be a StateProof key for this specific round
 	if key == nil {
@@ -166,7 +170,7 @@ func (s *Signer) Sign(hashable crypto.Hashable) (Signature, error) {
 		return Signature{}, err
 	}
 
-	sig, err := s.SigningKey.Sign(hashable)
+	sig, err := key.SignBytes(msg)
 	if err != nil {
 		return Signature{}, err
 	}
@@ -224,9 +228,16 @@ func (v *Verifier) IsEmpty() bool {
 	return *v == [MerkleSignatureSchemeRootSize]byte{}
 }
 
-// Verify verifies that a merklesignature sig is valid, on a specific round, under a given public key
-func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) error {
+// ValidateSigVersion validates that the version of the signature is matching the expected version
+func (s *Signature) ValidateSigVersion(version int) error {
+	if !s.Signature.IsVersionEqual(version) {
+		return ErrInvalidSignatureVersion
+	}
+	return nil
+}
 
+// VerifyBytes verifies that a merklesignature sig is valid, on a specific round, under a given public key
+func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
@@ -244,7 +255,7 @@ func (v *Verifier) Verify(round uint64, msg crypto.Hashable, sig Signature) erro
 	}
 
 	// verify that the signature is valid under the ephemeral public key
-	err = sig.VerifyingKey.Verify(msg, sig.Signature)
+	err = sig.VerifyingKey.VerifyBytes(msg, sig.Signature)
 	if err != nil {
 		return fmt.Errorf("%w - %v", ErrSignatureSchemeVerificationFailed, err)
 	}

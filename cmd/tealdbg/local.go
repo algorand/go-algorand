@@ -158,10 +158,23 @@ type evalResult struct {
 
 // AppState encapsulates information about execution of stateful teal program
 type AppState struct {
-	appIdx  basics.AppIndex
-	schemas basics.StateSchemas
-	global  map[basics.AppIndex]basics.TealKeyValue
-	locals  map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
+	appIdx    basics.AppIndex
+	schemas   basics.StateSchemas
+	global    map[basics.AppIndex]basics.TealKeyValue
+	locals    map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
+	logs      []string
+	innerTxns []transactions.SignedTxnWithAD
+}
+
+func cloneInners(a []transactions.SignedTxnWithAD) (b []transactions.SignedTxnWithAD) {
+	if a != nil {
+		b = make([]transactions.SignedTxnWithAD, len(a))
+		copy(b, a)
+		for i, itxn := range a {
+			b[i].EvalDelta.InnerTxns = cloneInners(itxn.EvalDelta.InnerTxns)
+		}
+	}
+	return
 }
 
 func (a *AppState) clone() (b AppState) {
@@ -177,11 +190,18 @@ func (a *AppState) clone() (b AppState) {
 			b.locals[addr][aid] = tkv.Clone()
 		}
 	}
+	b.logs = make([]string, len(a.logs))
+	copy(b.logs, a.logs)
+	b.innerTxns = cloneInners(a.innerTxns)
 	return
 }
 
 func (a *AppState) empty() bool {
-	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0
+	return a.appIdx == 0 &&
+		len(a.global) == 0 &&
+		len(a.locals) == 0 &&
+		len(a.logs) == 0 &&
+		len(a.innerTxns) == 0
 }
 
 type modeType int
@@ -238,6 +258,8 @@ type LocalRunner struct {
 func makeAppState() (states AppState) {
 	states.global = make(map[basics.AppIndex]basics.TealKeyValue)
 	states.locals = make(map[basics.Address]map[basics.AppIndex]basics.TealKeyValue)
+	states.logs = make([]string, 0)
+	states.innerTxns = make([]transactions.SignedTxnWithAD, 0)
 	return
 }
 
