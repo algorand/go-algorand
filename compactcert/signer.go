@@ -19,6 +19,7 @@ package compactcert
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/data/account"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -166,6 +167,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	}
 
 	sigs := make([]sigFromAddr, 0, len(keys))
+	ids := make([]account.ParticipationID, 0, len(keys))
 	for _, key := range keys {
 		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
 			continue
@@ -192,14 +194,20 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			Round:  hdr.Round,
 			Sig:    sig,
 		})
+		ids = append(ids, key.ParticipationID)
 	}
 
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
-	for _, sfa := range sigs {
+	for i, sfa := range sigs {
 		_, err = ccw.handleSig(sfa, nil)
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): handleSig: %v", hdr.Round, err)
 			continue
+		}
+
+		// Safe to delete key for sfa.Round because the signature is now stored in the disk.
+		if err := ccw.accts.DeleteStateProofKey(ids[i], sfa.Round); err != nil {
+			ccw.log.Warnf("ccw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
 		}
 	}
 	return
