@@ -82,6 +82,10 @@ func (i *instant) Zero() timers.Clock {
 	return i
 }
 
+func (i *instant) Since() time.Duration {
+	return 0
+}
+
 func (i *instant) runRound(r basics.Round) {
 	<-i.Z1 // wait until Zero is called
 	<-i.timeoutAtCalled
