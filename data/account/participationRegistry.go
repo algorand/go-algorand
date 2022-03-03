@@ -45,11 +45,6 @@ func (pid ParticipationID) IsZero() bool {
 	return (crypto.Digest(pid)).IsZero()
 }
 
-// IsEqual compares two ids and determines whether they are equal or not.
-func (pid ParticipationID) IsEqual(other ParticipationID) bool {
-	return pid == other
-}
-
 // String prints a b32 version of this ID.
 func (pid ParticipationID) String() string {
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(pid[:])
