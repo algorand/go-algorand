@@ -309,7 +309,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 				Message:            "Result limit exceeded",
 				MaxResults:         &maxResults,
 				TotalAssetsOptedIn: &record.TotalAssets,
-				TotalCreatedAssets: &record.TotalAppLocalStates,
+				TotalCreatedAssets: &record.TotalAssetParams,
 				TotalAppsOptedIn:   &record.TotalAppLocalStates,
 				TotalCreatedApps:   &record.TotalAppParams,
 			})
