@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build telemetry
-
 package metrics
 
 import (
@@ -62,4 +60,37 @@ func TestWriteAdd(t *testing.T) {
 
 	stringGauge.Deregister(nil)
 	counter.Deregister(nil)
+}
+
+func TestAddMetrics(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Test AddMetrics with a multi label counter
+	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})
+	var category1_1 = map[string]string{
+		"cat1": "1",
+	}
+	var category1_2 = map[string]string{
+		"cat1": "2",
+	}
+	var category1_3 = map[string]string{
+		"cat1": "3",
+	}
+	var category2_4 = map[string]string{
+		"cat2": "4",
+	}
+	var category2_5 = map[string]string{
+		"cat2": "5",
+	}
+
+	counter.Add(5, category1_1)
+	counter.Add(7, category1_2)
+	counter.Add(9, category1_3)
+	counter.Add(11, category2_4)
+	counter.Add(13, category2_5)
+
+	results := make(map[string]string)
+	DefaultRegistry().AddMetrics(results)
+
+	require.Equal(t, 5, len(results))
 }
