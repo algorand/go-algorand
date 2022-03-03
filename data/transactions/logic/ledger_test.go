@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -197,8 +198,8 @@ func (l *Ledger) LatestTimestamp() int64 {
 }
 
 // AccountData returns a version of the account that is good enough for
-// satisfiying AVM needs. (balance, calc minbalance, and authaddr)
-func (l *Ledger) AccountData(addr basics.Address) (basics.AccountData, error) {
+// satisfying AVM needs. (balance, calc minbalance, and authaddr)
+func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
 	br := l.balances[addr]
 	// br may come back empty if addr doesn't exist.  That's fine for our needs.
 	assets := make(map[basics.AssetIndex]basics.AssetParams)
@@ -226,15 +227,17 @@ func (l *Ledger) AccountData(addr basics.Address) (basics.AccountData, error) {
 		schemaTotal = schemaTotal.AddSchema(l.applications[a].LocalStateSchema)
 	}
 
-	return basics.AccountData{
-		MicroAlgos:         basics.MicroAlgos{Raw: br.balance},
-		AssetParams:        assets,
-		Assets:             br.holdings,
-		AuthAddr:           br.auth,
-		AppLocalStates:     locals,
-		AppParams:          apps,
-		TotalAppSchema:     schemaTotal,
-		TotalExtraAppPages: pagesTotal,
+	return ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos:          basics.MicroAlgos{Raw: br.balance},
+			AuthAddr:            br.auth,
+			TotalAppSchema:      schemaTotal,
+			TotalExtraAppPages:  pagesTotal,
+			TotalAppParams:      uint64(len(apps)),
+			TotalAppLocalStates: uint64(len(locals)),
+			TotalAssetParams:    uint64(len(assets)),
+			TotalAssets:         uint64(len(br.holdings)),
+		},
 	}, nil
 }
 

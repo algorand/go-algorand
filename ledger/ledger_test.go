@@ -114,7 +114,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		require.Equal(t, l.Latest(), latestRound)
 		totalRewardUnits = totals.RewardUnits()
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	blk.BlockHeader = bookkeeping.BlockHeader{
@@ -213,7 +213,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	for _, acctdata := range genesisInitState.Accounts {
 		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	correctHeader := bookkeeping.BlockHeader{
@@ -801,9 +801,9 @@ int 1
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 	addEmptyValidatedBlock(t, l, initAccounts)
@@ -832,23 +832,19 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
 	rnd = l.Latest()
-	acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+	acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
-
-	acctwr, err := l.Lookup(rnd, creator)
-	a.NoError(err)
-	a.Equal(acctwor.AppParams[appIdx].GlobalState["counter"], acctwr.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctwor, _, err = l.LookupWithoutRewards(l.Latest()-1, creator)
+	acctworRes, err = l.LookupResource(l.Latest()-1, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
-	acct, _, err = l.LookupWithoutRewards(rnd, user)
+	acctRes, err = l.LookupResource(rnd, user, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppLocalStates[appIdx].KeyValue["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
 
 // TestLedgerAppMultiTxnWrites ensures app state writes in multiple txn are applied
@@ -929,9 +925,9 @@ int 1                   // [1]
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acct.AppParams[appIdx].GlobalState["key"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
 	// make two app call txns and put into the same block, with and without groupping
 	var tests = []struct {
@@ -1006,13 +1002,9 @@ int 1                   // [1]
 
 			expected := uint64(base + value1 + value2)
 			rnd = l.Latest()
-			acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+			acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 			a.NoError(err)
-			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctwor.AppParams[appIdx].GlobalState["key"])
-
-			acctwr, err := l.Lookup(rnd, creator)
-			a.NoError(err)
-			a.Equal(acctwor.AppParams[appIdx].GlobalState["key"], acctwr.AppParams[appIdx].GlobalState["key"])
+			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})
 	}
 }
@@ -1227,7 +1219,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			for _, acctdata := range initAccounts {
 				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 			}
-			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
+			poolBal, _, _, err := l.LookupLatest(testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")
 			lastBlock, err := l.Block(l.Latest())
 			a.NoError(err, "could not get last block")
@@ -1540,6 +1532,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max asset id limit
 	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
+	require.NoError(t, err)
 	assetCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AssetCreatable &&
@@ -1558,6 +1551,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max application id limit
 	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
+	require.NoError(t, err)
 	appCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AppCreatable &&
@@ -1666,7 +1660,7 @@ func TestLedgerMemoryLeak(t *testing.T) {
 
 					err = l.appendUnvalidatedTx(t, accounts, keys, correctPay, transactions.ApplyData{})
 					require.NoError(t, err)
-					ad, err := l.Lookup(l.Latest(), addr)
+					ad, _, _, err := l.LookupLatest(addr)
 					require.NoError(t, err)
 
 					addresses = append(addresses, addr)

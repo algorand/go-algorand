@@ -412,17 +412,6 @@ func MakeAccountData(status Status, algos MicroAlgos) AccountData {
 	return AccountData{Status: status, MicroAlgos: algos}
 }
 
-// ClearOnlineState resets the account's fields to indicate that the account is an offline account
-func (u *AccountData) ClearOnlineState() {
-	u.Status = Offline
-	u.VoteFirstValid = Round(0)
-	u.VoteLastValid = Round(0)
-	u.VoteKeyDilution = 0
-	u.VoteID = crypto.OneTimeSignatureVerifier{}
-	u.SelectionID = crypto.VRFVerifier{}
-	u.StateProofID = merklesignature.Verifier{}
-}
-
 // Money returns the amount of MicroAlgos associated with the user's account
 func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money MicroAlgos, rewards MicroAlgos) {
 	e := u.WithUpdatedRewards(proto, rewardsLevel)
@@ -437,23 +426,35 @@ func PendingRewards(ot *OverflowTracker, proto config.ConsensusParams, microAlgo
 	return MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
 }
 
+// WithUpdatedRewards returns an updated number of algos, total rewards and new rewards base
+// to reflect rewards up to some rewards level.
+func WithUpdatedRewards(
+	proto config.ConsensusParams, status Status, microAlgosIn MicroAlgos, rewardedMicroAlgosIn MicroAlgos, rewardsBaseIn uint64, rewardsLevelIn uint64,
+) (MicroAlgos, MicroAlgos, uint64) {
+	if status != NotParticipating {
+		var ot OverflowTracker
+		rewardsUnits := microAlgosIn.RewardUnits(proto)
+		rewardsDelta := ot.Sub(rewardsLevelIn, rewardsBaseIn)
+		rewards := MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
+		microAlgosOut := ot.AddA(microAlgosIn, rewards)
+		if ot.Overflowed {
+			logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn)
+		}
+		rewardsBaseOut := rewardsLevelIn
+		// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
+		// this rewardAlgos counter could potentially roll over.
+		rewardedMicroAlgosOut := MicroAlgos{Raw: rewardedMicroAlgosIn.Raw + rewards.Raw}
+		return microAlgosOut, rewardedMicroAlgosOut, rewardsBaseOut
+	}
+	return microAlgosIn, rewardedMicroAlgosIn, rewardsBaseIn
+}
+
 // WithUpdatedRewards returns an updated number of algos in an AccountData
 // to reflect rewards up to some rewards level.
 func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
-	if u.Status != NotParticipating {
-		var ot OverflowTracker
-		rewardsUnits := u.MicroAlgos.RewardUnits(proto)
-		rewardsDelta := ot.Sub(rewardsLevel, u.RewardsBase)
-		rewards := MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
-		u.MicroAlgos = ot.AddA(u.MicroAlgos, rewards)
-		if ot.Overflowed {
-			logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", u.MicroAlgos, rewardsUnits, rewardsLevel, u.RewardsBase)
-		}
-		u.RewardsBase = rewardsLevel
-		// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
-		// this rewardAlgos counter could potentially roll over.
-		u.RewardedMicroAlgos = MicroAlgos{Raw: u.RewardedMicroAlgos.Raw + rewards.Raw}
-	}
+	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = WithUpdatedRewards(
+		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
+	)
 
 	return u
 }
@@ -462,30 +463,49 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
 func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+	return MinBalance(
+		proto,
+		uint64(len(u.Assets)),
+		u.TotalAppSchema,
+		uint64(len(u.AppParams)), uint64(len(u.AppLocalStates)),
+		uint64(u.TotalExtraAppPages),
+	)
+}
+
+// MinBalance computes the minimum balance requirements for an account based on
+// some consensus parameters. MinBalance should correspond roughly to how much
+// storage the account is allowed to store on disk.
+func MinBalance(
+	proto *config.ConsensusParams,
+	totalAssets uint64,
+	totalAppSchema StateSchema,
+	totalAppParams uint64, totalAppLocalStates uint64,
+	totalExtraAppPages uint64,
+) (res MicroAlgos) {
 	var min uint64
 
 	// First, base MinBalance
 	min = proto.MinBalance
 
 	// MinBalance for each Asset
-	assetCost := MulSaturate(proto.MinBalance, uint64(len(u.Assets)))
+	assetCost := MulSaturate(proto.MinBalance, totalAssets)
 	min = AddSaturate(min, assetCost)
 
 	// Base MinBalance for each created application
-	appCreationCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(len(u.AppParams)))
+	appCreationCost := MulSaturate(proto.AppFlatParamsMinBalance, totalAppParams)
 	min = AddSaturate(min, appCreationCost)
 
 	// Base MinBalance for each opted in application
-	appOptInCost := MulSaturate(proto.AppFlatOptInMinBalance, uint64(len(u.AppLocalStates)))
+	appOptInCost := MulSaturate(proto.AppFlatOptInMinBalance, totalAppLocalStates)
 	min = AddSaturate(min, appOptInCost)
 
 	// MinBalance for state usage measured by LocalStateSchemas and
 	// GlobalStateSchemas
-	schemaCost := u.TotalAppSchema.MinBalance(proto)
+	schemaCost := totalAppSchema.MinBalance(proto)
 	min = AddSaturate(min, schemaCost.Raw)
 
 	// MinBalance for each extra app program page
-	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(u.TotalExtraAppPages))
+	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, totalExtraAppPages)
 	min = AddSaturate(min, extraAppProgramLenCost)
 
 	res.Raw = min
@@ -556,25 +576,48 @@ func (u AccountData) IsZero() bool {
 // compounding).  However, online accounts have to periodically renew
 // participation keys, so the scale of the inconsistency is small.
 func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
-	if u.Status != Online {
+	return NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, proto)
+}
+
+// NormalizedOnlineAccountBalance returns a ``normalized'' balance for an account
+// with the given parameters.
+//
+// The normalization compensates for rewards that have not yet been applied,
+// by computing a balance normalized to round 0.  To normalize, we estimate
+// the microalgo balance that an account should have had at round 0, in order
+// to end up at its current balance when rewards are included.
+//
+// The benefit of the normalization procedure is that an account's normalized
+// balance does not change over time (unlike the actual algo balance that includes
+// rewards).  This makes it possible to compare normalized balances between two
+// accounts, to sort them, and get results that are close to what we would get
+// if we computed the exact algo balance of the accounts at a given round number.
+//
+// The normalization can lead to some inconsistencies in comparisons between
+// account balances, because the growth rate of rewards for accounts depends
+// on how recently the account has been touched (our rewards do not implement
+// compounding).  However, online accounts have to periodically renew
+// participation keys, so the scale of the inconsistency is small.
+func NormalizedOnlineAccountBalance(status Status, rewardsBase uint64, microAlgos MicroAlgos, proto config.ConsensusParams) uint64 {
+	if status != Online {
 		return 0
 	}
 
 	// If this account had one RewardUnit of microAlgos in round 0, it would
 	// have perRewardUnit microAlgos at the account's current rewards level.
-	perRewardUnit := u.RewardsBase + proto.RewardUnit
+	perRewardUnit := rewardsBase + proto.RewardUnit
 
 	// To normalize, we compute, mathematically,
 	// u.MicroAlgos / perRewardUnit * proto.RewardUnit, as
 	// (u.MicroAlgos * proto.RewardUnit) / perRewardUnit.
-	norm, overflowed := Muldiv(u.MicroAlgos.ToUint64(), proto.RewardUnit, perRewardUnit)
+	norm, overflowed := Muldiv(microAlgos.ToUint64(), proto.RewardUnit, perRewardUnit)
 
 	// Mathematically should be impossible to overflow
 	// because perRewardUnit >= proto.RewardUnit, as long
 	// as u.RewardBase isn't huge enough to cause overflow..
 	if overflowed {
 		logging.Base().Panicf("overflow computing normalized balance %d * %d / (%d + %d)",
-			u.MicroAlgos.ToUint64(), proto.RewardUnit, u.RewardsBase, proto.RewardUnit)
+			microAlgos.ToUint64(), proto.RewardUnit, rewardsBase, proto.RewardUnit)
 	}
 
 	return norm
