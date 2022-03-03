@@ -64,9 +64,9 @@ type networkImpl struct {
 func WrapNetwork(net network.GossipNode, log logging.Logger, cfg config.Local) agreement.Network {
 	i := new(networkImpl)
 
-	i.voteCh = make(chan agreement.Message, cfg.AgreementVoteBufferSize)
-	i.proposalCh = make(chan agreement.Message, cfg.AgreementProposalBufferSize)
-	i.bundleCh = make(chan agreement.Message, cfg.AgreementBundleBufferSize)
+	i.voteCh = make(chan agreement.Message, cfg.AgreementIncomingVotesQueueLength)
+	i.proposalCh = make(chan agreement.Message, cfg.AgreementIncomingProposalsQueueLength)
+	i.bundleCh = make(chan agreement.Message, cfg.AgreementIncomingBundlesQueueLength)
 
 	i.net = net
 	i.log = log

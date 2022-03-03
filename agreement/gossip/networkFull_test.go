@@ -362,9 +362,9 @@ func testNetworkImplFull(t *testing.T, nodesCount int) {
 	// which is a different test of logic that agremeent needs to
 	// deal with.
 	cfg := config.GetDefaultLocal()
-	cfg.AgreementVoteBufferSize = 100
-	cfg.AgreementProposalBufferSize = 100
-	cfg.AgreementBundleBufferSize = 100
+	cfg.AgreementIncomingVotesQueueLength = 100
+	cfg.AgreementIncomingProposalsQueueLength = 100
+	cfg.AgreementIncomingBundlesQueueLength = 100
 	t.Run("AgreementVoteTag", func(t *testing.T) {
 		testNetworkImplAgreementVote(t, nodesCount, cfg)
 	})
