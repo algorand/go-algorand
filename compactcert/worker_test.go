@@ -18,6 +18,7 @@ package compactcert
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
@@ -43,27 +44,32 @@ import (
 )
 
 type testWorkerStubs struct {
-	t             testing.TB
-	mu            deadlock.Mutex
-	latest        basics.Round
-	waiters       map[basics.Round]chan struct{}
-	blocks        map[basics.Round]bookkeeping.BlockHeader
-	keys          []account.Participation
-	keysForVoters []account.Participation
-	sigmsg        chan []byte
-	txmsg         chan transactions.SignedTxn
-	totalWeight   int
+	t                     testing.TB
+	mu                    deadlock.Mutex
+	latest                basics.Round
+	waiters               map[basics.Round]chan struct{}
+	blocks                map[basics.Round]bookkeeping.BlockHeader
+	keys                  []account.Participation
+	keysForVoters         []account.Participation
+	sigmsg                chan []byte
+	txmsg                 chan transactions.SignedTxn
+	totalWeight           int
+	deletedStateProofKeys map[account.ParticipationID]basics.Round
 }
 
 func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
 	s := &testWorkerStubs{
-		waiters:       make(map[basics.Round]chan struct{}),
-		blocks:        make(map[basics.Round]bookkeeping.BlockHeader),
-		sigmsg:        make(chan []byte, 1024),
-		txmsg:         make(chan transactions.SignedTxn, 1024),
-		keys:          keys,
-		keysForVoters: keys,
-		totalWeight:   totalWeight,
+		t:                     nil,
+		mu:                    deadlock.Mutex{},
+		latest:                0,
+		waiters:               make(map[basics.Round]chan struct{}),
+		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
+		keys:                  keys,
+		keysForVoters:         keys,
+		sigmsg:                make(chan []byte, 1024),
+		txmsg:                 make(chan transactions.SignedTxn, 1024),
+		totalWeight:           totalWeight,
+		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
 	}
 	s.latest--
 	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds))
@@ -129,6 +135,7 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 }
 
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
+	s.deletedStateProofKeys[id] = round
 	return nil
 }
 
@@ -473,4 +480,62 @@ func TestWorkerHandleSig(t *testing.T) {
 		// but also not disconnected.
 		require.Equal(t, res.Action, network.Ignore)
 	}
+}
+
+func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(3 * proto.CompactCertRounds)
+	// Expect all signatures to be broadcast.
+	w.signBlock(s.blocks[basics.Round(proto.CompactCertRounds)])
+	for _, round := range s.deletedStateProofKeys {
+		require.Equal(t, round, basics.Round(proto.CompactCertRounds))
+	}
+}
+
+func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(3 * proto.CompactCertRounds)
+	// Expect all signatures to be broadcast.
+
+	require.NoError(t, w.db.Atomic(
+		func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.Exec("DROP TABLE sigs")
+			return err
+		}),
+	)
+
+	s.deletedStateProofKeys = map[account.ParticipationID]basics.Round{}
+	w.signBlock(s.blocks[3*basics.Round(proto.CompactCertRounds)])
+	require.Zero(t, len(s.deletedStateProofKeys))
 }
