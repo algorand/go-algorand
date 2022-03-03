@@ -399,61 +399,6 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	}
 }
 
-func TestLatestSigsFromThisNode(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var keys []account.Participation
-	for i := 0; i < 10; i++ {
-		var parent basics.Address
-		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
-	}
-
-	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
-	w.Start()
-	defer w.Shutdown()
-
-	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(3*proto.CompactCertRounds - 2)
-
-	// Wait for a compact cert to be formed, so we know the signer thread is caught up.
-	_ = <-s.txmsg
-
-	var latestSigs map[basics.Address]basics.Round
-	var err error
-	for x := 0; x < 10; x++ {
-		latestSigs, err = w.LatestSigsFromThisNode()
-		require.NoError(t, err)
-		if len(latestSigs) == len(keys) {
-			break
-		}
-		time.Sleep(256 * time.Millisecond)
-	}
-	require.Equal(t, len(keys), len(latestSigs))
-	for _, k := range keys {
-		require.Equal(t, latestSigs[k.Parent], basics.Round(2*proto.CompactCertRounds))
-	}
-
-	// Add a block that claims the compact cert is formed.
-	s.mu.Lock()
-	s.addBlock(3 * basics.Round(proto.CompactCertRounds))
-	s.mu.Unlock()
-
-	// Wait for the builder to discard the signatures.
-	for x := 0; x < 10; x++ {
-		latestSigs, err = w.LatestSigsFromThisNode()
-		require.NoError(t, err)
-		if len(latestSigs) == 0 {
-			break
-		}
-		time.Sleep(256 * time.Millisecond)
-	}
-	require.Equal(t, 0, len(latestSigs))
-}
-
 func TestWorkerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
