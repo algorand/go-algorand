@@ -209,5 +209,4 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			ccw.log.Warnf("ccw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
 		}
 	}
-	return
 }
