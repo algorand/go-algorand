@@ -113,11 +113,16 @@ func (ccw *Worker) initBuilders() {
 				continue
 			}
 
-			err = builder.Add(pos, sig.sig, false)
-			if err != nil {
+			if builder.Present(pos) {
+				ccw.log.Warnf("initBuilders: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
+				continue
+			}
+
+			if err := builder.IsValid(pos, sig.sig, false); err != nil {
 				ccw.log.Warnf("initBuilders: cannot add %v in round %d: %v", sig.signer, rnd, err)
 				continue
 			}
+			builder.Add(pos, sig.sig)
 		}
 	}
 }
@@ -172,12 +177,11 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		return network.Ignore, nil
 	}
 
-	err := builder.Add(pos, sfa.Sig, true)
-	if err != nil {
+	if err := builder.IsValid(pos, sfa.Sig, true); err != nil {
 		return network.Disconnect, err
 	}
 
-	err = ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return addPendingSig(tx, sfa.Round, pendingSig{
 			signer:       sfa.Signer,
 			sig:          sfa.Sig,
@@ -187,7 +191,8 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	if err != nil {
 		return network.Ignore, err
 	}
-
+	// validated that we can add the sig previously.
+	builder.Add(pos, sfa.Sig)
 	return network.Broadcast, nil
 }
 

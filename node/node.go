@@ -1084,16 +1084,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 			continue
 		}
 
-		// If compact certs are enabled, we need to determine what signatures
-		// we already computed, since we can then delete ephemeral keys that
-		// were already used to compute a signature (stored in the compact
-		// cert db).
-		ccSigs, err := node.compactCert.LatestSigsFromThisNode()
-		if err != nil {
-			node.log.Warnf("Cannot look up latest compact cert sigs: %v", err)
-			continue
-		}
-
 		// We need to find the consensus protocol used to agree on block r,
 		// since that determines the params used for ephemeral keys in block
 		// r.  The params come from agreement.ParamsRound(r), which is r-2.
@@ -1111,7 +1101,7 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		agreementProto := config.Consensus[hdr.CurrentProtocol]
 
 		node.mu.Lock()
-		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
+		node.accountManager.DeleteOldKeys(latestHdr, agreementProto)
 		node.mu.Unlock()
 
 		// PKI TODO: Maybe we don't even need to flush the registry.

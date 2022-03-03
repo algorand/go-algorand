@@ -55,4 +55,5 @@ type Network interface {
 // this package.
 type Accounts interface {
 	StateProofKeys(basics.Round) []account.StateProofRecordForRound
+	DeleteStateProofKey(id account.ParticipationID, round basics.Round) error
 }

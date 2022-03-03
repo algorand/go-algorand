@@ -231,6 +231,8 @@ type ParticipationRegistry interface {
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
 	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
+	DeleteStateProofKeys(id ParticipationID, round basics.Round) error
+
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
 
@@ -339,6 +341,7 @@ const (
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
+	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<=?`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -407,6 +410,22 @@ type participationDB struct {
 	flushTimeout time.Duration
 }
 
+// DeleteStateProofKeys is a non-blocking operation, responsible for removing state-proof keys from the DB.
+func (db *participationDB) DeleteStateProofKeys(id ParticipationID, round basics.Round) error {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	if _, ok := db.cache[id]; !ok {
+		return ErrParticipationIDNotFound
+	}
+
+	db.writeQueue <- makeOpRequest(&deleteStateProofKeysOp{
+		ParticipationID: id,
+		round:           round,
+	})
+	return nil
+}
+
 type updatingParticipationRecord struct {
 	ParticipationRecord
 
@@ -439,6 +458,7 @@ func (db *participationDB) initializeCache() error {
 func (db *participationDB) writeThread() {
 	defer close(db.writeQueueDone)
 	var lastErr error
+
 	for op := range db.writeQueue {
 		if err := op.operation.apply(db); err != nil {
 			lastErr = err

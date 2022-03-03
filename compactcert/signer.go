@@ -17,8 +17,6 @@
 package compactcert
 
 import (
-	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -27,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
@@ -97,6 +96,7 @@ restart:
 
 			ccw.signBlock(hdr)
 			ccw.signedBlock(nextrnd)
+
 			nextrnd++
 
 		case <-ccw.ctx.Done():
@@ -167,7 +167,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	}
 
 	sigs := make([]sigFromAddr, 0, len(keys))
-
+	ids := make([]account.ParticipationID, 0, len(keys))
 	for _, key := range keys {
 		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
 			continue
@@ -194,39 +194,19 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			Round:  hdr.Round,
 			Sig:    sig,
 		})
+		ids = append(ids, key.ParticipationID)
 	}
 
-	for _, sfa := range sigs {
-		_, err = ccw.handleSig(sfa, nil)
-		if err != nil {
+	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
+	for i, sfa := range sigs {
+		if _, err := ccw.handleSig(sfa, nil); err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): handleSig: %v", hdr.Round, err)
+			continue
+		}
+
+		// Safe to delete key for sfa.Round because the signature is now stored in the disk.
+		if err := ccw.accts.DeleteStateProofKey(ids[i], sfa.Round); err != nil {
+			ccw.log.Warnf("ccw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
 		}
 	}
-}
-
-// LatestSigsFromThisNode returns information about compact cert signatures from
-// this node's participation keys that are already stored durably on disk.  In
-// particular, we return the round nunmber of the latest block signed with each
-// account's participation key.  This is intended for use by the ephemeral key
-// logic: since we already have these signatures stored on disk, it is safe to
-// delete the corresponding ephemeral private keys.
-func (ccw *Worker) LatestSigsFromThisNode() (map[basics.Address]basics.Round, error) {
-	res := make(map[basics.Address]basics.Round)
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		sigs, err := getPendingSigsFromThisNode(tx)
-		if err != nil {
-			return err
-		}
-
-		for rnd, psigs := range sigs {
-			for _, psig := range psigs {
-				if res[psig.signer] < rnd {
-					res[psig.signer] = rnd
-				}
-			}
-		}
-
-		return nil
-	})
-	return res, err
 }
