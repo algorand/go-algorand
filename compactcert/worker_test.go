@@ -503,8 +503,10 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusFuture]
 	s.advanceLatest(3 * proto.CompactCertRounds)
 	// Expect all signatures to be broadcast.
+
+	require.Zero(t, len(s.deletedStateProofKeys))
 	w.signBlock(s.blocks[basics.Round(proto.CompactCertRounds)])
-	require.Equal(t, len(s.keys), nParticipants)
+	require.Equal(t, len(s.deletedStateProofKeys), nParticipants)
 }
 
 func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
