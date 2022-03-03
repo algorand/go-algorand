@@ -199,9 +199,12 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
 	for i, sfa := range sigs {
-		_, err = ccw.handleSig(sfa, nil)
+		_, sigstatus, err := ccw.handleSig(sfa, nil)
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): handleSig: %v", hdr.Round, err)
+		}
+
+		if sigstatus != sigStored {
 			continue
 		}
 

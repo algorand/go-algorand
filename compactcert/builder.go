@@ -130,7 +130,7 @@ func (ccw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
-	fwd, err := ccw.handleSig(ssig, msg.Sender)
+	fwd, _, err := ccw.handleSig(ssig, msg.Sender)
 	if err != nil {
 		ccw.log.Warnf("ccw.handleSigMessage(): %v", err)
 	}
@@ -138,7 +138,15 @@ func (ccw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 	return network.OutgoingMessage{Action: fwd}
 }
 
-func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
+// used to state whether the signature was stored in db or not.
+type sigStatus int
+
+const (
+	sigRejected sigStatus = iota
+	sigStored
+)
+
+func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, sigStatus, error) {
 	ccw.mu.Lock()
 	defer ccw.mu.Unlock()
 
@@ -147,34 +155,34 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		latest := ccw.ledger.Latest()
 		latestHdr, err := ccw.ledger.BlockHdr(latest)
 		if err != nil {
-			return network.Disconnect, err
+			return network.Disconnect, sigRejected, err
 		}
 
 		if sfa.Round < latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
 			// Already have a complete compact cert in ledger.
 			// Ignore this sig.
-			return network.Ignore, nil
+			return network.Ignore, sigRejected, nil
 		}
 
 		builder, err = ccw.builderForRound(sfa.Round)
 		if err != nil {
-			return network.Disconnect, err
+			return network.Disconnect, sigRejected, err
 		}
 	}
 
 	pos, ok := builder.voters.AddrToPos[sfa.Signer]
 	if !ok {
-		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.Signer, sfa.Round)
+		return network.Disconnect, sigRejected, fmt.Errorf("handleSig: %v not in participants for %d", sfa.Signer, sfa.Round)
 	}
 
 	if builder.Present(pos) {
 		// Signature already part of the builder, ignore.
-		return network.Ignore, nil
+		return network.Ignore, sigRejected, nil
 	}
 
 	err := builder.Add(pos, sfa.Sig, true)
 	if err != nil {
-		return network.Disconnect, err
+		return network.Disconnect, sigRejected, err
 	}
 
 	err = ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -185,10 +193,10 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		})
 	})
 	if err != nil {
-		return network.Ignore, err
+		return network.Ignore, sigRejected, err
 	}
 
-	return network.Broadcast, nil
+	return network.Broadcast, sigStored, nil
 }
 
 func (ccw *Worker) builder(latest basics.Round) {
