@@ -529,38 +529,31 @@ func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics
 }
 
 func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	r, err := ledger.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
-	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
-}
-
-func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	r, err := ledger.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
-	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
-}
-
-// lookupResource loads resources the requested round rnd.
-func (ledger *evalTestLedger) lookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	res := ledgercore.AccountResource{}
+	res := ledgercore.AppResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
 		return res, fmt.Errorf("no such account %s", addr.String())
 	}
-	if ctype == basics.AppCreatable {
-		if params, ok := ad.AppParams[basics.AppIndex(cidx)]; ok {
-			res.AppParams = &params
-		}
-		if ls, ok := ad.AppLocalStates[basics.AppIndex(cidx)]; ok {
-			res.AppLocalState = &ls
-		}
-	} else if ctype == basics.AssetCreatable {
-		if params, ok := ad.AssetParams[basics.AssetIndex(cidx)]; ok {
-			res.AssetParams = &params
-		}
-		if h, ok := ad.Assets[basics.AssetIndex(cidx)]; ok {
-			res.AssetHolding = &h
-		}
-	} else {
-		return res, fmt.Errorf("unknown ctype %d", ctype)
+	if params, ok := ad.AppParams[aidx]; ok {
+		res.AppParams = &params
+	}
+	if ls, ok := ad.AppLocalStates[aidx]; ok {
+		res.AppLocalState = &ls
+	}
+	return res, nil
+}
+
+func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	res := ledgercore.AssetResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if params, ok := ad.AssetParams[aidx]; ok {
+		res.AssetParams = &params
+	}
+	if h, ok := ad.Assets[aidx]; ok {
+		res.AssetHolding = &h
 	}
 	return res, nil
 }
@@ -736,17 +729,11 @@ func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (
 }
 
 func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
-	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+	return ledgercore.AppResource{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
-	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
-}
-
-func (l *testCowBaseLedger) lookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	return ledgercore.AccountResource{}, errors.New("not implemented")
+	return ledgercore.AssetResource{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
