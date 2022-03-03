@@ -23,17 +23,12 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
-)
-
-var (
-	voteBufferSize     = 10000
-	proposalBufferSize = 25
-	bundleBufferSize   = 7
 )
 
 var messagesHandledTotal = metrics.MakeCounter(metrics.AgreementMessagesHandled)
@@ -64,12 +59,12 @@ type networkImpl struct {
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
-func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
+func WrapNetwork(net network.GossipNode, log logging.Logger, cfg config.Local) agreement.Network {
 	i := new(networkImpl)
 
-	i.voteCh = make(chan agreement.Message, voteBufferSize)
-	i.proposalCh = make(chan agreement.Message, proposalBufferSize)
-	i.bundleCh = make(chan agreement.Message, bundleBufferSize)
+	i.voteCh = make(chan agreement.Message, cfg.AgreementIncomingVotesQueueLength)
+	i.proposalCh = make(chan agreement.Message, cfg.AgreementIncomingProposalsQueueLength)
+	i.bundleCh = make(chan agreement.Message, cfg.AgreementIncomingBundlesQueueLength)
 
 	i.net = net
 	i.log = log
