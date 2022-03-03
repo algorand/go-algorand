@@ -36,18 +36,16 @@ var (
 	bundleBufferSize   = 7
 )
 
-var messagesHandled = metrics.MakeCounter(metrics.AgreementMessagesHandled)
-var messagesDropped = metrics.MakeCounter(metrics.AgreementMessagesDropped)
+var messagesHandledTotal = metrics.MakeCounter(metrics.AgreementMessagesHandled)
+var messagesHandledByType = metrics.NewTagCounter("algod_agreement_handled_{TAG}", "Number of agreement messages handled per type")
+var messagesDroppedTotal = metrics.MakeCounter(metrics.AgreementMessagesDropped)
+var messagesDroppedByType = metrics.NewTagCounter("algod_agreement_dropped_{TAG}", "Number of agreement messages handled per type")
 
-var agreementVoteMessage = map[string]string{
-	"message_type": "vote",
-}
-var agreementProposalMessage = map[string]string{
-	"message_type": "proposal",
-}
-var agreementBundleMessage = map[string]string{
-	"message_type": "bundle",
-}
+const (
+	agreementVoteMessageType     = "vote"
+	agreementProposalMessageType = "proposal"
+	agreementBundleMessageType   = "bundle"
+)
 
 type messageMetadata struct {
 	raw network.IncomingMessage
@@ -102,22 +100,22 @@ func messageMetadataFromHandle(h agreement.MessageHandle) *messageMetadata {
 }
 
 func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.OutgoingMessage {
-	return i.processMessage(raw, i.voteCh, agreementVoteMessage)
+	return i.processMessage(raw, i.voteCh, agreementVoteMessageType)
 }
 
 func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
 	if i.trace != nil {
 		i.trace.HashTrace(messagetracer.Proposal, raw.Data)
 	}
-	return i.processMessage(raw, i.proposalCh, agreementProposalMessage)
+	return i.processMessage(raw, i.proposalCh, agreementProposalMessageType)
 }
 
 func (i *networkImpl) processBundleMessage(raw network.IncomingMessage) network.OutgoingMessage {
-	return i.processMessage(raw, i.bundleCh, agreementBundleMessage)
+	return i.processMessage(raw, i.bundleCh, agreementBundleMessageType)
 }
 
 // i.e. process<Type>Message
-func (i *networkImpl) processMessage(raw network.IncomingMessage, submit chan<- agreement.Message, msgType map[string]string) network.OutgoingMessage {
+func (i *networkImpl) processMessage(raw network.IncomingMessage, submit chan<- agreement.Message, msgType string) network.OutgoingMessage {
 	metadata := &messageMetadata{raw: raw}
 
 	select {
@@ -125,9 +123,11 @@ func (i *networkImpl) processMessage(raw network.IncomingMessage, submit chan<- 
 		// It would be slightly better to measure at de-queue
 		// time, but that happens in many places in code and
 		// this is much easier.
-		messagesHandled.Inc(msgType)
+		messagesHandledTotal.Inc(nil)
+		messagesHandledByType.Add(msgType, 1)
 	default:
-		messagesDropped.Inc(msgType)
+		messagesDroppedTotal.Inc(nil)
+		messagesDroppedByType.Add(msgType, 1)
 	}
 
 	// Immediately ignore everything here, sometimes Relay/Broadcast/Disconnect later based on API handles saved from IncomingMessage
