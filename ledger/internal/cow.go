@@ -38,7 +38,18 @@ import (
 //                  ||     ||
 
 type roundCowParent interface {
-	lookup(basics.Address) (basics.AccountData, error)
+	// lookup retrieves data about an address, eventually querying the ledger if the address was not found in cache.
+	lookup(basics.Address) (ledgercore.AccountData, error)
+
+	// lookupAppParams, lookupAssetParams, lookupAppLocalState, and lookupAssetHolding retrieve data for a given address and ID.
+	// If cacheOnly is set, the ledger DB will not be queried, and only the cache will be consulted.
+	// This is used when we know a given value is already in cache (from a previous query for that same address and ID),
+	// and would rather have an error returned if that assumption is wrong, rather than hit the ledger.
+	lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error)
+	lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error)
+	lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error)
+	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error)
+
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -102,31 +113,17 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
-	var err error
 	if len(cb.sdeltas) == 0 {
 		return cb.mods
 	}
 
 	// Apply storage deltas to account deltas
-	// 1. Ensure all addresses from sdeltas have entries in accts because
-	//    SetKey/DelKey work only with sdeltas, so need to pull missing accounts
-	// 2. Call applyStorageDelta for every delta per account
 	for addr, smap := range cb.sdeltas {
-		var delta basics.AccountData
-		var exist bool
-		if delta, exist = cb.mods.Accts.Get(addr); !exist {
-			ad, err := cb.lookup(addr)
-			if err != nil {
-				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
-			}
-			delta = ad
-		}
 		for aapp, storeDelta := range smap {
-			if delta, err = applyStorageDelta(delta, aapp, storeDelta); err != nil {
+			if err := applyStorageDelta(cb, addr, aapp, storeDelta); err != nil {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
 		}
-		cb.mods.Accts.Upsert(addr, delta)
 	}
 	return cb.mods
 }
@@ -154,13 +151,49 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cb.lookupParent.getCreator(cidx, ctype)
 }
 
-func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
-	d, ok := cb.mods.Accts.Get(addr)
+func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountData, err error) {
+	d, ok := cb.mods.Accts.GetData(addr)
 	if ok {
 		return d, nil
 	}
 
 	return cb.lookupParent.lookup(addr)
+}
+
+func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
+	params, ok := cb.mods.Accts.GetAppParams(addr, aidx)
+	if ok {
+		return params, ok, nil
+	}
+
+	return cb.lookupParent.lookupAppParams(addr, aidx, cacheOnly)
+}
+
+func (cb *roundCowState) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error) {
+	params, ok := cb.mods.Accts.GetAssetParams(addr, aidx)
+	if ok {
+		return params, ok, nil
+	}
+
+	return cb.lookupParent.lookupAssetParams(addr, aidx, cacheOnly)
+}
+
+func (cb *roundCowState) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error) {
+	state, ok := cb.mods.Accts.GetAppLocalState(addr, aidx)
+	if ok {
+		return state, ok, nil
+	}
+
+	return cb.lookupParent.lookupAppLocalState(addr, aidx, cacheOnly)
+}
+
+func (cb *roundCowState) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error) {
+	holding, ok := cb.mods.Accts.GetAssetHolding(addr, aidx)
+	if ok {
+		return holding, ok, nil
+	}
+
+	return cb.lookupParent.lookupAssetHolding(addr, aidx, cacheOnly)
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -255,12 +288,6 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
-	for index, created := range cb.mods.ModifiedAssetHoldings {
-		cb.commitParent.mods.ModifiedAssetHoldings[index] = created
-	}
-	for index, created := range cb.mods.ModifiedAppLocalStates {
-		cb.commitParent.mods.ModifiedAppLocalStates[index] = created
-	}
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
