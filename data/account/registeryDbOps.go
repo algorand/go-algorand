@@ -71,6 +71,8 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 		}
 
 		stmt, err := tx.Prepare(deleteStateProofKeysQuery)
+		defer stmt.Close()
+
 		if err != nil {
 			return fmt.Errorf("unable to prepare state proof insert: %w", err)
 		}
