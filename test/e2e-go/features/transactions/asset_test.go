@@ -255,6 +255,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	confirmed := fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "creating max number of assets")
+	txids = make(map[string]string)
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
@@ -335,6 +336,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "changing keys")
+	txids = make(map[string]string)
 
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
