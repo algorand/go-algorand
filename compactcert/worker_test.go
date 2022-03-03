@@ -486,7 +486,8 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	nParticipants := 2
+	for i := 0; i < nParticipants; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -503,9 +504,7 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	s.advanceLatest(3 * proto.CompactCertRounds)
 	// Expect all signatures to be broadcast.
 	w.signBlock(s.blocks[basics.Round(proto.CompactCertRounds)])
-	for _, round := range s.deletedStateProofKeys {
-		require.Equal(t, round, basics.Round(proto.CompactCertRounds))
-	}
+	require.Equal(t, len(s.keys), nParticipants)
 }
 
 func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
