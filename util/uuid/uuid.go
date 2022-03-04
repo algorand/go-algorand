@@ -26,7 +26,10 @@ import (
 // contains completly random bytes.
 func New() string {
 	var buffer [16]byte
-	rand.Read(buffer[:])
+	_, err := rand.Read(buffer[:])
+	if err != nil {
+		panic(fmt.Errorf("unable to randomize buffer in uuid.New() : %w", err))
+	}
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", int64(buffer[0])+int64(buffer[1])<<8+int64(buffer[2])<<16+int64(buffer[3])<<24,
 		int64(buffer[4])+int64(buffer[5])<<8,
 		int64(buffer[6])+int64(buffer[7])<<8,
