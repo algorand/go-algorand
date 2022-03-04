@@ -3,7 +3,6 @@
 import os
 import sys
 from goal import Goal
-import algosdk.logic as logic
 
 from datetime import datetime
 
@@ -14,28 +13,33 @@ goal = Goal(sys.argv[1], autosend=True)
 
 joe = goal.new_account()
 
-txinfo1, err = goal.pay(goal.account, joe, amt=500_000)
+_, err = goal.pay(goal.account, joe, amt=500_000_000)
 assert not err, err
 
-txinfo1, err = goal.keyreg(joe, nonpart=True)
+_, err = goal.keyreg(joe, nonpart=True)
 assert not err, err
-joeb = goal.balance(joe)
 
-# app1 calls the clear state program of app2 (after opting into it) which issues an
-# inner app call to app3. This verifies that both accessing a CSP through inner app
-# calls and issuing inner app calls from a CSP is possible.
+# On creation app1 does nothing to avoid fee complications. Further calls to app1 must
+# contain an app arg that determines the execution path. An arg value of 0 opts app1 
+# into app2 while a nonzero value issues an inner app call to app2's CSP. This verifies
+# that both accessing a CSP through inner app calls and issuing inner app calls from a
+# CSP is possible.
 app1 = """
 #pragma version 6
  txn ApplicationID
  bz end
+
+ int 0
+ txn ApplicationArgs 0
+ btoi
+ ==
+ bz nxt
 
  itxn_begin
   int appl
   itxn_field TypeEnum
 
   txn Applications 1
-  dup
-  store 0
   itxn_field ApplicationID
 
   int OptIn
@@ -43,12 +47,15 @@ app1 = """
 
   txn Applications 2
   itxn_field Applications
+ itxn_submit
+ b end
 
- itxn_next
+ nxt:
+ itxn_begin
   int appl
   itxn_field TypeEnum
 
-  load 0
+  txn Applications 1
   itxn_field ApplicationID
 
   txn Applications 2
@@ -89,6 +96,7 @@ int 1
 
 goal.autosend = True
 
+# app1 creation
 txinfo1, err = goal.app_create(joe, goal.assemble(app1))
 assert not err, err
 app1ID = txinfo1['application-index']
@@ -106,15 +114,32 @@ assert not err, err
 app3ID = txinfo3['application-index']
 assert app3ID
 
-# fund the apps
-txinfo1, err = goal.pay(goal.account, goal.app_address(app1ID), amt=4_000_000)
+# fund app1
+_, err = goal.pay(goal.account, goal.app_address(app1ID), amt=4_000_000)
 assert not err, err
 
-txinfo2, err = goal.pay(goal.account, goal.app_address(app2ID), amt=4_000_000)
+# fund app2
+_, err = goal.pay(goal.account, goal.app_address(app2ID), amt=4_000_000)
 assert not err, err
 
-# execute c2c w/ CSP
-start_app, err = goal.app_call(joe, app1ID, foreign_apps=[int(app2ID), int(app3ID)])
+# execute c2c to opt app1 into app2
+_, err = goal.app_call(joe, app1ID, app_args=[0x00], foreign_apps=[int(app2ID), int(app3ID)])
+assert not err, err
+
+# execute c2c w/ CSP to opt app1 out of app2
+_, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
+assert not err, err
+
+# attemp additional CSP inner app call that's intended to fail because app1 is
+# no longer opted into app2 after previous call to CSP.
+_, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
+assert err
+
+# opt app1 into app2 again and call CSP again to verify that re optin works as expected
+_, err = goal.app_call(joe, app1ID, app_args=[0x00], foreign_apps=[int(app2ID), int(app3ID)])
+assert not err, err
+
+_, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
 assert not err, err
 
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")
