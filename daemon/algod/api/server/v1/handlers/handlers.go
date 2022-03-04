@@ -1314,7 +1314,7 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	lastRound := ledger.Latest()
-	resource, err := ledger.LookupResource(lastRound, creator, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	resource, err := ledger.LookupAsset(lastRound, creator, aidx)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
@@ -1414,7 +1414,7 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 	var result v1.AssetList
 	for _, aloc := range alocs {
 		// Fetch the asset parameters
-		record, err := ledger.LookupResource(lastRound, aloc.Creator, aloc.Index, basics.AssetCreatable)
+		record, err := ledger.LookupAsset(lastRound, aloc.Creator, basics.AssetIndex(aloc.Index))
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 			return

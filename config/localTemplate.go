@@ -435,6 +435,15 @@ type Local struct {
 	// asset holdings, and application local state) per account that will be allowed in AccountInformation
 	// REST API responses before returning a 400 Bad Request. Set zero for no limit.
 	MaxAPIResourcesPerAccount uint64 `version[21]:"100000"`
+
+	// AgreementIncomingVotesQueueLength sets the size of the buffer holding incoming votes.
+	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000"`
+
+	// AgreementIncomingProposalsQueueLength sets the size of the buffer holding incoming proposals.
+	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25"`
+
+	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
+	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

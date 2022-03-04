@@ -508,7 +508,17 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			task.address = &creator
 		}
 		var resource ledgercore.AccountResource
-		resource, err = p.ledger.LookupResource(p.rnd, *task.address, task.creatableIndex, task.creatableType)
+		if task.creatableType == basics.AppCreatable {
+			var appResource ledgercore.AppResource
+			appResource, err = p.ledger.LookupApplication(p.rnd, *task.address, basics.AppIndex(task.creatableIndex))
+			resource.AppParams = appResource.AppParams
+			resource.AppLocalState = appResource.AppLocalState
+		} else {
+			var assetResource ledgercore.AssetResource
+			assetResource, err = p.ledger.LookupAsset(p.rnd, *task.address, basics.AssetIndex(task.creatableIndex))
+			resource.AssetParams = assetResource.AssetParams
+			resource.AssetHolding = assetResource.AssetHolding
+		}
 		if err != nil {
 			// there was an error loading that entry.
 			break
