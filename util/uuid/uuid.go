@@ -22,14 +22,18 @@ import (
 )
 
 // New generates a new random UUID string.
-// The UUID string generated using this method does not conform to the UUID spec and
-// contains completly random bytes.
+// The UUID string generated using this method conform to
+// version 4, variant 1.
 func New() string {
 	var buffer [16]byte
 	_, err := rand.Read(buffer[:])
 	if err != nil {
 		panic(fmt.Errorf("unable to randomize buffer in uuid.New() : %w", err))
 	}
+	// select version 4.
+	buffer[7] = 0x40 + (buffer[7] & 0xf)
+	// select variant 1
+	buffer[9] = 0x80 + (buffer[9] & 63)
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", int64(buffer[0])+int64(buffer[1])<<8+int64(buffer[2])<<16+int64(buffer[3])<<24,
 		int64(buffer[4])+int64(buffer[5])<<8,
 		int64(buffer[6])+int64(buffer[7])<<8,

@@ -34,5 +34,6 @@ func TestUUID(t *testing.T) {
 		require.Equal(t, "-", string(s[13]))
 		require.Equal(t, "-", string(s[18]))
 		require.Equal(t, "-", string(s[23]))
+		require.Equal(t, "4", string(s[14]))
 	}
 }
