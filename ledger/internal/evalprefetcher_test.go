@@ -32,6 +32,22 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func acctAddrPtr(i int) (o *basics.Address) {
+	o = new(basics.Address)
+	o[0] = byte(i)
+	o[1] = byte(i >> 8)
+	o[2] = byte(i >> 16)
+	return
+}
+
+func acctAddr(i int) (o basics.Address) {
+	t := *acctAddrPtr(i)
+	copy(o[:], t[:])
+	return
+}
+
+const proto = protocol.ConsensusCurrentVersion
+
 type prefetcherTestLedger struct {
 	round    basics.Round
 	balances map[basics.Address]ledgercore.AccountData
@@ -66,7 +82,7 @@ func (l *prefetcherTestLedger) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
 func (l *prefetcherTestLedger) GenesisProto() config.ConsensusParams {
-	return config.Consensus[protocol.ConsensusCurrentVersion]
+	return config.Consensus[proto]
 }
 func (l *prefetcherTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	return l.round, ledgercore.AccountTotals{}, nil
@@ -75,21 +91,67 @@ func (l *prefetcherTestLedger) CompactCertVoters(basics.Round) (*ledgercore.Vote
 	return nil, nil
 }
 
+type loadedAccountDataEntryKey struct {
+	addressExists bool
+	address       basics.Address
+}
+
+func convertLoadedAccountDataEntries(entries []loadedAccountDataEntry) map[loadedAccountDataEntryKey]*ledgercore.AccountData {
+	res := make(map[loadedAccountDataEntryKey]*ledgercore.AccountData)
+
+	for _, e := range entries {
+		var key loadedAccountDataEntryKey
+		if e.address != nil {
+			key.addressExists = true
+			key.address = *e.address
+		}
+
+		res[key] = e.data
+	}
+
+	return res
+}
+
+func compareLoadedAccountDataEntries(t *testing.T, expected []loadedAccountDataEntry, actual []loadedAccountDataEntry) {
+	expectedForTest := convertLoadedAccountDataEntries(expected)
+	actualForTest := convertLoadedAccountDataEntries(actual)
+	require.Equal(t, expectedForTest, actualForTest)
+}
+
+type loadedResourcesEntryKey struct {
+	addressExists  bool
+	address        basics.Address
+	creatableIndex basics.CreatableIndex
+	creatableType  basics.CreatableType
+}
+
+func convertLoadedResourcesEntries(entries []loadedResourcesEntry) map[loadedResourcesEntryKey]*ledgercore.AccountResource {
+	res := make(map[loadedResourcesEntryKey]*ledgercore.AccountResource)
+
+	for _, e := range entries {
+		key := loadedResourcesEntryKey{
+			creatableIndex: e.creatableIndex,
+			creatableType:  e.creatableType,
+		}
+		if e.address != nil {
+			key.addressExists = true
+			key.address = *e.address
+		}
+
+		res[key] = e.resource
+	}
+
+	return res
+}
+
+func compareLoadedResourcesEntries(t *testing.T, expected []loadedResourcesEntry, actual []loadedResourcesEntry) {
+	expectedForTest := convertLoadedResourcesEntries(expected)
+	actualForTest := convertLoadedResourcesEntries(actual)
+	require.Equal(t, expectedForTest, actualForTest)
+}
+
 func TestEvaluatorPrefetcher(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
 
 	rnd := basics.Round(5)
 	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -105,15 +167,16 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 	ledger.creators[1001] = acctAddr(2)
 	ledger.creators[2001] = acctAddr(15)
 
-	type testTransactionCases struct {
+	type testCase struct {
+		name      string
 		signedTxn transactions.SignedTxn
 		accounts  []loadedAccountDataEntry
 		resources []loadedResourcesEntry
 	}
 
-	testTransactions := []testTransactionCases{
-		// payment transaction
+	testCases := []testCase{
 		{
+			name: "payment transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
@@ -153,8 +216,8 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				},
 			},
 		},
-		// asset config transaction for a non-existing asset
 		{
+			name: "asset config transaction for a non-existing asset",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
@@ -189,8 +252,8 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				},
 			},
 		},
-		// asset config transaction for an existing asset
 		{
+			name: "asset config transaction for an existing asset",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
@@ -225,8 +288,8 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				},
 			},
 		},
-		// asset transfer transaction
 		{
+			name: "asset transfer transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetTransferTx,
@@ -300,8 +363,8 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				},
 			},
 		},
-		// asset freeze transaction
 		{
+			name: "asset freeze transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetFreezeTx,
@@ -349,8 +412,8 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				},
 			},
 		},
-		// application transaction
 		{
+			name: "application transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
@@ -435,81 +498,28 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 	}
 
-	for _, txn := range testTransactions {
-		groups := make([][]transactions.SignedTxnWithAD, 1)
-		groups[0] = make([]transactions.SignedTxnWithAD, 1)
-		groups[0][0].SignedTxn = txn.signedTxn
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			groups := make([][]transactions.SignedTxnWithAD, 1)
+			groups[0] = make([]transactions.SignedTxnWithAD, 1)
+			groups[0][0].SignedTxn = testCase.signedTxn
 
-		preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+			preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 
-		for loadedTxnGroup := range preloadedTxnGroupsCh {
+			loadedTxnGroup, ok := <-preloadedTxnGroupsCh
+			require.True(t, ok)
 			require.NoError(t, loadedTxnGroup.err)
+			compareLoadedAccountDataEntries(t, testCase.accounts, loadedTxnGroup.accounts)
+			compareLoadedResourcesEntries(t, testCase.resources, loadedTxnGroup.resources)
 
-			// compare the txn.accounts and loadedTxnGroup.accounts in order agnostic way.
-			require.Equal(t, len(txn.accounts), len(loadedTxnGroup.accounts))
-			for _, acct := range txn.accounts {
-				// make sure we find it in loadedTxnGroup.accounts
-				found := false
-				require.NotNil(t, acct.address)
-				for k, loadedAcct := range loadedTxnGroup.accounts {
-					require.NotNilf(t, loadedAcct.address, "index: %d\nexpected %#v\nactual %#v", k, acct, loadedAcct)
-					if *acct.address != *loadedAcct.address {
-						continue
-					}
-					require.Equal(t, *acct.data, *loadedAcct.data)
-					found = true
-					break
-				}
-				require.Truef(t, found, "missing account %#v", acct)
-			}
-
-			// compare the txn.resources and loadedTxnGroup.resources in order agnostic way
-			require.Equalf(t, len(txn.resources), len(loadedTxnGroup.resources), "mismatching resources count; actual : %v", loadedTxnGroup.resources)
-			for _, res := range txn.resources {
-				// make sure we find it in loadedTxnGroup.resources
-				found := false
-				for _, loadedRes := range loadedTxnGroup.resources {
-					if res.creatableIndex != loadedRes.creatableIndex {
-						continue
-					}
-					require.Equal(t, res.creatableType, loadedRes.creatableType)
-					if res.address == nil {
-						require.Nil(t, loadedRes.address)
-					} else {
-						if loadedRes.address == nil || *res.address != *loadedRes.address {
-							continue
-						}
-					}
-					if res.resource == nil {
-						require.Nil(t, loadedRes.resource)
-					} else {
-						require.NotNil(t, loadedRes.resource)
-						require.Equal(t, *res.resource, *loadedRes.resource)
-					}
-					found = true
-					break
-				}
-				require.Truef(t, found, "failed to find resource %#v", res)
-			}
-		}
+			_, ok = <-preloadedTxnGroupsCh
+			require.False(t, ok)
+		})
 	}
 }
 
 func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
 
 	rnd := basics.Round(5)
 	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -548,7 +558,7 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 			addr += 2
 		}
 	}
-	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, txnGroups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, txnGroups, feeSinkAddr, config.Consensus[proto])
 	groupsCount := 0
 	addressCount := 0
 	uniqueAccounts := make(map[basics.Address]bool)
@@ -567,19 +577,6 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 }
 
 func BenchmarkPrefetcherApps(b *testing.B) {
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
-
 	txnGroupLen := 16
 	groups := make([][]transactions.SignedTxnWithAD, 1+b.N/txnGroupLen)
 	for grpIdx := range groups {
@@ -621,26 +618,13 @@ func BenchmarkPrefetcherApps(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 	for k := range preloadedTxnGroupsCh {
 		require.NoError(b, k.err)
 	}
 }
 
 func BenchmarkPrefetcherPayment(b *testing.B) {
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
-
 	txnGroupLen := 16
 	groups := make([][]transactions.SignedTxnWithAD, 1+b.N/txnGroupLen)
 	for grpIdx := range groups {
@@ -672,7 +656,7 @@ func BenchmarkPrefetcherPayment(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 	for k := range preloadedTxnGroupsCh {
 		require.NoError(b, k.err)
 	}
