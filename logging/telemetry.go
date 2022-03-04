@@ -213,12 +213,14 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		err = cfg.Save(configPath)
 	}
 
-	ch := config.GetCurrentVersion().Channel
+	ver := config.GetCurrentVersion()
+	ch := ver.Channel
 	// Should not happen, but default to "dev" if channel is unspecified.
 	if ch == "" {
 		ch = "dev"
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
 
 	return cfg, created, err
 }
