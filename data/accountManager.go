@@ -35,10 +35,12 @@ import (
 type AccountManager struct {
 	mu deadlock.Mutex
 
+	// syncronized by mu
 	partKeys map[account.ParticipationKeyIdentity]account.PersistedParticipation
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
+	// syncronized by mu
 	registeredAccounts map[string]bool
 
 	registry account.ParticipationRegistry
@@ -168,37 +170,40 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 
 	manager.mu.Lock()
 	pendingItems := make(map[string]<-chan error, len(manager.partKeys))
-	func() {
-		defer manager.mu.Unlock()
-		for _, part := range manager.partKeys {
-			// We need a key for round r+1 for agreement.
-			nextRound := latestHdr.Round + 1
 
-			if latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound > 0 {
-				// We need a key for the next compact cert round.
-				// This would be CompactCertNextRound+1 (+1 because compact
-				// cert code uses the next round's ephemeral key), except
-				// if we already used that key to produce a signature (as
-				// reported in ccSigs).
-				nextCC := latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound + 1
-				if ccSigs[part.Parent] >= nextCC {
-					nextCC = ccSigs[part.Parent] + basics.Round(latestProto.CompactCertRounds) + 1
-				}
+	partKeys := make([]account.PersistedParticipation, 0, len(manager.partKeys))
+	for _, part := range manager.partKeys {
+		partKeys = append(partKeys, part)
+	}
+	manager.mu.Unlock()
+	for _, part := range partKeys {
+		// We need a key for round r+1 for agreement.
+		nextRound := latestHdr.Round + 1
 
-				if nextCC < nextRound {
-					nextRound = nextCC
-				}
+		if latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound > 0 {
+			// We need a key for the next compact cert round.
+			// This would be CompactCertNextRound+1 (+1 because compact
+			// cert code uses the next round's ephemeral key), except
+			// if we already used that key to produce a signature (as
+			// reported in ccSigs).
+			nextCC := latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound + 1
+			if ccSigs[part.Parent] >= nextCC {
+				nextCC = ccSigs[part.Parent] + basics.Round(latestProto.CompactCertRounds) + 1
 			}
 
-			// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
-			first, last := part.ValidInterval()
-			errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
-				part.Address().String(), first, last, nextRound)
-			errCh := part.DeleteOldKeys(nextRound, agreementProto)
-
-			pendingItems[errString] = errCh
+			if nextCC < nextRound {
+				nextRound = nextCC
+			}
 		}
-	}()
+
+		// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
+		first, last := part.ValidInterval()
+		errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
+			part.Address().String(), first, last, nextRound)
+		errCh := part.DeleteOldKeys(nextRound, agreementProto)
+
+		pendingItems[errString] = errCh
+	}
 
 	// wait for all disk flushes, and report errors as they appear.
 	for errString, errCh := range pendingItems {

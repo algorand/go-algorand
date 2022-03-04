@@ -1011,11 +1011,11 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 		return nil
 	}
 	keys := part.StateProofSecrets.GetAllKeys()
-	keysSinger := make(account.StateProofKeys, len(keys))
+	keysSigner := make(account.StateProofKeys, len(keys))
 	for i := uint64(0); i < uint64(len(keys)); i++ {
-		keysSinger[i] = keys[i]
+		keysSigner[i] = keys[i]
 	}
-	return node.accountManager.Registry().AppendKeys(partID, keysSinger)
+	return node.accountManager.Registry().AppendKeys(partID, keysSigner)
 
 }
 
