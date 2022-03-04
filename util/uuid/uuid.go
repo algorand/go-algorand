@@ -18,6 +18,7 @@ package uuid
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 )
 
@@ -31,12 +32,12 @@ func New() string {
 		panic(fmt.Errorf("unable to randomize buffer in uuid.New() : %w", err))
 	}
 	// select version 4.
-	buffer[7] = 0x40 + (buffer[7] & 0xf)
+	buffer[6] = 0x40 | (buffer[6] & 0xf)
 	// select variant 1
-	buffer[9] = 0x80 + (buffer[9] & 63)
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", int64(buffer[0])+int64(buffer[1])<<8+int64(buffer[2])<<16+int64(buffer[3])<<24,
-		int64(buffer[4])+int64(buffer[5])<<8,
-		int64(buffer[6])+int64(buffer[7])<<8,
-		int64(buffer[8])+int64(buffer[9])<<8,
-		int64(buffer[10])+int64(buffer[11])<<8+int64(buffer[12])<<16+int64(buffer[13])<<24+int64(buffer[14])<<32+int64(buffer[15])<<40)
+	buffer[8] = 0x80 | (buffer[8] & 0x3f)
+	return hex.EncodeToString(buffer[:4]) + "-" +
+		hex.EncodeToString(buffer[4:6]) + "-" +
+		hex.EncodeToString(buffer[6:8]) + "-" +
+		hex.EncodeToString(buffer[8:10]) + "-" +
+		hex.EncodeToString(buffer[10:])
 }
