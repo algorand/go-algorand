@@ -194,20 +194,12 @@ func (counter *Counter) AddMetric(values map[string]string) {
 		return
 	}
 
-	if len(counter.values) == 1 {
-		for _, l := range counter.values {
-			sum := l.counter
-			if len(l.labels) == 0 {
-				sum += float64(atomic.LoadUint64(&counter.intValue))
-			}
+	for _, l := range counter.values {
+		sum := l.counter
+		if len(l.labels) == 0 {
+			sum += float64(atomic.LoadUint64(&counter.intValue))
+		}
 
-			values[counter.name] = strconv.FormatFloat(sum, 'f', -1, 32)
-		}
-	} else {
-		for label, counterIdx := range counter.labels {
-			valueIdx := counter.valuesIndices[counterIdx]
-			value := counter.values[valueIdx]
-			values[counter.name+"["+label+"]"] = strconv.FormatFloat(value.counter, 'f', -1, 32)
-		}
+		values[counter.name] = strconv.FormatFloat(sum, 'f', -1, 32)
 	}
 }
