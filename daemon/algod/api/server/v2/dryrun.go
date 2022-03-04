@@ -310,26 +310,32 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
-func (dl *dryrunLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	ad, _, err := dl.lookup(rnd, addr)
 	if err != nil {
-		return ledgercore.AccountResource{}, err
+		return ledgercore.AppResource{}, err
 	}
-	var result ledgercore.AccountResource
-	if ctype == basics.AppCreatable {
-		if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
-			result.AppParams = &p
-		}
-		if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
-			result.AppLocalState = &s
-		}
-	} else if ctype == basics.AssetCreatable {
-		if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-			result.AssetParams = &p
-		}
-		if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
-			result.AssetHolding = &p
-		}
+	var result ledgercore.AppResource
+	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+		result.AppParams = &p
+	}
+	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+		result.AppLocalState = &s
+	}
+	return result, nil
+}
+
+func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	ad, _, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return ledgercore.AssetResource{}, err
+	}
+	var result ledgercore.AssetResource
+	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+		result.AssetParams = &p
+	}
+	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+		result.AssetHolding = &p
 	}
 	return result, nil
 }

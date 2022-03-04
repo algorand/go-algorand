@@ -64,25 +64,29 @@ func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, er
 
 func (l *mockLedger) Latest() basics.Round { return l.latest }
 
-func (l *mockLedger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ar ledgercore.AccountResource, err error) {
+func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ar ledgercore.AssetResource, err error) {
 	ad, ok := l.accounts[addr]
 	if !ok {
-		return ledgercore.AccountResource{}, nil
+		return ledgercore.AssetResource{}, nil
 	}
-	if ctype == basics.AppCreatable {
-		if ap, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
-			ar.AppParams = &ap
-		}
-		if ls, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
-			ar.AppLocalState = &ls
-		}
-	} else {
-		if ap, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-			ar.AssetParams = &ap
-		}
-		if ah, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
-			ar.AssetHolding = &ah
-		}
+	if ap, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+		ar.AssetParams = &ap
+	}
+	if ah, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+		ar.AssetHolding = &ah
+	}
+	return ar, nil
+}
+func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ar ledgercore.AppResource, err error) {
+	ad, ok := l.accounts[addr]
+	if !ok {
+		return ledgercore.AppResource{}, nil
+	}
+	if ap, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+		ar.AppParams = &ap
+	}
+	if ls, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+		ar.AppLocalState = &ls
 	}
 	return ar, nil
 }

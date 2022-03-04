@@ -115,7 +115,17 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 	return *accountData, round, nil
 }
 
-func (l indexerLedgerConnector) LookupResource(round basics.Round, address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (l indexerLedgerConnector) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+func (l indexerLedgerConnector) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+func (l indexerLedgerConnector) lookupResource(round basics.Round, address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	// check to see if the account data in the cache.
 	if creatableMap, ok := l.roundResources.Resources[address]; ok {
 		if resource, ok := creatableMap[Creatable{aidx, ctype}]; ok {
