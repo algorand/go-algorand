@@ -79,15 +79,10 @@ func (b *Builder) Present(pos uint64) bool {
 	return b.sigs[pos].Weight != 0
 }
 
-// Add a signature to the set of signatures available for building a certificate.
+// IsValid verifies that the participant along with the signature can be inserted to the builder.
 // verifySig should be set to true in production; setting it to false is useful
 // for benchmarking to avoid the cost of signature checks.
-func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool) error {
-	if b.Present(pos) {
-		return fmt.Errorf("position %d already added", pos)
-	}
-
-	// Check participants array
+func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig bool) error {
 	if pos >= uint64(len(b.participants)) {
 		return fmt.Errorf("pos %d >= len(participants) %d", pos, len(b.participants))
 	}
@@ -107,6 +102,12 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 			return err
 		}
 	}
+	return nil
+}
+
+// Add a signature to the set of signatures available for building a certificate.
+func (b *Builder) Add(pos uint64, sig merklesignature.Signature) {
+	p := b.participants[pos]
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
@@ -114,7 +115,6 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 	b.signedWeight += p.Weight
 	b.cert = nil
 	b.sigsHasValidL = false
-	return nil
 }
 
 // Ready returns whether the certificate is ready to be built.

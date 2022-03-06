@@ -121,10 +121,9 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	for i := 0; i < npart; i++ {
-		err = b.Add(uint64(i), sigs[i], !doLargeTest)
-		if err != nil {
-			t.Error(err)
-		}
+		a.False(b.Present(uint64(i)))
+		a.NoError(b.IsValid(uint64(i), sigs[i], !doLargeTest))
+		b.Add(uint64(i), sigs[i])
 	}
 
 	cert, err := b.Build()
@@ -262,8 +261,9 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	a.NoError(err)
 
 	for i := 0; i < numPart; i++ {
-		err = b.Add(uint64(i), sigs[i], false)
-		a.NoError(err)
+		a.False(b.Present(uint64(i)))
+		a.NoError(b.IsValid(uint64(i), sigs[i], false))
+		b.Add(uint64(i), sigs[i])
 	}
 
 	cert, err := b.Build()
@@ -465,10 +465,9 @@ func BenchmarkBuildVerify(b *testing.B) {
 			}
 
 			for i := 0; i < npart; i++ {
-				err = builder.Add(uint64(i), sigs[i], true)
-				if err != nil {
-					b.Error(err)
-				}
+				a.False(builder.Present(uint64(i)))
+				a.NoError(builder.IsValid(uint64(i), sigs[i], true))
+				builder.Add(uint64(i), sigs[i])
 			}
 
 			cert, err = builder.Build()
@@ -545,7 +544,5 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	// Corrupting the version of the signature:
 	sig.Signature[1]++
 
-	err = builder.Add(uint64(0), sig, true)
-	a.Error(err)
-	a.ErrorIs(err, merklesignature.ErrInvalidSignatureVersion)
+	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrInvalidSignatureVersion)
 }
