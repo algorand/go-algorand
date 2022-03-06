@@ -26,7 +26,7 @@ import (
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	Msg          Message      // Message to be certified
+	Msg          []byte       // Message to be certified
 	ProvenWeight uint64       // Weight threshold proven by the certificate
 	SigRound     basics.Round // The round for which the ephemeral key is committed to
 	SecKQ        uint64       // Security parameter (k+q) from analysis document
@@ -75,12 +75,12 @@ type Cert struct {
 // canonical encoding of maps in msgpack format.
 type SortUint64 = basics.SortUint64
 
+// Message represents the message to be certified.
 type Message struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Payload []byte `codec:"p"`
+	Payload []byte
 }
 
+// ToBeHashed returns the bytes of the message.
 func (m Message) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.CompactCertMessage, m.Payload
 }
