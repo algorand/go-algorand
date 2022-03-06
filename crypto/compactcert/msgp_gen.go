@@ -17,6 +17,14 @@ import (
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
 //
+// Message
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
 // Reveal
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
@@ -340,6 +348,112 @@ func (z *Cert) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Cert) MsgIsZero() bool {
 	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && ((*z).SigProofs.MsgIsZero()) && ((*z).PartProofs.MsgIsZero()) && (len((*z).Reveals) == 0) && ((*z).MerkleSignatureVersion == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Message) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
+	if len((*z).Payload) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "p"
+			o = append(o, 0xa1, 0x70)
+			o = msgp.AppendBytes(o, (*z).Payload)
+		}
+	}
+	return
+}
+
+func (_ *Message) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Message)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Payload, bts, err = msgp.ReadBytesBytes(bts, (*z).Payload)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Payload")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = Message{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "p":
+				(*z).Payload, bts, err = msgp.ReadBytesBytes(bts, (*z).Payload)
+				if err != nil {
+					err = msgp.WrapError(err, "Payload")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *Message) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Message)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Message) Msgsize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Payload)
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Message) MsgIsZero() bool {
+	return (len((*z).Payload) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
