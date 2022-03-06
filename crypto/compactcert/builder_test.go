@@ -89,7 +89,8 @@ func TestBuildVerify(t *testing.T) {
 	npart := npartHi + npartLo
 
 	param := Params{
-		Msg:          testMessage("hello world"),
+		Message: Message{Payload: testMessage("hello world")},
+
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     currentRound,
 		SecKQ:        compactCertSecKQForTests,
@@ -103,7 +104,8 @@ func TestBuildVerify(t *testing.T) {
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.Msg)
+	tmp := param.Message.Hash()
+	sig, err := signerInRound.SignBytes(tmp[:])
 	require.NoError(t, err, "failed to create keys")
 
 	for i := 0; i < npart; i++ {
@@ -230,7 +232,8 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	numPart := 4
 
 	param := Params{
-		Msg:          testMessage("test!"),
+		Message: Message{Payload: testMessage("test!")},
+
 		ProvenWeight: uint64(totalWeight / (2 * numPart)),
 		SigRound:     currentRound,
 		SecKQ:        compactCertSecKQForTests,
@@ -248,7 +251,8 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(param.Msg)
+		tmp := param.Message.Hash()
+		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(tmp[:])
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
 
@@ -426,7 +430,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 	a := require.New(b)
 
 	param := Params{
-		Msg:          testMessage("hello world"),
+		Message: Message{Payload: testMessage("hello world")},
+
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     compactCertRoundsForTests,
 		SecKQ:        compactCertSecKQForTests,
@@ -443,7 +448,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 		}
 
 		signerInRound := signer.GetSigner(uint64(currentRound))
-		sig, err := signerInRound.SignBytes(param.Msg)
+		tmp := param.Message.Hash()
+		sig, err := signerInRound.SignBytes(tmp[:])
 		require.NoError(b, err, "failed to create keys")
 
 		partkeys = append(partkeys, signer)
@@ -520,7 +526,8 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	npartLo := 9
 
 	param := Params{
-		Msg:          testMessage("hello world"),
+		Message: Message{Payload: testMessage("hello world")},
+
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     currentRound,
 		SecKQ:        compactCertSecKQForTests,
@@ -539,7 +546,8 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 
 	// actual test:
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.Msg)
+	tmp := param.Hash()
+	sig, err := signerInRound.SignBytes(tmp[:])
 	require.NoError(t, err, "failed to create keys")
 	// Corrupting the version of the signature:
 	sig.Signature[1]++

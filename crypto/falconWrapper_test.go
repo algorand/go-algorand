@@ -32,12 +32,14 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
-	byteSig, err := key.SignBytes(msg)
+	//msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
+	msg := [128]byte{}
+
+	byteSig, err := key.SignBytes(msg[:])
 	a.NoError(err)
 
 	verifier := key.GetVerifyingKey()
-	err = verifier.VerifyBytes(msg, byteSig)
+	err = verifier.VerifyBytes(msg[:], byteSig)
 	a.NoError(err)
 }
 

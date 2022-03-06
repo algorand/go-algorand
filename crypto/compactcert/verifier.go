@@ -27,7 +27,8 @@ import (
 type Verifier struct {
 	Params
 
-	partcom crypto.GenericDigest
+	partcom       crypto.GenericDigest
+	hashedMessage HashedMessage
 }
 
 // MkVerifier constructs a verifier to check the compact certificate
@@ -35,8 +36,9 @@ type Verifier struct {
 // root of the participants that must sign the message.
 func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
 	return &Verifier{
-		Params:  p,
-		partcom: partcom,
+		Params:        p,
+		partcom:       partcom,
+		hashedMessage: p.Message.Hash(),
 	}
 }
 
@@ -67,7 +69,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		// verify that the msg and the signature is valid under the given participant's Pk
 		err = r.Part.PK.VerifyBytes(
 			uint64(v.SigRound),
-			v.Msg,
+			v.hashedMessage[:],
 			r.SigSlot.Sig,
 		)
 
@@ -99,7 +101,7 @@ func (v *Verifier) Verify(c *Cert) error {
 			ProvenWeight: v.ProvenWeight,
 			Sigcom:       c.SigCommit,
 			Partcom:      v.partcom,
-			Msg:          v.Msg,
+			Msg:          v.hashedMessage,
 		}
 
 		coin := hashCoin(choice)

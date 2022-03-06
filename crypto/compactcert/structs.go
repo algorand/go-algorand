@@ -24,9 +24,16 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// HashedMessage represents any message that we want to have a certification over.
+type HashedMessage [128]byte
+
+// MessageHashType is the type of hash used to generate HashedMessage
+const MessageHashType = crypto.Sha256
+
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	Msg          []byte       // Message to be certified
+	Message
+
 	ProvenWeight uint64       // Weight threshold proven by the certificate
 	SigRound     basics.Round // The round for which the ephemeral key is committed to
 	SecKQ        uint64       // Security parameter (k+q) from analysis document
@@ -83,4 +90,11 @@ type Message struct {
 // ToBeHashed returns the bytes of the message.
 func (m Message) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.CompactCertMessage, m.Payload
+}
+
+//Hash returns a hashed representation fitting the compact certificate messages.
+func (m Message) Hash() HashedMessage {
+	result := HashedMessage{}
+	copy(result[:], crypto.HashFactory{HashType: MessageHashType}.NewHash().Sum(crypto.HashRep(m)))
+	return result
 }

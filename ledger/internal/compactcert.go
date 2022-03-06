@@ -133,7 +133,7 @@ func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookke
 	}
 
 	res = compactcert.Params{
-		Msg:          msg,
+		Message:      compactcert.Message{Payload: msg},
 		ProvenWeight: provenWeight,
 		SigRound:     hdr.Round,
 		SecKQ:        proto.CompactCertSecKQ,

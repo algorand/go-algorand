@@ -72,9 +72,9 @@ func BenchmarkUnmarshalCert(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalMessage(t *testing.T) {
+func TestMarshalUnmarshalHashedMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := Message{}
+	v := HashedMessage{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -93,12 +93,12 @@ func TestMarshalUnmarshalMessage(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingMessage(t *testing.T) {
-	protocol.RunEncodingTest(t, &Message{})
+func TestRandomizedEncodingHashedMessage(t *testing.T) {
+	protocol.RunEncodingTest(t, &HashedMessage{})
 }
 
-func BenchmarkMarshalMsgMessage(b *testing.B) {
-	v := Message{}
+func BenchmarkMarshalMsgHashedMessage(b *testing.B) {
+	v := HashedMessage{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -106,8 +106,8 @@ func BenchmarkMarshalMsgMessage(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgMessage(b *testing.B) {
-	v := Message{}
+func BenchmarkAppendMsgHashedMessage(b *testing.B) {
+	v := HashedMessage{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -118,8 +118,8 @@ func BenchmarkAppendMsgMessage(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalMessage(b *testing.B) {
-	v := Message{}
+func BenchmarkUnmarshalHashedMessage(b *testing.B) {
+	v := HashedMessage{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
