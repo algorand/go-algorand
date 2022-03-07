@@ -44,8 +44,8 @@ const numberOfThreads = 256
 const printFreequency = 400
 const groupTransactions = true
 const channelDepth = 100
-const sixMillion = 6000000
-const sixThousand = 6000
+const sixMillion = 100
+const sixThousand = 10
 
 var maxTxGroupSize int
 
@@ -92,11 +92,21 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 
 				////////////////////
 				if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
+					stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
+					sender := stxns[0].Txn.Header.Sender
+					info, _ := getAccountInformation(c, sender.String(), "broadcastTransactionGroups")
+					for _, app := range *info.CreatedApps {
+						fmt.Printf("created app: %d\n", app.Id)
+					}
+				}
+				
+				if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
 					stxns[0].Txn.ApplicationCallTxnFields.ApplicationID > 0 {
 					sender := stxns[0].Txn.Header.Sender
 					for _, tx := range stxns {
 						appId := tx.Txn.ApplicationCallTxnFields.ApplicationID
-						_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId))
+						_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId), "broadcastTransactionGroups")
+						fmt.Printf("bTG: %d\t %s\n", appId, sender)
 						if err != nil {
 							fmt.Printf("opt-in for appid %d failed! error %s\n\n", appId, err)
 							continue
@@ -141,14 +151,15 @@ func getAccountInformation(
 func getAccountApplicationInformation(
 	client libgoal.Client,
 	address string,
-	appId uint64) (appInfo generated.AccountApplicationResponse, err error) {
+	appId uint64,
+	context string) (appInfo generated.AccountApplicationResponse, err error) {
 
 	for x := 0; x < 50; x++ { // retry only 50 times
 		appInfo, err = client.AccountApplicationInformation(address, appId)
 		if err == nil {
 			break
 		}
-		fmt.Printf("AccountApplicationInformation[%d]: %s\n", x, err)
+		fmt.Printf("AccountApplicationInformation (%s) [%d]: %s\n", context, x, err)
 		time.Sleep(time.Millisecond * 256)
 	}
 	return
@@ -782,17 +793,17 @@ func scenarioC(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
 
-	for kid, nacc := range keys {
+	for _, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
 		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
 
-		for appid, capp := range *info.CreatedApps {
-			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id)
+		for _, capp := range *info.CreatedApps {
+			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "after optin")
 			if err != nil {
-				fmt.Printf("kid: %d  appid: %d error %s\n\n", kid, appid, err)
+				fmt.Printf("account: %s  appid: %d error %s\n\n", ownAllAccount.pk, capp.Id, err)
 				continue
 			}
 			require.Equal(t, uint64(1), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
@@ -831,17 +842,17 @@ func scenarioC(
 
 	fmt.Println("Completed. Verifying accounts...")
 
-	for kid, nacc := range keys {
+	for _, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
 		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
 
-		for appid, capp := range *info.CreatedApps {
-			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id)
+		for _, capp := range *info.CreatedApps {
+			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "after call")
 			if err != nil {
-				fmt.Printf("kid: %d  appid: %d error %s\n\n", kid, appid, err)
+				fmt.Printf("account: %s  appid: %d error %s\n\n", ownAllAccount.pk, capp.Id, err)
 				continue
 			}
 			require.Equal(t, uint64(2), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
@@ -988,7 +999,7 @@ func handleError(err error, message string, errChan chan<- error) {
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
-	if force || counter == tLife {
+	if force || counter == tLife - 800 {
 		fmt.Printf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
