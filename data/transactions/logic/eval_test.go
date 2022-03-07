@@ -3468,6 +3468,7 @@ func BenchmarkBase64Decode(b *testing.B) {
 		"keccak256",
 		"sha256",
 		"sha512_256",
+		"sha3_256",
 		"base64_decode StdEncoding",
 		"base64_decode URLEncoding",
 	}
