@@ -164,6 +164,9 @@ const (
 	// LastLog Logs[len(Logs)-1]
 	LastLog
 
+	// StateProofPK Transaction.StateProofPK
+	StateProofPK
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -286,6 +289,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{CreatedAssetID, StackUint64, false, 5, 0, true},
 	{CreatedApplicationID, StackUint64, false, 5, 0, true},
 	{LastLog, StackBytes, false, 6, 0, true},
+	{StateProofPK, StackBytes, false, 6, 6, false},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

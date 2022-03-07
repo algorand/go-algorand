@@ -2,6 +2,7 @@
   "Genesis": {
     "NetworkName": "catchpointcatchupnetwork",
     "ConsensusProtocol": "catchpointtestingprotocol",
+    "LastPartKeyRound": 3000,
     "Wallets": [
       {
         "Name": "Wallet1",

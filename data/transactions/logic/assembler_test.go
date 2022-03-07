@@ -1361,6 +1361,7 @@ label1:
 txn CloseRemainderTo
 txn VotePK
 txn SelectionPK
+txn StateProofPK
 txn VoteFirst
 txn VoteLast
 txn FirstValidTime

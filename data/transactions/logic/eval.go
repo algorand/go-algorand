@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -210,7 +211,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
-	AccountData(addr basics.Address) (basics.AccountData, error)
+	AccountData(addr basics.Address) (ledgercore.AccountData, error)
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
@@ -2086,14 +2087,14 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 }
 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
-func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
+func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64, inner bool) (basics.TealValue, error) {
 	if groupIndex < 0 {
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	var cx EvalContext
 	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
 	fs := txnFieldSpecByField[field]
-	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, false)
+	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, inner)
 	return sv.toTealValue(), err
 }
 
@@ -2161,6 +2162,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Bytes = txn.VotePK[:]
 	case SelectionPK:
 		sv.Bytes = txn.SelectionPK[:]
+	case StateProofPK:
+		sv.Bytes = txn.StateProofPK[:]
 	case VoteFirst:
 		sv.Uint = uint64(txn.VoteFirst)
 	case VoteLast:
@@ -4328,6 +4331,11 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 			return fmt.Errorf("%s must be 32 bytes", fs.field)
 		}
 		copy(txn.SelectionPK[:], sv.Bytes)
+	case StateProofPK:
+		if len(sv.Bytes) != 64 {
+			return fmt.Errorf("%s must be 64 bytes", fs.field)
+		}
+		copy(txn.StateProofPK[:], sv.Bytes)
 	case VoteFirst:
 		var round uint64
 		round, err = sv.uint()

@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -66,6 +67,7 @@ func TestBlockEvaluatorFeeSink(t *testing.T) {
 	l := newTestLedger(t, genesisBalances)
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
@@ -190,7 +192,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
-	ad, _ := deltas.Accts.Get(addr)
+	ad, _ := deltas.Accts.GetBasicsAccountData(addr)
 	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
@@ -294,7 +296,7 @@ func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	eval := &BlockEvaluator{}
-	var rewardPoolBalance basics.AccountData
+	var rewardPoolBalance ledgercore.AccountData
 	rewardPoolBalance.MicroAlgos.Raw = 1234
 	var headerRound basics.Round
 	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
@@ -331,7 +333,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
 	genesisInitState.GenesisHash = testnetGenesisHash
 
-	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
+	rewardPoolBalance := ledgercore.ToAccountData(genesisInitState.Accounts[testPoolAddr])
 	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
@@ -459,7 +461,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 	var ot basics.OverflowTracker
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, acctData := range balances.Balances {
-		l.latestTotals.AddAccount(proto, acctData, &ot)
+		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
 	l.genesisProto = proto
 
@@ -521,8 +523,39 @@ func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTo
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
-	return ledger.roundBalances[rnd][addr], rnd, nil
+func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	ad := ledger.roundBalances[rnd][addr]
+	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	res := ledgercore.AppResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if params, ok := ad.AppParams[aidx]; ok {
+		res.AppParams = &params
+	}
+	if ls, ok := ad.AppLocalStates[aidx]; ok {
+		res.AppLocalState = &ls
+	}
+	return res, nil
+}
+
+func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	res := ledgercore.AssetResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if params, ok := ad.AssetParams[aidx]; ok {
+		res.AssetParams = &params
+	}
+	if h, ok := ad.Assets[aidx]; ok {
+		res.AssetHolding = &h
+	}
+	return res, nil
 }
 
 // GenesisHash returns the genesis hash for this ledger.
@@ -554,10 +587,16 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
 		newBalances[k] = v
 	}
+
 	// update
 	deltas := vb.Delta()
-	for _, addr := range deltas.Accts.ModifiedAccounts() {
-		accountData, _ := deltas.Accts.Get(addr)
+	// convert deltas into balance records
+	// the code assumes all modified accounts has entries in NewAccts.accts
+	// to enforce this fact we call ModifiedAccounts() with a panic as a side effect
+	deltas.Accts.ModifiedAccounts()
+	for i := 0; i < deltas.Accts.Len(); i++ {
+		addr, _ := deltas.Accts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
+		accountData, _ := deltas.Accts.GetBasicsAccountData(addr)
 		newBalances[addr] = accountData
 	}
 	ledger.roundBalances[vb.Block().Round()] = newBalances
@@ -685,8 +724,16 @@ func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basic
 	return errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error) {
-	return basics.AccountData{}, basics.Round(0), errors.New("not implemented")
+func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	return ledgercore.AppResource{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	return ledgercore.AssetResource{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -759,6 +806,8 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 		}
 		tmp := genesisInitState.Accounts[addr]
 		tmp.Status = basics.Online
+		crypto.RandBytes(tmp.StateProofID[:])
+		crypto.RandBytes(tmp.SelectionID[:])
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -819,6 +868,11 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
 	require.NoError(t, err)
 
+	acctData, _ := blkEval.state.lookup(recvAddr)
+
+	require.Equal(t, merklesignature.Verifier{}, acctData.StateProofID)
+	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
+
 	badBlock := *validatedBlock
 
 	// First validate that bad block is fine if we dont touch it...
@@ -870,8 +924,8 @@ type failRoundCowParent struct {
 	roundCowBase
 }
 
-func (p *failRoundCowParent) lookup(basics.Address) (basics.AccountData, error) {
-	return basics.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
+func (p *failRoundCowParent) lookup(basics.Address) (ledgercore.AccountData, error) {
+	return ledgercore.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
 }
 
 // TestExpiredAccountGenerationWithDiskFailure tests edge cases where disk failures can lead to ledger look up failures
@@ -952,9 +1006,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	err = eval.endOfBlock()
 	require.Error(t, err)
 
-	eval.block.ExpiredParticipationAccounts = []basics.Address{
-		basics.Address{},
-	}
+	eval.block.ExpiredParticipationAccounts = []basics.Address{{}}
 	eval.state.mods.Accts = ledgercore.AccountDeltas{}
 	eval.state.lookupParent = &failRoundCowParent{}
 	err = eval.endOfBlock()
@@ -986,7 +1038,16 @@ func TestExpiredAccountGeneration(t *testing.T) {
 			continue
 		}
 		tmp := genesisInitState.Accounts[addr]
+
+		// make up online account data
 		tmp.Status = basics.Online
+		tmp.VoteFirstValid = basics.Round(1)
+		tmp.VoteLastValid = basics.Round(100)
+		tmp.VoteKeyDilution = 0x1234123412341234
+		crypto.RandBytes(tmp.SelectionID[:])
+		crypto.RandBytes(tmp.VoteID[:])
+		crypto.RandBytes(tmp.StateProofID[:])
+
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -1057,5 +1118,5 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
 	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
 	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
-
+	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
 }
