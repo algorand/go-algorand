@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -656,10 +657,54 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 }
 
 // AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string) (resp generatedV2.Account, err error) {
+func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp generatedV2.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformationV2(account)
+		resp, err = algod.AccountInformationV2(account, includeCreatables)
+	}
+	return
+}
+
+// AccountApplicationInformation gets account information about a given app.
+func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp generatedV2.AccountApplicationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountApplicationInformation(accountAddress, applicationID)
+	}
+	return
+}
+
+// RawAccountApplicationInformation gets account information about a given app.
+func (c *Client) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (accountResource modelV2.AccountApplicationModel, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawAccountApplicationInformation(accountAddress, applicationID)
+		if err == nil {
+			err = protocol.Decode(resp, &accountResource)
+		}
+	}
+	return
+}
+
+// AccountAssetInformation gets account information about a given app.
+func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp generatedV2.AccountAssetResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountAssetInformation(accountAddress, assetID)
+	}
+	return
+}
+
+// RawAccountAssetInformation gets account information about a given app.
+func (c *Client) RawAccountAssetInformation(accountAddress string, assetID uint64) (accountResource modelV2.AccountAssetModel, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawAccountAssetInformation(accountAddress, assetID)
+		if err == nil {
+			err = protocol.Decode(resp, &accountResource)
+		}
 	}
 	return
 }
@@ -1105,7 +1150,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 
 			for _, acc := range accounts {
 				var info generatedV2.Account
-				if info, err = client.AccountInformationV2(acc.String()); err != nil {
+				if info, err = client.AccountInformationV2(acc.String(), true); err != nil {
 					// ignore error - accounts might have app addresses that were not funded
 					continue
 				}

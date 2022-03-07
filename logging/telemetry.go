@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
-	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/util/uuid"
 )
 
 const telemetryPrefix = "/"
@@ -75,7 +75,7 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 	telemetry.history = createLogBuffer(logBufferDepth)
 	if cfg.Enable {
 		if cfg.SessionGUID == "" {
-			cfg.SessionGUID = uuid.NewV4().String()
+			cfg.SessionGUID = uuid.New()
 		}
 		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
 		if err != nil {
@@ -132,12 +132,14 @@ func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg Telemet
 			return
 		}
 	}
-	ch := config.GetCurrentVersion().Channel
+	ver := config.GetCurrentVersion()
+	ch := ver.Channel
 	// Should not happen, but default to "dev" if channel is unspecified.
 	if ch == "" {
 		ch = "dev"
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
 	return cfg, err
 }
 
@@ -211,12 +213,14 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		err = cfg.Save(configPath)
 	}
 
-	ch := config.GetCurrentVersion().Channel
+	ver := config.GetCurrentVersion()
+	ch := ver.Channel
 	// Should not happen, but default to "dev" if channel is unspecified.
 	if ch == "" {
 		ch = "dev"
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
 
 	return cfg, created, err
 }
@@ -264,6 +268,7 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	entry := l.entry.WithFields(Fields{
 		"session":      l.GetTelemetrySession(),
 		"instanceName": l.GetInstanceName(),
+		"v":            l.GetTelemetryVersion(),
 	})
 	// Populate entry like logrus.entry.log() does
 	entry.Time = time.Now()

@@ -52,11 +52,11 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}
-		var balances catchpointFileBalancesChunk
-		balances.Balances = make([]encodedBalanceRecord, chunkSize)
+		var balances catchpointFileBalancesChunkV6
+		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
-			var randomAccount encodedBalanceRecord
-			accountData := basics.AccountData{}
+			var randomAccount encodedBalanceRecordV6
+			accountData := baseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
@@ -93,7 +93,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 
 	accountsCount := uint64(b.N)
 	fileHeader := CatchpointFileHeader{
-		Version:           catchpointFileVersion,
+		Version:           CatchpointFileVersionV6,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -125,7 +125,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 		last64KIndex--
 	}
 	if !last64KStart.IsZero() {
-		last64KDuration := time.Now().Sub(last64KStart)
+		last64KDuration := time.Since(last64KStart)
 		b.ReportMetric(float64(last64KDuration.Nanoseconds())/float64(64*1024), "ns/last_64k_account")
 	}
 }
@@ -140,7 +140,7 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 	}
 }
 
-func TestCatchupAcessorFoo(t *testing.T) {
+func TestCatchupAccessorFoo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)
@@ -249,7 +249,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	// content.msgpack from this:
 	accountsCount := uint64(len(initKeys))
 	fileHeader := CatchpointFileHeader{
-		Version:           catchpointFileVersion,
+		Version:           CatchpointFileVersionV6,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},

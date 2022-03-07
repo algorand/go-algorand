@@ -139,10 +139,25 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	defer watchdogReader.Close()
 	tarReader := tar.NewReader(watchdogReader)
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
+	var writeDuration time.Duration
+
+	printLogsFunc := func() {
+		lf.log.Infof(
+			"writing balances to disk took %d seconds, "+
+				"writing creatables to disk took %d seconds, "+
+				"writing hashes to disk took %d seconds, "+
+				"total duration is %d seconds",
+			downloadProgress.BalancesWriteDuration/time.Second,
+			downloadProgress.CreatablesWriteDuration/time.Second,
+			downloadProgress.HashesWriteDuration/time.Second,
+			writeDuration/time.Second)
+	}
+
 	for {
 		header, err := tarReader.Next()
 		if err != nil {
 			if err == io.EOF {
+				printLogsFunc()
 				return nil
 			}
 			return err
@@ -166,15 +181,18 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 				return err
 			}
 		}
+		start := time.Now()
 		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes, &downloadProgress)
 		if err != nil {
 			return err
 		}
+		writeDuration += time.Since(start)
 		if lf.reporter != nil {
 			lf.reporter.updateLedgerFetcherProgress(&downloadProgress)
 		}
 		if err = watchdogReader.Reset(); err != nil {
 			if err == io.EOF {
+				printLogsFunc()
 				return nil
 			}
 			err = fmt.Errorf("getPeerLedger received the following error while reading the catchpoint file : %v", err)
