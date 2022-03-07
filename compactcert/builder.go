@@ -333,7 +333,7 @@ func (ccw *Worker) tryBuilding() {
 	defer ccw.mu.Unlock()
 
 	for rnd, b := range ccw.builders {
-		firstValid := ccw.ledger.Latest() + 1
+		firstValid := ccw.ledger.Latest()
 		acceptableWeight := ledger.AcceptableCompactCertWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the cert at this time..

@@ -39,9 +39,11 @@ func TestCompactCerts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	t.Skip("Disabling since they need work and shouldn't block releases")
-	t.Parallel()
+	// TODO Stateproof: the Parallel should stay disable for now. Parallel might
+	// cause problem since we change the global future param to use 8 cc round.
+	//t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
+	expectedNumberOfCert := uint64(3)
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-compactcert")
@@ -52,6 +54,8 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.CompactCertSecKQ = 128
 	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
 	tmp := config.Consensus[protocol.ConsensusFuture]
@@ -84,7 +88,7 @@ func TestCompactCerts(t *testing.T) {
 
 	var lastCertBlock v1.Block
 	libgoal := fixture.LibGoalClient
-	for rnd := uint64(1); rnd <= consensusParams.CompactCertRounds*4; rnd++ {
+	for rnd := uint64(1); rnd <= consensusParams.CompactCertRounds*(expectedNumberOfCert+1); rnd++ {
 		// send a dummy payment transaction.
 		minTxnFee, _, err := fixture.CurrentMinFeeAndBalance()
 		r.NoError(err)
@@ -116,10 +120,11 @@ func TestCompactCerts(t *testing.T) {
 			nextCertRound := lastCertBlock.Round + consensusParams.CompactCertRounds
 
 			// Find the cert transaction
-			res, err := restClient.TransactionsByAddr(transactions.CompactCertSender.String(), 0, rnd, 4)
+			res, err := restClient.TransactionsByAddr(transactions.CompactCertSender.String(), 0, rnd, expectedNumberOfCert+1)
 			r.NoError(err)
 
 			var compactCert cc.Cert
+			var certMessage []byte
 			compactCertFound := false
 			for _, txn := range res.Transactions {
 				r.Equal(txn.Type, string(protocol.CompactCertTx))
@@ -127,6 +132,7 @@ func TestCompactCerts(t *testing.T) {
 				if txn.CompactCert.CertIntervalLatestRound == nextCertRound {
 					err = protocol.Decode(txn.CompactCert.Cert, &compactCert)
 					r.NoError(err)
+					certMessage = txn.CompactCert.CertMsg
 					compactCertFound = true
 				}
 			}
@@ -148,13 +154,8 @@ func TestCompactCerts(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(lastCertBlock.CompactCertVotersTotal, uint64(consensusParams.CompactCertWeightThreshold), 1<<32)
 			r.False(overflowed)
 
-			//compactcert.GenerateStateProofMessage() // TODO Stateproof: fix
-
 			ccparams := cc.Params{
-				// nextCertBlockDecoded.Block.BlockHeader,
-				StateProofMessageHash: stateproof.Message{
-					BlockHeadersCommitment: []byte{},
-				}.IntoStateProofMessageHash(),
+				Msg:          certMessage,
 				ProvenWeight: provenWeight,
 				SigRound:     basics.Round(nextCertBlock.Round),
 				SecKQ:        consensusParams.CompactCertSecKQ,
@@ -167,5 +168,5 @@ func TestCompactCerts(t *testing.T) {
 		}
 	}
 
-	r.Equalf(consensusParams.CompactCertRounds*3, lastCertBlock.Round, "the expected last certificate block wasn't the one that was observed")
+	r.Equalf(consensusParams.CompactCertRounds*expectedNumberOfCert, lastCertBlock.Round, "the expected last certificate block wasn't the one that was observed")
 }
