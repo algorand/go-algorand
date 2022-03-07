@@ -355,6 +355,7 @@ func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	cc := v1.CompactCertTransactionType{
 		CertIntervalLatestRound: uint64(tx.CompactCertTxnFields.CertIntervalLatestRound),
 		Cert:                    protocol.Encode(&tx.CompactCertTxnFields.Cert),
+		CertMsg:                 tx.CertMsg,
 	}
 
 	return v1.Transaction{
