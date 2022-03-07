@@ -44,8 +44,9 @@ const numberOfThreads = 256
 const printFreequency = 400
 const groupTransactions = true
 const channelDepth = 100
-const sixMillion = 100
-const sixThousand = 10
+const sixMillion = 6000000
+const sixThousand = 6000
+const verbose = false
 
 var maxTxGroupSize int
 
@@ -89,33 +90,30 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 		for x := 0; x < 50; x++ { // retry only 50 times
 			err = c.BroadcastTransactionGroup(stxns)
 			if err == nil {
-
-				////////////////////
-				if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
-					stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
-					sender := stxns[0].Txn.Header.Sender
-					info, _ := getAccountInformation(c, sender.String(), "broadcastTransactionGroups")
-					for _, app := range *info.CreatedApps {
-						fmt.Printf("created app: %d\n", app.Id)
+				if verbose {
+					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
+						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
+						sender := stxns[0].Txn.Header.Sender
+						info, _ := getAccountInformation(c, 0, sender.String(), "broadcastTransactionGroups")
+						for _, app := range *info.CreatedApps {
+							fmt.Printf("created app: %d\n", app.Id)
+						}
 					}
-				}
-				
-				if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
-					stxns[0].Txn.ApplicationCallTxnFields.ApplicationID > 0 {
-					sender := stxns[0].Txn.Header.Sender
-					for _, tx := range stxns {
-						appId := tx.Txn.ApplicationCallTxnFields.ApplicationID
-						_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId), "broadcastTransactionGroups")
-						fmt.Printf("bTG: %d\t %s\n", appId, sender)
-						if err != nil {
-							fmt.Printf("opt-in for appid %d failed! error %s\n\n", appId, err)
-							continue
+
+					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
+						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID > 0 {
+						sender := stxns[0].Txn.Header.Sender
+						for _, tx := range stxns {
+							appId := tx.Txn.ApplicationCallTxnFields.ApplicationID
+							_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId), "broadcastTransactionGroups")
+							fmt.Printf("bTG: %d\t %s\n", appId, sender)
+							if err != nil {
+								fmt.Printf("opt-in for appid %d failed! error %s\n\n", appId, err)
+								continue
+							}
 						}
 					}
 				}
-
-				/////////////////////
-
 				break
 			}
 			fmt.Printf("broadcastTransactionGroups[%d]: %s\n", x, err)
@@ -134,12 +132,17 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 
 func getAccountInformation(
 	client libgoal.Client,
+	expectedCount uint64,
 	address string,
 	context string) (info generated.Account, err error) {
 
 	for x := 0; x < 50; x++ { // retry only 50 times
 		info, err = client.AccountInformationV2(address, true)
 		if err == nil {
+			if expectedCount > 0 && expectedCount != len(*info.CreatedApps) {
+				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCount)
+				continue
+			}
 			break
 		}
 		fmt.Printf("AccountInformationV2 (%s) [%d]: %s\n", context, x, err)
@@ -520,7 +523,7 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioA opt-in assets")
+		info, err := getAccountInformation(client, 0, nacc.pk.String(), "ScenarioA opt-in assets")
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -559,7 +562,7 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioA transfer assets")
+		info, err := getAccountInformation(client, 0, nacc.pk.String(), "ScenarioA transfer assets")
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -770,7 +773,7 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioC opt-in apps")
+		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC opt-in apps")
 		require.NoError(t, err)
 		for appi, app := range *info.CreatedApps {
 			select {
@@ -793,15 +796,17 @@ func scenarioC(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
 
+	fmt.Println("verifying optin apps...")
+
 	for _, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioC verify accounts")
+		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
-			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "after optin")
+			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "verifying after optin")
 			if err != nil {
 				fmt.Printf("account: %s  appid: %d error %s\n\n", ownAllAccount.pk, capp.Id, err)
 				continue
@@ -811,12 +816,14 @@ func scenarioC(
 		}
 	}
 
+	fmt.Println("calling applications...")
+
 	// Make an app call to each of them
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioC call apps")
+		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC call apps")
 		require.NoError(t, err)
 		for appi, app := range *info.CreatedApps {
 			select {
@@ -846,7 +853,7 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, nacc.pk.String(), "ScenarioC verify accounts")
+		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
@@ -999,7 +1006,7 @@ func handleError(err error, message string, errChan chan<- error) {
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
-	if force || counter == tLife - 800 {
+	if force || counter == tLife-800 {
 		fmt.Printf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
