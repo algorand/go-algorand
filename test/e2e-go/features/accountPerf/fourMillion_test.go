@@ -47,7 +47,7 @@ const channelDepth = 100
 const sixMillion = 6000000
 const sixThousand = 6000
 const verbose = false
-
+var failTest bool
 var maxTxGroupSize int
 
 type psKey struct {
@@ -139,8 +139,10 @@ func getAccountInformation(
 	for x := 0; x < 50; x++ { // retry only 50 times
 		info, err = client.AccountInformationV2(address, true)
 		if err == nil {
-			if expectedCount > 0 && expectedCount != len(*info.CreatedApps) {
+			if expectedCount > 0 && int(expectedCount) != len(*info.CreatedApps) {
 				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCount)
+				fmt.Printf("%+v\n\n", info)
+				failTest = true
 				continue
 			}
 			break
@@ -866,7 +868,7 @@ func scenarioC(
 			require.Equal(t, uint64(3), (*capp.Params.GlobalState)[0].Value.Uint)
 		}
 	}
-
+	require.Equal(t, failTest, false)
 }
 
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them. Make an app call to each of them, and make sure the app store some information into the local storage.
