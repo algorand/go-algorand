@@ -130,10 +130,11 @@ assert not err, err
 _, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
 assert not err, err
 
-# attemp additional CSP inner app call that's intended to fail because app1 is
+# attempt additional CSP inner app call that's intended to fail because app1 is
 # no longer opted into app2 after previous call to CSP.
 _, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
 assert err
+assert "is not currently opted in" in str(err)
 
 # opt app1 into app2 again and call CSP again to verify that re optin works as expected
 _, err = goal.app_call(joe, app1ID, app_args=[0x00], foreign_apps=[int(app2ID), int(app3ID)])
