@@ -55,3 +55,8 @@ func (m *Frozen) Decode([]byte) (Clock, error) {
 func (m *Frozen) String() string {
 	return ""
 }
+
+// Since implements the Clock interface.
+func (m *Frozen) Since() time.Duration {
+	return 0
+}

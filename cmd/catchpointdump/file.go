@@ -48,6 +48,7 @@ var excludedFields *cmdutil.CobraStringSliceValue = cmdutil.MakeCobraStringSlice
 func init() {
 	fileCmd.Flags().StringVarP(&tarFile, "tar", "t", "", "Specify the tar file to process")
 	fileCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. tracker.dump.txt )")
+	fileCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
 	fileCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 }
 
@@ -65,6 +66,7 @@ var fileCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to stat '%s' : %v", tarFile, err)
 		}
+
 		tarSize := stats.Size()
 		if tarSize == 0 {
 			reportErrorf("Empty file '%s' : %v", tarFile, err)
@@ -87,9 +89,11 @@ var fileCmd = &cobra.Command{
 		defer os.Remove("./ledger.block.sqlite")
 		defer os.Remove("./ledger.block.sqlite-shm")
 		defer os.Remove("./ledger.block.sqlite-wal")
-		defer os.Remove("./ledger.tracker.sqlite")
-		defer os.Remove("./ledger.tracker.sqlite-shm")
-		defer os.Remove("./ledger.tracker.sqlite-wal")
+		if !loadOnly {
+			defer os.Remove("./ledger.tracker.sqlite")
+			defer os.Remove("./ledger.tracker.sqlite-shm")
+			defer os.Remove("./ledger.tracker.sqlite-wal")
+		}
 		defer l.Close()
 
 		catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
@@ -110,18 +114,20 @@ var fileCmd = &cobra.Command{
 			reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 		}
 
-		outFile := os.Stdout
-		if outFileName != "" {
-			outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
-			if err != nil {
-				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
+		if !loadOnly {
+			outFile := os.Stdout
+			if outFileName != "" {
+				outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+				if err != nil {
+					reportErrorf("Unable to create file '%s' : %v", outFileName, err)
+				}
+				defer outFile.Close()
 			}
-			defer outFile.Close()
-		}
 
-		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
-		if err != nil {
-			reportErrorf("Unable to print account database : %v", err)
+			err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+			if err != nil {
+				reportErrorf("Unable to print account database : %v", err)
+			}
 		}
 	},
 }
@@ -290,8 +296,10 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		}
 
 		balancesTable := "accountbase"
+		resourcesTable := "resources"
 		if fileHeader.Version != 0 {
 			balancesTable = "catchpointbalances"
+			resourcesTable = "catchpointresources"
 		}
 
 		var rowsCount int64
@@ -300,32 +308,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			return
 		}
 
-		rows, err := tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
-		if err != nil {
-			return
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var addrbuf []byte
-			var buf []byte
-			err = rows.Scan(&addrbuf, &buf)
-			if err != nil {
-				return
-			}
-
-			var data basics.AccountData
-			err = protocol.Decode(buf, &data)
-			if err != nil {
-				return
-			}
-
-			var addr basics.Address
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				return
-			}
-			copy(addr[:], addrbuf)
+		printer := func(addr basics.Address, data interface{}, progress uint64) (err error) {
 			jsonData, err := json.Marshal(data)
 			if err != nil {
 				return err
@@ -333,16 +316,71 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 			fmt.Fprintf(fileWriter, "%v : %s\n", addr, string(jsonData))
 
-			if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
+			if time.Since(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
 				lastProgressUpdate = time.Now()
 				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
 			}
-			progress++
+			return nil
 		}
 
-		err = rows.Err()
+		if fileHeader.Version < ledger.CatchpointFileVersionV6 {
+			var rows *sql.Rows
+			rows, err = tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
+			if err != nil {
+				return
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var addrbuf []byte
+				var buf []byte
+				err = rows.Scan(&addrbuf, &buf)
+				if err != nil {
+					return
+				}
+
+				var addr basics.Address
+				if len(addrbuf) != len(addr) {
+					err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+					return
+				}
+				copy(addr[:], addrbuf)
+
+				var data basics.AccountData
+				err = protocol.Decode(buf, &data)
+				if err != nil {
+					return
+				}
+
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+
+				progress++
+			}
+			err = rows.Err()
+		} else {
+			acctCount := 0
+			acctCb := func(addr basics.Address, data basics.AccountData) {
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+				progress++
+				acctCount++
+			}
+			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			if err != nil {
+				return
+			}
+			if acctCount != int(rowsCount) {
+				return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
+			}
+		}
+
 		// increase the deadline warning to disable the warning message.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
-		return nil
+		return err
 	})
 }

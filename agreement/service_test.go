@@ -71,6 +71,10 @@ func (c *testingClock) Zero() timers.Clock {
 	return c
 }
 
+func (c *testingClock) Since() time.Duration {
+	return 0
+}
+
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()

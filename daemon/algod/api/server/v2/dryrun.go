@@ -261,7 +261,7 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
 	out := basics.AccountData{}
 	accti, ok := dl.accountsIn[addr]
@@ -300,6 +300,44 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 	// AVM 1.1 timeframe, but seems correct (allows using app accounts, and the
 	// fee sink without supplying them)
 	return out, rnd, nil
+}
+
+func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	ad, rnd, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return ledgercore.AccountData{}, 0, err
+	}
+	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	ad, _, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return ledgercore.AppResource{}, err
+	}
+	var result ledgercore.AppResource
+	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+		result.AppParams = &p
+	}
+	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+		result.AppLocalState = &s
+	}
+	return result, nil
+}
+
+func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	ad, _, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return ledgercore.AssetResource{}, err
+	}
+	var result ledgercore.AssetResource
+	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+		result.AssetParams = &p
+	}
+	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+		result.AssetHolding = &p
+	}
+	return result, nil
 }
 
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
