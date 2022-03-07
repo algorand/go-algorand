@@ -60,9 +60,6 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 
 // Keys returns a list of Participation accounts, and their keys/secrets for requested round.
 func (manager *AccountManager) Keys(rnd basics.Round) (out []account.ParticipationRecordForRound) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
 	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetForRound(part.ParticipationID, rnd)
@@ -78,9 +75,6 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 
 // StateProofKeys returns a list of Participation accounts, and their stateproof secrets
 func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
 	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ParticipationID, rnd)
