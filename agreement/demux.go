@@ -18,9 +18,11 @@ package agreement
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -122,6 +124,16 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 				o, err := tokenize(raw.Data)
 				if err != nil {
+					var dpe *DecodeProposalError
+					if errors.As(err, &dpe) {
+						// check protocol version
+						cv, err := d.ledger.ConsensusVersion(dpe.Round)
+						if err != nil {
+							if _, ok := config.Consensus[cv]; !ok {
+								d.log.Warnf("received proposal with unsupported consensus version: %v", cv)
+							}
+						}
+					}
 					d.log.Warnf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
 					net.Disconnect(raw.MessageHandle)
 					d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)

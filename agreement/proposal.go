@@ -46,8 +46,8 @@ type proposalValue struct {
 type transmittedPayload struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	unauthenticatedProposal
-	PriorVote unauthenticatedVote `codec:"pv"`
+	ProposalData []byte              `codec:"pd"`
+	PriorVote    unauthenticatedVote `codec:"pv"`
 }
 
 // A unauthenticatedProposal is an Block along with everything needed to validate it.
@@ -63,6 +63,9 @@ type unauthenticatedProposal struct {
 
 // TransmittedPayload exported for dumping textual versions of messages
 type TransmittedPayload = transmittedPayload
+
+// UnauthenticatedProposal exported for dumping textual versions of messages
+type UnauthenticatedProposal = unauthenticatedProposal
 
 // ToBeHashed implements the Hashable interface.
 func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {

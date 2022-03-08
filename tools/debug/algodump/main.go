@@ -95,8 +95,10 @@ func (dh *dumpHandler) Handle(msg network.IncomingMessage) network.OutgoingMessa
 			data = fmt.Sprintf("[decode error: %v]", err)
 			goto print
 		}
+		var up agreement.UnauthenticatedProposal
+		err = protocol.Decode(p.ProposalData, &up)
 
-		data = fmt.Sprintf("proposal %s", shortdigest(crypto.Digest(p.Block.Hash())))
+		data = fmt.Sprintf("proposal %s", shortdigest(crypto.Digest(up.Block.Hash())))
 
 	case protocol.TxnTag:
 		dec := protocol.NewDecoderBytes(msg.Data)
