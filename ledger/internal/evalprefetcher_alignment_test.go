@@ -19,7 +19,6 @@ package internal
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-deadlock"
 )
 
 func genesisHash() crypto.Digest {
@@ -73,7 +73,7 @@ type prefetcherAlignmentTestLedger struct {
 	requestedCreators map[creatable]struct{}
 
 	// Protects requested* variables.
-	mu sync.Mutex
+	mu deadlock.Mutex
 }
 
 func (l *prefetcherAlignmentTestLedger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
