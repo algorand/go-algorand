@@ -17,8 +17,11 @@
 package fataccount
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +33,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	clientApi "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -47,6 +51,7 @@ const channelDepth = 100
 const sixMillion = 6000000
 const sixThousand = 6000
 const verbose = false
+
 var failTest bool
 var maxTxGroupSize int
 
@@ -381,12 +386,15 @@ func sendAlgoTransaction(
 
 func createAssetTransaction(
 	t *testing.T,
+	counter uint64,
 	round uint64,
 	sender basics.Address,
 	tLife uint64,
 	amount uint64,
 	genesisHash crypto.Digest) (assetTx transactions.Transaction) {
 
+	note := make([]byte, 8)
+	binary.LittleEndian.PutUint64(note, counter)
 	assetTx = transactions.Transaction{
 		Type: protocol.AssetConfigTx,
 		Header: transactions.Header{
@@ -395,6 +403,7 @@ func createAssetTransaction(
 			FirstValid:  basics.Round(round),
 			LastValid:   basics.Round(round + tLife),
 			GenesisHash: genesisHash,
+			Note:        note,
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
 			AssetParams: basics.AssetParams{
@@ -471,7 +480,7 @@ func scenarioA(
 	firstValid, counter, keys := createAccounts(
 		t,
 		fixture,
-		numberOfAccounts,
+		numberOfAccounts+1,
 		baseAcct,
 		firstValid,
 		balance,
@@ -482,11 +491,17 @@ func scenarioA(
 		txnGrpChan,
 		stopChan)
 
+	// have a single account opted in all of them
+	ownAllAccount := keys[numberOfAccounts-1]
+
 	fmt.Println("Creating assets...")
 
 	// create 6M unique assets by a different 6,000 accounts
 	assetAmount := uint64(100)
 	for nai, na := range keys {
+		if na == ownAllAccount {
+			continue
+		}
 		for asi := uint64(0); asi < assetsPerAccount; asi++ {
 			select {
 			case <-stopChan:
@@ -497,7 +512,7 @@ func scenarioA(
 			if nai%printFreequency == 0 && int(asi)%printFreequency == 0 {
 				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
-			atx := createAssetTransaction(t, firstValid, na.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
+			atx := createAssetTransaction(t, asi, firstValid, na.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
 			totalAssetAmount += uint64(600000000) + assetAmount
 			assetAmount++
 
@@ -513,8 +528,6 @@ func scenarioA(
 
 	fmt.Println("Opt-in assets...")
 
-	// have a single account opted in all of them
-	ownAllAccount := keys[numberOfAccounts-1]
 	// make ownAllAccount very rich
 	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
 	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
@@ -594,22 +607,29 @@ func scenarioA(
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
-	/*
-		// Verify the assets are transfered here
-		t0 := time.Now()
-		info, err := client.AccountInformationV2(ownAllAccount.pk.String())
-		fmt.Printf("AccountInformationV2 retrieval time: %s\n", time.Since(t0).String())
+
+	// Verify the assets are transfered here
+	tAssetAmt := uint64(0)
+	for _, nacc := range keys {
+		if nacc == ownAllAccount {
+			continue
+		}
+		info, err := getAccountInformation(client, 0, nacc.pk.String(), "ScenarioA verify assets")
 		require.NoError(t, err)
-		require.Equal(t, int(numberOfAssets), len(*info.Assets))
-		tAssetAmt := uint64(0)
 		for _, asset := range *info.Assets {
-			tAssetAmt += asset.Amount
+			select {
+			case <-stopChan:
+				require.False(t, true, "Test interrupted")
+			default:
+			}
+
+			assHold, err := client.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
+			require.NoError(t, err)
+
+			tAssetAmt += assHold.AssetHolding.Amount
 		}
-		if totalAssetAmount != tAssetAmt {
-			fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
-		}
-		require.Equal(t, totalAssetAmount, tAssetAmt)
-	*/
+	}
+	require.Equal(t, totalAssetAmount, tAssetAmt)
 }
 
 // create 6M unique assets, all created by a single account.
@@ -622,8 +642,6 @@ func scenarioB(
 	txnGrpChan chan<- []txnKey,
 	tLife uint64,
 	stopChan <-chan struct{}) {
-
-	//	client := fixture.LibGoalClient
 
 	numberOfAssets := uint64(sixMillion) // 6M
 	totalAssetAmount := uint64(0)
@@ -653,7 +671,7 @@ func scenarioB(
 		if int(asi)%printFreequency == 0 {
 			fmt.Printf("create asset %d / %d\n", asi, numberOfAssets)
 		}
-		atx := createAssetTransaction(t, firstValid, baseAcct.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
+		atx := createAssetTransaction(t, asi, firstValid, baseAcct.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
 		totalAssetAmount += uint64(600000000) + assetAmount
 		assetAmount++
 
@@ -666,22 +684,35 @@ func scenarioB(
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
-	/*
-		// Verify the assets are transfered here
-		t0 := time.Now()
-		info, err := client.AccountInformationV2(baseAcct.pk.String())
-		fmt.Printf("AccountInformationV2 retrieval time: %s\n", time.Since(t0).String())
+
+	client := fixture.LibGoalClient
+
+	info, err := client.AccountInformationV2(baseAcct.pk.String(), false)
+	require.NoError(t, err)
+	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
+	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
+
+	// Verify the assets are transfered here
+	tAssetAmt := uint64(0)
+	info, err = client.AccountInformationV2(baseAcct.pk.String(), false)
+	require.NoError(t, err)
+	counter = 0
+	for aid := uint64(0); counter < numberOfAssets && aid < 2*numberOfAssets; aid++ {
+		select {
+		case <-stopChan:
+			require.False(t, true, "Test interrupted")
+		default:
+		}
+
+		assHold, err := client.AccountAssetInformation(baseAcct.pk.String(), aid)
+		var httpError clientApi.HTTPError
+		if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
+			continue
+		}
 		require.NoError(t, err)
-		require.Equal(t, int(numberOfAssets), len(*info.Assets))
-		tAssetAmt := uint64(0)
-		for _, asset := range *info.Assets {
-			tAssetAmt += asset.Amount
-		}
-		if totalAssetAmount != tAssetAmt {
-			fmt.Printf("%d != %d\n", totalAssetAmount, tAssetAmt)
-		}
-		require.Equal(t, totalAssetAmount, tAssetAmt)
-	*/
+		tAssetAmt += assHold.AssetHolding.Amount
+	}
+	require.Equal(t, totalAssetAmount, tAssetAmt)
 }
 
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them.
@@ -714,7 +745,6 @@ func scenarioC(
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
 
-	//	globalStateCheck := make([]bool, numberOfApps)
 	appCallFields := make([]transactions.ApplicationCallTxnFields, numberOfApps)
 
 	// create 6K accounts
@@ -757,7 +787,7 @@ func scenarioC(
 			if int(appi)%printFreequency == 0 && int(nai)%printFreequency == 0 {
 				fmt.Printf("scenario3: create app %d / %d for account %d / %d\n", appi, appsPerAccount, nai, numberOfAccounts)
 			}
-			atx := makeAppTransaction(t, client, appi, firstValid, na.pk, tLife, genesisHash)
+			atx := makeAppTransaction(t, client, appi, firstValid, na.pk, tLife, false, genesisHash)
 			appCallFields[appi] = atx.ApplicationCallTxnFields
 			counter, txnGroup = queueTransaction(na.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
 
@@ -913,7 +943,7 @@ func scenarioD(
 		if int(asi)%printFreequency == 0 {
 			fmt.Printf("scenario4: create app %d / %d\n", asi, numberOfApps)
 		}
-		atx := makeAppTransaction(t, client, asi, firstValid, baseAcct.pk, tLife, genesisHash)
+		atx := makeAppTransaction(t, client, asi, firstValid, baseAcct.pk, tLife, true, genesisHash)
 		appCallFields[asi] = atx.ApplicationCallTxnFields
 		counter, txnGroup = queueTransaction(baseAcct.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
 
@@ -956,13 +986,15 @@ func scenarioD(
 				}
 				checkResChan <- 1
 				lastAppId = i
-				checkApplicationParams(
-					t,
+				pass := checkApplicationParams(
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
 					app.Params,
 					baseAcct.pk.String(),
 					&globalStateCheck,
 					globalStateCheckMu)
+				if !pass {
+					fmt.Printf("scenario4: app params check failed for %d\n", app.Id)
+				}
 			}
 			fmt.Printf("scenario4: Last app id: %d\n", lastAppId)
 			wg.Done()
@@ -970,6 +1002,7 @@ func scenarioD(
 	}
 
 	checked := uint64(0)
+	lastPrint := uint64(0)
 	for i := uint64(0); checked < numberOfApps; {
 		select {
 		case <-stopChan:
@@ -981,8 +1014,9 @@ func scenarioD(
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}
-		if int(checked)%printFreequency == 0 {
+		if checked != lastPrint && int(checked)%printFreequency == 0 {
 			fmt.Printf("scenario4: check app params %d / %d\n", checked, numberOfApps)
+			lastPrint = checked
 		}
 	}
 	close(checkAppChan)
@@ -1103,14 +1137,19 @@ func makeAppTransaction(
 	round uint64,
 	sender basics.Address,
 	tLife uint64,
+	setCounterInProg bool,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
+	progCounter := uint64(1)
+	if setCounterInProg {
+		progCounter = counter
+	}
 	prog := fmt.Sprintf(`#pragma version 2
 // a simple global and local calls counter app
 byte b64 Y291bnRlcg== // counter
 dup
 app_global_get
-int 1
+int %d
 +
 app_global_put  // update the counter
 int 0
@@ -1128,7 +1167,7 @@ int 1  // increment
 +
 app_local_put
 int 1
-`)
+`, progCounter)
 
 	approvalOps, err := logic.AssembleString(prog)
 	require.NoError(t, err)
@@ -1180,28 +1219,45 @@ func makeOptInAppTransaction(
 }
 
 func checkApplicationParams(
-	t *testing.T,
 	acTF transactions.ApplicationCallTxnFields,
 	app generated.ApplicationParams,
 	creator string,
 	globalStateCheck *[]bool,
-	globalStateCheckMu deadlock.Mutex) {
+	globalStateCheckMu deadlock.Mutex) (pass bool) {
 
-	require.Equal(t, acTF.ApprovalProgram, app.ApprovalProgram)
-	require.Equal(t, acTF.ClearStateProgram, app.ClearStateProgram)
-	require.Equal(t, creator, app.Creator)
+	pass = true
+	if bytes.Compare(acTF.ApprovalProgram, app.ApprovalProgram) != 0 {
+		return false
+	}
+	if bytes.Compare(acTF.ClearStateProgram, app.ClearStateProgram) != 0 {
+		return false
+	}
+	if creator != app.Creator {
+		return false
+	}
 
 	var oldVal bool
 	globalStateCheckMu.Lock()
 	oldVal = (*globalStateCheck)[(*app.GlobalState)[0].Value.Uint]
 	(*globalStateCheck)[(*app.GlobalState)[0].Value.Uint] = true
 	globalStateCheckMu.Unlock()
-	require.False(t, oldVal)
+	if oldVal != false {
+		return false
+	}
 
-	require.Equal(t, acTF.GlobalStateSchema.NumByteSlice, app.GlobalStateSchema.NumByteSlice)
-	require.Equal(t, acTF.GlobalStateSchema.NumUint, app.GlobalStateSchema.NumUint)
-	require.Equal(t, acTF.LocalStateSchema.NumByteSlice, app.LocalStateSchema.NumByteSlice)
-	require.Equal(t, acTF.LocalStateSchema.NumUint, app.LocalStateSchema.NumUint)
+	if acTF.GlobalStateSchema.NumByteSlice != app.GlobalStateSchema.NumByteSlice {
+		return false
+	}
+	if acTF.GlobalStateSchema.NumUint != app.GlobalStateSchema.NumUint {
+		return false
+	}
+	if acTF.LocalStateSchema.NumByteSlice != app.LocalStateSchema.NumByteSlice {
+		return false
+	}
+	if acTF.LocalStateSchema.NumUint != app.LocalStateSchema.NumUint {
+		return false
+	}
+	return pass
 }
 
 func createAccounts(
