@@ -66,9 +66,7 @@ func TestCompactCerts(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	t.Logf("CC rounds are %d", config.Consensus[protocol.ConsensusFuture].CompactCertRounds)
 	fixture.Setup(t, filepath.Join("nettemplates", "CompactCert.json"))
-	t.Logf("2CC rounds are %d", config.Consensus[protocol.ConsensusFuture].CompactCertRounds)
 	defer fixture.Shutdown()
 
 	restClient, err := fixture.NC.AlgodClient()
@@ -109,7 +107,10 @@ func TestCompactCerts(t *testing.T) {
 		if (rnd % consensusParams.CompactCertRounds) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.CompactCertVoters) > 0)
-			r.True(blk.CompactCertVotersTotal != 0)
+			t.Logf("stake value: %d", blk.CompactCertVotersTotal)
+			if !(blk.CompactCertVotersTotal != 0) {
+				t.FailNow()
+			}
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -121,6 +122,7 @@ func TestCompactCerts(t *testing.T) {
 		for lastCertBlock.Round != 0 && lastCertBlock.Round+consensusParams.CompactCertRounds < blk.CompactCertNextRound {
 			nextCertRound := lastCertBlock.Round + consensusParams.CompactCertRounds
 
+			t.Logf("found a cert for round %d at round %d", nextCertRound, blk.Round)
 			// Find the cert transaction
 			res, err := restClient.TransactionsByAddr(transactions.CompactCertSender.String(), 0, rnd, expectedNumberOfCert+1)
 			r.NoError(err)
