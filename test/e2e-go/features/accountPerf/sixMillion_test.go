@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -146,7 +147,7 @@ func getAccountInformation(
 		if err == nil {
 			if expectedCount > 0 && int(expectedCount) != len(*info.CreatedApps) {
 				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCount)
-				fmt.Printf("%+v\n\n", info)
+				fmt.Printf("%s\n\n", spew.Sdump(info))
 				failTest = true
 				continue
 			}
