@@ -279,12 +279,11 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			case protocol.AssetConfigTx:
 				loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, queue)
 			case protocol.AssetTransferTx:
-				loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 				if !stxn.Txn.AssetSender.IsZero() {
 					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 					loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddAccountTask(&stxn.Txn.AssetSender, task, accountTasks, queue)
 				} else {
+					loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
 					if stxn.Txn.AssetAmount == 0 && (stxn.Txn.AssetReceiver == stxn.Txn.Sender) {
 						// opt in
 						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
@@ -292,11 +291,9 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				}
 				if !stxn.Txn.AssetReceiver.IsZero() {
 					loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddAccountTask(&stxn.Txn.AssetReceiver, task, accountTasks, queue)
 				}
 				if !stxn.Txn.AssetCloseTo.IsZero() {
 					loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddAccountTask(&stxn.Txn.AssetCloseTo, task, accountTasks, queue)
 				}
 			case protocol.AssetFreezeTx:
 				if !stxn.Txn.FreezeAccount.IsZero() {

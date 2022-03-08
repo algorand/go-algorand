@@ -235,7 +235,14 @@ func makeGroupFromTxn(txn transactions.Transaction) []transactions.SignedTxnWith
 	}
 }
 
-func prefetch(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Transaction) (map[basics.Address]struct{} /*accounts*/, map[basics.Address]map[basics.AppIndex]struct{} /*apps*/, map[basics.Address]map[basics.AssetIndex]struct{} /*assets*/, map[creatable]struct{} /*creators*/) {
+type ledgerData struct {
+	Accounts map[basics.Address]struct{}
+	Apps     map[basics.Address]map[basics.AppIndex]struct{}
+	Assets   map[basics.Address]map[basics.AssetIndex]struct{}
+	Creators map[creatable]struct{}
+}
+
+func prefetch(t *testing.T, l LedgerForEvaluator, txn transactions.Transaction) ledgerData {
 	group := makeGroupFromTxn(txn)
 
 	ch := prefetchAccounts(
@@ -253,7 +260,13 @@ func prefetch(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.T
 
 	accounts := parseLoadedAccountDataEntries(loaded.accounts)
 	apps, assets, creators := parseLoadedResourcesEntries(loaded.resources)
-	return accounts, apps, assets, creators
+
+	return ledgerData{
+		Accounts: accounts,
+		Apps:     apps,
+		Assets:   assets,
+		Creators: creators,
+	}
 }
 
 func runEval(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Transaction) {
@@ -266,6 +279,25 @@ func runEval(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Tr
 
 	err = eval.TransactionGroup(makeGroupFromTxn(txn))
 	require.NoError(t, err)
+}
+
+func run(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Transaction) (ledgerData /*requested*/, ledgerData /*prefetched*/) {
+	prefetched := prefetch(t, l, txn)
+
+	l.requestedBalances = nil
+	l.requestedApps = nil
+	l.requestedAssets = nil
+	l.requestedCreators = nil
+
+	runEval(t, l, txn)
+	requestedData := ledgerData{
+		Accounts: l.requestedBalances,
+		Apps:     l.requestedApps,
+		Assets:   l.requestedAssets,
+		Creators: l.requestedCreators,
+	}
+
+	return requestedData, prefetched
 }
 
 func TestEvaluatorPrefetcherAlignmentPayment(t *testing.T) {
@@ -308,14 +340,10 @@ func TestEvaluatorPrefetcherAlignmentPayment(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
@@ -344,17 +372,14 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
 	// Only one (non-existing) asset is requested. Ignore it.
-	require.Len(t, l.requestedAssets, 1)
-	require.Len(t, l.requestedAssets[acctAddr(1)], 1)
-	require.Nil(t, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	require.Len(t, requested.Assets, 1)
+	require.Len(t, requested.Assets[acctAddr(1)], 1)
+	requested.Assets = nil
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
@@ -403,14 +428,10 @@ func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
@@ -462,14 +483,10 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
@@ -532,14 +549,10 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
@@ -617,14 +630,10 @@ func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
@@ -691,14 +700,10 @@ func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
@@ -742,14 +747,10 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
@@ -783,17 +784,14 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	// Only one (non-existing) app is requested. Ignore it.
-	require.Len(t, l.requestedApps, 1)
-	require.Len(t, l.requestedApps[addr], 1)
-	require.Nil(t, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	// Only one (non-existing) asset is requested. Ignore it.
+	require.Len(t, requested.Apps, 1)
+	require.Len(t, requested.Apps[acctAddr(1)], 1)
+	requested.Apps = nil
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
@@ -844,14 +842,10 @@ func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
@@ -906,14 +900,10 @@ func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
@@ -974,14 +964,10 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
@@ -1042,14 +1028,10 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testing.T) {
@@ -1110,14 +1092,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	// Loading accounts depends on the smart contract program. Ignore the addresses
+	// not requested.
+	requested.Accounts[acctAddr(5)] = struct{}{}
+	requested.Accounts[acctAddr(3)] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *testing.T) {
@@ -1178,14 +1160,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	// Loading foreign apps depends on the smart contract program. Ignore the apps
+	// not requested.
+	requested.Creators[creatable{cindex: 6, ctype: basics.AppCreatable}] = struct{}{}
+	requested.Creators[creatable{cindex: 8, ctype: basics.AppCreatable}] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *testing.T) {
@@ -1246,14 +1228,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 		},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	// Loading foreign assets depends on the smart contract program. Ignore the assets
+	// not requested.
+	requested.Creators[creatable{cindex: 6, ctype: basics.AssetCreatable}] = struct{}{}
+	requested.Creators[creatable{cindex: 8, ctype: basics.AssetCreatable}] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
@@ -1284,12 +1266,8 @@ func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
 		CompactCertTxnFields: transactions.CompactCertTxnFields{},
 	}
 
-	accounts, apps, assets, creators := prefetch(t, l, txn)
-	runEval(t, l, txn)
+	requested, prefetched := run(t, l, txn)
 
-	accounts[rewardsPool()] = struct{}{}
-	require.Equal(t, l.requestedBalances, accounts)
-	require.Equal(t, l.requestedApps, apps)
-	require.Equal(t, l.requestedAssets, assets)
-	require.Equal(t, l.requestedCreators, creators)
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
 }

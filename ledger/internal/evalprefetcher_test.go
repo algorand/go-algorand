@@ -317,32 +317,8 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
-				{
-					address: acctAddrPtr(2),
-					data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
-					},
-				},
-				{
-					address: acctAddrPtr(3),
-					data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
-					},
-				},
-				{
-					address: acctAddrPtr(4),
-					data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
-					},
-				},
 			},
 			resources: []loadedResourcesEntry{
-				{
-					address:        acctAddrPtr(1),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
-				},
 				{
 					address:        acctAddrPtr(2),
 					creatableIndex: 1001,
