@@ -107,7 +107,7 @@ if [[ "${ARCHTYPE}" = arm* ]]; then
     PARALLEL_FLAG="-p 1"
 fi
 
-PACKAGES="./..."
+PACKAGES=$(go list ./...|grep compactcert)
 if [ "$RUN_EXPECT" = "TRUE" ]; then
   PACKAGES=$(go list ./...|grep expect)
 fi

@@ -66,7 +66,9 @@ func TestCompactCerts(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
+	t.Logf("CC rounds are %d", config.Consensus[protocol.ConsensusFuture].CompactCertRounds)
 	fixture.Setup(t, filepath.Join("nettemplates", "CompactCert.json"))
+	t.Logf("2CC rounds are %d", config.Consensus[protocol.ConsensusFuture].CompactCertRounds)
 	defer fixture.Shutdown()
 
 	restClient, err := fixture.NC.AlgodClient()
