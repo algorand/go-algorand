@@ -285,11 +285,43 @@ func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Roun
 	return nil
 }
 
-func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	ad, ok := l.balances[addr]
+	if !ok {
+		return ledgercore.AssetResource{}, nil
+	}
+	var result ledgercore.AssetResource
+	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+		result.AssetParams = &p
+	}
+	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+		result.AssetHolding = &p
+	}
+
+	return result, nil
+}
+
+func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	ad, ok := l.balances[addr]
+	if !ok {
+		return ledgercore.AppResource{}, nil
+	}
+	var result ledgercore.AppResource
+	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+		result.AppParams = &p
+	}
+	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+		result.AppLocalState = &s
+	}
+
+	return result, nil
+}
+
+func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	ad := l.balances[addr]
 	// Clear RewardsBase since tealdbg has no idea about rewards level so the underlying calculation with reward will fail.
 	ad.RewardsBase = 0
-	return ad, rnd, nil
+	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

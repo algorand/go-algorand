@@ -20,9 +20,12 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    20,
+	Version:                                    22,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
+	AgreementIncomingBundlesQueueLength:        7,
+	AgreementIncomingProposalsQueueLength:      25,
+	AgreementIncomingVotesQueueLength:          10000,
 	AnnounceParticipationKey:                   true,
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
@@ -81,6 +84,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",
 	LogSizeLimit:                               1073741824,
+	MaxAPIResourcesPerAccount:                  100000,
 	MaxCatchpointDownloadDuration:              7200000000000,
 	MaxConnectionsPerIP:                        30,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,

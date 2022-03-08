@@ -206,7 +206,7 @@ var uniqueAccountTotals = []AccountTotals{
 func TestAccountTotalsMarshalMsgUnique(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	uniqueAt := make(map[crypto.Digest]bool, 0)
+	uniqueAt := make(map[crypto.Digest]bool, len(uniqueAccountTotals))
 	for _, at := range uniqueAccountTotals {
 		inBuffer := make([]byte, 0, 128)
 		outBuffer := at.MarshalMsg(inBuffer)

@@ -62,6 +62,7 @@ func isDefault(cfg TelemetryConfig) bool {
 	cfg.FilePath = "" // Reset to compare the rest
 	cfg.GUID = ""
 	cfg.ChainID = ""
+	cfg.Version = ""
 	defaultCfg.GUID = ""
 	return cfg == defaultCfg
 }
@@ -103,6 +104,7 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 
 	a.Equal(cfg.FilePath, dataDirLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
+	a.NotEmpty(cfg.Version)
 
 	// We got this from the tiny file we wrote to earlier.
 	a.True(cfg.Enable)
@@ -136,6 +138,7 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	defaultCfg := createTelemetryConfig()
 	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
+	a.NotEmpty(cfg.Version)
 
 	a.True(isDefault(cfg))
 
@@ -163,10 +166,14 @@ func TestSaveLoadConfig(t *testing.T) {
 
 	cfgLoad, err := LoadTelemetryConfig(cfg.FilePath)
 
-	// ChainId isn't stored.
+	// ChainId and Version aren't stored.
 	a.NotEmpty(cfg.ChainID)
 	a.Empty(cfgLoad.ChainID)
 	cfg.ChainID = ""
+
+	a.NotEmpty(cfg.Version)
+	a.Empty(cfgLoad.Version)
+	cfg.Version = ""
 
 	a.NoError(err)
 	a.Equal("testname", cfgLoad.Name)

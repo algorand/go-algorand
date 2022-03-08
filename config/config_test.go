@@ -309,6 +309,29 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 	a.Error(err)
 }
 
+func diffStrings(str1, str2 string, trimLen int) (out string) {
+	if len(str1) < len(str2) {
+		str1, str2 = str2, str1
+	}
+	// str1 is longer or equal to str2
+	for i := 0; i < len(str2); i++ {
+		if str1[i] == str2[i] {
+			continue
+		}
+		out1 := str1[i:]
+		out2 := str2[i:]
+		if len(out1) > trimLen {
+			out1 = out1[:trimLen]
+		}
+		if len(out2) > trimLen {
+			out2 = out2[:trimLen]
+		}
+		out = fmt.Sprintf("`%s` vs. `%s`", out1, out2)
+		break
+	}
+	return
+}
+
 // Verify that nobody is changing the shipping default configurations
 func TestConfigInvariant(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -321,9 +344,15 @@ func TestConfigInvariant(t *testing.T) {
 
 	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
 		c := Local{}
-		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)), &c)
+		configFileName := filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion))
+		err = codecs.LoadObjectFromFile(configFileName, &c)
 		a.NoError(err)
-		a.Equal(getVersionedDefaultLocalConfig(configVersion), c)
+		if !reflect.DeepEqual(getVersionedDefaultLocalConfig(configVersion), c) {
+			first := fmt.Sprintf("%#v", getVersionedDefaultLocalConfig(configVersion))
+			second := fmt.Sprintf("%#v", c)
+			diff := diffStrings(first, second, 20)
+			a.Equal(getVersionedDefaultLocalConfig(configVersion), c, "Comparison failed on config version %d\nDiff start point:`%s`\nConfig file name: %s", configVersion, diff, configFileName)
+		}
 	}
 }
 
