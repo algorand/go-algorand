@@ -990,7 +990,7 @@ func TestGlobal(t *testing.T) {
 		4: {CreatorAddress, globalV4TestProgram},
 		5: {GroupID, globalV5TestProgram},
 		6: {CallerApplicationAddress, globalV6TestProgram},
-		7: {CallerApplicationAddress, globalV6TestProgram},
+		7: {CallerApplicationAddress, globalV7TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -4610,13 +4610,19 @@ func TestOpBase64Decode(t *testing.T) {
 		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
 			"StdEncoding",
 			`MOBY-DICK;
+
 or, THE WHALE.
+
+
 By Herman Melville`, "",
 		},
 		{"TU9CWS1ESUNLOwoKb3IsIFRIRSBXSEFMRS4KCgpCeSBIZXJtYW4gTWVsdmlsbGU=",
 			"URLEncoding",
 			`MOBY-DICK;
+
 or, THE WHALE.
+
+
 By Herman Melville`, "",
 		},
 
@@ -4693,11 +4699,22 @@ By Herman Melville`, "",
 	template := `byte 0x%s; byte 0x%s; base64_decode %s; ==`
 	for _, tc := range testCases {
 		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), hex.EncodeToString([]byte(tc.encoded)), tc.alph)
-
 		if tc.error == "" {
 			if LogicVersion < fidoVersion {
 				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
 			} else {
+				// sanity check - test the function first:
+				encoding := base64.URLEncoding
+				if tc.alph == "StdEncoding" {
+					encoding = base64.StdEncoding
+				}
+				encoding = encoding.Strict()
+				decoded, err := base64Decode([]byte(tc.encoded), encoding)
+				// t.Log("\n\nversion:", fidoVersion, "\n\ntc.decoded:", tc.decoded, "\n\ntc.encoded:", tc.encoded, "\n\ntc.alph:", tc.alph, "\n\nsource:", source, "\n\ngolang decoded:", string(decoded))
+				require.NoError(t, err)
+				require.Equal(t, string(decoded), tc.decoded)
+
+				// now check eval:
 				testAccepts(t, source, fidoVersion)
 			}
 		} else {

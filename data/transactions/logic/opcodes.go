@@ -58,8 +58,8 @@ const txnEffectsVersion = 6
 // the Foreign arrays.
 const createdResourcesVersion = 6
 
-// "Future" opcodes
-const fidoVersion = LogicVersion + 1 // base64, json, secp256r1
+// "Future" opcodes (may end up pushed back past current LogicVersion)
+const fidoVersion = LogicVersion // base64, json, secp256r1
 
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
