@@ -4764,7 +4764,6 @@ func TestHasDuplicateKeys(t *testing.T) {
 	}
 }
 
-// Currently broken as depends on defaultEvalProtoWithVersion
 func TestOpJSONRef(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
