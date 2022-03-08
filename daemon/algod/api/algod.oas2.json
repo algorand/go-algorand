@@ -186,19 +186,19 @@
           "400": {
             "description": "Bad request",
             "schema": {
-              "$ref": "#/definitions/AccountsErrorResponse"
+              "$ref": "#/responses/AccountsErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -263,19 +263,19 @@
           "400": {
             "description": "Malformed address or asset ID",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -340,19 +340,19 @@
           "400": {
             "description": "Malformed address or application ID",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -413,25 +413,25 @@
           "400": {
             "description": "Max must be a non-negative integer",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "503": {
             "description": "Service Temporarily Unavailable",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -479,25 +479,25 @@
           "400": {
             "description": "Bad Request - Non integer number",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "None existing block ",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -560,25 +560,25 @@
           "400": {
             "description": "Malformed round number or transaction ID",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Non-existent block or transaction",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal error, including protocol not supporting Merkle proofs.",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -618,7 +618,7 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -649,25 +649,25 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Participation Key Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -709,31 +709,31 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Participation Key Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "503": {
             "description": "Service Temporarily Unavailable",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -763,25 +763,25 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Participation Key Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -810,25 +810,25 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Participation Key Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -872,25 +872,25 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Participation Key Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -948,7 +948,7 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
@@ -991,25 +991,25 @@
           "400": {
             "description": "Bad Request -- number must be non-negative integer ",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "503": {
             "description": "Service Temporarily Unavailable",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1058,25 +1058,25 @@
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "503": {
             "description": "Service Temporarily Unavailable",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1102,19 +1102,19 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "503": {
             "description": "Service Temporarily Unavailable",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1150,19 +1150,19 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "503": {
             "description": "Service Temporarily Unavailable",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1200,25 +1200,25 @@
           "200": {
             "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
             "schema": {
-              "$ref": "#/definitions/PendingTransactionResponse"
+              "$ref": "#/responses/PendingTransactionResponse"
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Transaction Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1263,25 +1263,25 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Application Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1326,25 +1326,25 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
             "description": "Application Not Found",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1395,13 +1395,13 @@
           "400": {
             "description": "Bad Request - Teal Compile Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
@@ -1410,7 +1410,7 @@
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1450,19 +1450,19 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1495,19 +1495,19 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -1557,13 +1557,13 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "404": {
@@ -1572,7 +1572,7 @@
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/ErrorResponse"
+              "$ref": "#/responses/ErrorResponse"
             }
           },
           "default": {
@@ -2226,51 +2226,6 @@
         }
       }
     },
-    "ErrorResponse": {
-      "description": "An error response with optional data field.",
-      "type": "object",
-      "required": [
-        "message"
-      ],
-      "properties": {
-        "data": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      }
-    },
-    "AccountsErrorResponse": {
-      "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
-      "type": "object",
-      "required": [
-        "message"
-      ],
-      "properties": {
-        "data": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        },
-        "max-results": {
-          "type": "integer"
-        },
-        "total-apps-opted-in": {
-          "type": "integer"
-        },
-        "total-assets-opted-in": {
-          "type": "integer"
-        },
-        "total-created-apps": {
-          "type": "integer"
-        },
-        "total-created-assets": {
-          "type": "integer"
-        }
-      }
-    },
     "DryrunRequest": {
       "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
       "type": "object",
@@ -2417,83 +2372,6 @@
         "minor": {
           "type": "integer",
           "format": "int64"
-        }
-      }
-    },
-    "PendingTransactionResponse": {
-      "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
-      "type": "object",
-      "required": [
-        "txn",
-        "pool-error"
-      ],
-      "properties": {
-        "asset-index": {
-          "description": "The asset index if the transaction was found and it created an asset.",
-          "type": "integer"
-          },
-        "application-index": {
-          "description": "The application index if the transaction was found and it created an application.",
-          "type": "integer"
-        },
-        "close-rewards": {
-          "description": "Rewards in microalgos applied to the close remainder to account.",
-          "type": "integer"
-        },
-        "closing-amount": {
-          "description": "Closing amount for the transaction.",
-          "type": "integer"
-        },
-        "asset-closing-amount": {
-          "description": "The number of the asset's unit that were transferred to the close-to address.",
-          "type": "integer"
-        },
-        "confirmed-round": {
-          "description": "The round where this transaction was confirmed, if present.",
-          "type": "integer"
-        },
-        "pool-error": {
-          "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
-          "type": "string"
-        },
-        "receiver-rewards": {
-          "description": "Rewards in microalgos applied to the receiver account.",
-          "type": "integer"
-        },
-        "sender-rewards": {
-          "description": "Rewards in microalgos applied to the sender account.",
-          "type": "integer"
-        },
-        "local-state-delta": {
-          "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AccountStateDelta"
-          }
-        },
-        "global-state-delta": {
-          "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
-          "$ref": "#/definitions/StateDelta"
-        },
-        "logs": {
-          "description": "\\[lg\\] Logs for the application being executed by this transaction.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "byte"
-          }
-        },
-        "inner-txns": {
-          "description": "Inner transactions produced by application execution.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PendingTransactionResponse"
-          }
-        },
-        "txn": {
-          "description": "The raw signed transaction.",
-            "type": "object",
-          "x-algorand-format": "SignedTransaction"
         }
       }
     }
@@ -2721,6 +2599,38 @@
         }
       }
     },
+    "AccountsErrorResponse": {
+      "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
+	"schema": {
+          "type": "object",
+          "required": [
+            "message"
+          ],
+          "properties": {
+            "data": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "max-results": {
+              "type": "integer"
+            },
+            "total-apps-opted-in": {
+              "type": "integer"
+            },
+            "total-assets-opted-in": {
+              "type": "integer"
+            },
+            "total-created-apps": {
+              "type": "integer"
+            },
+            "total-created-assets": {
+              "type": "integer"
+            }
+	}
+      }
+    },
     "BlockResponse": {
       "description": "Encoded block object.",
       "schema": {
@@ -2819,6 +2729,23 @@
         }
       }
     },
+    "ErrorResponse": {
+      "description": "An error response with optional data field.",
+	"schema": {
+          "type": "object",
+          "required": [
+            "message"
+          ],
+          "properties": {
+            "data": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+	  }
+	}
+    },
     "NodeStatusResponse": {
       "schema": {
         "description": "NodeStatus contains the information about a node status",
@@ -2896,6 +2823,85 @@
           }
         }
       }
+    },
+    "PendingTransactionResponse": {
+      "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
+	"schema": {	
+          "type": "object",
+          "required": [
+            "txn",
+            "pool-error"
+          ],
+          "properties": {
+            "asset-index": {
+              "description": "The asset index if the transaction was found and it created an asset.",
+              "type": "integer"
+              },
+            "application-index": {
+              "description": "The application index if the transaction was found and it created an application.",
+              "type": "integer"
+            },
+            "close-rewards": {
+              "description": "Rewards in microalgos applied to the close remainder to account.",
+              "type": "integer"
+            },
+            "closing-amount": {
+              "description": "Closing amount for the transaction.",
+              "type": "integer"
+            },
+            "asset-closing-amount": {
+              "description": "The number of the asset's unit that were transferred to the close-to address.",
+              "type": "integer"
+            },
+            "confirmed-round": {
+              "description": "The round where this transaction was confirmed, if present.",
+              "type": "integer"
+            },
+            "pool-error": {
+              "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
+              "type": "string"
+            },
+            "receiver-rewards": {
+              "description": "Rewards in microalgos applied to the receiver account.",
+              "type": "integer"
+            },
+            "sender-rewards": {
+              "description": "Rewards in microalgos applied to the sender account.",
+              "type": "integer"
+            },
+            "local-state-delta": {
+              "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/AccountStateDelta"
+              }
+            },
+            "global-state-delta": {
+              "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+              "$ref": "#/definitions/StateDelta"
+            },
+            "logs": {
+              "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "byte"
+              }
+            },
+            "inner-txns": {
+              "description": "Inner transactions produced by application execution.",
+              "type": "array",
+              "items": {
+                "$ref": "#/responses/PendingTransactionResponse"
+              }
+            },
+            "txn": {
+              "description": "The raw signed transaction.",
+                "type": "object",
+              "x-algorand-format": "SignedTransaction"
+            }
+          }
+       }
     },
     "PendingTransactionsResponse": {
       "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**.",
