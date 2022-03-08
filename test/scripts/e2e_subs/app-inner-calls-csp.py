@@ -22,8 +22,7 @@ assert not err, err
 # On creation app1 does nothing to avoid fee complications. Further calls to app1 must
 # contain an app arg that determines the execution path. An arg value of 0 opts app1 
 # into app2 while a nonzero value issues an inner app call to app2's CSP. This verifies
-# that both accessing a CSP through inner app calls and issuing inner app calls from a
-# CSP is possible.
+# that accessing a CSP with inner app calls is possible.
 app1 = """
 #pragma version 6
  txn ApplicationID
@@ -42,11 +41,12 @@ app1 = """
   txn Applications 1
   itxn_field ApplicationID
 
+  txn Applications 2
+  itxn_field Applications
+
   int OptIn
   itxn_field OnCompletion
 
-  txn Applications 2
-  itxn_field Applications
  itxn_submit
  b end
 
@@ -91,6 +91,8 @@ app2 = """
 
 app3 = """
 #pragma version 6
+pushbytes "success"
+log
 int 1
 """
 
@@ -122,13 +124,22 @@ assert not err, err
 _, err = goal.pay(goal.account, goal.app_address(app2ID), amt=4_000_000)
 assert not err, err
 
-# execute c2c to opt app1 into app2
-_, err = goal.app_call(joe, app1ID, app_args=[0x00], foreign_apps=[int(app2ID), int(app3ID)])
+# execute c2c to opt app1 into app2 and verify that the response is structured as
+# expected for a successful execution of all 3 apps.
+txinfo, err = goal.app_call(joe, app1ID, app_args=[0x00], foreign_apps=[int(app2ID), int(app3ID)])
 assert not err, err
+assert len(txinfo["inner-txns"]) == 1
+assert len(txinfo["inner-txns"][0]["inner-txns"]) == 1
+assert len(txinfo["inner-txns"][0]["inner-txns"][0]["logs"]) == 1
 
-# execute c2c w/ CSP to opt app1 out of app2
-_, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
+# execute c2c w/ CSP to opt app1 out of app2. Note that the CSP of app2 attempts
+# to issue an inner app call, which is not allowed. The expected behavior is for
+# the CSP to fail (so app3 won't be called) but for the Clear State operation to
+# succeed.
+txinfo, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
 assert not err, err
+assert len(txinfo["inner-txns"]) == 1
+assert "inner-txns" not in txinfo["inner-txns"][0]
 
 # attempt additional CSP inner app call that's intended to fail because app1 is
 # no longer opted into app2 after previous call to CSP.
