@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,7 @@ var (
 	rejectsFilename string
 	closeToAddress  string
 	noProgramOutput bool
+	writeSourceMap  bool
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
@@ -123,6 +125,7 @@ func init() {
 
 	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
+	compileCmd.Flags().BoolVarP(&writeSourceMap, "map", "m", false, "write out assembly map")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
@@ -927,7 +930,7 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFile(fname string) (program []byte) {
+func assembleFileImpl(fname string) *logic.OpStream {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
@@ -948,7 +951,17 @@ func assembleFile(fname string) (program []byte) {
 		}
 	}
 
+	return ops
+}
+
+func assembleFile(fname string) []byte {
+	ops := assembleFileImpl(fname)
 	return ops.Program
+}
+
+func assembleFileWithMap(fname string) ([]byte, logic.AssemblyMap) {
+	ops := assembleFileImpl(fname)
+	return ops.Program, ops.GetAssemblyMap()
 }
 
 func disassembleFile(fname, outname string) {
@@ -997,7 +1010,7 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-			program := assembleFile(fname)
+			program, sourceMap := assembleFileWithMap(fname)
 			outblob := program
 			outname := outFilename
 			if outname == "" {
@@ -1034,6 +1047,18 @@ var compileCmd = &cobra.Command{
 				err := writeFile(outname, outblob, 0666)
 				if err != nil {
 					reportErrorf("%s: %s", outname, err)
+				}
+			}
+			if writeSourceMap {
+				mapname := fname + ".map.json" // TODO: naming?
+				sourceMap.SourceName = fname
+				pcblob, err := json.Marshal(sourceMap)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+				err = writeFile(mapname, pcblob, 0666)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
 				}
 			}
 			if !signProgram && outname != stdoutFilenameValue {
