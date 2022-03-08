@@ -965,7 +965,6 @@ func scenarioD(
 	for p := 0; p < parallelCheckers; p++ {
 		wg.Add(1)
 		go func() {
-			lastAppId := uint64(0)
 			for i := range checkAppChan {
 				var app generated.Application
 				cont := false
@@ -985,7 +984,6 @@ func scenarioD(
 					continue
 				}
 				checkResChan <- 1
-				lastAppId = i
 				pass := checkApplicationParams(
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
 					app.Params,
@@ -996,7 +994,6 @@ func scenarioD(
 					fmt.Printf("scenario4: app params check failed for %d\n", app.Id)
 				}
 			}
-			fmt.Printf("scenario4: Last app id: %d\n", lastAppId)
 			wg.Done()
 		}()
 	}
@@ -1042,7 +1039,7 @@ func handleError(err error, message string, errChan chan<- error) {
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
-	if force || counter == tLife-800 {
+	if force || counter == tLife-800 { // TODO: remove -800 after resolving "Missing appsPerAccount" issue
 		fmt.Printf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
