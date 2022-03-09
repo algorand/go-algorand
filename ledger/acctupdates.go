@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -977,6 +978,9 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 					ledgercore.AssignAccountData(&data, ad)
 					withoutRewards = data.MicroAlgos // record balance before updating rewards
 					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+					if data.MicroAlgos.Raw == 0 { // this should never happen during the experiment
+						au.log.Errorf("accountUpdates.lookupLatest: returning for addr %s: %s", addr, spew.Sdump(data))
+					}
 				}
 			}()
 			withRewards = false

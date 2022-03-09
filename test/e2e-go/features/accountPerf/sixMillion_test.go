@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -145,15 +146,18 @@ func getAccountInformation(
 	for x := 0; x < 50; x++ { // retry only 50 times
 		info, err = client.AccountInformationV2(address, true)
 		if err == nil {
+			if expectedCount > 0 && int(expectedCount) != len(*info.CreatedApps) {
+				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCount)
+				fmt.Printf("%s\n\n", spew.Sdump(info))
 			if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
 				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCountApps)
-				fmt.Printf("%+v\n\n", info)
+				fmt.Printf("%s\n\n", spew.Sdump(info))
 				failTest = true
 				continue
 			}
 			if expectedCountAssets > 0 && int(expectedCountAssets) != len(*info.CreatedAssets) {
 				fmt.Printf("Missing assetsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedAssets), expectedCountAssets)
-				fmt.Printf("%+v\n\n", info)
+				fmt.Printf("%s\n\n", spew.Sdump(info))
 				failTest = true
 				continue
 			}
