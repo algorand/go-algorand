@@ -35,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -334,7 +333,7 @@ func getPendingTransactionsTest(t *testing.T, format string, max uint64, expecte
 func TestPendingTransactionLogsEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	response := generated.PendingTransactionResponse{
+	response := generatedV2.PendingTransactionResponse{
 		Logs: &[][]byte{
 			{},
 			[]byte(string("a")),
@@ -604,7 +603,7 @@ func TestTealDryrun(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var gdr generated.DryrunRequest
+	var gdr generatedV2.DryrunRequest
 	txns := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
@@ -631,24 +630,24 @@ func TestTealDryrun(t *testing.T) {
 	failOps, err := logic.AssembleStringWithVersion("int 0", 2)
 	require.NoError(t, err)
 
-	gdr.Apps = []generated.Application{
+	gdr.Apps = []generatedV2.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
+			Params: generatedV2.ApplicationParams{
 				ApprovalProgram: sucOps.Program,
 			},
 		},
 	}
-	localv := make(generated.TealKeyValueStore, 1)
-	localv[0] = generated.TealKeyValue{
+	localv := make(generatedV2.TealKeyValueStore, 1)
+	localv[0] = generatedV2.TealKeyValue{
 		Key:   "foo",
-		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+		Value: generatedV2.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
 	}
 
-	gdr.Accounts = []generated.Account{
+	gdr.Accounts = []generatedV2.Account{
 		{
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{{
+			AppsLocalState: &[]generatedV2.ApplicationLocalState{{
 				Id:       1,
 				KeyValue: &localv,
 			}},

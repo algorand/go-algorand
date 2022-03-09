@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
@@ -939,7 +938,7 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
-func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
+func (c *Client) AddParticipationKey(keyfile string) (resp generatedV2.PostParticipationResponse, err error) {
 	data, err := ioutil.ReadFile(keyfile)
 	if err != nil {
 		return
@@ -954,7 +953,7 @@ func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostPartici
 }
 
 // GetParticipationKeys gets the currently installed participation keys.
-func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysResponse, err error) {
+func (c *Client) GetParticipationKeys() (resp generatedV2.ParticipationKeysResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeys()
@@ -963,7 +962,7 @@ func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysRespons
 }
 
 // GetParticipationKeyByID looks up a specific participation key by its participationID.
-func (c *Client) GetParticipationKeyByID(id string) (resp generated.ParticipationKeyResponse, err error) {
+func (c *Client) GetParticipationKeyByID(id string) (resp generatedV2.ParticipationKeyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeyByID(id)
