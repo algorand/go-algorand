@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
-
 	"math"
 	"math/rand"
 	"os"

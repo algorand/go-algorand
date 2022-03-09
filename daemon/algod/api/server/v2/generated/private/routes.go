@@ -8,11 +8,13 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"fmt"
-	"github.com/algorand/oapi-codegen/pkg/runtime"
-	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/labstack/echo/v4"
 	"net/http"
 	"strings"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/labstack/echo/v4"
+
+	"github.com/algorand/oapi-codegen/pkg/runtime"
 )
 
 // ServerInterface represents all server handlers.

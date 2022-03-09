@@ -20,8 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )

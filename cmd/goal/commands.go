@@ -30,11 +30,10 @@ import (
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
 
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-
 	"github.com/algorand/go-algorand/config"
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"

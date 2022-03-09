@@ -20,10 +20,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 type event struct {

@@ -29,6 +29,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -45,7 +47,6 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-codec/codec"
 )
 
 const maxTealSourceBytes = 1e5

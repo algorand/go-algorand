@@ -27,8 +27,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gofrs/flock"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"

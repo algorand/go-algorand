@@ -21,8 +21,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/protocol"
 	"strings"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type dbOp interface {

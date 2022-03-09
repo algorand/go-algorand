@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
@@ -34,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 var txnSample string = `{

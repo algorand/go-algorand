@@ -7,9 +7,10 @@ package test
 import (
 	"testing"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshaltestSlice(t *testing.T) {

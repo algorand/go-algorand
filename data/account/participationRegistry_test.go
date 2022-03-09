@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"strings"
 	"sync"
 	"testing"

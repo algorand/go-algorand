@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
@@ -54,7 +56,6 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
-	"github.com/algorand/go-deadlock"
 )
 
 // StatusReport represents the current basic status of the node

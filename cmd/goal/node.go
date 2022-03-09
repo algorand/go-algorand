@@ -32,9 +32,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-algorand/config"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/network"

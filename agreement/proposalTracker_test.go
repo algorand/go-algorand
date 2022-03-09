@@ -21,9 +21,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func sortedVoteGen(t *testing.T) (votes []vote) {

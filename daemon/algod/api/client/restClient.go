@@ -30,10 +30,9 @@ import (
 
 	"github.com/google/go-querystring/query"
 
+	"github.com/algorand/go-algorand/crypto"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	privateV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
-
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"

@@ -28,12 +28,14 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -45,7 +47,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/algorand/go-codec/codec"
 )
 
 func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {

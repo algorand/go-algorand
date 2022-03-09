@@ -25,10 +25,12 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/algorand/go-algorand/protocol"
+	"github.com/gorilla/mux"
+
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
-	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // WebPageFrontend is web page debugging frontend

@@ -20,9 +20,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
 )
 
 // A OneTimeSignature is a cryptographic signature that is produced a limited

@@ -19,6 +19,7 @@ package fuzzer
 import (
 	"bytes"
 	"encoding/json"
+
 	"github.com/algorand/go-deadlock"
 
 	//"github.com/algorand/go-algorand/agreement"

@@ -17,6 +17,13 @@
 package upgrades
 
 import (
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -24,11 +31,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 )
 
 func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeClient libgoal.Client) {

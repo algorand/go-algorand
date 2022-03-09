@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -37,8 +39,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
-
-	"github.com/spf13/cobra"
 )
 
 var (

@@ -25,8 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/websocket"
 )
 
 const (

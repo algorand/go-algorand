@@ -17,9 +17,10 @@
 package main
 
 import (
-	linter "github.com/algorand/go-algorand/cmd/partitiontest_linter"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/singlechecker"
+
+	linter "github.com/algorand/go-algorand/cmd/partitiontest_linter"
 )
 
 type analyzerPlugin struct{}

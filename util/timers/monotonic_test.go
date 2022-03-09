@@ -17,10 +17,11 @@
 package timers
 
 import (
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func polled(ch <-chan time.Time) bool {

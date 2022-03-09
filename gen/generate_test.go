@@ -25,13 +25,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
-
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 func TestLoadMultiRootKeyConcurrent(t *testing.T) {

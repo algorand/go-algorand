@@ -26,10 +26,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"

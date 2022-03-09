@@ -19,8 +19,9 @@ package agreement
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // Creates a proposal manager, and returns it in automata and white box form, along

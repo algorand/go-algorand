@@ -17,9 +17,10 @@
 package ledger
 
 import (
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const epsilon = 5 * time.Millisecond

@@ -26,9 +26,8 @@ import (
 	"strings"
 	"time"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-algorand/config"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
