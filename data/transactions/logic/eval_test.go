@@ -4736,7 +4736,7 @@ By Herman Melville`, "",
 			if LogicVersion < fidoVersion {
 				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
 			} else {
-				// sanity check - test the function first:
+				// sanity check - test the helper function first:
 				encoding := base64.URLEncoding
 				if tc.alph == "StdEncoding" {
 					encoding = base64.StdEncoding
