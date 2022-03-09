@@ -1583,11 +1583,8 @@ transactionGroupLoop:
 			for _, lr := range txgroup.resources {
 				if lr.address == nil {
 					// we attempted to look for the creator, and failed.
-					if lr.creatableType == basics.AssetCreatable {
-						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AssetCreatable}] = foundAddress{exists: false}
-					} else {
-						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AppCreatable}] = foundAddress{exists: false}
-					}
+					base.creators[creatable{cindex: lr.creatableIndex, ctype: lr.creatableType}] =
+						foundAddress{exists: false}
 					continue
 				}
 				if lr.creatableType == basics.AssetCreatable {
