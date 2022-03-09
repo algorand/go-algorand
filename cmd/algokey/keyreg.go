@@ -82,7 +82,7 @@ func init() {
 	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
 	keyregCmd.Flags().StringVarP(&params.txFile, "outputFile", "o", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
 	keyregCmd.Flags().StringVar(&params.partkeyFile, "keyfile", "", "participation keys to register, file is opened to fetch metadata for the transaction; only specify when bringing an account online to vote in Algorand consensus")
-	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account to bring offline; only specify when taking an account offline from voting in Algorand consensus")
+	keyregCmd.Flags().StringVar(&params.addr, "account", "", "account address to bring offline; only specify when taking an account offline from voting in Algorand consensus")
 
 	// TODO: move 'bundleGenesisInject' into something that can be imported here instead of using constants.
 	validNetworks = map[string]crypto.Digest{
@@ -172,7 +172,7 @@ func run(params keyregCmdParams) error {
 		params.txFile = fmt.Sprintf("%s.tx", params.partkeyFile)
 	}
 
-	if util.FileExists(params.txFile) || params.txFile == stdoutFilenameValue {
+	if params.txFile != stdoutFilenameValue && util.FileExists(params.txFile) {
 		return fmt.Errorf("outputFile '%s' already exists", params.txFile)
 	}
 
