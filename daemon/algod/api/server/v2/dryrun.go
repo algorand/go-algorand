@@ -135,13 +135,11 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 	}
 
 	if any {
-		if ddr.scratchActive == nil {
-			ddr.scratchActive = make([]bool, maxActive, 256)
-		}
-		for i := len(ddr.scratchActive); i <= maxActive; i++ {
+		ddr.scratchActive = make([]bool, maxActive+1, 256)
+		for i := 0; i <= maxActive; i++ {
 			sv := (*ddr.history[lasti].Scratch)[i]
 			active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
-			ddr.scratchActive = append(ddr.scratchActive, active)
+			ddr.scratchActive[i] = active
 		}
 	} else {
 		if ddr.scratchActive != nil {
@@ -152,7 +150,7 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 		}
 	}
 
-	scratchlen := maxActive
+	scratchlen := maxActive + 1
 	if len(ddr.scratchActive) > scratchlen {
 		scratchlen = len(ddr.scratchActive)
 	}

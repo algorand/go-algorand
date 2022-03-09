@@ -404,7 +404,7 @@ func checkAppCallScratchType(t *testing.T, response *generated.DryrunResponse, s
 				continue
 			}
 
-			if len(*traceLine.Scratch) >= slot {
+			if len(*traceLine.Scratch) > slot {
 				assert.Equal(t, tt, basics.TealType((*traceLine.Scratch)[slot].Type))
 			}
 		}
@@ -1556,6 +1556,12 @@ txn GroupIndex
 int 3
 ==
 bnz checkgload
+pushbytes "def"
+store 251
+pushint 123
+store 252
+pushbytes "abc"
+store 253
 txn GroupIndex
 store 254
 b exit
@@ -1611,7 +1617,13 @@ int 1`)
 	}
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
+
 	checkAppCallScratchType(t, &response, 254, basics.TealUintType)
+	checkAppCallScratchType(t, &response, 253, basics.TealBytesType)
+	checkAppCallScratchType(t, &response, 252, basics.TealUintType)
+	checkAppCallScratchType(t, &response, 251, basics.TealBytesType)
+	checkAppCallScratchType(t, &response, 250, basics.TealType(0))
+
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
