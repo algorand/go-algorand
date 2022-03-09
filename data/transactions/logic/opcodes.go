@@ -59,7 +59,7 @@ const txnEffectsVersion = 6
 const createdResourcesVersion = 6
 
 // Experimental:
-const fidoVersion = LogicVersion + 1 // base64, json, secp256r1
+const fidoVersion = 7 // base64, json, secp256r1
 
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
