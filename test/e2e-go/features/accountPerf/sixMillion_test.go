@@ -45,15 +45,29 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// uses numberOfThreads to perform different operations (signing and preparing transactions) in parallel
 const numberOfThreads = 256
-const printFreequency = 400
+
+// the frequency of printing progress status
+const printFreequency = 20
+
+// send transactions in groups or one by one
 const groupTransactions = true
+
+// number of elements queued in channels
 const channelDepth = 100
-const sixMillion = 6000000
-const sixThousand = 6000
+
+// the test in intended for 6M apps/assets and 6K accounts. These variable values can be changed to modify this.
+const sixMillion = 100
+const sixThousand = 10
+
+// report additional information
 const verbose = false
 
+// used for failing the test in case a bad account information is obtained (to preserve the node folder)
 var failTest bool
+
+// transaction group size obtained from consensus parameter
 var maxTxGroupSize int
 
 type psKey struct {
@@ -66,6 +80,7 @@ type txnKey struct {
 	tx transactions.Transaction
 }
 
+// started as a goroutine which will listen to signed transactions and broadcast them
 func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
 	for stxn := range sigTxnChan {
 		if stxn == nil {
@@ -87,6 +102,7 @@ func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan
 	queueWg.Done()
 }
 
+// started as a goroutine which will listen to signed transaction groups and broadcast them
 func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnGrpChan <-chan []transactions.SignedTxn, errChan chan<- error) {
 	for stxns := range sigTxnGrpChan {
 		if stxns == nil {
@@ -136,6 +152,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 	queueWg.Done()
 }
 
+// queries the node for account information, and will ertry if the expected number of apps or assets are not returned
 func getAccountInformation(
 	client libgoal.Client,
 	expectedCountApps uint64,
@@ -166,6 +183,7 @@ func getAccountInformation(
 	return
 }
 
+// queries the node for the given app information
 func getAccountApplicationInformation(
 	client libgoal.Client,
 	address string,
@@ -183,6 +201,7 @@ func getAccountApplicationInformation(
 	return
 }
 
+// started as a goroutine, signs the transactions from the channel
 func signer(
 	sigWg *sync.WaitGroup,
 	client libgoal.Client,
@@ -200,6 +219,7 @@ func signer(
 	sigWg.Done()
 }
 
+// started as a goroutine, signs the transaction groups from the channel
 func signerGrpTxn(
 	sigWg *sync.WaitGroup,
 	client libgoal.Client,
@@ -234,22 +254,28 @@ func signerGrpTxn(
 	sigWg.Done()
 }
 
+// create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 func Test5MAssetsScenario1(t *testing.T) {
 	test5MAssets(t, 1)
 }
 
+// create 6M unique assets, all created by a single account.
 func Test5MAssetsScenario2(t *testing.T) {
 	test5MAssets(t, 2)
 }
 
+// create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them.
+// Make an app call to each of them, and make sure the app store some information into the local storage.
 func Test5MAssetsScenario3(t *testing.T) {
 	test5MAssets(t, 3)
 }
 
+// create 6M unique apps by a single account. Opt-into all the applications and make sure the app stores information to both the local and global storage.
 func Test5MAssetsScenario4(t *testing.T) {
 	test5MAssets(t, 4)
 }
 
+// the common section of all test scenarios
 func test5MAssets(t *testing.T, scenario int) {
 	partitiontest.PartitionTest(t)
 
@@ -356,6 +382,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	}
 }
 
+// generates numAccounts keys
 func generateKeys(numAccounts int) (keys []psKey) {
 	keys = make([]psKey, 0, numAccounts)
 	var seed crypto.Seed
@@ -368,6 +395,7 @@ func generateKeys(numAccounts int) (keys []psKey) {
 	return
 }
 
+// prepares a send algo transaction
 func sendAlgoTransaction(
 	t *testing.T,
 	round uint64,
@@ -394,6 +422,7 @@ func sendAlgoTransaction(
 	return
 }
 
+// prepares a create asset transaction
 func createAssetTransaction(
 	t *testing.T,
 	counter uint64,
@@ -426,6 +455,7 @@ func createAssetTransaction(
 	return
 }
 
+// prepares a send asset transaction
 func sendAssetTransaction(
 	t *testing.T,
 	round uint64,
@@ -512,15 +542,15 @@ func scenarioA(
 		if na == ownAllAccount {
 			continue
 		}
+		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("ScenarioA: create assets for acct: %d / %d\n", nai, numberOfAccounts)
+		}
+
 		for asi := uint64(0); asi < assetsPerAccount; asi++ {
 			select {
 			case <-stopChan:
 				require.Fail(t, "Test errored")
 			default:
-			}
-
-			if nai%printFreequency == 0 && int(asi)%printFreequency == 0 {
-				fmt.Printf("create asset for acct: %d asset %d\n", nai, asi)
 			}
 			atx := createAssetTransaction(t, asi, firstValid, na.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
 			totalAssetAmount += uint64(600000000) + assetAmount
@@ -548,18 +578,19 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
+		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("ScenarioA: Accepting assets from acct: %d / %d\n", acci, numberOfAccounts)
+		}
+
 		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA opt-in assets")
 		require.NoError(t, err)
-		for assi, asset := range *info.Assets {
+		for _, asset := range *info.Assets {
 			select {
 			case <-stopChan:
 				require.Fail(t, "Test errored")
 			default:
 			}
 
-			if assi%printFreequency == 0 && acci%printFreequency == 0 {
-				fmt.Printf("Accepting assets acct: %d asset %d\n", acci, assi)
-			}
 			optInT := sendAssetTransaction(
 				t,
 				firstValid,
@@ -587,18 +618,19 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
+		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("ScenarioA: Sending assets from acct: %d / %d\n", acci, numberOfAccounts)
+		}
+
 		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA transfer assets")
 		require.NoError(t, err)
-		for assi, asset := range *info.Assets {
+		for _, asset := range *info.Assets {
 			select {
 			case <-stopChan:
 				require.False(t, true, "Test interrupted")
 			default:
 			}
 
-			if assi%printFreequency == 0 && acci%printFreequency == 0 {
-				fmt.Printf("Sending assets acct: %d asset %d\n", acci, assi)
-			}
 			assSend := sendAssetTransaction(
 				t,
 				firstValid,
@@ -625,8 +657,8 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		if nai%printFreequency == 0 {
-			fmt.Printf("Verifying assets from account %d / %d\n", nai, len(keys))
+		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("ScenarioA: Verifying assets from account %d / %d\n", nai, numberOfAccounts)
 		}
 		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets")
 		require.NoError(t, err)
@@ -682,7 +714,7 @@ func scenarioB(
 		default:
 		}
 
-		if int(asi)%printFreequency == 0 {
+		if asi%(numberOfAssets/printFreequency+1) == 0 {
 			fmt.Printf("create asset %d / %d\n", asi, numberOfAssets)
 		}
 		atx := createAssetTransaction(t, asi, firstValid, baseAcct.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
@@ -727,8 +759,8 @@ func scenarioB(
 		counter++
 		require.NoError(t, err)
 		tAssetAmt += assHold.AssetHolding.Amount
-		if counter%printFreequency == 0 {
-			fmt.Printf("Verifying assets %d / %d\n", counter, numberOfAssets)
+		if counter%(numberOfAssets/printFreequency+1) == 0 {
+			fmt.Printf("ScenarioB: Verifying assets %d / %d\n", counter, numberOfAssets)
 		}
 	}
 	require.Equal(t, totalAssetAmount, tAssetAmt)
@@ -796,15 +828,16 @@ func scenarioC(
 		if na == ownAllAccount {
 			continue
 		}
+
+		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("scenario3: create apps for account %d / %d\n", nai, numberOfAccounts)
+		}
+
 		for appi := uint64(0); appi < appsPerAccount; appi++ {
 			select {
 			case <-stopChan:
 				require.Fail(t, "Test errored")
 			default:
-			}
-
-			if int(appi)%printFreequency == 0 && int(nai)%printFreequency == 0 {
-				fmt.Printf("scenario3: create app %d / %d for account %d / %d\n", appi, appsPerAccount, nai, numberOfAccounts)
 			}
 			atx := makeAppTransaction(t, client, appi, firstValid, na.pk, tLife, false, genesisHash)
 			appCallFields[appi] = atx.ApplicationCallTxnFields
@@ -824,17 +857,17 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
+		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("scenario3: Opting into Application acct: %d / %d\n", acci, numberOfAccounts)
+		}
+
 		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC opt-in apps")
 		require.NoError(t, err)
-		for appi, app := range *info.CreatedApps {
+		for _, app := range *info.CreatedApps {
 			select {
 			case <-stopChan:
 				require.Fail(t, "Test errored")
 			default:
-			}
-
-			if acci%printFreequency == 0 && appi%printFreequency == 0 {
-				fmt.Printf("scenario3: Opting into Application acct: %d app %d\n", acci, app.Id)
 			}
 			optInTx := makeOptInAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
@@ -853,8 +886,8 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		if nai%printFreequency == 0 {
-			fmt.Printf("Verifying apps opt-in from account %d / %d\n", nai, len(keys))
+		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("ScenarioC: Verifying apps opt-in from account %d / %d\n", nai, numberOfAccounts)
 		}
 		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
@@ -877,19 +910,18 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
+		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("scenario3: Calling Application acct %d / %d\n", acci, numberOfAccounts)
+		}
+
 		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC call apps")
 		require.NoError(t, err)
-		for appi, app := range *info.CreatedApps {
+		for _, app := range *info.CreatedApps {
 			select {
 			case <-stopChan:
 				require.Fail(t, "Test errored")
 			default:
 			}
-
-			if acci%printFreequency == 0 && appi%printFreequency == 0 {
-				fmt.Printf("scenario3: Calling Application acct: %d app %d\n", acci, app.Id)
-			}
-
 			optInTx := callAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
 
@@ -907,8 +939,8 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		if nai%printFreequency == 0 {
-			fmt.Printf("Verifying app calls from account %d / %d\n", nai, len(keys))
+		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("ScenarioC: Verifying app calls from account %d / %d\n", nai, numberOfAccounts)
 		}
 		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
@@ -925,8 +957,6 @@ func scenarioC(
 	}
 }
 
-// create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them. Make an app call to each of them, and make sure the app store some information into the local storage.
-//func scenarioC(
 // create 6M unique apps by a single account. Opt-into all the applications and make sure the app stores information to both the local and global storage.
 func scenarioD(
 	t *testing.T,
@@ -964,7 +994,7 @@ func scenarioD(
 		default:
 		}
 
-		if int(asi)%printFreequency == 0 {
+		if asi%(numberOfApps/printFreequency+1) == 0 {
 			fmt.Printf("scenario4: create app %d / %d\n", asi, numberOfApps)
 		}
 		atx := makeAppTransaction(t, client, asi, firstValid, baseAcct.pk, tLife, true, genesisHash)
@@ -1035,10 +1065,9 @@ func scenarioD(
 		case checkAppChan <- i:
 			i++
 		default:
-			fmt.Printf("status: %d / %d\n", checked, numberOfApps)
 			time.Sleep(10 * time.Millisecond)
 		}
-		if checked != lastPrint && int(checked)%printFreequency == 0 {
+		if checked != lastPrint && checked%(numberOfApps/printFreequency+1) == 0 {
 			fmt.Printf("scenario4: check app params %d / %d\n", checked, numberOfApps)
 			lastPrint = checked
 		}
@@ -1052,6 +1081,7 @@ func scenarioD(
 	}
 }
 
+// handles errors by channeling them between goroutines
 func handleError(err error, message string, errChan chan<- error) {
 	if err != nil {
 		fmt.Printf("%s: %v\n", message, err)
@@ -1063,6 +1093,7 @@ func handleError(err error, message string, errChan chan<- error) {
 	}
 }
 
+// handle the counters to prepare and send transactions in batches of MaxTxnLife transactions
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
@@ -1087,6 +1118,7 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 	return counter, firstValid, nil
 }
 
+// signs and broadcasts a single transaction
 func signAndBroadcastTransaction(
 	round uint64,
 	txn *transactions.Transaction,
@@ -1109,6 +1141,7 @@ func signAndBroadcastTransaction(
 	return err
 }
 
+// queues transactions and packages them into maxTxGroupSize groups
 func queueTransaction(
 	sk *crypto.SignatureSecrets,
 	tx transactions.Transaction,
@@ -1136,6 +1169,7 @@ func queueTransaction(
 	return counter, txnGroup
 }
 
+// flushes the queue to push transaction groups with fewer than maxTxGroupSize transactions
 func flushQueue(
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
@@ -1154,6 +1188,7 @@ func flushQueue(
 	return counter + 1, txnGroup
 }
 
+// prepares an app creation transaction
 func makeAppTransaction(
 	t *testing.T,
 	client libgoal.Client,
@@ -1220,6 +1255,7 @@ int 1
 	return
 }
 
+// prepares a opt-in app transaction
 func makeOptInAppTransaction(
 	t *testing.T,
 	client libgoal.Client,
@@ -1242,6 +1278,7 @@ func makeOptInAppTransaction(
 	return
 }
 
+// checks and verifies the app params by comparing them against the baseline
 func checkApplicationParams(
 	acTF transactions.ApplicationCallTxnFields,
 	app generated.ApplicationParams,
@@ -1284,6 +1321,7 @@ func checkApplicationParams(
 	return pass
 }
 
+// creates accounts (public/secret key pairs)
 func createAccounts(
 	t *testing.T,
 	fixture *fixtures.RestClientFixture,
@@ -1311,8 +1349,8 @@ func createAccounts(
 			require.Fail(t, "Test errored")
 		default:
 		}
-		if i%printFreequency == 0 {
-			fmt.Println("account create txn: ", i)
+		if i%int(numberOfAccounts/printFreequency+1) == 0 {
+			fmt.Printf("account create txn: %d / %d\n", i, numberOfAccounts)
 		}
 		txn := sendAlgoTransaction(t, firstValid, baseAcct.pk, key.pk, balance, tLife, genesisHash)
 		counter, txnGroup = queueTransaction(baseAcct.sk, txn, txnChan, txnGrpChan, counter, txnGroup)
@@ -1326,6 +1364,7 @@ func createAccounts(
 	return firstValid, counter, keys
 }
 
+// prepare app call transaction
 func callAppTransaction(
 	t *testing.T,
 	client libgoal.Client,
