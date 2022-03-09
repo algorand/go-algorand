@@ -596,9 +596,9 @@ type jsonRefSpec struct {
 }
 
 var jsonRefSpecs = []jsonRefSpec{
-	{JSONString, StackBytes, 6},
-	{JSONUint64, StackUint64, 6},
-	{JSONObject, StackBytes, 6},
+	{JSONString, StackBytes, fidoVersion},
+	{JSONUint64, StackUint64, fidoVersion},
+	{JSONObject, StackBytes, fidoVersion},
 }
 
 var jsonRefSpecByField map[JSONRefType]jsonRefSpec
