@@ -236,18 +236,22 @@ func signerGrpTxn(
 
 func Test5MAssetsScenario1(t *testing.T) {
 	test5MAssets(t, 1)
+	require.Equal(t, failTest, false)
 }
 
 func Test5MAssetsScenario2(t *testing.T) {
 	test5MAssets(t, 2)
+	require.Equal(t, failTest, false)
 }
 
 func Test5MAssetsScenario3(t *testing.T) {
 	test5MAssets(t, 3)
+	require.Equal(t, failTest, false)
 }
 
 func Test5MAssetsScenario4(t *testing.T) {
 	test5MAssets(t, 4)
+	require.Equal(t, failTest, false)
 }
 
 func test5MAssets(t *testing.T, scenario int) {
@@ -906,7 +910,6 @@ func scenarioC(
 			require.Equal(t, uint64(3), (*capp.Params.GlobalState)[0].Value.Uint)
 		}
 	}
-	require.Equal(t, failTest, false)
 }
 
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them. Make an app call to each of them, and make sure the app store some information into the local storage.
@@ -1047,7 +1050,7 @@ func handleError(err error, message string, errChan chan<- error) {
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
-	if force || counter == tLife-800 { // TODO: remove -800 after resolving "Missing appsPerAccount" issue
+	if force || counter == tLife { // TODO: remove tLife-800 after resolving "Missing appsPerAccount" issue
 		fmt.Printf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
