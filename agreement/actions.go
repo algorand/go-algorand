@@ -152,7 +152,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		msg := a.CompoundMessage
 		payload := transmittedPayload{
 			ProposalData: protocol.Encode(&msg.Proposal),
-			PriorVote:               msg.Vote,
+			PriorVote:    msg.Vote,
 		}
 		data = protocol.Encode(&payload)
 	}

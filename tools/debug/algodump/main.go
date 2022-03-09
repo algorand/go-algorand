@@ -97,6 +97,10 @@ func (dh *dumpHandler) Handle(msg network.IncomingMessage) network.OutgoingMessa
 		}
 		var up agreement.UnauthenticatedProposal
 		err = protocol.Decode(p.ProposalData, &up)
+		if err != nil {
+			data = fmt.Sprintf("[decode error: %v]", err)
+			goto print
+		}
 
 		data = fmt.Sprintf("proposal %s", shortdigest(crypto.Digest(up.Block.Hash())))
 

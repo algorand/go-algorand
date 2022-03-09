@@ -55,7 +55,7 @@ type compoundMessage struct {
 
 // DecodeProposalError indicates proposal decoding failure
 type DecodeProposalError struct {
-	Err     error
+	Err   error
 	Round basics.Round
 }
 
