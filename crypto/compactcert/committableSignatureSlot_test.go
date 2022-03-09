@@ -75,7 +75,7 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklesignature.Signature, lValue 
 	sigCommitment = append(sigCommitment, sig.VerifyingKey.GetFixedLengthHashableRepresentation()...)
 
 	treeIdxBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(treeIdxBytes, sig.MerkleArrayIndex)
+	binary.LittleEndian.PutUint64(treeIdxBytes, sig.VectorCommitmentIndex)
 	sigCommitment = append(sigCommitment, treeIdxBytes...)
 
 	//build the expected binary representation of the merkle signature proof
