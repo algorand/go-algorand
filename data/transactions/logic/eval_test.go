@@ -3917,14 +3917,27 @@ func obfuscate(program string) string {
 
 type evalTester func(pass bool, err error) bool
 
-func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
+func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester, xtras ...uint64) error {
 	t.Helper()
+
+	numXtras := len(xtras)
+	require.LessOrEqual(t, numXtras, 1, "can handle at most 1 extra parameter but provided %d", numXtras)
+	withField := false
+	var introducedField uint64
+	if numXtras == 1 {
+		withField = true
+		introducedField = xtras[0]
+	}
+
 	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Helper()
 			if v < introduced {
 				testProg(t, obfuscate(program), v, Expect{0, "...was introduced..."})
+				return
+			} else if withField && v < introducedField {
+				testProg(t, obfuscate(program), v, Expect{0, "...available in version..."})
 				return
 			}
 			ops := testProg(t, program, v)
@@ -3975,12 +3988,32 @@ func testRejects(t *testing.T, program string, introduced uint64) {
 		return !pass && err == nil
 	})
 }
+func testRejectsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
+	t.Helper()
+	testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
+		// Returned False, but didn't panic
+		return !pass && err == nil
+	}, introducedField)
+}
+func testAcceptsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
+	t.Helper()
+	testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
+		return pass && err == nil
+	}, introducedField)
+}
 func testPanics(t *testing.T, program string, introduced uint64) error {
 	t.Helper()
 	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
 	})
+}
+func testPanicsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) error {
+	t.Helper()
+	return testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
+		// TEAL panic! not just reject at exit
+		return !pass && err != nil
+	}, introducedField)
 }
 
 func TestAssert(t *testing.T) {
