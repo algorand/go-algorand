@@ -146,9 +146,6 @@ func getAccountInformation(
 	for x := 0; x < 50; x++ { // retry only 50 times
 		info, err = client.AccountInformationV2(address, true)
 		if err == nil {
-			if expectedCount > 0 && int(expectedCount) != len(*info.CreatedApps) {
-				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCount)
-				fmt.Printf("%s\n\n", spew.Sdump(info))
 			if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
 				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCountApps)
 				fmt.Printf("%s\n\n", spew.Sdump(info))
