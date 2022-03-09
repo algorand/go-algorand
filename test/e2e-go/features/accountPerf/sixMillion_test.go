@@ -99,7 +99,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
 						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
 						sender := stxns[0].Txn.Header.Sender
-						info, _ := getAccountInformation(c, 0, sender.String(), "broadcastTransactionGroups")
+						info, _ := getAccountInformation(c, 0, 0, sender.String(), "broadcastTransactionGroups")
 						for _, app := range *info.CreatedApps {
 							fmt.Printf("created app: %d\n", app.Id)
 						}
@@ -137,15 +137,22 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 
 func getAccountInformation(
 	client libgoal.Client,
-	expectedCount uint64,
+	expectedCountApps uint64,
+	expectedCountAssets uint64,
 	address string,
 	context string) (info generated.Account, err error) {
 
 	for x := 0; x < 50; x++ { // retry only 50 times
 		info, err = client.AccountInformationV2(address, true)
 		if err == nil {
-			if expectedCount > 0 && int(expectedCount) != len(*info.CreatedApps) {
-				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCount)
+			if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
+				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCountApps)
+				fmt.Printf("%+v\n\n", info)
+				failTest = true
+				continue
+			}
+			if expectedCountAssets > 0 && int(expectedCountAssets) != len(*info.CreatedAssets) {
+				fmt.Printf("Missing assetsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedAssets), expectedCountAssets)
 				fmt.Printf("%+v\n\n", info)
 				failTest = true
 				continue
@@ -538,7 +545,7 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, 0, nacc.pk.String(), "ScenarioA opt-in assets")
+		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA opt-in assets")
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -577,7 +584,7 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, 0, nacc.pk.String(), "ScenarioA transfer assets")
+		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA transfer assets")
 		require.NoError(t, err)
 		for assi, asset := range *info.Assets {
 			select {
@@ -614,7 +621,7 @@ func scenarioA(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, 0, nacc.pk.String(), "ScenarioA verify assets")
+		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets")
 		require.NoError(t, err)
 		for _, asset := range *info.Assets {
 			select {
@@ -805,7 +812,7 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC opt-in apps")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC opt-in apps")
 		require.NoError(t, err)
 		for appi, app := range *info.CreatedApps {
 			select {
@@ -834,7 +841,7 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC verify accounts")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
@@ -855,7 +862,7 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC call apps")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC call apps")
 		require.NoError(t, err)
 		for appi, app := range *info.CreatedApps {
 			select {
@@ -885,7 +892,7 @@ func scenarioC(
 		if nacc == ownAllAccount {
 			continue
 		}
-		info, err := getAccountInformation(client, appsPerAccount, nacc.pk.String(), "ScenarioC verify accounts")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
