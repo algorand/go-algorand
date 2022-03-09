@@ -618,11 +618,15 @@ func scenarioA(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
 	require.NoError(t, err)
 
+	fmt.Println("Verifying assets...")
 	// Verify the assets are transfered here
 	tAssetAmt := uint64(0)
-	for _, nacc := range keys {
+	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
+		}
+		if nai%printFreequency == 0 {
+			fmt.Printf("Verifying assets from account %d / %d\n", nai, len(keys))
 		}
 		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets")
 		require.NoError(t, err)
@@ -702,6 +706,7 @@ func scenarioB(
 	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
 	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
 
+	fmt.Println("Verifying assets...")
 	// Verify the assets are transfered here
 	tAssetAmt := uint64(0)
 	info, err = client.AccountInformationV2(baseAcct.pk.String(), false)
@@ -719,8 +724,12 @@ func scenarioB(
 		if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
 			continue
 		}
+		counter++
 		require.NoError(t, err)
 		tAssetAmt += assHold.AssetHolding.Amount
+		if counter%printFreequency == 0 {
+			fmt.Printf("Verifying assets %d / %d\n", counter, numberOfAssets)
+		}
 	}
 	require.Equal(t, totalAssetAmount, tAssetAmt)
 }
@@ -840,9 +849,12 @@ func scenarioC(
 
 	fmt.Println("verifying optin apps...")
 
-	for _, nacc := range keys {
+	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
+		}
+		if nai%printFreequency == 0 {
+			fmt.Printf("Verifying apps opt-in from account %d / %d\n", nai, len(keys))
 		}
 		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
@@ -891,9 +903,12 @@ func scenarioC(
 
 	fmt.Println("Completed. Verifying accounts...")
 
-	for _, nacc := range keys {
+	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
+		}
+		if nai%printFreequency == 0 {
+			fmt.Printf("Verifying app calls from account %d / %d\n", nai, len(keys))
 		}
 		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
 		require.NoError(t, err)
@@ -971,6 +986,8 @@ func scenarioD(
 	var wg sync.WaitGroup
 	var globalStateCheckMu deadlock.Mutex
 
+	fmt.Println("Completed. Verifying apps...")
+
 	for p := 0; p < parallelCheckers; p++ {
 		wg.Add(1)
 		go func() {
@@ -1018,6 +1035,7 @@ func scenarioD(
 		case checkAppChan <- i:
 			i++
 		default:
+			fmt.Printf("status: %d / %d\n", checked, numberOfApps)
 			time.Sleep(10 * time.Millisecond)
 		}
 		if checked != lastPrint && int(checked)%printFreequency == 0 {
