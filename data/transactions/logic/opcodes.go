@@ -58,7 +58,7 @@ const txnEffectsVersion = 6
 // the Foreign arrays.
 const createdResourcesVersion = 6
 
-// "Future" opcodes - experimental and may get pushed back further or removed
+// Experimental:
 const fidoVersion = LogicVersion + 1 // base64, json, secp256r1
 
 // opDetails records details such as non-standard costs, immediate
