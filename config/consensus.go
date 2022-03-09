@@ -1104,6 +1104,8 @@ func initConsensusProtocols() {
 	// Remove limits on maximum number of apps a single account can opt into
 	v32.MaxAppsOptedIn = 0
 
+	v32.LogicSigVersion = 7
+
 	Consensus[protocol.ConsensusV32] = v32
 
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
