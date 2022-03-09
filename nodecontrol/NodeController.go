@@ -17,8 +17,8 @@
 package nodecontrol
 
 import (
-	"path/filepath"
 	"fmt"
+	"path/filepath"
 	"syscall"
 	"time"
 
