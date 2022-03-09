@@ -11,6 +11,18 @@ linters:
     - govet
     - ineffassign
     - misspell
+    - gci
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/algorand)
+      - prefix(github.com/algorand/go-algorand)
+
+    section-separators:
+      - newLine
 
 severity:
   default-severity: error
