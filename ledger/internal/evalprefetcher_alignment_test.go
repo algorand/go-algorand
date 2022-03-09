@@ -42,11 +42,11 @@ func genesisHash() crypto.Digest {
 }
 
 func feeSink() basics.Address {
-	return acctAddr(100)
+	return makeTestingAddress(100)
 }
 
 func rewardsPool() basics.Address {
-	return acctAddr(101)
+	return makeTestingAddress(101)
 }
 
 func genesisBlock() (bookkeeping.Block, error) {
@@ -310,17 +310,17 @@ func TestEvaluatorPrefetcherAlignmentPayment(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000001},
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
 				},
 			},
-			acctAddr(3): {
+			makeTestingAddress(3): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000003},
 				},
@@ -331,12 +331,12 @@ func TestEvaluatorPrefetcherAlignmentPayment(t *testing.T) {
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(1),
+			Sender:      makeTestingAddress(1),
 			GenesisHash: genesisHash(),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver:         acctAddr(2),
-			CloseRemainderTo: acctAddr(3),
+			Receiver:         makeTestingAddress(2),
+			CloseRemainderTo: makeTestingAddress(3),
 		},
 	}
 
@@ -356,7 +356,7 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000001},
 				},
@@ -367,7 +367,7 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 	txn := transactions.Transaction{
 		Type: protocol.AssetConfigTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(1),
+			Sender:      makeTestingAddress(1),
 			GenesisHash: genesisHash(),
 		},
 	}
@@ -377,7 +377,7 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 	prefetched.Accounts[rewardsPool()] = struct{}{}
 	// Only one (non-existing) asset is requested. Ignore it.
 	require.Len(t, requested.Assets, 1)
-	require.Len(t, requested.Assets[acctAddr(1)], 1)
+	require.Len(t, requested.Assets[makeTestingAddress(1)], 1)
 	requested.Assets = nil
 	require.Equal(t, requested, prefetched)
 }
@@ -385,7 +385,7 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	addr := acctAddr(1)
+	addr := makeTestingAddress(1)
 	assetID := basics.AssetIndex(5)
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
@@ -420,7 +420,7 @@ func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
 	txn := transactions.Transaction{
 		Type: protocol.AssetConfigTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(1),
+			Sender:      makeTestingAddress(1),
 			GenesisHash: genesisHash(),
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
@@ -445,21 +445,21 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:       basics.MicroAlgos{Raw: 1000001},
 					TotalAssets:      1,
 					TotalAssetParams: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
 				},
 			},
 		},
 		assets: map[basics.Address]map[basics.AssetIndex]ledgercore.AssetResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				assetID: {
 					AssetParams:  &basics.AssetParams{},
 					AssetHolding: &basics.AssetHolding{},
@@ -467,19 +467,19 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(assetID): acctAddr(1),
+			basics.CreatableIndex(assetID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 			XferAsset:     assetID,
-			AssetReceiver: acctAddr(2),
+			AssetReceiver: makeTestingAddress(2),
 		},
 	}
 
@@ -500,31 +500,31 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:       basics.MicroAlgos{Raw: 1000001},
 					TotalAssets:      1,
 					TotalAssetParams: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
 				},
 			},
-			acctAddr(3): {
+			makeTestingAddress(3): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000003},
 				},
 			},
-			acctAddr(4): {
+			makeTestingAddress(4): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000004},
 				},
 			},
 		},
 		assets: map[basics.Address]map[basics.AssetIndex]ledgercore.AssetResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				assetID: {
 					AssetParams:  &basics.AssetParams{},
 					AssetHolding: &basics.AssetHolding{},
@@ -532,20 +532,20 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(assetID): acctAddr(1),
+			basics.CreatableIndex(assetID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 			XferAsset:     assetID,
-			AssetReceiver: acctAddr(2),
-			AssetCloseTo:  acctAddr(3),
+			AssetReceiver: makeTestingAddress(2),
+			AssetCloseTo:  makeTestingAddress(3),
 		},
 	}
 
@@ -566,67 +566,67 @@ func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:       basics.MicroAlgos{Raw: 1000001},
 					TotalAssets:      1,
 					TotalAssetParams: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
 				},
 			},
-			acctAddr(3): {
+			makeTestingAddress(3): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000003},
 				},
 			},
-			acctAddr(4): {
+			makeTestingAddress(4): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000003},
 				},
 			},
 		},
 		assets: map[basics.Address]map[basics.AssetIndex]ledgercore.AssetResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				assetID: {
 					AssetParams: &basics.AssetParams{
-						Clawback: acctAddr(2),
+						Clawback: makeTestingAddress(2),
 					},
 					AssetHolding: &basics.AssetHolding{},
 				},
 			},
-			acctAddr(3): {
+			makeTestingAddress(3): {
 				assetID: {
 					AssetHolding: &basics.AssetHolding{
 						Amount: 345,
 					},
 				},
 			},
-			acctAddr(4): {
+			makeTestingAddress(4): {
 				assetID: {
 					AssetHolding: &basics.AssetHolding{},
 				},
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(assetID): acctAddr(1),
+			basics.CreatableIndex(assetID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 			XferAsset:     assetID,
 			AssetAmount:   1,
-			AssetSender:   acctAddr(3),
-			AssetReceiver: acctAddr(4),
+			AssetSender:   makeTestingAddress(3),
+			AssetReceiver: makeTestingAddress(4),
 		},
 	}
 
@@ -647,34 +647,34 @@ func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:       basics.MicroAlgos{Raw: 1000001},
 					TotalAssets:      1,
 					TotalAssetParams: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
 				},
 			},
-			acctAddr(3): {
+			makeTestingAddress(3): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000003},
 				},
 			},
 		},
 		assets: map[basics.Address]map[basics.AssetIndex]ledgercore.AssetResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				assetID: {
 					AssetParams: &basics.AssetParams{
-						Freeze: acctAddr(2),
+						Freeze: makeTestingAddress(2),
 					},
 					AssetHolding: &basics.AssetHolding{},
 				},
 			},
-			acctAddr(3): {
+			makeTestingAddress(3): {
 				assetID: {
 					AssetHolding: &basics.AssetHolding{
 						Amount: 345,
@@ -683,18 +683,18 @@ func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(assetID): acctAddr(1),
+			basics.CreatableIndex(assetID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		AssetFreezeTxnFields: transactions.AssetFreezeTxnFields{
-			FreezeAccount: acctAddr(3),
+			FreezeAccount: makeTestingAddress(3),
 			FreezeAsset:   assetID,
 			AssetFrozen:   true,
 		},
@@ -709,7 +709,7 @@ func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	addr := acctAddr(1)
+	addr := makeTestingAddress(1)
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
 			rewardsPool(): {
@@ -735,7 +735,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 	txn := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(1),
+			Sender:      makeTestingAddress(1),
 			GenesisHash: genesisHash(),
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
@@ -756,7 +756,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	addr := acctAddr(1)
+	addr := makeTestingAddress(1)
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
 			rewardsPool(): {
@@ -789,7 +789,7 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 	prefetched.Accounts[rewardsPool()] = struct{}{}
 	// Only one (non-existing) asset is requested. Ignore it.
 	require.Len(t, requested.Apps, 1)
-	require.Len(t, requested.Apps[acctAddr(1)], 1)
+	require.Len(t, requested.Apps[makeTestingAddress(1)], 1)
 	requested.Apps = nil
 	require.Equal(t, requested, prefetched)
 }
@@ -797,7 +797,7 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	addr := acctAddr(1)
+	addr := makeTestingAddress(1)
 	appID := basics.AppIndex(5)
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
@@ -859,21 +859,21 @@ func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
 					TotalAppParams:      1,
 					TotalAppLocalStates: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
 				},
 			},
 		},
 		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
 						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
@@ -884,14 +884,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID): acctAddr(1),
+			basics.CreatableIndex(appID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -917,14 +917,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
 					TotalAppParams:      1,
 					TotalAppLocalStates: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
 					TotalAppLocalStates: 1,
@@ -932,7 +932,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 			},
 		},
 		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
 						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
@@ -941,21 +941,21 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				appID: {
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID): acctAddr(1),
+			basics.CreatableIndex(appID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -981,14 +981,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
 					TotalAppParams:      1,
 					TotalAppLocalStates: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
 					TotalAppLocalStates: 1,
@@ -996,7 +996,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 			},
 		},
 		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
 						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
@@ -1005,21 +1005,21 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				appID: {
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID): acctAddr(1),
+			basics.CreatableIndex(appID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1045,14 +1045,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
 					TotalAppParams:      1,
 					TotalAppLocalStates: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
 					TotalAppLocalStates: 1,
@@ -1060,7 +1060,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 			},
 		},
 		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
 						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
@@ -1069,26 +1069,26 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				appID: {
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID): acctAddr(1),
+			basics.CreatableIndex(appID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 			ApplicationID: appID,
-			Accounts:      []basics.Address{acctAddr(5), acctAddr(0), acctAddr(3)},
+			Accounts:      []basics.Address{makeTestingAddress(5), makeTestingAddress(0), makeTestingAddress(3)},
 		},
 	}
 
@@ -1097,8 +1097,8 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 	prefetched.Accounts[rewardsPool()] = struct{}{}
 	// Loading accounts depends on the smart contract program. Ignore the addresses
 	// not requested.
-	requested.Accounts[acctAddr(5)] = struct{}{}
-	requested.Accounts[acctAddr(3)] = struct{}{}
+	requested.Accounts[makeTestingAddress(5)] = struct{}{}
+	requested.Accounts[makeTestingAddress(3)] = struct{}{}
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1113,14 +1113,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
 					TotalAppParams:      1,
 					TotalAppLocalStates: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
 					TotalAppLocalStates: 1,
@@ -1128,7 +1128,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 			},
 		},
 		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
 						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
@@ -1137,21 +1137,21 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				appID: {
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID): acctAddr(1),
+			basics.CreatableIndex(appID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1181,14 +1181,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
 				},
 			},
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
 					TotalAppParams:      1,
 					TotalAppLocalStates: 1,
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				AccountBaseData: ledgercore.AccountBaseData{
 					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
 					TotalAppLocalStates: 1,
@@ -1196,7 +1196,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 			},
 		},
 		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
-			acctAddr(1): {
+			makeTestingAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
 						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
@@ -1205,21 +1205,21 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
-			acctAddr(2): {
+			makeTestingAddress(2): {
 				appID: {
 					AppLocalState: &basics.AppLocalState{},
 				},
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID): acctAddr(1),
+			basics.CreatableIndex(appID): makeTestingAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
-			Sender:      acctAddr(2),
+			Sender:      makeTestingAddress(2),
 			GenesisHash: genesisHash(),
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -1241,7 +1241,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	addr := acctAddr(1)
+	addr := makeTestingAddress(1)
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
 			rewardsPool(): {
