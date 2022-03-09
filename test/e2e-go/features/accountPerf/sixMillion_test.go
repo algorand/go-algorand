@@ -236,22 +236,18 @@ func signerGrpTxn(
 
 func Test5MAssetsScenario1(t *testing.T) {
 	test5MAssets(t, 1)
-	require.Equal(t, failTest, false)
 }
 
 func Test5MAssetsScenario2(t *testing.T) {
 	test5MAssets(t, 2)
-	require.Equal(t, failTest, false)
 }
 
 func Test5MAssetsScenario3(t *testing.T) {
 	test5MAssets(t, 3)
-	require.Equal(t, failTest, false)
 }
 
 func Test5MAssetsScenario4(t *testing.T) {
 	test5MAssets(t, 4)
-	require.Equal(t, failTest, false)
 }
 
 func test5MAssets(t *testing.T, scenario int) {
@@ -270,6 +266,8 @@ func test5MAssets(t *testing.T, scenario int) {
 		hkWg.Wait()
 		fixture.Shutdown()
 	}()
+	defer require.Equal(t, failTest, false)
+	failTest = false
 	client := fixture.LibGoalClient
 
 	accountList, err := fixture.GetWalletsSortedByBalance()
