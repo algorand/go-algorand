@@ -393,6 +393,24 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
+func checkAppCallScratchType(t *testing.T, response *generated.DryrunResponse, slot int, tt basics.TealType) {
+	for _, txn := range response.Txns {
+		if txn.AppCallTrace == nil {
+			continue
+		}
+
+		for _, traceLine := range *txn.AppCallTrace {
+			if traceLine.Scratch == nil {
+				continue
+			}
+
+			if len(*traceLine.Scratch) >= slot {
+				assert.Equal(t, tt, basics.TealType((*traceLine.Scratch)[slot].Type))
+			}
+		}
+	}
+}
+
 func TestDryrunGlobal1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
@@ -1593,6 +1611,7 @@ int 1`)
 	}
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
+	checkAppCallScratchType(t, &response, 254, basics.TealUintType)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)

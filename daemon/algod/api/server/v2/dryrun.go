@@ -136,7 +136,7 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 
 	if any {
 		if ddr.scratchActive == nil {
-			ddr.scratchActive = make([]bool, maxActive+1, 256)
+			ddr.scratchActive = make([]bool, maxActive, 256)
 		}
 		for i := len(ddr.scratchActive); i <= maxActive; i++ {
 			sv := (*ddr.history[lasti].Scratch)[i]
@@ -152,7 +152,7 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 		}
 	}
 
-	scratchlen := maxActive + 1
+	scratchlen := maxActive
 	if len(ddr.scratchActive) > scratchlen {
 		scratchlen = len(ddr.scratchActive)
 	}
