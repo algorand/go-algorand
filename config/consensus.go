@@ -1104,8 +1104,6 @@ func initConsensusProtocols() {
 	// Remove limits on maximum number of apps a single account can opt into
 	v32.MaxAppsOptedIn = 0
 
-	v32.LogicSigVersion = 7
-
 	Consensus[protocol.ConsensusV32] = v32
 
 	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
@@ -1125,6 +1123,8 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	vFuture.LogicSigVersion = 7
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
