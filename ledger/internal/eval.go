@@ -31,13 +31,22 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/apply"
-	"github.com/algorand/go-algorand/ledger/internal/interfaces"
 	"github.com/algorand/go-algorand/ledger/internal/prefetcher"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 )
+
+// LedgerForCowBase represents subset of Ledger functionality needed for cow business
+type LedgerForCowBase interface {
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
+	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
+	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
+	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
+	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+}
 
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
@@ -90,7 +99,7 @@ type cachedAssetHolding struct {
 }
 
 type roundCowBase struct {
-	l interfaces.LedgerForCowBase
+	l LedgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -125,7 +134,7 @@ type roundCowBase struct {
 	creators map[creatable]foundAddress
 }
 
-func makeRoundCowBase(l interfaces.LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
 	return &roundCowBase{
 		l:                  l,
 		rnd:                rnd,
@@ -597,9 +606,18 @@ type BlockEvaluator struct {
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
-	l interfaces.LedgerForEvaluator
+	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
+}
+
+// LedgerForEvaluator defines the ledger interface needed by the evaluator.
+type LedgerForEvaluator interface {
+	LedgerForCowBase
+	GenesisHash() crypto.Digest
+	GenesisProto() config.ConsensusParams
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
 // EvaluatorOptions defines the evaluator creation options
@@ -615,7 +633,7 @@ type EvaluatorOptions struct {
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
-func StartEvaluator(l interfaces.LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts EvaluatorOptions) (*BlockEvaluator, error) {
+func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts EvaluatorOptions) (*BlockEvaluator, error) {
 	var proto config.ConsensusParams
 	if evalOpts.ProtoParams == nil {
 		var ok bool
@@ -1497,7 +1515,7 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l interfaces.LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	eval, err := StartEvaluator(l, blk.BlockHeader,
 		EvaluatorOptions{
 			PaysetHint: len(blk.Payset),

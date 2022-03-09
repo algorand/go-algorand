@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package eval_prefetcher_alignment_test
+package prefetcher_test
 
 import (
 	"context"
@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/internal"
-	"github.com/algorand/go-algorand/ledger/internal/interfaces"
 	"github.com/algorand/go-algorand/ledger/internal/prefetcher"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -41,14 +40,6 @@ import (
 type creatable struct {
 	cindex basics.CreatableIndex
 	ctype  basics.CreatableType
-}
-
-const proto = protocol.ConsensusCurrentVersion
-
-func makeAddress(addressSeed byte) basics.Address {
-	var res basics.Address
-	res[0] = byte(addressSeed)
-	return res
 }
 
 func genesisHash() crypto.Digest {
@@ -258,7 +249,7 @@ type ledgerData struct {
 	Creators map[creatable]struct{}
 }
 
-func prefetch(t *testing.T, l interfaces.LedgerForEvaluator, txn transactions.Transaction) ledgerData {
+func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) ledgerData {
 	group := makeGroupFromTxn(txn)
 
 	ch := prefetcher.PrefetchAccounts(

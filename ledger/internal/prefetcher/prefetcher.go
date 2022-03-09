@@ -23,7 +23,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/internal/interfaces"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -32,6 +31,14 @@ import (
 // to load the account data before the Eval() start processing individual
 // transaction group.
 const asyncAccountLoadingThreadCount = 4
+
+// Ledger is a ledger interfaces for prefetcher.
+type Ledger interface {
+	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
+	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
+	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
+	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+}
 
 // LoadedAccountDataEntry describes a loaded account.
 type LoadedAccountDataEntry struct {
@@ -67,7 +74,7 @@ type LoadedTransactionGroup struct {
 
 // accountPrefetcher used to prefetch accounts balances and resources before the evaluator is being called.
 type accountPrefetcher struct {
-	ledger          interfaces.LedgerForEvaluator
+	ledger          Ledger
 	rnd             basics.Round
 	groups          [][]transactions.SignedTxnWithAD
 	feeSinkAddr     basics.Address
@@ -77,7 +84,7 @@ type accountPrefetcher struct {
 
 // PrefetchAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
-func PrefetchAccounts(ctx context.Context, l interfaces.LedgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
+func PrefetchAccounts(ctx context.Context, l Ledger, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
 	prefetcher := &accountPrefetcher{
 		ledger:          l,
 		rnd:             rnd,
