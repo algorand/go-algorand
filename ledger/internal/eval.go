@@ -31,21 +31,13 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/internal/prefetcher"
+	"github.com/algorand/go-algorand/ledger/internal/interfaces"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 )
-
-// LedgerForCowBase represents subset of Ledger functionality needed for cow business
-type LedgerForCowBase interface {
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
-	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
-	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-}
 
 // ErrRoundZero is self-explanatory
 var ErrRoundZero = errors.New("cannot start evaluator for round 0")
@@ -98,7 +90,7 @@ type cachedAssetHolding struct {
 }
 
 type roundCowBase struct {
-	l LedgerForCowBase
+	l interfaces.LedgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -133,7 +125,7 @@ type roundCowBase struct {
 	creators map[creatable]foundAddress
 }
 
-func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+func makeRoundCowBase(l interfaces.LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
 	return &roundCowBase{
 		l:                  l,
 		rnd:                rnd,
@@ -605,18 +597,9 @@ type BlockEvaluator struct {
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
-	l LedgerForEvaluator
+	l interfaces.LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
-}
-
-// LedgerForEvaluator defines the ledger interface needed by the evaluator.
-type LedgerForEvaluator interface {
-	LedgerForCowBase
-	GenesisHash() crypto.Digest
-	GenesisProto() config.ConsensusParams
-	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
-	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
 // EvaluatorOptions defines the evaluator creation options
@@ -632,7 +615,7 @@ type EvaluatorOptions struct {
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
-func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts EvaluatorOptions) (*BlockEvaluator, error) {
+func StartEvaluator(l interfaces.LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts EvaluatorOptions) (*BlockEvaluator, error) {
 	var proto config.ConsensusParams
 	if evalOpts.ProtoParams == nil {
 		var ok bool
@@ -1514,7 +1497,7 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l interfaces.LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	eval, err := StartEvaluator(l, blk.BlockHeader,
 		EvaluatorOptions{
 			PaysetHint: len(blk.Payset),
@@ -1539,7 +1522,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
-	preloadedTxnsData := prefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	preloadedTxnsData := prefetcher.PrefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
 	// ensure that before we exit from this method, the account loading is no longer active.
 	defer func() {
 		accountLoadingCancel()
@@ -1571,50 +1554,50 @@ transactionGroupLoop:
 		case txgroup, ok := <-preloadedTxnsData:
 			if !ok {
 				break transactionGroupLoop
-			} else if txgroup.err != nil {
-				return ledgercore.StateDelta{}, txgroup.err
+			} else if txgroup.Err != nil {
+				return ledgercore.StateDelta{}, txgroup.Err
 			}
 
-			for _, br := range txgroup.accounts {
-				if _, have := base.accounts[*br.address]; !have {
-					base.accounts[*br.address] = *br.data
+			for _, br := range txgroup.Accounts {
+				if _, have := base.accounts[*br.Address]; !have {
+					base.accounts[*br.Address] = *br.Data
 				}
 			}
-			for _, lr := range txgroup.resources {
-				if lr.address == nil {
+			for _, lr := range txgroup.Resources {
+				if lr.Address == nil {
 					// we attempted to look for the creator, and failed.
-					base.creators[creatable{cindex: lr.creatableIndex, ctype: lr.creatableType}] =
+					base.creators[creatable{cindex: lr.CreatableIndex, ctype: lr.CreatableType}] =
 						foundAddress{exists: false}
 					continue
 				}
-				if lr.creatableType == basics.AssetCreatable {
-					if lr.resource.AssetHolding != nil {
-						base.assets[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetHolding{value: *lr.resource.AssetHolding, exists: true}
+				if lr.CreatableType == basics.AssetCreatable {
+					if lr.Resource.AssetHolding != nil {
+						base.assets[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetHolding{value: *lr.Resource.AssetHolding, exists: true}
 					} else {
-						base.assets[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetHolding{exists: false}
+						base.assets[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetHolding{exists: false}
 					}
-					if lr.resource.AssetParams != nil {
-						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{value: *lr.resource.AssetParams, exists: true}
-						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AssetCreatable}] = foundAddress{address: *lr.address, exists: true}
+					if lr.Resource.AssetParams != nil {
+						base.assetParams[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetParams{value: *lr.Resource.AssetParams, exists: true}
+						base.creators[creatable{cindex: lr.CreatableIndex, ctype: basics.AssetCreatable}] = foundAddress{address: *lr.Address, exists: true}
 					} else {
-						base.assetParams[ledgercore.AccountAsset{Address: *lr.address, Asset: basics.AssetIndex(lr.creatableIndex)}] = cachedAssetParams{exists: false}
+						base.assetParams[ledgercore.AccountAsset{Address: *lr.Address, Asset: basics.AssetIndex(lr.CreatableIndex)}] = cachedAssetParams{exists: false}
 
 					}
 				} else {
-					if lr.resource.AppLocalState != nil {
-						base.appLocalStates[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppLocalState{value: *lr.resource.AppLocalState, exists: true}
+					if lr.Resource.AppLocalState != nil {
+						base.appLocalStates[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppLocalState{value: *lr.Resource.AppLocalState, exists: true}
 					} else {
-						base.appLocalStates[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppLocalState{exists: false}
+						base.appLocalStates[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppLocalState{exists: false}
 					}
-					if lr.resource.AppParams != nil {
-						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{value: *lr.resource.AppParams, exists: true}
-						base.creators[creatable{cindex: lr.creatableIndex, ctype: basics.AppCreatable}] = foundAddress{address: *lr.address, exists: true}
+					if lr.Resource.AppParams != nil {
+						base.appParams[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppParams{value: *lr.Resource.AppParams, exists: true}
+						base.creators[creatable{cindex: lr.CreatableIndex, ctype: basics.AppCreatable}] = foundAddress{address: *lr.Address, exists: true}
 					} else {
-						base.appParams[ledgercore.AccountApp{Address: *lr.address, App: basics.AppIndex(lr.creatableIndex)}] = cachedAppParams{exists: false}
+						base.appParams[ledgercore.AccountApp{Address: *lr.Address, App: basics.AppIndex(lr.CreatableIndex)}] = cachedAppParams{exists: false}
 					}
 				}
 			}
-			err = eval.TransactionGroup(txgroup.txnGroup)
+			err = eval.TransactionGroup(txgroup.TxnGroup)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}
