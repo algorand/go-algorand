@@ -335,14 +335,10 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	for _, lt := range tr.trackers {
 		base := cdr.oldBase
 		offset := cdr.offset
-
-		tr.log.Warnf("tracker: calling produceCommittingTask base: %d  offset: %d tracker: %T dbRound: %d, latestRound: %d", base, offset, lt, dbRound, blockqRound)
 		cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
 		if cdr == nil {
-			tr.log.Warnf("tracker: cdr == nil, tracker: %T", lt)
 			break
 		}
-		tr.log.Warnf("tracker: cdr base %d  cdr offset %d tracker: %T", cdr.oldBase, cdr.offset, lt)
 		if offset > 0 && cdr.offset > offset {
 			tr.log.Warnf("tracker %T produced offset %d but expected not greater than %d, dbRound %d, latestRound %d", lt, cdr.offset, offset, dbRound, blockqRound)
 		}
@@ -470,10 +466,8 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	}
 	tr.mu.RUnlock()
 
-	tr.log.Warnf("starting prepareCommit for dcc offset %d, oldBase %d, newBase %d", dcc.offset, dcc.oldBase, dcc.newBase)
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	tr.log.Warnf("starting commitRound for dcc offset %d, oldBase %d, newBase %d", dcc.offset, dcc.oldBase, dcc.newBase)
 	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
@@ -482,7 +476,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 			}
 		}
 
-		tr.log.Warnf("updateAccountsRound %d", dbRound+basics.Round(offset))
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset))
 		if err != nil {
 			return err

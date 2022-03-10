@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
-	"github.com/davecgh/go-spew/spew"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -563,8 +562,6 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 
-	au.log.Warnf("accountUpdates: committedRound: %d lookback: %d newBase: %d", committedRound, dcr.lookback, committedRound-dcr.lookback)
-
 	if committedRound < dcr.lookback {
 		return nil
 	}
@@ -585,11 +582,7 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 
 	offset = uint64(newBase - dbRound)
 
-	au.log.Warnf("accountUpdates: voters newBase: %d, offset: %d", newBase, offset)
-
 	offset = au.consecutiveVersion(offset)
-
-	au.log.Warnf("accountUpdates: consecutiveVersion offset: %d", offset)
 
 	// calculate the number of pending deltas
 	dcr.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
@@ -978,9 +971,6 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 					ledgercore.AssignAccountData(&data, ad)
 					withoutRewards = data.MicroAlgos // record balance before updating rewards
 					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
-					if data.MicroAlgos.Raw == 0 { // this should never happen during the experiment
-						au.log.Errorf("accountUpdates.lookupLatest: returning for addr %s: %s", addr, spew.Sdump(data))
-					}
 				}
 			}()
 			withRewards = false
@@ -1327,11 +1317,6 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 					return d, rnd, rewardsVersion, rewardsLevel, nil
 				}
 			}
-			au.log.Warnf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-			au.log.Warnf("%+v", addr)
-			au.log.Warnf("deltas len: %d", len(au.deltas))
-			au.log.Warnf("%+v", macct)
-			au.log.Warnf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 		} else {
 			// we know that the account in not in the deltas - so there is no point in scanning it.
 			// we've going to fall back to search in the database, but before doing so, we should

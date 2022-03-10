@@ -17,7 +17,6 @@
 package nodecontrol
 
 import (
-	"fmt"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -131,7 +130,6 @@ func killPID(pid int) (killed bool, err error) {
 		}
 		select {
 		case <-waitLong:
-			fmt.Println("Waited too long **********************************")
 			return true, util.KillProcess(pid, syscall.SIGKILL)
 		case <-time.After(time.Millisecond * 100):
 		}
