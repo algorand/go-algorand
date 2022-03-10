@@ -126,8 +126,12 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 		return
 	}
 
-	ddr.scratchActive = make([]bool, 256)
+	if ddr.scratchActive == nil {
+		ddr.scratchActive = make([]bool, 256)
+	}
+
 	for i, sv := range *ddr.history[lasti].Scratch {
+		ddr.scratchActive[i] = false
 		if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
 			ddr.scratchActive[i] = true
 			maxActive = i
