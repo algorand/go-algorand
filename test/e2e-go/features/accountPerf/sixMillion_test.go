@@ -104,44 +104,34 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 			break
 		}
 		var err error
-		for x := 0; x < 50; x++ { // retry only 50 times
-			err = c.BroadcastTransactionGroup(stxns)
-			if err == nil {
-				if extraChecks {
-					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
-						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
-						sender := stxns[0].Txn.Header.Sender
-						info, _ := getAccountInformation(c, 0, 0, sender.String(), "broadcastTransactionGroups", log)
-						for _, app := range *info.CreatedApps {
-							fmt.Printf("created app: %d\n", app.Id)
-						}
+		err = c.BroadcastTransactionGroup(stxns)
+		if err != nil {
+			handleError(err, "Error broadcastTransactionGroups", errChan)
+		} else {
+			if extraChecks {
+				if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
+					stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
+					sender := stxns[0].Txn.Header.Sender
+					info, _ := getAccountInformation(c, 0, 0, sender.String(), "broadcastTransactionGroups", log)
+					for _, app := range *info.CreatedApps {
+						fmt.Printf("created app: %d\n", app.Id)
 					}
-
-					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
-						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID > 0 {
-						sender := stxns[0].Txn.Header.Sender
-						for _, tx := range stxns {
-							appId := tx.Txn.ApplicationCallTxnFields.ApplicationID
-							_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId), "broadcastTransactionGroups")
-							fmt.Printf("bTG: %d\t %s\n", appId, sender)
-							if err != nil {
-								fmt.Printf("opt-in for appid %d failed! error %s\n\n", appId, err)
-								continue
-							}
+				}
+				
+				if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
+					stxns[0].Txn.ApplicationCallTxnFields.ApplicationID > 0 {
+					sender := stxns[0].Txn.Header.Sender
+					for _, tx := range stxns {
+						appId := tx.Txn.ApplicationCallTxnFields.ApplicationID
+						_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId), "broadcastTransactionGroups")
+						fmt.Printf("bTG: %d\t %s\n", appId, sender)
+						if err != nil {
+							fmt.Printf("opt-in for appid %d failed! error %s\n\n", appId, err)
+							continue
 						}
 					}
 				}
-				break
 			}
-			fmt.Printf("broadcastTransactionGroups[%d]: %s\n", x, err)
-			if strings.Contains(err.Error(), "already in ledger") {
-				err = nil
-				break
-			}
-			time.Sleep(time.Millisecond * 256)
-		}
-		if err != nil {
-			handleError(err, "Error broadcastTransactionGroups", errChan)
 		}
 	}
 }
