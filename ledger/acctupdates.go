@@ -872,19 +872,13 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 // even while it does return the AccountData which represent the "rewarded" account data.
 func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
 	au.accountsMu.RLock()
-	needUnlock := true
-	defer func() {
-		if needUnlock {
-			au.accountsMu.RUnlock()
-		}
-	}()
+	defer au.accountsMu.RUnlock()
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
 	var persistedData persistedAccountData
 	var persistedResources []persistedResourcesData
 	var resourceDbRound basics.Round
-	withRewards := true
 
 	foundAccount := false
 	var ad ledgercore.AccountData
@@ -944,142 +938,128 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		return false
 	}
 
-	for {
-		currentDbRound := au.cachedDBRound
-		currentDeltaLen := len(au.deltas)
-		rnd = au.latest()
-		offset, err = au.roundOffset(rnd)
-		if err != nil {
-			return
+	currentDbRound := au.cachedDBRound
+	rnd = au.latest()
+	offset, err = au.roundOffset(rnd)
+	if err != nil {
+		return
+	}
+	// offset should now be len(au.deltas)
+	if offset != uint64(len(au.deltas)) {
+		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, fmt.Errorf("offset != len(au.deltas): %w", ErrLookupLatestResources)
+	}
+	ad = ledgercore.AccountData{}
+	foundResources = make(map[basics.CreatableIndex]basics.Round)
+	resourceCount = 0
+
+	rewardsProto = config.Consensus[au.versions[offset]]
+	rewardsLevel = au.roundTotals[offset].RewardsLevel
+
+	// we want to make this defer only after setting the above rewardsProto/rewardsLevel.
+	defer func() {
+		if err == nil {
+			ledgercore.AssignAccountData(&data, ad)
+			withoutRewards = data.MicroAlgos // record balance before updating rewards
+			data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
 		}
-		// offset should now be len(au.deltas)
-		if offset != uint64(len(au.deltas)) {
-			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, fmt.Errorf("offset != len(au.deltas): %w", ErrLookupLatestResources)
-		}
-		ad = ledgercore.AccountData{}
-		foundResources = make(map[basics.CreatableIndex]basics.Round)
-		resourceCount = 0
+	}()
 
-		rewardsProto = config.Consensus[au.versions[offset]]
-		rewardsLevel = au.roundTotals[offset].RewardsLevel
+	// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
+	macct, indeltas := au.accounts[addr]
+	if indeltas {
+		// This is the most recent round, so we can
+		// use a cache of the most recent account state.
+		ad = macct.data
+		foundAccount = true
+	} else if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+		ad = macct.accountData.GetLedgerCoreAccountData()
+		foundAccount = true
+	}
 
-		// we're testing the withRewards here and setting the defer function only once, and only if withRewards is true.
-		// we want to make this defer only after setting the above rewardsProto/rewardsLevel.
-		if withRewards {
-			defer func() {
-				if err == nil {
-					ledgercore.AssignAccountData(&data, ad)
-					withoutRewards = data.MicroAlgos // record balance before updating rewards
-					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
-				}
-			}()
-			withRewards = false
-		}
+	if checkDone() {
+		return
+	}
 
-		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := au.accounts[addr]
-		if indeltas {
-			// This is the most recent round, so we can
-			// use a cache of the most recent account state.
-			ad = macct.data
-			foundAccount = true
-		} else if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
-			ad = macct.accountData.GetLedgerCoreAccountData()
-			foundAccount = true
-		}
-
-		if checkDone() {
-			return
-		}
-
-		// check for resources modified in the past rounds, in the deltas
-		for cidx, mr := range au.resources.getForAddress(addr) {
-			if err := addResource(cidx, rnd, mr.resource); err != nil {
-				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-			}
-		}
-
-		if checkDone() {
-			return
-		}
-
-		// check the baseResources -
-		if prds := au.baseResources.readAll(addr); len(prds) > 0 {
-			for _, prd := range prds {
-				if prd.addrid != 0 {
-					if err := addResource(prd.aidx, rnd, prd.AccountResource()); err != nil {
-						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-					}
-				}
-			}
-		}
-		au.accountsMu.RUnlock()
-		needUnlock = false
-
-		if checkDone() {
-			return
-		}
-
-		// No updates of this account in the in-memory deltas; use on-disk DB.
-		// The check in roundOffset() made sure the round is exactly the one
-		// present in the on-disk DB.  As an optimization, we avoid creating
-		// a separate transaction here, and directly use a prepared SQL query
-		// against the database.
-		if !foundAccount {
-			persistedData, err = au.accountsq.lookup(addr)
-			if err != nil {
-				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-			}
-			if persistedData.round == currentDbRound {
-				if persistedData.rowid != 0 {
-					// if we read actual data return it
-					ad = persistedData.accountData.GetLedgerCoreAccountData()
-				} else {
-					ad = ledgercore.AccountData{}
-				}
-
-				foundAccount = true
-				if checkDone() {
-					return
-				}
-			}
-
-			if persistedData.round < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupLatest: account database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
-			}
-			if persistedData.round > currentDbRound {
-				goto tryAgain
-			}
-		}
-
-		// Look for resources on disk
-		persistedResources, resourceDbRound, err = au.accountsq.lookupAllResources(addr)
-		if err != nil {
+	// check for resources modified in the past rounds, in the deltas
+	for cidx, mr := range au.resources.getForAddress(addr) {
+		if err := addResource(cidx, rnd, mr.resource); err != nil {
 			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 		}
-		if resourceDbRound == currentDbRound {
-			for _, pd := range persistedResources {
-				if err := addResource(pd.aidx, currentDbRound, pd.AccountResource()); err != nil {
+	}
+
+	if checkDone() {
+		return
+	}
+
+	// check the baseResources -
+	if prds := au.baseResources.readAll(addr); len(prds) > 0 {
+		for _, prd := range prds {
+			if prd.addrid != 0 {
+				if err := addResource(prd.aidx, rnd, prd.AccountResource()); err != nil {
 					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 				}
 			}
-			// We've found all the resources we could find for this address.
-			return
-		}
-
-		if resourceDbRound < currentDbRound {
-			au.log.Errorf("accountUpdates.lookupLatest: resource database round %d is behind in-memory round %d", resourceDbRound, currentDbRound)
-			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
-		}
-
-	tryAgain:
-		au.accountsMu.RLock()
-		needUnlock = true
-		for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
-			au.accountsReadCond.Wait()
 		}
 	}
+
+	if checkDone() {
+		return
+	}
+
+	// No updates of this account in the in-memory deltas; use on-disk DB.
+	// The check in roundOffset() made sure the round is exactly the one
+	// present in the on-disk DB.  As an optimization, we avoid creating
+	// a separate transaction here, and directly use a prepared SQL query
+	// against the database.
+	if !foundAccount {
+		persistedData, err = au.accountsq.lookup(addr)
+		if err != nil {
+			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+		}
+		if persistedData.round == currentDbRound {
+			if persistedData.rowid != 0 {
+				// if we read actual data return it
+				ad = persistedData.accountData.GetLedgerCoreAccountData()
+			} else {
+				ad = ledgercore.AccountData{}
+			}
+
+			foundAccount = true
+			if checkDone() {
+				return
+			}
+		}
+
+		if persistedData.round < currentDbRound {
+			au.log.Errorf("accountUpdates.lookupLatest: account database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+		}
+		if persistedData.round > currentDbRound {
+			// this can't happen: persistedData.round shouldn't be able to run ahead of currentDbRound
+			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &RoundOffsetError{round: persistedData.round, dbRound: currentDbRound}
+		}
+	}
+
+	// Look for resources on disk
+	persistedResources, resourceDbRound, err = au.accountsq.lookupAllResources(addr)
+	if err != nil {
+		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+	}
+	if resourceDbRound == currentDbRound {
+		for _, pd := range persistedResources {
+			if err := addResource(pd.aidx, currentDbRound, pd.AccountResource()); err != nil {
+				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+			}
+		}
+		// We've found all the resources we could find for this address.
+		return
+	} else if resourceDbRound < currentDbRound {
+		au.log.Errorf("accountUpdates.lookupLatest: resource database round %d is behind in-memory round %d", resourceDbRound, currentDbRound)
+		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
+	}
+	// else	if resourceDbRound > currentDbRound
+	// this can't happen: resourceDbRound shouldn't be able to run ahead of currentDbRound
+	return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &RoundOffsetError{round: persistedData.round, dbRound: currentDbRound}
 }
 
 // lookupWithRewards returns the online account data for a given address at a given round.
