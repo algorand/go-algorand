@@ -257,7 +257,6 @@ func test5MAssets(t *testing.T, scenario int) {
 	var errWatcherWg sync.WaitGroup
 
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
 
 	maxTxGroupSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
 	fixture.Setup(t, filepath.Join("nettemplates", "DevModeOneWallet.json"))
