@@ -295,7 +295,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Message:      *msg,
+				Message:      tx.Txn.CertMsg,
 				ProvenWeight: provenWeight,
 				SigRound:     tx.Txn.CertIntervalLatestRound,
 				SecKQ:        proto.CompactCertSecKQ,
