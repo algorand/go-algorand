@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -27,10 +28,10 @@ import (
 type CompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	CertIntervalLatestRound basics.Round                  `codec:"crtrnd"`
-	CertType                protocol.CompactCertType      `codec:"crttype"`
-	Cert                    compactcert.Cert              `codec:"crt"`
-	CertMsg                 compactcert.StateProofMessage `codec:"crtmsg"`
+	CertIntervalLatestRound basics.Round             `codec:"crtrnd"`
+	CertType                protocol.CompactCertType `codec:"crttype"`
+	Cert                    compactcert.Cert         `codec:"crt"`
+	CertMsg                 stateproof.Message       `codec:"crtmsg"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,
