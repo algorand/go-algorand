@@ -84,7 +84,8 @@ type SortUint64 = basics.SortUint64
 
 // Message represents the message to be certified.
 type Message struct {
-	Payload []byte
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Payload []byte   `codec:"p"`
 }
 
 // ToBeHashed returns the bytes of the message.

@@ -30,7 +30,7 @@ type CompactCertTxnFields struct {
 	CertIntervalLatestRound basics.Round             `codec:"crtrnd"`
 	CertType                protocol.CompactCertType `codec:"crttype"`
 	Cert                    compactcert.Cert         `codec:"crt"`
-	CertMsg                 []byte                   `codec:"crtmsg"`
+	CertMsg                 compactcert.Message      `codec:"crtmsg"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,
@@ -48,7 +48,7 @@ func (cc CompactCertTxnFields) Empty() bool {
 	if len(cc.Cert.Reveals) != 0 {
 		return false
 	}
-	if cc.CertMsg != nil {
+	if !cc.CertMsg.MsgIsZero() {
 		return false
 	}
 

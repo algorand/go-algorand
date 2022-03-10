@@ -206,7 +206,7 @@ func TestCowCompactCert(t *testing.T) {
 	var cert compactcert.Cert
 	var atRound basics.Round
 	var validate bool
-	var msg []byte
+	msg := compactcert.Message{}
 
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)

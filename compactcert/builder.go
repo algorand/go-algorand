@@ -62,7 +62,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	p, err := ledger.CompactCertParams(msg, votersHdr, hdr)
+	p, err := ledger.CompactCertParams(*msg, votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -357,7 +357,8 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
 		stxn.Txn.CertIntervalLatestRound = rnd
 		stxn.Txn.Cert = *cert
-		stxn.Txn.CertMsg = b.Msg
+
+		stxn.Txn.CertMsg = b.Params.Message
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)

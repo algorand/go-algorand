@@ -19,6 +19,7 @@ package compactcert
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -109,7 +110,7 @@ restart:
 // GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
 // This is the message the Compact Certificate will attest to.
-func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) ([]byte, error) {
+func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (*compactcert.Message, error) {
 	if compactCertRound < basics.Round(compactCertInterval) {
 		return nil, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
 	}
@@ -131,7 +132,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 		return nil, err
 	}
 
-	return tree.Root().ToSlice(), nil
+	return &compactcert.Message{Payload: tree.Root().ToSlice()}, nil
 }
 
 func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
@@ -183,7 +184,8 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 			continue
 		}
-		sig, err := key.StateProofSecrets.SignBytes(commitment)
+		tmp := commitment.Hash()
+		sig, err := key.StateProofSecrets.SignBytes(tmp[:])
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
 			continue
