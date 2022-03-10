@@ -103,7 +103,7 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 		}
 
 		cpy := make([]byte, len(b.Msg))
-		copy(cpy, b.Msg[:])
+		copy(cpy, b.Msg[:]) // TODO: onmce cfalcon is fixed can remove this copy.
 		if err := p.PK.VerifyBytes(uint64(b.SigRound), cpy, sig); err != nil {
 			return err
 		}
