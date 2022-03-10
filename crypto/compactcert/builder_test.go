@@ -75,10 +75,7 @@ func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a 
 	return signer
 }
 
-func TestBuildVerify(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
+func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.GenericDigest, uint64) {
 	currentRound := basics.Round(compactCertRoundsForTests)
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
@@ -118,14 +115,10 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
-	if err != nil {
-		t.Error(err)
-	}
+	a.NoError(err)
 
 	b, err := MkBuilder(param, parts, partcom)
-	if err != nil {
-		t.Error(err)
-	}
+	a.NoError(err)
 
 	for i := 0; i < npart; i++ {
 		a.False(b.Present(uint64(i)))
@@ -134,9 +127,17 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	cert, err := b.Build()
-	if err != nil {
-		t.Error(err)
-	}
+	a.NoError(err)
+
+	return cert, param, partcom.Root(), uint64(npart)
+}
+
+func TestBuildVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	cert, param, partCom, _ := generateCertForTesting(a)
 
 	var someReveal Reveal
 	for _, rev := range cert.Reveals {
@@ -156,9 +157,9 @@ func TestBuildVerify(t *testing.T) {
 	fmt.Printf("    %6d bytes reveals[*] total\n", len(protocol.Encode(&someReveal)))
 	fmt.Printf("  %6d bytes total\n", len(certenc))
 
-	verif := MkVerifier(param, partcom.Root())
-	err = verif.Verify(cert)
-	require.NoError(t, err, "failed to verify the compact cert")
+	verif := MkVerifier(param, partCom)
+	err := verif.Verify(cert)
+	a.NoError(err, "failed to verify the compact cert")
 }
 
 func generateRandomParticipant(a *require.Assertions, testname string) basics.Participant {
@@ -423,6 +424,66 @@ func findLInCert(a *require.Assertions, signature merklesignature.Signature, cer
 	}
 	a.Fail("could not find matching reveal")
 	return 0
+}
+
+func TestCoinIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	n := 1000
+	b := &Builder{
+		sigs:          make([]sigslot, n),
+		sigsHasValidL: true,
+	}
+
+	for i := 0; i < n; i++ {
+		b.sigs[i].L = uint64(i)
+		b.sigs[i].Weight = 1
+	}
+
+	for i := 0; i < n; i++ {
+		pos, err := b.coinIndex(uint64(i))
+		require.NoError(t, err)
+		require.Equal(t, pos, uint64(i))
+	}
+}
+
+func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// setting up a builder
+	a := require.New(t)
+	currentRound := basics.Round(compactCertRoundsForTests)
+
+	totalWeight := 10000000
+	npartHi := 1
+	npartLo := 9
+
+	param := Params{
+		Msg:          testMessage("hello world"),
+		ProvenWeight: uint64(totalWeight / 2),
+		SigRound:     currentRound,
+		SecKQ:        compactCertSecKQForTests,
+	}
+
+	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
+	var parts []basics.Participant
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
+
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	builder, err := MkBuilder(param, parts, partcom)
+	a.NoError(err)
+
+	// actual test:
+	signerInRound := key.GetSigner(uint64(currentRound))
+	sig, err := signerInRound.SignBytes(param.Msg)
+	require.NoError(t, err, "failed to create keys")
+	// Corrupting the version of the signature:
+	sig.Signature[1]++
+
+	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrInvalidSignatureVersion)
 }
 
 func BenchmarkBuildVerify(b *testing.B) {

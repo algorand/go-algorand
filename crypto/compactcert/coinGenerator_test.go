@@ -42,7 +42,7 @@ func TestHashCoin(t *testing.T) {
 		Partcom:      partcom,
 		MsgHash:      msgHash,
 	}
-	coinHash := MakeCoinHash(choice)
+	coinHash := MakeCoinGenerator(choice)
 
 	for j := uint64(0); j < 1000; j++ {
 		coin := coinHash.getNextCoin()
@@ -79,7 +79,7 @@ func BenchmarkHashCoin(b *testing.B) {
 		Partcom:      partcom,
 		MsgHash:      msgHash,
 	}
-	coinHash := MakeCoinHash(choice)
+	coinHash := MakeCoinGenerator(choice)
 
 	for i := 0; i < b.N; i++ {
 		coinHash.getNextCoin()

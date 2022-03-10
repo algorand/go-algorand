@@ -44,28 +44,28 @@ func (cc coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.CompactCertCoin, protocol.Encode(&cc)
 }
 
-// coinHashContext is used for extracting "randomized" 64 bits for coin flips
-type coinHashContext struct {
+// coinGenerator is used for extracting "randomized" 64 bits for coin flips
+type coinGenerator struct {
 	shkContext   sha3.ShakeHash
 	signedWeight uint64
 }
 
-// MakeCoinHash creates a new CoinHash context.
+// MakeCoinGenerator creates a new CoinHash context.
 // it is used for squeezing 64 bits for coin flips.
 // the function inits the XOF function in the following manner
 // Shake(sumhash(coinChoiceSeed))// we extract 64 bits from shake for each coin flip and divide it by SignedWeight
-func MakeCoinHash(choice coinChoiceSeed) coinHashContext {
+func MakeCoinGenerator(choice coinChoiceSeed) coinGenerator {
 	hash := crypto.HashFactory{HashType: CoinHashType}.NewHash()
 	hashedCoin := crypto.GenericHashObj(hash, choice)
 
 	shk := sha3.NewShake256()
 	shk.Write(hashedCoin)
 
-	return coinHashContext{shkContext: shk, signedWeight: choice.SignedWeight}
+	return coinGenerator{shkContext: shk, signedWeight: choice.SignedWeight}
 }
 
 // getNextCoin returns the next 64bits integer which represents a number between [0,SignedWeight)
-func (ch *coinHashContext) getNextCoin() uint64 {
+func (ch *coinGenerator) getNextCoin() uint64 {
 	var shakeDigest [64]byte
 
 	ch.shkContext.Read(shakeDigest[:])

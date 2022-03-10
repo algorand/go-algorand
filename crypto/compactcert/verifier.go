@@ -17,10 +17,17 @@
 package compactcert
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+)
+
+// Errors for the CompactCert verifier
+var (
+	ErrCoinNotInRange = errors.New("coin is not within slot weight range")
+	ErrNoRevealInPos  = errors.New("no reveal for position")
 )
 
 // Verifier is used to verify a compact certificate.
@@ -74,7 +81,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		)
 
 		if err != nil {
-			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)
+			return fmt.Errorf("signature in reveal pos %d does not verify. error is %w", pos, err)
 		}
 	}
 
@@ -101,20 +108,18 @@ func (v *Verifier) Verify(c *Cert) error {
 		Partcom:      v.partcom,
 		MsgHash:      v.Msg,
 	}
-	coinHash := MakeCoinHash(choice)
-	for j := uint64(0); j < nr; j++ {
 
-		coin := coinHash.getNextCoin()
-		matchingReveal := false
-		for _, r := range c.Reveals {
-			if r.SigSlot.L <= coin && coin < r.SigSlot.L+r.Part.Weight {
-				matchingReveal = true
-				break
-			}
+	coinHash := MakeCoinGenerator(choice)
+	for j := uint64(0); j < nr; j++ {
+		pos := c.PositionsToReveal[j]
+		reveal, exists := c.Reveals[pos]
+		if !exists {
+			return fmt.Errorf("%w: %d", ErrNoRevealInPos, pos)
 		}
 
-		if !matchingReveal {
-			return fmt.Errorf("no reveal for coin %d at %d", j, coin)
+		coin := coinHash.getNextCoin()
+		if !(reveal.SigSlot.L <= coin && coin < reveal.SigSlot.L+reveal.Part.Weight) {
+			return fmt.Errorf("%w: for reveal pos %d and coin %d, ", ErrCoinNotInRange, pos, coin)
 		}
 	}
 

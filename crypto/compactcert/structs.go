@@ -70,11 +70,13 @@ type Cert struct {
 	SigProofs    merklearray.Proof    `codec:"S"`
 	PartProofs   merklearray.Proof    `codec:"P"`
 
+	MerkleSignatureVersion int32 `codec:"v"`
+
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
 	// arrays.
-	Reveals                map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
-	MerkleSignatureVersion int32             `codec:"v"`
+	Reveals           map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
+	PositionsToReveal []uint64          `codec:"pr,allocbound=MaxReveals"`
 }
 
 // SortUint64 implements sorting by uint64 keys for

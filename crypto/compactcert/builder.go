@@ -201,6 +201,7 @@ func (b *Builder) Build() (*Cert, error) {
 
 	var proofPositions []uint64
 
+	revealsSequence := make([]uint64, nr)
 	choice := coinChoiceSeed{
 		SignedWeight: c.SignedWeight,
 		ProvenWeight: b.ProvenWeight,
@@ -208,7 +209,7 @@ func (b *Builder) Build() (*Cert, error) {
 		Partcom:      b.parttree.Root(),
 		MsgHash:      b.Msg,
 	}
-	coinHash := MakeCoinHash(choice)
+	coinHash := MakeCoinGenerator(choice)
 
 	for j := uint64(0); j < nr; j++ {
 		coin := coinHash.getNextCoin()
@@ -220,6 +221,8 @@ func (b *Builder) Build() (*Cert, error) {
 		if pos >= uint64(len(b.participants)) {
 			return nil, fmt.Errorf("pos %d >= len(participants) %d", pos, len(b.participants))
 		}
+
+		revealsSequence[j] = pos
 
 		// If we already revealed pos, no need to do it again
 		_, alreadyRevealed := c.Reveals[pos]
@@ -248,6 +251,7 @@ func (b *Builder) Build() (*Cert, error) {
 
 	c.SigProofs = *sigProofs
 	c.PartProofs = *partProofs
+	c.PositionsToReveal = revealsSequence
 
 	return c, nil
 }
