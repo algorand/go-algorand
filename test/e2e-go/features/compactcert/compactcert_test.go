@@ -150,7 +150,7 @@ func TestCompactCerts(t *testing.T) {
 			//compactcert.GenerateStateProofMessage() // TODO Stateproof: fix
 
 			ccparams := cc.Params{
-				StateProofMessage: cc.StateProofMessage{Payload: []byte{}}, // nextCertBlockDecoded.Block.BlockHeader,
+				StateProofMessage: stateproof.Message{Payload: []byte{}}, // nextCertBlockDecoded.Block.BlockHeader,
 				ProvenWeight:      provenWeight,
 				SigRound:          basics.Round(nextCertBlock.Round),
 				SecKQ:             consensusParams.CompactCertSecKQ,
