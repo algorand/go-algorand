@@ -24,7 +24,7 @@ func BenchmarkChannelWrites(b *testing.B) {
 	b.Run("groupTaskDone", func(b *testing.B) {
 		c := make(chan groupTaskDone, b.N)
 		for i := 0; i < b.N; i++ {
-			c <- groupTaskDone{groupIdx: i}
+			c <- groupTaskDone{groupIdx: int64(i)}
 		}
 	})
 
