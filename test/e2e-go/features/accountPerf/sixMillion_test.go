@@ -953,13 +953,13 @@ func scenarioD(
 			defer wg.Done()
 			for i := range checkAppChan {
 				app, err := client.ApplicationInformation(i)
-					if err != nil {
-						if strings.Contains(err.Error(), "application does not exist") {
-							continue
-						}
-						checkResChan <- 0
+				if err != nil {
+					if strings.Contains(err.Error(), "application does not exist") {
 						continue
 					}
+					checkResChan <- 0
+					continue
+				}
 				pass := checkApplicationParams(
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
 					app.Params,
@@ -999,6 +999,7 @@ func scenarioD(
 	close(checkAppChan)
 	wg.Wait()
 
+	require.Equal(t, numberOfApps, passed)
 	for _, x := range globalStateCheck {
 		require.True(t, x)
 	}
@@ -1244,7 +1245,7 @@ func checkApplicationParams(
 	globalStateCheckMu.Unlock()
 	if oldVal != false {
 		return false
-	}	
+	}
 	return pass
 }
 
