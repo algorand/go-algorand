@@ -952,32 +952,24 @@ func scenarioD(
 		go func() {
 			defer wg.Done()
 			for i := range checkAppChan {
-				var app generated.Application
-				var err1 error
-				cont := false
-				for {
-					app, err1 = client.ApplicationInformation(i)
-					if err1 != nil {
-						if strings.Contains(err1.Error(), "application does not exist") {
-							cont = true
-							break
+				app, err := client.ApplicationInformation(i)
+					if err != nil {
+						if strings.Contains(err.Error(), "application does not exist") {
+							continue
 						}
-						time.Sleep(time.Millisecond * 100)
+						checkResChan <- 0
 						continue
 					}
-					break
-				}
-				if cont {
-					continue
-				}
-				checkResChan <- 1
 				pass := checkApplicationParams(
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
 					app.Params,
 					baseAcct.pk.String(),
 					&globalStateCheck,
 					globalStateCheckMu)
-				if !pass {
+				if pass {
+					checkResChan <- 1
+				} else {
+					checkResChan <- 0
 					log.Errorf("scenario4: app params check failed for %d", app.Id)
 				}
 			}
@@ -985,13 +977,15 @@ func scenarioD(
 	}
 
 	checked := uint64(0)
+	passed := uint64(0)
 	lastPrint := uint64(0)
 	for i := uint64(0); checked < numberOfApps; {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
 		case val := <-checkResChan:
-			checked += val
+			checked++
+			passed += val
 		case checkAppChan <- i:
 			i++
 		default:
@@ -1007,7 +1001,6 @@ func scenarioD(
 
 	for _, x := range globalStateCheck {
 		require.True(t, x)
-
 	}
 }
 
@@ -1232,16 +1225,6 @@ func checkApplicationParams(
 	if creator != app.Creator {
 		return false
 	}
-
-	var oldVal bool
-	globalStateCheckMu.Lock()
-	oldVal = (*globalStateCheck)[(*app.GlobalState)[0].Value.Uint]
-	(*globalStateCheck)[(*app.GlobalState)[0].Value.Uint] = true
-	globalStateCheckMu.Unlock()
-	if oldVal != false {
-		return false
-	}
-
 	if acTF.GlobalStateSchema.NumByteSlice != app.GlobalStateSchema.NumByteSlice {
 		return false
 	}
@@ -1254,6 +1237,14 @@ func checkApplicationParams(
 	if acTF.LocalStateSchema.NumUint != app.LocalStateSchema.NumUint {
 		return false
 	}
+	var oldVal bool
+	globalStateCheckMu.Lock()
+	oldVal = (*globalStateCheck)[(*app.GlobalState)[0].Value.Uint]
+	(*globalStateCheck)[(*app.GlobalState)[0].Value.Uint] = true
+	globalStateCheckMu.Unlock()
+	if oldVal != false {
+		return false
+	}	
 	return pass
 }
 
