@@ -17,9 +17,6 @@
 package agreement
 
 import (
-	"fmt"
-
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -51,17 +48,6 @@ type message struct {
 type compoundMessage struct {
 	Vote     unauthenticatedVote
 	Proposal unauthenticatedProposal
-}
-
-// DecodeProposalError indicates proposal decoding failure
-type DecodeProposalError struct {
-	Err   error
-	Round basics.Round
-}
-
-// Error satisfies builtin interface `error`
-func (err DecodeProposalError) Error() string {
-	return fmt.Sprintf("logic eval error: %v", err.Err)
 }
 
 // streamTokenizer is a function that returns an object of some type after
@@ -102,14 +88,8 @@ func decodeProposal(data []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	var up unauthenticatedProposal
-	err = protocol.Decode(p.ProposalData, &up)
-	if err != nil {
-		return nil, DecodeProposalError{Err: err, Round: p.PriorVote.R.Round}
-	}
-
 	return compoundMessage{
 		Vote:     p.PriorVote,
-		Proposal: up,
+		Proposal: p.unauthenticatedProposal,
 	}, nil
 }

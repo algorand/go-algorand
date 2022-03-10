@@ -18,7 +18,6 @@ package agreement
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -124,14 +123,11 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 				o, err := tokenize(raw.Data)
 				if err != nil {
-					var dpe *DecodeProposalError
-					if errors.As(err, &dpe) {
-						// check protocol version
-						cv, err := d.ledger.ConsensusVersion(dpe.Round)
-						if err != nil {
-							if _, ok := config.Consensus[cv]; !ok {
-								d.log.Warnf("received proposal with unsupported consensus version: %v", cv)
-							}
+					// check protocol version
+					cv, err := d.ledger.ConsensusVersion(d.ledger.NextRound())
+					if err != nil {
+						if _, ok := config.Consensus[cv]; !ok {
+							d.log.Warnf("received proposal with unsupported consensus version: %v", cv)
 						}
 					}
 					d.log.Warnf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)

@@ -2262,12 +2262,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			var up unauthenticatedProposal
-			err = protocol.Decode(tp.ProposalData, &up)
-			if err != nil {
-				panic(err)
-			}
-			if up.Round() == basics.Round(startRound+2) {
+			if tp.Round() == basics.Round(startRound+2) {
 				params.exclude = relayID
 			}
 		}
