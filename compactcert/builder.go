@@ -359,7 +359,6 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
 		stxn.Txn.CertIntervalLatestRound = rnd
 		stxn.Txn.Cert = *cert
-
 		stxn.Txn.CertMsg = ccw.Message
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
