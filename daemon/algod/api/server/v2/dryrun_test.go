@@ -400,18 +400,17 @@ type expectedSlotType struct {
 
 func checkAppCallScratchType(t *testing.T, response *generated.DryrunResponse, txnIdx int, expected []expectedSlotType) {
 	txn := response.Txns[txnIdx]
+	// We should have a trace
 	assert.NotNil(t, txn.AppCallTrace)
-	// First one should be nil
+	// The first stack entry should be nil since we haven't stored anything in scratch yet
 	assert.Nil(t, (*txn.AppCallTrace)[0].Scratch)
-
-	// Last one should be the length of the max scratch
+	// Last one should be not nil, we should have some number of scratch vars
 	traceLine := (*txn.AppCallTrace)[len(*txn.AppCallTrace)-1]
 	assert.NotNil(t, traceLine.Scratch)
-
 	for _, exp := range expected {
+		// The TealType at the given slot index should match what we expect
 		assert.Equal(t, exp.tt, basics.TealType((*traceLine.Scratch)[exp.slot].Type))
 	}
-
 }
 
 func TestDryrunGlobal1(t *testing.T) {
