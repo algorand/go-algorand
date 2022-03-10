@@ -51,7 +51,7 @@ import (
 var numberOfGoRoutines = runtime.NumCPU() * 2
 
 // the frequency of printing progress status directly to stdout
-const printFrequency = 20
+const printFrequency = 3
 
 // send transactions in groups or one by one
 const groupTransactions = true
@@ -62,6 +62,9 @@ const channelDepth = 100
 // the test in intended for 6M apps/assets and 6K accounts. These variable values can be changed to modify this.
 const targetCreateableCount = 100
 const targetAccountCount = 10
+
+// print wait times
+const verbose = false
 
 // transaction group size obtained from consensus parameter
 var maxTxGroupSize int
@@ -1025,19 +1028,25 @@ func handleError(err error, message string, errChan chan<- error) {
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture, log logging.Logger) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
-	if force || counter == tLife { // TODO: remove tLife-800 after resolving "Missing appsPerAccount" issue
-		log.Debugf("Waiting for round %d...", int(lastRound))
+	if force || counter == tLife {
+		if verbose {
+			fmt.Printf("Waiting for round %d...", int(lastRound))
+		}
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
 			if err == nil {
-				log.Debugf(" waited less than %d sec, done.", (x+1)*waitBlock)
+				if verbose {
+					fmt.Printf(" waited less than %d sec, done.", (x+1)*waitBlock)
+				}
 				status, err := fixture.AlgodClient.Status()
 				if err != nil {
 					return 0, lastRound + 1, nil
 				}
 				return 0, status.LastRound + 1, nil
 			} else {
-				log.Debugf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
+				if verbose {
+					fmt.Printf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
+				}
 			}
 		}
 		log.Debugf("Giving up!")
