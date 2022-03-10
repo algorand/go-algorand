@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -40,29 +41,27 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// uses numberOfThreads to perform different operations (signing and preparing transactions) in parallel
-const numberOfThreads = 256
+// uses numberOfGoRoutines to perform different operations (signing and preparing transactions) in parallel
+var numberOfGoRoutines = runtime.NumCPU() * 2
 
-// the frequency of printing progress status
-const printFreequency = 20
+// the frequency of printing progress status directly to stdout
+const printFrequency = 20
 
 // send transactions in groups or one by one
-const groupTransactions = true
+const groupTransactions = false
 
 // number of elements queued in channels
 const channelDepth = 100
 
 // the test in intended for 6M apps/assets and 6K accounts. These variable values can be changed to modify this.
-const sixMillion = 100
-const sixThousand = 10
-
-// report additional information
-const verbose = false
+const targetCreateableCount = 100
+const targetAccountCount = 10
 
 // transaction group size obtained from consensus parameter
 var maxTxGroupSize int
@@ -79,74 +78,31 @@ type txnKey struct {
 
 // started as a goroutine which will listen to signed transactions and broadcast them
 func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
+	defer queueWg.Done()
 	for stxn := range sigTxnChan {
 		if stxn == nil {
 			break
 		}
-		var err error
-		for x := 0; x < 50; x++ { // retry only 50 times
-			_, err = c.BroadcastTransaction(*stxn)
-			if err == nil {
-				break
-			}
-			fmt.Printf("broadcastTransactions[%d]: %s", x, err)
-			time.Sleep(time.Millisecond * 256)
-		}
+		_, err := c.BroadcastTransaction(*stxn)
 		if err != nil {
 			handleError(err, "Error broadcastTransactions", errChan)
 		}
 	}
-	queueWg.Done()
 }
 
 // started as a goroutine which will listen to signed transaction groups and broadcast them
 func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnGrpChan <-chan []transactions.SignedTxn, errChan chan<- error) {
+	defer queueWg.Done()
 	for stxns := range sigTxnGrpChan {
 		if stxns == nil {
 			break
 		}
 		var err error
-		for x := 0; x < 50; x++ { // retry only 50 times
-			err = c.BroadcastTransactionGroup(stxns)
-			if err == nil {
-				if verbose {
-					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
-						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
-						sender := stxns[0].Txn.Header.Sender
-						info, _ := getAccountInformation(c, 0, 0, sender.String(), "broadcastTransactionGroups")
-						for _, app := range *info.CreatedApps {
-							fmt.Printf("created app: %d\n", app.Id)
-						}
-					}
-
-					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
-						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID > 0 {
-						sender := stxns[0].Txn.Header.Sender
-						for _, tx := range stxns {
-							appId := tx.Txn.ApplicationCallTxnFields.ApplicationID
-							_, err := getAccountApplicationInformation(c, sender.String(), uint64(appId), "broadcastTransactionGroups")
-							fmt.Printf("bTG: %d\t %s\n", appId, sender)
-							if err != nil {
-								fmt.Printf("opt-in for appid %d failed! error %s\n\n", appId, err)
-								continue
-							}
-						}
-					}
-				}
-				break
-			}
-			fmt.Printf("broadcastTransactionGroups[%d]: %s\n", x, err)
-			if strings.Contains(err.Error(), "already in ledger") {
-				err = nil
-				break
-			}
-			time.Sleep(time.Millisecond * 256)
-		}
+		err = c.BroadcastTransactionGroup(stxns)
 		if err != nil {
 			handleError(err, "Error broadcastTransactionGroups", errChan)
 		}
 	}
-	queueWg.Done()
 }
 
 // queries the node for account information, and will ertry if the expected number of apps or assets are not returned
@@ -155,25 +111,24 @@ func getAccountInformation(
 	expectedCountApps uint64,
 	expectedCountAssets uint64,
 	address string,
-	context string) (info generated.Account, err error) {
+	context string,
+	log logging.Logger) (info generated.Account, err error) {
 
-	for x := 0; x < 50; x++ { // retry only 50 times
+	for x := 0; x < 5; x++ { // retry only 5 times
 		info, err = client.AccountInformationV2(address, true)
 		if err == nil {
 			if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
-				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCountApps)
-				fmt.Printf("%s\n\n", spew.Sdump(info))
+				log.Errorf("Missing appsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedApps), expectedCountApps)
+				log.Errorf("%s", spew.Sdump(info))
 				continue
 			}
 			if expectedCountAssets > 0 && int(expectedCountAssets) != len(*info.CreatedAssets) {
-				fmt.Printf("Missing assetsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedAssets), expectedCountAssets)
-				fmt.Printf("%s\n\n", spew.Sdump(info))
+				log.Errorf("Missing assetsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedAssets), expectedCountAssets)
+				log.Errorf("%s", spew.Sdump(info))
 				continue
 			}
 			break
 		}
-		fmt.Printf("AccountInformationV2 (%s) [%d]: %s\n", context, x, err)
-		time.Sleep(time.Millisecond * 256)
 	}
 	return
 }
@@ -185,14 +140,7 @@ func getAccountApplicationInformation(
 	appId uint64,
 	context string) (appInfo generated.AccountApplicationResponse, err error) {
 
-	for x := 0; x < 50; x++ { // retry only 50 times
-		appInfo, err = client.AccountApplicationInformation(address, appId)
-		if err == nil {
-			break
-		}
-		fmt.Printf("AccountApplicationInformation (%s) [%d]: %s\n", context, x, err)
-		time.Sleep(time.Millisecond * 256)
-	}
+	appInfo, err = client.AccountApplicationInformation(address, appId)
 	return
 }
 
@@ -201,9 +149,8 @@ func signer(
 	sigWg *sync.WaitGroup,
 	client libgoal.Client,
 	txnChan <-chan *txnKey,
-	sigTxnChan chan<- *transactions.SignedTxn,
-	errChan chan<- error) {
-
+	sigTxnChan chan<- *transactions.SignedTxn) {
+	defer sigWg.Done()
 	for tk := range txnChan {
 		if tk == nil {
 			continue
@@ -211,7 +158,6 @@ func signer(
 		stxn := tk.tx.Sign(tk.sk)
 		sigTxnChan <- &stxn
 	}
-	sigWg.Done()
 }
 
 // started as a goroutine, signs the transaction groups from the channel
@@ -221,7 +167,7 @@ func signerGrpTxn(
 	txnGrpChan <-chan []txnKey,
 	sigTxnGrpChan chan<- []transactions.SignedTxn,
 	errChan chan<- error) {
-
+	defer sigWg.Done()
 	for tGroup := range txnGrpChan {
 
 		// prepare the array of transactions for the group id
@@ -246,7 +192,6 @@ func signerGrpTxn(
 
 		sigTxnGrpChan <- stxns
 	}
-	sigWg.Done()
 }
 
 // create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
@@ -279,6 +224,9 @@ func test5MAssets(t *testing.T, scenario int) {
 	var queueWg sync.WaitGroup
 	var hkWg sync.WaitGroup
 	var errWatcherWg sync.WaitGroup
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 
 	maxTxGroupSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
 	fixture.Setup(t, filepath.Join("nettemplates", "DevModeOneWallet.json"))
@@ -316,16 +264,16 @@ func test5MAssets(t *testing.T, scenario int) {
 	errChan := make(chan error, channelDepth)
 	stopChan := make(chan struct{}, 1)
 
-	for nthread := 0; nthread < numberOfThreads; nthread++ {
+	for ngoroutine := 0; ngoroutine < numberOfGoRoutines; ngoroutine++ {
 		sigWg.Add(1)
 		if groupTransactions {
 			go signerGrpTxn(&sigWg, client, txnGrpChan, sigTxnGrpChan, errChan)
 		} else {
-			go signer(&sigWg, client, txnChan, sigTxnChan, errChan)
+			go signer(&sigWg, client, txnChan, sigTxnChan)
 		}
 	}
 
-	for nthread := 0; nthread < numberOfThreads; nthread++ {
+	for ngoroutine := 0; ngoroutine < numberOfGoRoutines; ngoroutine++ {
 		queueWg.Add(1)
 		if groupTransactions {
 			go broadcastTransactionGroups(&queueWg, client, sigTxnGrpChan, errChan)
@@ -337,42 +285,42 @@ func test5MAssets(t *testing.T, scenario int) {
 	// error handling
 	errWatcherWg.Add(1)
 	go func() {
+		defer errWatcherWg.Done()
 		errCount := 0
-		for range errChan {
+		for err := range errChan {
+			log.Warnf("%s", err.Error())
 			errCount++
-			if errCount > 1000 {
-				fmt.Println("Too many errors!")
+			if errCount > 10 {
+				log.Warnf("too many errors %s", err.Error())
 				stopChan <- struct{}{}
 				break
 			}
 		}
 		close(stopChan)
-		errWatcherWg.Done()
 	}()
 
 	// some housekeeping
 	hkWg.Add(1)
 	go func() {
+		defer hkWg.Done()
 		sigWg.Wait()
 		close(sigTxnChan)
 		close(sigTxnGrpChan)
 		queueWg.Wait()
 		close(errChan)
 		errWatcherWg.Wait()
-		hkWg.Done()
 	}()
 
 	// Call different scenarios
 	switch scenario {
 	case 1:
-		scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
+		scenarioA(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan, log)
 	case 2:
-		scenarioB(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
+		scenarioB(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan, log)
 	case 3:
-		scenarioC(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
+		scenarioC(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan, log)
 	case 4:
-		scenarioD(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan)
-
+		scenarioD(t, &fixture, baseAcct, genesisHash, txnChan, txnGrpChan, tLife, stopChan, log)
 	}
 }
 
@@ -478,6 +426,15 @@ func sendAssetTransaction(
 	return
 }
 
+func printStdOut(index int, total uint64, message string) {
+	if printFrequency == 0 {
+		return
+	}
+	if index%int(total/(printFrequency+1)+1) == 0 {
+		fmt.Printf("%s: %d / %d\n", message, index, total)
+	}
+}
+
 // create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 func scenarioA(
 	t *testing.T,
@@ -487,12 +444,13 @@ func scenarioA(
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
 	tLife uint64,
-	stopChan <-chan struct{}) {
+	stopChan <-chan struct{},
+	log logging.Logger) {
 
 	client := fixture.LibGoalClient
 
-	numberOfAccounts := uint64(sixThousand) // 6K
-	numberOfAssets := uint64(sixMillion)    // 6M
+	numberOfAccounts := uint64(targetAccountCount)  // 6K
+	numberOfAssets := uint64(targetCreateableCount) // 6M
 
 	assetsPerAccount := numberOfAssets / numberOfAccounts
 
@@ -523,12 +481,13 @@ func scenarioA(
 		genesisHash,
 		txnChan,
 		txnGrpChan,
-		stopChan)
+		stopChan,
+		log)
 
 	// have a single account opted in all of them
 	ownAllAccount := keys[numberOfAccounts-1]
 
-	fmt.Println("Creating assets...")
+	log.Infof("Creating assets...")
 
 	// create 6M unique assets by a different 6,000 accounts
 	assetAmount := uint64(100)
@@ -536,9 +495,7 @@ func scenarioA(
 		if na == ownAllAccount {
 			continue
 		}
-		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("ScenarioA: create assets for acct: %d / %d\n", nai, numberOfAccounts)
-		}
+		printStdOut(nai, numberOfAccounts, "ScenarioA: create assets for acct")
 
 		for asi := uint64(0); asi < assetsPerAccount; asi++ {
 			select {
@@ -552,31 +509,28 @@ func scenarioA(
 
 			counter, txnGroup = queueTransaction(na.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
 
-			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
 		}
 	}
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	fmt.Println("Opt-in assets...")
+	log.Infof("Opt-in assets...")
 
 	// make ownAllAccount very rich
 	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
 	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("ScenarioA: Accepting assets from acct: %d / %d\n", acci, numberOfAccounts)
-		}
-
-		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA opt-in assets")
+		printStdOut(acci, numberOfAccounts, "ScenarioA: Accepting assets from acct")
+		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA opt-in assets", log)
 		require.NoError(t, err)
 		for _, asset := range *info.Assets {
 			select {
@@ -597,26 +551,24 @@ func scenarioA(
 
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInT, txnChan, txnGrpChan, counter, txnGroup)
 
-			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
 		}
 	}
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	fmt.Println("Transfer assets...")
+	log.Infof("Transfer assets...")
 
 	// and owning all of them
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("ScenarioA: Sending assets from acct: %d / %d\n", acci, numberOfAccounts)
-		}
+		printStdOut(acci, numberOfAccounts, "ScenarioA: Sending assets from acct")
 
-		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA transfer assets")
+		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA transfer assets", log)
 		require.NoError(t, err)
 		for _, asset := range *info.Assets {
 			select {
@@ -636,25 +588,23 @@ func scenarioA(
 				asset.Amount)
 			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
 
-			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
 		}
 	}
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	fmt.Println("Verifying assets...")
+	log.Infof("Verifying assets...")
 	// Verify the assets are transfered here
 	tAssetAmt := uint64(0)
 	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("ScenarioA: Verifying assets from account %d / %d\n", nai, numberOfAccounts)
-		}
-		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets")
+		printStdOut(nai, numberOfAccounts, "ScenarioA: Verifying assets from account")
+		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets", log)
 		require.NoError(t, err)
 		for _, asset := range *info.Assets {
 			select {
@@ -681,9 +631,10 @@ func scenarioB(
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
 	tLife uint64,
-	stopChan <-chan struct{}) {
+	stopChan <-chan struct{},
+	log logging.Logger) {
 
-	numberOfAssets := uint64(sixMillion) // 6M
+	numberOfAssets := uint64(targetCreateableCount) // 6M
 	totalAssetAmount := uint64(0)
 
 	defer func() {
@@ -696,7 +647,7 @@ func scenarioB(
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
 
-	fmt.Println("Creating assets..")
+	log.Infof("Creating assets..")
 
 	// create 6M unique assets by a single account
 	assetAmount := uint64(100)
@@ -708,21 +659,19 @@ func scenarioB(
 		default:
 		}
 
-		if asi%(numberOfAssets/printFreequency+1) == 0 {
-			fmt.Printf("create asset %d / %d\n", asi, numberOfAssets)
-		}
+		printStdOut(int(asi), numberOfAssets, "create asset")
 		atx := createAssetTransaction(t, asi, firstValid, baseAcct.pk, tLife, uint64(600000000)+assetAmount, genesisHash)
 		totalAssetAmount += uint64(600000000) + assetAmount
 		assetAmount++
 
 		counter, txnGroup = queueTransaction(baseAcct.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
 
-		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 		require.NoError(t, err)
 	}
 
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
 	client := fixture.LibGoalClient
@@ -732,7 +681,7 @@ func scenarioB(
 	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
 	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
 
-	fmt.Println("Verifying assets...")
+	log.Infof("Verifying assets...")
 	// Verify the assets are transfered here
 	tAssetAmt := uint64(0)
 	info, err = client.AccountInformationV2(baseAcct.pk.String(), false)
@@ -753,9 +702,7 @@ func scenarioB(
 		counter++
 		require.NoError(t, err)
 		tAssetAmt += assHold.AssetHolding.Amount
-		if counter%(numberOfAssets/printFreequency+1) == 0 {
-			fmt.Printf("ScenarioB: Verifying assets %d / %d\n", counter, numberOfAssets)
-		}
+		printStdOut(int(counter), numberOfAssets, "ScenarioB: Verifying assets")
 	}
 	require.Equal(t, totalAssetAmount, tAssetAmt)
 }
@@ -770,12 +717,12 @@ func scenarioC(
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
 	tLife uint64,
-	stopChan <-chan struct{}) {
+	stopChan <-chan struct{},
+	log logging.Logger) {
 
 	client := fixture.LibGoalClient
-
-	numberOfAccounts := uint64(sixThousand) // 6K
-	numberOfApps := uint64(sixMillion)      // 6M
+	numberOfAccounts := uint64(targetAccountCount) // 6K
+	numberOfApps := uint64(targetCreateableCount)  // 6M
 	appsPerAccount := (numberOfApps + (numberOfAccounts - 1)) / numberOfAccounts
 
 	balance := uint64(1000000000) // balance 199226999 below min 199275000
@@ -805,17 +752,18 @@ func scenarioC(
 		genesisHash,
 		txnChan,
 		txnGrpChan,
-		stopChan)
+		stopChan,
+		log)
 
 	// have a single account opted in all of them
 	ownAllAccount := keys[numberOfAccounts]
 	// make ownAllAccount very rich
 	sendAlgoTx := sendAlgoTransaction(t, firstValid, baseAcct.pk, ownAllAccount.pk, 10000000000000, tLife, genesisHash)
 	counter, txnGroup = queueTransaction(baseAcct.sk, sendAlgoTx, txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
 
-	fmt.Println("Creating applications ...")
+	log.Infof("Creating applications ...")
 
 	// create 6M unique apps by a different 6,000 accounts
 	for nai, na := range keys {
@@ -823,10 +771,7 @@ func scenarioC(
 			continue
 		}
 
-		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("scenario3: create apps for account %d / %d\n", nai, numberOfAccounts)
-		}
-
+		printStdOut(nai, numberOfAccounts, "scenario3: create apps for account")
 		for appi := uint64(0); appi < appsPerAccount; appi++ {
 			select {
 			case <-stopChan:
@@ -837,25 +782,22 @@ func scenarioC(
 			appCallFields[appi] = atx.ApplicationCallTxnFields
 			counter, txnGroup = queueTransaction(na.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
 
-			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
 		}
 	}
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	fmt.Println("Opt-in applications...")
+	log.Infof("Opt-in applications...")
 
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("scenario3: Opting into Application acct: %d / %d\n", acci, numberOfAccounts)
-		}
-
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC opt-in apps")
+		printStdOut(acci, numberOfAccounts, "scenario3: Opting into Application acct")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC opt-in apps", log)
 		require.NoError(t, err)
 		for _, app := range *info.CreatedApps {
 			select {
@@ -866,30 +808,28 @@ func scenarioC(
 			optInTx := makeOptInAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
 
-			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
 		}
 	}
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	fmt.Println("verifying optin apps...")
+	log.Infof("verifying optin apps...")
 
 	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("ScenarioC: Verifying apps opt-in from account %d / %d\n", nai, numberOfAccounts)
-		}
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
+		printStdOut(nai, numberOfAccounts, "ScenarioC: Verifying apps opt-in from account")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
 			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "verifying after optin")
 			if err != nil {
-				fmt.Printf("account: %s  appid: %d error %s\n\n", ownAllAccount.pk, capp.Id, err)
+				log.Errorf("account: %s  appid: %d error %s", ownAllAccount.pk, capp.Id, err)
 				continue
 			}
 			require.Equal(t, uint64(1), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
@@ -897,18 +837,15 @@ func scenarioC(
 		}
 	}
 
-	fmt.Println("calling applications...")
+	log.Infof("calling applications...")
 
 	// Make an app call to each of them
 	for acci, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		if acci%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("scenario3: Calling Application acct %d / %d\n", acci, numberOfAccounts)
-		}
-
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC call apps")
+		printStdOut(acci, numberOfAccounts, "scenario3: Calling Application acct")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC call apps", log)
 		require.NoError(t, err)
 		for _, app := range *info.CreatedApps {
 			select {
@@ -919,30 +856,28 @@ func scenarioC(
 			optInTx := callAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
 
-			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 			require.NoError(t, err)
 		}
 	}
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	fmt.Println("Completed. Verifying accounts...")
+	log.Infof("Completed. Verifying accounts...")
 
 	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
 			continue
 		}
-		if nai%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("ScenarioC: Verifying app calls from account %d / %d\n", nai, numberOfAccounts)
-		}
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts")
+		printStdOut(nai, numberOfAccounts, "ScenarioC: Verifying app calls from account")
+		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
 			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "after call")
 			if err != nil {
-				fmt.Printf("account: %s  appid: %d error %s\n\n", ownAllAccount.pk, capp.Id, err)
+				log.Errorf("account: %s  appid: %d error %s", ownAllAccount.pk, capp.Id, err)
 				continue
 			}
 			require.Equal(t, uint64(2), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
@@ -960,11 +895,11 @@ func scenarioD(
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
 	tLife uint64,
-	stopChan <-chan struct{}) {
+	stopChan <-chan struct{},
+	log logging.Logger) {
 
 	client := fixture.LibGoalClient
-
-	numberOfApps := uint64(sixMillion) // 6M
+	numberOfApps := uint64(targetCreateableCount) // 6M
 	defer func() {
 		close(txnChan)
 		close(txnGrpChan)
@@ -978,7 +913,7 @@ func scenarioD(
 	globalStateCheck := make([]bool, numberOfApps)
 	appCallFields := make([]transactions.ApplicationCallTxnFields, numberOfApps)
 
-	fmt.Println("Creating applications ...")
+	log.Infof("Creating applications ...")
 
 	// create 6M apps
 	for asi := uint64(0); asi < numberOfApps; asi++ {
@@ -988,33 +923,32 @@ func scenarioD(
 		default:
 		}
 
-		if asi%(numberOfApps/printFreequency+1) == 0 {
-			fmt.Printf("scenario4: create app %d / %d\n", asi, numberOfApps)
-		}
+		printStdOut(int(asi), numberOfApps, "scenario4: create app")
 		atx := makeAppTransaction(t, client, asi, firstValid, baseAcct.pk, tLife, true, genesisHash)
 		appCallFields[asi] = atx.ApplicationCallTxnFields
 		counter, txnGroup = queueTransaction(baseAcct.sk, atx, txnChan, txnGrpChan, counter, txnGroup)
 
-		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 		require.NoError(t, err)
 	}
 
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
 	// check the results in parallel
-	parallelCheckers := numberOfThreads
+	parallelCheckers := numberOfGoRoutines
 	checkAppChan := make(chan uint64, parallelCheckers)
 	checkResChan := make(chan uint64, parallelCheckers)
 	var wg sync.WaitGroup
 	var globalStateCheckMu deadlock.Mutex
 
-	fmt.Println("Completed. Verifying apps...")
+	log.Infof("Completed. Verifying apps...")
 
 	for p := 0; p < parallelCheckers; p++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for i := range checkAppChan {
 				var app generated.Application
 				var err1 error
@@ -1042,10 +976,9 @@ func scenarioD(
 					&globalStateCheck,
 					globalStateCheckMu)
 				if !pass {
-					fmt.Printf("scenario4: app params check failed for %d\n", app.Id)
+					log.Errorf("scenario4: app params check failed for %d", app.Id)
 				}
 			}
-			wg.Done()
 		}()
 	}
 
@@ -1062,8 +995,8 @@ func scenarioD(
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}
-		if checked != lastPrint && checked%(numberOfApps/printFreequency+1) == 0 {
-			fmt.Printf("scenario4: check app params %d / %d\n", checked, numberOfApps)
+		if checked != lastPrint {
+			printStdOut(int(checked), numberOfApps, "scenario4: check app params")
 			lastPrint = checked
 		}
 	}
@@ -1079,35 +1012,35 @@ func scenarioD(
 // handles errors by channeling them between goroutines
 func handleError(err error, message string, errChan chan<- error) {
 	if err != nil {
-		fmt.Printf("%s: %v\n", message, err)
+		err2 := fmt.Errorf("%s: %v", message, err)
 		select {
 		// use select to avoid blocking when the errChan is not interested in messages.
-		case errChan <- err:
+		case errChan <- err2:
 		default:
 		}
 	}
 }
 
 // handle the counters to prepare and send transactions in batches of MaxTxnLife transactions
-func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture) (newCounter, nextFirstValid uint64, err error) {
+func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture, log logging.Logger) (newCounter, nextFirstValid uint64, err error) {
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
 	if force || counter == tLife { // TODO: remove tLife-800 after resolving "Missing appsPerAccount" issue
-		fmt.Printf("Waiting for round %d...", int(lastRound))
+		log.Debugf("Waiting for round %d...", int(lastRound))
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
 			if err == nil {
-				fmt.Printf(" waited %d sec, done.\n", (x+1)*waitBlock)
+				log.Debugf(" waited less than %d sec, done.", (x+1)*waitBlock)
 				status, err := fixture.AlgodClient.Status()
 				if err != nil {
 					return 0, lastRound + 1, nil
 				}
 				return 0, status.LastRound + 1, nil
 			} else {
-				fmt.Printf(" waited %d sec, continue waiting...\n", (x+1)*waitBlock)
+				log.Debugf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
 			}
 		}
-		fmt.Println("Giving up!")
+		log.Debugf("Giving up!")
 		return 0, 0, fmt.Errorf("Waited for round %d for %d seconds. Giving up!", firstValid+counter, 1000*waitBlock)
 	}
 	return counter, firstValid, nil
@@ -1329,9 +1262,10 @@ func createAccounts(
 	genesisHash crypto.Digest,
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
-	stopChan <-chan struct{}) (newFirstValid uint64, newCounter uint64, keys []psKey) {
+	stopChan <-chan struct{},
+	log logging.Logger) (newFirstValid uint64, newCounter uint64, keys []psKey) {
 
-	fmt.Println("Creating accounts...")
+	log.Infof("Creating accounts...")
 
 	var err error
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
@@ -1344,17 +1278,15 @@ func createAccounts(
 			require.Fail(t, "Test errored")
 		default:
 		}
-		if i%int(numberOfAccounts/printFreequency+1) == 0 {
-			fmt.Printf("account create txn: %d / %d\n", i, numberOfAccounts)
-		}
+		printStdOut(i, numberOfAccounts, "account create txn")
 		txn := sendAlgoTransaction(t, firstValid, baseAcct.pk, key.pk, balance, tLife, genesisHash)
 		counter, txnGroup = queueTransaction(baseAcct.sk, txn, txnChan, txnGrpChan, counter, txnGroup)
 
-		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture)
+		counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
 		require.NoError(t, err)
 	}
 	counter, txnGroup = flushQueue(txnChan, txnGrpChan, counter, txnGroup)
-	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture)
+	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 	return firstValid, counter, keys
 }
