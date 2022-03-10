@@ -334,7 +334,6 @@ func (ccw *Worker) tryBuilding() {
 
 	for rnd, b := range ccw.builders {
 		firstValid := ccw.ledger.Latest()
-		fmt.Printf("on builder checking!\n")
 		acceptableWeight := ledger.AcceptableCompactCertWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the cert at this time..
@@ -352,7 +351,6 @@ func (ccw *Worker) tryBuilding() {
 			continue
 		}
 
-		fmt.Printf("Im ready for tx on round : %d the firs valid is %d and signedW %d and accp %d", rnd, firstValid, b.SignedWeight(), acceptableWeight)
 		var stxn transactions.SignedTxn
 		stxn.Txn.Type = protocol.CompactCertTx
 		stxn.Txn.Sender = transactions.CompactCertSender

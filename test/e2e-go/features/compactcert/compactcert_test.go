@@ -107,10 +107,7 @@ func TestCompactCerts(t *testing.T) {
 		if (rnd % consensusParams.CompactCertRounds) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.CompactCertVoters) > 0)
-			t.Logf("stake value: %d", blk.CompactCertVotersTotal)
-			if !(blk.CompactCertVotersTotal != 0) {
-				t.FailNow()
-			}
+			r.True(blk.CompactCertVotersTotal != 0)
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.

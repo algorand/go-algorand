@@ -117,6 +117,62 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
+    python3 -m venv "${TEMPDIR}/ve"
+    . "${TEMPDIR}/ve/bin/activate"
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
+    
+    # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
+    # Please update as necessary.
+    "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.9.0b1
+    
+    # Enable remote debugging:
+    "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
+    duration "e2e client setup"
+
+    if [ $INTERACTIVE ]; then
+        echo -e "\n\n********** READY **********\n\n"
+        echo "The test environment is now set. You can now run tests in another terminal."
+
+        echo -e "\nConfigure the environment:\n"
+        if [ "$(basename $SHELL)" == "fish" ]; then
+            echo "set -g VIRTUAL_ENV \"${TEMPDIR}/ve\""
+            echo "set -g PATH \"\$VIRTUAL_ENV/bin:\$PATH\""
+        else
+            echo "export VIRTUAL_ENV=\"${TEMPDIR}/ve\""
+            echo "export PATH=\"\$VIRTUAL_ENV/bin:\$PATH\""
+        fi
+
+        echo ""
+        echo "python3 \"$SCRIPT_PATH/e2e_client_runner.py\" ${RUN_KMD_WITH_UNSAFE_SCRYPT} \"$SCRIPT_PATH/e2e_subs/SCRIPT_FILE_NAME\""
+        echo ""
+        echo "Press enter to shut down the test environment..."
+        read a
+        echo -n "deactivating..."
+        deactivate
+        echo "done"
+        exit
+    fi
+
+    ./timeout 200 ./e2e_basic_start_stop.sh
+    duration "e2e_basic_start_stop.sh"
+
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+    duration "parallel client runner"
+
+    for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+    done
+    duration "vdir client runners"
+
+    for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+    done
+
+    deactivate
+    duration "serial client runners"
+fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
     # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
@@ -129,6 +185,18 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
     ./e2e_go_tests.sh ${GO_TEST_ARGS}
     duration "go integration tests"
 fi # if E2E_TEST_FILTER == "" or == "GO"
+
+if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "EXPECT" ]; then
+    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
+    # This allows us to clean up everything with our rm -rf trap.
+    mkdir "${TEMPDIR}/expect"
+    export TESTDIR=${TEMPDIR}/expect
+    export TESTDATADIR=${SRCROOT}/test/testdata
+    export SRCROOT=${SRCROOT}
+
+    ./e2e_go_tests.sh -e ${GO_TEST_ARGS}
+    duration "expect tests"
+fi # if E2E_TEST_FILTER == "" or == "EXPECT"
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"
