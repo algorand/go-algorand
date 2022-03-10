@@ -101,7 +101,10 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 		if err := sig.ValidateSigVersion(merklesignature.SchemeVersion); err != nil {
 			return err
 		}
-		if err := p.PK.VerifyBytes(uint64(b.SigRound), b.Msg[:], sig); err != nil {
+
+		cpy := make([]byte, len(b.Msg))
+		copy(cpy, b.Msg[:])
+		if err := p.PK.VerifyBytes(uint64(b.SigRound), cpy, sig); err != nil {
 			return err
 		}
 	}
