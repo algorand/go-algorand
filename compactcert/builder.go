@@ -62,9 +62,9 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	if err != nil {
 		return builder{}, err
 	}
-	ccw.Message = *msg
+	ccw.Message = msg
 
-	p, err := ledger.CompactCertParams(*msg, votersHdr, hdr)
+	p, err := ledger.CompactCertParams(msg, votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}

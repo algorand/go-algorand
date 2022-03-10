@@ -110,9 +110,9 @@ restart:
 // GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
 // This is the message the Compact Certificate will attest to.
-func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (*stateproof.Message, error) {
+func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (stateproof.Message, error) {
 	if compactCertRound < basics.Round(compactCertInterval) {
-		return nil, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
+		return stateproof.Message{}, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
 	}
 	var blkHdrArr blockHeadersArray
 	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, compactCertInterval)
@@ -121,7 +121,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 		rnd := firstRound + basics.Round(i)
 		hdr, err := ledger.BlockHdr(rnd)
 		if err != nil {
-			return nil, err
+			return stateproof.Message{}, err
 		}
 		blkHdrArr.blockHeaders[i] = hdr
 	}
@@ -129,10 +129,10 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 	// Build merkle tree from encoded headers
 	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
 	if err != nil {
-		return nil, err
+		return stateproof.Message{}, err
 	}
 
-	return &stateproof.Message{Payload: tree.Root().ToSlice()}, nil
+	return stateproof.Message{Payload: tree.Root().ToSlice()}, nil
 }
 
 func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
