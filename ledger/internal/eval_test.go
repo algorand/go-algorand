@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -206,7 +207,7 @@ func TestCowCompactCert(t *testing.T) {
 	var cert compactcert.Cert
 	var atRound basics.Round
 	var validate bool
-	msg := compactcert.StateProofMessage{}
+	msg := stateproof.Message{}
 
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)

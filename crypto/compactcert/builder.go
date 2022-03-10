@@ -18,7 +18,6 @@ package compactcert
 
 import (
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"

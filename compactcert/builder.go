@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// builderForRound not threadsafe, should be called with caution
 func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	hdr, err := ccw.ledger.BlockHdr(rnd)
 	if err != nil {
@@ -61,6 +62,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	if err != nil {
 		return builder{}, err
 	}
+	ccw.Message = *msg
 
 	p, err := ledger.CompactCertParams(*msg, votersHdr, hdr)
 	if err != nil {
@@ -358,7 +360,7 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.CertIntervalLatestRound = rnd
 		stxn.Txn.Cert = *cert
 
-		stxn.Txn.CertMsg = b.Params.StateProofMessage
+		stxn.Txn.CertMsg = ccw.Message
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)

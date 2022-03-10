@@ -23,12 +23,12 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -110,7 +110,7 @@ restart:
 // GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
 // This is the message the Compact Certificate will attest to.
-func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (*compactcert.StateProofMessage, error) {
+func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (*stateproof.Message, error) {
 	if compactCertRound < basics.Round(compactCertInterval) {
 		return nil, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
 	}
@@ -132,7 +132,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 		return nil, err
 	}
 
-	return &compactcert.StateProofMessage{Payload: tree.Root().ToSlice()}, nil
+	return &stateproof.Message{Payload: tree.Root().ToSlice()}, nil
 }
 
 func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
@@ -179,13 +179,13 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
-		commitment, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.CompactCertRounds)
+		stateproofMessage, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.CompactCertRounds)
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 			continue
 		}
-		tmp := commitment.Hash()
-		sig, err := key.StateProofSecrets.SignBytes(tmp[:])
+		hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
 			continue

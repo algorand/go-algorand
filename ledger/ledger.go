@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/apply"
@@ -763,7 +764,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 // CompactCertParams computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-func CompactCertParams(msg compactcert.StateProofMessage, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
 	return internal.CompactCertParams(msg, votersHdr, hdr)
 }
 

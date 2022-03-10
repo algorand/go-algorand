@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
@@ -103,7 +104,7 @@ type Txn struct {
 	CertIntervalLatestRound basics.Round
 	CertType                protocol.CompactCertType
 	Cert                    compactcert.Cert
-	CertMsg                 compactcert.StateProofMessage
+	CertMsg                 stateproof.Message
 }
 
 // Noted returns a new Txn with the given note field.
