@@ -68,6 +68,12 @@ type Txlease struct {
 	Lease  [32]byte
 }
 
+// IncludedTransactions defines the transactions included in a block, their index and last valid round.
+type IncludedTransactions struct {
+	LastValid        basics.Round
+	TranscationIndex uint64 // the index of the transaction in the block
+}
+
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
@@ -77,7 +83,7 @@ type StateDelta struct {
 	Accts AccountDeltas
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
-	Txids map[transactions.Txid]basics.Round
+	Txids map[transactions.Txid]IncludedTransactions
 
 	// new txleases for the txtail mapped to expiration
 	Txleases map[Txlease]basics.Round
@@ -176,7 +182,7 @@ type AccountDeltas struct {
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts:    MakeAccountDeltas(hint),
-		Txids:    make(map[transactions.Txid]basics.Round, hint),
+		Txids:    make(map[transactions.Txid]IncludedTransactions, hint),
 		Txleases: make(map[Txlease]basics.Round, hint),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
 		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),

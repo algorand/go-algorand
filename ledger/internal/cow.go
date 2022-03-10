@@ -232,7 +232,7 @@ func (cb *roundCowState) incTxnCount() {
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
-	cb.mods.Txids[txid] = txn.LastValid
+	cb.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: txn.LastValid, TranscationIndex: cb.txnCount}
 	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {
 		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
@@ -262,8 +262,8 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 func (cb *roundCowState) commitToParent() {
 	cb.commitParent.mods.Accts.MergeAccounts(cb.mods.Accts)
 
-	for txid, lv := range cb.mods.Txids {
-		cb.commitParent.mods.Txids[txid] = lv
+	for txid, incTxn := range cb.mods.Txids {
+		cb.commitParent.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: incTxn.LastValid, TranscationIndex: cb.commitParent.txnCount + incTxn.TranscationIndex}
 	}
 	cb.commitParent.txnCount += cb.txnCount
 

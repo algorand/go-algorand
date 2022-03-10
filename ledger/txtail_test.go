@@ -58,8 +58,8 @@ func TestTxTailCheckdup(t *testing.T) {
 			},
 		}
 
-		txids := make(map[transactions.Txid]basics.Round, 1)
-		txids[transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))] = rnd + txvalidity
+		txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, 1)
+		txids[transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, TranscationIndex: 0}
 		txleases := make(map[ledgercore.Txlease]basics.Round, 1)
 		txleases[ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 

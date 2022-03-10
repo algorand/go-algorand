@@ -22,17 +22,49 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
+
+type txTailRoundLease struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Sender basics.Address `codec:"s"`
+	Lease  [32]byte       `codec:"l,allocbound=-"`
+	TxnIdx uint64         `code:"i"` //!-- index of the entry in TxnIDs/LastValid
+}
+
+// TxTailRound contains the information about a single round of transactions.
+// The TxnIDs and LastValid would both be of the same length, and are stored
+// in that way for efficient message=pack encoding. The Leases would point to the
+// respective transaction index. Note that this isn’t optimized for storing
+// leases, as leases are extremely rare.
+type txTailRound struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	TxnIDs    []transactions.Txid `codec:"t,allocbound=-"`
+	LastValid []basics.Round      `codec:"v,allocbound=-"`
+	Leases    []txTailRoundLease  `codec:"l,allocbound=-"`
+	TimeStamp int64               `codec:"a"` //!-- timestamp from block header
+}
+
+func (t *txTailRound) encode() ([]byte, crypto.Digest) {
+	tailData := protocol.Encode(t)
+	hash := crypto.Hash(tailData)
+	return tailData, hash
+}
 
 const initialLastValidArrayLen = 256
 
 type roundTxMembers struct {
-	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
-	proto    config.ConsensusParams
+	txleases       map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
+	proto          config.ConsensusParams
+	serializedData []byte
+	tailHash       crypto.Digest
 }
 
 type txTail struct {
@@ -133,13 +165,30 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		return
 	}
 
-	t.recent[rnd] = roundTxMembers{
-		txleases: delta.Txleases,
-		proto:    config.Consensus[blk.CurrentProtocol],
-	}
+	var tail txTailRound
+	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
+	tail.LastValid = make([]basics.Round, len(delta.Txids))
+	tail.TimeStamp = blk.TimeStamp
 
-	for txid, lv := range delta.Txids {
-		t.putLV(lv, txid)
+	for txid, txnInc := range delta.Txids {
+		t.putLV(txnInc.LastValid, txid)
+		tail.TxnIDs[txnInc.TranscationIndex] = txid
+		tail.LastValid[txnInc.TranscationIndex] = txnInc.LastValid
+		if blk.Payset[txnInc.TranscationIndex].Txn.Lease != [32]byte{} {
+			tail.Leases = append(tail.Leases, txTailRoundLease{
+				Sender: blk.Payset[txnInc.TranscationIndex].Txn.Sender,
+				Lease:  blk.Payset[txnInc.TranscationIndex].Txn.Lease,
+				TxnIdx: txnInc.TranscationIndex,
+			})
+		}
+	}
+	encodedTail, tailHash := tail.encode()
+
+	t.recent[rnd] = roundTxMembers{
+		txleases:       delta.Txleases,
+		proto:          config.Consensus[blk.CurrentProtocol],
+		serializedData: encodedTail,
+		tailHash:       tailHash,
 	}
 }
 
@@ -222,4 +271,25 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
 	}
 	t.lastValid[lastValid][id] = struct{}{}
+}
+
+func (t *txTail) recentTailHash(lastRound basics.Round) (crypto.Digest, error) {
+	last, has := t.recent[lastRound]
+	if !has {
+		return crypto.Digest{}, fmt.Errorf("recentTailHash doesn't have head round %d", lastRound)
+	}
+	// preapare a buffer to hash.
+	buffer := make([]byte, (last.proto.MaxTxnLife+1)*crypto.DigestSize)
+	bufIdx := 0
+	for i := lastRound - basics.Round(last.proto.MaxTxnLife); i < lastRound; i++ {
+		rnd, has := t.recent[i]
+		if !has {
+			return crypto.Digest{}, fmt.Errorf("recentTailHash doesn't have round %d", lastRound)
+		}
+		copy(buffer[bufIdx:], rnd.tailHash[:])
+		bufIdx += crypto.DigestSize
+	}
+	copy(buffer[bufIdx:], last.tailHash[:])
+
+	return crypto.Hash(buffer), nil
 }
