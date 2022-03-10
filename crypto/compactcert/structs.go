@@ -27,8 +27,8 @@ import (
 // StateProofMessageHash represents any message that we want to have a certification over.
 type StateProofMessageHash [128]byte
 
-// MessageHashType is the type of hash used to generate StateProofMessageHash
-const MessageHashType = crypto.Sha256
+// StateProofMessageHashType is the type of hash used to generate StateProofMessageHash
+const StateProofMessageHashType = crypto.Sha256
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
@@ -96,6 +96,6 @@ func (m StateProofMessage) ToBeHashed() (protocol.HashID, []byte) {
 //Hash returns a hashed representation fitting the compact certificate messages.
 func (m StateProofMessage) Hash() StateProofMessageHash {
 	result := StateProofMessageHash{}
-	copy(result[:], crypto.HashFactory{HashType: MessageHashType}.NewHash().Sum(crypto.HashRep(m)))
+	copy(result[:], crypto.HashFactory{HashType: StateProofMessageHashType}.NewHash().Sum(crypto.HashRep(m)))
 	return result
 }
