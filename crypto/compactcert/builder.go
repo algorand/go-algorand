@@ -52,7 +52,7 @@ type Builder struct {
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
 	cert *Cert
-	Msg  HashedMessage
+	Msg  StateProofMessageHash
 }
 
 // MkBuilder constructs an empty builder (with no signatures).  The message

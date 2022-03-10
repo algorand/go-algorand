@@ -25,14 +25,6 @@ import (
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
 //
-// HashedMessage
-//       |-----> (*) MarshalMsg
-//       |-----> (*) CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> (*) Msgsize
-//       |-----> (*) MsgIsZero
-//
 // Params
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
@@ -56,6 +48,14 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//
+// StateProofMessageHash
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
 //
 // Verifier
 //     |-----> (*) MarshalMsg
@@ -88,7 +88,7 @@ func (z *Builder) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0004Len := uint32(5)
 	var zb0004Mask uint16 /* 12 bits */
-	if (*z).Msg == (HashedMessage{}) {
+	if (*z).Msg == (StateProofMessageHash{}) {
 		zb0004Len--
 		zb0004Mask |= 0x1
 	}
@@ -277,7 +277,7 @@ func (z *Builder) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Builder) MsgIsZero() bool {
-	return (len((*z).Params.StateProofMessage.Payload) == 0) && ((*z).Params.ProvenWeight == 0) && ((*z).Params.SigRound.MsgIsZero()) && ((*z).Params.SecKQ == 0) && ((*z).Msg == (HashedMessage{}))
+	return (len((*z).Params.StateProofMessage.Payload) == 0) && ((*z).Params.ProvenWeight == 0) && ((*z).Params.SigRound.MsgIsZero()) && ((*z).Params.SecKQ == 0) && ((*z).Msg == (StateProofMessageHash{}))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -578,45 +578,6 @@ func (z *Cert) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Cert) MsgIsZero() bool {
 	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && ((*z).SigProofs.MsgIsZero()) && ((*z).PartProofs.MsgIsZero()) && (len((*z).Reveals) == 0) && ((*z).MerkleSignatureVersion == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *HashedMessage) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *HashedMessage) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*HashedMessage)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashedMessage) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (_ *HashedMessage) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*HashedMessage)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *HashedMessage) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (128 * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *HashedMessage) MsgIsZero() bool {
-	return (*z) == (HashedMessage{})
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1180,6 +1141,45 @@ func (z *StateProofMessage) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *StateProofMessageHash) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *StateProofMessageHash) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofMessageHash)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *StateProofMessageHash) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (_ *StateProofMessageHash) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofMessageHash)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *StateProofMessageHash) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (128 * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *StateProofMessageHash) MsgIsZero() bool {
+	return (*z) == (StateProofMessageHash{})
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -1364,7 +1364,7 @@ func (z *coinChoice) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
-	if (*z).Msg == (HashedMessage{}) {
+	if (*z).Msg == (StateProofMessageHash{}) {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
@@ -1572,7 +1572,7 @@ func (z *coinChoice) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *coinChoice) MsgIsZero() bool {
-	return ((*z).J == 0) && ((*z).SignedWeight == 0) && ((*z).ProvenWeight == 0) && ((*z).Sigcom.MsgIsZero()) && ((*z).Partcom.MsgIsZero()) && ((*z).Msg == (HashedMessage{}))
+	return ((*z).J == 0) && ((*z).SignedWeight == 0) && ((*z).ProvenWeight == 0) && ((*z).Sigcom.MsgIsZero()) && ((*z).Partcom.MsgIsZero()) && ((*z).Msg == (StateProofMessageHash{}))
 }
 
 // MarshalMsg implements msgp.Marshaler

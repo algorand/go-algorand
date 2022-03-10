@@ -24,10 +24,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// HashedMessage represents any message that we want to have a certification over.
-type HashedMessage [128]byte
+// StateProofMessageHash represents any message that we want to have a certification over.
+type StateProofMessageHash [128]byte
 
-// MessageHashType is the type of hash used to generate HashedMessage
+// MessageHashType is the type of hash used to generate StateProofMessageHash
 const MessageHashType = crypto.Sha256
 
 // Params defines common parameters for the verifier and builder.
@@ -94,8 +94,8 @@ func (m StateProofMessage) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 //Hash returns a hashed representation fitting the compact certificate messages.
-func (m StateProofMessage) Hash() HashedMessage {
-	result := HashedMessage{}
+func (m StateProofMessage) Hash() StateProofMessageHash {
+	result := StateProofMessageHash{}
 	copy(result[:], crypto.HashFactory{HashType: MessageHashType}.NewHash().Sum(crypto.HashRep(m)))
 	return result
 }
