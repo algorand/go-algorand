@@ -21,7 +21,6 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 // StateProofMessageHash represents any message that we want to have a certification over.
@@ -32,7 +31,7 @@ const StateProofMessageHashType = crypto.Sha256
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	StateProofMessage
+	StateProofMessageHash
 
 	ProvenWeight uint64       // Weight threshold proven by the certificate
 	SigRound     basics.Round // The round for which the ephemeral key is committed to
@@ -81,21 +80,3 @@ type Cert struct {
 // SortUint64 implements sorting by uint64 keys for
 // canonical encoding of maps in msgpack format.
 type SortUint64 = basics.SortUint64
-
-// StateProofMessage represents the message to be certified.
-type StateProofMessage struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	Payload []byte   `codec:"p"`
-}
-
-// ToBeHashed returns the bytes of the message.
-func (m StateProofMessage) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertMessage, m.Payload
-}
-
-//Hash returns a hashed representation fitting the compact certificate messages.
-func (m StateProofMessage) Hash() StateProofMessageHash {
-	result := StateProofMessageHash{}
-	copy(result[:], crypto.HashFactory{HashType: StateProofMessageHashType}.NewHash().Sum(crypto.HashRep(m)))
-	return result
-}

@@ -52,7 +52,6 @@ type Builder struct {
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
 	cert *Cert
-	Msg  StateProofMessageHash
 }
 
 // MkBuilder constructs an empty builder (with no signatures).  The message
@@ -64,7 +63,6 @@ func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tr
 
 	b := &Builder{
 		Params: param,
-		Msg:    param.StateProofMessage.Hash(),
 
 		sigs:          make([]sigslot, npart),
 		sigsHasValidL: false,
@@ -102,8 +100,8 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 			return err
 		}
 
-		cpy := make([]byte, len(b.Msg))
-		copy(cpy, b.Msg[:]) // TODO: onmce cfalcon is fixed can remove this copy.
+		cpy := make([]byte, len(b.Params.StateProofMessageHash))
+		copy(cpy, b.Params.StateProofMessageHash[:]) // TODO: onmce cfalcon is fixed can remove this copy.
 		if err := p.PK.VerifyBytes(uint64(b.SigRound), cpy, sig); err != nil {
 			return err
 		}
@@ -211,7 +209,7 @@ func (b *Builder) Build() (*Cert, error) {
 			ProvenWeight: b.ProvenWeight,
 			Sigcom:       c.SigCommit,
 			Partcom:      b.parttree.Root(),
-			Msg:          b.Msg,
+			Msg:          b.Params.StateProofMessageHash,
 		}
 
 		coin := hashCoin(choice)
