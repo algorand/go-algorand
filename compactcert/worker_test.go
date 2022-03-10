@@ -295,10 +295,10 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Message:      tx.Txn.CertMsg,
-				ProvenWeight: provenWeight,
-				SigRound:     tx.Txn.CertIntervalLatestRound,
-				SecKQ:        proto.CompactCertSecKQ,
+				StateProofMessage: tx.Txn.CertMsg,
+				ProvenWeight:      provenWeight,
+				SigRound:          tx.Txn.CertIntervalLatestRound,
+				SecKQ:             proto.CompactCertSecKQ,
 			}
 
 			voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
@@ -359,10 +359,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.False(t, overflowed)
 
 	ccparams := compactcert.Params{
-		Message:      *msg,
-		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(tx.Txn.CertIntervalLatestRound),
-		SecKQ:        proto.CompactCertSecKQ,
+		StateProofMessage: *msg,
+		ProvenWeight:      provenWeight,
+		SigRound:          basics.Round(tx.Txn.CertIntervalLatestRound),
+		SecKQ:             proto.CompactCertSecKQ,
 	}
 
 	voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))

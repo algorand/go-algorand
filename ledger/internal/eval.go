@@ -556,7 +556,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert cc.Cert, certMsg cc.Message, atRound basics.Round, validate bool) error {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert cc.Cert, certMsg cc.StateProofMessage, atRound basics.Round, validate bool) error {
 	if certType != protocol.CompactCertBasic {
 		return fmt.Errorf("compact cert type %d not supported", certType)
 	}

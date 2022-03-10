@@ -110,7 +110,7 @@ restart:
 // GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
 // This is the message the Compact Certificate will attest to.
-func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (*compactcert.Message, error) {
+func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (*compactcert.StateProofMessage, error) {
 	if compactCertRound < basics.Round(compactCertInterval) {
 		return nil, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
 	}
@@ -132,7 +132,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 		return nil, err
 	}
 
-	return &compactcert.Message{Payload: tree.Root().ToSlice()}, nil
+	return &compactcert.StateProofMessage{Payload: tree.Root().ToSlice()}, nil
 }
 
 func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {

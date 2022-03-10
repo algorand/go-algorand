@@ -38,7 +38,7 @@ func TestValidateCompactCert(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var nextCertRnd basics.Round
 	var atRound basics.Round
-	msg := compactcert.Message{Payload: []byte("this is an arbitrary message")}
+	msg := compactcert.StateProofMessage{Payload: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
 	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
@@ -152,7 +152,7 @@ func TestCompactCertParams(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var hdr bookkeeping.BlockHeader
 
-	msg := compactcert.Message{Payload: []byte("testest")}
+	msg := compactcert.StateProofMessage{Payload: []byte("testest")}
 
 	res, err := CompactCertParams(msg, votersHdr, hdr)
 	require.Error(t, err) // not enabled

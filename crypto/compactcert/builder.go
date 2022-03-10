@@ -64,7 +64,7 @@ func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tr
 
 	b := &Builder{
 		Params: param,
-		Msg:    param.Message.Hash(),
+		Msg:    param.StateProofMessage.Hash(),
 
 		sigs:          make([]sigslot, npart),
 		sigsHasValidL: false,

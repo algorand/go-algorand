@@ -89,7 +89,7 @@ func TestBuildVerify(t *testing.T) {
 	npart := npartHi + npartLo
 
 	param := Params{
-		Message: Message{Payload: testMessage("hello world")},
+		StateProofMessage: StateProofMessage{Payload: testMessage("hello world")},
 
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     currentRound,
@@ -104,7 +104,7 @@ func TestBuildVerify(t *testing.T) {
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
 	signerInRound := key.GetSigner(uint64(currentRound))
-	tmp := param.Message.Hash()
+	tmp := param.StateProofMessage.Hash()
 	sig, err := signerInRound.SignBytes(tmp[:])
 	require.NoError(t, err, "failed to create keys")
 
@@ -232,7 +232,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	numPart := 4
 
 	param := Params{
-		Message: Message{Payload: testMessage("test!")},
+		StateProofMessage: StateProofMessage{Payload: testMessage("test!")},
 
 		ProvenWeight: uint64(totalWeight / (2 * numPart)),
 		SigRound:     currentRound,
@@ -251,7 +251,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		tmp := param.Message.Hash()
+		tmp := param.StateProofMessage.Hash()
 		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(tmp[:])
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
@@ -430,7 +430,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	a := require.New(b)
 
 	param := Params{
-		Message: Message{Payload: testMessage("hello world")},
+		StateProofMessage: StateProofMessage{Payload: testMessage("hello world")},
 
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     compactCertRoundsForTests,
@@ -448,7 +448,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		}
 
 		signerInRound := signer.GetSigner(uint64(currentRound))
-		tmp := param.Message.Hash()
+		tmp := param.StateProofMessage.Hash()
 		sig, err := signerInRound.SignBytes(tmp[:])
 		require.NoError(b, err, "failed to create keys")
 
@@ -526,7 +526,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	npartLo := 9
 
 	param := Params{
-		Message: Message{Payload: testMessage("hello world")},
+		StateProofMessage: StateProofMessage{Payload: testMessage("hello world")},
 
 		ProvenWeight: uint64(totalWeight / 2),
 		SigRound:     currentRound,

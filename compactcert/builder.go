@@ -358,7 +358,7 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.CertIntervalLatestRound = rnd
 		stxn.Txn.Cert = *cert
 
-		stxn.Txn.CertMsg = b.Params.Message
+		stxn.Txn.CertMsg = b.Params.StateProofMessage
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)

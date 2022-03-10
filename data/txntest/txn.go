@@ -103,7 +103,7 @@ type Txn struct {
 	CertIntervalLatestRound basics.Round
 	CertType                protocol.CompactCertType
 	Cert                    compactcert.Cert
-	CertMsg                 compactcert.Message
+	CertMsg                 compactcert.StateProofMessage
 }
 
 // Noted returns a new Txn with the given note field.
