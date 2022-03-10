@@ -48,7 +48,7 @@ func TestCompactCerts(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-compactcert")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.CompactCertRounds = 8
+	consensusParams.CompactCertRounds = 10
 	consensusParams.CompactCertTopVoters = 1024
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100

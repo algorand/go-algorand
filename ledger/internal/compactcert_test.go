@@ -123,7 +123,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	require.Equal(t, uint64(100), out)
 
 	// this should exercise the second return case
-	firstValid = basics.Round(5)
+	firstValid = basics.Round(3)
 	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
@@ -135,7 +135,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 
 	proto.CompactCertRounds = 10000
 	votersHdr.Round = 10000
-	firstValid = basics.Round(29000)
+	firstValid = basics.Round(29000 - 2)
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	cc.CompactCertVotersTotal.Raw = 0x7fffffffffffffff
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc

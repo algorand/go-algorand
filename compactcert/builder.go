@@ -352,7 +352,7 @@ func (ccw *Worker) tryBuilding() {
 			continue
 		}
 
-		fmt.Printf("Im ready for tx on round : %d the firs valid is %d", rnd, firstValid)
+		fmt.Printf("Im ready for tx on round : %d the firs valid is %d and signedW %d and accp %d", rnd, firstValid, b.SignedWeight(), acceptableWeight)
 		var stxn transactions.SignedTxn
 		stxn.Txn.Type = protocol.CompactCertTx
 		stxn.Txn.Sender = transactions.CompactCertSender

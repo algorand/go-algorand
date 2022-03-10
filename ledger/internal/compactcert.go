@@ -63,7 +63,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	// The second +1 comes from the fact that, if we are checking this
 	// acceptable weight to decide whether to allow this transaction in
 	// a block, the transaction was sent out one round ago.
-	offset = offset.SubSaturate(basics.Round(proto.CompactCertRounds/2) + 1)
+	offset = offset.SubSaturate(basics.Round(proto.CompactCertRounds / 2))
 	if offset == 0 {
 		fmt.Printf("HERE! we don't pass it")
 		return total.ToUint64()
@@ -182,6 +182,7 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
 			atRound, cert.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
+	fmt.Printf("the accpect signedW on the tx is !  singed is %d and accpt %d", cert.SignedWeight, acceptableWeight)
 
 	ccParams, err := CompactCertParams(msg, votersHdr, certHdr)
 	if err != nil {
