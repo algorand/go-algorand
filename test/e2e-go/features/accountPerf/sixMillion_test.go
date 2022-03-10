@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -124,12 +123,10 @@ func getAccountInformation(
 		}
 		if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
 			log.Errorf("Missing appsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedApps), expectedCountApps)
-			log.Errorf("%s", spew.Sdump(info))
 			continue
 		}
 		if expectedCountAssets > 0 && int(expectedCountAssets) != len(*info.CreatedAssets) {
 			log.Errorf("Missing assetsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedAssets), expectedCountAssets)
-			log.Errorf("%s", spew.Sdump(info))
 			continue
 		}
 	}
