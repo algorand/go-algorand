@@ -1063,7 +1063,7 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
 			if err == nil {
 				if verbose {
-					fmt.Printf(" waited less than %d sec, done.", (x+1)*waitBlock)
+					fmt.Printf(" waited less than %d sec, done.\n", (x+1)*waitBlock)
 				}
 				status, err := fixture.AlgodClient.Status()
 				if err != nil {
@@ -1077,7 +1077,7 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 			}
 		}
 		log.Debugf("Giving up!")
-		return 0, 0, fmt.Errorf("Waited for round %d for %d seconds. Giving up!", firstValid+counter, 1000*waitBlock)
+		return 0, 0, fmt.Errorf("Waited for round %d for %d seconds. Giving up!\n", firstValid+counter, 1000*waitBlock)
 	}
 	return counter, firstValid, nil
 }
