@@ -19,11 +19,11 @@ package compactcert
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/account"
