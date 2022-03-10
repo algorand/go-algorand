@@ -63,8 +63,11 @@ const channelDepth = 100
 const targetCreateableCount = 6000000
 const targetAccountCount = 6000
 
-// report additional information
-const verbose = false
+// peform extra checks
+const extraChecks = false
+
+// print wait times
+const verbose = true
 
 // transaction group size obtained from consensus parameter
 var maxTxGroupSize int
@@ -104,7 +107,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 		for x := 0; x < 50; x++ { // retry only 50 times
 			err = c.BroadcastTransactionGroup(stxns)
 			if err == nil {
-				if verbose {
+				if extraChecks {
 					if stxns[0].Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC &&
 						stxns[0].Txn.ApplicationCallTxnFields.ApplicationID == 0 {
 						sender := stxns[0].Txn.Header.Sender
@@ -1064,18 +1067,24 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 	waitBlock := 5
 	lastRound := firstValid + counter - 1
 	if force || counter == tLife { // TODO: remove tLife-800 after resolving "Missing appsPerAccount" issue
-		log.Debugf("Waiting for round %d...", int(lastRound))
+		if verbose {
+			fmt.Printf("Waiting for round %d...", int(lastRound))
+		}
 		for x := 0; x < 1000; x++ {
 			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
 			if err == nil {
-				log.Debugf(" waited less than %d sec, done.", (x+1)*waitBlock)
+				if verbose {
+					fmt.Printf(" waited less than %d sec, done.", (x+1)*waitBlock)
+				}
 				status, err := fixture.AlgodClient.Status()
 				if err != nil {
 					return 0, lastRound + 1, nil
 				}
 				return 0, status.LastRound + 1, nil
 			} else {
-				log.Debugf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
+				if verbose {
+					fmt.Printf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
+				}
 			}
 		}
 		log.Debugf("Giving up!")
