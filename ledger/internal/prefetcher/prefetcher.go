@@ -105,8 +105,10 @@ type groupTask struct {
 	// in order to ensure support on 32-bit platforms, this variable need to be 64-bit aligned.
 	incompleteCount int64
 	// the group task index - aligns with the index of the transaction group in the
-	// provided groups slice.
-	groupTaskIndex int
+	// provided groups slice. The usage of int64 here is to made sure the size of the
+	// structure is 64-bit aligned. If this not the case, then it would fail the atomic
+	// operations on the incompleteCount on 32-bit systems.
+	groupTaskIndex int64
 	// balances contains the loaded balances each transaction group have
 	balances []LoadedAccountDataEntry
 	// balancesCount is the number of balances that nees to be loaded per transaction group
@@ -142,7 +144,7 @@ type preloaderTaskQueue struct {
 }
 
 type groupTaskDone struct {
-	groupIdx int
+	groupIdx int64
 	err      error
 }
 
@@ -375,7 +377,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
 		gr := &groupsReady[grpIdx]
-		gr.groupTaskIndex = grpIdx
+		gr.groupTaskIndex = int64(grpIdx)
 		gr.incompleteCount = int64(gr.balancesCount + gr.resourcesCount)
 		gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
 		if gr.resourcesCount > 0 {
@@ -396,8 +398,8 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	}
 
 	// iterate on the transaction groups tasks. This array retains the original order.
-	completed := make(map[int]bool)
-	for i := 0; i < len(p.groups); {
+	completed := make(map[int64]bool)
+	for i := int64(0); i < int64(len(p.groups)); {
 	wait:
 		incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount)
 		if incompleteCount > 0 || (incompleteCount != dependencyFreeGroup && !completed[i]) {
@@ -423,7 +425,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			}
 		}
 		next := i
-		for ; next < len(p.groups); next++ {
+		for ; next < int64(len(p.groups)); next++ {
 			if !completed[next] {
 				if next > i {
 					i = next
