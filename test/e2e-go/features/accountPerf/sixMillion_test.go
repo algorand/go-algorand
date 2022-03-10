@@ -147,18 +147,18 @@ func getAccountInformation(
 
 	for x := 0; x < 5; x++ { // retry only 5 times
 		info, err = client.AccountInformationV2(address, true)
-		if err == nil {
-			if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
-				log.Errorf("Missing appsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedApps), expectedCountApps)
-				log.Errorf("%s", spew.Sdump(info))
-				continue
-			}
-			if expectedCountAssets > 0 && int(expectedCountAssets) != len(*info.CreatedAssets) {
-				log.Errorf("Missing assetsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedAssets), expectedCountAssets)
-				log.Errorf("%s", spew.Sdump(info))
-				continue
-			}
-			break
+		if err != nil {
+			return
+		}
+		if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
+			log.Errorf("Missing appsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedApps), expectedCountApps)
+			log.Errorf("%s", spew.Sdump(info))
+			continue
+		}
+		if expectedCountAssets > 0 && int(expectedCountAssets) != len(*info.CreatedAssets) {
+			log.Errorf("Missing assetsPerAccount: %s got: %d expected: %d", address, len(*info.CreatedAssets), expectedCountAssets)
+			log.Errorf("%s", spew.Sdump(info))
+			continue
 		}
 	}
 	return
