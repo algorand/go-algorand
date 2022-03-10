@@ -58,7 +58,7 @@ const txnEffectsVersion = 6
 // the Foreign arrays.
 const createdResourcesVersion = 6
 
-// experimental:
+// experimental-
 const fidoVersion = 7 // base64, json, secp256r1
 
 // opDetails records details such as non-standard costs, immediate
