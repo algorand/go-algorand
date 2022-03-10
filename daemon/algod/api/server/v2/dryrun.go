@@ -141,9 +141,8 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 
 	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:maxActive+1]
 	for i := range *ddr.history[lasti].Scratch {
-		// TODO: Still not sure why we need this?
 		if !ddr.scratchActive[i] {
-			(*ddr.history[lasti].Scratch)[i] = generated.TealValue{}
+			(*ddr.history[lasti].Scratch)[i].Type = 0
 		}
 	}
 }
