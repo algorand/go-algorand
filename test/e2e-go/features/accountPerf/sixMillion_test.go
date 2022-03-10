@@ -54,7 +54,7 @@ var numberOfGoRoutines = runtime.NumCPU() * 2
 const printFrequency = 20
 
 // send transactions in groups or one by one
-const groupTransactions = false
+const groupTransactions = true
 
 // number of elements queued in channels
 const channelDepth = 100
