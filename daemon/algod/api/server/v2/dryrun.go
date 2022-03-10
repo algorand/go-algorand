@@ -119,7 +119,6 @@ type dryrunDebugReceiver struct {
 }
 
 func (ddr *dryrunDebugReceiver) updateScratch() {
-	any := false
 	maxActive := -1
 	lasti := len(ddr.history) - 1
 
@@ -127,38 +126,24 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 		return
 	}
 
+	ddr.scratchActive = make([]bool, 256)
 	for i, sv := range *ddr.history[lasti].Scratch {
 		if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
-			any = true
+			ddr.scratchActive[i] = true
 			maxActive = i
 		}
 	}
 
-	if any {
-		ddr.scratchActive = make([]bool, maxActive+1, 256)
-		for i := 0; i <= maxActive; i++ {
-			sv := (*ddr.history[lasti].Scratch)[i]
-			active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
-			ddr.scratchActive[i] = active
-		}
-	} else {
-		if ddr.scratchActive != nil {
-			*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:len(ddr.scratchActive)]
-		} else {
-			ddr.history[lasti].Scratch = nil
-			return
-		}
+	if maxActive == -1 {
+		ddr.history[lasti].Scratch = nil
+		return
 	}
 
-	scratchlen := maxActive + 1
-	if len(ddr.scratchActive) > scratchlen {
-		scratchlen = len(ddr.scratchActive)
-	}
-
-	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:scratchlen]
+	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:maxActive+1]
 	for i := range *ddr.history[lasti].Scratch {
+		// TODO: Still not sure why we need this?
 		if !ddr.scratchActive[i] {
-			(*ddr.history[lasti].Scratch)[i].Type = 0
+			(*ddr.history[lasti].Scratch)[i] = generated.TealValue{}
 		}
 	}
 }
