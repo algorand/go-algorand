@@ -64,9 +64,6 @@ const sixThousand = 6000
 // report additional information
 const verbose = false
 
-// used for failing the test in case a bad account information is obtained (to preserve the node folder)
-var failTest bool
-
 // transaction group size obtained from consensus parameter
 var maxTxGroupSize int
 
@@ -166,13 +163,11 @@ func getAccountInformation(
 			if expectedCountApps > 0 && int(expectedCountApps) != len(*info.CreatedApps) {
 				fmt.Printf("Missing appsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedApps), expectedCountApps)
 				fmt.Printf("%s\n\n", spew.Sdump(info))
-				failTest = true
 				continue
 			}
 			if expectedCountAssets > 0 && int(expectedCountAssets) != len(*info.CreatedAssets) {
 				fmt.Printf("Missing assetsPerAccount: %s got: %d expected: %d\n", address, len(*info.CreatedAssets), expectedCountAssets)
 				fmt.Printf("%s\n\n", spew.Sdump(info))
-				failTest = true
 				continue
 			}
 			break
@@ -292,8 +287,7 @@ func test5MAssets(t *testing.T, scenario int) {
 		hkWg.Wait()
 		fixture.Shutdown()
 	}()
-	defer require.Equal(t, failTest, false)
-	failTest = false
+	defer require.Equal(t, true, false, "force fail preserve node folder")
 	client := fixture.LibGoalClient
 
 	accountList, err := fixture.GetWalletsSortedByBalance()
@@ -1023,11 +1017,12 @@ func scenarioD(
 		go func() {
 			for i := range checkAppChan {
 				var app generated.Application
+				var err1 error
 				cont := false
 				for {
-					app, err = client.ApplicationInformation(i)
-					if err != nil {
-						if strings.Contains(err.Error(), "application does not exist") {
+					app, err1 = client.ApplicationInformation(i)
+					if err1 != nil {
+						if strings.Contains(err1.Error(), "application does not exist") {
 							cont = true
 							break
 						}
