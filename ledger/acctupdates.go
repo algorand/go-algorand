@@ -984,9 +984,6 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			ad = macct.data
 			foundAccount = true
 		} else if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
-			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
-			// would ensure that we promote this field.
-			au.baseAccounts.writePending(macct)
 			ad = macct.accountData.GetLedgerCoreAccountData()
 			foundAccount = true
 		}
@@ -1009,9 +1006,6 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		// check the baseResources -
 		if prds := au.baseResources.readAll(addr); len(prds) > 0 {
 			for _, prd := range prds {
-				// we don't technically need this, since it's already in the baseResources, however, writing this over
-				// would ensure that we promote this field.
-				au.baseResources.writePending(prd, addr)
 				if prd.addrid != 0 {
 					if err := addResource(prd.aidx, rnd, prd.AccountResource()); err != nil {
 						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
@@ -1039,7 +1033,6 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			if persistedData.round == currentDbRound {
 				if persistedData.rowid != 0 {
 					// if we read actual data return it
-					au.baseAccounts.writePending(persistedData)
 					ad = persistedData.accountData.GetLedgerCoreAccountData()
 				} else {
 					ad = ledgercore.AccountData{}
@@ -1067,7 +1060,6 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		}
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
-				au.baseResources.writePending(pd, addr)
 				if err := addResource(pd.aidx, currentDbRound, pd.AccountResource()); err != nil {
 					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 				}
