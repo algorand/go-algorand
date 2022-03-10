@@ -915,36 +915,6 @@
         ],
         "type": "object"
       },
-      "AccountsErrorResponse": {
-        "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
-        "properties": {
-          "data": {
-            "type": "string"
-          },
-          "max-results": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "total-apps-opted-in": {
-            "type": "integer"
-          },
-          "total-assets-opted-in": {
-            "type": "integer"
-          },
-          "total-created-apps": {
-            "type": "integer"
-          },
-          "total-created-assets": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "type": "object"
-      },
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
@@ -1391,7 +1361,8 @@
         "description": "An error response with optional data field.",
         "properties": {
           "data": {
-            "type": "string"
+            "properties": {},
+            "type": "object"
           },
           "message": {
             "type": "string"
@@ -1819,12 +1790,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountsErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountsErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
