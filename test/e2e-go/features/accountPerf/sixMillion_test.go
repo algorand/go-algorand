@@ -58,8 +58,8 @@ const groupTransactions = true
 const channelDepth = 100
 
 // the test in intended for 6M apps/assets and 6K accounts. These variable values can be changed to modify this.
-const sixMillion = 100
-const sixThousand = 10
+const sixMillion = 6000000
+const sixThousand = 6000
 
 // report additional information
 const verbose = false
