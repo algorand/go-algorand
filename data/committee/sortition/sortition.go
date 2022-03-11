@@ -18,6 +18,7 @@ package sortition
 
 // #cgo CFLAGS: -O3
 // #cgo CXXFLAGS: -std=c++11
+// #cgo darwin,arm64 CXXFLAGS: -I/opt/homebrew/include
 // #include <stdint.h>
 // #include <stdlib.h>
 // #include "sortition.h"

@@ -1077,7 +1077,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: []byte &rarr; ..., []byte
 - SHA3_256 hash of value A, yields [32]byte
 - **Cost**: 130
-   - LogicSigVersion >= 6
+- Availability: v6
 
 ## b+
 
