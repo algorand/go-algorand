@@ -79,13 +79,13 @@ type txnKey struct {
 }
 
 // started as a goroutine which will listen to signed transactions and broadcast them
-func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
+func broadcastTransactions(queueWg *sync.WaitGroup, fixture *fixtures.RestClientFixture, sigTxnChan <-chan *transactions.SignedTxn, errChan chan<- error) {
 	defer queueWg.Done()
 	for stxn := range sigTxnChan {
 		if stxn == nil {
 			break
 		}
-		_, err := c.BroadcastTransaction(*stxn)
+		_, err := fixture.AlgodClient.SendRawTransaction(*stxn)
 		if err != nil {
 			handleError(err, "Error broadcastTransactions", errChan)
 		}
@@ -93,14 +93,15 @@ func broadcastTransactions(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnChan
 }
 
 // started as a goroutine which will listen to signed transaction groups and broadcast them
-func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTxnGrpChan <-chan []transactions.SignedTxn, errChan chan<- error) {
+func broadcastTransactionGroups(queueWg *sync.WaitGroup, fixture *fixtures.RestClientFixture, sigTxnGrpChan <-chan []transactions.SignedTxn, errChan chan<- error) {
 	defer queueWg.Done()
 	for stxns := range sigTxnGrpChan {
 		if stxns == nil {
 			break
 		}
 		var err error
-		err = c.BroadcastTransactionGroup(stxns)
+
+		err = fixture.AlgodClient.SendRawTransactionGroup(stxns)
 		if err != nil {
 			handleError(err, "Error broadcastTransactionGroups", errChan)
 		}
@@ -109,7 +110,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, c libgoal.Client, sigTx
 
 // queries the node for account information, and will ertry if the expected number of apps or assets are not returned
 func getAccountInformation(
-	client libgoal.Client,
+	fixture *fixtures.RestClientFixture,
 	expectedCountApps uint64,
 	expectedCountAssets uint64,
 	address string,
@@ -117,7 +118,7 @@ func getAccountInformation(
 	log logging.Logger) (info generated.Account, err error) {
 
 	for x := 0; x < 5; x++ { // retry only 5 times
-		info, err = client.AccountInformationV2(address, true)
+		info, err = fixture.AlgodClient.AccountInformationV2(address, true)
 		if err != nil {
 			return
 		}
@@ -135,19 +136,18 @@ func getAccountInformation(
 
 // queries the node for the given app information
 func getAccountApplicationInformation(
-	client libgoal.Client,
+	fixture *fixtures.RestClientFixture,
 	address string,
-	appId uint64,
+	appID uint64,
 	context string) (appInfo generated.AccountApplicationResponse, err error) {
 
-	appInfo, err = client.AccountApplicationInformation(address, appId)
+	appInfo, err = fixture.AlgodClient.AccountApplicationInformation(address, appID)
 	return
 }
 
 // started as a goroutine, signs the transactions from the channel
 func signer(
 	sigWg *sync.WaitGroup,
-	client libgoal.Client,
 	txnChan <-chan *txnKey,
 	sigTxnChan chan<- *transactions.SignedTxn) {
 	defer sigWg.Done()
@@ -180,7 +180,7 @@ func signerGrpTxn(
 		handleError(err, "Error GroupID", errChan)
 
 		// set the group id to each transaction
-		for i, _ := range tGroup {
+		for i := range tGroup {
 			sendTransactions[i].Group = gid
 		}
 
@@ -235,14 +235,12 @@ func test5MAssets(t *testing.T, scenario int) {
 		fixture.Shutdown()
 	}()
 
-	client := fixture.LibGoalClient
-
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	require.NoError(t, err)
 	// get the wallet account
 	wAcct := accountList[0].Address
 
-	suggestedParams, err := client.SuggestedParams()
+	suggestedParams, err := fixture.AlgodClient.SuggestedParams()
 	require.NoError(t, err)
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggestedParams.GenesisHash)
@@ -253,7 +251,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	baseAcct := ba[0]
 	sender, err := basics.UnmarshalChecksumAddress(wAcct)
 	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 1000000000000000, 1, genesisHash)
-	err = signAndBroadcastTransaction(0, &satxn, client, &fixture)
+	err = signAndBroadcastTransaction(0, &satxn, fixture.LibGoalClient, &fixture)
 	require.NoError(t, err)
 
 	txnChan := make(chan *txnKey, channelDepth)
@@ -266,18 +264,18 @@ func test5MAssets(t *testing.T, scenario int) {
 	for ngoroutine := 0; ngoroutine < numberOfGoRoutines; ngoroutine++ {
 		sigWg.Add(1)
 		if groupTransactions {
-			go signerGrpTxn(&sigWg, client, txnGrpChan, sigTxnGrpChan, errChan)
+			go signerGrpTxn(&sigWg, fixture.LibGoalClient, txnGrpChan, sigTxnGrpChan, errChan)
 		} else {
-			go signer(&sigWg, client, txnChan, sigTxnChan)
+			go signer(&sigWg, txnChan, sigTxnChan)
 		}
 	}
 
 	for ngoroutine := 0; ngoroutine < numberOfGoRoutines; ngoroutine++ {
 		queueWg.Add(1)
 		if groupTransactions {
-			go broadcastTransactionGroups(&queueWg, client, sigTxnGrpChan, errChan)
+			go broadcastTransactionGroups(&queueWg, &fixture, sigTxnGrpChan, errChan)
 		} else {
-			go broadcastTransactions(&queueWg, client, sigTxnChan, errChan)
+			go broadcastTransactions(&queueWg, &fixture, sigTxnChan, errChan)
 		}
 	}
 
@@ -446,8 +444,6 @@ func scenarioA(
 	stopChan <-chan struct{},
 	log logging.Logger) {
 
-	client := fixture.LibGoalClient
-
 	numberOfAccounts := uint64(targetAccountCount)  // 6K
 	numberOfAssets := uint64(targetCreateableCount) // 6M
 
@@ -529,7 +525,7 @@ func scenarioA(
 			continue
 		}
 		printStdOut(acci, numberOfAccounts, "ScenarioA: Accepting assets from acct")
-		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA opt-in assets", log)
+		info, err := getAccountInformation(fixture, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA opt-in assets", log)
 		require.NoError(t, err)
 		for _, asset := range *info.Assets {
 			select {
@@ -567,7 +563,7 @@ func scenarioA(
 		}
 		printStdOut(acci, numberOfAccounts, "ScenarioA: Sending assets from acct")
 
-		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA transfer assets", log)
+		info, err := getAccountInformation(fixture, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA transfer assets", log)
 		require.NoError(t, err)
 		for _, asset := range *info.Assets {
 			select {
@@ -603,7 +599,7 @@ func scenarioA(
 			continue
 		}
 		printStdOut(nai, numberOfAccounts, "ScenarioA: Verifying assets from account")
-		info, err := getAccountInformation(client, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets", log)
+		info, err := getAccountInformation(fixture, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets", log)
 		require.NoError(t, err)
 		for _, asset := range *info.Assets {
 			select {
@@ -612,7 +608,7 @@ func scenarioA(
 			default:
 			}
 
-			assHold, err := client.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
+			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
 			require.NoError(t, err)
 
 			tAssetAmt += assHold.AssetHolding.Amount
@@ -673,9 +669,7 @@ func scenarioB(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	client := fixture.LibGoalClient
-
-	info, err := client.AccountInformationV2(baseAcct.pk.String(), false)
+	info, err := fixture.AlgodClient.AccountInformationV2(baseAcct.pk.String(), false)
 	require.NoError(t, err)
 	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
 	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
@@ -683,7 +677,7 @@ func scenarioB(
 	log.Infof("Verifying assets...")
 	// Verify the assets are transfered here
 	tAssetAmt := uint64(0)
-	info, err = client.AccountInformationV2(baseAcct.pk.String(), false)
+	info, err = fixture.AlgodClient.AccountInformationV2(baseAcct.pk.String(), false)
 	require.NoError(t, err)
 	counter = 0
 	for aid := uint64(0); counter < numberOfAssets && aid < 2*numberOfAssets; aid++ {
@@ -693,7 +687,7 @@ func scenarioB(
 		default:
 		}
 
-		assHold, err := client.AccountAssetInformation(baseAcct.pk.String(), aid)
+		assHold, err := fixture.AlgodClient.AccountAssetInformation(baseAcct.pk.String(), aid)
 		var httpError clientApi.HTTPError
 		if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
 			continue
@@ -796,7 +790,7 @@ func scenarioC(
 			continue
 		}
 		printStdOut(acci, numberOfAccounts, "scenario3: Opting into Application acct")
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC opt-in apps", log)
+		info, err := getAccountInformation(fixture, appsPerAccount, 0, nacc.pk.String(), "ScenarioC opt-in apps", log)
 		require.NoError(t, err)
 		for _, app := range *info.CreatedApps {
 			select {
@@ -822,11 +816,11 @@ func scenarioC(
 			continue
 		}
 		printStdOut(nai, numberOfAccounts, "ScenarioC: Verifying apps opt-in from account")
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
+		info, err := getAccountInformation(fixture, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
-			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "verifying after optin")
+			appInfo, err := getAccountApplicationInformation(fixture, ownAllAccount.pk.String(), capp.Id, "verifying after optin")
 			if err != nil {
 				log.Errorf("account: %s  appid: %d error %s", ownAllAccount.pk, capp.Id, err)
 				continue
@@ -844,7 +838,7 @@ func scenarioC(
 			continue
 		}
 		printStdOut(acci, numberOfAccounts, "scenario3: Calling Application acct")
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC call apps", log)
+		info, err := getAccountInformation(fixture, appsPerAccount, 0, nacc.pk.String(), "ScenarioC call apps", log)
 		require.NoError(t, err)
 		for _, app := range *info.CreatedApps {
 			select {
@@ -870,11 +864,11 @@ func scenarioC(
 			continue
 		}
 		printStdOut(nai, numberOfAccounts, "ScenarioC: Verifying app calls from account")
-		info, err := getAccountInformation(client, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
+		info, err := getAccountInformation(fixture, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
 		require.NoError(t, err)
 
 		for _, capp := range *info.CreatedApps {
-			appInfo, err := getAccountApplicationInformation(client, ownAllAccount.pk.String(), capp.Id, "after call")
+			appInfo, err := getAccountApplicationInformation(fixture, ownAllAccount.pk.String(), capp.Id, "after call")
 			if err != nil {
 				log.Errorf("account: %s  appid: %d error %s", ownAllAccount.pk, capp.Id, err)
 				continue
@@ -949,7 +943,7 @@ func scenarioD(
 		go func() {
 			defer wg.Done()
 			for i := range checkAppChan {
-				app, err := client.ApplicationInformation(i)
+				app, err := fixture.AlgodClient.ApplicationInformation(i)
 				if err != nil {
 					if strings.Contains(err.Error(), "application does not exist") {
 						continue
@@ -962,7 +956,7 @@ func scenarioD(
 					app.Params,
 					baseAcct.pk.String(),
 					&globalStateCheck,
-					globalStateCheckMu)
+					&globalStateCheckMu)
 				if pass {
 					checkResChan <- 1
 				} else {
@@ -1033,14 +1027,13 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 					return 0, lastRound + 1, nil
 				}
 				return 0, status.LastRound + 1, nil
-			} else {
-				if verbose {
-					fmt.Printf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
-				}
+			}
+			if verbose {
+				fmt.Printf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
 			}
 		}
 		log.Debugf("Giving up!")
-		return 0, 0, fmt.Errorf("Waited for round %d for %d seconds. Giving up!\n", firstValid+counter, 1000*waitBlock)
+		return 0, 0, fmt.Errorf("waited for round %d for %d seconds. Giving up", firstValid+counter, 1000*waitBlock)
 	}
 	return counter, firstValid, nil
 }
@@ -1060,7 +1053,8 @@ func signAndBroadcastTransaction(
 	if err != nil {
 		return err
 	}
-	_, err = client.BroadcastTransaction(stxn)
+
+	_, err = fixture.AlgodClient.SendRawTransaction(stxn)
 	if err != nil {
 		return err
 	}
@@ -1211,7 +1205,7 @@ func checkApplicationParams(
 	app generated.ApplicationParams,
 	creator string,
 	globalStateCheck *[]bool,
-	globalStateCheckMu deadlock.Mutex) (pass bool) {
+	globalStateCheckMu *deadlock.Mutex) (pass bool) {
 
 	pass = true
 	if bytes.Compare(acTF.ApprovalProgram, app.ApprovalProgram) != 0 {
