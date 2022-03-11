@@ -186,7 +186,7 @@
           "400": {
             "description": "Bad request",
             "schema": {
-              "$ref": "#/definitions/AccountsErrorResponse"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "401": {
@@ -2234,40 +2234,10 @@
       ],
       "properties": {
         "data": {
-          "type": "string"
+          "type": "object"
         },
         "message": {
           "type": "string"
-        }
-      }
-    },
-    "AccountsErrorResponse": {
-      "description": "An error response for the AccountInformation endpoint, with optional information about limits that were exceeded.",
-      "type": "object",
-      "required": [
-        "message"
-      ],
-      "properties": {
-        "data": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        },
-        "max-results": {
-          "type": "integer"
-        },
-        "total-apps-opted-in": {
-          "type": "integer"
-        },
-        "total-assets-opted-in": {
-          "type": "integer"
-        },
-        "total-created-apps": {
-          "type": "integer"
-        },
-        "total-created-assets": {
-          "type": "integer"
         }
       }
     },
