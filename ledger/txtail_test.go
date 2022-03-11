@@ -82,8 +82,8 @@ func TestTxTailCheckdup(t *testing.T) {
 		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, Txn.ID(), ledgercore.Txlease{})
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-txvalidity-1 {
-			var missingRoundErr *txtailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
+			var missingRoundErr *errTxtailMissingRound
+			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxtailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var txInLedgerErr *ledgercore.TransactionInLedgerError
 			require.Truef(t, errors.As(err, &txInLedgerErr), "error a TransactionInLedgerError(%d) : %v ", rnd, err)
@@ -96,8 +96,8 @@ func TestTxTailCheckdup(t *testing.T) {
 		err := tail.checkDup(proto, rnd, basics.Round(0), rnd, transactions.Txid{}, lease)
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-1 {
-			var missingRoundErr *txtailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
+			var missingRoundErr *errTxtailMissingRound
+			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxtailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var leaseInLedgerErr *ledgercore.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)
@@ -180,7 +180,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 			if r >= ledger.Latest()-testTxTailValidityRange {
 				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
 			} else {
-				require.Equal(t, &txtailMissingRound{round: txn.Txn.LastValid}, dupResult)
+				require.Equal(t, &errTxtailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
 		} else {
 			// transaction has no lease
@@ -195,7 +195,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 					require.Nil(t, dupResult)
 				}
 			} else {
-				require.Equal(t, &txtailMissingRound{round: txn.Txn.LastValid}, dupResult)
+				require.Equal(t, &errTxtailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
 		}
 	}

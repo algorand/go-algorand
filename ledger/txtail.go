@@ -61,8 +61,10 @@ func (t *txTailRound) encode() ([]byte, crypto.Digest) {
 const initialLastValidArrayLen = 256
 
 type roundTxMembers struct {
-	txleases       map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
-	proto          config.ConsensusParams
+	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
+	proto    config.ConsensusParams
+	// serializedData contain the serialized(encoded) form of the txTailRound. This field would remain
+	// maintained in this data structure up until being cleared out by commitRound
 	serializedData []byte
 	tailHash       crypto.Digest
 }
@@ -206,11 +208,38 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 	return (rnd + 1).SubSaturate(maxlife), basics.Round(0)
 }
 
-func (t *txTail) prepareCommit(*deferredCommitContext) error {
+func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
+	if !dcc.isCatchpointRound {
+		return nil
+	}
+	// update the dcc with the hash we'll need.
+	dcc.txTailHash, err = t.recentTailHash(dcc.oldBase + basics.Round(dcc.offset))
 	return nil
 }
 
-func (t *txTail) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func txtailNewRound(tx *sql.Tx, rnd basics.Round, roundData []byte) error {
+	// todo - implement this.
+	return nil
+}
+
+func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
+	for rnd := dcc.oldBase; rnd < dcc.oldBase+basics.Round(dcc.offset); rnd++ {
+		// get the round data we want to flush.
+		rndData, has := t.recent[rnd]
+		if !has {
+			return fmt.Errorf("txTail: unable to commit round %d - missing round data in recent rounds map", rnd)
+		}
+		if len(rndData.serializedData) == 0 {
+			return fmt.Errorf("txTail: unable to commit round %d - missing serialized transaction tail data", rnd)
+		}
+		err := txtailNewRound(tx, rnd, rndData.serializedData)
+		if err != nil {
+			return fmt.Errorf("txTail: unable to persist new round %d : %w", rnd, err)
+		}
+		// clear out the serialized data.
+		rndData.serializedData = nil
+		t.recent[rnd] = rndData
+	}
 	return nil
 }
 
@@ -227,13 +256,13 @@ func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basi
 	return dcr
 }
 
-// txtailMissingRound is returned by checkDup when requested for a round number below the low watermark
-type txtailMissingRound struct {
+// errTxtailMissingRound is returned by checkDup when requested for a round number below the low watermark
+type errTxtailMissingRound struct {
 	round basics.Round
 }
 
 // Error satisfies builtin interface `error`
-func (t txtailMissingRound) Error() string {
+func (t errTxtailMissingRound) Error() string {
 	return fmt.Sprintf("txTail: tried to check for dup in missing round %d", t.round)
 }
 
@@ -241,7 +270,7 @@ func (t txtailMissingRound) Error() string {
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	if lastValid < t.lowWaterMark {
-		return &txtailMissingRound{round: lastValid}
+		return &errTxtailMissingRound{round: lastValid}
 	}
 
 	if proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
