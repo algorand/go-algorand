@@ -138,8 +138,7 @@ func getAccountInformation(
 func getAccountApplicationInformation(
 	fixture *fixtures.RestClientFixture,
 	address string,
-	appID uint64,
-	context string) (appInfo generated.AccountApplicationResponse, err error) {
+	appID uint64) (appInfo generated.AccountApplicationResponse, err error) {
 
 	appInfo, err = fixture.AlgodClient.AccountApplicationInformation(address, appID)
 	return
@@ -321,12 +320,14 @@ func test5MAssets(t *testing.T, scenario int) {
 	}
 }
 
-// generates numAccounts keys
+// generates numAccounts keys; we generate the same seeds here when generating the secret keys
+// so that this test would be reproducible.
 func generateKeys(numAccounts int) (keys []psKey) {
 	keys = make([]psKey, 0, numAccounts)
 	var seed crypto.Seed
+	seed[len(seed)-1] = 1
 	for a := 0; a < numAccounts; a++ {
-		crypto.RandBytes(seed[:])
+		seed[0], seed[1], seed[2], seed[3] = byte(a), byte(a>>8), byte(a>>16), byte(a>>24)
 		privateKey := crypto.GenerateSignatureSecrets(seed)
 		publicKey := basics.Address(privateKey.SignatureVerifier)
 		keys = append(keys, psKey{pk: publicKey, sk: privateKey})
@@ -527,6 +528,7 @@ func scenarioA(
 		printStdOut(acci, numberOfAccounts, "ScenarioA: Accepting assets from acct")
 		info, err := getAccountInformation(fixture, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA opt-in assets", log)
 		require.NoError(t, err)
+		require.Equal(t, int(assetsPerAccount), len(*info.Assets)) // test the asset holding.
 		for _, asset := range *info.Assets {
 			select {
 			case <-stopChan:
@@ -565,6 +567,7 @@ func scenarioA(
 
 		info, err := getAccountInformation(fixture, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA transfer assets", log)
 		require.NoError(t, err)
+		require.Equal(t, int(assetsPerAccount), len(*info.Assets)) // test the asset holding.
 		for _, asset := range *info.Assets {
 			select {
 			case <-stopChan:
@@ -601,6 +604,7 @@ func scenarioA(
 		printStdOut(nai, numberOfAccounts, "ScenarioA: Verifying assets from account")
 		info, err := getAccountInformation(fixture, 0, assetsPerAccount, nacc.pk.String(), "ScenarioA verify assets", log)
 		require.NoError(t, err)
+		require.Equal(t, int(assetsPerAccount), len(*info.Assets)) // test the asset holding.
 		for _, asset := range *info.Assets {
 			select {
 			case <-stopChan:
@@ -677,9 +681,9 @@ func scenarioB(
 	log.Infof("Verifying assets...")
 	// Verify the assets are transfered here
 	tAssetAmt := uint64(0)
-	info, err = fixture.AlgodClient.AccountInformationV2(baseAcct.pk.String(), false)
-	require.NoError(t, err)
 	counter = 0
+	// this loop iterates over all the range of potentail assets, tries to confirm all of them.
+	// many of these are expected to be non-existing.
 	for aid := uint64(0); counter < numberOfAssets && aid < 2*numberOfAssets; aid++ {
 		select {
 		case <-stopChan:
@@ -694,6 +698,7 @@ func scenarioB(
 		}
 		counter++
 		require.NoError(t, err)
+		require.NotZero(t, assHold.AssetHolding.Amount)
 		tAssetAmt += assHold.AssetHolding.Amount
 		printStdOut(int(counter), numberOfAssets, "ScenarioB: Verifying assets")
 	}
@@ -818,15 +823,16 @@ func scenarioC(
 		printStdOut(nai, numberOfAccounts, "ScenarioC: Verifying apps opt-in from account")
 		info, err := getAccountInformation(fixture, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
 		require.NoError(t, err)
-
+		require.Equal(t, appsPerAccount, info.TotalAppsOptedIn) // since we opted into the app
 		for _, capp := range *info.CreatedApps {
-			appInfo, err := getAccountApplicationInformation(fixture, ownAllAccount.pk.String(), capp.Id, "verifying after optin")
+			appInfo, err := getAccountApplicationInformation(fixture, ownAllAccount.pk.String(), capp.Id) // "verifying after optin"
 			if err != nil {
 				log.Errorf("account: %s  appid: %d error %s", ownAllAccount.pk, capp.Id, err)
 				continue
 			}
 			require.Equal(t, uint64(1), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
 			require.Equal(t, uint64(2), (*capp.Params.GlobalState)[0].Value.Uint)
+			require.Nil(t, appInfo.CreatedApp)
 		}
 	}
 
@@ -866,15 +872,16 @@ func scenarioC(
 		printStdOut(nai, numberOfAccounts, "ScenarioC: Verifying app calls from account")
 		info, err := getAccountInformation(fixture, appsPerAccount, 0, nacc.pk.String(), "ScenarioC verify accounts", log)
 		require.NoError(t, err)
-
+		require.Equal(t, appsPerAccount, info.TotalAppsOptedIn) // since we opted into the app
 		for _, capp := range *info.CreatedApps {
-			appInfo, err := getAccountApplicationInformation(fixture, ownAllAccount.pk.String(), capp.Id, "after call")
+			appInfo, err := getAccountApplicationInformation(fixture, ownAllAccount.pk.String(), capp.Id) // "after call"
 			if err != nil {
 				log.Errorf("account: %s  appid: %d error %s", ownAllAccount.pk, capp.Id, err)
 				continue
 			}
 			require.Equal(t, uint64(2), (*appInfo.AppLocalState.KeyValue)[0].Value.Uint)
 			require.Equal(t, uint64(3), (*capp.Params.GlobalState)[0].Value.Uint)
+			require.Nil(t, appInfo.CreatedApp)
 		}
 	}
 }
@@ -1010,30 +1017,19 @@ func handleError(err error, message string, errChan chan<- error) {
 
 // handle the counters to prepare and send transactions in batches of MaxTxnLife transactions
 func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture, log logging.Logger) (newCounter, nextFirstValid uint64, err error) {
-	waitBlock := 5
 	lastRound := firstValid + counter - 1
 	if force || counter == tLife {
 		if verbose {
 			fmt.Printf("Waiting for round %d...", int(lastRound))
 		}
-		for x := 0; x < 1000; x++ {
-			err := fixture.WaitForRound(lastRound, time.Duration(waitBlock)*time.Second)
-			if err == nil {
-				if verbose {
-					fmt.Printf(" waited less than %d sec, done.\n", (x+1)*waitBlock)
-				}
-				status, err := fixture.AlgodClient.Status()
-				if err != nil {
-					return 0, lastRound + 1, nil
-				}
-				return 0, status.LastRound + 1, nil
-			}
-			if verbose {
-				fmt.Printf(" waited %d sec, continue waiting...", (x+1)*waitBlock)
-			}
+		nodeStat, err := fixture.AlgodClient.WaitForBlock(basics.Round(lastRound - 1))
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to wait for block %d : %w", lastRound, err)
 		}
-		log.Debugf("Giving up!")
-		return 0, 0, fmt.Errorf("waited for round %d for %d seconds. Giving up", firstValid+counter, 1000*waitBlock)
+		if nodeStat.LastRound < lastRound {
+			return 0, 0, fmt.Errorf("failed to wait for block %d : node is at round %d", lastRound, nodeStat.LastRound)
+		}
+		return 0, nodeStat.LastRound + 1, nil
 	}
 	return counter, firstValid, nil
 }
