@@ -214,7 +214,7 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	}
 	// update the dcc with the hash we'll need.
 	dcc.txTailHash, err = t.recentTailHash(dcc.oldBase + basics.Round(dcc.offset))
-	return nil
+	return
 }
 
 func txtailNewRound(tx *sql.Tx, rnd basics.Round, roundData []byte) error {
