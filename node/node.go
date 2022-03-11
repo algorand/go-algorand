@@ -55,7 +55,6 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
 	"github.com/algorand/go-deadlock"
-	uuid "github.com/satori/go.uuid"
 )
 
 // StatusReport represents the current basic status of the node
@@ -254,7 +253,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Accessor:       crashAccess,
 		Clock:          agreementClock,
 		Local:          node.config,
-		Network:        gossip.WrapNetwork(node.net, log),
+		Network:        gossip.WrapNetwork(node.net, log, cfg),
 		Ledger:         agreementLedger,
 		BlockFactory:   node,
 		BlockValidator: blockValidator,
@@ -852,7 +851,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 	// Create a temporary filename with a UUID so that we can call this function twice
 	// in a row without worrying about collisions
 	sb.WriteString("tempPartKeyBinary.")
-	sb.WriteString(uuid.NewV4().String())
+	sb.WriteString(fmt.Sprintf("%d", crypto.RandUint64()))
 	sb.WriteString(".bin")
 
 	tempFile := filepath.Join(outDir, filepath.Base(sb.String()))
@@ -1011,11 +1010,11 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 		return nil
 	}
 	keys := part.StateProofSecrets.GetAllKeys()
-	keysSinger := make(account.StateProofKeys, len(keys))
+	keysSigner := make(account.StateProofKeys, len(keys))
 	for i := uint64(0); i < uint64(len(keys)); i++ {
-		keysSinger[i] = keys[i]
+		keysSigner[i] = keys[i]
 	}
-	return node.accountManager.Registry().AppendKeys(partID, keysSinger)
+	return node.accountManager.Registry().AppendKeys(partID, keysSigner)
 
 }
 

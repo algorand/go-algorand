@@ -1,0 +1,10 @@
+{
+  "Hosts": [
+    {
+      "Name": "AWS-US-EAST-1-i3-xlarge",
+      "Provider": "AWS",
+      "Region": "us-east-1",
+      "BaseConfiguration": "i3en.xlarge"
+    }
+  ]
+}

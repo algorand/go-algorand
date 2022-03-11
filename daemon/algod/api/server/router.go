@@ -71,7 +71,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/logging"
@@ -143,7 +143,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
-		Node:     node,
+		Node:     apiNode{node},
 		Log:      logger,
 		Shutdown: shutdown,
 	}
@@ -152,3 +152,8 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	return e
 }
+
+// apiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
+type apiNode struct{ *node.AlgorandFullNode }
+
+func (n apiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
