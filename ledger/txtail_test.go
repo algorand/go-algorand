@@ -56,10 +56,12 @@ func TestTxTailCheckdup(t *testing.T) {
 					CurrentProtocol: protocol.ConsensusCurrentVersion,
 				},
 			},
+			Payset: make(transactions.Payset, 1),
 		}
 
 		txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, 1)
-		txids[transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, TranscationIndex: 0}
+		blk.Payset[0].Txn.Note = []byte{byte(rnd % 256), byte(rnd / 256), byte(1)}
+		txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, TranscationIndex: 0}
 		txleases := make(map[ledgercore.Txlease]basics.Round, 1)
 		txleases[ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 
@@ -72,8 +74,12 @@ func TestTxTailCheckdup(t *testing.T) {
 
 	// test txid duplication testing.
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
-		txid := transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))
-		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, txid, ledgercore.Txlease{})
+		Txn := transactions.Transaction{
+			Header: transactions.Header{
+				Note: []byte{byte(rnd % 256), byte(rnd / 256), byte(1)},
+			},
+		}
+		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, Txn.ID(), ledgercore.Txlease{})
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-txvalidity-1 {
 			var missingRoundErr *txtailMissingRound
