@@ -1052,7 +1052,7 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 	lastRound := firstValid + counter - 1
 	if force || counter == tLife { // TODO: remove tLife-800 after resolving "Missing appsPerAccount" issue
 		if verbose {
-			fmt.Printf("Waiting for round %d...", int(lastRound))
+			fmt.Printf("Waiting for round %d...\n", int(lastRound))
 		}
 		nodeStat, err := fixture.AlgodClient.WaitForBlock(basics.Round(lastRound - 1))
 		if err != nil {
