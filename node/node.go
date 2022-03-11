@@ -1010,11 +1010,11 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 		return nil
 	}
 	keys := part.StateProofSecrets.GetAllKeys()
-	keysSinger := make(account.StateProofKeys, len(keys))
+	keysSigner := make(account.StateProofKeys, len(keys))
 	for i := uint64(0); i < uint64(len(keys)); i++ {
-		keysSinger[i] = keys[i]
+		keysSigner[i] = keys[i]
 	}
-	return node.accountManager.Registry().AppendKeys(partID, keysSinger)
+	return node.accountManager.Registry().AppendKeys(partID, keysSigner)
 
 }
 
@@ -1313,6 +1313,11 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound {
+	// on devmode, we don't need any voting keys for the agreement, since the agreement doesn't vote.
+	if node.devMode {
+		return []account.ParticipationRecordForRound{}
+	}
+
 	parts := node.accountManager.Keys(votingRound)
 	participations := make([]account.ParticipationRecordForRound, 0, len(parts))
 	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(parts))
