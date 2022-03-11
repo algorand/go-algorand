@@ -40,15 +40,15 @@ func TestCompactCerts(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	// TODO Stateproof: the Parallel should stay disable for now. Parallel might
-	// cause problem since we change the global future param to use 8 cc round.
+	// cause problem since we change the global future param to use 16 cc round.
 	//t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
-	expectedNumberOfCert := uint64(3)
+	expectedNumberOfCert := uint64(4)
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-compactcert")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.CompactCertRounds = 10
+	consensusParams.CompactCertRounds = 16
 	consensusParams.CompactCertTopVoters = 1024
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
@@ -102,7 +102,7 @@ func TestCompactCerts(t *testing.T) {
 		blk, err := libgoal.Block(rnd)
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
-		t.Logf("Round %d, block %v\n", rnd, blk)
+		//t.Logf("Round %d, block %v\n", rnd, blk)
 
 		if (rnd % consensusParams.CompactCertRounds) == 0 {
 			// Must have a merkle commitment for participants
@@ -125,7 +125,7 @@ func TestCompactCerts(t *testing.T) {
 			r.NoError(err)
 
 			var compactCert cc.Cert
-			var certMessage []byte
+			var certMessage stateproof.Message
 			compactCertFound := false
 			for _, txn := range res.Transactions {
 				r.Equal(txn.Type, string(protocol.CompactCertTx))
@@ -133,7 +133,8 @@ func TestCompactCerts(t *testing.T) {
 				if txn.CompactCert.CertIntervalLatestRound == nextCertRound {
 					err = protocol.Decode(txn.CompactCert.Cert, &compactCert)
 					r.NoError(err)
-					certMessage = txn.CompactCert.CertMsg
+					err = protocol.Decode(txn.CompactCert.CertMsg, &certMessage)
+					r.NoError(err)
 					compactCertFound = true
 				}
 			}
@@ -156,10 +157,10 @@ func TestCompactCerts(t *testing.T) {
 			r.False(overflowed)
 
 			ccparams := cc.Params{
-				Msg:          certMessage,
-				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(nextCertBlock.Round),
-				SecKQ:        consensusParams.CompactCertSecKQ,
+				StateProofMessageHash: certMessage.IntoStateProofMessageHash(),
+				ProvenWeight:          provenWeight,
+				SigRound:              basics.Round(nextCertBlock.Round),
+				SecKQ:                 consensusParams.CompactCertSecKQ,
 			}
 			verif := cc.MkVerifier(ccparams, votersRoot)
 			err = verif.Verify(&compactCert)

@@ -51,18 +51,9 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 		return total.ToUint64()
 	}
 
-	// During the first proto.CompactCertRound/2 + 1 + 1 blocks, the
+	// During the first proto.CompactCertRound/2 blocks, the
 	// signatures are still being broadcast, so, continue requiring
 	// 100% votes.
-	//
-	// The first +1 comes from CompactCertWorker.broadcastSigs: it only
-	// broadcasts signatures for round R starting with round R+1, to
-	// ensure nodes have the block for round R already in their ledger,
-	// to check the sig.
-	//
-	// The second +1 comes from the fact that, if we are checking this
-	// acceptable weight to decide whether to allow this transaction in
-	// a block, the transaction was sent out one round ago.
 	offset = offset.SubSaturate(basics.Round(proto.CompactCertRounds / 2))
 	if offset == 0 {
 		return total.ToUint64()
