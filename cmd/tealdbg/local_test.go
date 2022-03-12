@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1465,114 +1466,131 @@ func TestRunAllGloads(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
+	sourceA := `#pragma version 6
+
+	txn ApplicationID
+	bz handle_createapp
+	
+	int 99
+	store 1
+	
+	itxn_begin
+		int acfg
+		itxn_field TypeEnum
+		int 1000000
+		itxn_field ConfigAssetTotal
+		int 3
+		itxn_field ConfigAssetDecimals
+		byte base64 AA== 
+		itxn_field ConfigAssetUnitName
+		byte base64(AAAAAAAAAAA=)
+		itxn_field ConfigAssetName
+		pushbytes 0x0000000000000000 
+		itxn_field ConfigAssetURL
+		global CurrentApplicationAddress
+		dup
+		dup2
+		itxn_field ConfigAssetManager
+		itxn_field ConfigAssetReserve
+		itxn_field ConfigAssetFreeze
+		itxn_field ConfigAssetClawback
+	itxn_submit
+	
+	handle_createapp:
+	int 1`
+
+	sourceB := `#pragma version 6
+
+	txn ApplicationID
+	bz handle_createapp
+	
+	gload 2 1
+	itob
+	log
+	
+	handle_createapp:
+	int 1`
+
+	ops, err := logic.AssembleString(sourceA)
+	a.NoError(err)
+	progA := base64.StdEncoding.EncodeToString(ops.Program)
+
+	ops, err = logic.AssembleString(sourceB)
+	a.NoError(err)
+	progB := base64.StdEncoding.EncodeToString(ops.Program)
+
 	// Transaction group with 5 transactions
 	// 1. Payment txn to app A
 	// 2. Payment txn to app B
-	// 3. AppCreate txn
-	// 4. App call to app A
-	// 5. App call to app B with gload on app A scratch slot and gaid on txn 3
+	// 3. App call to app A
+	// 4. App call to app B with gload on app A scratch slot
 	ddrBlob := `{
 		"accounts": [
 		  {
-			"address": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-			"amount": 3999997358471000,
-			"amount-without-pending-rewards": 3999997358471000,
-			"apps-total-schema": {
-			  "num-byte-slice": 0,
-			  "num-uint": 2
-			},
-			"created-apps": [
-			  {
-				"id": 39,
-				"params": {
-				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-				  "clear-state-program": "BoEB",
-				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-				  "global-state-schema": {
-					"num-byte-slice": 0,
-					"num-uint": 1
-				  },
-				  "local-state-schema": {
-					"num-byte-slice": 1,
-					"num-uint": 1
-				  }
-				}
-			  },
-			  {
-				"id": 45,
-				"params": {
-				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-				  "clear-state-program": "BoEB",
-				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-				  "global-state-schema": {
-					"num-byte-slice": 0,
-					"num-uint": 1
-				  },
-				  "local-state-schema": {
-					"num-byte-slice": 1,
-					"num-uint": 1
-				  }
-				}
-			  }
-			],
-			"min-balance": 357000,
+			"address": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+			"amount": 4000001724861773,
+			"amount-without-pending-rewards": 4000001724861773,
+			"min-balance": 100000,
 			"participation": {
-			  "selection-participation-key": "ZNiFSD82lnUrGxVsoCHs8cgVLUa8U0c3i7IslQ0AkY4=",
-			  "state-proof-key": "paupaTUqHOcGOPKBocOOFUudy2MTomIwj+RqL9LR2/c8pnQ1jMTAb7mylq8fxYR+zcfL4rFA20yxInIfEd/Q3g==",
+			  "selection-participation-key": "S3YIZ2TNGSl1plq93eXsXsRhJRfCyIMKq0sq12++C8Y=",
+			  "state-proof-key": "4BqeyojB23ZEj7Ddf9MKtIHBKFFYKhIYEwctoSuL9iXXdQ6R5lWzIJ5Sun5wHJhE9Rk5/wjjTeiCFJPEJVafrA==",
 			  "vote-first-valid": 0,
 			  "vote-key-dilution": 10000,
 			  "vote-last-valid": 3000000,
-			  "vote-participation-key": "0mbTP4EWCucq2UpwFtB+wCrxtTmqiLcW013osw0sRng="
+			  "vote-participation-key": "qmkEl2AbMO/KKK+iOgIhSB3Q/4WXftoucPUvEYFaWbo="
 			},
 			"pending-rewards": 0,
-			"rewards": 0,
-			"round": 32,
-			"status": "Online"
+			"reward-base": 1,
+			"rewards": 3999997773,
+			"round": 41,
+			"status": "Online",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 0,
+			"total-created-apps": 0,
+			"total-created-assets": 0
 		  },
 		  {
-			"address": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
-			"amount": 97998000,
-			"amount-without-pending-rewards": 97998000,
+			"address": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+			"amount": 74198032,
+			"amount-without-pending-rewards": 74198032,
 			"assets": [
 			  {
 				"amount": 1000000,
-				"asset-id": 38,
-				"creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				"asset-id": 45,
 				"is-frozen": false
 			  },
 			  {
 				"amount": 1000000,
-				"asset-id": 44,
-				"creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				"asset-id": 50,
 				"is-frozen": false
 			  }
 			],
 			"created-assets": [
 			  {
-				"index": 38,
+				"index": 45,
 				"params": {
-				  "clawback": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
-				  "creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "clawback": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "creator": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
 				  "decimals": 3,
-				  "freeze": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
-				  "manager": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "freeze": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "manager": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
 				  "name-b64": "AAAAAAAAAAA=",
-				  "reserve": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "reserve": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
 				  "total": 1000000,
 				  "unit-name-b64": "AA==",
 				  "url-b64": "AAAAAAAAAAA="
 				}
 			  },
 			  {
-				"index": 44,
+				"index": 50,
 				"params": {
-				  "clawback": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
-				  "creator": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "clawback": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "creator": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
 				  "decimals": 3,
-				  "freeze": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
-				  "manager": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "freeze": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "manager": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
 				  "name-b64": "AAAAAAAAAAA=",
-				  "reserve": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
+				  "reserve": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
 				  "total": 1000000,
 				  "unit-name-b64": "AA==",
 				  "url-b64": "AAAAAAAAAAA="
@@ -1581,140 +1599,61 @@ func TestRunAllGloads(t *testing.T) {
 			],
 			"min-balance": 300000,
 			"pending-rewards": 0,
-			"rewards": 0,
-			"round": 32,
-			"status": "Offline"
+			"reward-base": 1,
+			"rewards": 32,
+			"round": 41,
+			"status": "Offline",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 2,
+			"total-created-apps": 0,
+			"total-created-assets": 2
 		  },
 		  {
-			"address": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-			"amount": 3999997358471000,
-			"amount-without-pending-rewards": 3999997358471000,
-			"apps-total-schema": {
-			  "num-byte-slice": 0,
-			  "num-uint": 2
-			},
-			"created-apps": [
-			  {
-				"id": 39,
-				"params": {
-				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-				  "clear-state-program": "BoEB",
-				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-				  "global-state-schema": {
-					"num-byte-slice": 0,
-					"num-uint": 1
-				  },
-				  "local-state-schema": {
-					"num-byte-slice": 1,
-					"num-uint": 1
-				  }
-				}
-			  },
-			  {
-				"id": 45,
-				"params": {
-				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-				  "clear-state-program": "BoEB",
-				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-				  "global-state-schema": {
-					"num-byte-slice": 0,
-					"num-uint": 1
-				  },
-				  "local-state-schema": {
-					"num-byte-slice": 1,
-					"num-uint": 1
-				  }
-				}
-			  }
-			],
-			"min-balance": 357000,
+			"address": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+			"amount": 4000001724861773,
+			"amount-without-pending-rewards": 4000001724861773,
+			"min-balance": 100000,
 			"participation": {
-			  "selection-participation-key": "ZNiFSD82lnUrGxVsoCHs8cgVLUa8U0c3i7IslQ0AkY4=",
-			  "state-proof-key": "paupaTUqHOcGOPKBocOOFUudy2MTomIwj+RqL9LR2/c8pnQ1jMTAb7mylq8fxYR+zcfL4rFA20yxInIfEd/Q3g==",
+			  "selection-participation-key": "S3YIZ2TNGSl1plq93eXsXsRhJRfCyIMKq0sq12++C8Y=",
+			  "state-proof-key": "4BqeyojB23ZEj7Ddf9MKtIHBKFFYKhIYEwctoSuL9iXXdQ6R5lWzIJ5Sun5wHJhE9Rk5/wjjTeiCFJPEJVafrA==",
 			  "vote-first-valid": 0,
 			  "vote-key-dilution": 10000,
 			  "vote-last-valid": 3000000,
-			  "vote-participation-key": "0mbTP4EWCucq2UpwFtB+wCrxtTmqiLcW013osw0sRng="
+			  "vote-participation-key": "qmkEl2AbMO/KKK+iOgIhSB3Q/4WXftoucPUvEYFaWbo="
 			},
 			"pending-rewards": 0,
-			"rewards": 0,
-			"round": 32,
-			"status": "Online"
+			"reward-base": 1,
+			"rewards": 3999997773,
+			"round": 41,
+			"status": "Online",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 0,
+			"total-created-apps": 0,
+			"total-created-assets": 0
 		  },
 		  {
-			"address": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-			"amount": 3999997358471000,
-			"amount-without-pending-rewards": 3999997358471000,
-			"apps-total-schema": {
-			  "num-byte-slice": 0,
-			  "num-uint": 2
-			},
-			"created-apps": [
-			  {
-				"id": 39,
-				"params": {
-				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-				  "clear-state-program": "BoEB",
-				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-				  "global-state-schema": {
-					"num-byte-slice": 0,
-					"num-uint": 1
-				  },
-				  "local-state-schema": {
-					"num-byte-slice": 1,
-					"num-uint": 1
-				  }
-				}
-			  },
-			  {
-				"id": 45,
-				"params": {
-				  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-				  "clear-state-program": "BoEB",
-				  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-				  "global-state-schema": {
-					"num-byte-slice": 0,
-					"num-uint": 1
-				  },
-				  "local-state-schema": {
-					"num-byte-slice": 1,
-					"num-uint": 1
-				  }
-				}
-			  }
-			],
-			"min-balance": 357000,
-			"participation": {
-			  "selection-participation-key": "ZNiFSD82lnUrGxVsoCHs8cgVLUa8U0c3i7IslQ0AkY4=",
-			  "state-proof-key": "paupaTUqHOcGOPKBocOOFUudy2MTomIwj+RqL9LR2/c8pnQ1jMTAb7mylq8fxYR+zcfL4rFA20yxInIfEd/Q3g==",
-			  "vote-first-valid": 0,
-			  "vote-key-dilution": 10000,
-			  "vote-last-valid": 3000000,
-			  "vote-participation-key": "0mbTP4EWCucq2UpwFtB+wCrxtTmqiLcW013osw0sRng="
-			},
-			"pending-rewards": 0,
-			"rewards": 0,
-			"round": 32,
-			"status": "Online"
-		  },
-		  {
-			"address": "Y5BFRELEVAJKE4F7M2DTJIA2YKQE5RXC6ZOASH2KRNANQLBB32JEVVQLVI",
-			"amount": 59500000,
-			"amount-without-pending-rewards": 59500000,
+			"address": "KLWQTWPJXUAPVZNANKGGTTFGPPJZDOLGOCBCBRHR53C6J2FDYF2GBABCRU",
+			"amount": 27300019,
+			"amount-without-pending-rewards": 27300019,
 			"min-balance": 100000,
 			"pending-rewards": 0,
-			"rewards": 0,
-			"round": 32,
-			"status": "Offline"
+			"reward-base": 1,
+			"rewards": 19,
+			"round": 41,
+			"status": "Offline",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 0,
+			"total-created-apps": 0,
+			"total-created-assets": 0
 		  }
 		],
 		"apps": [
 		  {
-			"id": 32,
+			"id": 39,
 			"params": {
-			  "approval-program": "BiABAzEYQQA/MRYWsIFjNQGxIrIQgcCEPbIiIrIjgAEAsiWACAAAAAAAAAAAsiaACAAAAAAAAAAAsicyCklKsimyKrIrsiyzgQE=",
+			  "approval-program": "%s",
 			  "clear-state-program": "BoEB",
-			  "creator": "ECX2MGUEG2XHTJLE3ZLJ5TN3HUEBFEWQTN6A22JR5USO5SRW5MBGA4HJN4",
+			  "creator": "5Z2LOJJCA52LM6I6FLS3DLRBG7UWDEQ2RS2Y76Z66QPUNLAGGJIDDX7BII",
 			  "global-state-schema": {
 				"num-byte-slice": 1,
 				"num-uint": 1
@@ -1726,27 +1665,11 @@ func TestRunAllGloads(t *testing.T) {
 			}
 		  },
 		  {
-			"id": 1380011588,
+			"id": 41,
 			"params": {
-			  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
+			  "approval-program": "%s",
 			  "clear-state-program": "BoEB",
-			  "creator": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-			  "global-state-schema": {
-				"num-byte-slice": 0,
-				"num-uint": 1
-			  },
-			  "local-state-schema": {
-				"num-byte-slice": 1,
-				"num-uint": 1
-			  }
-			}
-		  },
-		  {
-			"id": 34,
-			"params": {
-			  "approval-program": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-			  "clear-state-program": "BoEB",
-			  "creator": "JG4FCMNYOV5UCHFXDDQN6VBFE2CMXT2UPGJQBNETCH47PDJ5AZXSINXPCY",
+			  "creator": "5P7Y556QIE3UCBNWJ7GXPNDCV6CLZF5VDEZ2PTTGNY5PQ2OBA4D6GXZFZA",
 			  "global-state-schema": {
 				"num-byte-slice": 1,
 				"num-uint": 1
@@ -1758,93 +1681,74 @@ func TestRunAllGloads(t *testing.T) {
 			}
 		  }
 		],
-		"latest-timestamp": 1645245312,
+		"latest-timestamp": 1646848841,
 		"protocol-version": "future",
-		"round": 32,
+		"round": 41,
 		"sources": null,
 		"txns": [
 		  {
-		"sig": "vGqxKnL+fdnoou67v0b/ut2Hg0oJb4WCfFyoS9fFCZ/nauWIwl9BOrlsJCF3do+umh8Ch9K/5PycR1NUXhi2BA==",
+		"sig": "EPT8gSZDv20jj+bRwoqeqt7js8pquiYoH+pK4tl+qzujseK6+3QiFJV0qFU6p2xlrLNvsbqHBMmbOGjX9HUmAQ==",
 		"txn": {
-		  "amt": 34300000,
+		  "amt": 41300000,
 		  "fee": 1000,
-		  "fv": 31,
+		  "fv": 40,
 		  "gen": "sandnet-v1",
-		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
-		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
-		  "lv": 1031,
-		  "rcv": "QMSFP4CRVBRDZGCFET5LWJCYFX4YWX4IXFQ5NQKMXQDWUZCGVEF3SZHVUE",
-		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "rcv": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
 		  "type": "pay"
 		}
 	  },
 		  {
-		"sig": "WRznoi6GwJ6f99HevuT5LlciOzAneZIe6KENibhawLNTl/b/dRyEss/+LGOTii70wsO+1eMeF8kJ+Y3F+rRrBA==",
+		"sig": "Wmphf7cw//QSlNg0WD1VjFRwtVh6KOo/hFxdwD57aW/swuNCUN7L5ew0BS1vWOp2C6eVzZPK145b+H2A2PziBg==",
 		"txn": {
-		  "amt": 14000000,
+		  "amt": 7700000,
 		  "fee": 1000,
-		  "fv": 31,
+		  "fv": 40,
 		  "gen": "sandnet-v1",
-		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
-		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
-		  "lv": 1031,
-		  "rcv": "Y5BFRELEVAJKE4F7M2DTJIA2YKQE5RXC6ZOASH2KRNANQLBB32JEVVQLVI",
-		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "rcv": "KLWQTWPJXUAPVZNANKGGTTFGPPJZDOLGOCBCBRHR53C6J2FDYF2GBABCRU",
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
 		  "type": "pay"
 		}
 	  },
 		  {
-		"sig": "R064xUOBT25Py35X4nyMNFN7cXFfc1rB8HtXKA1qjZpbyZbfNVGh9ZIesGFycB7RKD2u+skmVTYb3bawnUuQAA==",
+		"sig": "IyrYrbX6yaQfUcNHmArTWptV3WI9fdUbRT4K7q6KaCoub5L/dRRV6bFcLAcNZKTXNLYR+d4/GYz6XFhfFBp+DQ==",
 		"txn": {
-		  "apid": 32,
+		  "apid": 39,
 		  "fee": 1000,
-		  "fv": 31,
+		  "fv": 40,
 		  "gen": "sandnet-v1",
-		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
-		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
-		  "lv": 1031,
-		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
 		  "type": "appl"
 		}
 	  },
 		  {
-		"sig": "xmNqXs0z8UrBxBXZDSdfVZYuGnn/B1CGDq2xMp6Swq0AozHvMoqgTMBKXUACPfnBdjZCT/LXItWAK3iNP3k7CQ==",
+		"sig": "H1TQRug7WG3tjGae3bXzDiAoXbILByvc9//J+imkFgaAHW5UPzvJGtn7yVpr8tInYVPnnTF+l88TXY/ANUB2CQ==",
 		"txn": {
-		  "apap": "BjEYQQANMRYWsDoCARawPAMWsIEB",
-		  "apgs": {
-			"nui": 1
-		  },
-		  "apls": {
-			"nbs": 1,
-			"nui": 1
-		  },
-		  "apsu": "BoEB",
+		  "apid": 41,
 		  "fee": 1000,
-		  "fv": 31,
+		  "fv": 40,
 		  "gen": "sandnet-v1",
-		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
-		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
-		  "lv": 1031,
-		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
-		  "type": "appl"
-		}
-	  },
-		  {
-		"sig": "fQLG6fezHdqVQncU8zXigiPB2depfHBEjOyVkeZhiCebY3GJH0Hjbokt5/3WBnmYB6P1FlJbOcANPu5W+uf6DA==",
-		"txn": {
-		  "apid": 34,
-		  "fee": 1000,
-		  "fv": 31,
-		  "gen": "sandnet-v1",
-		  "gh": "jmFas6g6UPtLEQSsSrDTjQ9nYcIvgrOm3vYQdysdJp0=",
-		  "grp": "La23vx0HseOp/s8U7YvwhRB6VcpesxCvyFfsR0AGd/Y=",
-		  "lv": 1031,
-		  "snd": "AGJ4MYH6LT5NV4LFUWT62ETX5STDY7I3GMFBQL2AY2ZAI57CYOZY3JAI34",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
 		  "type": "appl"
 		}
 	  }
 		]
 	  }`
+
+	// Format string with base64 encoded program bytes string
+	ddrBlob = fmt.Sprintf(ddrBlob, progA, progB)
 
 	ds := DebugParams{
 		Proto:      string(protocol.ConsensusCurrentVersion),
@@ -1854,7 +1758,7 @@ func TestRunAllGloads(t *testing.T) {
 	}
 
 	local := MakeLocalRunner(nil)
-	err := local.Setup(&ds)
+	err = local.Setup(&ds)
 	a.NoError(err)
 
 	err = local.RunAll()
