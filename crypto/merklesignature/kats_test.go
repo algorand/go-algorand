@@ -17,47 +17,27 @@
 package merklesignature
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"testing"
 )
 
 type mssKat struct {
-	publicKey          []byte
-	ctSignature        []byte
-	ephemeralKey       []byte
-	vcIndex            uint64
-	correspondingRound uint64
-	proofDepth         uint8
-	proofBytes         []byte
-	message            []byte
-}
-
-func sliceToHex(b []byte) string {
-	str := "["
-	for i := 0; i < len(b)-1; i++ {
-		str += fmt.Sprintf("0x%.2x, ", b[i])
-	}
-	str += fmt.Sprintf("0x%.2x]", b[len(b)-1])
-	return str
-}
-
-// String converts kat to a pretty-printable string
-func (kat mssKat) String() string {
-	var asString string
-	asString = fmt.Sprintf("MSS public key (root): %v  \n", sliceToHex(kat.publicKey[:]))
-	asString += fmt.Sprintf("ctSignature: %v  \n", sliceToHex(kat.ctSignature))
-	asString += fmt.Sprintf("ephemeral public key: %v \n ", sliceToHex(kat.ephemeralKey))
-	asString += fmt.Sprintf("correspondingRound: 0x%x \n", kat.correspondingRound)
-	asString += fmt.Sprintf("VC index: 0x%x \n", kat.vcIndex)
-	asString += fmt.Sprintf("Proof Depth: 0x%x \n", kat.proofDepth)
-	asString += fmt.Sprintf("Proof: %v \n", sliceToHex(kat.proofBytes))
-	asString += fmt.Sprintf("Message: %v \n", sliceToHex(kat.message))
-
-	return asString
+	PublicKey          []byte
+	CtSignature        []byte
+	EphemeralKey       []byte
+	VcIndex            uint64
+	CorrespondingRound uint64
+	ProofDepth         uint8
+	ProofBytes         []byte
+	Message            []byte
 }
 
 func extractMssSignatureParts(signature Signature) ([]byte, []byte, []byte, uint8, error) {
@@ -97,14 +77,14 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 		return mssKat{}, fmt.Errorf("error while formating mss signature %w", err)
 	}
 
-	return mssKat{publicKey: verifier[:],
-		ctSignature:        ctSignature,
-		ephemeralKey:       pk,
-		vcIndex:            signature.VectorCommitmentIndex,
-		correspondingRound: atRound,
-		proofDepth:         proofDepth,
-		proofBytes:         proof,
-		message:            messageToSign}, nil
+	return mssKat{PublicKey: verifier[:],
+		CtSignature:        ctSignature,
+		EphemeralKey:       pk,
+		VcIndex:            signature.VectorCommitmentIndex,
+		CorrespondingRound: atRound,
+		ProofDepth:         proofDepth,
+		ProofBytes:         proof,
+		Message:            messageToSign}, nil
 }
 
 var shouldGenerateKATs bool
@@ -115,10 +95,16 @@ func init() {
 
 func TestGenerateKat(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	if !shouldGenerateKATs {
 		t.Skip()
 	}
-	kat, _ := generateMssKat(256, 512, 9, []byte("test"))
-	fmt.Println(kat)
+	kat, err := generateMssKat(256, 512, 9, []byte("test"))
+	a.NoError(err)
+
+	katAsJSON, err := json.MarshalIndent(kat, "", "\t")
+	a.NoError(err)
+
+	fmt.Println(string(katAsJSON))
 }
