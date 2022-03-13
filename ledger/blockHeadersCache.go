@@ -35,6 +35,10 @@ type latestBlockHeadersCache struct {
 	mutex        deadlock.RWMutex
 }
 
+func (c *blockHeadersCache) initialize() {
+	c.lruCache.maxEntries = 10
+}
+
 func (c *blockHeadersCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
 	// check latestHeadersCache first
 	blockHeader, exists = c.latestHeadersCache.Get(round)
@@ -44,7 +48,9 @@ func (c *blockHeadersCache) Get(round basics.Round) (blockHeader bookkeeping.Blo
 
 	// if not found in latestHeadersCache, check LRUCache
 	value, exists := c.lruCache.Get(round)
-	blockHeader = value.(bookkeeping.BlockHeader)
+	if exists {
+		blockHeader = value.(bookkeeping.BlockHeader)
+	}
 
 	return
 }

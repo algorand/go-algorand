@@ -85,7 +85,7 @@ type Ledger struct {
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
 
-	headerCache heapLRUCache
+	headerCache blockHeadersCache
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
@@ -119,7 +119,7 @@ func OpenLedger(
 		cfg:                            cfg,
 	}
 
-	l.headerCache.maxEntries = 10
+	l.headerCache.initialize()
 
 	defer func() {
 		if err != nil {
@@ -583,9 +583,8 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	value, exists := l.headerCache.Get(rnd)
+	blk, exists := l.headerCache.Get(rnd)
 	if exists {
-		blk = value.(bookkeeping.BlockHeader)
 		return
 	}
 
