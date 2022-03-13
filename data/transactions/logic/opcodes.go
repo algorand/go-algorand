@@ -316,9 +316,7 @@ var OpSpecs = []OpSpec{
 	{0x95, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, costly(10)},
 	{0x96, "bsqrt", opBytesSqrt, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(40)},
 	{0x97, "divw", opDivw, asmDefault, disDefault, twoInts.plus(oneInt), oneInt, 6, modeAny, opDefault},
-
-	//More Hash Functions
-	{0x9f, "sha3_256", opSHA3_256, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(130)},
+	{0x98, "sha3_256", opSHA3_256, asmDefault, disDefault, oneBytes, oneBytes, 7, modeAny, costly(130)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
