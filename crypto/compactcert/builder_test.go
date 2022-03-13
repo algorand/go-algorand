@@ -459,10 +459,10 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	npartLo := 9
 
 	param := Params{
-		Msg:          testMessage("hello world"),
-		ProvenWeight: uint64(totalWeight / 2),
-		SigRound:     currentRound,
-		SecKQ:        compactCertSecKQForTests,
+		Msg:                   testMessage("hello world"),
+		ProvenWeightThreshold: uint64(totalWeight / 2),
+		SigRound:              currentRound,
+		SecKQ:                 compactCertSecKQForTests,
 	}
 
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)

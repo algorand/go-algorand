@@ -781,7 +781,7 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			zb0002--
 			(*z).ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProvenWeight")
+				err = msgp.WrapError(err, "struct-from-array", "ProvenWeightThreshold")
 				return
 			}
 		}
@@ -841,7 +841,7 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			case "provenweight":
 				(*z).ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ProvenWeight")
+					err = msgp.WrapError(err, "ProvenWeightThreshold")
 					return
 				}
 			case "sigcom":

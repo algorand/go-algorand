@@ -122,7 +122,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) {
 
 // Ready returns whether the certificate is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.signedWeight > b.Params.ProvenWeight
+	return b.signedWeight > b.Params.ProvenWeightThreshold
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -170,8 +170,8 @@ func (b *Builder) Build() (*Cert, error) {
 		return b.cert, nil
 	}
 
-	if b.signedWeight <= b.Params.ProvenWeight {
-		return nil, fmt.Errorf("not enough signed weight: %d <= %d", b.signedWeight, b.Params.ProvenWeight)
+	if b.signedWeight <= b.Params.ProvenWeightThreshold {
+		return nil, fmt.Errorf("not enough signed weight: %d <= %d", b.signedWeight, b.Params.ProvenWeightThreshold)
 	}
 
 	// Commit to the sigs array
@@ -204,7 +204,7 @@ func (b *Builder) Build() (*Cert, error) {
 	revealsSequence := make([]uint64, nr)
 	choice := coinChoiceSeed{
 		SignedWeight: c.SignedWeight,
-		ProvenWeight: b.ProvenWeight,
+		ProvenWeight: b.ProvenWeightThreshold,
 		Sigcom:       c.SigCommit,
 		Partcom:      b.parttree.Root(),
 		MsgHash:      b.Msg,

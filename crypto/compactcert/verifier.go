@@ -19,15 +19,18 @@ package compactcert
 import (
 	"errors"
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"math"
 )
 
 // Errors for the CompactCert verifier
 var (
-	ErrCoinNotInRange = errors.New("coin is not within slot weight range")
-	ErrNoRevealInPos  = errors.New("no reveal for position")
+	ErrCoinNotInRange                   = errors.New("coin is not within slot weight range")
+	ErrNoRevealInPos                    = errors.New("no reveal for position")
+	ErrSignedWeightLessThanProvenWeight = errors.New("signed weight is less than or equal to proven weight")
+	ErrTooManyReveals                   = errors.New("too many reveals in cert")
+	ErrInsufficientImpliedProvenWeight  = errors.New("signed weight and number of reveals yield insufficient proven weight")
 )
 
 // Verifier is used to verify a compact certificate.
@@ -50,9 +53,11 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
 // Verify checks if c is a valid compact certificate for the message
 // and participants that were used to construct the Verifier.
 func (v *Verifier) Verify(c *Cert) error {
-	if c.SignedWeight <= v.ProvenWeight {
-		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
+	nr := uint64(len(c.PositionsToReveal))
+	if err := v.verifyWeights(c.SignedWeight, nr); err != nil {
+		return err
 	}
+
 	version := int(c.MerkleSignatureVersion)
 	for _, reveal := range c.Reveals {
 		if err := reveal.SigSlot.Sig.ValidateSigVersion(version); err != nil {
@@ -95,15 +100,9 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 
-	// Verify that the reveals contain the right coins
-	nr, err := v.numReveals(c.SignedWeight)
-	if err != nil {
-		return err
-	}
-
 	choice := coinChoiceSeed{
 		SignedWeight: c.SignedWeight,
-		ProvenWeight: v.ProvenWeight,
+		ProvenWeight: v.ProvenWeightThreshold,
 		Sigcom:       c.SigCommit,
 		Partcom:      v.partcom,
 		MsgHash:      v.Msg,
@@ -124,4 +123,28 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 
 	return nil
+}
+
+func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error {
+	if numOfReveals > MaxReveals {
+		return ErrTooManyReveals
+	}
+
+	if signedWeight <= v.ProvenWeightThreshold {
+		return fmt.Errorf("%w - signed weight %d <= proven weight %d", ErrSignedWeightLessThanProvenWeight, signedWeight, v.ProvenWeightThreshold)
+	}
+
+	weightLowerBond := log2(signedWeight) - log2(v.ProvenWeightThreshold)
+	fmt.Printf("sw : %f  pw: %f\n", math.Log2(float64(signedWeight)), math.Log2(float64(v.ProvenWeightThreshold)))
+	fmt.Printf("sw - pw=%d\n", log2(signedWeight)-log2(v.ProvenWeightThreshold))
+	fmt.Printf("numRev*(sw-pw) = %d\n", uint64(weightLowerBond)*numOfReveals)
+	if uint64(weightLowerBond)*numOfReveals < v.SecKQ {
+		return ErrInsufficientImpliedProvenWeight
+	}
+	return nil
+}
+
+func log2(x uint64) int64 {
+	t := math.Log2(float64(x))
+	return int64(t)
 }
