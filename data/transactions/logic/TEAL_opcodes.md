@@ -1093,6 +1093,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
 The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
 
+## sha3_256
+
+- Opcode: 0x98
+- Stack: ..., A: []byte &rarr; ..., []byte
+- SHA3_256 hash of value A, yields [32]byte
+- **Cost**: 130
+- Availability: v7
+
 ## b+
 
 - Opcode: 0xa0
