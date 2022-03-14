@@ -267,8 +267,8 @@ return stack matches the name of the input value.
 | `sha256` | SHA256 hash of value A, yields [32]byte |
 | `keccak256` | Keccak256 hash of value A, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
-| `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
+| `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
