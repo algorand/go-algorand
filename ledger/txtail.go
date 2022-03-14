@@ -382,7 +382,11 @@ func (t *txTail) recentTailHash(offset uint64, maxTxnLife uint64) (crypto.Digest
 	buffer := make([]byte, (maxTxnLife+1)*crypto.DigestSize)
 	bufIdx := 0
 	t.tailMu.RLock()
-	for i := offset; i < offset+maxTxnLife; i++ {
+	lastOffset := offset + maxTxnLife
+	if lastOffset > uint64(len(t.roundTailHashes)) {
+		lastOffset = uint64(len(t.roundTailHashes))
+	}
+	for i := offset; i < lastOffset; i++ {
 		copy(buffer[bufIdx:], t.roundTailHashes[i][:])
 		bufIdx += crypto.DigestSize
 	}
