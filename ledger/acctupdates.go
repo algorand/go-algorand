@@ -627,6 +627,13 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals ledgercore.AccountTot
 	return au.totalsImpl(rnd)
 }
 
+// OnlineTotals returns the online totals of all accounts at the end of round rnd.
+func (au *accountUpdates) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	return au.onlineTotalsImpl(rnd)
+}
+
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
 func (au *accountUpdates) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	au.accountsMu.RLock()
@@ -737,6 +744,17 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals ledgercore.Accoun
 
 	totals = au.roundTotals[offset]
 	return
+}
+
+// onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.
+func (au *accountUpdates) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+
+	totals := au.roundTotals[offset]
+	return totals.Online.Money, nil
 }
 
 // latestTotalsImpl returns the totals of all accounts for the most recent round, as well as the round number
