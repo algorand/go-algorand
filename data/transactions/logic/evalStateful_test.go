@@ -67,7 +67,7 @@ func TestEvalModes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	// ed25519verify and err are tested separately below
+	// ed25519verify* and err are tested separately below
 
 	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
 	// check all opcodes available in runModeApplication
@@ -2381,6 +2381,7 @@ func TestReturnTypes(t *testing.T) {
 	// these require special input data and tested separately
 	skipCmd := map[string]bool{
 		"ed25519verify":       true,
+		"ed25519verify_bare":  true,
 		"ecdsa_verify":        true,
 		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,

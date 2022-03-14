@@ -165,8 +165,8 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, costly(130)},
 	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, costly(45)},
 
-	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, costly(1900)},
-	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 5, modeAny, costly(1900)},
+	{0x04, "ed25519verify", opEd25519Verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, costly(1900)},
+	{0x04, "ed25519verify", opEd25519Verify, asmDefault, disDefault, threeBytes, oneInt, 5, modeAny, costly(1900)},
 
 	{0x05, "ecdsa_verify", opEcdsaVerify, assembleEcdsa, disEcdsa, threeBytes.plus(twoBytes), oneInt, 5, modeAny, costlyImm(1700, "v")},
 	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, assembleEcdsa, disEcdsa, oneBytes, twoBytes, 5, modeAny, costlyImm(650, "v")},
@@ -301,6 +301,8 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
+
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, asmDefault, disDefault, threeBytes, oneInt, 7, modeAny, costly(1900)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, opBranch},

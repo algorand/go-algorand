@@ -133,6 +133,46 @@ ed25519verify`, pkStr), v)
 	}
 }
 
+func TestEd25519VerifyBare(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	c := crypto.GenerateSignatureSecrets(s)
+	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+	data, err := hex.DecodeString(msg)
+	require.NoError(t, err)
+	pk := basics.Address(c.SignatureVerifier)
+	pkStr := pk.String()
+
+	for v := uint64(7); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, fmt.Sprintf(`arg 0
+arg 1
+addr %s
+ed25519verify_bare`, pkStr), v)
+			require.NoError(t, err)
+			sig := c.SignBytes(data)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			txn.Lsig.Args = [][]byte{data[:], sig[:]}
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+
+			// short sig will fail
+			txn.Lsig.Args[1] = sig[1:]
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "invalid signature")
+
+			// flip a bit and it should not pass
+			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+			data1, err := hex.DecodeString(msg1)
+			require.NoError(t, err)
+			txn.Lsig.Args = [][]byte{data1, sig[:]}
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "REJECT")
+		})
+	}
+}
+
 // bitIntFillBytes is a replacement for big.Int.FillBytes from future Go
 func bitIntFillBytes(b *big.Int, buf []byte) []byte {
 	for i := range buf {
