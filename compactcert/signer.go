@@ -171,6 +171,14 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 
 	sigs := make([]sigFromAddr, 0, len(keys))
 	ids := make([]account.ParticipationID, 0, len(keys))
+
+	stateproofMessage, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.CompactCertRounds)
+	if err != nil {
+		ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
+		return
+	}
+	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+
 	for _, key := range keys {
 		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
 			continue
@@ -181,12 +189,6 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
-		stateproofMessage, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.CompactCertRounds)
-		if err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
-			continue
-		}
-		hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
