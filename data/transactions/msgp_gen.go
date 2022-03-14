@@ -1525,7 +1525,7 @@ func (z *CompactCertTxnFields) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if len((*z).CertMsg) == 0 {
+	if (*z).CertMsg.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -1548,7 +1548,7 @@ func (z *CompactCertTxnFields) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "crtmsg"
 			o = append(o, 0xa6, 0x63, 0x72, 0x74, 0x6d, 0x73, 0x67)
-			o = msgp.AppendBytes(o, (*z).CertMsg)
+			o = (*z).CertMsg.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "crtrnd"
@@ -1608,7 +1608,7 @@ func (z *CompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).CertMsg, bts, err = msgp.ReadBytesBytes(bts, (*z).CertMsg)
+			bts, err = (*z).CertMsg.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CertMsg")
 				return
@@ -1656,7 +1656,7 @@ func (z *CompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "crtmsg":
-				(*z).CertMsg, bts, err = msgp.ReadBytesBytes(bts, (*z).CertMsg)
+				bts, err = (*z).CertMsg.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "CertMsg")
 					return
@@ -1681,13 +1681,13 @@ func (_ *CompactCertTxnFields) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CompactCertTxnFields) Msgsize() (s int) {
-	s = 1 + 7 + (*z).CertIntervalLatestRound.Msgsize() + 8 + (*z).CertType.Msgsize() + 4 + (*z).Cert.Msgsize() + 7 + msgp.BytesPrefixSize + len((*z).CertMsg)
+	s = 1 + 7 + (*z).CertIntervalLatestRound.Msgsize() + 8 + (*z).CertType.Msgsize() + 4 + (*z).Cert.Msgsize() + 7 + (*z).CertMsg.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CompactCertTxnFields) MsgIsZero() bool {
-	return ((*z).CertIntervalLatestRound.MsgIsZero()) && ((*z).CertType.MsgIsZero()) && ((*z).Cert.MsgIsZero()) && (len((*z).CertMsg) == 0)
+	return ((*z).CertIntervalLatestRound.MsgIsZero()) && ((*z).CertType.MsgIsZero()) && ((*z).Cert.MsgIsZero()) && ((*z).CertMsg.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4308,7 +4308,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 		zb0006Len--
 		zb0006Mask |= 0x20000000
 	}
-	if len((*z).CompactCertTxnFields.CertMsg) == 0 {
+	if (*z).CompactCertTxnFields.CertMsg.MsgIsZero() {
 		zb0006Len--
 		zb0006Mask |= 0x40000000
 	}
@@ -4547,7 +4547,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 		if (zb0006Mask & 0x40000000) == 0 { // if not empty
 			// string "crtmsg"
 			o = append(o, 0xa6, 0x63, 0x72, 0x74, 0x6d, 0x73, 0x67)
-			o = msgp.AppendBytes(o, (*z).CompactCertTxnFields.CertMsg)
+			o = (*z).CompactCertTxnFields.CertMsg.MarshalMsg(o)
 		}
 		if (zb0006Mask & 0x80000000) == 0 { // if not empty
 			// string "crtrnd"
@@ -5171,7 +5171,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0006 > 0 {
 			zb0006--
-			(*z).CompactCertTxnFields.CertMsg, bts, err = msgp.ReadBytesBytes(bts, (*z).CompactCertTxnFields.CertMsg)
+			bts, err = (*z).CompactCertTxnFields.CertMsg.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CertMsg")
 				return
@@ -5589,7 +5589,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "crtmsg":
-				(*z).CompactCertTxnFields.CertMsg, bts, err = msgp.ReadBytesBytes(bts, (*z).CompactCertTxnFields.CertMsg)
+				bts, err = (*z).CompactCertTxnFields.CertMsg.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "CertMsg")
 					return
@@ -5630,13 +5630,13 @@ func (z *Transaction) Msgsize() (s int) {
 	for zb0005 := range (*z).ApplicationCallTxnFields.ForeignAssets {
 		s += (*z).ApplicationCallTxnFields.ForeignAssets[zb0005].Msgsize()
 	}
-	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Uint32Size + 7 + (*z).CompactCertTxnFields.CertIntervalLatestRound.Msgsize() + 8 + (*z).CompactCertTxnFields.CertType.Msgsize() + 4 + (*z).CompactCertTxnFields.Cert.Msgsize() + 7 + msgp.BytesPrefixSize + len((*z).CompactCertTxnFields.CertMsg)
+	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Uint32Size + 7 + (*z).CompactCertTxnFields.CertIntervalLatestRound.Msgsize() + 8 + (*z).CompactCertTxnFields.CertType.Msgsize() + 4 + (*z).CompactCertTxnFields.Cert.Msgsize() + 7 + (*z).CompactCertTxnFields.CertMsg.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Transaction) MsgIsZero() bool {
-	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).Header.RekeyTo.MsgIsZero()) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.StateProofPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && (len((*z).ApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).ApplicationCallTxnFields.ForeignAssets) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0) && ((*z).ApplicationCallTxnFields.ExtraProgramPages == 0) && ((*z).CompactCertTxnFields.CertIntervalLatestRound.MsgIsZero()) && ((*z).CompactCertTxnFields.CertType.MsgIsZero()) && ((*z).CompactCertTxnFields.Cert.MsgIsZero()) && (len((*z).CompactCertTxnFields.CertMsg) == 0)
+	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).Header.RekeyTo.MsgIsZero()) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.StateProofPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && (len((*z).ApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).ApplicationCallTxnFields.ForeignAssets) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0) && ((*z).ApplicationCallTxnFields.ExtraProgramPages == 0) && ((*z).CompactCertTxnFields.CertIntervalLatestRound.MsgIsZero()) && ((*z).CompactCertTxnFields.CertType.MsgIsZero()) && ((*z).CompactCertTxnFields.Cert.MsgIsZero()) && ((*z).CompactCertTxnFields.CertMsg.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

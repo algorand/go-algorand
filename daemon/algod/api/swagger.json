@@ -1434,7 +1434,7 @@
           "x-go-name": "Cert"
         },
         "certmsg": {
-          "description": "CertMsg represents the message that the cert is attesting for.",
+          "description": "CertMsg is the msgpack encoding of the state proof message.",
           "type": "string",
           "format": "byte",
           "x-go-name": "CertMsg"

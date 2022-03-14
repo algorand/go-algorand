@@ -27,6 +27,7 @@ import (
 	cc "github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -150,7 +151,10 @@ func TestCompactCerts(t *testing.T) {
 			//compactcert.GenerateStateProofMessage() // TODO Stateproof: fix
 
 			ccparams := cc.Params{
-				Msg:          []byte{}, // nextCertBlockDecoded.Block.BlockHeader,
+				// nextCertBlockDecoded.Block.BlockHeader,
+				StateProofMessageHash: stateproof.Message{
+					BlockHeadersCommitment: []byte{},
+				}.IntoStateProofMessageHash(),
 				ProvenWeight: provenWeight,
 				SigRound:     basics.Round(nextCertBlock.Round),
 				SecKQ:        consensusParams.CompactCertSecKQ,

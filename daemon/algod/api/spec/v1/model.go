@@ -790,7 +790,7 @@ type CompactCertTransactionType struct {
 	// swagger:strfmt byte
 	Cert []byte `json:"cert"`
 
-	// CertMsg represents the message that the cert is attesting for.
+	// CertMsg is the msgpack encoding of the state proof message.
 	//
 	// required: true
 	// swagger:strfmt byte
