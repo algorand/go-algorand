@@ -25,8 +25,8 @@ import (
 // Message represents the message to be certified.
 type Message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	// Commitment over the blocks in the interval between two compact certificates.
-	CompcertBlockIntervalCommitment []byte `codec:"b"`
+	// Commitment over the sha256 of the block headers in the interval between two compact certificates.
+	BlockHeadersCommitment []byte `codec:"b"`
 }
 
 // ToBeHashed returns the bytes of the message.

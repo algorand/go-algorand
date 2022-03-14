@@ -153,7 +153,7 @@ func TestCompactCerts(t *testing.T) {
 			ccparams := cc.Params{
 				// nextCertBlockDecoded.Block.BlockHeader,
 				StateProofMessageHash: stateproof.Message{
-					CompcertBlockIntervalCommitment: []byte{},
+					BlockHeadersCommitment: []byte{},
 				}.IntoStateProofMessageHash(),
 				ProvenWeight: provenWeight,
 				SigRound:     basics.Round(nextCertBlock.Round),

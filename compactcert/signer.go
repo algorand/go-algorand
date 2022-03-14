@@ -133,7 +133,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 	}
 
 	return stateproof.Message{
-		CompcertBlockIntervalCommitment: tree.Root().ToSlice(),
+		BlockHeadersCommitment: tree.Root().ToSlice(),
 	}, nil
 }
 
