@@ -37,7 +37,7 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 	a.NoError(err)
 
 	verifier := key.GetVerifyingKey()
-	err = verifier.VerifyBytes(msg[:], byteSig)
+	err = verifier.VerifyBytes(msg, byteSig)
 	a.NoError(err)
 }
 
