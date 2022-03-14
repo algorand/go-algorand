@@ -316,6 +316,7 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	firstTailIdx := len(t.roundTailHashes) - len(t.roundTailSerializedData) - int(maxTxnLife)
 	if firstTailIdx > 0 {
 		t.roundTailHashes = t.roundTailHashes[firstTailIdx:]
+		t.consensusVersions = t.consensusVersions[firstTailIdx:]
 	}
 	t.tailMu.Unlock()
 }
