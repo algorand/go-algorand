@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// builderForRound not threadsafe, should be called with caution
+// builderForRound not threadsafe, should be called in a lock environment
 func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	hdr, err := ccw.ledger.BlockHdr(rnd)
 	if err != nil {
