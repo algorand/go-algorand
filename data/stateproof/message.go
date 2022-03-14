@@ -25,12 +25,13 @@ import (
 // Message represents the message to be certified.
 type Message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	Payload []byte   `codec:"p"`
+	// Commitment over the blocks in the interval between two compact certificates.
+	CompcertBlockIntervalCommitment []byte `codec:"b"`
 }
 
 // ToBeHashed returns the bytes of the message.
 func (m Message) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertMessage, m.Payload
+	return protocol.CompactCertMessage, m.CompcertBlockIntervalCommitment
 }
 
 // IntoStateProofMessageHash returns a hashed representation fitting the compact certificate messages.

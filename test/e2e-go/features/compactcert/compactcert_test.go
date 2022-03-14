@@ -152,10 +152,12 @@ func TestCompactCerts(t *testing.T) {
 
 			ccparams := cc.Params{
 				// nextCertBlockDecoded.Block.BlockHeader,
-				StateProofMessageHash: stateproof.Message{Payload: []byte{}}.IntoStateProofMessageHash(),
-				ProvenWeight:          provenWeight,
-				SigRound:              basics.Round(nextCertBlock.Round),
-				SecKQ:                 consensusParams.CompactCertSecKQ,
+				StateProofMessageHash: stateproof.Message{
+					CompcertBlockIntervalCommitment: []byte{},
+				}.IntoStateProofMessageHash(),
+				ProvenWeight: provenWeight,
+				SigRound:     basics.Round(nextCertBlock.Round),
+				SecKQ:        consensusParams.CompactCertSecKQ,
 			}
 			verif := cc.MkVerifier(ccparams, votersRoot)
 			err = verif.Verify(&compactCert)

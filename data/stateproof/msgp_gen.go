@@ -22,7 +22,7 @@ func (z *Message) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)
 	var zb0001Mask uint8 /* 2 bits */
-	if len((*z).Payload) == 0 {
+	if len((*z).CompcertBlockIntervalCommitment) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -30,9 +30,9 @@ func (z *Message) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "p"
-			o = append(o, 0xa1, 0x70)
-			o = msgp.AppendBytes(o, (*z).Payload)
+			// string "b"
+			o = append(o, 0xa1, 0x62)
+			o = msgp.AppendBytes(o, (*z).CompcertBlockIntervalCommitment)
 		}
 	}
 	return
@@ -58,9 +58,9 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).Payload, bts, err = msgp.ReadBytesBytes(bts, (*z).Payload)
+			(*z).CompcertBlockIntervalCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).CompcertBlockIntervalCommitment)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Payload")
+				err = msgp.WrapError(err, "struct-from-array", "CompcertBlockIntervalCommitment")
 				return
 			}
 		}
@@ -87,10 +87,10 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "p":
-				(*z).Payload, bts, err = msgp.ReadBytesBytes(bts, (*z).Payload)
+			case "b":
+				(*z).CompcertBlockIntervalCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).CompcertBlockIntervalCommitment)
 				if err != nil {
-					err = msgp.WrapError(err, "Payload")
+					err = msgp.WrapError(err, "CompcertBlockIntervalCommitment")
 					return
 				}
 			default:
@@ -113,11 +113,11 @@ func (_ *Message) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Message) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Payload)
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).CompcertBlockIntervalCommitment)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Message) MsgIsZero() bool {
-	return (len((*z).Payload) == 0)
+	return (len((*z).CompcertBlockIntervalCommitment) == 0)
 }
