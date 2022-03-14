@@ -217,13 +217,19 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	return
 }
 
-func txtailNewRound(tx *sql.Tx, rnd basics.Round, roundData []byte) error {
+func txtailNewRound(tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetRound basics.Round) error {
 	// todo - implement this.
+	// step 1 :
+	// insert all round data.
+	// step 2:
+	// delte all data before forgetRound
 	return nil
 }
 
 func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
-	for rnd := dcc.oldBase; rnd < dcc.oldBase+basics.Round(dcc.offset); rnd++ {
+	baseRound := dcc.oldBase + 1
+	roundsData := make([][]byte, 0, dcc.offset)
+	for rnd := baseRound; rnd < baseRound+basics.Round(dcc.offset); rnd++ {
 		// get the round data we want to flush.
 		rndData, has := t.recent[rnd]
 		if !has {
@@ -232,13 +238,15 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 		if len(rndData.serializedData) == 0 {
 			return fmt.Errorf("txTail: unable to commit round %d - missing serialized transaction tail data", rnd)
 		}
-		err := txtailNewRound(tx, rnd, rndData.serializedData)
-		if err != nil {
-			return fmt.Errorf("txTail: unable to persist new round %d : %w", rnd, err)
-		}
+		roundsData = append(roundsData, rndData.serializedData)
 		// clear out the serialized data.
 		rndData.serializedData = nil
 		t.recent[rnd] = rndData
+	}
+	maxTxnLifeRound := basics.Round(t.recent[baseRound+basics.Round(dcc.offset)-1].proto.MaxTxnLife) + 1
+	forgetRound := (baseRound + basics.Round(dcc.offset)).SubSaturate(maxTxnLifeRound)
+	if err := txtailNewRound(tx, baseRound, roundsData, forgetRound); err != nil {
+		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
 	return nil
 }
