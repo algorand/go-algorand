@@ -42,7 +42,6 @@ type sigslot struct {
 // a compact certificate for that message.
 type Builder struct {
 	Params
-
 	sigs          []sigslot // Indexed by pos in participants
 	sigsHasValidL bool      // The L values in sigs are consistent with weights
 	signedWeight  uint64    // Total weight of signatures so far
