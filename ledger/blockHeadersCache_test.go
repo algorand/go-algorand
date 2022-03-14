@@ -31,6 +31,7 @@ func TestBlockHeadersCache(t *testing.T) {
 	a := require.New(t)
 
 	var cache blockHeadersCache
+	cache.initialize()
 	for i := basics.Round(1024); i < 1024+latestCacheSize; i++ {
 		hdr := bookkeeping.BlockHeader{Round: i}
 		cache.Put(i, hdr)
