@@ -724,7 +724,7 @@ var signCmd = &cobra.Command{
 		}
 
 		var lsig transactions.LogicSig
-
+		var authAddr basics.Address
 		var client libgoal.Client
 		var wh []byte
 		var pw []byte
@@ -743,6 +743,11 @@ var signCmd = &cobra.Command{
 			dataDir := ensureSingleDataDir()
 			client = ensureKmdClient(dataDir)
 			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		} else {
+			authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+			if err != nil {
+				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+			}
 		}
 
 		var outData []byte
@@ -787,15 +792,11 @@ var signCmd = &cobra.Command{
 
 		for _, group := range groupsOrder {
 			txnGroup := []transactions.SignedTxn{}
-			for idx, txn := range txnGroups[group] {
+			for _, txn := range txnGroups[group] {
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
 					if signerAddress != "" {
-						addr, err := basics.UnmarshalChecksumAddress(signerAddress)
-						if err != nil {
-							reportErrorf("Signer invalid txn[%d]: %v", idx, err)
-						}
-						txn.AuthAddr = addr
+						txn.AuthAddr = authAddr
 					}
 				}
 				txnGroup = append(txnGroup, *txn)
