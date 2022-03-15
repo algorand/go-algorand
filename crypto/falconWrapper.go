@@ -109,7 +109,7 @@ func (d *FalconVerifier) GetSignatureFixedLengthHashableRepresentation(signature
 	return ctSignature[:], err
 }
 
-// NewFalconSigner creates a falconSinger that is used to sign and verify falcon signatures
+// NewFalconSigner creates a falconSigner that is used to sign and verify falcon signatures
 func NewFalconSigner() (*FalconSigner, error) {
 	var seed FalconSeed
 	RandBytes(seed[:])

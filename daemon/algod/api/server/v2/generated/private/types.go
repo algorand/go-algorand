@@ -124,17 +124,6 @@ type AccountStateDelta struct {
 	Delta StateDelta `json:"delta"`
 }
 
-// AccountsErrorResponse defines model for AccountsErrorResponse.
-type AccountsErrorResponse struct {
-	Data               *string `json:"data,omitempty"`
-	MaxResults         *uint64 `json:"max-results,omitempty"`
-	Message            string  `json:"message"`
-	TotalAppsOptedIn   *uint64 `json:"total-apps-opted-in,omitempty"`
-	TotalAssetsOptedIn *uint64 `json:"total-assets-opted-in,omitempty"`
-	TotalCreatedApps   *uint64 `json:"total-created-apps,omitempty"`
-	TotalCreatedAssets *uint64 `json:"total-created-assets,omitempty"`
-}
-
 // Application defines model for Application.
 type Application struct {
 
@@ -346,8 +335,8 @@ type DryrunTxnResult struct {
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
-	Data    *string `json:"data,omitempty"`
-	Message string  `json:"message"`
+	Data    *map[string]interface{} `json:"data,omitempty"`
+	Message string                  `json:"message"`
 }
 
 // EvalDelta defines model for EvalDelta.

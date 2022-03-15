@@ -19,11 +19,12 @@ package merklesignature
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
-	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -101,7 +102,7 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 }
 
 func createTestDB(a *require.Assertions) *db.Accessor {
-	tmpname := uuid.NewV4().String() // could this just be a constant string instead? does it even matter?
+	tmpname := fmt.Sprintf("%015x", crypto.RandUint64())
 	store, err := db.MakeAccessor(tmpname, false, true)
 	a.NoError(err)
 	a.NotNil(store)

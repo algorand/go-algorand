@@ -87,7 +87,11 @@ func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, er
 // see https://www.sqlite.org/pragma.html#pragma_secure_delete
 // It is not read-only and not in-memory (otherwise, erasability doesn't matter)
 func MakeErasableAccessor(dbfilename string) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, false, false, []string{"_secure_delete=on"})
+	return makeErasableAccessor(dbfilename, false)
+}
+
+func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
+	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on"})
 }
 
 func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package prefetcher_test
 
 import (
 	"context"
@@ -27,10 +27,27 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/internal/prefetcher"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+func makeAddressPtr(seed int) (o *basics.Address) {
+	o = new(basics.Address)
+	o[0] = byte(seed)
+	o[1] = byte(seed >> 8)
+	o[2] = byte(seed >> 16)
+	return
+}
+
+func makeAddress(addressSeed int) (o basics.Address) {
+	t := *makeAddressPtr(addressSeed)
+	copy(o[:], t[:])
+	return
+}
+
+const proto = protocol.ConsensusCurrentVersion
 
 type prefetcherTestLedger struct {
 	round    basics.Round
@@ -50,8 +67,11 @@ func (l *prefetcherTestLedger) LookupWithoutRewards(_ basics.Round, addr basics.
 	}
 	return ledgercore.AccountData{}, l.round, nil
 }
-func (l *prefetcherTestLedger) LookupResource(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.AccountResource, error) {
-	return ledgercore.AccountResource{}, nil
+func (l *prefetcherTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	return ledgercore.AppResource{}, nil
+}
+func (l *prefetcherTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	return ledgercore.AssetResource{}, nil
 }
 func (l *prefetcherTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, error) {
 	if addr, has := l.creators[cidx]; has {
@@ -63,7 +83,7 @@ func (l *prefetcherTestLedger) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
 func (l *prefetcherTestLedger) GenesisProto() config.ConsensusParams {
-	return config.Consensus[protocol.ConsensusCurrentVersion]
+	return config.Consensus[proto]
 }
 func (l *prefetcherTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	return l.round, ledgercore.AccountTotals{}, nil
@@ -72,21 +92,67 @@ func (l *prefetcherTestLedger) CompactCertVoters(basics.Round) (*ledgercore.Vote
 	return nil, nil
 }
 
+type loadedAccountDataEntryKey struct {
+	addressExists bool
+	address       basics.Address
+}
+
+func convertLoadedAccountDataEntries(entries []prefetcher.LoadedAccountDataEntry) map[loadedAccountDataEntryKey]*ledgercore.AccountData {
+	res := make(map[loadedAccountDataEntryKey]*ledgercore.AccountData)
+
+	for _, e := range entries {
+		var key loadedAccountDataEntryKey
+		if e.Address != nil {
+			key.addressExists = true
+			key.address = *e.Address
+		}
+
+		res[key] = e.Data
+	}
+
+	return res
+}
+
+func compareLoadedAccountDataEntries(t *testing.T, expected []prefetcher.LoadedAccountDataEntry, actual []prefetcher.LoadedAccountDataEntry) {
+	expectedForTest := convertLoadedAccountDataEntries(expected)
+	actualForTest := convertLoadedAccountDataEntries(actual)
+	require.Equal(t, expectedForTest, actualForTest)
+}
+
+type loadedResourcesEntryKey struct {
+	addressExists  bool
+	address        basics.Address
+	creatableIndex basics.CreatableIndex
+	creatableType  basics.CreatableType
+}
+
+func convertLoadedResourcesEntries(entries []prefetcher.LoadedResourcesEntry) map[loadedResourcesEntryKey]*ledgercore.AccountResource {
+	res := make(map[loadedResourcesEntryKey]*ledgercore.AccountResource)
+
+	for _, e := range entries {
+		key := loadedResourcesEntryKey{
+			creatableIndex: e.CreatableIndex,
+			creatableType:  e.CreatableType,
+		}
+		if e.Address != nil {
+			key.addressExists = true
+			key.address = *e.Address
+		}
+
+		res[key] = e.Resource
+	}
+
+	return res
+}
+
+func compareLoadedResourcesEntries(t *testing.T, expected []prefetcher.LoadedResourcesEntry, actual []prefetcher.LoadedResourcesEntry) {
+	expectedForTest := convertLoadedResourcesEntries(expected)
+	actualForTest := convertLoadedResourcesEntries(actual)
+	require.Equal(t, expectedForTest, actualForTest)
+}
+
 func TestEvaluatorPrefetcher(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
 
 	rnd := basics.Round(5)
 	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -96,269 +162,246 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		balances: make(map[basics.Address]ledgercore.AccountData),
 		creators: make(map[basics.CreatableIndex]basics.Address),
 	}
-	ledger.balances[acctAddr(1)] = ledgercore.AccountData{
+	ledger.balances[makeAddress(1)] = ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 	}
-	ledger.creators[1001] = acctAddr(2)
-	ledger.creators[2001] = acctAddr(15)
+	ledger.creators[1001] = makeAddress(2)
+	ledger.creators[2001] = makeAddress(15)
 
-	type testTransactionCases struct {
+	type testCase struct {
+		name      string
 		signedTxn transactions.SignedTxn
-		accounts  []loadedAccountDataEntry
-		resources []loadedResourcesEntry
+		accounts  []prefetcher.LoadedAccountDataEntry
+		resources []prefetcher.LoadedResourcesEntry
 	}
 
-	testTransactions := []testTransactionCases{
-		// payment transaction
+	testCases := []testCase{
 		{
+			name: "payment transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender: acctAddr(1),
+						Sender: makeAddress(1),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
-						Receiver:         acctAddr(2),
-						CloseRemainderTo: acctAddr(3),
+						Receiver:         makeAddress(2),
+						CloseRemainderTo: makeAddress(3),
 					},
 				},
 			},
-			accounts: []loadedAccountDataEntry{
+			accounts: []prefetcher.LoadedAccountDataEntry{
 				{
-					address: &feeSinkAddr,
-					data: &ledgercore.AccountData{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(1),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
 				{
-					address: acctAddrPtr(2),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(2),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(3),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(3),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 			},
 		},
-		// asset config transaction for a non-existing asset
 		{
+			name: "asset config transaction for a non-existing asset",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
 					Header: transactions.Header{
-						Sender: acctAddr(1),
+						Sender: makeAddress(1),
 					},
 					AssetConfigTxnFields: transactions.AssetConfigTxnFields{
 						ConfigAsset: 1000,
 					},
 				},
 			},
-			accounts: []loadedAccountDataEntry{
+			accounts: []prefetcher.LoadedAccountDataEntry{
 				{
-					address: &feeSinkAddr,
-					data: &ledgercore.AccountData{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(1),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
 			},
-			resources: []loadedResourcesEntry{
+			resources: []prefetcher.LoadedResourcesEntry{
 				{
-					address:        nil,
-					creatableIndex: 1000,
-					creatableType:  basics.AssetCreatable,
-					resource:       nil,
+					Address:        nil,
+					CreatableIndex: 1000,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       nil,
 				},
 			},
 		},
-		// asset config transaction for an existing asset
 		{
+			name: "asset config transaction for an existing asset",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
 					Header: transactions.Header{
-						Sender: acctAddr(1),
+						Sender: makeAddress(1),
 					},
 					AssetConfigTxnFields: transactions.AssetConfigTxnFields{
 						ConfigAsset: 1001,
 					},
 				},
 			},
-			accounts: []loadedAccountDataEntry{
+			accounts: []prefetcher.LoadedAccountDataEntry{
 				{
-					address: &feeSinkAddr,
-					data: &ledgercore.AccountData{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(1),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
 			},
-			resources: []loadedResourcesEntry{
+			resources: []prefetcher.LoadedResourcesEntry{
 				{
-					address:        acctAddrPtr(2),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(2),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 			},
 		},
-		// asset transfer transaction
 		{
+			name: "asset transfer transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetTransferTx,
 					Header: transactions.Header{
-						Sender: acctAddr(1),
+						Sender: makeAddress(1),
 					},
 					AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 						XferAsset:     1001,
-						AssetSender:   acctAddr(2),
-						AssetReceiver: acctAddr(3),
-						AssetCloseTo:  acctAddr(4),
+						AssetSender:   makeAddress(2),
+						AssetReceiver: makeAddress(3),
+						AssetCloseTo:  makeAddress(4),
 					},
 				},
 			},
-			accounts: []loadedAccountDataEntry{
+			accounts: []prefetcher.LoadedAccountDataEntry{
 				{
-					address: &feeSinkAddr,
-					data: &ledgercore.AccountData{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(1),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
-				{
-					address: acctAddrPtr(2),
-					data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
-					},
-				},
-				{
-					address: acctAddrPtr(3),
-					data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
-					},
-				},
-				{
-					address: acctAddrPtr(4),
-					data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
-					},
-				},
 			},
-			resources: []loadedResourcesEntry{
+			resources: []prefetcher.LoadedResourcesEntry{
 				{
-					address:        acctAddrPtr(1),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(2),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 				{
-					address:        acctAddrPtr(2),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(3),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 				{
-					address:        acctAddrPtr(3),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
-				},
-				{
-					address:        acctAddrPtr(4),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(4),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 			},
 		},
-		// asset freeze transaction
 		{
+			name: "asset freeze transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetFreezeTx,
 					Header: transactions.Header{
-						Sender: acctAddr(1),
+						Sender: makeAddress(1),
 					},
 					AssetFreezeTxnFields: transactions.AssetFreezeTxnFields{
-						FreezeAccount: acctAddr(3),
+						FreezeAccount: makeAddress(3),
 						FreezeAsset:   1001,
 					},
 				},
 			},
-			accounts: []loadedAccountDataEntry{
+			accounts: []prefetcher.LoadedAccountDataEntry{
 				{
-					address: &feeSinkAddr,
-					data: &ledgercore.AccountData{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(1),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
 				{
-					address: acctAddrPtr(3),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(3),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 			},
-			resources: []loadedResourcesEntry{
+			resources: []prefetcher.LoadedResourcesEntry{
 				{
-					address:        acctAddrPtr(2),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(2),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 				{
-					address:        acctAddrPtr(3),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(3),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 			},
 		},
-		// application transaction
 		{
+			name: "application transaction",
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 					Header: transactions.Header{
-						Sender: acctAddr(1),
+						Sender: makeAddress(1),
 					},
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 						ApplicationID: 10,
 						Accounts: []basics.Address{
-							acctAddr(4),
-							acctAddr(5),
+							makeAddress(4),
+							makeAddress(5),
 						},
 						ForeignApps: []basics.AppIndex{
 							2001,
@@ -370,50 +413,50 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					},
 				},
 			},
-			accounts: []loadedAccountDataEntry{
+			accounts: []prefetcher.LoadedAccountDataEntry{
 				{
-					address: &feeSinkAddr,
-					data: &ledgercore.AccountData{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(1),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
 				{
-					address: acctAddrPtr(4),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(4),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 				{
-					address: acctAddrPtr(5),
-					data: &ledgercore.AccountData{
+					Address: makeAddressPtr(5),
+					Data: &ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
 					},
 				},
 			},
-			resources: []loadedResourcesEntry{
+			resources: []prefetcher.LoadedResourcesEntry{
 				{
-					address:        acctAddrPtr(2),
-					creatableIndex: 1001,
-					creatableType:  basics.AssetCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(2),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 				{
-					address:        acctAddrPtr(15),
-					creatableIndex: 2001,
-					creatableType:  basics.AppCreatable,
-					resource:       &ledgercore.AccountResource{},
+					Address:        makeAddressPtr(15),
+					CreatableIndex: 2001,
+					CreatableType:  basics.AppCreatable,
+					Resource:       &ledgercore.AccountResource{},
 				},
 				{
-					address:        nil,
-					creatableIndex: 2002,
-					creatableType:  basics.AppCreatable,
-					resource:       nil,
+					Address:        nil,
+					CreatableIndex: 2002,
+					CreatableType:  basics.AppCreatable,
+					Resource:       nil,
 				},
 				/* - if we'll decide that we want to perfetch the account local state, then this should be enabled.
 				{
@@ -423,90 +466,37 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					resource:       &ledgercore.AccountResource{},
 				},*/
 				{
-					address:        nil,
-					creatableIndex: 10,
-					creatableType:  basics.AppCreatable,
-					resource:       nil,
+					Address:        nil,
+					CreatableIndex: 10,
+					CreatableType:  basics.AppCreatable,
+					Resource:       nil,
 				},
 			},
 		},
 	}
 
-	for _, txn := range testTransactions {
-		groups := make([][]transactions.SignedTxnWithAD, 1)
-		groups[0] = make([]transactions.SignedTxnWithAD, 1)
-		groups[0][0].SignedTxn = txn.signedTxn
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			groups := make([][]transactions.SignedTxnWithAD, 1)
+			groups[0] = make([]transactions.SignedTxnWithAD, 1)
+			groups[0][0].SignedTxn = testCase.signedTxn
 
-		preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+			preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 
-		for loadedTxnGroup := range preloadedTxnGroupsCh {
-			require.NoError(t, loadedTxnGroup.err)
+			loadedTxnGroup, ok := <-preloadedTxnGroupsCh
+			require.True(t, ok)
+			require.NoError(t, loadedTxnGroup.Err)
+			compareLoadedAccountDataEntries(t, testCase.accounts, loadedTxnGroup.Accounts)
+			compareLoadedResourcesEntries(t, testCase.resources, loadedTxnGroup.Resources)
 
-			// compare the txn.accounts and loadedTxnGroup.accounts in order agnostic way.
-			require.Equal(t, len(txn.accounts), len(loadedTxnGroup.accounts))
-			for _, acct := range txn.accounts {
-				// make sure we find it in loadedTxnGroup.accounts
-				found := false
-				require.NotNil(t, acct.address)
-				for k, loadedAcct := range loadedTxnGroup.accounts {
-					require.NotNilf(t, loadedAcct.address, "index: %d\nexpected %#v\nactual %#v", k, acct, loadedAcct)
-					if *acct.address != *loadedAcct.address {
-						continue
-					}
-					require.Equal(t, *acct.data, *loadedAcct.data)
-					found = true
-					break
-				}
-				require.Truef(t, found, "missing account %#v", acct)
-			}
-
-			// compare the txn.resources and loadedTxnGroup.resources in order agnostic way
-			require.Equalf(t, len(txn.resources), len(loadedTxnGroup.resources), "mismatching resources count; actual : %v", loadedTxnGroup.resources)
-			for _, res := range txn.resources {
-				// make sure we find it in loadedTxnGroup.resources
-				found := false
-				for _, loadedRes := range loadedTxnGroup.resources {
-					if res.creatableIndex != loadedRes.creatableIndex {
-						continue
-					}
-					require.Equal(t, res.creatableType, loadedRes.creatableType)
-					if res.address == nil {
-						require.Nil(t, loadedRes.address)
-					} else {
-						if loadedRes.address == nil || *res.address != *loadedRes.address {
-							continue
-						}
-					}
-					if res.resource == nil {
-						require.Nil(t, loadedRes.resource)
-					} else {
-						require.NotNil(t, loadedRes.resource)
-						require.Equal(t, *res.resource, *loadedRes.resource)
-					}
-					found = true
-					break
-				}
-				require.Truef(t, found, "failed to find resource %#v", res)
-			}
-		}
+			_, ok = <-preloadedTxnGroupsCh
+			require.False(t, ok)
+		})
 	}
 }
 
 func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
 
 	rnd := basics.Round(5)
 	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -516,13 +506,13 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 		balances: make(map[basics.Address]ledgercore.AccountData),
 		creators: make(map[basics.CreatableIndex]basics.Address),
 	}
-	ledger.balances[acctAddr(1)] = ledgercore.AccountData{
+	ledger.balances[makeAddress(1)] = ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 	}
 	type testTransactionCases struct {
 		signedTxn transactions.SignedTxn
-		accounts  []loadedAccountDataEntry
-		resources []loadedResourcesEntry
+		accounts  []prefetcher.LoadedAccountDataEntry
+		resources []prefetcher.LoadedResourcesEntry
 	}
 
 	txnGroups := make([][]transactions.SignedTxnWithAD, 20000)
@@ -534,27 +524,27 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender: acctAddr(1),
+						Sender: makeAddress(1),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
-						Receiver:         acctAddr(addr),
-						CloseRemainderTo: acctAddr(addr + 1),
+						Receiver:         makeAddress(addr),
+						CloseRemainderTo: makeAddress(addr + 1),
 					},
 				},
 			}
 			addr += 2
 		}
 	}
-	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, txnGroups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd, txnGroups, feeSinkAddr, config.Consensus[proto])
 	groupsCount := 0
 	addressCount := 0
 	uniqueAccounts := make(map[basics.Address]bool)
 	for k := range preloadedTxnGroupsCh {
-		addressCount += len(k.accounts)
-		for _, acct := range k.accounts {
-			uniqueAccounts[*acct.address] = true
+		addressCount += len(k.Accounts)
+		for _, acct := range k.Accounts {
+			uniqueAccounts[*acct.Address] = true
 		}
-		require.Equal(t, txnGroups[groupsCount], k.txnGroup)
+		require.Equal(t, txnGroups[groupsCount], k.TxnGroup)
 		groupsCount++
 	}
 	require.Equal(t, len(txnGroups), groupsCount)
@@ -564,19 +554,6 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 }
 
 func BenchmarkPrefetcherApps(b *testing.B) {
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
-
 	txnGroupLen := 16
 	groups := make([][]transactions.SignedTxnWithAD, 1+b.N/txnGroupLen)
 	for grpIdx := range groups {
@@ -586,13 +563,13 @@ func BenchmarkPrefetcherApps(b *testing.B) {
 				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
 					Header: transactions.Header{
-						Sender: acctAddr(grpIdx + txnIdx),
+						Sender: makeAddress(grpIdx + txnIdx),
 					},
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 						ApplicationID: 10,
 						Accounts: []basics.Address{
-							acctAddr(grpIdx + txnIdx + 1),
-							acctAddr(grpIdx + txnIdx + 1),
+							makeAddress(grpIdx + txnIdx + 1),
+							makeAddress(grpIdx + txnIdx + 1),
 						},
 						ForeignApps: []basics.AppIndex{
 							2001,
@@ -613,31 +590,18 @@ func BenchmarkPrefetcherApps(b *testing.B) {
 		balances: make(map[basics.Address]ledgercore.AccountData),
 		creators: make(map[basics.CreatableIndex]basics.Address),
 	}
-	ledger.balances[acctAddr(1)] = ledgercore.AccountData{
+	ledger.balances[makeAddress(1)] = ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 	for k := range preloadedTxnGroupsCh {
-		require.NoError(b, k.err)
+		require.NoError(b, k.Err)
 	}
 }
 
 func BenchmarkPrefetcherPayment(b *testing.B) {
-	acctAddrPtr := func(i int) (o *basics.Address) {
-		o = new(basics.Address)
-		o[0] = byte(i)
-		o[1] = byte(i >> 8)
-		o[2] = byte(i >> 16)
-		return
-	}
-	acctAddr := func(i int) (o basics.Address) {
-		t := *acctAddrPtr(i)
-		copy(o[:], t[:])
-		return
-	}
-
 	txnGroupLen := 16
 	groups := make([][]transactions.SignedTxnWithAD, 1+b.N/txnGroupLen)
 	for grpIdx := range groups {
@@ -647,11 +611,11 @@ func BenchmarkPrefetcherPayment(b *testing.B) {
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender: acctAddr(grpIdx + txnIdx),
+						Sender: makeAddress(grpIdx + txnIdx),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
-						Receiver:         acctAddr(grpIdx + txnIdx + 1),
-						CloseRemainderTo: acctAddr(grpIdx + txnIdx + 2),
+						Receiver:         makeAddress(grpIdx + txnIdx + 1),
+						CloseRemainderTo: makeAddress(grpIdx + txnIdx + 2),
 					},
 				},
 			}
@@ -664,28 +628,13 @@ func BenchmarkPrefetcherPayment(b *testing.B) {
 		balances: make(map[basics.Address]ledgercore.AccountData),
 		creators: make(map[basics.CreatableIndex]basics.Address),
 	}
-	ledger.balances[acctAddr(1)] = ledgercore.AccountData{
+	ledger.balances[makeAddress(1)] = ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := prefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[protocol.ConsensusCurrentVersion])
+	preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 	for k := range preloadedTxnGroupsCh {
-		require.NoError(b, k.err)
+		require.NoError(b, k.Err)
 	}
-}
-func BenchmarkChannelWrites(b *testing.B) {
-	b.Run("groupTaskDone", func(b *testing.B) {
-		c := make(chan groupTaskDone, b.N)
-		for i := 0; i < b.N; i++ {
-			c <- groupTaskDone{groupIdx: i}
-		}
-	})
-
-	b.Run("int64", func(b *testing.B) {
-		c := make(chan int64, b.N)
-		for i := int64(0); i < int64(b.N); i++ {
-			c <- i
-		}
-	})
 }
