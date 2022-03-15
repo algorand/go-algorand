@@ -425,7 +425,7 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 // Explicit invocation of const lookup and push
-func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
+func asmIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("intc operation needs one argument")
 	}
@@ -436,7 +436,7 @@ func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.Intc(uint(constIndex))
 	return nil
 }
-func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
+func asmByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("bytec operation needs one argument")
 	}
@@ -661,7 +661,7 @@ func assembleMethod(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.error("Unable to parse method signature")
 }
 
-func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
+func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
@@ -681,7 +681,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
+func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	bvals := make([][]byte, 0, len(args))
 	rest := args
@@ -726,7 +726,7 @@ func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
+func asmArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("arg operation needs one argument")
 	}
@@ -751,7 +751,7 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	return asmDefault(ops, &altSpec, args)
 }
 
-func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
+func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("branch operation needs label argument")
 	}
@@ -764,7 +764,7 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
+func asmSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	err := asmDefault(ops, spec, args)
 	if err != nil {
 		return err
@@ -1040,7 +1040,7 @@ func asmGitxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.errorf("%s expects two or three arguments", spec.Name)
 }
 
-func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
+func asmGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1061,7 +1061,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1082,7 +1082,7 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1103,7 +1103,7 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1124,7 +1124,7 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAcctParams(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAcctParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1164,7 +1164,7 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
+func asmEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1184,7 +1184,7 @@ func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
+func asmBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1206,7 +1206,7 @@ func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
+func asmJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1227,7 +1227,7 @@ func assembleJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-type assembleFunc func(*OpStream, *OpSpec, []string) error
+type asmFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
@@ -2178,7 +2178,7 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 	return
 }
 
-type disassembleFunc func(dis *disassembleState, spec *OpSpec) (string, error)
+type disFunc func(dis *disassembleState, spec *OpSpec) (string, error)
 
 // Basic disasemble, and extra bytes of opcode are decoded as bytes integers.
 func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
