@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"math"
+	"math/bits"
 )
 
 // Errors for the CompactCert verifier
@@ -134,9 +135,10 @@ func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error
 		return fmt.Errorf("%w - signed weight %d <= proven weight %d", ErrSignedWeightLessThanProvenWeight, signedWeight, v.ProvenWeightThreshold)
 	}
 
-	weightLowerBond := log2(signedWeight) - log2(v.ProvenWeightThreshold)
+	weightLowerBond := log2Up(signedWeight) - log2Down(v.ProvenWeightThreshold)
 	fmt.Printf("sw : %f  pw: %f\n", math.Log2(float64(signedWeight)), math.Log2(float64(v.ProvenWeightThreshold)))
-	fmt.Printf("sw - pw=%d\n", log2(signedWeight)-log2(v.ProvenWeightThreshold))
+	fmt.Printf("func sw : %d  pw: %d\n", log2Down(signedWeight), log2Up(v.ProvenWeightThreshold))
+	fmt.Printf("sw - pw=%d\n", log2Up(signedWeight)-log2Down(v.ProvenWeightThreshold))
 	fmt.Printf("numRev*(sw-pw) = %d\n", uint64(weightLowerBond)*numOfReveals)
 	if uint64(weightLowerBond)*numOfReveals < v.SecKQ {
 		return ErrInsufficientImpliedProvenWeight
@@ -144,7 +146,18 @@ func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error
 	return nil
 }
 
-func log2(x uint64) int64 {
-	t := math.Log2(float64(x))
-	return int64(t)
+func log2Up(x uint64) uint64 {
+	bits := uint64(bits.Len64(x))
+	if 1<<(bits-1) == x {
+		return bits - 1
+	}
+	return (bits - 1) + 1
+}
+
+func log2Down(x uint64) uint64 {
+	bits := uint64(bits.Len64(x))
+	if 1<<(bits-1) == x {
+		return bits - 1
+	}
+	return bits - 1
 }

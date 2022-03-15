@@ -2,7 +2,7 @@ package compactcert
 
 import (
 	"fmt"
-	
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -116,7 +116,7 @@ func TestVerifyImpliedProvend(t *testing.T) {
 	a := require.New(t)
 
 	signedWeight := uint64(1<<11 - 1)
-	provenWeight := uint64(1 << 10)
+	provenWeight := uint64(1<<10 + 3)
 
 	numOfReveals, err := numReveals(signedWeight, provenWeight, 128, MaxReveals)
 	fmt.Println(numOfReveals)
