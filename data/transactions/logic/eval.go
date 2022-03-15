@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/consensys/gnark-crypto/ecc/bn254"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fp"
 )
 
 // EvalMaxVersion is the max version we can interpret and run
@@ -1250,73 +1251,107 @@ func opDivw(cx *EvalContext) {
 	cx.stack[pprev].Uint = quo
 }
 
+func bytesToBN254Field(b []byte) (ret fp.Element) {
+	var x big.Int
+	x.SetBytes(b[:32])
+	return
+}
+
+func bytesToBN254G1(b []byte) (ret bn254.G1Affine) {
+	ret.X = bytesToBN254Field(b[:32])
+	ret.Y = bytesToBN254Field(b[32:64])
+	return
+}
+
+func bytesToBN254G1s(b []byte) (ret []bn254.G1Affine) {
+	for i := 0; i < len(b)/64; i++ {
+		ret = append(ret, bytesToBN254G1(b[(i*64):(i*64+64)]))
+	}
+	return
+}
+
+func bytesToBN254G2(b []byte) (ret bn254.G2Affine) {
+	ret.X.A0 = bytesToBN254Field(b[:32])
+	ret.X.A1 = bytesToBN254Field(b[32:64])
+	ret.Y.A0 = bytesToBN254Field(b[64:96])
+	ret.Y.A1 = bytesToBN254Field(b[96:128])
+	return
+}
+
+func bytesToBN254G2s(b []byte) (ret []bn254.G2Affine) {
+	for i := 0; i < len(b)/128; i++ {
+		ret = append(ret, bytesToBN254G2(b[(i*128):(i*128+128)]))
+	}
+	return
+}
+
+func bN254G1ToBytes(g1 *bn254.G1Affine) (ret []byte) {
+	retX := g1.X.Bytes()
+	retY := g1.Y.Bytes()
+	ret = append(retX[:], retY[:]...)
+	return
+}
+
+func bN254G2ToBytes(g2 *bn254.G2Affine) (ret []byte) {
+	retXA0 := g2.X.A0.Bytes()
+	retXA1 := g2.X.A1.Bytes()
+	retYA0 := g2.Y.A0.Bytes()
+	retYA1 := g2.Y.A1.Bytes()
+
+	ret = append(retXA0[:], retXA1[:]...)
+	ret = append(ret[:], retYA0[:]...)
+	ret = append(ret[:], retYA1[:]...)
+
+	return
+}
+
 func opBn256Add(cx *EvalContext) {
 	last := len(cx.stack) - 1
+	prev := last - 1
 
-	input := cx.stack[last].Bytes
+	aBytes := cx.stack[prev].Bytes
+	bBytes := cx.stack[last].Bytes
 
-	a := new(bn254.G1Affine)
-	err := a.Unmarshal(input[:64])
-	if err != nil {
-		cx.err = errors.New("unmarshal failed")
-		return
-	}
+	a := bytesToBN254G1(aBytes)
+	b := bytesToBN254G1(bBytes)
 
-	b := new(bn254.G1Affine)
-	err = b.Unmarshal(input[64:128])
-	if err != nil {
-		cx.err = errors.New("unmarshal failed")
-		return
-	}
+	res := new(bn254.G1Affine).Add(&a, &b)
 
-	res := new(bn254.G1Affine).Add(a, b)
-	resBytes := res.Marshal()
+	resBytes := bN254G1ToBytes(res)
 
-	cx.stack[last].Bytes = resBytes
+	cx.stack = cx.stack[:last]
+	cx.stack[prev].Bytes = resBytes
 }
 
 func opBn256ScalarMul(cx *EvalContext) {
 	last := len(cx.stack) - 1
+	prev := last - 1
 
-	input := cx.stack[last].Bytes
+	aBytes := cx.stack[prev].Bytes
+	a := bytesToBN254G1(aBytes)
 
-	a := new(bn254.G1Affine)
-	err := a.Unmarshal(input[:64])
-	if err != nil {
-		cx.err = errors.New("unmarshal failed")
-		return
-	}
+	kBytes := cx.stack[last].Bytes
+	k := new(big.Int).SetBytes(kBytes[:32])
 
-	k := new(big.Int).SetBytes(input[64:96])
+	res := new(bn254.G1Affine).ScalarMultiplication(&a, k)
 
-	res := new(bn254.G1Affine).ScalarMultiplication(a, k)
-	resBytes := res.Marshal()
+	resBytes := bN254G1ToBytes(res)
 
-	cx.stack[last].Bytes = resBytes
+	cx.stack = cx.stack[:last]
+	cx.stack[prev].Bytes = resBytes
 }
 
 func opBn256Pairing(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
-	g1bytes := cx.stack[prev].Bytes
-	g2bytes := cx.stack[last].Bytes
+	g1Bytes := cx.stack[prev].Bytes
+	g2Bytes := cx.stack[last].Bytes
 
-	g1 := new(bn254.G1Affine)
-	err := g1.Unmarshal(g1bytes[:64])
-	if err != nil {
-		cx.err = errors.New("unmarshal failed")
-		return
-	}
+	g1 := bytesToBN254G1s(g1Bytes)
+	g2 := bytesToBN254G2s(g2Bytes)
 
-	g2 := new(bn254.G2Affine)
-	err = g2.Unmarshal(g2bytes[:128])
-	if err != nil {
-		cx.err = errors.New("unmarshal failed")
-		return
-	}
-
-	ok, err := bn254.PairingCheck([]bn254.G1Affine{*g1}, []bn254.G2Affine{*g2})
+	ok, err := bn254.PairingCheck(g1, g2)
 	if err != nil {
 		cx.err = errors.New("pairing failed")
 		return
