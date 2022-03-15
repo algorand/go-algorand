@@ -394,7 +394,7 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 	ops.Bytec(constIndex)
 }
 
-func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
+func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("int needs one argument")
 	}
@@ -628,7 +628,7 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte {base64,b64,base32,b32} ...
 // byte 0x....
 // byte "this is a string\n"
-func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
+func asmByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
@@ -644,7 +644,7 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 // method "add(uint64,uint64)uint64"
-func assembleMethod(ops *OpStream, spec *OpSpec, args []string) error {
+func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.error("method requires a literal argument")
 	}
@@ -714,7 +714,7 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 
 // addr A1EU...
 // parses base32-with-checksum account address strings into a byte literal
-func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAddr(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("addr operation needs one argument")
 	}
@@ -1402,12 +1402,12 @@ func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
 // keywords handle parsing and assembling special asm language constructs like 'addr'
 // We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
-	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"int":  {0, "int", nil, asmInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"byte": {0, "byte", nil, asmByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"addr": {0, "addr", nil, asmAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"method": {0, "method", nil, asmMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 }
 
 type lineError struct {
