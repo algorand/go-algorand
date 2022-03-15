@@ -54,6 +54,22 @@ byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 	testAccepts(t, progText, 1)
 }
 
+func TestSHA3_256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	/*
+		pip install hashlib
+		import hashlib
+		hashlib.sha3_256(b"fnord").hexdigest()
+	*/
+	progText := `byte 0x666E6F7264
+sha3_256
+byte 0xd757297405c5c89f7ceca368ee76c2f1893ee24f654e60032e65fb53b01aae10
+==`
+	testAccepts(t, progText, 7)
+}
+
 func TestSHA512_256(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -98,6 +114,46 @@ ed25519verify`, pkStr), v)
 				ProgramHash: crypto.HashObj(Program(ops.Program)),
 				Data:        data[:],
 			})
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			txn.Lsig.Args = [][]byte{data[:], sig[:]}
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+
+			// short sig will fail
+			txn.Lsig.Args[1] = sig[1:]
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "invalid signature")
+
+			// flip a bit and it should not pass
+			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+			data1, err := hex.DecodeString(msg1)
+			require.NoError(t, err)
+			txn.Lsig.Args = [][]byte{data1, sig[:]}
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "REJECT")
+		})
+	}
+}
+
+func TestEd25519VerifyBare(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	c := crypto.GenerateSignatureSecrets(s)
+	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+	data, err := hex.DecodeString(msg)
+	require.NoError(t, err)
+	pk := basics.Address(c.SignatureVerifier)
+	pkStr := pk.String()
+
+	for v := uint64(7); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, fmt.Sprintf(`arg 0
+arg 1
+addr %s
+ed25519verify_bare`, pkStr), v)
+			require.NoError(t, err)
+			sig := c.SignBytes(data)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}

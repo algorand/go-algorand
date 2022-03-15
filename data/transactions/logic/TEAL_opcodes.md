@@ -1012,6 +1012,14 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
+## ed25519verify_bare
+
+- Opcode: 0x84
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
+- for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
+- **Cost**: 1900
+- Availability: v7
+
 ## callsub target
 
 - Opcode: 0x88 {int16 branch offset, big endian}
@@ -1092,6 +1100,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Availability: v6
 
 The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
+
+## sha3_256
+
+- Opcode: 0x98
+- Stack: ..., A: []byte &rarr; ..., []byte
+- SHA3_256 hash of value A, yields [32]byte
+- **Cost**: 130
+- Availability: v7
 
 ## b+
 

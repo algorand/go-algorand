@@ -1101,6 +1101,13 @@ func opSHA256(cx *EvalContext) {
 	cx.stack[last].Bytes = hash[:]
 }
 
+// The NIST SHA3-256 is implemented for compatibility with ICON
+func opSHA3_256(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	hash := sha3.Sum256(cx.stack[last].Bytes)
+	cx.stack[last].Bytes = hash[:]
+}
+
 // The Keccak256 variant of SHA-3 is implemented for compatibility with Ethereum
 func opKeccak256(cx *EvalContext) {
 	last := len(cx.stack) - 1
@@ -2831,7 +2838,7 @@ func (cx *EvalContext) programHash() crypto.Digest {
 	return cx.programHashCached
 }
 
-func opEd25519verify(cx *EvalContext) {
+func opEd25519Verify(cx *EvalContext) {
 	last := len(cx.stack) - 1 // index of PK
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
@@ -2852,6 +2859,30 @@ func opEd25519verify(cx *EvalContext) {
 
 	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
 	cx.stack[pprev].Uint = boolToUint(sv.Verify(msg, sig, cx.Proto.EnableBatchVerification))
+	cx.stack[pprev].Bytes = nil
+	cx.stack = cx.stack[:prev]
+}
+
+func opEd25519VerifyBare(cx *EvalContext) {
+	last := len(cx.stack) - 1 // index of PK
+	prev := last - 1          // index of signature
+	pprev := prev - 1         // index of data
+
+	var sv crypto.SignatureVerifier
+	if len(cx.stack[last].Bytes) != len(sv) {
+		cx.err = errors.New("invalid public key")
+		return
+	}
+	copy(sv[:], cx.stack[last].Bytes)
+
+	var sig crypto.Signature
+	if len(cx.stack[prev].Bytes) != len(sig) {
+		cx.err = errors.New("invalid signature")
+		return
+	}
+	copy(sig[:], cx.stack[prev].Bytes)
+
+	cx.stack[pprev].Uint = boolToUint(sv.VerifyBytes(cx.stack[pprev].Bytes, sig, cx.Proto.EnableBatchVerification))
 	cx.stack[pprev].Bytes = nil
 	cx.stack = cx.stack[:prev]
 }
