@@ -797,7 +797,6 @@ var signCmd = &cobra.Command{
 						}
 						txn.AuthAddr = addr
 					}
-
 				}
 				txnGroup = append(txnGroup, *txn)
 			}
