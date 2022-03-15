@@ -67,7 +67,7 @@ func TestEvalModes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	// ed25519verify and err are tested separately below
+	// ed25519verify* and err are tested separately below
 
 	// check modeAny (TEAL v1 + txna/gtxna) are available in RunModeSignature
 	// check all opcodes available in runModeApplication
@@ -77,6 +77,7 @@ bytec 0
 sha256
 keccak256
 sha512_256
+sha3_256
 len
 intc_0
 +
@@ -2369,6 +2370,7 @@ func TestReturnTypes(t *testing.T) {
 		"gitxna":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
 		"gitxnas":           "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxnas 0 Accounts",
 		"base64_decode":     `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
+		"json_ref":          "json_ref JSONUint64",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2379,6 +2381,7 @@ func TestReturnTypes(t *testing.T) {
 	// these require special input data and tested separately
 	skipCmd := map[string]bool{
 		"ed25519verify":       true,
+		"ed25519verify_bare":  true,
 		"ecdsa_verify":        true,
 		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,

@@ -221,17 +221,30 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		CreatedAssets      []interface{} `json:"createdAssets"`
 	}
 
-	err = json.Unmarshal(rec.Body.Bytes(), &ret)
-	require.NoError(t, err)
-
-	// totals should be present in both 200 and 400
-	require.Equal(t, acctSize, ret.TotalApps+ret.TotalAssets+ret.TotalCreatedApps+ret.TotalCreatedAssets, "totals incorrect: %+v", ret)
+	var errRet struct {
+		Data struct {
+			TotalApps          int `json:"total-apps-opted-in"`
+			TotalAssets        int `json:"total-assets-opted-in"`
+			TotalCreatedApps   int `json:"total-created-apps"`
+			TotalCreatedAssets int `json:"total-created-assets"`
+			MaxResults         int `json:"max-results"`
+		} `json:"data,omitempty"`
+	}
 
 	// check totals
 	switch rec.Code {
 	case 400:
-		require.Equal(t, maxResults, ret.MaxResults)
+		err = json.Unmarshal(rec.Body.Bytes(), &errRet)
+		require.NoError(t, err)
+		require.Equal(t, maxResults, errRet.Data.MaxResults)
+		// totals should be present in both 200 and 400
+		require.Equal(t, acctSize, errRet.Data.TotalApps+errRet.Data.TotalAssets+errRet.Data.TotalCreatedApps+errRet.Data.TotalCreatedAssets, "totals incorrect: %+v", ret)
 	case 200:
+		err = json.Unmarshal(rec.Body.Bytes(), &ret)
+		require.NoError(t, err)
+		// totals should be present in both 200 and 400
+		require.Equal(t, acctSize, ret.TotalApps+ret.TotalAssets+ret.TotalCreatedApps+ret.TotalCreatedAssets, "totals incorrect: %+v", ret)
+
 		if exclude == "all" {
 			require.Nil(t, ret.Apps)
 			require.Nil(t, ret.Assets)
