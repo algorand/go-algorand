@@ -730,14 +730,14 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x55
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
-- Bth byte of A, as an integer
+- Bth byte of A, as an integer. If B is larger than the array length, the program fails
 - Availability: v3
 
 ## setbyte
 
 - Opcode: 0x56
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- Copy of A with the Bth byte set to small integer (between 0..255) C
+- Copy of A with the Bth byte set to small integer (between 0..255) C. If B is larger than the array length, the program fails
 - Availability: v3
 
 ## extract s l

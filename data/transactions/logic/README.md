@@ -306,8 +306,8 @@ return stack matches the name of the input value.
 | `expw` | A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1 |
 | `getbit` | Bth bit of (byte-array or integer) A. |
 | `setbit` | Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C |
-| `getbyte` | Bth byte of A, as an integer |
-| `setbyte` | Copy of A with the Bth byte set to small integer (between 0..255) C |
+| `getbyte` | Bth byte of A, as an integer. If B is larger than the array length, the program fails |
+| `setbyte` | Copy of A with the Bth byte set to small integer (between 0..255) C. If B is larger than the array length, the program fails |
 | `concat` | join A and B |
 
 ### Byte Array Manipulation
