@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"sync"
 
@@ -40,6 +38,7 @@ import (
 // rather than a direct ledger tracker.  We don't have an explicit interface
 // for such an "accounts tracker" yet, however.
 type votersTracker struct {
+	trivialTracker
 	// round contains the top online accounts in a given round.
 	//
 	// To avoid increasing block latency, we include a Merkle commitment
@@ -195,27 +194,6 @@ func (vt *votersTracker) committedUpTo(committedRound basics.Round) (minRound, l
 	}
 
 	return vt.lowestRound(committedRound), basics.Round(proto.CompactCertVotersLookback)
-}
-
-func (vt *votersTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
-}
-
-func (vt *votersTracker) prepareCommit(*deferredCommitContext) error {
-	return nil
-}
-
-func (vt *votersTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
-}
-
-func (vt *votersTracker) postCommit(context.Context, *deferredCommitContext) {
-}
-
-func (vt *votersTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
-}
-
-func (vt *votersTracker) handleUnorderedCommit(*deferredCommitContext) {
 }
 
 // lowestRound() returns the lowest round state (blocks and accounts) needed by

@@ -680,3 +680,33 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 	return
 
 }
+
+// trivialTracker has default implementation of committing functions from ledgerTracker interface.
+// It does not implement loadFromDisk, close and newBlock b/c these functions must be implemented for any tracker.
+type trivialTracker struct {
+}
+
+func (tt *trivialTracker) committedUpTo(committedRnd basics.Round) (retRound, lookback basics.Round) {
+	return committedRnd, basics.Round(0)
+}
+
+func (tt *trivialTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
+}
+
+func (tt *trivialTracker) prepareCommit(*deferredCommitContext) error {
+	return nil
+}
+
+func (tt *trivialTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (tt *trivialTracker) postCommit(context.Context, *deferredCommitContext) {
+}
+
+func (tt *trivialTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
+}
+
+func (tt *trivialTracker) handleUnorderedCommit(*deferredCommitContext) {
+}

@@ -17,9 +17,6 @@
 package ledger
 
 import (
-	"context"
-	"database/sql"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -27,6 +24,7 @@ import (
 )
 
 type metricsTracker struct {
+	trivialTracker
 	ledgerTransactionsTotal *metrics.Counter
 	ledgerRewardClaimsTotal *metrics.Counter
 	ledgerRound             *metrics.Gauge
@@ -60,29 +58,4 @@ func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	mt.ledgerTransactionsTotal.Add(float64(len(blk.Payset)), map[string]string{})
 	// TODO rewards: need to provide meaningful metric here.
 	mt.ledgerRewardClaimsTotal.Add(float64(1), map[string]string{})
-}
-
-func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) (retRound, lookback basics.Round) {
-	return committedRnd, basics.Round(0)
-}
-
-func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
-	return nil
-}
-
-func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
-}
-
-func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (mt *metricsTracker) handleUnorderedCommit(*deferredCommitContext) {
-}
-
-func (mt *metricsTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
 }

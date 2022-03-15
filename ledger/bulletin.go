@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"context"
-	"database/sql"
 	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
@@ -49,6 +47,7 @@ func (notifier *notifier) notify() {
 // bulletin provides an easy way to wait on a round to be written to the ledger.
 // To use it, call <-Wait(round)
 type bulletin struct {
+	trivialTracker
 	mu                          deadlock.Mutex
 	pendingNotificationRequests map[basics.Round]notifier
 	latestRound                 basics.Round
@@ -107,25 +106,4 @@ func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Ro
 
 	b.latestRound = rnd
 	return rnd, basics.Round(0)
-}
-
-func (b *bulletin) prepareCommit(dcc *deferredCommitContext) error {
-	return nil
-}
-
-func (b *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
-}
-
-func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (b *bulletin) handleUnorderedCommit(*deferredCommitContext) {
-}
-
-func (b *bulletin) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
 }

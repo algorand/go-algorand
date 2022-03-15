@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"context"
-	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -39,6 +37,7 @@ type blockDeltaPair struct {
 }
 
 type blockNotifier struct {
+	trivialTracker
 	mu            deadlock.Mutex
 	cond          *sync.Cond
 	listeners     []BlockListener
@@ -108,29 +107,4 @@ func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateD
 	defer bn.mu.Unlock()
 	bn.pendingBlocks = append(bn.pendingBlocks, blockDeltaPair{block: blk, delta: delta})
 	bn.cond.Broadcast()
-}
-
-func (bn *blockNotifier) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
-	return rnd, basics.Round(0)
-}
-
-func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
-	return nil
-}
-
-func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
-}
-
-func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) handleUnorderedCommit(*deferredCommitContext) {
-}
-
-func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
 }
