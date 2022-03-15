@@ -124,7 +124,7 @@ func (t *txTail) txTailRoundFromBlock(l ledgerForTracker, rnd basics.Round) (txT
 
 }
 
-func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
+func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) error {
 	latest := l.Latest()
 	hdr, err := l.BlockHdr(latest)
 	if err != nil {
@@ -150,8 +150,9 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	roundsLastValids := make(map[basics.Round][]transactions.Txid)
 
 	// allocate with size 0, just so that we can start from fresh.
-	t.roundTailHashes = make([]crypto.Digest, 0)
-	t.consensusVersions = make([]protocol.ConsensusVersion, 0)
+	roundTailHashes := make([]crypto.Digest, 0)
+	consensusVersions := make([]protocol.ConsensusVersion, 0)
+	roundTailSerializedData := make([][]byte, 0)
 
 	for ; old <= latest; old++ {
 
@@ -193,9 +194,12 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 			}
 		}
 
-		_, tailHash := txTailRound.encode()
-		t.roundTailHashes = append(t.roundTailHashes, tailHash)
-		t.consensusVersions = append(t.consensusVersions, consensusVersion)
+		encodedTail, tailHash := txTailRound.encode()
+		roundTailHashes = append(roundTailHashes, tailHash)
+		consensusVersions = append(consensusVersions, consensusVersion)
+		if old > trackerRound {
+			roundTailSerializedData = append(roundTailSerializedData, encodedTail)
+		}
 	}
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
@@ -206,10 +210,12 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 		}
 		t.lastValid[lastValid] = lastValueMap
 	}
-
 	t.tailMu.Lock()
-	t.roundTailSerializedData = make([][]byte, 0)
+	t.roundTailHashes = roundTailHashes
+	t.consensusVersions = consensusVersions
+	t.roundTailSerializedData = roundTailSerializedData
 	t.tailMu.Unlock()
+
 	return nil
 }
 
