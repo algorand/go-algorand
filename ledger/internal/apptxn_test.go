@@ -3032,3 +3032,224 @@ itxn_submit
 		})
 	}
 }
+
+// TestGlobalChangesAcrossApps ensures that state changes are seen by other app
+// calls when using inners.
+func TestGlobalChangesAcrossApps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appA := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+            // Call B : No arguments means: set your global "X" to "ABC"
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+			itxn_submit
+
+            // Call C : Checks that B's global X is ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 2;     itxn_field ApplicationID
+            txn Applications 1;     itxn_field Applications // Pass on access to B
+			itxn_submit
+
+            // Call B again:  1 arg means it checks if X == ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+            byte "check, please";   itxn_field ApplicationArgs
+			itxn_submit
+
+            // Check B's state for X
+            txn Applications 1
+            byte "X"
+            app_global_get_ex
+            assert
+            byte "ABC"
+            ==
+            assert
+`),
+	}
+
+	appB := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn NumAppArgs
+  bnz check						// 1 arg means check
+  // set
+  byte "X"
+  byte "ABC"
+  app_global_put
+  b end
+check:
+  byte "X"
+  app_global_get
+  byte "ABC"
+  ==
+  assert
+  b end
+`),
+		GlobalStateSchema: basics.StateSchema{
+			NumByteSlice: 1,
+		},
+	}
+
+	appC := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn Applications 1
+  byte "X"
+  app_global_get_ex
+  assert
+  byte "ABC"
+  ==
+  assert
+`),
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &appA, &appB, &appC)
+	vb := endBlock(t, l, eval)
+	indexA := vb.Block().Payset[0].ApplicationID
+	indexB := vb.Block().Payset[1].ApplicationID
+	indexC := vb.Block().Payset[2].ApplicationID
+
+	fundA := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: indexA.Address(),
+		Amount:   1_000_000,
+	}
+
+	callA := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: indexA,
+		ForeignApps:   []basics.AppIndex{indexB, indexC},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fundA, &callA)
+	endBlock(t, l, eval)
+}
+
+// TestLocalChangesAcrossApps ensures that state changes are seen by other app
+// calls when using inners.
+func TestLocalChangesAcrossApps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appA := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+            // Call B : No arguments means: set caller's local "X" to "ABC"
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+            int OptIn;              itxn_field OnCompletion
+			itxn_submit
+
+            // Call C : Checks that caller's local X for app B is ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 2;     itxn_field ApplicationID
+            txn Applications 1;     itxn_field Applications // Pass on access to B
+			itxn_submit
+
+            // Call B again:  1 arg means it checks if caller's local X == ABC
+			itxn_begin
+			int appl;               itxn_field TypeEnum
+			txn Applications 1;     itxn_field ApplicationID
+            byte "check, please";   itxn_field ApplicationArgs
+			itxn_submit
+
+            // Check self local state for B
+            global CurrentApplicationAddress
+            txn Applications 1
+            byte "X"
+            app_local_get_ex
+            assert
+            byte "ABC"
+            ==
+            assert
+`),
+	}
+
+	appB := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn NumAppArgs
+  bnz check						// 1 arg means check
+  // set
+  txn Sender
+  byte "X"
+  byte "ABC"
+  app_local_put
+  b end
+check:
+  txn Sender
+  byte "X"
+  app_local_get
+  byte "ABC"
+  ==
+  assert
+  b end
+`),
+		LocalStateSchema: basics.StateSchema{
+			NumByteSlice: 1,
+		},
+	}
+
+	appC := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  txn Sender
+  txn Applications 1
+  byte "X"
+  app_local_get_ex
+  assert
+  byte "ABC"
+  ==
+  assert
+`),
+	}
+
+	eval := nextBlock(t, l, true, nil)
+	txns(t, l, eval, &appA, &appB, &appC)
+	vb := endBlock(t, l, eval)
+	indexA := vb.Block().Payset[0].ApplicationID
+	indexB := vb.Block().Payset[1].ApplicationID
+	indexC := vb.Block().Payset[2].ApplicationID
+
+	fundA := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: indexA.Address(),
+		Amount:   1_000_000,
+	}
+
+	callA := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[0],
+		ApplicationID: indexA,
+		ForeignApps:   []basics.AppIndex{indexB, indexC},
+	}
+
+	eval = nextBlock(t, l, true, nil)
+	txns(t, l, eval, &fundA, &callA)
+	endBlock(t, l, eval)
+}

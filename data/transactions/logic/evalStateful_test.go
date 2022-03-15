@@ -1133,9 +1133,43 @@ func TestAcctParams(t *testing.T) {
 	testApp(t, source, ep)
 }
 
+func TestGlobalNonDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, ledger := makeSampleEnv()
+	source := `
+byte "none"
+app_global_del
+int 1
+`
+	ledger.NewApp(txn.Sender, 888, makeApp(0, 0, 1, 0))
+	delta := testApp(t, source, ep)
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
+}
+
+func TestLocalNonDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, ledger := makeSampleEnv()
+	source := `
+int 0
+byte "none"
+app_local_del
+int 1
+`
+	ledger.NewAccount(txn.Sender, 100000)
+	ledger.NewApp(txn.Sender, 888, makeApp(0, 0, 1, 0))
+	ledger.NewLocals(txn.Sender, 888)
+	delta := testApp(t, source, ep)
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
+}
+
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	sourceRead := `intcblock 0 100 0x77 1
@@ -1294,7 +1328,7 @@ int 0x77
 &&
 `
 	delta := testApp(t, source, ep)
-	require.Empty(t, 0, delta.GlobalDelta)
+	require.Empty(t, delta.GlobalDelta)
 	require.Len(t, delta.LocalDeltas, 1)
 
 	require.Len(t, delta.LocalDeltas[0], 2)

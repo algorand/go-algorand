@@ -311,7 +311,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
 
-	credit, _ := transactions.FeeCredit(txgroup, proto.MinTxnFee)
+	credit := feeCredit(txgroup, proto.MinTxnFee)
 
 	if proto.EnableAppCostPooling && apps > 0 {
 		pooledApplicationBudget = new(int)
@@ -335,6 +335,25 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		created:                 &resources{},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 	}
+}
+
+// feeCredit returns the extra fee supplied in this top-level txgroup compared
+// to required minfee.  It can make assumptions about overflow because the group
+// is known OK according to TxnGroupBatchVerify. (In essence the group is
+// "WellFormed")
+func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
+	minFeeCount := uint64(0)
+	feesPaid := uint64(0)
+	for _, stxn := range txgroup {
+		if stxn.Txn.Type != protocol.CompactCertTx {
+			minFeeCount++
+		}
+		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+	}
+	// Overflow is impossible, because TxnGroupBatchVerify checked.
+	feeNeeded := minFee * minFeeCount
+
+	return feesPaid - feeNeeded
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -3617,8 +3636,8 @@ func opAppLocalPut(cx *EvalContext) {
 		return
 	}
 
-	// if writing the same value, do nothing, matching ledger behavior with
-	// previous BuildEvalDelta mechanism
+	// if writing the same value, don't record in EvalDelta, matching ledger
+	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
@@ -3653,8 +3672,8 @@ func opAppGlobalPut(cx *EvalContext) {
 		return
 	}
 
-	// if writing the same value, do nothing, matching ledger behavior with
-	// previous BuildEvalDelta mechanism
+	// if writing the same value, don't record in EvalDelta, matching ledger
+	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
@@ -3686,15 +3705,27 @@ func opAppLocalDel(cx *EvalContext) {
 	}
 
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
-	if err == nil {
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	// if deleting a non-existent value, don't record in EvalDelta, matching
+	// ledger behavior with previous BuildEvalDelta mechanism
+	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
+		if err != nil {
+			cx.err = err
+			return
+		}
 		if _, ok := cx.Txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
 			cx.Txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
 		}
 		cx.Txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
 			Action: basics.DeleteAction,
 		}
-		err = cx.Ledger.DelLocal(addr, cx.appID, key, accountIdx)
 	}
+
+	err = cx.Ledger.DelLocal(addr, cx.appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -3713,9 +3744,18 @@ func opAppGlobalDel(cx *EvalContext) {
 		return
 	}
 
-	cx.Txn.EvalDelta.GlobalDelta[key] = basics.ValueDelta{
-		Action: basics.DeleteAction,
+	// if deleting a non-existent value, don't record in EvalDelta, matching
+	// ledger behavior with previous BuildEvalDelta mechanism
+	if _, ok, err := cx.Ledger.GetGlobal(cx.appID, key); ok {
+		if err != nil {
+			cx.err = err
+			return
+		}
+		cx.Txn.EvalDelta.GlobalDelta[key] = basics.ValueDelta{
+			Action: basics.DeleteAction,
+		}
 	}
+
 	err := cx.Ledger.DelGlobal(cx.appID, key)
 	if err != nil {
 		cx.err = err
@@ -3733,11 +3773,8 @@ func opAppGlobalDel(cx *EvalContext) {
 
 func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		if ref == 0 {
+		if ref == 0 || ref == uint64(cx.appID) {
 			return cx.appID, nil
-		}
-		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 		}
 		for _, appID := range cx.Txn.Txn.ForeignApps {
 			if appID == basics.AppIndex(ref) {
@@ -3752,13 +3789,11 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 				}
 			}
 		}
-		// It should be legal to use your own app id, which can't be in
-		// ForeignApps during creation, because it is unknown then.  But it can
-		// be discovered in the app code.  It's tempting to combine this with
-		// the == 0 test, above, but it must come after the check for being
-		// below len(ForeignApps)
-		if ref == uint64(cx.appID) {
-			return cx.appID, nil
+		// Allow use of indexes, but this comes last so that clear advice can be
+		// given to anyone who cares about semantics in the first few rounds of
+		// a new network - don't use indexes for references, use the App ID
+		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
+			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
 		}
 	} else {
 		// Old rules
@@ -3780,10 +3815,6 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 
 func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		// In recent versions, accept either kind of ASA reference
-		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
-		}
 		for _, assetID := range cx.Txn.Txn.ForeignAssets {
 			if assetID == basics.AssetIndex(ref) {
 				return assetID, nil
@@ -3796,6 +3827,12 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 					return assetID, nil
 				}
 			}
+		}
+		// Allow use of indexes, but this comes last so that clear advice can be
+		// given to anyone who cares about semantics in the first few rounds of
+		// a new network - don't use indexes for references, use the asa ID.
+		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
+			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
 		}
 	} else {
 		// Old rules
