@@ -32,6 +32,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// txTailRoundLease is used as part of txTailRound for storing
+// a single lease.
 type txTailRoundLease struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -54,6 +56,8 @@ type txTailRound struct {
 	TimeStamp int64               `codec:"a"` //!-- timestamp from block header
 }
 
+// encode the transaction tail data into a serialized form, and return the serialized data
+// as well as the hash of the data.
 func (t *txTailRound) encode() ([]byte, crypto.Digest) {
 	tailData := protocol.Encode(t)
 	hash := crypto.Hash(tailData)
@@ -76,12 +80,15 @@ type txTail struct {
 	roundTailSerializedData [][]byte
 
 	// roundTailHashes contains the recent 1001 hashes. The first entry matches that current tracker database round - 1001,
-	// the second to tracker database round - 1000, and so forth.
+	// the second to tracker database round - 1000, and so forth. The roundTailHashes always has it's first array element
+	// not being used.
 	roundTailHashes []crypto.Digest
 
+	// consensusVersions contains the recent 1001 consensus versions. The first entry matches that current tracker database round - 1001,
+	// the second to tracker database round - 1000, and so forth.
 	consensusVersions []protocol.ConsensusVersion
 
-	// tailMu is the synchronization mutex for accessing roundTailHashes and roundTailSerializedData.
+	// tailMu is the synchronization mutex for accessing roundTailHashes, roundTailSerializedData and consensusVersions.
 	tailMu deadlock.RWMutex
 
 	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
@@ -150,8 +157,9 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 	roundsLastValids := make(map[basics.Round][]transactions.Txid)
 
 	// allocate with size 0, just so that we can start from fresh.
-	roundTailHashes := make([]crypto.Digest, 0)
-	consensusVersions := make([]protocol.ConsensusVersion, 0)
+	// the roundTailHashes and consensusVersions always has 1 extra element being unused, so preallocate that.
+	roundTailHashes := make([]crypto.Digest, 1)
+	consensusVersions := make([]protocol.ConsensusVersion, 1)
 	roundTailSerializedData := make([][]byte, 0)
 
 	for ; old <= latest; old++ {
@@ -237,13 +245,13 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	for txid, txnInc := range delta.Txids {
 		t.putLV(txnInc.LastValid, txid)
-		tail.TxnIDs[txnInc.TranscationIndex] = txid
-		tail.LastValid[txnInc.TranscationIndex] = txnInc.LastValid
-		if blk.Payset[txnInc.TranscationIndex].Txn.Lease != [32]byte{} {
+		tail.TxnIDs[txnInc.TransactionIndex] = txid
+		tail.LastValid[txnInc.TransactionIndex] = txnInc.LastValid
+		if blk.Payset[txnInc.TransactionIndex].Txn.Lease != [32]byte{} {
 			tail.Leases = append(tail.Leases, txTailRoundLease{
-				Sender: blk.Payset[txnInc.TranscationIndex].Txn.Sender,
-				Lease:  blk.Payset[txnInc.TranscationIndex].Txn.Lease,
-				TxnIdx: txnInc.TranscationIndex,
+				Sender: blk.Payset[txnInc.TransactionIndex].Txn.Sender,
+				Lease:  blk.Payset[txnInc.TransactionIndex].Txn.Lease,
+				TxnIdx: txnInc.TransactionIndex,
 			})
 		}
 	}

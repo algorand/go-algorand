@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -61,7 +62,7 @@ func TestTxTailCheckdup(t *testing.T) {
 
 		txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, 1)
 		blk.Payset[0].Txn.Note = []byte{byte(rnd % 256), byte(rnd / 256), byte(1)}
-		txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, TranscationIndex: 0}
+		txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{LastValid: rnd + txvalidity, TransactionIndex: 0}
 		txleases := make(map[ledgercore.Txlease]basics.Round, 1)
 		txleases[ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 
@@ -197,6 +198,71 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 			} else {
 				require.Equal(t, &errTxtailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
+		}
+	}
+}
+
+func TestTxTailDeltaTracking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var ledger txTailTestLedger
+	txtail := txTail{}
+
+	err := txtail.loadFromDisk(&ledger, 0)
+	require.NoError(t, err)
+	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
+	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
+	require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
+
+	var lease [32]byte
+	for i := 1; i < int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)*3; i++ {
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round:     basics.Round(i),
+				TimeStamp: int64(i << 10),
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: protocol.ConsensusCurrentVersion,
+				},
+			},
+			Payset: make(transactions.Payset, 1),
+		}
+		sender := &basics.Address{}
+		sender[0] = byte(i)
+		sender[1] = byte(i >> 8)
+		sender[2] = byte(i >> 16)
+		blk.Payset[0].Txn.Sender = *sender
+		blk.Payset[0].Txn.Lease = lease
+		deltas := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+		deltas.Txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{
+			LastValid:        basics.Round(i + 50),
+			TransactionIndex: 0,
+		}
+		deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
+
+		txtail.newBlock(blk, deltas)
+		txtail.committedUpTo(basics.Round(i))
+		dcc := &deferredCommitContext{
+			deferredCommitRange: deferredCommitRange{
+				oldBase:           basics.Round(i - 1),
+				offset:            1,
+				isCatchpointRound: true,
+			},
+		}
+		err = txtail.prepareCommit(dcc)
+		require.NoError(t, err)
+		err = txtail.commitRound(context.Background(), nil, dcc)
+		require.NoError(t, err)
+		if uint64(i) > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife*2 {
+			// validate internal storage length.
+			require.Equal(t, 1, len(txtail.roundTailSerializedData))
+			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife+1), len(txtail.roundTailHashes))
+			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife+1), len(txtail.consensusVersions))
+		}
+		txtail.postCommit(context.Background(), dcc)
+		if uint64(i) > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife*2 {
+			// validate internal storage length.
+			require.Zero(t, len(txtail.roundTailSerializedData))
+			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.roundTailHashes))
+			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.consensusVersions))
 		}
 	}
 }
