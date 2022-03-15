@@ -308,7 +308,6 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	// Costs for v2 should be higher because of hash opcode cost changes
 	ep2, tx, _ := makeSampleEnvWithVersion(2)
 	ep2.Proto.LogicSigMaxCost = 2307
-	//	ep2.TxnGroup[0].Lsig.Logic = opsV2.Program
 	ep2.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
 	// Eval doesn't fail, but it would be ok (better?) if it did
 	testLogicBytes(t, opsV2.Program, ep2, "static cost", "")

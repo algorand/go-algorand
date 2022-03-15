@@ -62,6 +62,7 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		SchemaMinBalancePerEntry: 1003,
 		SchemaUintMinBalance:     1004,
 		SchemaBytesMinBalance:    1005,
+		AppFlatOptInMinBalance:   1006,
 
 		MaxInnerTransactions: 4,
 		MaxTxGroupSize:       8,
@@ -107,20 +108,22 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 	ep := defaultEvalParamsWithVersion(txn, LogicVersion)
 	ep.Trace = nil // Tracing would slow down benchmarks
 	clone := *ep.Proto
-	bigBudget := uint64(1000 * 1000) // Allow long run times
-	clone.LogicSigMaxCost = bigBudget
-	clone.MaxAppProgramCost = int(bigBudget)
+	bigBudget := 1000 * 1000 // Allow long run times
+	clone.LogicSigMaxCost = uint64(bigBudget)
+	clone.MaxAppProgramCost = bigBudget
 	ep.Proto = &clone
 	ep.PooledApplicationBudget = &bigBudget
 	return ep
 }
 
 func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *EvalParams {
+	var zero uint64
 	ep := &EvalParams{
-		Proto:    makeTestProtoV(version),
-		TxnGroup: make([]transactions.SignedTxnWithAD, 1),
-		Specials: &transactions.SpecialAddresses{},
-		Trace:    &strings.Builder{},
+		Proto:     makeTestProtoV(version),
+		TxnGroup:  make([]transactions.SignedTxnWithAD, 1),
+		Specials:  &transactions.SpecialAddresses{},
+		Trace:     &strings.Builder{},
+		FeeCredit: &zero,
 	}
 	if txn != nil {
 		ep.TxnGroup[0].SignedTxn = *txn
@@ -134,7 +137,7 @@ func defaultEvalParamsWithVersion(txn *transactions.SignedTxn, version uint64) *
 // a group, and then thrown away.
 func (ep *EvalParams) reset() {
 	if ep.Proto.EnableAppCostPooling {
-		budget := uint64(ep.Proto.MaxAppProgramCost)
+		budget := ep.Proto.MaxAppProgramCost
 		ep.PooledApplicationBudget = &budget
 	}
 	if ep.Proto.EnableInnerTransactionPooling {
@@ -572,6 +575,19 @@ int 1                   // ret 1
 `, 2)
 }
 
+func TestDivw(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testPanics(t, "int 1; int 2; int 0; divw; assert;", 6)
+	testPanics(t, "int 2; int 1; int 1; divw; assert;", 6)
+	testPanics(t, "int 2; int 0; int 2; divw; assert", 6)
+	testAccepts(t, "int 1; int 2; int 2; divw;", 6)
+
+	testAccepts(t, "int 1; int 0; int 2; divw; int 0x8000000000000000; ==", 6)
+	testAccepts(t, "int 0; int 90; int 30; divw; int 3; ==", 6)
+}
+
 func TestUint128(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -814,7 +830,7 @@ func TestGtxnBadIndex(t *testing.T) {
 
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
-	testLogicBytes(t, program, defaultEvalParams(nil), "gtxn lookup")
+	testLogicBytes(t, program, defaultEvalParams(nil), "txn index 1")
 }
 
 func TestGtxnBadField(t *testing.T) {
@@ -1352,25 +1368,31 @@ assert
 int 1
 `
 
+// The additions in v6 were all "effects" so they must look behind.  They use gtxn 2.
 const testTxnProgramTextV6 = testTxnProgramTextV5 + `
 assert
 
-txn CreatedAssetID
+gtxn 2 CreatedAssetID
 int 0
 ==
 assert
 
-txn CreatedApplicationID
+gtxn 2 CreatedApplicationID
 int 0
 ==
 assert
 
-txn NumLogs
+gtxn 2 NumLogs
 int 2
 ==
 assert
 
-txn Logs 1
+gtxn 2 Logs 1
+byte "prefilled"
+==
+assert
+
+gtxn 2 LastLog
 byte "prefilled"
 ==
 assert
@@ -1533,11 +1555,11 @@ func TestTxn(t *testing.T) {
 			// Since we test GroupIndex ==3, we need to fake up such a group
 			ep := defaultEvalParams(nil)
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{txn, txn, txn, txn})
-			ep.TxnGroup[3].EvalDelta.Logs = []string{"x", "prefilled"}
+			ep.TxnGroup[2].EvalDelta.Logs = []string{"x", "prefilled"}
 			if v < txnEffectsVersion {
 				testLogicFull(t, ops.Program, 3, ep)
 			} else {
-				// Starting in txnEffectsVersion we can't access all fields in Logic mode
+				// Starting in txnEffectsVersion, there are fields we can't access all fields in Logic mode
 				testLogicFull(t, ops.Program, 3, ep, "not allowed in current mode")
 				// And the early tests use "arg" a lot - not allowed in stateful. So remove those tests.
 				lastArg := strings.Index(source, "arg 10\n==\n&&")
@@ -1628,12 +1650,12 @@ func TestGaid(t *testing.T) {
 	ep.Ledger = MakeLedger(nil)
 
 	// should fail when no creatable was created
-	_, err := EvalApp(check0.Program, 1, 0, ep)
+	_, err := EvalApp(check0.Program, 1, 888, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "the txn did not create anything")
+	require.Contains(t, err.Error(), "did not create anything")
 
 	ep.TxnGroup[0].ApplyData.ConfigAsset = 100
-	pass, err := EvalApp(check0.Program, 1, 0, ep)
+	pass, err := EvalApp(check0.Program, 1, 888, ep)
 	if !pass || err != nil {
 		t.Log(ep.Trace.String())
 	}
@@ -1642,18 +1664,18 @@ func TestGaid(t *testing.T) {
 
 	// should fail when accessing future transaction in group
 	check2 := testProg(t, "gaid 2; int 0; >", 4)
-	_, err = EvalApp(check2.Program, 1, 0, ep)
+	_, err = EvalApp(check2.Program, 1, 888, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
-	_, err = EvalApp(check0.Program, 0, 0, ep)
+	_, err = EvalApp(check0.Program, 0, 888, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 
 	// should fail on non-creatable
 	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
-	_, err = EvalApp(check0.Program, 1, 0, ep)
+	_, err = EvalApp(check0.Program, 1, 888, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
@@ -1919,7 +1941,7 @@ txna ApplicationArgs 0
 	// modify gtxn index
 	saved = ops.Program[2]
 	ops.Program[2] = 0x01
-	testLogicBytes(t, ops.Program, ep, "gtxna lookup TxnGroup[1] but it only has 1")
+	testLogicBytes(t, ops.Program, ep, "txn index 1, len(group) is 1")
 
 	// modify gtxn field
 	ops.Program[2] = saved
@@ -3300,6 +3322,7 @@ func BenchmarkUintMath(b *testing.B) {
 		{"mul", "", "int 212; int 323; *; pop", "int 1"},
 		{"mulw", "", "int 21276237623; int 32387238723; mulw; pop; pop", "int 1"},
 		{"div", "", "int 736247364; int 892; /; pop", "int 1"},
+		{"divw", "", "int 736; int 892; int 892; divw; pop", "int 1"},
 		{"divmodw", "", "int 736247364; int 892; int 126712; int 71672; divmodw; pop; pop; pop; pop", "int 1"},
 		{"sqrt", "", "int 736247364; sqrt; pop", "int 1"},
 		{"exp", "", "int 734; int 5; exp; pop", "int 1"},
@@ -4521,9 +4544,10 @@ func TestPcDetails(t *testing.T) {
 			ops := testProg(t, test.source, LogicVersion)
 			ep, _, _ := makeSampleEnv()
 
-			pass, cx, err := EvalContract(ops.Program, 0, 0, ep)
+			pass, cx, err := EvalContract(ops.Program, 0, 888, ep)
 			require.Error(t, err)
 			require.False(t, pass)
+			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
 			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
 
@@ -4624,6 +4648,15 @@ By Herman Melville`, "",
 		{"SQ=", "URLEncoding", "", "byte 3"},
 		{"SQ===", "StdEncoding", "", "byte 4"},
 		{"SQ===", "URLEncoding", "", "byte 4"},
+
+		// Strict decoding. "Y" is normally encoded as "WQ==", as confirmed by the first test
+		{"WQ==", "StdEncoding", "Y", ""},
+		// When encoding one byte, the Y (90) becomes a 6bit value (the W) and a
+		// 2bit value (the first 2 bits of the Q. Q is the 16th b64 digit, it is
+		// 0b010000. For encoding Y, only those first two bits matter. In
+		// Strict() mode, the rest must be 0s. So using R (0b010001) should
+		// fail.
+		{"WR==", "StdEncoding", "Y", "byte 2"},
 	}
 
 	template := `byte 0x%s; byte 0x%s; base64_decode %s; ==`
@@ -4631,10 +4664,18 @@ By Herman Melville`, "",
 		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), hex.EncodeToString([]byte(tc.encoded)), tc.alph)
 
 		if tc.error == "" {
-			testAccepts(t, source, minB64DecodeVersion)
+			if LogicVersion < fidoVersion {
+				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
+			} else {
+				testAccepts(t, source, fidoVersion)
+			}
 		} else {
-			err := testPanics(t, source, minB64DecodeVersion)
-			require.Contains(t, err.Error(), tc.error)
+			if LogicVersion < fidoVersion {
+				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
+			} else {
+				err := testPanics(t, source, fidoVersion)
+				require.Contains(t, err.Error(), tc.error)
+			}
 		}
 	}
 }

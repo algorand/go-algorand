@@ -159,6 +159,9 @@ const (
 	// CreatedApplicationID Transaction.ApplyData.EvalDelta.ApplicationID
 	CreatedApplicationID
 
+	// LastLog Logs[len(Logs)-1]
+	LastLog
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -275,10 +278,12 @@ var txnFieldSpecs = []txnFieldSpec{
 	{ExtraProgramPages, StackUint64, false, 4, 6, false},
 	{Nonparticipation, StackUint64, false, 5, 6, false},
 
-	{Logs, StackBytes, true, 5, 5, true},
-	{NumLogs, StackUint64, false, 5, 5, true},
-	{CreatedAssetID, StackUint64, false, 5, 5, true},
-	{CreatedApplicationID, StackUint64, false, 5, 5, true},
+	// "Effects" Last two things are always going to: 0, true
+	{Logs, StackBytes, true, 5, 0, true},
+	{NumLogs, StackUint64, false, 5, 0, true},
+	{CreatedAssetID, StackUint64, false, 5, 0, true},
+	{CreatedApplicationID, StackUint64, false, 5, 0, true},
+	{LastLog, StackBytes, false, 6, 0, true},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

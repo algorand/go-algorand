@@ -72,8 +72,9 @@ func TestCurrentInnerTypes(t *testing.T) {
 	// allowed since v6
 	TestApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
 	TestApp(t, "itxn_begin; int keyreg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
-	TestApp(t, "itxn_begin; byte \"appl\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
-	TestApp(t, "itxn_begin; int appl; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
+	// caught before inner evaluation, because id=0 and bad program
+	TestApp(t, "itxn_begin; byte \"appl\"; itxn_field Type; itxn_submit; int 1;", ep, "invalid program (empty)")
+	TestApp(t, "itxn_begin; int appl; itxn_field TypeEnum; itxn_submit; int 1;", ep, "invalid program (empty)")
 
 	// Establish 888 as the app id, and fund it.
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -622,7 +623,7 @@ txn Sender; itxn_field Receiver;
 		pay+
 		"itxn_submit; itxn Fee; int 1999; ==", ep)
 
-	// Same first, but force the second too low
+	// Same as first, but force the second too low
 	TestApp(t, "itxn_begin"+
 		pay+
 		"int 3; itxn_field Fee;"+
@@ -647,6 +648,25 @@ txn Sender; itxn_field Receiver;
 		pay+
 		"int 1; itxn_field Fee;"+
 		"itxn_submit; itxn Fee; int 1", ep, "fee too small")
+
+	// Test that overpay in first inner group is available in second inner group
+	// also ensure only exactly the _right_ amount of credit is available.
+	TestApp(t, "itxn_begin"+
+		pay+
+		"int 2002; itxn_field Fee;"+ // double pay
+		"itxn_next"+
+		pay+
+		"int 1001; itxn_field Fee;"+ // regular pay
+		"itxn_submit;"+
+		// At beginning of second group, we should have 1 minfee of credit
+		"itxn_begin"+
+		pay+
+		"int 0; itxn_field Fee;"+ // free, due to credit
+		"itxn_next"+
+		pay+
+		"itxn_submit; itxn Fee; int 1001; ==", // second one should have to pay
+		ep)
+
 }
 
 // TestApplCreation is only determining what appl transactions can be
@@ -734,8 +754,8 @@ func TestApplCreation(t *testing.T) {
 
 // TestApplSubmission tests for checking of illegal appl transaction in form
 // only.  Things where interactions between two different fields causes the
-// error.  These are not exhaustive, but certainly demonstrate that WellFormed
-// is getting a crack at the txn.
+// error.  These are not exhaustive, but certainly demonstrate that
+// transactions.WellFormed is getting a crack at the txn.
 func TestApplSubmission(t *testing.T) {
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -748,12 +768,14 @@ func TestApplSubmission(t *testing.T) {
 
 	p := "itxn_begin; int appl; itxn_field TypeEnum;"
 	s := ";itxn_submit; int 1"
-	TestApp(t, p+a+s, ep)
+	TestApp(t, p+a+s, ep, "ClearStateProgram: invalid program (empty)")
 
-	// All zeros is v0, so we get a complaint, but that means lengths were ok.
+	a += fmt.Sprintf("byte 0x%s; itxn_field ClearStateProgram;", approve)
+
+	// All zeros is v0, so we get a complaint, but that means lengths were ok when set.
 	TestApp(t, p+a+`int 600; bzero; itxn_field ApprovalProgram;
                   int 600; bzero; itxn_field ClearStateProgram;`+s, ep,
-		"program version must be")
+		"inner app call with version 0")
 
 	TestApp(t, p+`int 601; bzero; itxn_field ApprovalProgram;
                   int 600; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
@@ -762,7 +784,7 @@ func TestApplSubmission(t *testing.T) {
 	TestApp(t, p+a+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
                   int 1200; bzero; itxn_field ClearStateProgram;`+s, ep,
-		"program version must be")
+		"inner app call with version 0")
 	TestApp(t, p+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
                   int 1201; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
@@ -772,9 +794,9 @@ func TestApplSubmission(t *testing.T) {
 	TestApp(t, p+`int 1; itxn_field ExtraProgramPages;
                   int 7; itxn_field ApplicationID`+s, ep, "immutable")
 
-	TestApp(t, p+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s,
+	TestApp(t, p+a+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s,
 		ep, "too large")
-	TestApp(t, p+"int 7; itxn_field LocalNumUint; int 7; itxn_field LocalNumByteSlice"+s,
+	TestApp(t, p+a+"int 7; itxn_field LocalNumUint; int 7; itxn_field LocalNumByteSlice"+s,
 		ep, "too large")
 }
 
@@ -783,7 +805,7 @@ func TestInnerApplCreate(t *testing.T) {
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
 
-	ops := TestProg(t, "int 1", AssemblerMaxVersion)
+	ops := TestProg(t, "int 50", AssemblerMaxVersion)
 	approve := "byte 0x" + hex.EncodeToString(ops.Program)
 
 	TestApp(t, `
@@ -804,8 +826,8 @@ int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
 
 	call := `
 itxn_begin
-int appl;              itxn_field TypeEnum
-int 5000;               itxn_field ApplicationID
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
 itxn_submit
 int 1
 `
@@ -839,7 +861,7 @@ int 5000; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
 `, ep)
 
 	// Can't call it either
-	TestApp(t, call, ep, "No application")
+	TestApp(t, call, ep, "no such app 5000")
 
 }
 
@@ -849,19 +871,59 @@ func TestCreateOldAppFails(t *testing.T) {
 	ledger.NewAccount(appAddr(888), 50_000)
 
 	ops := TestProg(t, "int 1", InnerAppsEnabledVersion-1)
-	approve := "byte 0x" + hex.EncodeToString(ops.Program)
+	old := "byte 0x" + hex.EncodeToString(ops.Program)
 
 	TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
-`+approve+`; itxn_field ApprovalProgram
-`+approve+`; itxn_field ClearStateProgram
+`+old+`; itxn_field ApprovalProgram
+`+old+`; itxn_field ClearStateProgram
 int 1;       itxn_field GlobalNumUint
 int 2;       itxn_field LocalNumByteSlice
 int 3;       itxn_field LocalNumUint
 itxn_submit
 int 1
-`, ep, "program version must be >=")
+`, ep, "inner app call with version 5")
+
+	ops = TestProg(t, "int 1", InnerAppsEnabledVersion)
+	recent := "byte 0x" + hex.EncodeToString(ops.Program)
+
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+`+recent+`; itxn_field ApprovalProgram
+`+recent+`; itxn_field ClearStateProgram
+int 1;       itxn_field GlobalNumUint
+int 2;       itxn_field LocalNumByteSlice
+int 3;       itxn_field LocalNumUint
+itxn_submit
+int 1
+`, ep)
+
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+`+old+`; itxn_field ApprovalProgram
+`+recent+`; itxn_field ClearStateProgram
+int 1;       itxn_field GlobalNumUint
+int 2;       itxn_field LocalNumByteSlice
+int 3;       itxn_field LocalNumUint
+itxn_submit
+int 1
+`, ep, "program version mismatch")
+
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+`+recent+`; itxn_field ApprovalProgram
+`+old+`; itxn_field ClearStateProgram
+int 1;       itxn_field GlobalNumUint
+int 2;       itxn_field LocalNumByteSlice
+int 3;       itxn_field LocalNumUint
+itxn_submit
+int 1
+`, ep, "program version mismatch")
+
 }
 
 func TestSelfReentrancy(t *testing.T) {
@@ -1114,6 +1176,12 @@ byte 0x33
 ==
 assert
 
+int 0
+gitxnas 1 Logs
+byte 0x33
+==
+assert
+
 itxn_begin
 int appl;    itxn_field TypeEnum
 int 444;     itxn_field ApplicationID
@@ -1200,10 +1268,16 @@ int 1
 	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
 	TestApp(t, `itxn_begin
 int appl;    itxn_field TypeEnum
-	`+fmt.Sprintf("byte 0x%s; itxn_field ApprovalProgram;", hex.EncodeToString(ops.Program))+`
+	`+fmt.Sprintf("byte 0x%s", hex.EncodeToString(ops.Program))+`
+dup
+itxn_field ApprovalProgram;
+itxn_field ClearStateProgram;
 itxn_next
 int appl;    itxn_field TypeEnum
-	`+fmt.Sprintf("byte 0x%s; itxn_field ApprovalProgram;", hex.EncodeToString(ops.Program))+`
+	`+fmt.Sprintf("byte 0x%s;", hex.EncodeToString(ops.Program))+`
+dup
+itxn_field ApprovalProgram;
+itxn_field ClearStateProgram;
 itxn_next
 int appl;    itxn_field TypeEnum
 int 222;     itxn_field ApplicationID
@@ -1458,7 +1532,7 @@ int 1
 	createAndUse := `
   itxn_begin
    int appl;     itxn_field TypeEnum
-   byte	` + hexProgram(t, pay5back) + `; itxn_field ApprovalProgram;
+   byte	` + hexProgram(t, pay5back) + `; dup; itxn_field ApprovalProgram; itxn_field ClearStateProgram;
   itxn_submit
 
   itxn CreatedApplicationID; app_params_get AppAddress; assert
@@ -1490,7 +1564,10 @@ int 1
 	createAndPay := `
   itxn_begin
    int appl;    itxn_field TypeEnum
-	` + fmt.Sprintf("byte %s; itxn_field ApprovalProgram;", hexProgram(t, pay5back)) + `
+	` + fmt.Sprintf("byte %s", hexProgram(t, pay5back)) + `
+  dup
+  itxn_field ApprovalProgram;
+  itxn_field ClearStateProgram;
   itxn_submit
 
   itxn_begin
@@ -1602,4 +1679,99 @@ assert
 int 1
 `, ep, "assert failed")
 
+}
+
+// TestInnerCallDepth ensures that inner calls are limited in depth
+func TestInnerCallDepth(t *testing.T) {
+	t.Parallel()
+
+	ep, tx, ledger := MakeSampleEnv()
+	// Allow a lot to make the test viable
+	ep.Proto.MaxAppTxnForeignApps = 50
+	ep.Proto.MaxAppTotalTxnReferences = 50
+
+	var apps []basics.AppIndex
+	// 200 will be a simple app that always approves
+	yes := TestProg(t, `int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 200, basics.AppParams{
+		ApprovalProgram: yes.Program,
+	})
+	apps = append(apps, basics.AppIndex(200))
+
+	// 201-210 will be apps that call the next lower one.
+	for i := 0; i < 10; i++ {
+		source := main(`
+ global CurrentApplicationID
+ itob
+ log
+ itxn_begin
+ int appl;                    itxn_field TypeEnum
+ txn NumApplications
+loop:
+ dup
+ bz done
+ dup
+ txnas Applications
+ itxn_field Applications
+ int 1
+ -
+ b loop
+
+done:
+ pop
+ ` + fmt.Sprintf("int %d", 200+i) + `; itxn_field ApplicationID
+ itxn_submit
+`)
+		idx := basics.AppIndex(200 + i + 1)
+		ledger.NewApp(tx.Receiver, idx, basics.AppParams{
+			ApprovalProgram: TestProg(t, source, AssemblerMaxVersion).Program,
+		})
+		ledger.NewAccount(appAddr(int(idx)), 10_000)
+		apps = append(apps, idx)
+	}
+	tx.ForeignApps = apps
+	ledger.NewAccount(appAddr(888), 100_000)
+
+	app, _, err := ledger.AppParams(202)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep)
+
+	app, _, err = ledger.AppParams(208)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep)
+
+	app, _, err = ledger.AppParams(209)
+	require.NoError(t, err)
+	TestAppBytes(t, app.ApprovalProgram, ep, "appl depth")
+}
+
+func TestInfiniteRecursion(t *testing.T) {
+	ep, tx, ledger := MakeSampleEnv()
+	source := `
+itxn_begin
+int appl; itxn_field TypeEnum
+int 0; app_params_get AppApprovalProgram
+assert
+itxn_field ApprovalProgram
+
+int 0; app_params_get AppClearStateProgram
+assert
+itxn_field ClearStateProgram
+
+itxn_submit
+`
+	// This app looks itself up in the ledger, so we need to put it in there.
+	ledger.NewApp(tx.Sender, 888, basics.AppParams{
+		ApprovalProgram:   TestProg(t, source, AssemblerMaxVersion).Program,
+		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
+	})
+	// We're testing if this can recur forever. It's hard to fund all these
+	// apps, but we can put a huge credit in the ep.
+	*ep.FeeCredit = 1_000_000_000
+
+	// This has been tested by hand, by setting maxAppCallDepth to 10_000_000
+	// but without that, the depth limiter stops it first.
+	// TestApp(t, source, ep, "too many inner transactions 1 with 0 left")
+
+	TestApp(t, source, ep, "appl depth (8) exceeded")
 }

@@ -1,7 +1,7 @@
 # The Algorand Virtual Machine (AVM) and TEAL.
 
 The AVM is a bytecode based stack interpreter that executes programs
-asscoiated with Algorand transactions. TEAL is an assembly language
+associated with Algorand transactions. TEAL is an assembly language
 syntax for specifying a program that is ultimately converted to AVM
 bytecode. These programs can be used to check the parameters of the
 transaction and approve the transaction as if by a signature. This use
@@ -16,7 +16,9 @@ few global values. In addition, _Smart Contracts_ have access to
 limited state that is global to the application and per-account local
 state for each account that has opted-in to the application. For both
 types of program, approval is signaled by finishing with the stack
-containing a single non-zero uint64 value.
+containing a single non-zero uint64 value, though `return` can be used
+to signal an early approval which approves based only upon the top
+stack value being a non-zero uint64 value.
 
 ## The Stack
 
@@ -34,8 +36,8 @@ exceeded or if a byte-array element exceed 4096 bytes, the program fails.
 
 In addition to the stack there are 256 positions of scratch
 space. Like stack values, scratch locations may be uint64s or
-byte-arrays. Scratch locations are intialized as uint64 zero. Scratch
-space is acccsed by the `load(s)` and `store(s)` opcodes which move
+byte-arrays. Scratch locations are initialized as uint64 zero. Scratch
+space is accessed by the `load(s)` and `store(s)` opcodes which move
 data from or to scratch space, respectively.
 
 ## Versions
@@ -82,19 +84,41 @@ even before the transaction has been included in a block. These Args
 are _not_ part of the transaction ID nor of the TxGroup hash. They
 also cannot be read from other programs in the group of transactions.
 
-A program can either authorize some delegated action on a normal private key signed or multisig account or be wholly in charge of a contract account.
+A program can either authorize some delegated action on a normal
+signature-based or multisignature-based account or be wholly in charge
+of a contract account.
 
-* If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytecode) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program. Note that Smart Signature Args are _not_ signed.
+* If the account has signed the program (by providing a valid ed25519
+  signature or valid multisignature for the authorizer address on the
+  string "Program" concatenated with the program bytecode) then: if the
+  program returns true the transaction is authorized as if the account
+  had signed it. This allows an account to hand out a signed program
+  so that other users can carry out delegated actions which are
+  approved by the program. Note that Smart Signature Args are _not_
+  signed.
 
-* If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
+* If the SHA512_256 hash of the program (prefixed by "Program") is
+  equal to authorizer address of the transaction sender then this is a
+  contract account wholly controlled by the program. No other
+  signature is necessary or possible. The only way to execute a
+  transaction against the contract account is for the program to
+  approve it.
 
-The bytecode plus the length of all Args must add up to no more than 1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an associated cost and the program cost must total no more than 20,000 (consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1, but a few slow cryptographic operations are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
+The bytecode plus the length of all Args must add up to no more than
+1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
+associated cost and the program cost must total no more than 20,000
+(consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1,
+but a few slow cryptographic operations have a much higher cost. Prior
+to v4, the program's cost was estimated as the static sum of all the
+opcode costs in the program (whether they were actually executed or
+not). Beginning with v4, the program's cost is tracked dynamically,
+while being evaluated. If the program exceeds its budget, it fails.
 
 ## Execution Environment for Smart Contracts (Applications)
 
 Smart Contracts are executed in ApplicationCall transactions. Like
 Smart Signatures, contracts indicate success by leaving a single
-non-zero integer on the stack.  A failed smart contract call is not a
+non-zero integer on the stack.  A failed Smart Contract call is not a
 valid transaction, thus not written to the blockchain. Nodes maintain
 a list of transactions that would succeed, given the current state of
 the blockchain, called the transaction pool. Nodes draw from the pool
@@ -110,37 +134,79 @@ must rerun their code to determine if the ApplicationCall transactions
 in their pool would still succeed each time a block is added to the
 blockchain.
 
+Smart contracts have limits on their execution cost (700, consensus
+parameter MaxAppProgramCost). Before v4, this was a static limit on
+the cost of all the instructions in the program. Since then, the cost
+is tracked dynamically during execution and must not exceed
+MaxAppProgramCost. Beginning with v5, programs costs are pooled and
+tracked dynamically across app executions in a group.  If `n`
+application invocations appear in a group, then the total execution
+cost of such calls must not exceed `n`*MaxAppProgramCost. In v6, inner
+application calls become possible, and each such call increases the
+pooled budget by MaxAppProgramCost.
+
+Executions of the ClearStateProgram are more stringent, in order to
+ensure that applications may be closed out, but that applications also
+are assured a chance to clean up their internal state. At the
+beginning of the execution of a ClearStateProgram, the pooled budget
+available must be MaxAppProgramCost or higher. If it is not, the
+containing transaction group fails without clearing the app's
+state. During the execution of the ClearStateProgram, no more than
+MaxAppProgramCost may be drawn. If further execution is attempted, the
+ClearStateProgram fails, and the app's state _is cleared_.
+
+
 ### Resource availability
 
-Smart contracts have limits on their execution budget (700, consensus
-paramter MaxAppProgramCost), and the amount of blockchain state they
+Smart contracts have limits on the amount of blockchain state they
 may examine.  Opcodes may only access blockchain resources such as
 Accounts, Assets, and contract state if the given resource is
-_available_. 
+_available_.
 
  * A resource in the "foreign array" fields of the ApplicationCall
    transaction (`txn.Accounts`, `txn.ForeignAssets`, and
    `txn.ForeignApplications`) is _available_.
 
- * The `global CurrentApplicationID` and `txn.Sender` are _available_.
+ * The `txn.Sender`, `global CurrentApplicationID`, and `global
+   CurrentApplicationAddress` are _available_.
 
  * Prior to v4, all assets were considered _available_ to the
-   `asset_holding_get` opcode.
+   `asset_holding_get` opcode, and all applications were _available_
+   to the `app_local_get_ex` opcode.
 
  * Since v6, any asset or contract that was created earlier in the
-   same transaction group is _available_. In addition, any account
-   that is the contract account of a contract that was created earlier
-   in the group is _available_.
+   same transaction group (whether by a top-level or inner
+   transaction) is _available_. In addition, any account that is the
+   associated account of a contract that was created earlier in the
+   group is _available_.
 
 ## Constants
 
-Constants are loaded into storage separate from the stack and scratch space. They can then be pushed onto the stack by referring to the type and index. This makes for efficient re-use of byte constants used for account addresses, etc. Constants that are not reused can be pushed with `pushint` or `pushbytes`.
+Constants can be pushed onto the stack in two different ways:
 
-The assembler will hide most of this, allowing simple use of `int 1234` and `byte 0xcafed00d`. These constants will automatically get assembled into int and byte pages of constants, de-duplicated, and operations to load them from constant storage space inserted.
+1. Constants can be pushed directly with `pushint` or
+   `pushbytes`. This method is more efficient for constants that are
+   only used once.
 
-Constants are prepared by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings.
+2. Constants can be loaded into storage separate from the stack and
+   scratch space, using two opcodes `intcblock` and
+   `bytecblock`. Then, constants from this storage can be pushed
+   pushed onto the stack by referring to the type and index using
+   `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. This method is
+   more efficient for constants that are used multiple times.
 
-Constants are pushed onto the stack by `intc`, `intc_[0123]`, `pushint`, `bytec`, `bytec_[0123]`, and `pushbytes`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
+The assembler will hide most of this, allowing simple use of `int 1234`
+and `byte 0xcafed00d`. Constants introduced via `int` and `byte` will
+be assembled into appropriate uses of `pushint|pushbytes` and
+`{int|byte}c, {int|byte}c_[0123]` to minimize program size.
+
+
+The opcodes `intcblock` and `bytecblock` use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint),
+reproduced [here](#varuint). The `intcblock` opcode is followed by a
+varuint specifying the number of integer constants and then that
+number of varuints. The `bytecblock` opcode is followed by a varuint
+specifying the number of byte constants, and then that number of pairs
+of (varuint, bytes) length prefixed byte strings.
 
 ### Named Integer Constants
 
@@ -266,10 +332,11 @@ In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `itxn_submit`, the effects of the transaction are visible begining
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
-`keyreg` and `appl` effects.
+`keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
+to invoke a program with version less than v6.
 
-In v5, only a few of the Header fields may be set: `Type`/`TypeEnum`,
-`Sender`, and `Fee`. In v6, Header fields `Note` and `RekeyTo` may
+In v5, only a subset of the transaction's header fields may be set: `Type`/`TypeEnum`,
+`Sender`, and `Fee`. In v6, header fields `Note` and `RekeyTo` may
 also be set.  For the specific (non-header) fields of each transaction
 type, any field may be set.  This allows, for example, clawback
 transactions, asset opt-ins, and asset creates in addition to the more
@@ -285,7 +352,7 @@ the the array, rather than setting the entire array at once.
 
 `itxn_field` fails immediately for unsupported fields, unsupported
 transaction types, or improperly typed values for a particular
-field. `itxn_field` makes aceptance decisions entirely from the field
+field. `itxn_field` makes acceptance decisions entirely from the field
 and value provided, never considering previously set fields. Illegal
 interactions between fields, such as setting fields that belong to two
 different transaction types, are rejected by `itxn_submit`.
@@ -368,7 +435,7 @@ This requirement is enforced as follows:
 * Compute the largest version number across all the transactions in a group (of size 1 or more), call it `maxVerNo`. If any transaction in this group has a program with a version smaller than `maxVerNo`, then that TEAL program will fail.
 
 In addition, applications must be version 6 or greater to be eligible
-for calling in an inner transaction.
+for being called in an inner transaction.
 
 ## Varuint
 

@@ -19,7 +19,6 @@ package internal
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -53,23 +52,12 @@ func newLogicLedger(cow cowForLogicLedger) *logicLedger {
 	}
 }
 
-func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
-	// Fetch record with pending rewards applied
+func (al *logicLedger) AccountData(addr basics.Address) (basics.AccountData, error) {
 	record, err := al.cow.Get(addr, true)
 	if err != nil {
-		return
+		return basics.AccountData{}, err
 	}
-
-	return record.MicroAlgos, nil
-}
-
-func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
-	record, err := al.cow.Get(addr, false) // pending rewards unneeded
-	if err != nil {
-		return
-	}
-
-	return record.MinBalance(proto), nil
+	return record, nil
 }
 
 func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {

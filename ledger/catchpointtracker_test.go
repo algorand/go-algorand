@@ -114,6 +114,7 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	// File on disk, and database has the record
 	reader, err := ct.GetCatchpointStream(basics.Round(1))
+	require.NoError(t, err)
 	n, err = reader.Read(dataRead)
 	require.NoError(t, err)
 	require.Equal(t, 3, n)
@@ -125,13 +126,16 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	// File deleted, but record in the database
 	err = os.Remove(filepath.Join(temporaryDirectroy, "catchpoints", "2.catchpoint"))
+	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
 	err = ct.accountsq.storeCatchpoint(context.Background(), basics.Round(3), "", "", 0)
+	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(3))
+	require.NoError(t, err)
 	n, err = reader.Read(dataRead)
 	require.NoError(t, err)
 	require.Equal(t, 3, n)

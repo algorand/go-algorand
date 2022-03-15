@@ -485,6 +485,10 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 			pc, det := cx.PcDetails()
 			details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
 		}
+		// Don't wrap ClearStateBudgetError, so it will be taken seriously
+		if _, ok := err.(logic.ClearStateBudgetError); ok {
+			return false, transactions.EvalDelta{}, err
+		}
 		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err, Details: details}
 	}
 

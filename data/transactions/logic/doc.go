@@ -60,6 +60,7 @@ var opDocByName = map[string]string{
 	"expw":    "A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1",
 	"mulw":    "A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low",
 	"addw":    "A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.",
+	"divw":    "A,B / C. Fail if C == 0 or if result overflows.",
 	"divmodw": "W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)",
 
 	"intcblock":  "prepare block of uint64 constants for use by intc",
@@ -95,8 +96,10 @@ var opDocByName = map[string]string{
 	"gtxnsas": "Bth value of the array field F from the Ath transaction in the current group",
 	"itxn":    "field F of the last inner transaction",
 	"itxna":   "Ith value of the array field F of the last inner transaction",
+	"itxnas":  "Ath value of the array field F of the last inner transaction",
 	"gitxn":   "field F of the Tth transaction in the last inner group submitted",
 	"gitxna":  "Ith value of the array field F from the Tth transaction in the last inner group submitted",
+	"gitxnas": "Ath value of the array field F from the Tth transaction in the last inner group submitted",
 
 	"global":  "global field F",
 	"load":    "Ith scratch space value. All scratch spaces are 0 at program start.",
@@ -151,7 +154,7 @@ var opDocByName = map[string]string{
 	"asset_params_get":  "X is field F from asset A. Y is 1 if A exists, else 0",
 	"app_params_get":    "X is field F from app A. Y is 1 if A exists, else 0",
 	"acct_params_get":   "X is field F from account A. Y is 1 if A owns positive algos, else 0",
-	"assert":            "immediately fail unless X is a non-zero number",
+	"assert":            "immediately fail unless A is a non-zero number",
 	"callsub":           "branch unconditionally to TARGET, saving the next instruction on the call stack",
 	"retsub":            "pop the top instruction from the call stack and branch to it",
 
@@ -231,8 +234,10 @@ var opcodeImmediateNotes = map[string]string{
 	"itxn_field": "{uint8 transaction field index}",
 	"itxn":       "{uint8 transaction field index}",
 	"itxna":      "{uint8 transaction field index} {uint8 transaction field array index}",
+	"itxnas":     "{uint8 transaction field index}",
 	"gitxn":      "{uint8 transaction group index} {uint8 transaction field index}",
 	"gitxna":     "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
+	"gitxnas":    "{uint8 transaction group index} {uint8 transaction field index}",
 
 	"ecdsa_verify":        "{uint8 curve index}",
 	"ecdsa_pk_decompress": "{uint8 curve index}",
@@ -278,6 +283,7 @@ var opDocExtras = map[string]string{
 	"+":                   "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
 	"/":                   "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
 	"bitlen":              "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
+	"divw":                "The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.",
 	"divmodw":             "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
 	"txn":                 "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":                "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
@@ -308,7 +314,7 @@ var opDocExtras = map[string]string{
 	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
 	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.",
 	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
-	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_. (Addresses set into asset params of acfg transactions need not be _available_.)",
+	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode":       "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 }
@@ -322,14 +328,14 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log"},
-	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "gitxn", "gitxna"},
+	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 
 // OpCost indicates the cost of an operation over the range of
@@ -463,10 +469,11 @@ var txnFieldDocs = map[string]string{
 	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
 	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
 
-	"Logs":                 "Log messages emitted by an application call (`itxn` only until v6)",
-	"NumLogs":              "Number of Logs (`itxn` only until v6)",
-	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (`itxn` only until v6)",
-	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (`itxn` only until v6)",
+	"Logs":                 "Log messages emitted by an application call (only with `itxn` in v5)",
+	"NumLogs":              "Number of Logs (only with `itxn` in v5)",
+	"LastLog":              "The last message emitted. Empty bytes if none were emitted",
+	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (only with `itxn` in v5)",
+	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (only with `itxn` in v5)",
 }
 
 var globalFieldDocs = map[string]string{

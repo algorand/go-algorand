@@ -95,3 +95,16 @@ crypto_sign_ed25519ph_final_verify(crypto_sign_ed25519ph_state *state,
 
     return _crypto_sign_ed25519_verify_detached(sig, ph, sizeof ph, pk, 1);
 }
+
+
+int
+crypto_sign_ed25519ph_final_bv_compatible_verify(crypto_sign_ed25519ph_state *state,
+                                   const unsigned char         *sig,
+                                   const unsigned char         *pk)
+{
+    unsigned char ph[crypto_hash_sha512_BYTES];
+
+    crypto_hash_sha512_final(&state->hs, ph);
+
+    return _crypto_sign_ed25519_bv_compatible_verify_detached(sig, ph, sizeof ph, pk, 1);
+}

@@ -70,7 +70,7 @@ This section briefly describes the expected outcomes of the current build pipeli
     - The packages are built from the correct branch and channel and are the correct version.  This done by running `algod -v`.
         + This is done for the following docker containers:
             - centos:7
-            - centos:8
+            - quay.io/centos/centos:stream8
             - fedora:28
             - ubuntu:16.04
             - ubuntu:18.04

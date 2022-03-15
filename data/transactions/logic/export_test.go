@@ -18,7 +18,9 @@ package logic
 
 // Export for testing only.  See
 // https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
-// nice explanation.
+// nice explanation. tl;dr: Since some of our testing is in logic_test package,
+// we export some extra things to make testing easier there. But we do it in a
+// _test.go file, so they are only exported during testing.
 
 func NewExpect(l int, s string) Expect {
 	return Expect{l, s}

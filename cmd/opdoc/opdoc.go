@@ -35,7 +35,10 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 	opSpecs := logic.OpsByName[logic.LogicVersion]
 	// TODO: sort by logic.OpSpecs[].Opcode
 	for _, opname := range names {
-		spec := opSpecs[opname]
+		spec, ok := opSpecs[opname]
+		if !ok {
+			continue // Allows "future" opcodes to exist, but be omitted from spec.
+		}
 		fmt.Fprintf(out, "| `%s%s` | %s |\n",
 			markdownTableEscape(spec.Name), immediateMarkdown(&spec),
 			markdownTableEscape(logic.OpDoc(opname)))
@@ -147,6 +150,11 @@ func appParamsFieldsMarkdown(out io.Writer) {
 	fieldSpecsMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
 }
 
+func acctParamsFieldsMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`acct_params_get` Fields:\n\n")
+	fieldSpecsMarkdown(out, logic.AcctParamsFieldNames, logic.AcctParamsFieldSpecByName)
+}
+
 func ecDsaCurvesMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`ECDSA` Curves:\n\n")
 	fieldSpecsMarkdown(out, logic.EcdsaCurveNames, logic.EcdsaCurveSpecByName)
@@ -227,20 +235,25 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	if !op.Modes.Any() {
 		fmt.Fprintf(out, "- Mode: %s\n", op.Modes.String())
 	}
-	if op.Name == "global" {
+	switch op.Name {
+	case "global":
 		globalFieldsMarkdown(out)
-	} else if op.Name == "txn" {
+	case "txn":
 		transactionFieldsMarkdown(out)
 		fmt.Fprintf(out, "\nTypeEnum mapping:\n\n")
 		typeEnumTableMarkdown(out)
-	} else if op.Name == "asset_holding_get" {
+	case "asset_holding_get":
 		assetHoldingFieldsMarkdown(out)
-	} else if op.Name == "asset_params_get" {
+	case "asset_params_get":
 		assetParamsFieldsMarkdown(out)
-	} else if op.Name == "app_params_get" {
+	case "app_params_get":
 		appParamsFieldsMarkdown(out)
-	} else if strings.HasPrefix(op.Name, "ecdsa") {
-		ecDsaCurvesMarkdown(out)
+	case "acct_params_get":
+		acctParamsFieldsMarkdown(out)
+	default:
+		if strings.HasPrefix(op.Name, "ecdsa") {
+			ecDsaCurvesMarkdown(out)
+		}
 	}
 	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {
@@ -359,42 +372,51 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	}
 }
 
+func create(file string) *os.File {
+	f, err := os.Create(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to create '%s': %v", file, err)
+		os.Exit(1)
+	}
+	return f
+}
+
 func main() {
-	opcodesMd, _ := os.Create("TEAL_opcodes.md")
+	opcodesMd := create("TEAL_opcodes.md")
 	opsToMarkdown(opcodesMd)
 	opcodesMd.Close()
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {
 		fname := fmt.Sprintf("%s.md", grp)
 		fname = strings.ReplaceAll(fname, " ", "_")
-		fout, _ := os.Create(fname)
+		fout := create(fname)
 		opGroupMarkdownTable(names, fout)
 		fout.Close()
 		for _, opname := range names {
 			opGroups[opname] = append(opGroups[opname], grp)
 		}
 	}
-	constants, _ := os.Create("named_integer_constants.md")
+	constants := create("named_integer_constants.md")
 	integerConstantsTableMarkdown(constants)
 	constants.Close()
 
-	txnfields, _ := os.Create("txn_fields.md")
+	txnfields := create("txn_fields.md")
 	fieldSpecsMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldSpecByName)
 	txnfields.Close()
 
-	globalfields, _ := os.Create("global_fields.md")
+	globalfields := create("global_fields.md")
 	fieldSpecsMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldSpecByName)
 	globalfields.Close()
 
-	assetholding, _ := os.Create("asset_holding_fields.md")
+	assetholding := create("asset_holding_fields.md")
 	fieldSpecsMarkdown(assetholding, logic.AssetHoldingFieldNames, logic.AssetHoldingFieldSpecByName)
 	assetholding.Close()
 
-	assetparams, _ := os.Create("asset_params_fields.md")
+	assetparams := create("asset_params_fields.md")
 	fieldSpecsMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldSpecByName)
 	assetparams.Close()
 
-	appparams, _ := os.Create("app_params_fields.md")
+	appparams := create("app_params_fields.md")
 	fieldSpecsMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
 	appparams.Close()
 
@@ -402,12 +424,12 @@ func main() {
 	fieldSpecsMarkdown(acctparams, logic.AcctParamsFieldNames, logic.AcctParamsFieldSpecByName)
 	acctparams.Close()
 
-	langspecjs, _ := os.Create("langspec.json")
+	langspecjs := create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
 	enc.Encode(buildLanguageSpec(opGroups))
 	langspecjs.Close()
 
-	tealtm, _ := os.Create("teal.tmLanguage.json")
+	tealtm := create("teal.tmLanguage.json")
 	enc = json.NewEncoder(tealtm)
 	enc.SetIndent("", "  ")
 	enc.Encode(buildSyntaxHighlight())

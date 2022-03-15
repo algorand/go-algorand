@@ -64,7 +64,7 @@ func TestGlobalFieldsVersions(t *testing.T) {
 		ep.Ledger = ledger
 
 		// check failure with version check
-		_, err := EvalApp(ops.Program, 0, 0, ep)
+		_, err := EvalApp(ops.Program, 0, 888, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -170,7 +170,7 @@ func TestTxnFieldVersions(t *testing.T) {
 }
 
 // TestTxnEffectsAvailable ensures that LogicSigs can not use "effects" fields
-// (ever). And apps can only use effects fields with `txn` after
+// (ever). And apps can only use effects fields with `gtxn` after
 // txnEffectsVersion. (itxn could use them earlier)
 func TestTxnEffectsAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -180,25 +180,25 @@ func TestTxnEffectsAvailable(t *testing.T) {
 		if !fs.effects {
 			continue
 		}
-		source := fmt.Sprintf("txn %s", fs.field.String())
+		source := fmt.Sprintf("gtxn 0 %s; pop; int 1", fs.field)
 		if fs.array {
-			source = fmt.Sprintf("txna %s 0", fs.field.String())
+			source = fmt.Sprintf("gtxn 0 %s 0; pop; int 1", fs.field)
 		}
 		for v := fs.version; v <= AssemblerMaxVersion; v++ {
 			ops := testProg(t, source, v)
-			ep := defaultEvalParams(nil)
-			ep.TxnGroup[0].Lsig.Logic = ops.Program
-			_, err := EvalSignature(0, ep)
+			ep, _, _ := makeSampleEnv()
+			ep.TxnGroup[1].Lsig.Logic = ops.Program
+			_, err := EvalSignature(1, ep)
 			require.Error(t, err)
 			ep.Ledger = MakeLedger(nil)
-			_, err = EvalApp(ops.Program, 0, 0, ep)
+			_, err = EvalApp(ops.Program, 1, 888, ep)
 			if v < txnEffectsVersion {
-				require.Error(t, err)
+				require.Error(t, err, source)
 			} else {
 				if fs.array {
 					continue // Array (Logs) will be 0 length, so will fail anyway
 				}
-				require.NoError(t, err)
+				require.NoError(t, err, source)
 			}
 		}
 	}

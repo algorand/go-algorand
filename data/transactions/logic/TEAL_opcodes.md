@@ -432,10 +432,11 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 55 | LocalNumByteSlice | uint64 | v3  | Number of local state byteslices in ApplicationCall |
 | 56 | ExtraProgramPages | uint64 | v4  | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. |
 | 57 | Nonparticipation | uint64 | v5  | Marks an account nonparticipating for rewards |
-| 58 | Logs | []byte | v5  | Log messages emitted by an application call (`itxn` only until v6). Application mode only |
-| 59 | NumLogs | uint64 | v5  | Number of Logs (`itxn` only until v6). Application mode only |
-| 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (`itxn` only until v6). Application mode only |
-| 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (`itxn` only until v6). Application mode only |
+| 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
+| 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
+| 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
+| 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
+| 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
 
 
 TypeEnum mapping:
@@ -623,7 +624,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 - Opcode: 0x44
 - Stack: ..., A: uint64 &rarr; ...
-- immediately fail unless X is a non-zero number
+- immediately fail unless A is a non-zero number
 - Availability: v3
 
 ## pop
@@ -769,16 +770,6 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
-
-## base64_decode e
-
-- Opcode: 0x5c {uint8 encoding index}
-- Stack: ..., A: []byte &rarr; ..., []byte
-- decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 25
-- Availability: v6
-
-Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\n` and `\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\r`, or `\n`.
 
 ## balance
 
@@ -956,10 +947,19 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 ## acct_params_get f
 
 - Opcode: 0x73 {uint8 account params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
+- Stack: ..., A &rarr; ..., X: any, Y: uint64
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
 - Availability: v6
 - Mode: Application
+
+`acct_params_get` Fields:
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | AcctBalance | uint64 | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+
 
 ## min_balance
 
@@ -1060,6 +1060,15 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers
 - **Cost**: 40
 - Availability: v6
+
+## divw
+
+- Opcode: 0x97
+- Stack: ..., A: uint64, B: uint64, C: uint64 &rarr; ..., uint64
+- A,B / C. Fail if C == 0 or if result overflows.
+- Availability: v6
+
+The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
 
 ## b+
 
@@ -1210,7 +1219,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Availability: v5
 - Mode: Application
 
-`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_. (Addresses set into asset params of acfg transactions need not be _available_.)
+`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)
 
 ## itxn_submit
 
@@ -1298,5 +1307,21 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xc4
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth scratch space value of the Ath transaction in the current group
+- Availability: v6
+- Mode: Application
+
+## itxnas f
+
+- Opcode: 0xc5 {uint8 transaction field index}
+- Stack: ..., A: uint64 &rarr; ..., any
+- Ath value of the array field F of the last inner transaction
+- Availability: v6
+- Mode: Application
+
+## gitxnas t f
+
+- Opcode: 0xc6 {uint8 transaction group index} {uint8 transaction field index}
+- Stack: ..., A: uint64 &rarr; ..., any
+- Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application

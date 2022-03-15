@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -95,10 +94,9 @@ func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 	l.balances[addr] = makeBalanceRecord(addr, balance)
 }
 
-// NewApp add a new AVM app to the Ledger, and arranges so that future
-// executions will act as though they are that app.  In most uses, it only sets
-// up the id and schema but no code, as testing will want to try many different
-// code sequences.
+// NewApp add a new AVM app to the Ledger.  In most uses, it only sets up the id
+// and schema but no code, as testing will want to try many different code
+// sequences.
 func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
 	params = params.Clone()
 	if params.GlobalState == nil {
@@ -198,48 +196,46 @@ func (l *Ledger) LatestTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
-// Balance returns the value in an account, as MicroAlgos
-func (l *Ledger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.MicroAlgos{Raw: 0}, nil
-	}
-	return basics.MicroAlgos{Raw: br.balance}, nil
-}
-
-// MinBalance computes the MinBalance requirement for an account,
-// under the given consensus parameters.
-func (l *Ledger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (amount basics.MicroAlgos, err error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		br = makeBalanceRecord(addr, 0)
-	}
-
-	var min uint64
-
-	// First, base MinBalance
-	min = proto.MinBalance
-
-	// MinBalance for each Asset
-	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(br.holdings)))
-	min = basics.AddSaturate(min, assetCost)
-
-	// Base MinBalance + GlobalStateSchema.MinBalance + ExtraProgramPages MinBalance for each created application
-	for _, params := range l.applications {
-		if params.Creator == addr {
-			min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
-			min = basics.AddSaturate(min, params.GlobalStateSchema.MinBalance(proto).Raw)
-			min = basics.AddSaturate(min, basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(params.ExtraProgramPages)))
+// AccountData returns a version of the account that is good enough for
+// satisfiying AVM needs. (balance, calc minbalance, and authaddr)
+func (l *Ledger) AccountData(addr basics.Address) (basics.AccountData, error) {
+	br := l.balances[addr]
+	// br may come back empty if addr doesn't exist.  That's fine for our needs.
+	assets := make(map[basics.AssetIndex]basics.AssetParams)
+	for a, p := range l.assets {
+		if p.Creator == addr {
+			assets[a] = p.AssetParams
 		}
 	}
 
-	// Base MinBalance + LocalStateSchema.MinBalance for each opted in application
-	for idx := range br.locals {
-		min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
-		min = basics.AddSaturate(min, l.applications[idx].LocalStateSchema.MinBalance(proto).Raw)
+	schemaTotal := basics.StateSchema{}
+	pagesTotal := uint32(0)
+
+	apps := make(map[basics.AppIndex]basics.AppParams)
+	for a, p := range l.applications {
+		if p.Creator == addr {
+			apps[a] = p.AppParams
+			schemaTotal = schemaTotal.AddSchema(p.GlobalStateSchema)
+			pagesTotal = p.ExtraProgramPages
+		}
 	}
 
-	return basics.MicroAlgos{Raw: min}, nil
+	locals := map[basics.AppIndex]basics.AppLocalState{}
+	for a := range br.locals {
+		locals[a] = basics.AppLocalState{} // No need to fill in
+		schemaTotal = schemaTotal.AddSchema(l.applications[a].LocalStateSchema)
+	}
+
+	return basics.AccountData{
+		MicroAlgos:         basics.MicroAlgos{Raw: br.balance},
+		AssetParams:        assets,
+		Assets:             br.holdings,
+		AuthAddr:           br.auth,
+		AppLocalStates:     locals,
+		AppParams:          apps,
+		TotalAppSchema:     schemaTotal,
+		TotalExtraAppPages: pagesTotal,
+	}, nil
 }
 
 // Authorizer returns the address that must authorize txns from a
@@ -340,7 +336,7 @@ func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 	}
 	tkvd, ok := br.locals[appIdx]
 	if !ok {
-		return basics.TealValue{}, false, fmt.Errorf("no app for account")
+		return basics.TealValue{}, false, fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 
 	// check deltas first
@@ -366,7 +362,7 @@ func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
-		return fmt.Errorf("no app for account")
+		return fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 
 	// if writing the same value, return
@@ -394,7 +390,7 @@ func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
-		return fmt.Errorf("no app for account")
+		return fmt.Errorf("account %s is not opted into %d", addr, appIdx)
 	}
 	exist := false
 	if _, ok := tkv[key]; ok {
@@ -654,6 +650,10 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 		}
 		l.NewApp(from, aid, params)
 		ad.ApplicationID = aid
+	}
+
+	if appl.OnCompletion == transactions.ClearStateOC {
+		return errors.New("not implemented in test ledger")
 	}
 
 	if appl.OnCompletion == transactions.OptInOC {

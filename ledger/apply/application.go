@@ -360,6 +360,11 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
+		err := transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params)
+		if err != nil {
+			return err
+		}
+
 		err = checkPrograms(&ac, evalParams)
 		if err != nil {
 			return err
