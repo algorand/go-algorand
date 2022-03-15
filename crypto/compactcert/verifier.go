@@ -106,10 +106,10 @@ func (v *Verifier) Verify(c *Cert) error {
 		ProvenWeight: v.ProvenWeightThreshold,
 		Sigcom:       c.SigCommit,
 		Partcom:      v.partcom,
-		MsgHash:      v.Msg,
+		MsgHash:      v.StateProofMessageHash,
 	}
 
-	coinHash := MakeCoinGenerator(choice)
+	coinHash := makeCoinGenerator(choice)
 	for j := uint64(0); j < nr; j++ {
 		pos := c.PositionsToReveal[j]
 		reveal, exists := c.Reveals[pos]

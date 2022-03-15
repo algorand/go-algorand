@@ -25,6 +25,14 @@ import (
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
 //
+// StateProofMessageHash
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//
 // coinChoiceSeed
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
@@ -694,55 +702,94 @@ func (z *Reveal) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *StateProofMessageHash) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *StateProofMessageHash) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofMessageHash)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *StateProofMessageHash) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (_ *StateProofMessageHash) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofMessageHash)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *StateProofMessageHash) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (128 * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *StateProofMessageHash) MsgIsZero() bool {
+	return (*z) == (StateProofMessageHash{})
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *coinChoiceSeed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
-	if len((*z).MsgHash) == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x2
+	zb0002Len := uint32(5)
+	var zb0002Mask uint8 /* 6 bits */
+	if (*z).MsgHash == (StateProofMessageHash{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
 	}
 	if (*z).Partcom.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0002Len--
+		zb0002Mask |= 0x4
 	}
 	if (*z).ProvenWeight == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0002Len--
+		zb0002Mask |= 0x8
 	}
 	if (*z).Sigcom.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0002Len--
+		zb0002Mask |= 0x10
 	}
 	if (*z).SignedWeight == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x20
+		zb0002Len--
+		zb0002Mask |= 0x20
 	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "msghash"
 			o = append(o, 0xa7, 0x6d, 0x73, 0x67, 0x68, 0x61, 0x73, 0x68)
-			o = msgp.AppendBytes(o, (*z).MsgHash)
+			o = msgp.AppendBytes(o, ((*z).MsgHash)[:])
 		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
+		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "partcom"
 			o = append(o, 0xa7, 0x70, 0x61, 0x72, 0x74, 0x63, 0x6f, 0x6d)
 			o = (*z).Partcom.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "provenweight"
 			o = append(o, 0xac, 0x70, 0x72, 0x6f, 0x76, 0x65, 0x6e, 0x77, 0x65, 0x69, 0x67, 0x68, 0x74)
 			o = msgp.AppendUint64(o, (*z).ProvenWeight)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "sigcom"
 			o = append(o, 0xa6, 0x73, 0x69, 0x67, 0x63, 0x6f, 0x6d)
 			o = (*z).Sigcom.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
+		if (zb0002Mask & 0x20) == 0 { // if not empty
 			// string "sigweight"
 			o = append(o, 0xa9, 0x73, 0x69, 0x67, 0x77, 0x65, 0x69, 0x67, 0x68, 0x74)
 			o = msgp.AppendUint64(o, (*z).SignedWeight)
@@ -769,8 +816,8 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			(*z).SignedWeight, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
@@ -781,7 +828,7 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			zb0002--
 			(*z).ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProvenWeightThreshold")
+				err = msgp.WrapError(err, "struct-from-array", "ProvenWeight")
 				return
 			}
 		}
@@ -801,9 +848,9 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).MsgHash, bts, err = msgp.ReadBytesBytes(bts, (*z).MsgHash)
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).MsgHash)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "MsgHash")
 				return
@@ -821,7 +868,7 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 {
+		if zb0003 {
 			(*z) = coinChoiceSeed{}
 		}
 		for zb0002 > 0 {
@@ -841,7 +888,7 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			case "provenweight":
 				(*z).ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ProvenWeightThreshold")
+					err = msgp.WrapError(err, "ProvenWeight")
 					return
 				}
 			case "sigcom":
@@ -857,7 +904,7 @@ func (z *coinChoiceSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "msghash":
-				(*z).MsgHash, bts, err = msgp.ReadBytesBytes(bts, (*z).MsgHash)
+				bts, err = msgp.ReadExactBytes(bts, ((*z).MsgHash)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "MsgHash")
 					return
@@ -882,13 +929,13 @@ func (_ *coinChoiceSeed) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *coinChoiceSeed) Msgsize() (s int) {
-	s = 1 + 10 + msgp.Uint64Size + 13 + msgp.Uint64Size + 7 + (*z).Sigcom.Msgsize() + 8 + (*z).Partcom.Msgsize() + 8 + msgp.BytesPrefixSize + len((*z).MsgHash)
+	s = 1 + 10 + msgp.Uint64Size + 13 + msgp.Uint64Size + 7 + (*z).Sigcom.Msgsize() + 8 + (*z).Partcom.Msgsize() + 8 + msgp.ArrayHeaderSize + (128 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *coinChoiceSeed) MsgIsZero() bool {
-	return ((*z).SignedWeight == 0) && ((*z).ProvenWeight == 0) && ((*z).Sigcom.MsgIsZero()) && ((*z).Partcom.MsgIsZero()) && (len((*z).MsgHash) == 0)
+	return ((*z).SignedWeight == 0) && ((*z).ProvenWeight == 0) && ((*z).Sigcom.MsgIsZero()) && ((*z).Partcom.MsgIsZero()) && ((*z).MsgHash == (StateProofMessageHash{}))
 }
 
 // MarshalMsg implements msgp.Marshaler

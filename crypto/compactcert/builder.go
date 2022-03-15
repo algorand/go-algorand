@@ -207,9 +207,9 @@ func (b *Builder) Build() (*Cert, error) {
 		ProvenWeight: b.ProvenWeightThreshold,
 		Sigcom:       c.SigCommit,
 		Partcom:      b.parttree.Root(),
-		MsgHash:      b.Msg,
+		MsgHash:      b.StateProofMessageHash,
 	}
-	coinHash := MakeCoinGenerator(choice)
+	coinHash := makeCoinGenerator(choice)
 
 	for j := uint64(0); j < nr; j++ {
 		coin := coinHash.getNextCoin()

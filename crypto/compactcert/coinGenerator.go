@@ -30,17 +30,16 @@ import (
 type coinChoiceSeed struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SignedWeight uint64               `codec:"sigweight"`
-	ProvenWeight uint64               `codec:"provenweight"`
-	Sigcom       crypto.GenericDigest `codec:"sigcom"`
-	Partcom      crypto.GenericDigest `codec:"partcom"`
-	MsgHash      []byte               `codec:"msghash"`
+	SignedWeight uint64                `codec:"sigweight"`
+	ProvenWeight uint64                `codec:"provenweight"`
+	Sigcom       crypto.GenericDigest  `codec:"sigcom"`
+	Partcom      crypto.GenericDigest  `codec:"partcom"`
+	MsgHash      StateProofMessageHash `codec:"msghash"`
 }
-
-// TODO should create a fixed length representation
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (cc coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
+	// TODO should create a fixed length representation
 	return protocol.CompactCertCoin, protocol.Encode(&cc)
 }
 
@@ -50,11 +49,12 @@ type coinGenerator struct {
 	signedWeight uint64
 }
 
-// MakeCoinGenerator creates a new CoinHash context.
+// makeCoinGenerator creates a new CoinHash context.
 // it is used for squeezing 64 bits for coin flips.
 // the function inits the XOF function in the following manner
-// Shake(sumhash(coinChoiceSeed))// we extract 64 bits from shake for each coin flip and divide it by SignedWeight
-func MakeCoinGenerator(choice coinChoiceSeed) coinGenerator {
+// Shake(sumhash(coinChoiceSeed))
+//we extract 64 bits from shake for each coin flip and divide it by SignedWeight
+func makeCoinGenerator(choice coinChoiceSeed) coinGenerator {
 	hash := crypto.HashFactory{HashType: CoinHashType}.NewHash()
 	hashedCoin := crypto.GenericHashObj(hash, choice)
 

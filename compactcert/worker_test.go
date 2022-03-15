@@ -296,7 +296,7 @@ func TestWorkerAllSigs(t *testing.T) {
 
 			ccparams := compactcert.Params{
 				StateProofMessageHash: tx.Txn.CertMsg.IntoStateProofMessageHash(),
-				ProvenWeight:          provenWeight,
+				ProvenWeightThreshold: provenWeight,
 				SigRound:              tx.Txn.CertIntervalLatestRound,
 				SecKQ:                 proto.CompactCertSecKQ,
 			}
@@ -360,7 +360,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	ccparams := compactcert.Params{
 		StateProofMessageHash: msg.IntoStateProofMessageHash(),
-		ProvenWeight:          provenWeight,
+		ProvenWeightThreshold: provenWeight,
 		SigRound:              basics.Round(tx.Txn.CertIntervalLatestRound),
 		SecKQ:                 proto.CompactCertSecKQ,
 	}

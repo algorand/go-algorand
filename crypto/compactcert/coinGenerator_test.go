@@ -29,7 +29,7 @@ func TestHashCoin(t *testing.T) {
 	var slots [32]uint64
 	var sigcom = make(crypto.GenericDigest, HashSize)
 	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = make(crypto.GenericDigest, HashSize)
+	var msgHash StateProofMessageHash
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])
@@ -42,7 +42,7 @@ func TestHashCoin(t *testing.T) {
 		Partcom:      partcom,
 		MsgHash:      msgHash,
 	}
-	coinHash := MakeCoinGenerator(choice)
+	coinHash := makeCoinGenerator(choice)
 
 	for j := uint64(0); j < 1000; j++ {
 		coin := coinHash.getNextCoin()
@@ -66,7 +66,7 @@ func TestHashCoin(t *testing.T) {
 func BenchmarkHashCoin(b *testing.B) {
 	var sigcom = make(crypto.GenericDigest, HashSize)
 	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = make(crypto.GenericDigest, HashSize)
+	var msgHash StateProofMessageHash
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])
@@ -79,7 +79,7 @@ func BenchmarkHashCoin(b *testing.B) {
 		Partcom:      partcom,
 		MsgHash:      msgHash,
 	}
-	coinHash := MakeCoinGenerator(choice)
+	coinHash := makeCoinGenerator(choice)
 
 	for i := 0; i < b.N; i++ {
 		coinHash.getNextCoin()

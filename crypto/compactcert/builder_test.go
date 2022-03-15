@@ -94,9 +94,9 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	param := Params{
 		StateProofMessageHash: testMessage("hello world").IntoStateProofMessageHash(),
 
-		ProvenWeight: uint64(totalWeight / 2),
-		SigRound:     currentRound,
-		SecKQ:        compactCertSecKQForTests,
+		ProvenWeightThreshold: uint64(totalWeight / 2),
+		SigRound:              currentRound,
+		SecKQ:                 compactCertSecKQForTests,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
@@ -108,7 +108,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 
 	signerInRound := key.GetSigner(uint64(currentRound))
 	sig, err := signerInRound.SignBytes(param.StateProofMessageHash[:])
-	require.NoError(t, err, "failed to create keys")
+	a.NoError(err, "failed to create keys")
 
 	for i := 0; i < npart; i++ {
 		sigs = append(sigs, sig)
@@ -239,7 +239,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 
 	param := Params{
 		StateProofMessageHash: testMessage("test!").IntoStateProofMessageHash(),
-		ProvenWeight:          uint64(totalWeight / (2 * numPart)),
+		ProvenWeightThreshold: uint64(totalWeight / (2 * numPart)),
 		SigRound:              currentRound,
 		SecKQ:                 compactCertSecKQForTests,
 	}
@@ -426,6 +426,45 @@ func findLInCert(a *require.Assertions, signature merklesignature.Signature, cer
 	return 0
 }
 
+func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// setting up a builder
+	a := require.New(t)
+	currentRound := basics.Round(compactCertRoundsForTests)
+
+	totalWeight := 10000000
+	npartHi := 1
+	npartLo := 9
+
+	param := Params{
+		StateProofMessageHash: testMessage("hello world").IntoStateProofMessageHash(),
+		ProvenWeightThreshold: uint64(totalWeight / 2),
+		SigRound:              currentRound,
+		SecKQ:                 compactCertSecKQForTests,
+	}
+
+	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
+	var parts []basics.Participant
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
+	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
+
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	builder, err := MkBuilder(param, parts, partcom)
+	a.NoError(err)
+
+	// actual test:
+	signerInRound := key.GetSigner(uint64(currentRound))
+	sig, err := signerInRound.SignBytes(param.StateProofMessageHash[:])
+	require.NoError(t, err, "failed to create keys")
+	// Corrupting the version of the signature:
+	sig.Signature[1]++
+
+	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrInvalidSignatureVersion)
+}
+
 func TestCoinIndex(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -447,45 +486,6 @@ func TestCoinIndex(t *testing.T) {
 	}
 }
 
-func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// setting up a builder
-	a := require.New(t)
-	currentRound := basics.Round(compactCertRoundsForTests)
-
-	totalWeight := 10000000
-	npartHi := 1
-	npartLo := 9
-
-	param := Params{
-		Msg:                   testMessage("hello world"),
-		ProvenWeightThreshold: uint64(totalWeight / 2),
-		SigRound:              currentRound,
-		SecKQ:                 compactCertSecKQForTests,
-	}
-
-	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
-	var parts []basics.Participant
-	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
-	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
-
-	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
-	a.NoError(err)
-
-	builder, err := MkBuilder(param, parts, partcom)
-	a.NoError(err)
-
-	// actual test:
-	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.Msg)
-	require.NoError(t, err, "failed to create keys")
-	// Corrupting the version of the signature:
-	sig.Signature[1]++
-
-	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrInvalidSignatureVersion)
-}
-
 func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 10000
@@ -495,7 +495,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	param := Params{
 		StateProofMessageHash: testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeight:          uint64(totalWeight / 2),
+		ProvenWeightThreshold: uint64(totalWeight / 2),
 		SigRound:              compactCertRoundsForTests,
 		SecKQ:                 compactCertSecKQForTests,
 	}
@@ -553,64 +553,4 @@ func BenchmarkBuildVerify(b *testing.B) {
 			}
 		}
 	})
-}
-
-func TestCoinIndex(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	n := 1000
-	b := &Builder{
-		sigs:          make([]sigslot, n),
-		sigsHasValidL: true,
-	}
-
-	for i := 0; i < n; i++ {
-		b.sigs[i].L = uint64(i)
-		b.sigs[i].Weight = 1
-	}
-
-	for i := 0; i < n; i++ {
-		pos, err := b.coinIndex(uint64(i))
-		require.NoError(t, err)
-		require.Equal(t, pos, uint64(i))
-	}
-}
-
-func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// setting up a builder
-	a := require.New(t)
-	currentRound := basics.Round(compactCertRoundsForTests)
-
-	totalWeight := 10000000
-	npartHi := 1
-	npartLo := 9
-
-	param := Params{
-		StateProofMessageHash: testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeight:          uint64(totalWeight / 2),
-		SigRound:              currentRound,
-		SecKQ:                 compactCertSecKQForTests,
-	}
-
-	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
-	var parts []basics.Participant
-	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
-	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
-
-	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
-	a.NoError(err)
-
-	builder, err := MkBuilder(param, parts, partcom)
-	a.NoError(err)
-
-	// actual test:
-	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.StateProofMessageHash[:])
-	require.NoError(t, err, "failed to create keys")
-	// Corrupting the version of the signature:
-	sig.Signature[1]++
-
-	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrInvalidSignatureVersion)
 }
