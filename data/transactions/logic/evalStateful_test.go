@@ -2393,15 +2393,15 @@ func TestReturnTypes(t *testing.T) {
 
 	byName := OpsByName[LogicVersion]
 	for _, m := range []runMode{runModeSignature, runModeApplication} {
-		t.Run(fmt.Sprintf("m=%s", m), func(t *testing.T) {
-			for name, spec := range byName {
-				// Only try an opcode in its modes
-				if (m & spec.Modes) == 0 {
-					continue
-				}
-				if skipCmd[name] {
-					continue
-				}
+		for name, spec := range byName {
+			// Only try an opcode in its modes
+			if (m & spec.Modes) == 0 {
+				continue
+			}
+			if skipCmd[name] {
+				continue
+			}
+			t.Run(fmt.Sprintf("mode=%s,opcode=%s", m, name), func(t *testing.T) {
 				provideStackInput := true
 				cmd := name
 				if special, ok := specialCmd[name]; ok {
@@ -2467,24 +2467,20 @@ func TestReturnTypes(t *testing.T) {
 					if reason != "stack finished with bytes not int" &&
 						!strings.HasPrefix(reason, "stack len is") {
 						assert.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
-						continue // skip the return type checking
+					}
+				} else {
+					assert.Len(t, cx.stack, len(spec.Returns), "%s", ep.Trace)
+					for i := 0; i < len(spec.Returns); i++ {
+						stackType := cx.stack[i].argType()
+						retType := spec.Returns[i]
+						assert.True(
+							t, typecheck(retType, stackType),
+							"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
+						)
 					}
 				}
-
-				if !assert.Len(t, cx.stack, len(spec.Returns), "%s", ep.Trace) {
-					continue
-				}
-
-				for i := 0; i < len(spec.Returns); i++ {
-					stackType := cx.stack[i].argType()
-					retType := spec.Returns[i]
-					assert.True(
-						t, typecheck(retType, stackType),
-						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
-					)
-				}
-			}
-		})
+			})
+		}
 	}
 }
 
