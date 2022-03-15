@@ -48,7 +48,7 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// StateProofSecrets is used to sign compact certificates. might be nil
+	// StateProofSecrets is used to sign compact certificates.
 	StateProofSecrets *merklesignature.Secrets
 
 	// The first and last rounds for which this account is valid, respectively.
@@ -303,7 +303,12 @@ func (part PersistedParticipation) Persist() error {
 // Calls through to the migration helper and returns the result.
 func Migrate(partDB db.Accessor) error {
 	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return partMigrate(tx)
+		err := partMigrate(tx)
+		if err != nil {
+			return err
+		}
+
+		return merklesignature.InstallStateProofTable(tx)
 	})
 }
 
