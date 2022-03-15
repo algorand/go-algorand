@@ -2466,18 +2466,17 @@ func TestReturnTypes(t *testing.T) {
 					reason := err.Error()
 					if reason != "stack finished with bytes not int" &&
 						!strings.HasPrefix(reason, "stack len is") {
-						assert.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
+						require.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
 					}
-				} else {
-					assert.Len(t, cx.stack, len(spec.Returns), "%s", ep.Trace)
-					for i := 0; i < len(spec.Returns); i++ {
-						stackType := cx.stack[i].argType()
-						retType := spec.Returns[i]
-						assert.True(
-							t, typecheck(retType, stackType),
-							"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
-						)
-					}
+				}
+				require.Len(t, cx.stack, len(spec.Returns), "%s", ep.Trace)
+				for i := 0; i < len(spec.Returns); i++ {
+					stackType := cx.stack[i].argType()
+					retType := spec.Returns[i]
+					require.True(
+						t, typecheck(retType, stackType),
+						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
+					)
 				}
 			})
 		}
