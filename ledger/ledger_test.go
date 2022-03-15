@@ -1388,6 +1388,64 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 	}
 }
 
+func BenchmarkLedgerBlockHdrCaching(b *testing.B) {
+	benchLedgerCache(b, 700)
+}
+
+func BenchmarkLedgerBlockHdrWithoutCaching(b *testing.B) {
+	benchLedgerCache(b, 100)
+}
+
+type nullWriter struct{} // logging output not required
+
+func (w nullWriter) Write(data []byte) (n int, err error) {
+	return len(data), nil
+}
+
+func benchLedgerCache(b *testing.B, startRound basics.Round) {
+	a := require.New(b)
+
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = false // benchmark actual DB stored in disk instead of on memory
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(b)
+	log.SetOutput(nullWriter{})
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	a.NoError(err)
+	defer func() { // close ledger and remove temporary DB file
+		l.Close()
+		err := os.Remove(dbName + ".tracker.sqlite")
+		if err != nil {
+			fmt.Printf("os.Remove: %v \n", err)
+		}
+		err = os.Remove(dbName + ".block.sqlite")
+		if err != nil {
+			fmt.Printf("os.Remove: %v \n", err)
+		}
+
+	}()
+
+	blk := genesisInitState.Block
+
+	// Fill ledger (and its cache) with blocks
+	for i := 0; i < 1024; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := l.AddBlock(blk, agreement.Certificate{})
+		a.NoError(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		for j := startRound; j < startRound+256; j++ { // these rounds should be in cache
+			hdr, err := l.BlockHdr(j)
+			a.NoError(err)
+			a.Equal(j, hdr.Round)
+		}
+	}
+}
+
 func TestLedgerReload(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

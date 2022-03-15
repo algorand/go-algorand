@@ -21,8 +21,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -71,4 +73,13 @@ func TestLatestBlockHeadersCache(t *testing.T) {
 		a.True(exists)
 		a.Equal(basics.Round(i), hdr.Round)
 	}
+}
+
+func TestCacheSizeConsensus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// TODO Stateproof: change to CurrentVersion when feature is enabled
+	// latest blockheaders cache should be able to store at least an interval and a half of the required state proof rounds
+	a.GreaterOrEqual(uint64(latestCacheSize), config.Consensus[protocol.ConsensusFuture].CompactCertRounds*3/2)
 }
