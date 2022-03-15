@@ -179,9 +179,6 @@ type accountUpdates struct {
 	// accountsReadCond used to synchronize read access to the internal data structures.
 	accountsReadCond *sync.Cond
 
-	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
-	voters *votersTracker
-
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseAccounts lruAccounts
 
@@ -281,10 +278,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
-	if au.voters != nil {
-		au.voters.close()
-	}
-
 	au.baseAccounts.prune(0)
 	au.baseResources.prune(0)
 }
@@ -576,10 +569,6 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, au.cachedDBRound, len(au.deltas))
 	}
 
-	if au.voters != nil {
-		newBase = au.voters.lowestRound(newBase)
-	}
-
 	offset = uint64(newBase - dbRound)
 
 	offset = au.consecutiveVersion(offset)
@@ -667,6 +656,8 @@ type accountUpdatesLedgerEvaluator struct {
 	// au is the associated accountUpdates structure which invoking the trackerEvalVerified function, passing this structure as input.
 	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
 	au *accountUpdates
+	// voters tracker to give access to CompactCertVoters method
+	vt *votersTracker
 	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
 	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
@@ -684,7 +675,7 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 
 // CompactCertVoters returns the top online accounts at round rnd.
 func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
-	return aul.au.voters.getVoters(rnd)
+	return aul.vt.getVoters(rnd)
 }
 
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
@@ -860,10 +851,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.baseAccounts.prune(newBaseAccountSize)
 	newBaseResourcesSize := (len(au.resources) + 1) + baseResourcesPendingAccountsBufferSize
 	au.baseResources.prune(newBaseResourcesSize)
-
-	if au.voters != nil {
-		au.voters.newBlock(blk.BlockHeader)
-	}
 }
 
 // lookupLatest returns the account data for a given address for the latest round.

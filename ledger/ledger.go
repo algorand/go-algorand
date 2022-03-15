@@ -76,6 +76,7 @@ type Ledger struct {
 
 	// State-machine trackers
 	accts      accountUpdates
+	voters     votersTracker
 	catchpoint catchpointTracker
 	txTail     txTail
 	bulletin   bulletin
@@ -198,6 +199,7 @@ func (l *Ledger) reloadLedger() error {
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
 		&l.accts,      // update the balances
+		&l.voters,     // voters keeps track of Merkle trees of online accounts, used for compact certificates.
 		&l.catchpoint, // catchpoints tracker : update catchpoint labels, create catchpoint files
 		&l.txTail,     // update the transaction tail, tracking the recent 1000 txn
 		&l.bulletin,   // provide closed channel signaling support for completed rounds
@@ -436,7 +438,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.voters.getVoters(rnd)
+	return l.voters.getVoters(rnd)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
@@ -771,6 +773,12 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 	vb := ledgercore.MakeValidatedBlock(blk, delta)
 	return &vb, nil
+}
+
+// OnlineTop returns the top n online accounts, sorted by their normalized
+// balance and address, whose voting keys are valid in voteRnd.
+func (l *Ledger) OnlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
+	return l.accts.onlineTop(rnd, voteRnd, n)
 }
 
 // CompactCertParams computes the parameters for building or verifying

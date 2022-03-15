@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"sync"
 
@@ -61,8 +63,8 @@ type votersTracker struct {
 	// for round X+CompactCertVotersLookback+CompactCertRounds.
 	round map[basics.Round]*ledgercore.VotersForRound
 
-	l  ledgerForTracker
-	au *accountUpdates
+	l   ledgerForTracker
+	hdr bookkeeping.BlockHeader
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
@@ -79,38 +81,37 @@ func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams)
 	return certRnd.SubSaturate(basics.Round(proto.CompactCertRounds)).SubSaturate(basics.Round(proto.CompactCertVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) (err error) {
 	vt.l = l
-	vt.au = au
 	vt.round = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	latest := l.Latest()
-	hdr, err := l.BlockHdr(latest)
+	vt.hdr, err = l.BlockHdr(latest)
 	if err != nil {
 		return err
 	}
-	proto := config.Consensus[hdr.CurrentProtocol]
+	proto := config.Consensus[vt.hdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 || hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
+	if proto.CompactCertRounds == 0 || vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
+	startR := votersRoundForCertRound(vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
-			hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
+			vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
 	}
 
 	for r := startR; r <= latest; r += basics.Round(proto.CompactCertRounds) {
-		hdr, err = l.BlockHdr(r)
+		vt.hdr, err = l.BlockHdr(r)
 		if err != nil {
 			return err
 		}
 
-		vt.loadTree(hdr)
+		vt.loadTree(vt.hdr)
 	}
 
 	return nil
@@ -139,15 +140,13 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		onlineAccounts := ledgercore.TopOnlineAccounts(vt.au.onlineTop)
-		err := tr.LoadTree(onlineAccounts, hdr)
+		err := tr.LoadTree(vt.l.OnlineTop, hdr)
 		if err != nil {
 			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
 
 			tr.BroadcastError(err)
 		}
 	}()
-	return
 }
 
 // close waits until all the internal spawned go-routines are done before returning, allowing clean
@@ -156,18 +155,20 @@ func (vt *votersTracker) close() {
 	vt.loadWaitGroup.Wait()
 }
 
-func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
-	proto := config.Consensus[hdr.CurrentProtocol]
+func (vt *votersTracker) newBlock(blk bookkeeping.Block, _ ledgercore.StateDelta) {
+	proto := config.Consensus[blk.CurrentProtocol]
 	if proto.CompactCertRounds == 0 {
 		// No compact certs.
 		return
 	}
 
+	vt.hdr = blk.BlockHeader
+
 	// Check if any blocks can be forgotten because the compact cert is available.
 	for r, tr := range vt.round {
 		commitRound := r + basics.Round(tr.Proto.CompactCertVotersLookback)
 		certRound := commitRound + basics.Round(tr.Proto.CompactCertRounds)
-		if certRound < hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
+		if certRound < vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
 			delete(vt.round, r)
 		}
 	}
@@ -175,15 +176,46 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a merkle tree for commitment in a later
 	// block.
-	r := uint64(hdr.Round)
+	r := uint64(vt.hdr.Round)
 	if (r+proto.CompactCertVotersLookback)%proto.CompactCertRounds == 0 {
 		_, ok := vt.round[basics.Round(r)]
 		if ok {
 			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
-			vt.loadTree(hdr)
+			vt.loadTree(vt.hdr)
 		}
 	}
+}
+
+func (vt *votersTracker) committedUpTo(committedRound basics.Round) (minRound, lookback basics.Round) {
+	proto := config.Consensus[vt.hdr.CurrentProtocol]
+	if proto.CompactCertRounds == 0 {
+		// No compact certs.
+		return committedRound, 0
+	}
+
+	return vt.lowestRound(committedRound), basics.Round(proto.CompactCertVotersLookback)
+}
+
+func (vt *votersTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
+}
+
+func (vt *votersTracker) prepareCommit(*deferredCommitContext) error {
+	return nil
+}
+
+func (vt *votersTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (vt *votersTracker) postCommit(context.Context, *deferredCommitContext) {
+}
+
+func (vt *votersTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
+}
+
+func (vt *votersTracker) handleUnorderedCommit(*deferredCommitContext) {
 }
 
 // lowestRound() returns the lowest round state (blocks and accounts) needed by

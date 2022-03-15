@@ -101,6 +101,10 @@ func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData
 	return wl.l.GenesisAccounts()
 }
 
+func (wl *wrappedLedger) OnlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
+	return wl.l.OnlineTop(rnd, voteRnd, n)
+}
+
 func getInitState() (genesisInitState ledgercore.InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion

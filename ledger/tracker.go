@@ -83,7 +83,7 @@ type ledgerTracker interface {
 	// save space, and the tracker is expected to still function
 	// after a restart and a call to loadFromDisk().
 	// For example, returning 0 means that no blocks can be deleted.
-	// Separetly, the method returns the lookback that is being
+	// Separately, the method returns the lookback that is being
 	// maintained by the tracker.
 	committedUpTo(basics.Round) (minRound, lookback basics.Round)
 
@@ -143,12 +143,14 @@ type ledgerForTracker interface {
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
 	GenesisAccounts() map[basics.Address]basics.AccountData
+	OnlineTop(basics.Round, basics.Round, uint64) ([]*ledgercore.OnlineAccount, error)
 }
 
 type trackerRegistry struct {
 	trackers []ledgerTracker
-	// the accts has some exceptional usages in the tracker registry.
-	accts *accountUpdates
+	// the accts and vt have some exceptional usages in the tracker registry.
+	accts  *accountUpdates
+	voters *votersTracker
 
 	// ctx is the context for the committing go-routine.
 	ctx context.Context
@@ -265,6 +267,9 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 			tr.accts = accts
 			break
 		}
+		if vt, ok := tracker.(*votersTracker); ok {
+			tr.voters = vt
+		}
 	}
 	return
 }
@@ -288,13 +293,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
 
-	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
-	tr.accts.voters = &votersTracker{}
-	err = tr.accts.voters.loadFromDisk(l, tr.accts)
-	if err != nil {
-		err = fmt.Errorf("voters tracker failed to loadFromDisk : %w", err)
-	}
-	return err
+	return nil
 }
 
 func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -520,6 +519,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 
 	accLedgerEval := accountUpdatesLedgerEvaluator{
 		au: tr.accts,
+		vt: tr.voters,
 	}
 
 	if lastBalancesRound < lastestBlockRound {
