@@ -149,7 +149,14 @@ func (sv stackValue) string(limit int) (string, error) {
 	return string(sv.Bytes), nil
 }
 
-func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
+func (sv stackValue) toTealValue() (tv basics.TealValue) {
+	if sv.argType() == StackBytes {
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
+	}
+	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
+}
+
+func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 	switch tv.Type {
 	case basics.TealBytesType:
 		sv.Bytes = []byte(tv.Bytes)
@@ -189,13 +196,6 @@ func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uin
 		}
 	}
 	return minVersion
-}
-
-func (sv *stackValue) toTealValue() (tv basics.TealValue) {
-	if sv.argType() == StackBytes {
-		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
-	}
-	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
@@ -3642,7 +3642,7 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 	}
 
 	if ok {
-		result, err = stackValueFromTealValue(&tv)
+		result, err = stackValueFromTealValue(tv)
 	}
 	return
 }
@@ -3659,7 +3659,7 @@ func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (resu
 	}
 
 	if ok {
-		result, err = stackValueFromTealValue(&tv)
+		result, err = stackValueFromTealValue(tv)
 	}
 	return
 }
