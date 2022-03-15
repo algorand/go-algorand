@@ -3475,6 +3475,7 @@ func BenchmarkBase64Decode(b *testing.B) {
 		"keccak256",
 		"sha256",
 		"sha512_256",
+		"sha3_256",
 		"base64_decode StdEncoding",
 		"base64_decode URLEncoding",
 	}
@@ -4937,7 +4938,6 @@ func TestOpJSONRef(t *testing.T) {
 
 	for _, s := range testCases {
 		for v := uint64(2); v < fidoVersion; v++ {
-			fmt.Printf("%d->%s\n", v, s.source)
 			expectedErrs := s.previousVersErrors
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
@@ -5127,7 +5127,6 @@ func TestOpJSONRef(t *testing.T) {
 
 	for _, s := range failedCases {
 		for v := uint64(2); v < fidoVersion; v++ {
-			fmt.Printf("%d->%s\n", v, s.source)
 			expectedErrs := s.previousVersErrors
 			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
