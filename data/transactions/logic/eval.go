@@ -18,11 +18,14 @@ package logic
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -38,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/consensys/gnark-crypto/ecc/bn254"
@@ -209,7 +213,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
-	AccountData(addr basics.Address) (basics.AccountData, error)
+	AccountData(addr basics.Address) (ledgercore.AccountData, error)
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
@@ -1096,6 +1100,13 @@ func opSelect(cx *EvalContext) {
 func opSHA256(cx *EvalContext) {
 	last := len(cx.stack) - 1
 	hash := sha256.Sum256(cx.stack[last].Bytes)
+	cx.stack[last].Bytes = hash[:]
+}
+
+// The NIST SHA3-256 is implemented for compatibility with ICON
+func opSHA3_256(cx *EvalContext) {
+	last := len(cx.stack) - 1
+	hash := sha3.Sum256(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = hash[:]
 }
 
@@ -2199,14 +2210,14 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 }
 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
-func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
+func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64, inner bool) (basics.TealValue, error) {
 	if groupIndex < 0 {
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	var cx EvalContext
 	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
 	fs := txnFieldSpecByField[field]
-	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, false)
+	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, inner)
 	return sv.toTealValue(), err
 }
 
@@ -2943,7 +2954,7 @@ func (cx *EvalContext) programHash() crypto.Digest {
 	return cx.programHashCached
 }
 
-func opEd25519verify(cx *EvalContext) {
+func opEd25519Verify(cx *EvalContext) {
 	last := len(cx.stack) - 1 // index of PK
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
@@ -2968,6 +2979,30 @@ func opEd25519verify(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+func opEd25519VerifyBare(cx *EvalContext) {
+	last := len(cx.stack) - 1 // index of PK
+	prev := last - 1          // index of signature
+	pprev := prev - 1         // index of data
+
+	var sv crypto.SignatureVerifier
+	if len(cx.stack[last].Bytes) != len(sv) {
+		cx.err = errors.New("invalid public key")
+		return
+	}
+	copy(sv[:], cx.stack[last].Bytes)
+
+	var sig crypto.Signature
+	if len(cx.stack[prev].Bytes) != len(sig) {
+		cx.err = errors.New("invalid signature")
+		return
+	}
+	copy(sig[:], cx.stack[prev].Bytes)
+
+	cx.stack[pprev].Uint = boolToUint(sv.VerifyBytes(cx.stack[pprev].Bytes, sig, cx.Proto.EnableBatchVerification))
+	cx.stack[pprev].Bytes = nil
+	cx.stack = cx.stack[:prev]
+}
+
 // leadingZeros needs to be replaced by big.Int.FillBytes
 func leadingZeros(size int, b *big.Int) ([]byte, error) {
 	data := b.Bytes()
@@ -2983,6 +3018,57 @@ func leadingZeros(size int, b *big.Int) ([]byte, error) {
 	return buf, nil
 }
 
+// polynomial returns x³ - 3x + b.
+//
+// TODO: remove this when go-algorand is updated to go 1.15+
+func polynomial(curve *elliptic.CurveParams, x *big.Int) *big.Int {
+	x3 := new(big.Int).Mul(x, x)
+	x3.Mul(x3, x)
+
+	threeX := new(big.Int).Lsh(x, 1)
+	threeX.Add(threeX, x)
+
+	x3.Sub(x3, threeX)
+	x3.Add(x3, curve.B)
+	x3.Mod(x3, curve.P)
+
+	return x3
+}
+
+// unmarshalCompressed converts a point, serialized by MarshalCompressed, into an x, y pair.
+// It is an error if the point is not in compressed form or is not on the curve.
+// On error, x = nil.
+//
+// TODO: remove this and replace usage with elliptic.UnmarshallCompressed when go-algorand is
+// updated to go 1.15+
+func unmarshalCompressed(curve elliptic.Curve, data []byte) (x, y *big.Int) {
+	byteLen := (curve.Params().BitSize + 7) / 8
+	if len(data) != 1+byteLen {
+		return nil, nil
+	}
+	if data[0] != 2 && data[0] != 3 { // compressed form
+		return nil, nil
+	}
+	p := curve.Params().P
+	x = new(big.Int).SetBytes(data[1:])
+	if x.Cmp(p) >= 0 {
+		return nil, nil
+	}
+	// y² = x³ - 3x + b
+	y = polynomial(curve.Params(), x)
+	y = y.ModSqrt(y, p)
+	if y == nil {
+		return nil, nil
+	}
+	if byte(y.Bit(0)) != data[0]&1 {
+		y.Neg(y).Mod(y, p)
+	}
+	if !curve.IsOnCurve(x, y) {
+		return nil, nil
+	}
+	return
+}
+
 func opEcdsaVerify(cx *EvalContext) {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
@@ -2991,7 +3077,7 @@ func opEcdsaVerify(cx *EvalContext) {
 		return
 	}
 
-	if fs.field != Secp256k1 {
+	if fs.field != Secp256k1 && fs.field != Secp256r1 {
 		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
 		return
 	}
@@ -3008,15 +3094,33 @@ func opEcdsaVerify(cx *EvalContext) {
 	sigR := cx.stack[fourth].Bytes
 	msg := cx.stack[fifth].Bytes
 
+	if len(msg) != 32 {
+		cx.err = fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
+		return
+	}
+
 	x := new(big.Int).SetBytes(pkX)
 	y := new(big.Int).SetBytes(pkY)
-	pubkey := secp256k1.S256().Marshal(x, y)
 
-	signature := make([]byte, 0, len(sigR)+len(sigS))
-	signature = append(signature, sigR...)
-	signature = append(signature, sigS...)
+	var result bool
+	if fs.field == Secp256k1 {
+		signature := make([]byte, 0, len(sigR)+len(sigS))
+		signature = append(signature, sigR...)
+		signature = append(signature, sigS...)
 
-	result := secp256k1.VerifySignature(pubkey, msg, signature)
+		pubkey := secp256k1.S256().Marshal(x, y)
+		result = secp256k1.VerifySignature(pubkey, msg, signature)
+	} else if fs.field == Secp256r1 {
+		r := new(big.Int).SetBytes(sigR)
+		s := new(big.Int).SetBytes(sigS)
+
+		pubkey := ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     x,
+			Y:     y,
+		}
+		result = ecdsa.Verify(&pubkey, msg, r, s)
+	}
 
 	cx.stack[fifth].Uint = boolToUint(result)
 	cx.stack[fifth].Bytes = nil
@@ -3031,7 +3135,7 @@ func opEcdsaPkDecompress(cx *EvalContext) {
 		return
 	}
 
-	if fs.field != Secp256k1 {
+	if fs.field != Secp256k1 && fs.field != Secp256r1 {
 		cx.err = fmt.Errorf("unsupported curve %d", fs.field)
 		return
 	}
@@ -3039,10 +3143,19 @@ func opEcdsaPkDecompress(cx *EvalContext) {
 	last := len(cx.stack) - 1 // compressed PK
 
 	pubkey := cx.stack[last].Bytes
-	x, y := secp256k1.DecompressPubkey(pubkey)
-	if x == nil {
-		cx.err = fmt.Errorf("invalid pubkey")
-		return
+	var x, y *big.Int
+	if fs.field == Secp256k1 {
+		x, y = secp256k1.DecompressPubkey(pubkey)
+		if x == nil {
+			cx.err = fmt.Errorf("invalid pubkey")
+			return
+		}
+	} else if fs.field == Secp256r1 {
+		x, y = unmarshalCompressed(elliptic.P256(), pubkey)
+		if x == nil {
+			cx.err = fmt.Errorf("invalid compressed pubkey")
+			return
+		}
 	}
 
 	var err error
@@ -4753,4 +4866,107 @@ func opBase64Decode(cx *EvalContext) {
 	}
 	encoding = encoding.Strict()
 	cx.stack[last].Bytes, cx.err = base64Decode(cx.stack[last].Bytes, encoding)
+}
+func hasDuplicateKeys(jsonText []byte) (bool, map[string]json.RawMessage, error) {
+	dec := json.NewDecoder(bytes.NewReader(jsonText))
+	parsed := make(map[string]json.RawMessage)
+	t, err := dec.Token()
+	if err != nil {
+		return false, nil, err
+	}
+	t, ok := t.(json.Delim)
+	if !ok || t.(json.Delim).String() != "{" {
+		return false, nil, fmt.Errorf("only json object is allowed")
+	}
+	for dec.More() {
+		var value json.RawMessage
+		// get JSON key
+		key, err := dec.Token()
+		if err != nil {
+			return false, nil, err
+		}
+		// end of json
+		if key == '}' {
+			break
+		}
+		// decode value
+		err = dec.Decode(&value)
+		if err != nil {
+			return false, nil, err
+		}
+		// check for duplicates
+		if _, ok := parsed[key.(string)]; ok {
+			return true, nil, nil
+		}
+		parsed[key.(string)] = value
+	}
+	return false, parsed, nil
+}
+
+func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
+	if !json.Valid(jsonText) {
+		return nil, fmt.Errorf("invalid json text")
+	}
+	// parse json text and check for duplicate keys
+	hasDuplicates, parsed, err := hasDuplicateKeys(jsonText)
+	if hasDuplicates {
+		return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invalid json text, %v", err)
+	}
+	return parsed, nil
+}
+func opJSONRef(cx *EvalContext) {
+	// get json key
+	last := len(cx.stack) - 1
+	key := string(cx.stack[last].Bytes)
+	cx.stack = cx.stack[:last] // pop
+
+	// parse json text
+	last = len(cx.stack) - 1
+	parsed, err := parseJSON(cx.stack[last].Bytes)
+	if err != nil {
+		cx.err = fmt.Errorf("error while parsing JSON text, %v", err)
+		return
+	}
+
+	// get value from json
+	var stval stackValue
+	_, ok := parsed[key]
+	if !ok {
+		cx.err = fmt.Errorf("key %s not found in JSON text", key)
+		return
+	}
+	expectedType := JSONRefType(cx.program[cx.pc+1])
+	switch expectedType {
+	case JSONString:
+		var value string
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		stval.Bytes = []byte(value)
+	case JSONUint64:
+		var value uint64
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		stval.Uint = value
+	case JSONObject:
+		var value map[string]json.RawMessage
+		err := json.Unmarshal(parsed[key], &value)
+		if err != nil {
+			cx.err = err
+			return
+		}
+		stval.Bytes = parsed[key]
+	default:
+		cx.err = fmt.Errorf("unsupported json_ref return type, should not have reached here")
+		return
+	}
+	cx.stack[last] = stval
 }

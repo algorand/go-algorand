@@ -55,7 +55,10 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
 	"github.com/algorand/go-deadlock"
-	uuid "github.com/satori/go.uuid"
+)
+
+const (
+	participationRegistryFlushMaxWaitDuration = 30 * time.Second
 )
 
 // StatusReport represents the current basic status of the node
@@ -254,7 +257,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Accessor:       crashAccess,
 		Clock:          agreementClock,
 		Local:          node.config,
-		Network:        gossip.WrapNetwork(node.net, log),
+		Network:        gossip.WrapNetwork(node.net, log, cfg),
 		Ledger:         agreementLedger,
 		BlockFactory:   node,
 		BlockValidator: blockValidator,
@@ -754,7 +757,7 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 // ensureParticipationDB opens or creates a participation DB.
 func ensureParticipationDB(genesisDir string, log logging.Logger) (account.ParticipationRegistry, error) {
 	accessorFile := filepath.Join(genesisDir, config.ParticipationRegistryFilename)
-	accessor, err := db.OpenPair(accessorFile, false)
+	accessor, err := db.OpenErasablePair(accessorFile)
 	if err != nil {
 		return nil, err
 	}
@@ -819,10 +822,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 		return err
 	}
 
-	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
-	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
-	// the error message.
-	err = node.accountManager.Registry().Flush(500 * time.Millisecond)
+	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 	if err != nil {
 		return err
 	}
@@ -840,10 +840,7 @@ func (node *AlgorandFullNode) AppendParticipationKeys(partKeyID account.Particip
 		return err
 	}
 
-	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
-	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
-	// the error message.
-	return node.accountManager.Registry().Flush(500 * time.Millisecond)
+	return node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 }
 
 func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (string, error) {
@@ -852,7 +849,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 	// Create a temporary filename with a UUID so that we can call this function twice
 	// in a row without worrying about collisions
 	sb.WriteString("tempPartKeyBinary.")
-	sb.WriteString(uuid.NewV4().String())
+	sb.WriteString(fmt.Sprintf("%d", crypto.RandUint64()))
 	sb.WriteString(".bin")
 
 	tempFile := filepath.Join(outDir, filepath.Base(sb.String()))
@@ -915,10 +912,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
 	_ = node.accountManager.AddParticipation(partkey)
 
-	// PKI TODO: pick a better timeout, this is just something short. This could also be removed if we change
-	// POST /v2/participation and DELETE /v2/participation to return "202 OK Accepted" instead of waiting and getting
-	// the error message.
-	err = node.accountManager.Registry().Flush(500 * time.Millisecond)
+	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
@@ -1011,11 +1005,11 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 		return nil
 	}
 	keys := part.StateProofSecrets.GetAllKeys()
-	keysSinger := make(account.StateProofKeys, len(keys))
+	keysSigner := make(account.StateProofKeys, len(keys))
 	for i := uint64(0); i < uint64(len(keys)); i++ {
-		keysSinger[i] = keys[i]
+		keysSigner[i] = keys[i]
 	}
-	return node.accountManager.Registry().AppendKeys(partID, keysSinger)
+	return node.accountManager.Registry().AppendKeys(partID, keysSigner)
 
 }
 
@@ -1084,16 +1078,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 			continue
 		}
 
-		// If compact certs are enabled, we need to determine what signatures
-		// we already computed, since we can then delete ephemeral keys that
-		// were already used to compute a signature (stored in the compact
-		// cert db).
-		ccSigs, err := node.compactCert.LatestSigsFromThisNode()
-		if err != nil {
-			node.log.Warnf("Cannot look up latest compact cert sigs: %v", err)
-			continue
-		}
-
 		// We need to find the consensus protocol used to agree on block r,
 		// since that determines the params used for ephemeral keys in block
 		// r.  The params come from agreement.ParamsRound(r), which is r-2.
@@ -1111,12 +1095,14 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		agreementProto := config.Consensus[hdr.CurrentProtocol]
 
 		node.mu.Lock()
-		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
+		node.accountManager.DeleteOldKeys(latestHdr, agreementProto)
 		node.mu.Unlock()
 
-		// PKI TODO: Maybe we don't even need to flush the registry.
-		// Persist participation registry metrics.
-		node.accountManager.FlushRegistry(2 * time.Second)
+		// Persist participation registry updates to last-used round and voting key changes.
+		err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
+		if err != nil {
+			node.log.Warnf("error while flushing the registry: %w", err)
+		}
 	}
 }
 
@@ -1314,6 +1300,11 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound {
+	// on devmode, we don't need any voting keys for the agreement, since the agreement doesn't vote.
+	if node.devMode {
+		return []account.ParticipationRecordForRound{}
+	}
+
 	parts := node.accountManager.Keys(votingRound)
 	participations := make([]account.ParticipationRecordForRound, 0, len(parts))
 	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(parts))

@@ -171,7 +171,7 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (t *txTail) handleUnorderedCommit(uint64, basics.Round, basics.Round) {
+func (t *txTail) handleUnorderedCommit(*deferredCommitContext) {
 }
 
 func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

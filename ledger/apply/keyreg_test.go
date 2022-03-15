@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
@@ -41,9 +42,24 @@ const defaultParticipationLastRound = 3000
 type keyregTestBalances struct {
 	addrs   map[basics.Address]basics.AccountData
 	version protocol.ConsensusVersion
+	mockCreatableBalances
 }
 
-func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+func newKeyregTestBalances() *keyregTestBalances {
+	b := &keyregTestBalances{
+		addrs:   make(map[basics.Address]basics.AccountData),
+		version: protocol.ConsensusCurrentVersion,
+	}
+	b.mockCreatableBalances = mockCreatableBalances{access: b}
+	return b
+}
+
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error) {
+	acct, err := balances.getAccount(addr, withPendingRewards)
+	return ledgercore.ToAccountData(acct), err
+}
+
+func (balances keyregTestBalances) getAccount(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	return balances.addrs[addr], nil
 }
 
@@ -51,9 +67,19 @@ func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype 
 	return basics.Address{}, true, nil
 }
 
-func (balances keyregTestBalances) Put(addr basics.Address, ad basics.AccountData) error {
+func (balances keyregTestBalances) Put(addr basics.Address, ad ledgercore.AccountData) error {
+	a, _ := balances.getAccount(addr, false) // ignoring not found error
+	ledgercore.AssignAccountData(&a, ad)
+	return balances.putAccount(addr, a)
+}
+
+func (balances keyregTestBalances) putAccount(addr basics.Address, ad basics.AccountData) error {
 	balances.addrs[addr] = ad
 	return nil
+}
+
+func (balances keyregTestBalances) CloseAccount(addr basics.Address) error {
+	return balances.putAccount(addr, basics.AccountData{})
 }
 
 func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
@@ -106,7 +132,7 @@ func TestKeyregApply(t *testing.T) {
 
 	tx.Sender = src
 
-	mockBal := keyregTestBalances{make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion}
+	mockBal := newKeyregTestBalances()
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
@@ -170,7 +196,7 @@ func TestKeyregApply(t *testing.T) {
 	}
 }
 
-func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
+func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal *keyregTestBalances) {
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
 

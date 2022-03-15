@@ -165,6 +165,17 @@
             "required": true
           },
           {
+            "name": "exclude",
+            "description": "When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "all",
+              "none"
+            ]
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -173,7 +184,161 @@
             "$ref": "#/responses/AccountResponse"
           },
           "400": {
-            "description": "Malformed address",
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
+        }
+      ]
+    },
+    "/v2/accounts/{address}/assets/{asset-id}": {
+      "get": {
+        "description": "Given a specific account public key and asset ID, this call returns the account's asset holding and asset parameters (if either exist). Asset parameters will only be returned if the provided address is the asset's creator.",
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information about a given asset.",
+        "operationId": "AccountAssetInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "An asset identifier",
+            "name": "asset-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountAssetResponse"
+          },
+          "400": {
+            "description": "Malformed address or asset ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
+        }
+      ]
+    },
+    "/v2/accounts/{address}/applications/{application-id}": {
+      "get": {
+        "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information about a given app.",
+        "operationId": "AccountApplicationInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountApplicationResponse"
+          },
+          "400": {
+            "description": "Malformed address or application ID",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1198,7 +1363,7 @@
     },
     "/v2/teal/compile": {
       "post": {
-        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "consumes": [
           "text/plain"
         ],
@@ -1361,7 +1526,7 @@
     },
     "/v2/teal/dryrun": {
       "post": {
-        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
+        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "consumes": [
           "application/json",
           "application/msgpack"
@@ -1429,7 +1594,11 @@
         "amount-without-pending-rewards",
         "rewards",
         "status",
-        "min-balance"
+        "min-balance",
+        "total-apps-opted-in",
+        "total-assets-opted-in",
+        "total-created-apps",
+        "total-created-assets"
       ],
       "properties": {
         "address": {
@@ -1455,6 +1624,10 @@
             "$ref": "#/definitions/ApplicationLocalState"
           }
         },
+        "total-apps-opted-in": {
+          "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
+          "type": "integer"
+        },
         "apps-total-schema": {
           "description": "\\[tsch\\] stores the sum of all of the local schemas and global schemas in this account.\n\nNote: the raw account uses `StateSchema` for this type.",
           "$ref": "#/definitions/ApplicationStateSchema"
@@ -1470,6 +1643,10 @@
             "$ref": "#/definitions/AssetHolding"
           }
         },
+        "total-assets-opted-in": {
+          "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
+          "type": "integer"
+        },
         "created-apps": {
           "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -\u003e AppParams` for this type.",
           "type": "array",
@@ -1477,12 +1654,20 @@
             "$ref": "#/definitions/Application"
           }
         },
+        "total-created-apps": {
+          "description": "The count of all apps (AppParams objects) created by this account.",
+          "type": "integer"
+        },
         "created-assets": {
           "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e Asset` for this type.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Asset"
           }
+        },
+        "total-created-assets": {
+          "description": "The count of all assets (AssetParams objects) created by this account.",
+          "type": "integer"
         },
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
@@ -1585,7 +1770,6 @@
       "type": "object",
       "required": [
         "asset-id",
-        "creator",
         "amount",
         "is-frozen"
       ],
@@ -1599,10 +1783,6 @@
           "description": "Asset ID of the holding.",
           "type": "integer",
           "x-go-name": "AssetID"
-        },
-        "creator": {
-          "description": "Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.",
-          "type": "string"
         },
         "is-frozen": {
           "description": "\\[f\\] whether or not the holding is frozen.",
@@ -2054,7 +2234,7 @@
       ],
       "properties": {
         "data": {
-          "type": "string"
+          "type": "object"
         },
         "message": {
           "type": "string"
@@ -2460,8 +2640,55 @@
   },
   "responses": {
     "AccountResponse": {
+      "description": "AccountResponse wraps the Account type in a response.",
       "schema": {
         "$ref": "#/definitions/Account"
+      }
+    },
+    "AccountAssetResponse": {
+      "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+          },
+          "asset-holding": {
+            "description": "\\[asset\\] Details about the asset held by this account.\n\nThe raw account uses `AssetHolding` for this type.",
+            "$ref": "#/definitions/AssetHolding"
+          },
+          "created-asset": {
+            "description": "\\[apar\\] parameters of the asset created by this account.\n\nThe raw account uses `AssetParams` for this type.",
+            "$ref": "#/definitions/AssetParams"
+          }
+        }
+      }
+    },
+    "AccountApplicationResponse": {
+      "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+            },
+          "app-local-state": {
+            "description": "\\[appl\\] the application local data stored in this account.\n\nThe raw account uses `AppLocalState` for this type.",
+            "$ref": "#/definitions/ApplicationLocalState"
+          },
+          "created-app": {
+            "description": "\\[appp\\] parameters of the application created by this account including app global data.\n\nThe raw account uses `AppParams` for this type.",
+            "$ref": "#/definitions/ApplicationParams"
+          }
+        }
       }
     },
     "BlockResponse": {

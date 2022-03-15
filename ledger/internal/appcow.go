@@ -248,14 +248,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 			Creator: addr,
 			Created: true,
 		}
-	} else {
-		aa := ledgercore.AccountApp{
-			Address: addr,
-			App:     aidx,
-		}
-		cb.mods.ModifiedAppLocalStates[aa] = true
 	}
-
 	return nil
 }
 
@@ -287,14 +280,7 @@ func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex
 			Creator: addr,
 			Created: false,
 		}
-	} else {
-		aa := ledgercore.AccountApp{
-			Address: addr,
-			App:     aidx,
-		}
-		cb.mods.ModifiedAppLocalStates[aa] = false
 	}
-
 	return nil
 }
 
@@ -650,91 +636,118 @@ func (lsd *storageDelta) applyChild(child *storageDelta) {
 // applyStorageDelta saves in-mem storageDelta into AccountData
 // cow stores app data separately from AccountData to minimize potentially large AccountData copying/reallocations.
 // When cow is done applyStorageDelta offloads app stores into AccountData
-func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageDelta) (basics.AccountData, error) {
+func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, storeDelta *storageDelta) error {
 	// duplicate code in branches is proven to be a bit faster than
 	// having basics.AppParams and basics.AppLocalState under a common interface with additional loops and type assertions
 	if aapp.global {
-		var owned map[basics.AppIndex]basics.AppParams
-		if len(data.AppParams) > 0 {
-			owned = make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
-			for k, v := range data.AppParams {
-				owned[k] = v
-			}
-		}
-
-		switch store.action {
+		switch storeDelta.action {
 		case deallocAction:
-			delete(owned, aapp.aidx)
-		case allocAction, remainAllocAction:
-			// note: these should always exist because they were
-			// at least preceded by a call to Put()
-			params, ok := owned[aapp.aidx]
-			if !ok {
-				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
+			// app params and app local states might be accessed without touching base account record
+			// from TEAL by writing into KV store.
+			// This is OK although KV deletion and allocation must be preceded by updating counters in base account record,
+			// so ensure the base record was updated and placed into deltas
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
+				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
-			params = params.Clone()
-			if (store.action == allocAction && len(store.kvCow) > 0) ||
-				(store.action == remainAllocAction && params.GlobalState == nil) {
+			// fetch AppLocalState to store along with deleted AppParams
+			state, _, err := cb.lookupAppLocalState(addr, aapp.aidx, true)
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			}
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, ledgercore.AppParamsDelta{Deleted: true}, state)
+		case allocAction:
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
+				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
+			}
+			fallthrough
+		case remainAllocAction:
+			// note: these should always exist because they were
+			// at least preceded by a call to PutAppParams/PutAssetParams()
+			params, exist, err := cb.lookupAppParams(addr, aapp.aidx, true)
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
+			}
+			if !exist {
+				return fmt.Errorf("could not find existing params for %v", aapp.aidx)
+			}
+			paramsClone := params.Params.Clone()
+			params.Params = &paramsClone
+			if (storeDelta.action == allocAction && len(storeDelta.kvCow) > 0) ||
+				(storeDelta.action == remainAllocAction && params.Params.GlobalState == nil) {
 				// allocate KeyValue for
 				// 1) app creation and global write in the same app call
 				// 2) global state writing into empty global state
-				params.GlobalState = make(basics.TealKeyValue)
+				params.Params.GlobalState = make(basics.TealKeyValue)
 			}
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
-			for k, v := range store.kvCow {
+			for k, v := range storeDelta.kvCow {
 				if !v.newExists {
-					delete(params.GlobalState, k)
+					delete(params.Params.GlobalState, k)
 				} else {
-					params.GlobalState[k] = v.new
+					params.Params.GlobalState[k] = v.new
 				}
 			}
-			owned[aapp.aidx] = params
+			// fetch AppLocalState to store along with updated AppParams
+			state, _, err := cb.lookupAppLocalState(addr, aapp.aidx, true)
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			}
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, params, state)
 		}
-
-		data.AppParams = owned
-
 	} else {
-		var owned map[basics.AppIndex]basics.AppLocalState
-		if len(data.AppLocalStates) > 0 {
-			owned = make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
-			for k, v := range data.AppLocalStates {
-				owned[k] = v
-			}
-		}
-
-		switch store.action {
+		switch storeDelta.action {
 		case deallocAction:
-			delete(owned, aapp.aidx)
-		case allocAction, remainAllocAction:
-			// note: these should always exist because they were
-			// at least preceded by a call to Put (opting in),
-			// or the account has opted in before and local states are pre-allocated
-			states, ok := owned[aapp.aidx]
-			if !ok {
-				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
+				return fmt.Errorf("dealloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
 			}
-			states = states.Clone()
-			if (store.action == allocAction && len(store.kvCow) > 0) ||
-				(store.action == remainAllocAction && states.KeyValue == nil) {
+			// fetch AppParams to store along with deleted AppLocalState
+			params, _, err := cb.lookupAppParams(addr, aapp.aidx, true)
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			}
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, params, ledgercore.AppLocalStateDelta{Deleted: true})
+		case allocAction:
+			if _, ok := cb.mods.Accts.GetData(addr); !ok {
+				return fmt.Errorf("alloc consistency check (global=%v) failed for (%s, %d)", aapp.global, addr.String(), aapp.aidx)
+			}
+			fallthrough
+		case remainAllocAction:
+			// note: these should always exist because they were
+			// at least preceded by a call to PutAssetHolding/PutLocalState
+			states, exist, err := cb.lookupAppLocalState(addr, aapp.aidx, true)
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d): %w", aapp.global, addr.String(), aapp.aidx, err)
+			}
+			if !exist {
+				return fmt.Errorf("could not find existing states for %v", aapp.aidx)
+			}
+
+			statesClone := states.LocalState.Clone()
+			states.LocalState = &statesClone
+			if (storeDelta.action == allocAction && len(storeDelta.kvCow) > 0) ||
+				(storeDelta.action == remainAllocAction && states.LocalState.KeyValue == nil) {
 				// allocate KeyValue for
 				// 1) opting in and local state write in the same app call
 				// 2) local state writing into empty local state (opted in)
-				states.KeyValue = make(basics.TealKeyValue)
+				states.LocalState.KeyValue = make(basics.TealKeyValue)
 			}
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
-			for k, v := range store.kvCow {
+			for k, v := range storeDelta.kvCow {
 				if !v.newExists {
-					delete(states.KeyValue, k)
+					delete(states.LocalState.KeyValue, k)
 				} else {
-					states.KeyValue[k] = v.new
+					states.LocalState.KeyValue[k] = v.new
 				}
 			}
-			owned[aapp.aidx] = states
+			// fetch AppParams to store along with deleted AppLocalState
+			params, _, err := cb.lookupAppParams(addr, aapp.aidx, true)
+			if err != nil {
+				return fmt.Errorf("fetching storage (global=%v) failed for (%s, %d) AppLocalState: %w", aapp.global, addr.String(), aapp.aidx, err)
+			}
+			cb.mods.Accts.UpsertAppResource(addr, aapp.aidx, params, states)
 		}
-
-		data.AppLocalStates = owned
 	}
-	return data, nil
+	return nil
 }

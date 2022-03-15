@@ -1396,6 +1396,8 @@ next2:
 // used in a later app call tx (in the same group).  This was not allowed until
 // v6, because of the strict adherence to the foreign-arrays rules.
 func TestCreateAndUse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
 	defer l.Close()
@@ -1455,6 +1457,8 @@ func TestCreateAndUse(t *testing.T) {
 }
 
 func TestGtxnEffects(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
 	defer l.Close()

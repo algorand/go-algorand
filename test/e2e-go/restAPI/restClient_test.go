@@ -22,11 +22,6 @@ import (
 	"errors"
 	"flag"
 
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/util/db"
 	"math"
 	"math/rand"
 	"os"
@@ -41,13 +36,18 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 var fixture fixtures.RestClientFixture
@@ -1127,7 +1127,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress)
+	account, err := testClient.AccountInformationV2(someAddress, false)
 	a.NoError(err)
 	a.NotNil(account.Participation.StateProofKey)
 
@@ -1223,7 +1223,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress)
+	account, err := testClient.AccountInformationV2(someAddress, false)
 	a.NoError(err)
 	a.Nil(account.Participation.StateProofKey)
 }
