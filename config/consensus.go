@@ -1124,6 +1124,8 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
+	vFuture.LogicSigVersion = 7
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
