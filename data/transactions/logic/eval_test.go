@@ -3337,7 +3337,7 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 }
 
 // Rather than run b.N times, build a program that runs the operation
-// 2000 times, and does so for b.N / 2000 tuns.  This lets us amortize
+// 2000 times, and does so for b.N / 2000 runs.  This lets us amortize
 // away the creation and teardown of the evaluation system.  We report
 // the "extra/op" as the number of extra instructions that are run
 // during the "operation".  They are presumed to be fast (15/ns), so
