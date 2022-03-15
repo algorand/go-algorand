@@ -1012,6 +1012,14 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
+## ed25519verify_bare
+
+- Opcode: 0x84
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
+- for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
+- **Cost**: 1900
+- Availability: v7
+
 ## callsub target
 
 - Opcode: 0x88 {int16 branch offset, big endian}
