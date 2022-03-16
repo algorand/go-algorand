@@ -42,12 +42,13 @@ type cdtState struct {
 	globals     []basics.TealValue
 
 	// mutable program state
-	mu      deadlock.Mutex
-	stack   []basics.TealValue
-	scratch []basics.TealValue
-	pc      atomicInt
-	line    atomicInt
-	err     atomicString
+	mu        deadlock.Mutex
+	stack     []basics.TealValue
+	scratch   []basics.TealValue
+	pc        atomicInt
+	line      atomicInt
+	err       atomicString
+	callStack []logic.CallFrame
 	AppState
 
 	// debugger states
@@ -64,6 +65,7 @@ type cdtStateUpdate struct {
 	line         int
 	err          string
 	opcodeBudget int
+	callStack    []logic.CallFrame
 
 	AppState
 }
@@ -110,6 +112,7 @@ func (s *cdtState) Update(state cdtStateUpdate) {
 	s.AppState = state.AppState
 	// We need to dynamically override opcodeBudget with the proper value each step.
 	s.globals[logic.OpcodeBudget].Uint = uint64(state.opcodeBudget)
+	s.callStack = state.callStack
 }
 
 func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.RuntimePropertyDescriptor, err error) {

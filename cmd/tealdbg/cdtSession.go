@@ -168,8 +168,8 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		// set pc and line to 0 to workaround Register ack
 		state.Update(cdtStateUpdate{
 			dbgState.Stack, dbgState.Scratch,
-			0, 0, "",
-			dbgState.OpcodeBudget, s.debugger.GetStates(nil),
+			0, 0, "", dbgState.OpcodeBudget, dbgState.CallStack,
+			s.debugger.GetStates(nil),
 		})
 
 		hash := sha256.Sum256([]byte(state.disassembly)) // some random hash
@@ -247,7 +247,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				state.Update(cdtStateUpdate{
 					dbgState.Stack, dbgState.Scratch,
 					dbgState.PC, dbgState.Line, dbgState.Error,
-					dbgState.OpcodeBudget, appState,
+					dbgState.OpcodeBudget, dbgState.CallStack, appState,
 				})
 				dbgStateMu.Unlock()
 
@@ -579,22 +579,43 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) cdt.DebuggerPaused
 		},
 	}
 	sc := []cdt.DebuggerScope{scopeLocal, scopeGlobal}
-	cf := cdt.DebuggerCallFrame{
-		CallFrameID:  "mainframe",
-		FunctionName: "",
-		Location: &cdt.DebuggerLocation{
-			ScriptID:     s.scriptID,
-			LineNumber:   state.line.Load(),
-			ColumnNumber: 0,
+
+	cfs := []cdt.DebuggerCallFrame{
+		{
+			CallFrameID:  "mainframe",
+			FunctionName: "main",
+			Location: &cdt.DebuggerLocation{
+				ScriptID:     s.scriptID,
+				LineNumber:   state.line.Load(),
+				ColumnNumber: 0,
+			},
+			URL:        s.scriptURL,
+			ScopeChain: sc,
 		},
-		URL:        s.scriptURL,
-		ScopeChain: sc,
+	}
+	for i := range state.callStack {
+		cf := cdt.DebuggerCallFrame{
+			CallFrameID:  "mainframe",
+			FunctionName: state.callStack[i].LabelName,
+			Location: &cdt.DebuggerLocation{
+				ScriptID:     s.scriptID,
+				LineNumber:   state.line.Load(),
+				ColumnNumber: 0,
+			},
+			URL:        s.scriptURL,
+			ScopeChain: sc,
+		}
+		// Set the previous call frame line number
+		cfs[0].Location.LineNumber = state.callStack[i].FrameLine
+		// We have to prepend the newest frame for it to appear first
+		// in the debugger...
+		cfs = append([]cdt.DebuggerCallFrame{cf}, cfs...)
 	}
 
 	evPaused := cdt.DebuggerPausedEvent{
 		Method: "Debugger.paused",
 		Params: cdt.DebuggerPausedParams{
-			CallFrames:     []cdt.DebuggerCallFrame{cf},
+			CallFrames:     cfs,
 			Reason:         "other",
 			HitBreakpoints: make([]string, 0),
 		},
