@@ -202,6 +202,18 @@ func (vt *votersTracker) committedUpTo(committedRound basics.Round) (minRound, l
 	return vt.lowestRound(committedRound), basics.Round(proto.CompactCertVotersLookback)
 }
 
+// votersTracker relies on data stored by account updates
+// but might prevent committing accounts state if state proofs enabled but not compelted
+func (vt *votersTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	newBase := dcr.oldBase + basics.Round(dcr.offset)
+	// ensure newBase fits our needs
+	newBase = vt.lowestRound(newBase)
+	// adjust the offset off set accordingly
+	offset := basics.SubSaturate(uint64(newBase), uint64(dbRound))
+	dcr.offset = offset
+	return dcr
+}
+
 // lowestRound() returns the lowest round state (blocks and accounts) needed by
 // the votersTracker in case of a restart.  The accountUpdates tracker will
 // not delete account state before this round, so that after a restart, it's
