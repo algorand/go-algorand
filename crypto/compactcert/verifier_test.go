@@ -80,7 +80,7 @@ func TestVerifyBadSignature(t *testing.T) {
 	a.NoError(err)
 
 	rev := cert.Reveals[cert.PositionsToReveal[0]]
-	rev.SigSlot.Sig.Signature[10] += 1
+	rev.SigSlot.Sig.Signature[10]++
 
 	verifier = MkVerifier(param, partCom)
 	err = verifier.Verify(cert)

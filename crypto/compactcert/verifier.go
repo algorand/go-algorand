@@ -103,7 +103,6 @@ func (v *Verifier) Verify(c *Cert) error {
 
 	choice := coinChoiceSeed{
 		SignedWeight: c.SignedWeight,
-		ProvenWeight: v.ProvenWeightThreshold,
 		Sigcom:       c.SigCommit,
 		Partcom:      v.partcom,
 		MsgHash:      v.StateProofMessageHash,

@@ -204,7 +204,6 @@ func (b *Builder) Build() (*Cert, error) {
 	revealsSequence := make([]uint64, nr)
 	choice := coinChoiceSeed{
 		SignedWeight: c.SignedWeight,
-		ProvenWeight: b.ProvenWeightThreshold,
 		Sigcom:       c.SigCommit,
 		Partcom:      b.parttree.Root(),
 		MsgHash:      b.StateProofMessageHash,

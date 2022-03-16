@@ -31,7 +31,6 @@ type coinChoiceSeed struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	SignedWeight uint64                `codec:"sigweight"`
-	ProvenWeight uint64                `codec:"provenweight"`
 	Sigcom       crypto.GenericDigest  `codec:"sigcom"`
 	Partcom      crypto.GenericDigest  `codec:"partcom"`
 	MsgHash      StateProofMessageHash `codec:"msghash"`
@@ -66,7 +65,7 @@ func makeCoinGenerator(choice coinChoiceSeed) coinGenerator {
 
 // getNextCoin returns the next 64bits integer which represents a number between [0,SignedWeight)
 func (ch *coinGenerator) getNextCoin() uint64 {
-	var shakeDigest [64]byte
+	var shakeDigest [8]byte
 
 	ch.shkContext.Read(shakeDigest[:])
 
