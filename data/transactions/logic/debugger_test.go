@@ -127,7 +127,7 @@ func TestLineToPC(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dState := DebugState{
-		Disassembly: "abc\ndef\nghi",
+		Disassembly: "callsub abc\ndef\nghi",
 		PCOffset:    []PCOffset{{PC: 1, Offset: 4}, {PC: 2, Offset: 8}, {PC: 3, Offset: 12}},
 	}
 	pc := dState.LineToPC(0)
@@ -173,4 +173,28 @@ func TestValueDeltaToValueDelta(t *testing.T) {
 	require.NotEqual(t, vDelta.Bytes, ans.Bytes)
 	require.Equal(t, base64.StdEncoding.EncodeToString([]byte(vDelta.Bytes)), ans.Bytes)
 	require.Equal(t, vDelta.Uint, ans.Uint)
+}
+
+func TestParseCallstack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	expectedCallFrames := []CallFrame{
+		{
+			FrameLine: 0,
+			LabelName: "abc",
+		},
+		{
+			FrameLine: 2,
+			LabelName: "ghi",
+		},
+	}
+
+	dState := DebugState{
+		Disassembly: "callsub abc\ndef\ncallsub ghi\njkl",
+		PCOffset:    []PCOffset{{PC: 1, Offset: 11}, {PC: 4, Offset: 15}, {PC: 5, Offset: 27}, {PC: 8, Offset: 31}},
+	}
+	callstack := []int{4, 8}
+
+	cfs := dState.parseCallstack(callstack)
+	require.Equal(t, expectedCallFrames, cfs)
 }
