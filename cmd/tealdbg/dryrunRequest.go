@@ -17,10 +17,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-codec/codec"
 
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -33,18 +35,27 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 	}
 
 	var gdr generatedV2.DryrunRequest
-	err1 := protocol.DecodeJSON(dp.DdrBlob, &gdr)
+	err1 := decode(protocol.JSONStrictHandle, dp.DdrBlob, &gdr)
 	if err1 == nil {
 		ddr, err = v2.DryrunRequestFromGenerated(&gdr)
 	} else {
-		err = protocol.DecodeReflect(dp.DdrBlob, &ddr)
-		// if failed report intermediate decoding error
+		err = decode(protocol.CodecHandle, dp.DdrBlob, &ddr)
 		if err != nil {
 			log.Printf("Decoding as JSON DryrunRequest object failed: %s", err1.Error())
 		}
 	}
 
 	return
+}
+
+func decode(handle codec.Handle, data []byte, v interface{}) error {
+	enc := codec.NewDecoderBytes(data, handle)
+
+	err := enc.Decode(v)
+	if err != nil {
+		return fmt.Errorf("failed to decode object: %v", err)
+	}
+	return nil
 }
 
 func convertAccounts(accounts []generatedV2.Account) (records []basics.BalanceRecord, err error) {
