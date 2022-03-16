@@ -60,7 +60,7 @@ func TestBlockHeaderCache(t *testing.T) {
 	a.True(exists)
 
 	_, exists = cache.lruCache.Get(rnd)
-	a.False(exists)
+	a.True(exists)
 
 }
 
