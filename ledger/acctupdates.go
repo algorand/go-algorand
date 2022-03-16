@@ -620,13 +620,6 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	au.accountsReadCond.Broadcast()
 }
 
-// Totals returns the totals for a given round
-func (au *accountUpdates) Totals(rnd basics.Round) (totals ledgercore.AccountTotals, err error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.totalsImpl(rnd)
-}
-
 // OnlineTotals returns the online totals of all accounts at the end of round rnd.
 func (au *accountUpdates) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	au.accountsMu.RLock()
@@ -733,17 +726,6 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
-}
-
-// totalsImpl returns the totals for a given round
-func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals ledgercore.AccountTotals, err error) {
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return
-	}
-
-	totals = au.roundTotals[offset]
-	return
 }
 
 // onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.
