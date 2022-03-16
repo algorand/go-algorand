@@ -265,10 +265,11 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	for _, tracker := range tr.trackers {
 		if accts, ok := tracker.(*accountUpdates); ok {
 			tr.accts = accts
-			break
+			continue
 		}
 		if vt, ok := tracker.(*votersTracker); ok {
 			tr.voters = vt
+			continue
 		}
 	}
 	return

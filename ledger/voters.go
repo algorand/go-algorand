@@ -62,8 +62,7 @@ type votersTracker struct {
 	// for round X+CompactCertVotersLookback+CompactCertRounds.
 	round map[basics.Round]*ledgercore.VotersForRound
 
-	l   ledgerForTracker
-	hdr bookkeeping.BlockHeader
+	l ledgerForTracker
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
@@ -80,37 +79,37 @@ func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams)
 	return certRnd.SubSaturate(basics.Round(proto.CompactCertRounds)).SubSaturate(basics.Round(proto.CompactCertVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) (err error) {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	vt.l = l
 	vt.round = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	latest := l.Latest()
-	vt.hdr, err = l.BlockHdr(latest)
+	hdr, err := l.BlockHdr(latest)
 	if err != nil {
 		return err
 	}
-	proto := config.Consensus[vt.hdr.CurrentProtocol]
+	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 || vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
+	if proto.CompactCertRounds == 0 || hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := votersRoundForCertRound(vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
+	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
-			vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
+			hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
 	}
 
 	for r := startR; r <= latest; r += basics.Round(proto.CompactCertRounds) {
-		vt.hdr, err = l.BlockHdr(r)
+		hdr, err = l.BlockHdr(r)
 		if err != nil {
 			return err
 		}
 
-		vt.loadTree(vt.hdr)
+		vt.loadTree(hdr)
 	}
 
 	return nil
@@ -155,19 +154,21 @@ func (vt *votersTracker) close() {
 }
 
 func (vt *votersTracker) newBlock(blk bookkeeping.Block, _ ledgercore.StateDelta) {
-	proto := config.Consensus[blk.CurrentProtocol]
+	hdr := blk.BlockHeader
+
+	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.CompactCertRounds == 0 {
 		// No compact certs.
 		return
 	}
 
-	vt.hdr = blk.BlockHeader
+	hdr := blk.BlockHeader
 
 	// Check if any blocks can be forgotten because the compact cert is available.
 	for r, tr := range vt.round {
 		commitRound := r + basics.Round(tr.Proto.CompactCertVotersLookback)
 		certRound := commitRound + basics.Round(tr.Proto.CompactCertRounds)
-		if certRound < vt.hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
+		if certRound < hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
 			delete(vt.round, r)
 		}
 	}
@@ -175,19 +176,24 @@ func (vt *votersTracker) newBlock(blk bookkeeping.Block, _ ledgercore.StateDelta
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a merkle tree for commitment in a later
 	// block.
-	r := uint64(vt.hdr.Round)
+	r := uint64(hdr.Round)
 	if (r+proto.CompactCertVotersLookback)%proto.CompactCertRounds == 0 {
 		_, ok := vt.round[basics.Round(r)]
 		if ok {
 			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
-			vt.loadTree(vt.hdr)
+			vt.loadTree(hdr)
 		}
 	}
 }
 
 func (vt *votersTracker) committedUpTo(committedRound basics.Round) (minRound, lookback basics.Round) {
-	proto := config.Consensus[vt.hdr.CurrentProtocol]
+	hdr, err := vt.l.BlockHdr(committedRound)
+	if err != nil {
+		vt.l.trackerLog().Errorf("voters: failed to retrieve block header for %d: %w", committedRound, err)
+		return committedRound, 0
+	}
+	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.CompactCertRounds == 0 {
 		// No compact certs.
 		return committedRound, 0
