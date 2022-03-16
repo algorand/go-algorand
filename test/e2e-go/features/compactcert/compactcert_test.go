@@ -25,7 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/compactcert"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -38,7 +38,7 @@ func TestCompactCerts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	t.Skip("Disabling since they need work and shouldn't block releases")
+	// t.Skip("Disabling since they need work and shouldn't block releases")
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
 

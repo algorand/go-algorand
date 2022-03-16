@@ -79,7 +79,7 @@ func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams)
 	return certRnd.SubSaturate(basics.Round(proto.CompactCertRounds)).SubSaturate(basics.Round(proto.CompactCertVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	vt.l = l
 	vt.round = make(map[basics.Round]*ledgercore.VotersForRound)
 
@@ -96,6 +96,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error 
 	}
 
 	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
+	l.trackerLog().Warnf("voters loadFromDisk: latest = %d, dbRound = %d, nextRound = %d, startR = %d ", latest, dbRound, hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, startR)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
@@ -161,8 +162,7 @@ func (vt *votersTracker) newBlock(blk bookkeeping.Block, _ ledgercore.StateDelta
 		// No compact certs.
 		return
 	}
-
-	hdr := blk.BlockHeader
+	vt.l.trackerLog().Warnf("voters newBlock: blk.Round = %d, nextRound = %d", hdr.Round, hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound)
 
 	// Check if any blocks can be forgotten because the compact cert is available.
 	for r, tr := range vt.round {
