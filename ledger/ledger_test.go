@@ -1363,6 +1363,7 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 
 func TestLedgerBlockHdrCaching(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
@@ -1371,21 +1372,32 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 	cfg.Archival = true
 	log := logging.TestingLog(t)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
+	a.NoError(err)
 	defer l.Close()
 
 	blk := genesisInitState.Block
 
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 1024; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		a.NoError(err)
 
 		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
-		require.NoError(t, err)
-		require.Equal(t, blk.BlockHeader, hdr)
+		a.NoError(err)
+		a.Equal(blk.BlockHeader, hdr)
 	}
+
+	rnd := basics.Round(128)
+	hdr, err := l.BlockHdr(rnd) // should update LRU cache but not latestBlockHeaderCache
+	a.NoError(err)
+	a.Equal(rnd, hdr.Round)
+
+	_, exists := l.headerCache.lruCache.Get(rnd)
+	a.True(exists)
+
+	_, exists = l.headerCache.latestHeaderCache.Get(rnd)
+	a.False(exists)
 }
 
 func BenchmarkLedgerBlockHdrCaching(b *testing.B) {

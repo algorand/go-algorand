@@ -51,6 +51,17 @@ func TestBlockHeaderCache(t *testing.T) {
 
 	_, exists = cache.latestHeaderCache.Get(rnd)
 	a.False(exists)
+
+	rnd = basics.Round(2048)
+	hdr = bookkeeping.BlockHeader{Round: rnd}
+	cache.Put(hdr)
+
+	_, exists = cache.latestHeaderCache.Get(rnd)
+	a.True(exists)
+
+	_, exists = cache.lruCache.Get(rnd)
+	a.False(exists)
+
 }
 
 func TestLatestBlockHeaderCache(t *testing.T) {
@@ -68,10 +79,10 @@ func TestLatestBlockHeaderCache(t *testing.T) {
 		a.False(exists)
 	}
 
-	for i := 123; i < latestCacheSize; i++ {
-		hdr, exists := cache.Get(basics.Round(i))
+	for i := basics.Round(123); i < latestCacheSize; i++ {
+		hdr, exists := cache.Get(i)
 		a.True(exists)
-		a.Equal(basics.Round(i), hdr.Round)
+		a.Equal(i, hdr.Round)
 	}
 }
 
@@ -80,6 +91,5 @@ func TestCacheSizeConsensus(t *testing.T) {
 	a := require.New(t)
 
 	// TODO Stateproof: change to CurrentVersion when feature is enabled
-	// latest blockheaders cache should be able to store at least an interval and a half of the required state proof rounds
-	a.GreaterOrEqual(uint64(latestCacheSize), config.Consensus[protocol.ConsensusFuture].CompactCertRounds*3/2)
+	a.Equal(uint64(latestCacheSize), config.Consensus[protocol.ConsensusFuture].CompactCertRounds*2)
 }

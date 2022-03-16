@@ -64,7 +64,11 @@ func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeepin
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	idx := round % latestCacheSize
+	/** round 512 will be stored in idx 511, so the entire required interval for
+	generating the stateproof message will be sequential in memory.
+	Might improve performance in terms of CPU caching.
+	*/
+	idx := (round - 1 + latestCacheSize) % latestCacheSize
 	blockHeader = c.blockHeaders[idx]
 	if blockHeader.Round == 0 || blockHeader.Round != round { // blockHeader is empty or not requested round
 		return bookkeeping.BlockHeader{}, false
@@ -77,7 +81,7 @@ func (c *latestBlockHeaderCache) Put(blockHeader bookkeeping.BlockHeader) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	idx := blockHeader.Round % latestCacheSize
+	idx := (blockHeader.Round - 1 + latestCacheSize) % latestCacheSize
 	cachedHdr := c.blockHeaders[idx]
 	if blockHeader.Round > cachedHdr.Round { // provided blockHeader is more recent than cached one
 		c.blockHeaders[idx] = blockHeader
