@@ -68,10 +68,9 @@ func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeepin
 	blockHeader = c.blockHeaders[idx]
 	if blockHeader.Round == 0 || blockHeader.Round != round { // blockHeader is empty or not requested round
 		return bookkeeping.BlockHeader{}, false
-	} else {
-		return blockHeader, true
 	}
 
+	return blockHeader, true
 }
 
 func (c *latestBlockHeaderCache) Put(blockHeader bookkeeping.BlockHeader) {
