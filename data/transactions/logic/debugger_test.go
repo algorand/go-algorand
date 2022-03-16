@@ -127,7 +127,7 @@ func TestLineToPC(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dState := DebugState{
-		Disassembly: "callsub abc\ndef\nghi",
+		Disassembly: "abc\ndef\nghi",
 		PCOffset:    []PCOffset{{PC: 1, Offset: 4}, {PC: 2, Offset: 8}, {PC: 3, Offset: 12}},
 	}
 	pc := dState.LineToPC(0)
