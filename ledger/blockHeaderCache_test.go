@@ -32,7 +32,7 @@ func TestBlockHeadersCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	var cache blockHeadersCache
+	var cache blockHeaderCache
 	cache.initialize()
 	for i := basics.Round(1024); i < 1024+latestCacheSize; i++ {
 		hdr := bookkeeping.BlockHeader{Round: i}
@@ -49,7 +49,7 @@ func TestBlockHeadersCache(t *testing.T) {
 	_, exists = cache.lruCache.Get(rnd)
 	a.True(exists)
 
-	_, exists = cache.latestHeadersCache.Get(rnd)
+	_, exists = cache.latestHeaderCache.Get(rnd)
 	a.False(exists)
 }
 
@@ -57,7 +57,7 @@ func TestLatestBlockHeadersCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	var cache latestBlockHeadersCache
+	var cache latestBlockHeaderCache
 	for i := basics.Round(123); i < latestCacheSize; i++ {
 		hdr := bookkeeping.BlockHeader{Round: i}
 		cache.Put(i, hdr)

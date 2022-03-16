@@ -25,28 +25,28 @@ import (
 const latestCacheSize = 512
 
 // blockHeaderCache is a wrapper for all block header cache mechanisms used within the Ledger.
-type blockHeadersCache struct {
-	lruCache           heapLRUCache
-	latestHeadersCache latestBlockHeadersCache
+type blockHeaderCache struct {
+	lruCache          heapLRUCache
+	latestHeaderCache latestBlockHeaderCache
 }
 
-type latestBlockHeadersCache struct {
+type latestBlockHeaderCache struct {
 	blockHeaders [latestCacheSize]bookkeeping.BlockHeader
 	mutex        deadlock.RWMutex
 }
 
-func (c *blockHeadersCache) initialize() {
+func (c *blockHeaderCache) initialize() {
 	c.lruCache.maxEntries = 10
 }
 
-func (c *blockHeadersCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
-	// check latestHeadersCache first
-	blockHeader, exists = c.latestHeadersCache.Get(round)
+func (c *blockHeaderCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
+	// check latestHeaderCache first
+	blockHeader, exists = c.latestHeaderCache.Get(round)
 	if exists {
 		return
 	}
 
-	// if not found in latestHeadersCache, check LRUCache
+	// if not found in latestHeaderCache, check LRUCache
 	value, exists := c.lruCache.Get(round)
 	if exists {
 		blockHeader = value.(bookkeeping.BlockHeader)
@@ -55,12 +55,12 @@ func (c *blockHeadersCache) Get(round basics.Round) (blockHeader bookkeeping.Blo
 	return
 }
 
-func (c *blockHeadersCache) Put(round basics.Round, blockHeader bookkeeping.BlockHeader) {
-	c.latestHeadersCache.Put(round, blockHeader)
+func (c *blockHeaderCache) Put(round basics.Round, blockHeader bookkeeping.BlockHeader) {
+	c.latestHeaderCache.Put(round, blockHeader)
 	c.lruCache.Put(round, blockHeader)
 }
 
-func (c *latestBlockHeadersCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
+func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
@@ -75,7 +75,7 @@ func (c *latestBlockHeadersCache) Get(round basics.Round) (blockHeader bookkeepi
 	return
 }
 
-func (c *latestBlockHeadersCache) Put(round basics.Round, blockHeader bookkeeping.BlockHeader) {
+func (c *latestBlockHeaderCache) Put(round basics.Round, blockHeader bookkeeping.BlockHeader) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 

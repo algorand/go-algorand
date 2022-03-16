@@ -85,7 +85,7 @@ type Ledger struct {
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
 
-	headerCache blockHeadersCache
+	headerCache blockHeaderCache
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
