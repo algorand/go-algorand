@@ -95,7 +95,7 @@ func GetProgramID(program []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func makeDebugState(cx *EvalContext) DebugState {
+func makeDebugState(cx *EvalContext) *DebugState {
 	disasm, dsInfo, err := disassembleInstrumented(cx.program, nil)
 	if err != nil {
 		// Report disassembly error as program text
@@ -103,11 +103,11 @@ func makeDebugState(cx *EvalContext) DebugState {
 	}
 
 	// initialize DebuggerState with immutable fields
-	ds := DebugState{
+	ds := &DebugState{
 		ExecID:      GetProgramID(cx.program),
 		Disassembly: disasm,
 		PCOffset:    dsInfo.pcOffset,
-		GroupIndex:  int(cx.GroupIndex),
+		GroupIndex:  int(cx.groupIndex),
 		TxnGroup:    cx.TxnGroup,
 		Proto:       cx.Proto,
 	}
@@ -127,7 +127,7 @@ func makeDebugState(cx *EvalContext) DebugState {
 	ds.Globals = globals
 
 	if (cx.runModeFlags & runModeApplication) != 0 {
-		ds.EvalDelta = cx.Txn.EvalDelta
+		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
 	return ds
@@ -221,15 +221,15 @@ func (d *DebugState) parseCallstack(callstack []int) []CallFrame {
 	return callFrames
 }
 
-func (cx *EvalContext) refreshDebugState() *DebugState {
-	ds := &cx.debugState
+func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
+	ds := cx.debugState
 
 	// Update pc, line, error, stack, scratch space, callstack,
 	// and opcode budget
 	ds.PC = cx.pc
 	ds.Line = ds.PCToLine(cx.pc)
-	if cx.err != nil {
-		ds.Error = cx.err.Error()
+	if evalError != nil {
+		ds.Error = evalError.Error()
 	}
 
 	stack := make([]basics.TealValue, len(cx.stack))
@@ -248,7 +248,7 @@ func (cx *EvalContext) refreshDebugState() *DebugState {
 	ds.CallStack = ds.parseCallstack(cx.callstack)
 
 	if (cx.runModeFlags & runModeApplication) != 0 {
-		ds.EvalDelta = cx.Txn.EvalDelta
+		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
 	return ds

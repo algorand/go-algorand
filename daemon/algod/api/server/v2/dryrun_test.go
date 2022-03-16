@@ -393,6 +393,26 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
+type expectedSlotType struct {
+	slot int
+	tt   basics.TealType
+}
+
+func checkAppCallScratchType(t *testing.T, response *generated.DryrunResponse, txnIdx int, expected []expectedSlotType) {
+	txn := response.Txns[txnIdx]
+	// We should have a trace
+	assert.NotNil(t, txn.AppCallTrace)
+	// The first stack entry should be nil since we haven't stored anything in scratch yet
+	assert.Nil(t, (*txn.AppCallTrace)[0].Scratch)
+	// Last one should be not nil, we should have some number of scratch vars
+	traceLine := (*txn.AppCallTrace)[len(*txn.AppCallTrace)-1]
+	assert.NotNil(t, traceLine.Scratch)
+	for _, exp := range expected {
+		// The TealType at the given slot index should match what we expect
+		assert.Equal(t, exp.tt, basics.TealType((*traceLine.Scratch)[exp.slot].Type))
+	}
+}
+
 func TestDryrunGlobal1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
@@ -1538,6 +1558,14 @@ txn GroupIndex
 int 3
 ==
 bnz checkgload
+pushint 123
+store 0
+pushbytes "def"
+store 251
+pushint 123
+store 252
+pushbytes "abc"
+store 253
 txn GroupIndex
 store 254
 b exit
@@ -1593,6 +1621,16 @@ int 1`)
 	}
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
+
+	checkAppCallScratchType(t, &response, 1, []expectedSlotType{
+		{0, basics.TealUintType},
+		{1, basics.TealType(0)},
+		{251, basics.TealBytesType},
+		{252, basics.TealUintType},
+		{253, basics.TealBytesType},
+		{254, basics.TealUintType},
+	})
+
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)

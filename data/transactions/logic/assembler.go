@@ -394,7 +394,7 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 	ops.Bytec(constIndex)
 }
 
-func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
+func asmInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("int needs one argument")
 	}
@@ -425,7 +425,7 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 // Explicit invocation of const lookup and push
-func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
+func asmIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("intc operation needs one argument")
 	}
@@ -436,7 +436,7 @@ func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.Intc(uint(constIndex))
 	return nil
 }
-func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
+func asmByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("bytec operation needs one argument")
 	}
@@ -628,7 +628,7 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte {base64,b64,base32,b32} ...
 // byte 0x....
 // byte "this is a string\n"
-func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
+func asmByte(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.errorf("%s operation needs byte literal argument", spec.Name)
 	}
@@ -644,7 +644,7 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 // method "add(uint64,uint64)uint64"
-func assembleMethod(ops *OpStream, spec *OpSpec, args []string) error {
+func asmMethod(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
 		return ops.error("method requires a literal argument")
 	}
@@ -661,7 +661,7 @@ func assembleMethod(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.error("Unable to parse method signature")
 }
 
-func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
+func asmIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
@@ -681,7 +681,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
+func asmByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	bvals := make([][]byte, 0, len(args))
 	rest := args
@@ -714,7 +714,7 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 
 // addr A1EU...
 // parses base32-with-checksum account address strings into a byte literal
-func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAddr(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("addr operation needs one argument")
 	}
@@ -726,7 +726,7 @@ func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
+func asmArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("arg operation needs one argument")
 	}
@@ -751,7 +751,7 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	return asmDefault(ops, &altSpec, args)
 }
 
-func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
+func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("branch operation needs label argument")
 	}
@@ -764,7 +764,7 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
+func asmSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	err := asmDefault(ops, spec, args)
 	if err != nil {
 		return err
@@ -1040,7 +1040,7 @@ func asmGitxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.errorf("%s expects two or three arguments", spec.Name)
 }
 
-func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
+func asmGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1061,7 +1061,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1082,7 +1082,7 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1103,7 +1103,7 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1124,7 +1124,7 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleAcctParams(ops *OpStream, spec *OpSpec, args []string) error {
+func asmAcctParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1164,7 +1164,7 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
+func asmEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1184,7 +1184,7 @@ func assembleEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
+func asmBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1206,7 +1206,28 @@ func assembleBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-type assembleFunc func(*OpStream, *OpSpec, []string) error
+func asmJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+
+	jsonSpec, ok := jsonRefSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("%s unsupported JSON value type: %#v", spec.Name, args[0])
+	}
+	if jsonSpec.version > ops.Version {
+		return ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
+	}
+
+	valueType := jsonSpec.field
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(valueType))
+	ops.trace("%s (%s)", jsonSpec.field, jsonSpec.ftype)
+	ops.returns(jsonSpec.ftype)
+	return nil
+}
+
+type asmFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
@@ -1381,12 +1402,12 @@ func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
 // keywords handle parsing and assembling special asm language constructs like 'addr'
 // We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
-	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"int":  {0, "int", nil, asmInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"byte": {0, "byte", nil, asmByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"addr": {0, "addr", nil, asmAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"method": {0, "method", nil, asmMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 }
 
 type lineError struct {
@@ -1925,6 +1946,12 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 
 		// update all indexes into ops.pending that have been shifted by the above line
 
+		// This is a huge optimization for long repetitive programs. Takes
+		// BenchmarkUintMath from 160sec to 19s.
+		if positionDelta == 0 {
+			continue
+		}
+
 		for i := range ops.intcRefs {
 			if ops.intcRefs[i].position > position {
 				ops.intcRefs[i].position += positionDelta
@@ -2151,7 +2178,7 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 	return
 }
 
-type disassembleFunc func(dis *disassembleState, spec *OpSpec) (string, error)
+type disFunc func(dis *disassembleState, spec *OpSpec) (string, error)
 
 // Basic disasemble, and extra bytes of opcode are decoded as bytes integers.
 func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -2427,10 +2454,6 @@ func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = pos + bytesUsed
 	return fmt.Sprintf("%s %d", spec.Name, val), nil
 }
-func checkPushInt(cx *EvalContext) error {
-	opPushInt(cx)
-	return cx.err
-}
 
 func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	pos := dis.pc + 1
@@ -2446,10 +2469,6 @@ func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	bytes := dis.program[pos:end]
 	dis.nextpc = int(end)
 	return fmt.Sprintf("%s 0x%s // %s", spec.Name, hex.EncodeToString(bytes), guessByteFormat(bytes)), nil
-}
-func checkPushBytes(cx *EvalContext) error {
-	opPushBytes(cx)
-	return cx.err
 }
 
 // This is also used to disassemble gtxns, gtxnsas, txnas, itxn, itxnas
@@ -2654,6 +2673,22 @@ func disBase64Decode(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid base64_decode arg index %d at pc=%d", b64dArg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, base64EncodingNames[b64dArg]), nil
+}
+
+func disJSONRef(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+
+	jsonRefArg := dis.program[dis.pc+1]
+	if int(jsonRefArg) >= len(jsonRefSpecByName) {
+		return "", fmt.Errorf("invalid json_ref arg index %d at pc=%d", jsonRefArg, dis.pc)
+	}
+
+	return fmt.Sprintf("%s %s", spec.Name, jsonRefTypeNames[jsonRefArg]), nil
 }
 
 type disInfo struct {

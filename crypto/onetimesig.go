@@ -319,6 +319,14 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
+	if batchVersionCompatible {
+		return batchVerificationImpl(
+			[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
+			[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
+			[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
+		)
+	}
+
 	if !ed25519Verify(ed25519PublicKey(v), HashRep(batchID), sig.PK2Sig, batchVersionCompatible) {
 		return false
 	}

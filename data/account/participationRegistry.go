@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
@@ -234,8 +235,8 @@ type ParticipationRegistry interface {
 	// Delete removes a record from storage.
 	Delete(id ParticipationID) error
 
-	// DeleteExpired removes all records from storage which are expired on the given round.
-	DeleteExpired(round basics.Round) error
+	// DeleteExpired removes all records and ephemeral voting keys from storage that are expired on the given round.
+	DeleteExpired(latestRound basics.Round, proto config.ConsensusParams) error
 
 	// Get a participation record.
 	Get(id ParticipationID) ParticipationRecord
@@ -318,6 +319,7 @@ const (
 			stateProof BLOB --*  msgpack encoding of merklesignature.SignerContext
 		)`
 
+	// Rolling maintains a 1-to-1 relationship with Keysets by primary key
 	createRolling = `CREATE TABLE Rolling (
 			pk INTEGER PRIMARY KEY NOT NULL,
 
@@ -363,7 +365,8 @@ const (
 		     lastBlockProposalRound=?,
 		     lastStateProofRound=?,
 		     effectiveFirstRound=?,
-		     effectiveLastRound=?
+		     effectiveLastRound=?,
+		     voting=?
 		 WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 )
 
@@ -394,7 +397,7 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
 
-	// dirty marked on Record(), cleared on Register(), Delete(), Flush()
+	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
 	dirty map[ParticipationID]struct{}
 
 	log   logging.Logger
@@ -557,16 +560,35 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	return nil
 }
 
-func (db *participationDB) DeleteExpired(round basics.Round) error {
-	// This could be optimized to delete everything with one query.
+func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProto config.ConsensusParams) error {
+	// We need a key for round r+1 for agreement.
+	nextRound := latestRound + 1
+	var updated []ParticipationRecord
+
 	for _, v := range db.GetAll() {
-		if v.LastValid < round {
+		if v.LastValid < latestRound { // this participation key is no longer valid; delete it
+			// This could be optimized to delete everything with one query.
 			err := db.Delete(v.ParticipationID)
 			if err != nil {
 				return err
 			}
+		} else if v.FirstValid <= latestRound { // this key is valid; update it
+			keyDilution := v.KeyDilution
+			if keyDilution == 0 {
+				keyDilution = agreementProto.DefaultKeyDilution
+			}
+			v.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(nextRound, keyDilution), keyDilution)
+			updated = append(updated, v)
 		}
 	}
+
+	// mark updated records as dirty, so they will be flushed by a call to FlushRegistry after each round
+	db.mutex.Lock()
+	for _, r := range updated {
+		db.dirty[r.ParticipationID] = struct{}{}
+		db.cache[r.ParticipationID] = r
+	}
+	db.mutex.Unlock()
 	return nil
 }
 
@@ -784,13 +806,18 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 
 // updateRollingFields sets all of the rolling fields according to the record object.
 func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
+	voting := record.Voting.Snapshot()
+	encodedVotingSecrets := protocol.Encode(&voting)
+
 	result, err := tx.ExecContext(ctx, updateRollingFieldsSQL,
 		record.LastVote,
 		record.LastBlockProposal,
 		record.LastStateProof,
 		record.EffectiveFirst,
 		record.EffectiveLast,
+		encodedVotingSecrets,
 		record.ParticipationID[:])
+
 	if err != nil {
 		return err
 	}
