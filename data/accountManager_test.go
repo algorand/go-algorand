@@ -19,7 +19,9 @@ package data
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,9 +40,56 @@ import (
 
 func TestAccountManagerKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	registry := &mocks.MockParticipationRegistry{}
+	testAccountManagerKeys(t, registry, false)
+}
+
+// copied from account/participationRegistry_test.go
+func getRegistryImpl(t testing.TB, inMem bool, erasable bool) (registry account.ParticipationRegistry, dbName string) {
+	var rootDB db.Pair
+	var err error
+	dbName = strings.Replace(t.Name(), "/", "_", -1)
+	if erasable {
+		require.False(t, inMem, "erasable registry can't be in-memory")
+		rootDB, err = db.OpenErasablePair(dbName)
+	} else {
+		rootDB, err = db.OpenPair(dbName, inMem)
+	}
+	require.NoError(t, err)
+
+	registry, err = account.MakeParticipationRegistry(rootDB, logging.TestingLog(t))
+	require.NoError(t, err)
+	require.NotNil(t, registry)
+
+	if inMem { // no files to clean up
+		dbName = ""
+	}
+	return registry, dbName
+}
+
+func registryCloseTest(t testing.TB, registry account.ParticipationRegistry, dbfilePrefix string) {
+	registry.Close()
+	// clean up DB files
+	if dbfilePrefix != "" {
+		dbfiles, err := filepath.Glob(dbfilePrefix + "*")
+		require.NoError(t, err)
+		for _, f := range dbfiles {
+			t.Log("removing", f)
+			require.NoError(t, os.Remove(f))
+		}
+	}
+}
+
+func TestAccountManagerKeysRegistry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	registry, dbName := getRegistryImpl(t, false, true)
+	defer registryCloseTest(t, registry, dbName)
+	testAccountManagerKeys(t, registry, true)
+}
+
+func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry, flushRegistry bool) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Error)
-	registry := &mocks.MockParticipationRegistry{}
 
 	acctManager := MakeAccountManager(log, registry)
 
@@ -54,7 +103,10 @@ func TestAccountManagerKeys(t *testing.T) {
 	}()
 
 	// create participation keys
-	const numPartKeys = 10
+	numPartKeys := 10
+	if nk, err := strconv.Atoi(os.Getenv("NUMKEYS")); err == nil { // allow setting numKeys via env var
+		numPartKeys = nk
+	}
 	for partKeyIdx := 0; partKeyIdx < numPartKeys; partKeyIdx++ {
 		rootFilename := t.Name() + "_root_" + strconv.Itoa(partKeyIdx) + ".sqlite"
 		partFilename := t.Name() + "_part_" + strconv.Itoa(partKeyIdx) + ".sqlite"
@@ -79,24 +131,36 @@ func TestAccountManagerKeys(t *testing.T) {
 
 		acctManager.AddParticipation(part)
 	}
+	if _, mocked := acctManager.Registry().(*mocks.MockParticipationRegistry); !mocked {
+		require.Len(t, acctManager.Keys(basics.Round(1)), numPartKeys, "incorrect number of keys, can happen if test crashes and leaves SQLite files")
+		require.Len(t, acctManager.Registry().GetAll(), numPartKeys, "incorrect number of keys, can happen if test crashes and leaves SQLite files")
+	}
 
 	keyDeletionDone := make(chan struct{}, 1)
 	nextRoundCh := make(chan basics.Round, 2)
 	// kick off key deletion thread.
 	go func() {
 		defer close(keyDeletionDone)
-		ccSigs := make(map[basics.Address]basics.Round)
 		agreementProto := config.Consensus[protocol.ConsensusCurrentVersion]
 		header := bookkeeping.BlockHeader{}
 		for rnd := range nextRoundCh {
 			header.Round = rnd
-			acctManager.DeleteOldKeys(header, ccSigs, agreementProto)
+			t0 := time.Now()
+			acctManager.DeleteOldKeys(header, agreementProto)
+			t.Logf("DeleteOldKeys\trnd %d took %v", uint64(rnd), time.Since(t0))
+
+			if flushRegistry {
+				t0 = time.Now()
+				err := acctManager.Registry().Flush(10 * time.Second)
+				require.NoError(t, err)
+				t.Logf("Flush\t\trnd %d took %v", uint64(rnd), time.Since(t0))
+			}
 		}
 	}()
 
 	testStartTime := time.Now()
 	keysTotalDuration := time.Duration(0)
-	for i := 1; i < 10; i++ {
+	for i := 1; i < 20; i++ {
 		nextRoundCh <- basics.Round(i)
 		startTime := time.Now()
 		acctManager.Keys(basics.Round(i))
@@ -105,6 +169,7 @@ func TestAccountManagerKeys(t *testing.T) {
 	close(nextRoundCh)
 	<-keyDeletionDone
 	testDuration := time.Since(testStartTime)
+	t.Logf("testDuration %v keysTotalDuration %v\n", testDuration, keysTotalDuration)
 	require.Lessf(t, keysTotalDuration, testDuration/100, fmt.Sprintf("the time to aquire the keys via Keys() was %v whereas blocking on keys deletion took %v", keysTotalDuration, testDuration))
 	t.Logf("Calling AccountManager.Keys() while AccountManager.DeleteOldKeys() was busy, 10 times in a row, resulted in accumulated delay of %v\n", keysTotalDuration)
 }
