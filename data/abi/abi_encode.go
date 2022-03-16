@@ -624,14 +624,14 @@ func VerifyMethodSignature(methodSig string) error {
 
 		_, err = TypeOf(argType)
 		if err != nil {
-			return fmt.Errorf(`Error parsing argument type at index %d: %s`, i, err.Error())
+			return fmt.Errorf("Error parsing argument type at index %d: %s", i, err.Error())
 		}
 	}
 
 	if retType != VoidReturnType {
 		_, err = TypeOf(retType)
 		if err != nil {
-			return fmt.Errorf(`Error parsing return type: %s`, err.Error())
+			return fmt.Errorf("Error parsing return type: %s", err.Error())
 		}
 	}
 
