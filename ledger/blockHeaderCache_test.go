@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestBlockHeadersCache(t *testing.T) {
+func TestBlockHeaderCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -53,7 +53,7 @@ func TestBlockHeadersCache(t *testing.T) {
 	a.False(exists)
 }
 
-func TestLatestBlockHeadersCache(t *testing.T) {
+func TestLatestBlockHeaderCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
