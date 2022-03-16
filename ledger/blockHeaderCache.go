@@ -55,9 +55,9 @@ func (c *blockHeaderCache) Get(round basics.Round) (blockHeader bookkeeping.Bloc
 	return
 }
 
-func (c *blockHeaderCache) Put(round basics.Round, blockHeader bookkeeping.BlockHeader) {
-	c.latestHeaderCache.Put(round, blockHeader)
-	c.lruCache.Put(round, blockHeader)
+func (c *blockHeaderCache) Put(blockHeader bookkeeping.BlockHeader) {
+	c.latestHeaderCache.Put(blockHeader)
+	c.lruCache.Put(blockHeader.Round, blockHeader)
 }
 
 func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
@@ -75,13 +75,13 @@ func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeepin
 	return
 }
 
-func (c *latestBlockHeaderCache) Put(round basics.Round, blockHeader bookkeeping.BlockHeader) {
+func (c *latestBlockHeaderCache) Put(blockHeader bookkeeping.BlockHeader) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	idx := round % latestCacheSize
+	idx := blockHeader.Round % latestCacheSize
 	cachedHdr := c.blockHeaders[idx]
-	if round > cachedHdr.Round { // provided blockHeader is more recent than cached one
+	if blockHeader.Round > cachedHdr.Round { // provided blockHeader is more recent than cached one
 		c.blockHeaders[idx] = blockHeader
 	}
 }

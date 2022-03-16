@@ -36,12 +36,12 @@ func TestBlockHeadersCache(t *testing.T) {
 	cache.initialize()
 	for i := basics.Round(1024); i < 1024+latestCacheSize; i++ {
 		hdr := bookkeeping.BlockHeader{Round: i}
-		cache.Put(i, hdr)
+		cache.Put(hdr)
 	}
 
 	rnd := basics.Round(120)
 	hdr := bookkeeping.BlockHeader{Round: rnd}
-	cache.Put(rnd, hdr)
+	cache.Put(hdr)
 
 	_, exists := cache.Get(rnd)
 	a.True(exists)
@@ -60,7 +60,7 @@ func TestLatestBlockHeadersCache(t *testing.T) {
 	var cache latestBlockHeaderCache
 	for i := basics.Round(123); i < latestCacheSize; i++ {
 		hdr := bookkeeping.BlockHeader{Round: i}
-		cache.Put(i, hdr)
+		cache.Put(hdr)
 	}
 
 	for i := basics.Round(0); i < 123; i++ {

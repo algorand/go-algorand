@@ -590,7 +590,7 @@ func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err er
 
 	blk, err = l.blockQ.getBlockHdr(rnd)
 	if err == nil {
-		l.headerCache.Put(rnd, blk)
+		l.headerCache.Put(blk)
 	}
 	return
 }
@@ -640,7 +640,7 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 	if err != nil {
 		return err
 	}
-	l.headerCache.Put(blk.Round(), blk.BlockHeader)
+	l.headerCache.Put(blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
