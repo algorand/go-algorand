@@ -22,7 +22,7 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-const latestCacheSize = 512
+const cacheSize = 512
 
 // blockHeaderCache is a wrapper for all block header cache mechanisms used within the Ledger.
 type blockHeaderCache struct {
@@ -31,7 +31,7 @@ type blockHeaderCache struct {
 }
 
 type latestBlockHeaderCache struct {
-	blockHeaders [latestCacheSize]bookkeeping.BlockHeader
+	blockHeaders [cacheSize]bookkeeping.BlockHeader
 	mutex        deadlock.RWMutex
 }
 
@@ -39,9 +39,9 @@ func (c *blockHeaderCache) initialize() {
 	c.lruCache.maxEntries = 10
 }
 
-func (c *blockHeaderCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
+func (c *blockHeaderCache) get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
 	// check latestHeaderCache first
-	blockHeader, exists = c.latestHeaderCache.Get(round)
+	blockHeader, exists = c.latestHeaderCache.get(round)
 	if exists {
 		return
 	}
@@ -55,12 +55,12 @@ func (c *blockHeaderCache) Get(round basics.Round) (blockHeader bookkeeping.Bloc
 	return
 }
 
-func (c *blockHeaderCache) Put(blockHeader bookkeeping.BlockHeader) {
-	c.latestHeaderCache.Put(blockHeader)
+func (c *blockHeaderCache) put(blockHeader bookkeeping.BlockHeader) {
+	c.latestHeaderCache.put(blockHeader)
 	c.lruCache.Put(blockHeader.Round, blockHeader)
 }
 
-func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
+func (c *latestBlockHeaderCache) get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
@@ -68,20 +68,20 @@ func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeepin
 	generating the stateproof message will be sequential in memory.
 	Might improve performance in terms of CPU caching.
 	*/
-	idx := (round - 1 + latestCacheSize) % latestCacheSize
+	idx := basics.SubSaturate(uint64(round), 1) % cacheSize
 	if round == 0 || c.blockHeaders[idx].Round != round { // blockHeader is empty or not requested round
 		return bookkeeping.BlockHeader{}, false
 	}
-	blockHeader = c.blockHeaders[idx]	
+	blockHeader = c.blockHeaders[idx]
 
 	return blockHeader, true
 }
 
-func (c *latestBlockHeaderCache) Put(blockHeader bookkeeping.BlockHeader) {
+func (c *latestBlockHeaderCache) put(blockHeader bookkeeping.BlockHeader) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	idx := (blockHeader.Round - 1 + latestCacheSize) % latestCacheSize
+	idx := basics.SubSaturate(uint64(blockHeader.Round), 1) % cacheSize
 	if blockHeader.Round > c.blockHeaders[idx].Round { // provided blockHeader is more recent than cached one
 		c.blockHeaders[idx] = blockHeader
 	}

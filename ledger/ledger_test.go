@@ -1396,7 +1396,7 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 	_, exists := l.headerCache.lruCache.Get(rnd)
 	a.True(exists)
 
-	_, exists = l.headerCache.latestHeaderCache.Get(rnd)
+	_, exists = l.headerCache.latestHeaderCache.get(rnd)
 	a.False(exists)
 }
 
