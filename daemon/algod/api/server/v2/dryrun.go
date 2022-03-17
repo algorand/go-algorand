@@ -511,7 +511,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
 				if len(delta.LocalDeltas) > 0 {
-					localDeltas := make([]generated.AccountStateDelta, len(delta.LocalDeltas))
+					localDeltas := []generated.AccountStateDelta{}
 					for k, v := range delta.LocalDeltas {
 						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
 						if err2 != nil {
