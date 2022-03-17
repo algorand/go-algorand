@@ -38,7 +38,6 @@ package crypto
 import "C"
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 )
 
@@ -167,10 +166,5 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		C.size_t(len(messages)),
 		(*C.int)(unsafe.Pointer(valid)))
 
-	if allValid != 0 {
-		s := fmt.Sprintf("batch verification failed for: messages: %v, signatures: %v, pks:%v", messages, signatures, publicKeys)
-		panic(s)
-	}
-	return true
-	//return allValid == 0
+	return allValid == 0
 }
