@@ -886,7 +886,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	var resourceDbRound basics.Round
 	withRewards := true
 
-	foundAccount := false
+	var foundAccount bool
 	var ad ledgercore.AccountData
 
 	var foundResources map[basics.CreatableIndex]basics.Round
@@ -917,7 +917,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				return true
 			}
 			// not possible to know how many resources rows to look for: totals conceal possibly overlapping assets/apps
-			if (ad.TotalAssetParams != 0 && ad.TotalAssets != 0) ||
+			// but asset params also assume asset holding
+			if (ad.TotalAssetParams != 0 && ad.TotalAssets != 0 && ad.TotalAssetParams != ad.TotalAssets) ||
 				(ad.TotalAppParams != 0 && ad.TotalAppLocalStates != 0) {
 				return false
 			}
@@ -929,6 +930,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				needToFind += uint64(ad.TotalAssets) // look for N asset holdings
 			} else if ad.TotalAssets == 0 { // not a holder of assets
 				needToFind += uint64(ad.TotalAssetParams) // look for N asset params
+			} else if ad.TotalAssetParams == ad.TotalAssets {
+				needToFind += uint64(ad.TotalAssetParams)
 			} else {
 				return false
 			}
@@ -957,6 +960,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, fmt.Errorf("offset != len(au.deltas): %w", ErrLookupLatestResources)
 		}
 		ad = ledgercore.AccountData{}
+		foundAccount = false
 		foundResources = make(map[basics.CreatableIndex]basics.Round)
 		resourceCount = 0
 
@@ -977,17 +981,16 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		}
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := au.accounts[addr]
-		if indeltas {
+		if macct, has := au.accounts[addr]; has {
 			// This is the most recent round, so we can
 			// use a cache of the most recent account state.
 			ad = macct.data
 			foundAccount = true
-		} else if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+		} else if pad, has := au.baseAccounts.read(addr); has && pad.round == currentDbRound {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
-			au.baseAccounts.writePending(macct)
-			ad = macct.accountData.GetLedgerCoreAccountData()
+			au.baseAccounts.writePending(pad)
+			ad = pad.accountData.GetLedgerCoreAccountData()
 			foundAccount = true
 		}
 

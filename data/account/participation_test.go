@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -161,13 +162,25 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 		os.Remove(b.Name() + "_part")
 	}()
 
-	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	// make participation key
+	lastValid := 3000000
+	keyDilution := 10000
+	if kd, err := strconv.Atoi(os.Getenv("DILUTION")); err == nil { // allow setting key dilution via env var
+		keyDilution = kd
+	}
+	if lv, err := strconv.Atoi(os.Getenv("LASTVALID")); err == nil { // allow setting last valid via env var
+		lastValid = lv
+	}
+	b.Log("making part keys for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
+	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, basics.Round(lastValid), uint64(keyDilution))
 	a.NoError(err)
 	a.NotNil(part)
 
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	b.Log("starting DeleteOldKeys benchmark up to round", b.N)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		errCh := part.DeleteOldKeys(basics.Round(i), config.Consensus[protocol.ConsensusCurrentVersion])
+		errCh := part.DeleteOldKeys(basics.Round(i), proto)
 		err := <-errCh
 		a.NoError(err)
 	}
@@ -552,4 +565,44 @@ func TestKeyregValidityPeriod(t *testing.T) {
 	lastValid = basics.Round(maxValidPeriod + 1)
 	_, err = FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.Error(err)
+}
+
+func BenchmarkParticipationSign(b *testing.B) {
+	access, err := db.MakeAccessor("writetest_root", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	access.Close()
+	require.NoError(b, err)
+
+	access, err = db.MakeAccessor("writetest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	defer access.Close()
+	keyDilution := uint64(10000) // DefaultKeyDilution is 10K
+	firstValid := basics.Round(0)
+	lastValid := basics.Round(b.N)
+	numBatches := basics.OneTimeIDForRound(lastValid, keyDilution).Batch - basics.OneTimeIDForRound(firstValid, keyDilution).Batch + 1
+	numKeys := b.N
+	b.Log("generating", numKeys, "keys")
+	t0 := time.Now()
+	part, err := FillDBWithParticipationKeys(access, root.Address(), firstValid, lastValid, keyDilution)
+	b.Log("generated keys, took", time.Since(t0))
+	require.NoError(b, err)
+
+	msg := testMessage("hello")
+
+	// assert empty batch (no pregenerated keys)
+	require.Empty(b, part.Voting.Offsets)
+	// assert all batch keys are available
+	require.Len(b, part.Voting.Batches, int(numBatches))
+
+	// use the key many times: will force dynamic key generation
+	b.ResetTimer()
+	for rnd := 0; rnd < b.N; rnd++ {
+		ephID := basics.OneTimeIDForRound(basics.Round(rnd), keyDilution)
+		_ = part.Voting.Sign(ephID, msg)
+	}
 }

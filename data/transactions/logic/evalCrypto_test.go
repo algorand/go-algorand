@@ -18,12 +18,14 @@ package logic
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -50,6 +52,22 @@ keccak256
 byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 ==`
 	testAccepts(t, progText, 1)
+}
+
+func TestSHA3_256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	/*
+		pip install hashlib
+		import hashlib
+		hashlib.sha3_256(b"fnord").hexdigest()
+	*/
+	progText := `byte 0x666E6F7264
+sha3_256
+byte 0xd757297405c5c89f7ceca368ee76c2f1893ee24f654e60032e65fb53b01aae10
+==`
+	testAccepts(t, progText, 7)
 }
 
 func TestSHA512_256(t *testing.T) {
@@ -96,6 +114,46 @@ ed25519verify`, pkStr), v)
 				ProgramHash: crypto.HashObj(Program(ops.Program)),
 				Data:        data[:],
 			})
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			txn.Lsig.Args = [][]byte{data[:], sig[:]}
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+
+			// short sig will fail
+			txn.Lsig.Args[1] = sig[1:]
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "invalid signature")
+
+			// flip a bit and it should not pass
+			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+			data1, err := hex.DecodeString(msg1)
+			require.NoError(t, err)
+			txn.Lsig.Args = [][]byte{data1, sig[:]}
+			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "REJECT")
+		})
+	}
+}
+
+func TestEd25519VerifyBare(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	c := crypto.GenerateSignatureSecrets(s)
+	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+	data, err := hex.DecodeString(msg)
+	require.NoError(t, err)
+	pk := basics.Address(c.SignatureVerifier)
+	pkStr := pk.String()
+
+	for v := uint64(7); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, fmt.Sprintf(`arg 0
+arg 1
+addr %s
+ed25519verify_bare`, pkStr), v)
+			require.NoError(t, err)
+			sig := c.SignBytes(data)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
@@ -172,7 +230,7 @@ func TestLeadingZeros(t *testing.T) {
 	require.Equal(t, v31z, keyToByte(t, b))
 }
 
-func TestEcdsa(t *testing.T) {
+func TestEcdsaWithSecp256k1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -323,6 +381,128 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	require.True(t, pass)
 }
 
+// MarshalCompressed converts a point on the curve into the compressed form
+// specified in section 4.3.6 of ANSI X9.62.
+//
+// TODO: replace with elliptic.MarshalCompressed when updating to go 1.15+
+func marshalCompressed(curve elliptic.Curve, x, y *big.Int) []byte {
+	byteLen := (curve.Params().BitSize + 7) / 8
+	compressed := make([]byte, 1+byteLen)
+	compressed[0] = byte(y.Bit(0)) | 2
+	bitIntFillBytes(x, compressed[1:])
+	return compressed
+}
+
+func TestEcdsaWithSecp256r1(t *testing.T) {
+	if LogicVersion < fidoVersion {
+		return
+	}
+
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	pk := marshalCompressed(elliptic.P256(), key.X, key.Y)
+	x := keyToByte(t, key.PublicKey.X)
+	y := keyToByte(t, key.PublicKey.Y)
+
+	// ecdsa decompress tests
+	source := `
+byte 0x%s
+ecdsa_pk_decompress Secp256r1
+store 0
+byte 0x%s
+==
+load 0
+byte 0x%s
+==
+&&`
+	pkTampered1 := make([]byte, len(pk))
+	copy(pkTampered1, pk)
+	pkTampered1[0] = 0                     // first byte is a prefix of either 0x02 or 0x03
+	pkTampered2 := make([]byte, len(pk)-1) // must be 33 bytes length
+	copy(pkTampered2, pk)
+
+	var decompressTests = []struct {
+		key  []byte
+		pass bool
+	}{
+		{pk, true},
+		{pkTampered1, false},
+		{pkTampered2, false},
+	}
+	for i, test := range decompressTests {
+		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Log("decompressTests i", i)
+			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
+			if test.pass {
+				testAcceptsWithField(t, src, 5, fidoVersion)
+			} else {
+				testPanicsWithField(t, src, 5, fidoVersion)
+			}
+		})
+	}
+
+	// ecdsa verify tests
+	source = `
+byte "%s"
+sha512_256
+byte 0x%s
+byte 0x%s
+byte 0x%s
+byte 0x%s
+ecdsa_verify Secp256r1
+`
+	data := []byte("testdata")
+	msg := sha512.Sum512_256(data)
+
+	ri, si, err := ecdsa.Sign(rand.Reader, key, msg[:])
+	require.NoError(t, err)
+	r := ri.Bytes()
+	s := si.Bytes()
+
+	rTampered := make([]byte, len(r))
+	copy(rTampered, r)
+	rTampered[0] += byte(1) // intentional overflow
+
+	var verifyTests = []struct {
+		data string
+		r    []byte
+		pass bool
+	}{
+		{"testdata", r, true},
+		{"testdata", rTampered, false},
+		{"testdata1", r, false},
+	}
+	for _, test := range verifyTests {
+		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
+			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
+			if test.pass {
+				testAcceptsWithField(t, src, 5, fidoVersion)
+			} else {
+				testRejectsWithField(t, src, 5, fidoVersion)
+			}
+		})
+	}
+
+	// sample sequencing: decompress + verify
+	source = fmt.Sprintf(`#pragma version `+strconv.Itoa(fidoVersion)+`
+byte "testdata"
+sha512_256
+byte 0x%s
+byte 0x%s
+byte 0x%s
+ecdsa_pk_decompress Secp256r1
+ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(pk))
+	ops := testProg(t, source, fidoVersion)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = ops.Program
+	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, fidoVersion))
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 // test compatibility with ethereum signatures
 func TestEcdsaEthAddress(t *testing.T) {
 	/*
@@ -437,31 +617,56 @@ type benchmarkEcdsaData struct {
 	programs []byte
 }
 
-func benchmarkEcdsaGenData(b *testing.B) (data []benchmarkEcdsaData) {
+func benchmarkEcdsaGenData(b *testing.B, curve EcdsaCurve) (data []benchmarkEcdsaData) {
 	data = make([]benchmarkEcdsaData, b.N)
 	for i := 0; i < b.N; i++ {
-		key, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
-		require.NoError(b, err)
+		var key *ecdsa.PrivateKey
+		if curve == Secp256k1 {
+			var err error
+			key, err = ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+			require.NoError(b, err)
+		} else if curve == Secp256r1 {
+			var err error
+			key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			require.NoError(b, err)
+		}
 		sk := keyToByte(b, key.D)
 		data[i].x = keyToByte(b, key.PublicKey.X)
 		data[i].y = keyToByte(b, key.PublicKey.Y)
-		data[i].pk = secp256k1.CompressPubkey(key.PublicKey.X, key.PublicKey.Y)
+		if curve == Secp256k1 {
+			data[i].pk = secp256k1.CompressPubkey(key.PublicKey.X, key.PublicKey.Y)
+		} else if curve == Secp256r1 {
+			data[i].pk = marshalCompressed(elliptic.P256(), key.PublicKey.X, key.PublicKey.Y)
+		}
 
 		d := []byte("testdata")
 		data[i].msg = sha512.Sum512_256(d)
 
-		sign, err := secp256k1.Sign(data[i].msg[:], sk)
-		require.NoError(b, err)
-		data[i].r = sign[:32]
-		data[i].s = sign[32:64]
-		data[i].v = int(sign[64])
+		if curve == Secp256k1 {
+			sign, err := secp256k1.Sign(data[i].msg[:], sk)
+			require.NoError(b, err)
+			data[i].r = sign[:32]
+			data[i].s = sign[32:64]
+			data[i].v = int(sign[64])
+		} else if curve == Secp256r1 {
+			r, s, err := ecdsa.Sign(rand.Reader, key, data[i].msg[:])
+			require.NoError(b, err)
+			data[i].r = r.Bytes()
+			data[i].s = s.Bytes()
+		}
 	}
 	return data
 }
 
-func benchmarkEcdsa(b *testing.B, source string) {
-	data := benchmarkEcdsaGenData(b)
-	ops, err := AssembleStringWithVersion(source, 5)
+func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
+	data := benchmarkEcdsaGenData(b, curve)
+	var version uint64
+	if curve == Secp256k1 {
+		version = 5
+	} else if curve == Secp256r1 {
+		version = 6
+	}
+	ops, err := AssembleStringWithVersion(source, version)
 	require.NoError(b, err)
 	for i := 0; i < b.N; i++ {
 		data[i].programs = ops.Program
@@ -488,7 +693,7 @@ func benchmarkEcdsa(b *testing.B, source string) {
 }
 
 func BenchmarkEcdsa(b *testing.B) {
-	b.Run("ecdsa_verify", func(b *testing.B) {
+	b.Run("ecdsa_verify secp256k1", func(b *testing.B) {
 		source := `#pragma version 5
 arg 0
 arg 1
@@ -496,19 +701,45 @@ arg 2
 arg 3
 arg 4
 ecdsa_verify Secp256k1`
-		benchmarkEcdsa(b, source)
+		benchmarkEcdsa(b, source, Secp256k1)
 	})
-	b.Run("ecdsa_pk_decompress", func(b *testing.B) {
+
+	if LogicVersion >= fidoVersion {
+		b.Run("ecdsa_verify secp256r1", func(b *testing.B) {
+			source := `#pragma version ` + strconv.Itoa(fidoVersion) + `
+	arg 0d
+	arg 1
+	arg 2
+	arg 3
+	arg 4
+	ecdsa_verify Secp256r1`
+			benchmarkEcdsa(b, source, Secp256r1)
+		})
+	}
+
+	b.Run("ecdsa_pk_decompress Secp256k1", func(b *testing.B) {
 		source := `#pragma version 5
 arg 5
 ecdsa_pk_decompress Secp256k1
 pop
 pop
 int 1`
-		benchmarkEcdsa(b, source)
+		benchmarkEcdsa(b, source, Secp256k1)
 	})
 
-	b.Run("ecdsa_pk_recover", func(b *testing.B) {
+	if LogicVersion >= fidoVersion {
+		b.Run("ecdsa_pk_decompress Secp256r1", func(b *testing.B) {
+			source := `#pragma version ` + strconv.Itoa(fidoVersion) + `
+	arg 5
+	ecdsa_pk_decompress Secp256r1
+	pop
+	pop
+	int 1`
+			benchmarkEcdsa(b, source, Secp256r1)
+		})
+	}
+
+	b.Run("ecdsa_pk_recover Secp256k1", func(b *testing.B) {
 		source := `#pragma version 5
 arg 0
 arg 6
@@ -519,6 +750,6 @@ ecdsa_pk_recover Secp256k1
 pop
 pop
 int 1`
-		benchmarkEcdsa(b, source)
+		benchmarkEcdsa(b, source, Secp256k1)
 	})
 }

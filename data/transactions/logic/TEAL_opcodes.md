@@ -55,9 +55,10 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 
 `ECDSA` Curves:
 
-| Index | Name | Notes |
-| - | ------ | --------- |
-| 0 | Secp256k1 | secp256k1 curve |
+| Index | Name | In | Notes |
+| - | ------ | - | --------- |
+| 0 | Secp256k1 |      | secp256k1 curve |
+| 1 | Secp256r1 | v7  | secp256r1 curve |
 
 
 The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.
@@ -72,9 +73,10 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 
 `ECDSA` Curves:
 
-| Index | Name | Notes |
-| - | ------ | --------- |
-| 0 | Secp256k1 | secp256k1 curve |
+| Index | Name | In | Notes |
+| - | ------ | - | --------- |
+| 0 | Secp256k1 |      | secp256k1 curve |
+| 1 | Secp256r1 | v7  | secp256r1 curve |
 
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
@@ -89,9 +91,10 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 
 `ECDSA` Curves:
 
-| Index | Name | Notes |
-| - | ------ | --------- |
-| 0 | Secp256k1 | secp256k1 curve |
+| Index | Name | In | Notes |
+| - | ------ | - | --------- |
+| 0 | Secp256k1 |      | secp256k1 curve |
+| 1 | Secp256r1 | v7  | secp256r1 curve |
 
 
 S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.
@@ -709,7 +712,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 - Opcode: 0x53
 - Stack: ..., A, B: uint64 &rarr; ..., uint64
-- Bth bit of (byte-array or integer) A.
+- Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
 - Availability: v3
 
 see explanation of bit ordering in setbit
@@ -718,7 +721,7 @@ see explanation of bit ordering in setbit
 
 - Opcode: 0x54
 - Stack: ..., A, B: uint64, C: uint64 &rarr; ..., any
-- Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C
+- Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
 - Availability: v3
 
 When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.
@@ -727,14 +730,14 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x55
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
-- Bth byte of A, as an integer
+- Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails
 - Availability: v3
 
 ## setbyte
 
 - Opcode: 0x56
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- Copy of A with the Bth byte set to small integer (between 0..255) C
+- Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails
 - Availability: v3
 
 ## extract s l
@@ -771,6 +774,25 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
+
+## base64_decode e
+
+- Opcode: 0x5c {uint8 encoding index}
+- Stack: ..., A: []byte &rarr; ..., []byte
+- decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
+- **Cost**: 25
+- Availability: v7
+
+Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\n` and `\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\r`, or `\n`.
+
+## json_ref r
+
+- Opcode: 0x5d {string return type}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., any
+- return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
+- Availability: v7
+
+specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.
 
 ## balance
 
@@ -990,6 +1012,14 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
+## ed25519verify_bare
+
+- Opcode: 0x84
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
+- for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
+- **Cost**: 1900
+- Availability: v7
+
 ## callsub target
 
 - Opcode: 0x88 {int16 branch offset, big endian}
@@ -1070,6 +1100,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Availability: v6
 
 The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
+
+## sha3_256
+
+- Opcode: 0x98
+- Stack: ..., A: []byte &rarr; ..., []byte
+- SHA3_256 hash of value A, yields [32]byte
+- **Cost**: 130
+- Availability: v7
 
 ## b+
 
