@@ -72,7 +72,7 @@ func BenchmarkHashCoin(b *testing.B) {
 	crypto.RandBytes(msgHash[:])
 
 	choice := coinChoiceSeed{
-		SignedWeight: 1024,
+		SignedWeight: 1025,
 		Sigcom:       sigcom,
 		Partcom:      partcom,
 		MsgHash:      msgHash,
@@ -81,5 +81,26 @@ func BenchmarkHashCoin(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		coinHash.getNextCoin()
+	}
+}
+
+func BenchmarkHashCoinGenerate(b *testing.B) {
+	var sigcom = make(crypto.GenericDigest, HashSize)
+	var partcom = make(crypto.GenericDigest, HashSize)
+	var msgHash StateProofMessageHash
+
+	crypto.RandBytes(sigcom[:])
+	crypto.RandBytes(partcom[:])
+	crypto.RandBytes(msgHash[:])
+
+	choice := coinChoiceSeed{
+		SignedWeight: 1025,
+		Sigcom:       sigcom,
+		Partcom:      partcom,
+		MsgHash:      msgHash,
+	}
+
+	for i := 0; i < b.N; i++ {
+		makeCoinGenerator(choice)
 	}
 }
