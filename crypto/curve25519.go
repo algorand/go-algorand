@@ -213,7 +213,12 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 //
 func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
+	b := ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
+	if !b {
+		s := fmt.Sprintf("batch verification failed for: messages: %v, signatures: %v, pks:%v", message, sig, v)
+		panic(s)
+	}
+	return true
 }
 
 // VerifyBytes verifies a signature, where the message is not hashed first.
@@ -221,5 +226,10 @@ func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 // If the message is a Hashable, Verify() can be used instead.
 func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
+	b := ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
+	if !b {
+		s := fmt.Sprintf("batch verification failed for: messages: %v, signatures: %v, pks:%v", message, sig, v)
+		panic(s)
+	}
+	return true
 }
