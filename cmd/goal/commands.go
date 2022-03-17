@@ -539,7 +539,7 @@ func reportWarnRawf(format string, args ...interface{}) {
 // reportWarnln prints a warning message to stderr. The message will be prefixed with "Warning: ".
 // If you don't want this prefix, use reportWarnRawln
 func reportWarnln(args ...interface{}) {
-	reportWarnRawf("Warning: %s", args...)
+	reportWarnRawf("Warning: %s", fmt.Sprint(args...))
 }
 
 // reportWarnf prints a warning message to stderr. The message will be prefixed with "Warning: ". If
