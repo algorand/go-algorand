@@ -743,7 +743,7 @@ var signCmd = &cobra.Command{
 			dataDir := ensureSingleDataDir()
 			client = ensureKmdClient(dataDir)
 			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
-		} else {
+		} else if signerAddress != "" {
 			authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
 			if err != nil {
 				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
