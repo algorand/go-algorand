@@ -59,6 +59,12 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = performResourceTableMigration(context.Background(), tx, nil)
 	require.NoError(tb, err)
 
+	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
+	require.NoError(tb, err)
+
+	err = performOnlineAccountsTableMigration(context.Background(), tx, nil)
+	require.NoError(tb, err)
+
 	return newDB
 }
 
@@ -256,7 +262,7 @@ func TestAccountDBRound(t *testing.T) {
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts)
 		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
 
-		err = updatesCnt.accountsLoadOld(tx)
+		err = updatesCnt.accountsLoadOld(tx, "accountbase")
 		require.NoError(t, err)
 
 		knownAddresses := make(map[basics.Address]int64)
@@ -279,6 +285,10 @@ func TestAccountDBRound(t *testing.T) {
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
+
+		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesCnt, proto, basics.Round(i))
+		require.NoError(t, err)
+		require.Equal(t, updatedAccts, updatedOnlineAccts)
 
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
@@ -382,7 +392,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			)
 			require.Equal(t, 1, len(outAccountDeltas.misses))
 
-			err = outAccountDeltas.accountsLoadOld(tx)
+			err = outAccountDeltas.accountsLoadOld(tx, "accountbase")
 			require.NoError(t, err)
 
 			knownAddresses := make(map[basics.Address]int64)

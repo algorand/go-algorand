@@ -42,6 +42,7 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt          *sql.Stmt
 	lookupStmt                  *sql.Stmt
+	lookupOnlineStmt            *sql.Stmt
 	lookupResourcesStmt         *sql.Stmt
 	lookupAllResourcesStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
@@ -120,6 +121,14 @@ var createResourcesTable = []string{
 		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`,
 }
 
+var createOnlineAccountsTable = []string{
+	`CREATE TABLE IF NOT EXISTS onlineaccounts (
+		address blob PRIMARY KEY NOT NULL,
+		normalizedonlinebalance INTEGER,
+		data blob)`,
+	createNormalizedOnlineBalanceIndex("onlineaccountnorm", "onlineaccounts"),
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -129,12 +138,13 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
 	`DROP TABLE IF EXISTS resources`,
+	`DROP TABLE IF EXISTS onlineaccounts`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(6)
+var accountDBVersion = int32(7)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -645,11 +655,11 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
+func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx, accountsTable string) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
-	selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	selectStmt, err := tx.Prepare("SELECT rowid, data FROM " + accountsTable + " WHERE address=?")
 	if err != nil {
 		return
 	}
@@ -1067,6 +1077,25 @@ func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	for _, stmt := range createResourcesTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
+	var exists bool
+	err := tx.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('onlineaccounts') WHERE name='addrid'").Scan(&exists)
+	if err == nil {
+		// Already exists.
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	for _, stmt := range createOnlineAccountsTable {
 		_, err = tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
@@ -1751,6 +1780,71 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	return nil
 }
 
+func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
+	var insertNewAcctBase *sql.Stmt
+	var insertNewAcctBaseNormBal *sql.Stmt
+	insertNewAcctBase, err = tx.PrepareContext(ctx, "INSERT INTO onlineaccounts(address, data) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertNewAcctBase.Close()
+
+	insertNewAcctBaseNormBal, err = tx.PrepareContext(ctx, "INSERT INTO onlineaccounts(address, data, normalizedonlinebalance) VALUES(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertNewAcctBaseNormBal.Close()
+
+	var rows *sql.Rows
+	rows, err = tx.QueryContext(ctx, "SELECT address, data, normalizedonlinebalance FROM accountbase ORDER BY address")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var insertRes sql.Result
+	var rowsAffected int64
+	var processedAccounts uint64
+	var totalBaseAccounts uint64
+
+	totalBaseAccounts, err = totalAccounts(ctx, tx)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var addrbuf []byte
+		var encodedAcctData []byte
+		var normBal sql.NullInt64
+		err = rows.Scan(&addrbuf, &encodedAcctData, &normBal)
+		if err != nil {
+			return err
+		}
+
+		if normBal.Valid {
+			insertRes, err = insertNewAcctBaseNormBal.ExecContext(ctx, addrbuf, encodedAcctData, normBal.Int64)
+		} else {
+			insertRes, err = insertNewAcctBase.ExecContext(ctx, addrbuf, encodedAcctData)
+		}
+
+		if err != nil {
+			return err
+		}
+		rowsAffected, err = insertRes.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rowsAffected != 1 {
+			return fmt.Errorf("number of affected rows is not 1 - %d", rowsAffected)
+		}
+		processedAccounts++
+		if log != nil {
+			log(processedAccounts, totalBaseAccounts)
+		}
+	}
+
+	return rows.Err()
+}
+
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
 // and optionally returns list of addresses that were eliminated
 func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
@@ -1848,6 +1942,17 @@ func accountsHashRound(tx *sql.Tx) (hashrnd basics.Round, err error) {
 	return
 }
 
+// onlineAccountsRound returns the round of the online accounts table
+// TODO: remove after synchronizing online accounts writes with acct updates
+func onlineAccountsRound(tx *sql.Tx) (hashrnd basics.Round, err error) {
+	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='onlineacctbase'").Scan(&hashrnd)
+	if err == sql.ErrNoRows {
+		hashrnd = basics.Round(0)
+		err = nil
+	}
+	return
+}
+
 func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
@@ -1858,6 +1963,11 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 	}
 
 	qs.lookupStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? WHERE id='onlineacctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -2061,10 +2171,18 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
 func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, err error) {
+	return lookupAccount(addr, qs.lookupStmt)
+}
+
+func (qs *accountsDbQueries) lookupOnline(addr basics.Address) (data persistedAccountData, err error) {
+	return lookupAccount(addr, qs.lookupOnlineStmt)
+}
+
+func lookupAccount(addr basics.Address, lookupStmt *sql.Stmt) (data persistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
+		err := lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
@@ -2195,6 +2313,7 @@ func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
 		&qs.lookupStmt,
+		&qs.lookupOnlineStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupCreatorStmt,
@@ -2225,7 +2344,7 @@ func (qs *accountsDbQueries) close() {
 // Note that this does not check if the accounts have a vote key valid for any
 // particular round (past, present, or future).
 func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
+	rows, err := tx.Query("SELECT address, data FROM onlineaccounts WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -2344,21 +2463,21 @@ func (w *accountsSQLWriter) close() {
 	}
 }
 
-func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
+func makeAccountsSQLWriter(tx *sql.Tx, accountsTable string, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
 	w = new(accountsSQLWriter)
 
-	if hasAccounts {
-		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
+	if len(accountsTable) > 0 {
+		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM " + accountsTable + " WHERE rowid=?")
 		if err != nil {
 			return
 		}
 
-		w.insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+		w.insertStmt, err = tx.Prepare("INSERT INTO " + accountsTable + " (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
+		w.updateStmt, err = tx.Prepare("UPDATE " + accountsTable + " SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
 		if err != nil {
 			return
 		}
@@ -2476,13 +2595,41 @@ func accountsNewRound(
 	hasAccounts := updates.len() > 0
 	hasResources := resources.len() > 0
 	hasCreatables := len(creatables) > 0
-	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasCreatables)
+
+	accountsTableName := ""
+	if hasAccounts {
+		accountsTableName = "accountbase"
+	}
+	writer, err := makeAccountsSQLWriter(tx, accountsTableName, hasResources, hasCreatables)
 	if err != nil {
 		return
 	}
 	defer writer.close()
 
 	return accountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
+}
+
+func onlineAccountsNewRound(
+	tx *sql.Tx,
+	updates compactAccountDeltas,
+	proto config.ConsensusParams, lastUpdateRound basics.Round,
+) (updatedAccounts []persistedAccountData, err error) {
+	hasAccounts := updates.len() > 0
+	hasResources := false
+	hasCreatables := false
+
+	accountsTableName := ""
+	if hasAccounts {
+		accountsTableName = "onlineaccounts"
+	}
+	writer, err := makeAccountsSQLWriter(tx, accountsTableName, hasResources, hasCreatables)
+	if err != nil {
+		return
+	}
+	defer writer.close()
+
+	updatedAccounts, _, err = accountsNewRoundImpl(writer, updates, compactResourcesDeltas{}, nil, proto, lastUpdateRound)
+	return
 }
 
 // accountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
@@ -2750,6 +2897,26 @@ func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
 
 	if aff != 1 {
 		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		return
+	}
+	return
+}
+
+// updates the round number associated with the online account table
+// TODO: remove
+func updateOnlineAccountsRound(tx *sql.Tx, hashRound basics.Round) (err error) {
+	res, err := tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('onlineacctbase',?)", hashRound)
+	if err != nil {
+		return
+	}
+
+	aff, err := res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if aff != 1 {
+		err = fmt.Errorf("updateOnlineAccountsRound(onlineacctbase,%d): expected to update 1 row but got %d", hashRound, aff)
 		return
 	}
 	return

@@ -75,12 +75,13 @@ type Ledger struct {
 	genesisProto config.ConsensusParams
 
 	// State-machine trackers
-	accts      accountUpdates
-	catchpoint catchpointTracker
-	txTail     txTail
-	bulletin   bulletin
-	notifier   blockNotifier
-	metrics    metricsTracker
+	accts       accountUpdates
+	acctsOnline onlineAccounts
+	catchpoint  catchpointTracker
+	txTail      txTail
+	bulletin    bulletin
+	notifier    blockNotifier
+	metrics     metricsTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -155,6 +156,7 @@ func OpenLedger(
 	}
 
 	l.accts.initialize(cfg)
+	l.acctsOnline.initialize()
 	l.catchpoint.initialize(cfg, dbPathPrefix)
 
 	err = l.reloadLedger()
@@ -197,12 +199,13 @@ func (l *Ledger) reloadLedger() error {
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
-		&l.accts,      // update the balances
-		&l.catchpoint, // catchpoints tracker : update catchpoint labels, create catchpoint files
-		&l.txTail,     // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin,   // provide closed channel signaling support for completed rounds
-		&l.notifier,   // send OnNewBlocks to subscribers
-		&l.metrics,    // provides metrics reporting support
+		&l.accts,       // update the balances
+		&l.catchpoint,  // catchpoints tracker : update catchpoint labels, create catchpoint files
+		&l.acctsOnline, // update online account balances history
+		&l.txTail,      // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin,    // provide closed channel signaling support for completed rounds
+		&l.notifier,    // send OnNewBlocks to subscribers
+		&l.metrics,     // provides metrics reporting support
 	}
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
@@ -436,7 +439,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.voters.getVoters(rnd)
+	return l.acctsOnline.voters.getVoters(rnd)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
@@ -527,7 +530,7 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.LookupOnlineAccountData(rnd, addr)
+	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
 	if err != nil {
 		return basics.OnlineAccountData{}, err
 	}

@@ -260,10 +260,13 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) *accountUpdates {
 	au := &accountUpdates{}
 	au.initialize(conf)
+	ao := &onlineAccounts{}
+	ao.initialize()
+
 	_, err := trackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
 
-	l.trackers.initialize(l, []ledgerTracker{au}, conf)
+	l.trackers.initialize(l, []ledgerTracker{au, ao}, conf)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
 
@@ -479,7 +482,7 @@ func TestAcctUpdates(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
@@ -584,7 +587,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
@@ -672,7 +675,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -805,7 +808,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
@@ -970,7 +973,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			for addr, ad := range updates {
 				delta.Accts.Upsert(addr, ad)
 			}
-			au.newBlock(blk, delta)
+			ml.trackers.newBlock(blk, delta)
 			ml.trackers.committedUpTo(i)
 		}
 		lastRound := i - 1
@@ -1616,7 +1619,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(basics.Round(i))
 		ml.trackers.waitAccountsWriting()
 		accts = append(accts, newAccts)
@@ -1719,7 +1722,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1755,7 +1758,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1838,7 +1841,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1873,7 +1876,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1910,7 +1913,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -2053,7 +2056,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 
 		// commit changes synchroniously
 		_, maxLookback := au.committedUpTo(i)
@@ -2245,7 +2248,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
@@ -2457,7 +2460,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
-		au.newBlock(blk, delta)
+		ml.trackers.newBlock(blk, delta)
 	}
 
 	// the test 1 requires 2 blocks with different resource state, au requires MaxBalLookback block to start persisting

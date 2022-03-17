@@ -52,13 +52,15 @@ func TestTrackerScheduleCommit(t *testing.T) {
 
 	au := &accountUpdates{}
 	ct := &catchpointTracker{}
+	ao := &onlineAccounts{}
 	au.initialize(conf)
 	ct.initialize(conf, ".")
+	ao.initialize()
 
 	_, err := trackerDBInitialize(ml, false, ".")
 	a.NoError(err)
 
-	ml.trackers.initialize(ml, []ledgerTracker{au, ct}, conf)
+	ml.trackers.initialize(ml, []ledgerTracker{au, ct, ao}, conf)
 	defer ml.trackers.close()
 	err = ml.trackers.loadFromDisk(ml)
 	a.NoError(err)
@@ -84,11 +86,15 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	au.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))
 	au.deltasAccum = make([]int, int(blockqRound))
 	au.versions = make([]protocol.ConsensusVersion, int(blockqRound))
+	ao.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))
+	ao.versions = make([]protocol.ConsensusVersion, int(blockqRound))
 	for i := 0; i <= int(expectedOffset); i++ {
 		au.versions[i] = protocol.ConsensusCurrentVersion
+		ao.versions[i] = protocol.ConsensusCurrentVersion
 	}
 	for i := int(expectedOffset) + 1; i < len(au.versions); i++ {
 		au.versions[i] = protocol.ConsensusFuture
+		ao.versions[i] = protocol.ConsensusFuture
 	}
 	au.accountsMu.Unlock()
 
@@ -110,9 +116,14 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	// expectedOffset = uint64(blockqRound - lookback - dbRound) // 983
 	a.Equal(expectedOffset, cdr.offset)
 
+	cdr = ao.produceCommittingTask(blockqRound, dbRound, cdr)
+	a.NotNil(cdr)
+	a.Equal(expectedOffset, cdr.offsetOnline)
+
 	// schedule the commit. au is expected to return offset 100 and
 	ml.trackers.mu.Lock()
 	ml.trackers.dbRound = dbRound
+	ml.trackers.dbRoundOnline = dbRound
 	ml.trackers.mu.Unlock()
 	ml.trackers.scheduleCommit(blockqRound, lookback)
 
