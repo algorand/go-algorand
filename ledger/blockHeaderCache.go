@@ -69,10 +69,10 @@ func (c *latestBlockHeaderCache) Get(round basics.Round) (blockHeader bookkeepin
 	Might improve performance in terms of CPU caching.
 	*/
 	idx := (round - 1 + latestCacheSize) % latestCacheSize
-	blockHeader = c.blockHeaders[idx]
-	if blockHeader.Round == 0 || blockHeader.Round != round { // blockHeader is empty or not requested round
+	if round == 0 || c.blockHeaders[idx].Round != round { // blockHeader is empty or not requested round
 		return bookkeeping.BlockHeader{}, false
 	}
+	blockHeader = c.blockHeaders[idx]	
 
 	return blockHeader, true
 }
