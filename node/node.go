@@ -515,6 +515,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 }
 
 // BroadcastCompactCertSignedTxGroup broadcasts a transaction group that has already been signed.
+// In DevMode, it will not advance the round.
 func (node *AlgorandFullNode) BroadcastCompactCertSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
 	return node.broadcastSignedTxGroup(txgroup)
 }
