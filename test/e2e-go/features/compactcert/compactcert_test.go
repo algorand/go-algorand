@@ -158,7 +158,7 @@ func TestCompactCerts(t *testing.T) {
 
 			ccparams := cc.Params{
 				StateProofMessageHash: certMessage.IntoStateProofMessageHash(),
-				ProvenWeight:          provenWeight,
+				ProvenWeightThreshold: provenWeight,
 				SigRound:              basics.Round(nextCertBlock.Round),
 				SecKQ:                 consensusParams.CompactCertSecKQ,
 			}
