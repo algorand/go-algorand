@@ -331,7 +331,7 @@ var sendCmd = &cobra.Command{
 			if logicSigFile != "" {
 				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
-			program = assembleFile(programSource)
+			program = assembleFile(programSource, false)
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
 		}
@@ -733,7 +733,7 @@ var signCmd = &cobra.Command{
 			if logicSigFile != "" {
 				reportErrorln("goal clerk sign should have at most one of --program/-p or --logic-sig/-L")
 			}
-			lsig.Logic = assembleFile(programSource)
+			lsig.Logic = assembleFile(programSource, false)
 			lsig.Args = getProgramArgs()
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
@@ -927,7 +927,7 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFile(fname string) (program []byte) {
+func assembleFile(fname string, printWarnings bool) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
@@ -946,6 +946,17 @@ func assembleFile(fname string) (program []byte) {
 		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
 			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
 		}
+	}
+
+	if printWarnings && len(ops.Warnings) != 0 {
+		for _, warning := range ops.Warnings {
+			reportWarnRawln(warning.Error())
+		}
+		plural := "s"
+		if len(ops.Warnings) == 1 {
+			plural = ""
+		}
+		reportWarnRawf("%d warning%s", len(ops.Warnings), plural)
 	}
 
 	return ops.Program
@@ -997,8 +1008,6 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-			program := assembleFile(fname)
-			outblob := program
 			outname := outFilename
 			if outname == "" {
 				if fname == stdinFileNameValue {
@@ -1007,6 +1016,9 @@ var compileCmd = &cobra.Command{
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
 			}
+			shouldPrintAdditionalInfo := outname != stdoutFilenameValue
+			program := assembleFile(fname, true)
+			outblob := program
 			if signProgram {
 				dataDir := ensureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
@@ -1036,7 +1048,7 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s", outname, err)
 				}
 			}
-			if !signProgram && outname != stdoutFilenameValue {
+			if !signProgram && shouldPrintAdditionalInfo {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
