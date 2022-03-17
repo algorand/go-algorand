@@ -267,37 +267,9 @@ func (ops *OpStream) RecordSourceLine() {
 	ops.OffsetToLine[ops.pending.Len()] = ops.sourceLine - 1
 }
 
-// ReferToLabel records an opcode label refence to resolve later
+// ReferToLabel records an opcode label reference to resolve later
 func (ops *OpStream) ReferToLabel(pc int, label string) {
 	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
-}
-
-// GetAssemblyMap returns a struct containing details about
-// the assembled file and mappings to the source file
-func (ops *OpStream) GetAssemblyMap() AssemblyMap {
-	maxPC := 0
-	for pc := range ops.OffsetToLine {
-		if pc > maxPC {
-			maxPC = pc
-		}
-	}
-
-	// Array where index is the PC and value is the line.
-	pcToLine := make([]string, maxPC+1)
-	for pc := range pcToLine {
-		if line, ok := ops.OffsetToLine[pc]; ok {
-			pcToLine[pc] = strconv.Itoa(line)
-		} else {
-			pcToLine[pc] = ""
-		}
-	}
-
-	// Encode the source map into a string
-	encodedMapping := strings.Join(pcToLine, ";")
-
-	return AssemblyMap{
-		Mapping: encodedMapping,
-	}
 }
 
 type opTypeFunc func(ops *OpStream, immediates []string) (StackTypes, StackTypes)
@@ -2769,14 +2741,4 @@ func Disassemble(program []byte) (text string, err error) {
 func HasStatefulOps(program []byte) (bool, error) {
 	_, ds, err := disassembleInstrumented(program, nil)
 	return ds.hasStatefulOps, err
-}
-
-// TODO: Consider haing a SourceMapper interface...
-// AssemblyMap contains details from the source to assembly process
-// currently contains map of TEAL source line number to assembled bytecode position
-// and details about the template varirables contained in the source file
-type AssemblyMap struct {
-	SourceName string `json:"source_name"`
-	Mapping    string `json:"mapping"`
-	SourceMap  []int  `json:"source_map"`
 }

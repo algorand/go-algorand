@@ -959,9 +959,9 @@ func assembleFile(fname string) []byte {
 	return ops.Program
 }
 
-func assembleFileWithMap(fname string) ([]byte, logic.AssemblyMap) {
+func assembleFileWithMap(fname string) ([]byte, logic.SourceMap) {
 	ops := assembleFileImpl(fname)
-	return ops.Program, ops.GetAssemblyMap()
+	return ops.Program, logic.GetSourceMap([]string{fname}, ops.OffsetToLine)
 }
 
 func disassembleFile(fname, outname string) {
@@ -1050,8 +1050,7 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			if writeSourceMap {
-				mapname := fname + ".map.json" // TODO: naming?
-				sourceMap.SourceName = fname
+				mapname := fname + ".map"
 				pcblob, err := json.Marshal(sourceMap)
 				if err != nil {
 					reportErrorf("%s: %s", mapname, err)
