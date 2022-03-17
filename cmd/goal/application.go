@@ -448,7 +448,7 @@ var createAppCmd = &cobra.Command{
 
 		switch onCompletionEnum {
 		case transactions.CloseOutOC, transactions.ClearStateOC:
-			reportWarnf("Warning: '--on-completion %s' may be ill-formed for 'goal app create'", onCompletion)
+			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", onCompletion)
 		}
 
 		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, extraPages)
@@ -1204,7 +1204,7 @@ var methodAppCmd = &cobra.Command{
 
 			switch onCompletionEnum {
 			case transactions.CloseOutOC, transactions.ClearStateOC:
-				reportWarnf("Warning: '--on-completion %s' may be ill-formed for use with --create", onCompletion)
+				reportWarnf("'--on-completion %s' may be ill-formed for use with --create", onCompletion)
 			}
 		} else {
 			if appIdx == 0 {

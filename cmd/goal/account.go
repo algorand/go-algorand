@@ -396,7 +396,7 @@ var newMultisigCmd = &cobra.Command{
 			}
 		}
 		if duplicatesDetected {
-			reportWarnln(warnMultisigDuplicatesDetected)
+			reportWarnRawln(warnMultisigDuplicatesDetected)
 		}
 		// Generate a new address in the default wallet
 		addr, err := client.CreateMultisigAccount(wh, threshold, args)
@@ -1369,7 +1369,7 @@ var importRootKeysCmd = &cobra.Command{
 			if err != nil {
 				// If error is 'like' "key already exists", treat as warning and not an error
 				if strings.Contains(err.Error(), "key already exists") {
-					reportWarnf("Warning: "+errorRequestFail, err.Error()+"\n > Key File: "+filename)
+					reportWarnf(errorRequestFail, err.Error()+"\n > Key File: "+filename)
 				} else {
 					reportErrorf(errorRequestFail, err)
 				}

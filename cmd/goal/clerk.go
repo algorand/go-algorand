@@ -469,7 +469,7 @@ var sendCmd = &cobra.Command{
 
 			// Append the signer since it's a rekey txn
 			if basics.Address(addr) == stx.Txn.Sender {
-				reportWarnln("Warning:" + rekeySenderTargetSameError)
+				reportWarnln(rekeySenderTargetSameError)
 			}
 			stx.AuthAddr = basics.Address(addr)
 		}
@@ -557,7 +557,7 @@ var rawsendCmd = &cobra.Command{
 				for _, txn := range txgroup {
 					txnErrors[txn.ID()] = err.Error()
 				}
-				reportWarnf("Warning: "+errorBroadcastingTX, err)
+				reportWarnf(errorBroadcastingTX, err)
 				continue
 			}
 
@@ -584,7 +584,7 @@ var rawsendCmd = &cobra.Command{
 				txn, err := client.PendingTransactionInformation(txidStr)
 				if err != nil {
 					txnErrors[txid] = err.Error()
-					reportWarnf("Warning: "+errorRequestFail, err)
+					reportWarnf(errorRequestFail, err)
 					continue
 				}
 
@@ -595,7 +595,7 @@ var rawsendCmd = &cobra.Command{
 
 				if txn.PoolError != "" {
 					txnErrors[txid] = txn.PoolError
-					reportWarnf("Warning: "+txPoolError, txidStr, txn.PoolError)
+					reportWarnf(txPoolError, txidStr, txn.PoolError)
 					continue
 				}
 
@@ -950,13 +950,13 @@ func assembleFile(fname string, printWarnings bool) (program []byte) {
 
 	if printWarnings && len(ops.Warnings) != 0 {
 		for _, warning := range ops.Warnings {
-			reportWarnln(warning.Error())
+			reportWarnRawln(warning.Error())
 		}
 		plural := "s"
 		if len(ops.Warnings) == 1 {
 			plural = ""
 		}
-		reportWarnf("%d warning%s", len(ops.Warnings), plural)
+		reportWarnRawf("%d warning%s", len(ops.Warnings), plural)
 	}
 
 	return ops.Program
