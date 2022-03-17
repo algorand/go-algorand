@@ -26,6 +26,16 @@ linters-settings:
 
 severity:
   default-severity: error
+  rules:
+    - linters:
+        - errcheck
+        - gofmt
+        - golint
+        - govet
+        - ineffassign
+        - misspell
+        - gci
+      severity: error
 
 issues:
   # use these new lint checks on code since #2574
