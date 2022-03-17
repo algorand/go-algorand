@@ -82,8 +82,7 @@ func (c *latestBlockHeaderCache) Put(blockHeader bookkeeping.BlockHeader) {
 	defer c.mutex.Unlock()
 
 	idx := (blockHeader.Round - 1 + latestCacheSize) % latestCacheSize
-	cachedHdr := c.blockHeaders[idx]
-	if blockHeader.Round > cachedHdr.Round { // provided blockHeader is more recent than cached one
+	if blockHeader.Round > c.blockHeaders[idx].Round { // provided blockHeader is more recent than cached one
 		c.blockHeaders[idx] = blockHeader
 	}
 }
