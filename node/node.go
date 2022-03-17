@@ -514,9 +514,9 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
-// BroadcastCompactCertSignedTxGroup broadcasts a transaction group that has already been signed.
-// In DevMode, it will not advance the round.
-func (node *AlgorandFullNode) BroadcastCompactCertSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+// BroadcastInternalSignedTxGroup broadcasts a transaction group that has already been signed.
+// It is originated internally, and in DevMode, it will not advance the round.
+func (node *AlgorandFullNode) BroadcastInternalSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
