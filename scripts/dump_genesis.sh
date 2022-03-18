@@ -57,6 +57,9 @@ for LEDGER in $LEDGERS; do
       resources)
         SORT=addrid
         ;;
+      onlineaccounts)
+        SORT=address
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

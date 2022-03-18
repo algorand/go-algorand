@@ -167,6 +167,12 @@ func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBPa
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
 					return
 				}
+			case 6:
+				err = tu.upgradeDatabaseSchema6(ctx, tx)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
+					return
+				}
 			default:
 				return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -410,6 +416,35 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 
 	// update version
 	return tu.setVersion(ctx, tx, 6)
+}
+
+// upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
+// adding a new onlineaccounts table
+// TODO: onlineaccounts: upgrade as needed after switching to the final table version
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, tx *sql.Tx) (err error) {
+	err = accountsCreateOnlineAccountsTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	var lastProgressInfoMsg time.Time
+	const progressLoggingInterval = 5 * time.Second
+	migrationProcessLog := func(processed, total uint64) {
+		if time.Since(lastProgressInfoMsg) < progressLoggingInterval {
+			return
+		}
+		lastProgressInfoMsg = time.Now()
+		tu.log.Infof("upgradeDatabaseSchema6 upgraded %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
+	}
+	err = performOnlineAccountsTableMigration(ctx, tx, migrationProcessLog)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete data migration : %v", err)
+	}
+
+	// TODO: remove normalized balance from accountbase
+
+	// update version
+	return tu.setVersion(ctx, tx, 7)
 }
 
 // isDirEmpty returns if a given directory is empty or not.
