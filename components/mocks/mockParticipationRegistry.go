@@ -19,6 +19,7 @@ package mocks
 import (
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -44,7 +45,7 @@ func (m *MockParticipationRegistry) Delete(id account.ParticipationID) error {
 }
 
 // DeleteExpired removes all records from storage which are expired on the given round.
-func (m *MockParticipationRegistry) DeleteExpired(round basics.Round) error {
+func (m *MockParticipationRegistry) DeleteExpired(latestRound basics.Round, agreementProto config.ConsensusParams) error {
 	return nil
 }
 

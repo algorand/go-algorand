@@ -9,6 +9,7 @@ A big thank you to everyone who has contributed to the `go-algorand` codebase.
 - jeapostrophe
 - jecassis
 - jsign
+- Matt-Ryley
 - mxmauro
 - Olshansk
 - qkniep
