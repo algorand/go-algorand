@@ -174,7 +174,7 @@ func (gauge *Gauge) WriteMetric(buf *strings.Builder, parentLabels string) {
 }
 
 // AddMetric adds the metric into the map
-func (gauge *Gauge) AddMetric(values map[string]string) {
+func (gauge *Gauge) AddMetric(values map[string]float64) {
 	gauge.Lock()
 	defer gauge.Unlock()
 
@@ -183,6 +183,6 @@ func (gauge *Gauge) AddMetric(values map[string]string) {
 	}
 
 	for _, l := range gauge.valuesIndices {
-		values[gauge.name] = strconv.FormatFloat(l.gauge, 'f', -1, 32)
+		values[sanitizeTelemetryName(gauge.name+":"+l.formattedLabels)] = l.gauge
 	}
 }

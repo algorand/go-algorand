@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/algorand/go-deadlock"
@@ -25,11 +26,17 @@ import (
 // Metric represent any collectable metric
 type Metric interface {
 	WriteMetric(buf *strings.Builder, parentLabels string)
-	AddMetric(values map[string]string)
+	AddMetric(values map[string]float64)
 }
 
 // Registry represents a single set of metrics registry
 type Registry struct {
 	metrics   []Metric
 	metricsMu deadlock.Mutex
+}
+
+var sanitizeTelemetryCharactersRegexp = regexp.MustCompile("(^[^a-zA-Z_]|[^a-zA-Z_0-9])")
+
+func sanitizeTelemetryName(name string) string {
+	return sanitizeTelemetryCharactersRegexp.ReplaceAllString(name, "_")
 }

@@ -33,27 +33,26 @@ func TestWriteAdd(t *testing.T) {
 	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})
 	counter.Add(12.34, nil)
 
-	results := make(map[string]string)
+	labelCounter := MakeCounter(MetricName{Name: "label-counter", Description: "counter with labels"})
+	counter.Add(5, map[string]string{"label": "a label value"})
+
+	results := make(map[string]float64)
 	DefaultRegistry().AddMetrics(results)
 
-	require.Equal(t, 1, len(results))
+	require.Equal(t, 2, len(results))
 	require.True(t, hasKey(results, "gauge-name"))
-	require.Equal(t, "12.34", results["gauge-name"])
+	require.InDelta(t, 12.34, results["gauge-name"], 0.01)
+	require.True(t, hasKey(results, "label-counter_a_label_value"))
+	require.InDelta(t, 5, results["label-counter_a_label_value"], 0.01)
 
 	bufBefore := strings.Builder{}
 	DefaultRegistry().WriteMetrics(&bufBefore, "label")
 	require.True(t, bufBefore.Len() > 0)
 
-	// Test that WriteMetrics does not change after adding a StringGauge
-	stringGauge := MakeStringGauge()
-	stringGauge.Set("string-key", "value")
-
 	DefaultRegistry().AddMetrics(results)
 
-	require.True(t, hasKey(results, "string-key"))
-	require.Equal(t, "value", results["string-key"])
 	require.True(t, hasKey(results, "gauge-name"))
-	require.Equal(t, "12.34", results["gauge-name"])
+	require.InDelta(t, 12.34, results["gauge-name"], 0.01)
 
 	// not included in string builder
 	bufAfter := strings.Builder{}
