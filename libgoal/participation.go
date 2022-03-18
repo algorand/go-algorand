@@ -170,7 +170,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	}
 
 	if keyDilution == 0 {
-		keyDilution = proto.DefaultKeyDilution
+		keyDilution = 1 + uint64(math.Sqrt(float64(lastRound-firstRound)))
 	}
 
 	// Fill the database with new participation keys
