@@ -86,3 +86,8 @@ func (m *Monotonic) Decode(data []byte) (Clock, error) {
 func (m *Monotonic) String() string {
 	return time.Time(m.zero).String()
 }
+
+// Since returns the time that has passed between the time the clock was last zeroed out and now
+func (m *Monotonic) Since() time.Duration {
+	return time.Since(m.zero)
+}
