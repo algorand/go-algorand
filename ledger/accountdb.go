@@ -1795,6 +1795,11 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 	}
 	defer insertNewAcctBaseNormBal.Close()
 
+	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('onlineacctbase', 0)")
+	if err != nil {
+		return err
+	}
+
 	var rows *sql.Rows
 	rows, err = tx.QueryContext(ctx, "SELECT address, data, normalizedonlinebalance FROM accountbase ORDER BY address")
 	if err != nil {
@@ -2904,8 +2909,9 @@ func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
 
 // updates the round number associated with the online account table
 // TODO: remove
-func updateOnlineAccountsRound(tx *sql.Tx, hashRound basics.Round) (err error) {
-	res, err := tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('onlineacctbase',?)", hashRound)
+func updateOnlineAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
+
+	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='onlineacctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
 		return
 	}
@@ -2916,8 +2922,19 @@ func updateOnlineAccountsRound(tx *sql.Tx, hashRound basics.Round) (err error) {
 	}
 
 	if aff != 1 {
-		err = fmt.Errorf("updateOnlineAccountsRound(onlineacctbase,%d): expected to update 1 row but got %d", hashRound, aff)
-		return
+		// try to figure out why we couldn't update the round number.
+		var base basics.Round
+		err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='onlineacctbase'").Scan(&base)
+		if err != nil {
+			return
+		}
+		if base > rnd {
+			err = fmt.Errorf("newRound %d is not after base %d", rnd, base)
+			return
+		} else if base != rnd {
+			err = fmt.Errorf("updateAccountsRound(onlineacctbase, %d): expected to update 1 row but got %d", rnd, aff)
+			return
+		}
 	}
 	return
 }
