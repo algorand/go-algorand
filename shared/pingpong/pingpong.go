@@ -882,7 +882,7 @@ func (pps *WorkerState) sendFromTo(
 			timeCredit -= took
 			if timeCredit > 0 {
 				time.Sleep(timeCredit)
-				timeCredit = time.Duration(0)
+				timeCredit -= time.Since(now)
 			} else if timeCredit < -1000*time.Millisecond {
 				// cap the "time debt" to 1000 ms.
 				timeCredit = -1000 * time.Millisecond
