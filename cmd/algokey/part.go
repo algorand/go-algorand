@@ -180,7 +180,7 @@ func init() {
 	partGenerateCmd.Flags().StringVar(&partKeyfile, "keyfile", "", "Participation key filename")
 	partGenerateCmd.Flags().Uint64Var(&partFirstRound, "first", 0, "First round for participation key")
 	partGenerateCmd.Flags().Uint64Var(&partLastRound, "last", 0, "Last round for participation key")
-	partGenerateCmd.Flags().Uint64Var(&partKeyDilution, "dilution", 0, "Key dilution (defaults to sqrt of validity window)")
+	partGenerateCmd.Flags().Uint64Var(&partKeyDilution, "dilution", 0, "Key dilution for two-level participation keys (defaults to sqrt of validity window)")
 	partGenerateCmd.Flags().StringVar(&partParent, "parent", "", "Address of parent account")
 	partGenerateCmd.MarkFlagRequired("first")
 	partGenerateCmd.MarkFlagRequired("last")
