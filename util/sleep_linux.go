@@ -22,5 +22,5 @@ import (
 
 // Nanosleep sleeps for the given ns in nanoseconds.
 func Nanosleep(ns int64) {
-	syscall.Nanosleep(&Timespec{Nsec: ns}, nil)
+	syscall.Nanosleep(&syscall.Timespec{Nsec: ns}, nil)
 }
