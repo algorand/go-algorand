@@ -44,7 +44,7 @@ func TimedWait(c *sync.Cond, timeout time.Duration) {
 			// thread hasn't gotten around to calling c.Wait()
 			// yet, so the c.Broadcast() did not wake it up.
 			// Sleep for a second and check again.
-			<-time.After(time.Second)
+			time.Sleep(time.Second)
 		}
 	}()
 
