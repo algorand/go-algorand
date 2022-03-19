@@ -21,9 +21,9 @@ import (
 	"time"
 )
 
-// NanoSleep sleeps for the given ns in nanoseconds.
-func NanoSleep(ns int64) {
-	syscall.Nanosleep(&syscall.Timespec{Nsec: ns % time.Second.Nanoseconds(), Sec: ns / time.Second.Nanoseconds()}, nil) // nolint:errcheck
+// NanoSleep sleeps for the given d duration.
+func NanoSleep(d time.Duration) {
+	syscall.Nanosleep(&syscall.Timespec{Nsec: d.Nanoseconds(), Sec: d.Nanoseconds() / time.Second.Nanoseconds()}, nil) // nolint:errcheck
 }
 
 // NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
@@ -34,7 +34,7 @@ func NanoAfter(d time.Duration) <-chan time.Time {
 	}
 	c := make(chan time.Time, 1)
 	go func() {
-		NanoSleep(d.Nanoseconds())
+		NanoSleep(d)
 		c <- time.Now()
 	}()
 	return c

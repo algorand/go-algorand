@@ -35,7 +35,7 @@ func TimedWait(c *sync.Cond, timeout time.Duration) {
 	var done int32
 
 	go func() {
-		util.NanoSleep(timeout.Nanoseconds())
+		util.NanoSleep(timeout)
 
 		for atomic.LoadInt32(&done) == 0 {
 			c.Broadcast()

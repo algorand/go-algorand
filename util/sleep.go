@@ -22,9 +22,9 @@ import (
 	"time"
 )
 
-// NanoSleep sleeps for the given ns in nanoseconds.
-func NanoSleep(ns int64) {
-	time.Sleep(time.Duration(ns))
+// NanoSleep sleeps for the given d duration.
+func NanoSleep(d time.Duration) {
+	time.Sleep(d)
 }
 
 // NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
