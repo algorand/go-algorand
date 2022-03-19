@@ -26,3 +26,8 @@ import (
 func Nanosleep(ns int64) {
 	time.Sleep(time.Duration(ns))
 }
+
+// NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
+func NanoAfter(d time.Duration) <-chan time.Time {
+	return time.After(d)
+}

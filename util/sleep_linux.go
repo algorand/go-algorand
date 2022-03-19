@@ -18,9 +18,24 @@ package util
 
 import (
 	"syscall"
+	"time"
 )
 
 // Nanosleep sleeps for the given ns in nanoseconds.
 func Nanosleep(ns int64) {
 	syscall.Nanosleep(&syscall.Timespec{Nsec: ns}, nil) // nolint:errcheck
+}
+
+// NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
+func NanoAfter(d time.Duration) <-chan time.Time {
+	// The folowing is a workaround for the go 1.16 bug, where timers are rounded up to the next millisecond resolution.
+	if d > 10*time.Millisecond {
+		return time.After(d)
+	}
+	c := make(chan time.Time, 1)
+	go func() {
+		Nanosleep(d.Nanoseconds())
+		c <- time.Now()
+	}()
+	return c
 }
