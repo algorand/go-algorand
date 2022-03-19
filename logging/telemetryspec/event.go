@@ -50,7 +50,7 @@ type HeartbeatEventDetails struct {
 		Branch     string `json:"branch"`
 		CommitHash string `json:"commit-hash"`
 	} `json:"Metrics"` // backwards compatible name
-	Metrics map[string]float64 `'json:"m"`
+	Metrics map[string]float64 `json:"m"`
 }
 
 // CatchupStartEvent event
