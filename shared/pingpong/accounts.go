@@ -18,7 +18,6 @@ package pingpong
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/util"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -37,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 )
 
