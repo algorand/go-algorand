@@ -22,8 +22,8 @@ import (
 	"time"
 )
 
-// Nanosleep sleeps for the given ns in nanoseconds.
-func Nanosleep(ns int64) {
+// NanoSleep sleeps for the given ns in nanoseconds.
+func NanoSleep(ns int64) {
 	time.Sleep(time.Duration(ns))
 }
 

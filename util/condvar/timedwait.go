@@ -20,6 +20,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // TimedWait waits for sync.Cond c to be signaled, with a timeout.
@@ -33,7 +35,7 @@ func TimedWait(c *sync.Cond, timeout time.Duration) {
 	var done int32
 
 	go func() {
-		<-time.After(timeout)
+		util.NanoSleep(timeout.Nanoseconds())
 
 		for atomic.LoadInt32(&done) == 0 {
 			c.Broadcast()

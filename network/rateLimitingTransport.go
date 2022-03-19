@@ -67,7 +67,7 @@ func (r *rateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 		}
 		waitDeadline := time.Now().Add(waitTime)
 		if waitDeadline.Before(queueingDeadline) {
-			util.Nanosleep(waitTime.Nanoseconds())
+			util.NanoSleep(waitTime.Nanoseconds())
 			continue
 		}
 		return nil, ErrConnectionQueueingTimeout
