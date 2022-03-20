@@ -2448,7 +2448,8 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 	newBlock := func(au *accountUpdates, rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas) {
 		rewardLevel := uint64(0)
-		prevTotals, err := au.Totals(basics.Round(rnd - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, rnd-1, prevRound)
 		require.NoError(t, err)
 
 		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
