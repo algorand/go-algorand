@@ -1401,7 +1401,7 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 }
 
 func BenchmarkLedgerBlockHdrCaching(b *testing.B) {
-	benchLedgerCache(b, 700)
+	benchLedgerCache(b, 1024-256+1)
 }
 
 func BenchmarkLedgerBlockHdrWithoutCaching(b *testing.B) {

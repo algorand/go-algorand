@@ -34,7 +34,7 @@ func TestBlockHeaderCache(t *testing.T) {
 
 	var cache blockHeaderCache
 	cache.initialize()
-	for i := basics.Round(1024); i < 1024+cacheSize; i++ {
+	for i := basics.Round(1024); i < 1024+latestHeaderCacheSize; i++ {
 		hdr := bookkeeping.BlockHeader{Round: i}
 		cache.put(hdr)
 	}
@@ -69,7 +69,7 @@ func TestLatestBlockHeaderCache(t *testing.T) {
 	a := require.New(t)
 
 	var cache latestBlockHeaderCache
-	for i := basics.Round(123); i < cacheSize; i++ {
+	for i := basics.Round(123); i < latestHeaderCacheSize; i++ {
 		hdr := bookkeeping.BlockHeader{Round: i}
 		cache.put(hdr)
 	}
@@ -79,7 +79,7 @@ func TestLatestBlockHeaderCache(t *testing.T) {
 		a.False(exists)
 	}
 
-	for i := basics.Round(123); i < cacheSize; i++ {
+	for i := basics.Round(123); i < latestHeaderCacheSize; i++ {
 		hdr, exists := cache.get(i)
 		a.True(exists)
 		a.Equal(i, hdr.Round)
@@ -91,5 +91,5 @@ func TestCacheSizeConsensus(t *testing.T) {
 	a := require.New(t)
 
 	// TODO Stateproof: change to CurrentVersion when feature is enabled
-	a.Equal(uint64(cacheSize), config.Consensus[protocol.ConsensusFuture].CompactCertRounds*2)
+	a.Equal(uint64(latestHeaderCacheSize), config.Consensus[protocol.ConsensusFuture].CompactCertRounds*2)
 }

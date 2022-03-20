@@ -19,10 +19,12 @@ package ledger
 import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+
 	"github.com/algorand/go-deadlock"
 )
 
-const cacheSize = 512
+const latestHeaderCacheSize = 512
+const blockHeadersLRUCacheSize = 10
 
 // blockHeaderCache is a wrapper for all block header cache mechanisms used within the Ledger.
 type blockHeaderCache struct {
@@ -31,12 +33,12 @@ type blockHeaderCache struct {
 }
 
 type latestBlockHeaderCache struct {
-	blockHeaders [cacheSize]bookkeeping.BlockHeader
+	blockHeaders [latestHeaderCacheSize]bookkeeping.BlockHeader
 	mutex        deadlock.RWMutex
 }
 
 func (c *blockHeaderCache) initialize() {
-	c.lruCache.maxEntries = 10
+	c.lruCache.maxEntries = blockHeadersLRUCacheSize
 }
 
 func (c *blockHeaderCache) get(round basics.Round) (blockHeader bookkeeping.BlockHeader, exists bool) {
@@ -64,11 +66,7 @@ func (c *latestBlockHeaderCache) get(round basics.Round) (blockHeader bookkeepin
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	/** round 512 will be stored in idx 511, so the entire required interval for
-	generating the stateproof message will be sequential in memory.
-	Might improve performance in terms of CPU caching.
-	*/
-	idx := basics.SubSaturate(uint64(round), 1) % cacheSize
+	idx := round % latestHeaderCacheSize
 	if round == 0 || c.blockHeaders[idx].Round != round { // blockHeader is empty or not requested round
 		return bookkeeping.BlockHeader{}, false
 	}
@@ -81,7 +79,7 @@ func (c *latestBlockHeaderCache) put(blockHeader bookkeeping.BlockHeader) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	idx := basics.SubSaturate(uint64(blockHeader.Round), 1) % cacheSize
+	idx := blockHeader.Round % latestHeaderCacheSize
 	if blockHeader.Round > c.blockHeaders[idx].Round { // provided blockHeader is more recent than cached one
 		c.blockHeaders[idx] = blockHeader
 	}
