@@ -572,7 +572,12 @@ func ParseArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationAr
 func ParseMethodSignature(methodSig string) (name string, argTypes []string, returnType string, err error) {
 	argsStart := strings.Index(methodSig, "(")
 	if argsStart == -1 {
-		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		err = fmt.Errorf(`No parenthesis in method signature: "%s"`, methodSig)
+		return
+	}
+
+	if argsStart == 0 {
+		err = fmt.Errorf(`Method signature has no name: "%s"`, methodSig)
 		return
 	}
 
@@ -583,7 +588,7 @@ func ParseMethodSignature(methodSig string) (name string, argTypes []string, ret
 			depth++
 		} else if char == ')' {
 			if depth == 0 {
-				err = fmt.Errorf("Unpaired parenthesis in method signature: %s", methodSig)
+				err = fmt.Errorf(`Unpaired parenthesis in method signature: "%s"`, methodSig)
 				return
 			}
 			depth--
@@ -595,7 +600,7 @@ func ParseMethodSignature(methodSig string) (name string, argTypes []string, ret
 	}
 
 	if argsEnd == -1 {
-		err = fmt.Errorf("Invalid method signature: %s", methodSig)
+		err = fmt.Errorf(`Unpaired parenthesis in method signature: "%s"`, methodSig)
 		return
 	}
 
@@ -603,4 +608,32 @@ func ParseMethodSignature(methodSig string) (name string, argTypes []string, ret
 	argTypes, err = parseTupleContent(methodSig[argsStart+1 : argsEnd])
 	returnType = methodSig[argsEnd+1:]
 	return
+}
+
+// VerifyMethodSignature checks if a method signature and its referenced types can be parsed properly
+func VerifyMethodSignature(methodSig string) error {
+	_, argTypes, retType, err := ParseMethodSignature(methodSig)
+	if err != nil {
+		return err
+	}
+
+	for i, argType := range argTypes {
+		if IsReferenceType(argType) || IsTransactionType(argType) {
+			continue
+		}
+
+		_, err = TypeOf(argType)
+		if err != nil {
+			return fmt.Errorf("Error parsing argument type at index %d: %s", i, err.Error())
+		}
+	}
+
+	if retType != VoidReturnType {
+		_, err = TypeOf(retType)
+		if err != nil {
+			return fmt.Errorf("Error parsing return type: %s", err.Error())
+		}
+	}
+
+	return nil
 }

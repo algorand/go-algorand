@@ -61,12 +61,14 @@ func TestIsWritingCatchpointFile(t *testing.T) {
 func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) *catchpointTracker {
 	au := &accountUpdates{}
 	ct := &catchpointTracker{}
+	ao := &onlineAccounts{}
 	au.initialize(conf)
 	ct.initialize(conf, dbPathPrefix)
+	ao.initialize()
 	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
-	err = l.trackers.initialize(l, []ledgerTracker{au, ct}, conf)
+	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao}, conf)
 	require.NoError(tb, err)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
