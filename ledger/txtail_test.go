@@ -141,6 +141,39 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 
 	return blk, nil
 }
+
+func (t *txTailTestLedger) Initialize(ts *testing.T) error {
+	// create a corresponding blockdb.
+	inMemory := true
+	t.blockDBs, _ = dbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+
+	tx, err := t.trackerDBs.Wdb.Handle.Begin()
+	require.NoError(ts, err)
+
+	accts := ledgertesting.RandomAccounts(20, true)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	newDB := accountsInitTest(ts, tx, accts, proto)
+	require.True(ts, newDB)
+	_, err = accountsInit(tx, accts, proto)
+	require.NoError(ts, err)
+
+	roundData := make([][]byte, 0, config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife+1)
+	startRound := t.Latest() - basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife) + 1
+	for i := startRound; i <= t.Latest(); i++ {
+		blk, err := t.Block(i)
+		require.NoError(ts, err)
+		tail, err := txTailRoundFromBlock(blk)
+		require.NoError(ts, err)
+		encoded, _ := tail.encode()
+		roundData = append(roundData, encoded)
+	}
+	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
+	require.NoError(ts, err)
+	tx.Commit()
+	return nil
+}
+
 func makeTxTailTestTransaction(r basics.Round, txnIdx int) (txn transactions.SignedTxnInBlock) {
 	txn.Txn.FirstValid = r
 	txn.Txn.LastValid = r + testTxTailValidityRange
@@ -159,8 +192,9 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var ledger txTailTestLedger
 	txtail := txTail{}
+	require.NoError(t, ledger.Initialize(t))
 
-	err := txtail.loadFromDisk(&ledger, 0)
+	err := txtail.loadFromDisk(&ledger, ledger.Latest())
 	require.NoError(t, err)
 	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
 	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
@@ -206,15 +240,16 @@ func TestTxTailDeltaTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var ledger txTailTestLedger
 	txtail := txTail{}
+	require.NoError(t, ledger.Initialize(t))
 
-	err := txtail.loadFromDisk(&ledger, 0)
+	err := txtail.loadFromDisk(&ledger, ledger.Latest())
 	require.NoError(t, err)
 	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
 	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
 	require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
 
 	var lease [32]byte
-	for i := 1; i < int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)*3; i++ {
+	for i := int(ledger.Latest()) + 1; i < int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)*3; i++ {
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
 				Round:     basics.Round(i),
@@ -249,8 +284,13 @@ func TestTxTailDeltaTracking(t *testing.T) {
 		}
 		err = txtail.prepareCommit(dcc)
 		require.NoError(t, err)
-		err = txtail.commitRound(context.Background(), nil, dcc)
+
+		tx, err := ledger.trackerDBs.Wdb.Handle.Begin()
 		require.NoError(t, err)
+
+		err = txtail.commitRound(context.Background(), tx, dcc)
+		require.NoError(t, err)
+		tx.Commit()
 		if uint64(i) > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife*2 {
 			// validate internal storage length.
 			require.Equal(t, 1, len(txtail.roundTailSerializedData))

@@ -2821,23 +2821,27 @@ func (z *resourcesData) MsgIsZero() bool {
 func (z *txTailRound) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0004Len := uint32(4)
-	var zb0004Mask uint8 /* 5 bits */
+	zb0004Len := uint32(5)
+	var zb0004Mask uint8 /* 6 bits */
 	if (*z).TimeStamp == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x2
 	}
-	if len((*z).Leases) == 0 {
+	if (*z).ConsensusVersion.MsgIsZero() {
 		zb0004Len--
 		zb0004Mask |= 0x4
 	}
-	if len((*z).TxnIDs) == 0 {
+	if len((*z).Leases) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x8
 	}
-	if len((*z).LastValid) == 0 {
+	if len((*z).TxnIDs) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x10
+	}
+	if len((*z).LastValid) == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x20
 	}
 	// variable map header, size zb0004Len
 	o = append(o, 0x80|uint8(zb0004Len))
@@ -2848,6 +2852,11 @@ func (z *txTailRound) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendInt64(o, (*z).TimeStamp)
 		}
 		if (zb0004Mask & 0x4) == 0 { // if not empty
+			// string "b"
+			o = append(o, 0xa1, 0x62)
+			o = (*z).ConsensusVersion.MarshalMsg(o)
+		}
+		if (zb0004Mask & 0x8) == 0 { // if not empty
 			// string "l"
 			o = append(o, 0xa1, 0x6c)
 			if (*z).Leases == nil {
@@ -2859,7 +2868,7 @@ func (z *txTailRound) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Leases[zb0003].MarshalMsg(o)
 			}
 		}
-		if (zb0004Mask & 0x8) == 0 { // if not empty
+		if (zb0004Mask & 0x10) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			if (*z).TxnIDs == nil {
@@ -2871,7 +2880,7 @@ func (z *txTailRound) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).TxnIDs[zb0001].MarshalMsg(o)
 			}
 		}
-		if (zb0004Mask & 0x10) == 0 { // if not empty
+		if (zb0004Mask & 0x20) == 0 { // if not empty
 			// string "v"
 			o = append(o, 0xa1, 0x76)
 			if (*z).LastValid == nil {
@@ -2986,6 +2995,14 @@ func (z *txTailRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0004 > 0 {
+			zb0004--
+			bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ConsensusVersion")
+				return
+			}
+		}
+		if zb0004 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0004)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -3080,6 +3097,12 @@ func (z *txTailRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TimeStamp")
 					return
 				}
+			case "b":
+				bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ConsensusVersion")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -3112,13 +3135,13 @@ func (z *txTailRound) Msgsize() (s int) {
 	for zb0003 := range (*z).Leases {
 		s += (*z).Leases[zb0003].Msgsize()
 	}
-	s += 2 + msgp.Int64Size
+	s += 2 + msgp.Int64Size + 2 + (*z).ConsensusVersion.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *txTailRound) MsgIsZero() bool {
-	return (len((*z).TxnIDs) == 0) && (len((*z).LastValid) == 0) && (len((*z).Leases) == 0) && ((*z).TimeStamp == 0)
+	return (len((*z).TxnIDs) == 0) && (len((*z).LastValid) == 0) && (len((*z).Leases) == 0) && ((*z).TimeStamp == 0) && ((*z).ConsensusVersion.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

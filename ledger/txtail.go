@@ -32,38 +32,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// txTailRoundLease is used as part of txTailRound for storing
-// a single lease.
-type txTailRoundLease struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Sender basics.Address `codec:"s"`
-	Lease  [32]byte       `codec:"l,allocbound=-"`
-	TxnIdx uint64         `code:"i"` //!-- index of the entry in TxnIDs/LastValid
-}
-
-// TxTailRound contains the information about a single round of transactions.
-// The TxnIDs and LastValid would both be of the same length, and are stored
-// in that way for efficient message=pack encoding. The Leases would point to the
-// respective transaction index. Note that this isn’t optimized for storing
-// leases, as leases are extremely rare.
-type txTailRound struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	TxnIDs    []transactions.Txid `codec:"t,allocbound=-"`
-	LastValid []basics.Round      `codec:"v,allocbound=-"`
-	Leases    []txTailRoundLease  `codec:"l,allocbound=-"`
-	TimeStamp int64               `codec:"a"` //!-- timestamp from block header
-}
-
-// encode the transaction tail data into a serialized form, and return the serialized data
-// as well as the hash of the data.
-func (t *txTailRound) encode() ([]byte, crypto.Digest) {
-	tailData := protocol.Encode(t)
-	hash := crypto.Hash(tailData)
-	return tailData, hash
-}
-
 const initialLastValidArrayLen = 256
 
 type roundLeases struct {
@@ -98,54 +66,22 @@ type txTail struct {
 	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
-// txTailRoundFromBlock is a temporary method until we can start loading the tail from the tracker database.
-func (t *txTail) txTailRoundFromBlock(l ledgerForTracker, rnd basics.Round) (txTailRound, protocol.ConsensusVersion, error) {
-	blk, err := l.Block(rnd)
-	if err != nil {
-		return txTailRound{}, "", err
-	}
+func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) error {
+	rdb := l.trackerDB().Rdb
 
-	payset, err := blk.DecodePaysetFlat()
-	if err != nil {
-		return txTailRound{}, "", err
-	}
-
-	var tail txTailRound
-	tail.TxnIDs = make([]transactions.Txid, len(payset))
-	tail.LastValid = make([]basics.Round, len(payset))
-	tail.TimeStamp = blk.TimeStamp
-
-	for txIdxtxid, txn := range payset {
-		tail.TxnIDs[txIdxtxid] = txn.ID()
-		tail.LastValid[txIdxtxid] = txn.Txn.LastValid
-		if txn.Txn.Lease != [32]byte{} {
-			tail.Leases = append(tail.Leases, txTailRoundLease{
-				Sender: txn.Txn.Sender,
-				Lease:  txn.Txn.Lease,
-				TxnIdx: uint64(txIdxtxid),
-			})
+	var roundData []*txTailRound
+	var baseRound basics.Round
+	if trackerRound > 0 {
+		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			roundData, baseRound, err = loadTxTail(context.Background(), tx, trackerRound)
+			return err
+		})
+		if err != nil {
+			return err
 		}
 	}
 
-	return tail, blk.CurrentProtocol, nil
-
-}
-
-func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) error {
-	latest := l.Latest()
-	hdr, err := l.BlockHdr(latest)
-	if err != nil {
-		return fmt.Errorf("txTail: could not get latest block header: %v", err)
-	}
-	proto := config.Consensus[hdr.CurrentProtocol]
-
-	// If the latest round is R, then any transactions from blocks strictly older than
-	// R + 1 - proto.MaxTxnLife
-	// could not be valid in the next round (R+1), and so are irrelevant.
-	// Thus we load the txids from blocks R+1-maxTxnLife to R, inclusive
-	old := (latest + 1).SubSaturate(basics.Round(proto.MaxTxnLife))
-
-	t.lowWaterMark = latest
+	t.lowWaterMark = trackerRound
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 
 	t.recent = make(map[basics.Round]roundLeases)
@@ -162,15 +98,9 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 	consensusVersions := make([]protocol.ConsensusVersion, 1)
 	roundTailSerializedData := make([][]byte, 0)
 
-	for ; old <= latest; old++ {
-
-		// the following section would need to be refactored later on.
-		txTailRound, consensusVersion, err := t.txTailRoundFromBlock(l, old)
-		if err != nil {
-			return err
-		}
-
-		consensusParams := config.Consensus[consensusVersion]
+	for old := baseRound; old <= trackerRound && trackerRound > baseRound; old++ {
+		txTailRound := roundData[0]
+		consensusParams := config.Consensus[txTailRound.ConsensusVersion]
 
 		t.recent[old] = roundLeases{
 			txleases: make(map[ledgercore.Txlease]basics.Round, len(txTailRound.TxnIDs)),
@@ -202,12 +132,10 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 			}
 		}
 
-		encodedTail, tailHash := txTailRound.encode()
+		_, tailHash := txTailRound.encode()
 		roundTailHashes = append(roundTailHashes, tailHash)
-		consensusVersions = append(consensusVersions, consensusVersion)
-		if old > trackerRound {
-			roundTailSerializedData = append(roundTailSerializedData, encodedTail)
-		}
+		consensusVersions = append(consensusVersions, txTailRound.ConsensusVersion)
+		roundData = roundData[1:]
 	}
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
@@ -242,6 +170,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
 	tail.LastValid = make([]basics.Round, len(delta.Txids))
 	tail.TimeStamp = blk.TimeStamp
+	tail.ConsensusVersion = blk.BlockHeader.CurrentProtocol
 
 	for txid, txnInc := range delta.Txids {
 		t.putLV(txnInc.LastValid, txid)
@@ -293,15 +222,6 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	return
 }
 
-func txtailNewRound(tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetRound basics.Round) error {
-	// todo - implement this.
-	// step 1 :
-	// insert all round data.
-	// step 2:
-	// delte all data before forgetRound
-	return nil
-}
-
 func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
 	baseRound := dcc.oldBase + 1
 	roundsData := make([][]byte, 0, dcc.offset)
@@ -315,7 +235,7 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 	t.tailMu.RUnlock()
 
 	forgetRound := (baseRound + basics.Round(dcc.offset)).SubSaturate(maxTxnLifeRound)
-	if err := txtailNewRound(tx, baseRound, roundsData, forgetRound); err != nil {
+	if err := txtailNewRound(ctx, tx, baseRound, roundsData, forgetRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
 	return nil

@@ -38,6 +38,7 @@ type trackerDBParams struct {
 	initProto         config.ConsensusParams
 	catchpointEnabled bool
 	dbPathPrefix      string
+	blockDb           db.Pair
 }
 
 type trackerDBSchemaInitializer struct {
@@ -63,6 +64,7 @@ type trackerDBInitParams struct {
 // procedures to bring it up to the database schema supported by the binary.
 func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerDBInitParams, err error) {
 	dbs := l.trackerDB()
+	bdbs := l.blockDB()
 	log := l.trackerLog()
 
 	lastestBlockRound := l.Latest()
@@ -73,7 +75,13 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	}
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		tp := trackerDBParams{l.GenesisAccounts(), l.GenesisProto(), catchpointEnabled, dbPathPrefix}
+		tp := trackerDBParams{
+			initAccounts:      l.GenesisAccounts(),
+			initProto:         l.GenesisProto(),
+			catchpointEnabled: catchpointEnabled,
+			dbPathPrefix:      dbPathPrefix,
+			blockDb:           bdbs,
+		}
 		var err0 error
 		mgr, err0 = trackerDBInitializeImpl(ctx, tx, tp, log)
 		if err0 != nil {
@@ -427,6 +435,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return err
 	}
 
+	err = accountsCreateTxTailTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+
 	var lastProgressInfoMsg time.Time
 	const progressLoggingInterval = 5 * time.Second
 	migrationProcessLog := func(processed, total uint64) {
@@ -439,6 +452,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 	err = performOnlineAccountsTableMigration(ctx, tx, migrationProcessLog)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete data migration : %v", err)
+	}
+
+	if !tu.newDatabase {
+		err = performTxtailTableMigration(context.Background(), tx, tu.blockDb.Rdb)
+		if err != nil {
+			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete data migration : %v", err)
+		}
 	}
 
 	// TODO: remove normalized balance from accountbase
