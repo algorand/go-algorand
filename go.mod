@@ -1,6 +1,6 @@
 module github.com/algorand/go-algorand
 
-go 1.14
+go 1.16
 
 require (
 	github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123
