@@ -3963,12 +3963,8 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, trackerRound basics.Round) (rou
 	}
 	// reverse the array ordering in-place so that it would be incremental order.
 	for i := 0; i < len(roundData)/2; i++ {
-		bottom := roundData[i]
-		roundData[i] = roundData[len(roundData)-i-1]
-		roundData[len(roundData)-i-1] = bottom
-		hash := roundHash[i]
-		roundHash[i] = roundHash[len(roundHash)-i-1]
-		roundHash[len(roundHash)-i-1] = hash
+		roundData[i], roundData[len(roundData)-i-1] = roundData[len(roundData)-i-1], roundData[i]
+		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
 	}
 	return roundData, roundHash, expectedRound + 1, nil
 }
