@@ -147,6 +147,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS accounthashes`,
 	`DROP TABLE IF EXISTS resources`,
 	`DROP TABLE IF EXISTS onlineaccounts`,
+	`DROP TABLE IF EXISTS txtail`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -875,6 +876,8 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
+		"DROP TABLE IF EXISTS catchpointtxtail",
+		"DROP TABLE IF EXISTS catchpointonlineaccounts",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -888,6 +891,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		now := time.Now().UnixNano()
 		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
 		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
+		idxnameOnlineBalances := fmt.Sprintf("onlineaccountnorm_idx_%d", now)
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
@@ -895,8 +899,11 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
-			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
+			"CREATE TABLE IF NOT EXISTS catchpointonlineaccounts (address blob PRIMARY KEY NOT NULL, normalizedonlinebalance INTEGER, data blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointtxtail (round INTEGER PRIMARY KEY NOT NULL, data blob)",
+			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
+			createNormalizedOnlineBalanceIndex(idxnameOnlineBalances, "catchpointonlineaccounts"),
 		)
 	}
 
@@ -918,16 +925,22 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
 		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
 		"ALTER TABLE resources RENAME TO resources_old",
+		"ALTER TABLE onlineaccounts RENAME TO onlineaccounts_old",
+		"ALTER TABLE txtail RENAME TO txtail_old",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
+		"ALTER TABLE catchpointonlineaccounts RENAME TO onlineaccounts",
+		"ALTER TABLE catchpointtxtail RENAME TO txtail",
 
 		"DROP TABLE IF EXISTS accountbase_old",
 		"DROP TABLE IF EXISTS assetcreators_old",
 		"DROP TABLE IF EXISTS accounthashes_old",
 		"DROP TABLE IF EXISTS resources_old",
+		"DROP TABLE IF EXISTS onlineaccounts_old",
+		"DROP TABLE IF EXISTS txtail_old",
 	}
 
 	for _, stmt := range stmts {
