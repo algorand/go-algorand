@@ -193,6 +193,7 @@ func (tx Transaction) InnerID(parent Txid, index int) Txid {
 	input = append(input, buf...)
 	enc := tx.MarshalMsg(input)
 
+	log.Printf("Raw: %+v", tx)
 	log.Printf("MARSHALLED: %s", base64.StdEncoding.EncodeToString(enc))
 
 	defer protocol.PutEncodingBuf(enc)
