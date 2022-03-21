@@ -23,7 +23,10 @@ import (
 
 // NanoSleep sleeps for the given d duration.
 func NanoSleep(d time.Duration) {
-	syscall.Nanosleep(&syscall.Timespec{Nsec: d.Nanoseconds() % time.Second.Nanoseconds(), Sec: d.Nanoseconds() / time.Second.Nanoseconds()}, nil) // nolint:errcheck
+	syscall.Nanosleep(&syscall.Timespec{
+		Nsec: d.Nanoseconds() % time.Second.Nanoseconds(),
+		Sec:  d.Nanoseconds() / time.Second.Nanoseconds()},
+		nil) // nolint:errcheck
 }
 
 // NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
