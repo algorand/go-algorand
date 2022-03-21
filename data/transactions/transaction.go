@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -193,8 +192,8 @@ func (tx Transaction) InnerID(parent Txid, index int) Txid {
 	input = append(input, buf...)
 	enc := tx.MarshalMsg(input)
 
-	log.Printf("Raw: %+v", tx)
-	log.Printf("MARSHALLED: %s", base64.StdEncoding.EncodeToString(enc))
+	fmt.Printf("\nRaw: %+v\n", tx)
+	fmt.Printf("\nMARSHALLED: %s\n", base64.StdEncoding.EncodeToString(enc))
 
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
