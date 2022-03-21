@@ -16,15 +16,32 @@ gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
-printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
-PROGRAM=($(${gcmd} clerk compile "${TEMPDIR}/simple.teal"))
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 | grep Created | awk '{ print $6 }')
+printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
+printf '#pragma version 3\nint 1' > "${TEMPDIR}/simple-v3.teal"
+
+# Create
+RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT 2>&1 || true)
+EXPECTED="method create(uint64)uint64 succeeded with output: 2468"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-method-test FAIL the method call to create(uint64)uint64 should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
+APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
 
 # Opt in
 RES=$(${gcmd} app method --method "optIn(string)string" --arg "\"Algorand Fan\"" --on-completion optin --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPECTED="method optIn(string)string succeeded with output: \"hello Algorand Fan\""
 if [[ $RES != *"${EXPECTED}"* ]]; then
     date '+app-abi-method-test FAIL the method call to optIn(string)string should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# No arguments or return value
+RES=$(${gcmd} app method --method "empty()void" --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method empty()void succeeded"
+if [[ $RES != *"${EXPECTED}" ]]; then
+    date '+app-abi-method-test FAIL the method call to empty()void should not fail %Y%m%d_%H%M%S'
     false
 fi
 
@@ -62,11 +79,27 @@ if [[ $RES != *"${EXPECTED}"* ]]; then
     false
 fi
 
+# Foreign reference test
+RES=$(${gcmd} app method --method "referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9]" --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg $APPID --arg $ACCOUNT --arg 10 --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg 11 --arg 10 --arg 20 --arg 21 --app-account 2R5LMPTYLVMWYEG4RPI26PJAM7ARTGUB7LZSONQPGLUWTPOP6LQCJTQZVE --foreign-app 21 --foreign-asset 10 --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9] succeeded with output: [2,0,2,0,2,1,0,1,0]"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-method-test FAIL the method call to referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9] should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
 # Close out
 RES=$(${gcmd} app method --method "closeOut()string" --on-completion closeout --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPECTED="method closeOut()string succeeded with output: \"goodbye Algorand Fan\""
 if [[ $RES != *"${EXPECTED}"* ]]; then
     date '+app-abi-method-test FAIL the method call to closeOut()string should not fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# Update
+RES=$(${gcmd} app method --method "update()void" --on-completion updateapplication --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v3.teal --app-id $APPID --from $ACCOUNT 2>&1 || true)
+EXPECTED="method update()void succeeded"
+if [[ $RES != *"${EXPECTED}"* ]]; then
+    date '+app-abi-method-test FAIL the method call to update()void should not fail %Y%m%d_%H%M%S'
     false
 fi
 

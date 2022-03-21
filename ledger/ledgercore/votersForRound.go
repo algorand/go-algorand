@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,8 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -52,7 +54,7 @@ type VotersForRound struct {
 	// Participants is the array of top #CompactCertVoters online accounts
 	// in this round, sorted by normalized balance (to make sure heavyweight
 	// accounts are biased to the front).
-	Participants ParticipantsArray
+	Participants basics.ParticipantsArray
 
 	// AddrToPos specifies the position of a given account address (if present)
 	// in the Participants array.  This allows adding a vote from a given account
@@ -84,18 +86,12 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 	// using the balances from round r.
 	certRound := r + basics.Round(tr.Proto.CompactCertVotersLookback+tr.Proto.CompactCertRounds)
 
-	// sigKeyRound is the ephemeral key ID that we expect to be used for signing
-	// the block from certRound.  It is one higher because the keys for certRound
-	// might be deleted by the time consensus is reached on the block and we try
-	// to sign the compact cert for block certRound.
-	sigKeyRound := certRound + 1
-
-	top, err := onlineTop(r, sigKeyRound, tr.Proto.CompactCertTopVoters)
+	top, err := onlineTop(r, certRound, tr.Proto.CompactCertTopVoters)
 	if err != nil {
 		return err
 	}
 
-	participants := make(ParticipantsArray, len(top))
+	participants := make(basics.ParticipantsArray, len(top))
 	addrToPos := make(map[basics.Address]uint64)
 	var totalWeight basics.MicroAlgos
 
@@ -112,20 +108,14 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 			return fmt.Errorf("votersTracker.LoadTree: overflow computing totalWeight %d + %d", totalWeight.ToUint64(), money.ToUint64())
 		}
 
-		keyDilution := acct.VoteKeyDilution
-		if keyDilution == 0 {
-			keyDilution = tr.Proto.DefaultKeyDilution
-		}
-
 		participants[i] = basics.Participant{
-			PK:          acct.VoteID,
-			Weight:      money.ToUint64(),
-			KeyDilution: keyDilution,
+			PK:     acct.StateProofID,
+			Weight: money.ToUint64(),
 		}
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.Build(participants)
+	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: compactcert.HashType})
 	if err != nil {
 		return err
 	}

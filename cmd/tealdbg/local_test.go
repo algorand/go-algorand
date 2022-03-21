@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -316,6 +317,7 @@ func TestDebugEnvironment(t *testing.T) {
 	// make transaction group: app call + sample payment
 	txn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
 				Fee:    basics.MicroAlgos{Raw: 1000},
@@ -523,7 +525,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 
 	l := LocalRunner{}
 	dp := DebugParams{
@@ -602,7 +604,7 @@ func TestRunMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 	l := LocalRunner{}
 
 	// check run mode auto on stateful code
@@ -624,7 +626,7 @@ func TestRunMode(t *testing.T) {
 	a.Equal(modeStateful, l.runs[0].mode)
 	a.Equal(basics.AppIndex(100), l.runs[0].aidx)
 	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(logic.EvalSignature).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
 
@@ -844,20 +846,25 @@ func checkBalanceAdapter(
 	a.NoError(err)
 	a.Equal(basics.MicroAlgos{Raw: 500000000}, ad.MicroAlgos)
 
-	holdings, ok := ad.Assets[assetIdx+1]
+	holdings, ok, err := ba.GetAssetHolding(sender, assetIdx+1)
+	a.NoError(err)
 	a.False(ok)
-	holdings, ok = ad.Assets[assetIdx]
+	holdings, ok, err = ba.GetAssetHolding(sender, assetIdx)
+	a.NoError(err)
 	a.True(ok)
 	a.Equal(basics.AssetHolding{Amount: 10, Frozen: false}, holdings)
 
-	aparams, ok := ad.AssetParams[assetIdx]
+	aparams, ok, err := ba.GetAssetParams(sender, assetIdx)
+	a.NoError(err)
 	a.True(ok)
 	a.Equal(uint64(100), aparams.Total)
 	a.Equal("tok", aparams.UnitName)
 
-	params, ok := ad.AppParams[appIdx+1]
+	params, ok, err := ba.GetAppParams(sender, appIdx+1)
+	a.NoError(err)
 	a.False(ok)
-	params, ok = ad.AppParams[appIdx]
+	params, ok, err = ba.GetAppParams(sender, appIdx)
+	a.NoError(err)
 	a.True(ok)
 
 	addr, ok, err := ba.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
@@ -886,9 +893,10 @@ func checkBalanceAdapter(
 	a.True(ok)
 	a.Equal("global", v.Bytes)
 
-	loc, ok := ad.AppLocalStates[appIdx+1]
+	loc, ok, err := ba.GetAppLocalState(sender, appIdx+1)
+	a.NoError(err)
 	a.False(ok)
-	loc, ok = ad.AppLocalStates[appIdx]
+	loc, ok, err = ba.GetAppLocalState(sender, appIdx)
 	a.True(ok)
 
 	v, ok = loc.KeyValue["lkeyint"]
@@ -901,7 +909,8 @@ func checkBalanceAdapter(
 
 	ad, err = ba.Get(receiver, false)
 	a.NoError(err)
-	loc, ok = ad.AppLocalStates[appIdx]
+	loc, ok, err = ba.GetAppLocalState(receiver, appIdx)
+	a.NoError(err)
 	a.False(ok)
 }
 
@@ -959,7 +968,7 @@ func TestLocalBalanceAdapter(t *testing.T) {
 	a.Equal(modeStateful, l.runs[0].mode)
 	a.NotEmpty(l.runs[0].aidx)
 	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(logic.EvalSignature).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
 	ba := l.runs[0].ba
@@ -984,7 +993,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, accountPath):
 			w.WriteHeader(200)
 			if r.URL.Path[len(accountPath):] == brs.Addr.String() {
-				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, basics.MicroAlgos{Raw: 0})
+				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, 100, &config.ConsensusParams{MinBalance: 100000}, basics.MicroAlgos{Raw: 0})
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
 				response, err := json.Marshal(accountResponse)
@@ -1050,7 +1059,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 	a.Equal(modeStateful, l.runs[0].mode)
 	a.NotEmpty(l.runs[0].aidx)
 	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(logic.EvalSignature).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
 

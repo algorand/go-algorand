@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -123,7 +123,15 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 				o, err := tokenize(raw.Data)
 				if err != nil {
-					logging.Base().Warnf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
+					warnMsg := fmt.Sprintf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
+					// check protocol version
+					cv, err := d.ledger.ConsensusVersion(d.ledger.NextRound())
+					if err == nil {
+						if _, ok := config.Consensus[cv]; !ok {
+							warnMsg = fmt.Sprintf("received proposal message was ignored. The node binary doesn't support the next network consensus (%v) and would no longer be able to process agreement messages", cv)
+						}
+					}
+					d.log.Warn(warnMsg)
 					net.Disconnect(raw.MessageHandle)
 					d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
 					continue
@@ -189,6 +197,10 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		}
 		proto, err := d.ledger.ConsensusVersion(ParamsRound(e.ConsensusRound()))
 		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
+
+		if e.t() == payloadVerified {
+			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
+		}
 	}()
 
 	var pseudonodeEvents <-chan externalEvent
@@ -236,22 +248,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
 	deadlineCh := s.Clock.TimeoutAt(deadline)
-	var fastDeadlineCh <-chan time.Time
-
-	fastPartitionRecoveryEnabled := false
-	if proto, err := d.ledger.ConsensusVersion(ParamsRound(currentRound)); err != nil {
-		logging.Base().Warnf("demux: could not get consensus parameters for round %d: %v", ParamsRound(currentRound), err)
-		// this might happen during catchup, since the Ledger.Wait fires as soon as a new block is received by the ledger, which could be
-		// far before it's being committed. In these cases, it should be safe to default to the current consensus version. On subsequent
-		// iterations, it will get "corrected" since the ledger would finish flushing the blocks to disk.
-		fastPartitionRecoveryEnabled = config.Consensus[protocol.ConsensusCurrentVersion].FastPartitionRecovery
-	} else {
-		fastPartitionRecoveryEnabled = config.Consensus[proto].FastPartitionRecovery
-	}
-
-	if fastPartitionRecoveryEnabled {
-		fastDeadlineCh = s.Clock.TimeoutAt(fastDeadline)
-	}
+	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)

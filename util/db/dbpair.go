@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,6 +40,23 @@ func OpenPair(filename string, memory bool) (p Pair, err error) {
 	}
 
 	p.Wdb, err = MakeAccessor(filename, false, memory)
+	if err != nil {
+		p.Rdb.Close()
+		return
+	}
+
+	return
+}
+
+// OpenErasablePair opens the filename with both reading and writing accessors
+// with the secure_delete pragma set, using MakeErasableAccessor.
+func OpenErasablePair(filename string) (p Pair, err error) {
+	p.Rdb, err = makeErasableAccessor(filename, true)
+	if err != nil {
+		return
+	}
+
+	p.Wdb, err = makeErasableAccessor(filename, false)
 	if err != nil {
 		p.Rdb.Close()
 		return

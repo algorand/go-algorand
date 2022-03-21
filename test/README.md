@@ -52,3 +52,9 @@ test/scripts/e2e.sh -i
 ```
 
 Tests in the `e2e_subs/serial` directory are executed serially instead of in parallel. This should only be used when absolutely necessary.
+
+### Updating Indexer E2E test input
+
+Indexer `make e2e` runs tests using the output of go-algorand `e2e_subs` tests as input.  The process for making new inputs available via S3 is manual.
+
+Test modifiers _must_ make a best-effort attempt to remember to upload new artifacts to S3 when modifying tests.  Here's a step-by-step process overview:  [https://github.com/algorand/indexer/blob/develop/misc/README.md](https://github.com/algorand/indexer/blob/develop/misc/README.md).

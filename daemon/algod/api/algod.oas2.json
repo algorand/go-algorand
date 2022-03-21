@@ -165,6 +165,17 @@
             "required": true
           },
           {
+            "name": "exclude",
+            "description": "When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "all",
+              "none"
+            ]
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -173,7 +184,161 @@
             "$ref": "#/responses/AccountResponse"
           },
           "400": {
-            "description": "Malformed address",
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
+        }
+      ]
+    },
+    "/v2/accounts/{address}/assets/{asset-id}": {
+      "get": {
+        "description": "Given a specific account public key and asset ID, this call returns the account's asset holding and asset parameters (if either exist). Asset parameters will only be returned if the provided address is the asset's creator.",
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information about a given asset.",
+        "operationId": "AccountAssetInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "An asset identifier",
+            "name": "asset-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountAssetResponse"
+          },
+          "400": {
+            "description": "Malformed address or asset ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
+        }
+      ]
+    },
+    "/v2/accounts/{address}/applications/{application-id}": {
+      "get": {
+        "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information about a given app.",
+        "operationId": "AccountApplicationInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountApplicationResponse"
+          },
+          "400": {
+            "description": "Malformed address or application ID",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -463,13 +628,10 @@
       }
     },
     "/v2/participation": {
-
       "get": {
-
         "tags": [
           "private"
         ],
-
         "description": "Return a list of participation keys",
         "produces": [
           "application/json"
@@ -497,7 +659,7 @@
             }
           },
           "404": {
-            "description": "Application Not Found",
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -513,14 +675,10 @@
           }
         }
       },
-
-
       "post": {
-
         "tags": [
           "private"
         ],
-
         "consumes": [
           "application/msgpack"
         ],
@@ -544,7 +702,6 @@
             }
           }
         ],
-
         "responses": {
           "200": {
             "$ref": "#/responses/PostParticipationResponse"
@@ -557,6 +714,12 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -577,30 +740,25 @@
             "description": "Unknown Error"
           }
         }
-
       }
-
     },
     "/v2/participation/{participation-id}": {
       "delete": {
-
         "tags": [
           "private"
         ],
-
-        "description": "Delete a given participation key by id",
+        "description": "Delete a given participation key by ID",
         "produces": [
           "application/json"
         ],
-
         "schemes": [
           "http"
         ],
-        "summary": "Delete a given participation key by id",
+        "summary": "Delete a given participation key by ID",
         "operationId": "DeleteParticipationKeyByID",
         "responses": {
           "200": {
-            "$ref": "#/responses/DeleteParticipationIdResponse"
+            "description": "Participation key got deleted by ID"
           },
           "400": {
             "description": "Bad Request",
@@ -610,6 +768,12 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -624,23 +788,19 @@
             "description": "Unknown Error"
           }
         }
-
       },
-
       "get": {
-
         "tags": [
           "private"
         ],
-
-        "description": "Given a participation id, return information about that participation key",
+        "description": "Given a participation ID, return information about that participation key",
         "produces": [
           "application/json"
         ],
         "schemes": [
           "http"
         ],
-        "summary": "Get participation key info by id",
+        "summary": "Get participation key info given a participation ID",
         "operationId": "GetParticipationKeyByID",
         "responses": {
           "200": {
@@ -660,7 +820,69 @@
             }
           },
           "404": {
-            "description": "Application Not Found",
+            "description": "Participation Key Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "private"
+        ],
+        "description": "Given a participation ID, append state proof keys to a particular set of participation keys",
+        "consumes": [
+          "application/msgpack"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "description": "The state proof keys to add to an existing participation ID",
+            "name": "keymap",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Append state proof keys to a participation key",
+        "operationId": "AppendKeys",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/ParticipationKeyResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Participation Key Not Found",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -951,7 +1173,7 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "produces": [
           "application/json",
           "application/msgpack"
@@ -965,7 +1187,7 @@
           {
             "pattern": "[A-Z0-9]+",
             "type": "string",
-            "description": "A transaction id",
+            "description": "A transaction ID",
             "name": "txid",
             "in": "path",
             "required": true
@@ -976,7 +1198,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
+            "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
             "schema": {
               "$ref": "#/definitions/PendingTransactionResponse"
             }
@@ -1015,7 +1237,7 @@
     },
     "/v2/applications/{application-id}": {
       "get": {
-        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
         "produces": [
           "application/json"
         ],
@@ -1078,7 +1300,7 @@
     },
     "/v2/assets/{asset-id}": {
       "get": {
-        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
+        "description": "Given a asset ID, it returns asset information including creator, name, total supply and special addresses.",
         "produces": [
           "application/json"
         ],
@@ -1141,7 +1363,7 @@
     },
     "/v2/teal/compile": {
       "post": {
-        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "consumes": [
           "text/plain"
         ],
@@ -1304,7 +1526,7 @@
     },
     "/v2/teal/dryrun": {
       "post": {
-        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
+        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "consumes": [
           "application/json",
           "application/msgpack"
@@ -1371,7 +1593,12 @@
         "pending-rewards",
         "amount-without-pending-rewards",
         "rewards",
-        "status"
+        "status",
+        "min-balance",
+        "total-apps-opted-in",
+        "total-assets-opted-in",
+        "total-created-apps",
+        "total-created-assets"
       ],
       "properties": {
         "address": {
@@ -1380,6 +1607,10 @@
         },
         "amount": {
           "description": "\\[algo\\] total number of MicroAlgos in the account",
+          "type": "integer"
+        },
+        "min-balance": {
+          "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
           "type": "integer"
         },
         "amount-without-pending-rewards": {
@@ -1392,6 +1623,10 @@
           "items": {
             "$ref": "#/definitions/ApplicationLocalState"
           }
+        },
+        "total-apps-opted-in": {
+          "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
+          "type": "integer"
         },
         "apps-total-schema": {
           "description": "\\[tsch\\] stores the sum of all of the local schemas and global schemas in this account.\n\nNote: the raw account uses `StateSchema` for this type.",
@@ -1408,6 +1643,10 @@
             "$ref": "#/definitions/AssetHolding"
           }
         },
+        "total-assets-opted-in": {
+          "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
+          "type": "integer"
+        },
         "created-apps": {
           "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -\u003e AppParams` for this type.",
           "type": "array",
@@ -1415,12 +1654,20 @@
             "$ref": "#/definitions/Application"
           }
         },
+        "total-created-apps": {
+          "description": "The count of all apps (AppParams objects) created by this account.",
+          "type": "integer"
+        },
         "created-assets": {
           "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -\u003e Asset` for this type.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Asset"
           }
+        },
+        "total-created-assets": {
+          "description": "The count of all assets (AssetParams objects) created by this account.",
+          "type": "integer"
         },
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
@@ -1493,6 +1740,11 @@
           "description": "\\[vote\\] root participation public key (if any) currently registered for this round.",
           "type": "string",
           "format": "byte"
+        },
+        "state-proof-key": {
+          "description": "\\[stprf\\] Root of the state proof key (if any)",
+          "type": "string",
+          "format": "byte"
         }
       }
     },
@@ -1518,7 +1770,6 @@
       "type": "object",
       "required": [
         "asset-id",
-        "creator",
         "amount",
         "is-frozen"
       ],
@@ -1532,10 +1783,6 @@
           "description": "Asset ID of the holding.",
           "type": "integer",
           "x-go-name": "AssetID"
-        },
-        "creator": {
-          "description": "Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.",
-          "type": "string"
         },
         "is-frozen": {
           "description": "\\[f\\] whether or not the holding is frozen.",
@@ -1926,6 +2173,13 @@
             "type": "string"
           }
         },
+        "logic-sig-disassembly": {
+          "description": "Disassembled lsig program line by line.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "logic-sig-trace": {
           "type": "array",
           "items": {
@@ -1980,7 +2234,7 @@
       ],
       "properties": {
         "data": {
-          "type": "string"
+          "type": "object"
         },
         "message": {
           "type": "string"
@@ -2386,8 +2640,55 @@
   },
   "responses": {
     "AccountResponse": {
+      "description": "AccountResponse wraps the Account type in a response.",
       "schema": {
         "$ref": "#/definitions/Account"
+      }
+    },
+    "AccountAssetResponse": {
+      "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+          },
+          "asset-holding": {
+            "description": "\\[asset\\] Details about the asset held by this account.\n\nThe raw account uses `AssetHolding` for this type.",
+            "$ref": "#/definitions/AssetHolding"
+          },
+          "created-asset": {
+            "description": "\\[apar\\] parameters of the asset created by this account.\n\nThe raw account uses `AssetParams` for this type.",
+            "$ref": "#/definitions/AssetParams"
+          }
+        }
+      }
+    },
+    "AccountApplicationResponse": {
+      "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+            },
+          "app-local-state": {
+            "description": "\\[appl\\] the application local data stored in this account.\n\nThe raw account uses `AppLocalState` for this type.",
+            "$ref": "#/definitions/ApplicationLocalState"
+          },
+          "created-app": {
+            "description": "\\[appp\\] parameters of the application created by this account including app global data.\n\nThe raw account uses `AppParams` for this type.",
+            "$ref": "#/definitions/ApplicationParams"
+          }
+        }
       }
     },
     "BlockResponse": {
@@ -2418,7 +2719,9 @@
         "required": [
           "proof",
           "stibhash",
-          "idx"
+          "idx",
+          "treedepth",
+          "hashtype"
         ],
         "properties": {
           "proof": {
@@ -2431,9 +2734,21 @@
             "type": "string",
             "format": "byte"
           },
+          "treedepth": {
+            "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+            "type": "integer"
+          },
           "idx": {
             "description": "Index of the transaction in the block's payset.",
             "type": "integer"
+          },
+          "hashtype": {
+            "enum": [
+              "sumhash",
+              "sha512_256"
+            ],
+            "type": "string",
+            "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256"
           }
         }
       }
@@ -2577,7 +2892,6 @@
         }
       }
     },
-
     "ParticipationKeysResponse": {
       "description": "A list of participation keys",
       "schema": {
@@ -2588,22 +2902,10 @@
       }
     },
     "ParticipationKeyResponse": {
-      "description": "A detailed description of a participation id",
+      "description": "A detailed description of a participation ID",
       "schema": {
-        "type": "object",
-        "required": [
-          "participationKey"
-        ],
-        "properties": {
-          "participationKey": {
-            "description": "Detailed description of a participation key",
-            "type": "string"
-          }
-        }
+        "$ref": "#/definitions/ParticipationKey"
       }
-    },
-    "DeleteParticipationIdResponse" : {
-      "description": "Participation key got deleted by ID"
     },
     "PostParticipationResponse" : {
       "description": "Participation ID of the submission",
@@ -2614,7 +2916,7 @@
         ],
         "properties": {
           "partId": {
-            "description": "encoding of the participation id.",
+            "description": "encoding of the participation ID.",
             "type": "string"
           }
         }

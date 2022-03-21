@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -169,7 +169,8 @@ func TestCompactCertParams(t *testing.T) {
 
 	hdr.Round = 4
 	res, err = CompactCertParams(votersHdr, hdr)
-	require.Equal(t, hdr.Round+1, res.SigRound)
+	require.NoError(t, err)
+	require.Equal(t, hdr.Round, res.SigRound)
 
 	// Covers all cases except overflow
 }

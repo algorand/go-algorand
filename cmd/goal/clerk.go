@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -321,7 +321,7 @@ var sendCmd = &cobra.Command{
 		var err error
 		if progByteFile != "" {
 			if programSource != "" || logicSigFile != "" {
-				reportErrorln("should at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
+				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
 			program, err = readFile(progByteFile)
 			if err != nil {
@@ -329,9 +329,9 @@ var sendCmd = &cobra.Command{
 			}
 		} else if programSource != "" {
 			if logicSigFile != "" {
-				reportErrorln("should at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
+				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
-			program = assembleFile(programSource)
+			program = assembleFile(programSource, false)
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
 		}
@@ -724,7 +724,7 @@ var signCmd = &cobra.Command{
 		}
 
 		var lsig transactions.LogicSig
-
+		var authAddr basics.Address
 		var client libgoal.Client
 		var wh []byte
 		var pw []byte
@@ -733,7 +733,7 @@ var signCmd = &cobra.Command{
 			if logicSigFile != "" {
 				reportErrorln("goal clerk sign should have at most one of --program/-p or --logic-sig/-L")
 			}
-			lsig.Logic = assembleFile(programSource)
+			lsig.Logic = assembleFile(programSource, false)
 			lsig.Args = getProgramArgs()
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
@@ -743,6 +743,11 @@ var signCmd = &cobra.Command{
 			dataDir := ensureSingleDataDir()
 			client = ensureKmdClient(dataDir)
 			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		} else if signerAddress != "" {
+			authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+			if err != nil {
+				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+			}
 		}
 
 		var outData []byte
@@ -788,6 +793,12 @@ var signCmd = &cobra.Command{
 		for _, group := range groupsOrder {
 			txnGroup := []transactions.SignedTxn{}
 			for _, txn := range txnGroups[group] {
+				if lsig.Logic != nil {
+					txn.Lsig = lsig
+					if signerAddress != "" {
+						txn.AuthAddr = authAddr
+					}
+				}
 				txnGroup = append(txnGroup, *txn)
 			}
 			var groupCtx *verify.GroupContext
@@ -801,7 +812,6 @@ var signCmd = &cobra.Command{
 			for i, txn := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
-					txn.Lsig = lsig
 					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
 					if err != nil {
 						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
@@ -925,7 +935,7 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFile(fname string) (program []byte) {
+func assembleFile(fname string, printWarnings bool) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
@@ -944,6 +954,17 @@ func assembleFile(fname string) (program []byte) {
 		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
 			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
 		}
+	}
+
+	if printWarnings && len(ops.Warnings) != 0 {
+		for _, warning := range ops.Warnings {
+			reportWarnRawln(warning.Error())
+		}
+		plural := "s"
+		if len(ops.Warnings) == 1 {
+			plural = ""
+		}
+		reportWarnRawf("%d warning%s", len(ops.Warnings), plural)
 	}
 
 	return ops.Program
@@ -995,8 +1016,6 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-			program := assembleFile(fname)
-			outblob := program
 			outname := outFilename
 			if outname == "" {
 				if fname == stdinFileNameValue {
@@ -1005,6 +1024,9 @@ var compileCmd = &cobra.Command{
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
 			}
+			shouldPrintAdditionalInfo := outname != stdoutFilenameValue
+			program := assembleFile(fname, true)
+			outblob := program
 			if signProgram {
 				dataDir := ensureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
@@ -1034,7 +1056,7 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s", outname, err)
 				}
 			}
-			if !signProgram && outname != stdoutFilenameValue {
+			if !signProgram && shouldPrintAdditionalInfo {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
@@ -1065,10 +1087,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			stxns = append(stxns, txn)
 		}
-		txgroup := make([]transactions.SignedTxn, len(stxns))
-		for i, st := range stxns {
-			txgroup[i] = st
-		}
+		txgroup := transactions.WrapSignedTxnsWithAD(stxns)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
@@ -1078,7 +1097,7 @@ var dryrunCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(err.Error())
 			}
-			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, accts, string(proto), dumpForDryrunFormat.String())
+			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -1096,22 +1115,15 @@ var dryrunCmd = &cobra.Command{
 			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
-			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: uint64(i), TxnGroup: txgroup}
-			err := logic.Check(txn.Lsig.Logic, ep)
+			ep := logic.NewEvalParams(txgroup, &params, nil)
+			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
 			}
-			sb := strings.Builder{}
-			ep = logic.EvalParams{
-				Txn:        &txn,
-				GroupIndex: uint64(i),
-				Proto:      &params,
-				Trace:      &sb,
-				TxnGroup:   txgroup,
-			}
-			pass, err := logic.Eval(txn.Lsig.Logic, ep)
+			ep.Trace = &strings.Builder{}
+			pass, err := logic.EvalSignature(i, ep)
 			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())
+			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, ep.Trace.String())
 			if pass {
 				fmt.Fprintf(os.Stdout, " - pass -\n")
 			} else {

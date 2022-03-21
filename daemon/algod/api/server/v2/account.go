@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
@@ -29,19 +30,18 @@ import (
 
 // AccountDataToAccount converts basics.AccountData to v2.generated.Account
 func AccountDataToAccount(
-	address string, record *basics.AccountData, assetsCreators map[basics.AssetIndex]string,
-	lastRound basics.Round, amountWithoutPendingRewards basics.MicroAlgos,
+	address string, record *basics.AccountData,
+	lastRound basics.Round, consensus *config.ConsensusParams,
+	amountWithoutPendingRewards basics.MicroAlgos,
 ) (generated.Account, error) {
 
 	assets := make([]generated.AssetHolding, 0, len(record.Assets))
 	for curid, holding := range record.Assets {
 		// Empty is ok, asset may have been deleted, so we can no
 		// longer fetch the creator
-		creator := assetsCreators[curid]
 		holding := generated.AssetHolding{
 			Amount:   holding.Amount,
 			AssetId:  uint64(curid),
-			Creator:  creator,
 			IsFrozen: holding.Frozen,
 		}
 
@@ -68,6 +68,10 @@ func AccountDataToAccount(
 			VoteFirstValid:            uint64(record.VoteFirstValid),
 			VoteLastValid:             uint64(record.VoteLastValid),
 			VoteKeyDilution:           uint64(record.VoteKeyDilution),
+		}
+		if !record.StateProofID.IsEmpty() {
+			tmp := record.StateProofID[:]
+			apiParticipation.StateProofKey = &tmp
 		}
 	}
 
@@ -108,6 +112,8 @@ func AccountDataToAccount(
 		return generated.Account{}, errors.New("overflow on pending reward calculation")
 	}
 
+	minBalance := record.MinBalance(consensus)
+
 	return generated.Account{
 		SigType:                     nil,
 		Round:                       uint64(lastRound),
@@ -120,12 +126,17 @@ func AccountDataToAccount(
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
+		TotalCreatedAssets:          uint64(len(createdAssets)),
 		CreatedApps:                 &createdApps,
+		TotalCreatedApps:            uint64(len(createdApps)),
 		Assets:                      &assets,
+		TotalAssetsOptedIn:          uint64(len(assets)),
 		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
+		TotalAppsOptedIn:            uint64(len(appsLocalState)),
 		AppsTotalSchema:             &totalAppSchema,
 		AppsTotalExtraPages:         numOrNil(totalExtraPages),
+		MinBalance:                  minBalance.Raw,
 	}, nil
 }
 

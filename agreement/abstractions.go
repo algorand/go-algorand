@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -224,7 +224,7 @@ type KeyManager interface {
 	// VotingKeys returns an immutable array of voting keys that are
 	// valid for the provided votingRound, and were available at
 	// keysRound.
-	VotingKeys(votingRound, keysRound basics.Round) []account.Participation
+	VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound
 
 	// Record indicates that the given participation action has been taken.
 	// The operation needs to be asynchronous to avoid impacting agreement.

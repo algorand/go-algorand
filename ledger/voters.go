@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -150,7 +150,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	return
 }
 
-// close waits until all the internal spawned go-rouines are done before returning, allowing clean
+// close waits until all the internal spawned go-routines are done before returning, allowing clean
 // shutdown.
 func (vt *votersTracker) close() {
 	vt.loadWaitGroup.Wait()

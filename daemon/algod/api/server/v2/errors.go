@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,15 @@ package v2
 var (
 	errAppDoesNotExist                         = "application does not exist"
 	errAssetDoesNotExist                       = "asset does not exist"
+	errAccountAppDoesNotExist                  = "account application info not found"
+	errAccountAssetDoesNotExist                = "account asset info not found"
 	errFailedLookingUpLedger                   = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool          = "failed to retrieve information from the transaction pool"
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"
 	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
 	errFailedParsingFormatOption               = "failed to parse the format option"
 	errFailedToParseAddress                    = "failed to parse the address"
+	errFailedToParseExclude                    = "failed to parse exclude"
 	errFailedToParseTransaction                = "failed to parse transaction"
 	errFailedToParseBlock                      = "failed to parse block"
 	errFailedToParseCert                       = "failed to parse cert"

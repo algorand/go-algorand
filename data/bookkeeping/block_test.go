@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,15 +17,19 @@
 package bookkeeping
 
 import (
+	"bytes"
+	"math"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -248,19 +252,29 @@ func TestTime(t *testing.T) {
 func TestRewardsLevel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	var prev Block
 	prev.RewardsLevel = 1
 	prev.RewardsRate = 10
 
 	rewardUnits := uint64(10)
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, log)
 	require.Equal(t, uint64(2), state.RewardsLevel)
 	require.Equal(t, uint64(0), state.RewardsResidue)
+
+	assert.Zero(t, buf.Len())
 }
 
 func TestRewardsLevelWithResidue(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -270,13 +284,19 @@ func TestRewardsLevelWithResidue(t *testing.T) {
 	prev.RewardsRate = 1
 
 	rewardUnits := uint64(10)
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, log)
 	require.Equal(t, uint64(11), state.RewardsLevel)
 	require.Equal(t, uint64(0), state.RewardsResidue)
+
+	assert.Zero(t, buf.Len())
 }
 
 func TestRewardsLevelNoUnits(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -285,13 +305,19 @@ func TestRewardsLevelNoUnits(t *testing.T) {
 	prev.RewardsResidue = 2
 
 	rewardUnits := uint64(0)
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, log)
 	require.Equal(t, prev.RewardsLevel, state.RewardsLevel)
 	require.Equal(t, prev.RewardsResidue, state.RewardsResidue)
+
+	assert.Zero(t, buf.Len())
 }
 
 func TestTinyLevel(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -300,12 +326,18 @@ func TestTinyLevel(t *testing.T) {
 	prev.RewardsRate = 10 * unitsInAlgos
 	algosInSystem := uint64(1000 * 1000 * 1000)
 	rewardUnits := algosInSystem * unitsInAlgos / proto.RewardUnit
-	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits)
+	state := prev.NextRewardsState(prev.Round()+1, proto, basics.MicroAlgos{}, rewardUnits, log)
 	require.True(t, state.RewardsLevel > 0 || state.RewardsResidue > 0)
+
+	assert.Zero(t, buf.Len())
 }
 
 func TestRewardsRate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
 
 	var prev Block
 	prev.RewardsLevel = 1
@@ -318,13 +350,19 @@ func TestRewardsRate(t *testing.T) {
 	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * uint64(proto.RewardsRateRefreshInterval)}
 
 	// make sure that RewardsRate stays the same
-	state := prev.NextRewardsState(prev.Round()+1, proto, incentivePoolBalance, 0)
+	state := prev.NextRewardsState(prev.Round()+1, proto, incentivePoolBalance, 0, log)
 	require.Equal(t, prev.RewardsRate, state.RewardsRate)
 	require.Equal(t, prev.BlockHeader.RewardsRecalculationRound, state.RewardsRecalculationRound)
+
+	assert.Zero(t, buf.Len())
 }
 
 func TestRewardsRateRefresh(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
 
 	var prev Block
 	prev.RewardsLevel = 1
@@ -337,9 +375,11 @@ func TestRewardsRateRefresh(t *testing.T) {
 	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * uint64(proto.RewardsRateRefreshInterval)}
 	// make sure that RewardsRate was recomputed
 	nextRound := prev.Round() + 1
-	state := prev.NextRewardsState(nextRound, proto, incentivePoolBalance, 0)
+	state := prev.NextRewardsState(nextRound, proto, incentivePoolBalance, 0, log)
 	require.Equal(t, (incentivePoolBalance.Raw-proto.MinBalance)/uint64(proto.RewardsRateRefreshInterval), state.RewardsRate)
 	require.Equal(t, nextRound+basics.Round(proto.RewardsRateRefreshInterval), state.RewardsRecalculationRound)
+
+	assert.Zero(t, buf.Len())
 }
 
 func TestEncodeDecodeSignedTxn(t *testing.T) {
@@ -412,8 +452,13 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.RewardsCalculationFix = false
 
 	runTest := func() bool {
+		var buf bytes.Buffer
+		log := logging.NewLogger()
+		log.SetOutput(&buf)
+
 		incentivePoolBalance := uint64(125000000000000)
 		totalRewardUnits := uint64(10000000000)
 		require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
@@ -429,7 +474,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 			curRewardsState.RewardsRate = incentivePoolBalance / uint64(consensusParams.RewardsRateRefreshInterval)
 		}
 		for rnd := 1; rnd < int(consensusParams.RewardsRateRefreshInterval+2); rnd++ {
-			nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits)
+			nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits, log)
 			// adjust the incentive pool balance
 			var ot basics.OverflowTracker
 
@@ -450,6 +495,8 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 			// prepare for the next iteration
 			curRewardsState = nextRewardState
 		}
+
+		assert.Zero(t, buf.Len())
 		return true
 	}
 
@@ -460,4 +507,265 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 	// test expected success
 	consensusParams.InitialRewardsRateCalculation = true
 	require.True(t, runTest())
+}
+
+func performRewardsRateCalculation(
+	t *testing.T, consensusParams config.ConsensusParams,
+	curRewardsState RewardsState,
+	incentivePoolBalance uint64, totalRewardUnits uint64, startingRound uint64, overspends bool, logs bool) {
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+	defer func() {
+		require.Equal(t, logs, buf.Len() != 0)
+	}()
+
+	require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
+
+	for rnd := startingRound; rnd < startingRound+uint64(consensusParams.RewardsRateRefreshInterval)*3; rnd++ {
+		nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits, log)
+		// adjust the incentive pool balance
+		var ot basics.OverflowTracker
+
+		// get number of rewards per unit
+		rewardsPerUnit := ot.Sub(nextRewardState.RewardsLevel, curRewardsState.RewardsLevel)
+		require.False(t, ot.Overflowed)
+
+		// subtract the total dispersed funds from the pool balance
+		incentivePoolBalance = ot.Sub(incentivePoolBalance, ot.Mul(totalRewardUnits, rewardsPerUnit))
+		if ot.Overflowed {
+			require.True(t, overspends)
+			return
+		}
+
+		if incentivePoolBalance < consensusParams.MinBalance {
+			require.True(t, overspends)
+			return
+		}
+
+		// prepare for the next iteration
+		curRewardsState = nextRewardState
+	}
+
+	require.False(t, overspends)
+}
+
+func TestNextRewardsRateWithFix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+
+	tests := []struct {
+		name                      string
+		rewardsRate               uint64
+		rewardsLevel              uint64
+		rewardsResidue            uint64
+		rewardsRecalculationRound basics.Round
+		incentivePoolBalance      uint64
+		totalRewardUnits          uint64
+		startingRound             uint64
+		logs                      bool
+	}{
+		{"zero_rate", 0, 215332, 0, 18500000, proto.MinBalance, 6756334087, 18063999, false},
+		// 3 subtests below use parameters found in the block header `startingRound` - 1.
+		{"mainnet_0", 24000000, 215332, 545321700, 18500000, 10464550021728, 6756334087,
+			18063999, true},
+		{"mainnet_1", 24000000, 215332, 521321700, 18500000, 10464550021728, 6756334078,
+			18063998, true},
+		{"mainnet_2", 24000000, 215332, 425321700, 18500000, 10464550021728, 6756334079,
+			18063994, true},
+		{"no_residue", 0, 0, 0, 1000000,
+			proto.MinBalance + 500000000000 /* 5*10^11 */, 1, 1000000, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			curRewardsState := RewardsState{
+				RewardsLevel:              test.rewardsLevel,
+				RewardsResidue:            test.rewardsResidue,
+				RewardsRecalculationRound: test.rewardsRecalculationRound,
+				RewardsRate:               test.rewardsRate,
+			}
+
+			performRewardsRateCalculation(
+				t, proto, curRewardsState, test.incentivePoolBalance, test.totalRewardUnits,
+				test.startingRound, false, test.logs)
+		})
+	}
+}
+
+func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = false
+
+	curRewardsState := RewardsState{
+		RewardsLevel:              0,
+		RewardsResidue:            0,
+		RewardsRecalculationRound: 1000000,
+		RewardsRate:               0,
+	}
+
+	performRewardsRateCalculation(
+		t, proto, curRewardsState, proto.MinBalance+500000000000,
+		1, 1000000, true, false)
+}
+
+func TestNextRewardsRateWithFixUsesNewRate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 1
+	proto.RewardsRateRefreshInterval = 10
+
+	state := RewardsState{
+		RewardsLevel:              4,
+		RewardsRate:               80,
+		RewardsResidue:            2,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound, proto, basics.MicroAlgos{Raw: 113}, 10, log)
+
+	expected := RewardsState{
+		RewardsLevel:              5,
+		RewardsRate:               11,
+		RewardsResidue:            3,
+		RewardsRecalculationRound: 110,
+	}
+	assert.Equal(t, expected, newState)
+
+	assert.Zero(t, buf.Len())
+}
+
+func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 10
+
+	state := RewardsState{
+		RewardsLevel:              4,
+		RewardsRate:               80,
+		RewardsResidue:            21,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound, proto, basics.MicroAlgos{Raw: 19}, 10, log)
+
+	expected := RewardsState{
+		RewardsLevel:              6,
+		RewardsRate:               0,
+		RewardsResidue:            1,
+		RewardsRecalculationRound: 100 + basics.Round(proto.RewardsRateRefreshInterval),
+	}
+	assert.Equal(t, expected, newState)
+
+	assert.Contains(
+		t, string(buf.Bytes()), "overflowed when trying to refresh RewardsRate")
+}
+
+func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 10
+
+	state := RewardsState{
+		RewardsLevel:              4,
+		RewardsRate:               80,
+		RewardsResidue:            math.MaxUint64,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound, proto, basics.MicroAlgos{Raw: 9009}, 10, log)
+
+	expected := RewardsState{
+		RewardsLevel:              4 + math.MaxUint64/10,
+		RewardsRate:               0,
+		RewardsResidue:            math.MaxUint64 % 10,
+		RewardsRecalculationRound: 100 + basics.Round(proto.RewardsRateRefreshInterval),
+	}
+	assert.Equal(t, expected, newState)
+
+	assert.Contains(
+		t, string(buf.Bytes()),
+		"overflowed when trying to accumulate MinBalance(10) and "+
+			"RewardsResidue(18446744073709551615)")
+}
+
+func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 10
+
+	state := RewardsState{
+		RewardsLevel:              4,
+		RewardsRate:               80,
+		RewardsResidue:            math.MaxUint64,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound-1, proto, basics.MicroAlgos{Raw: 0}, 1, log)
+	assert.Equal(t, state, newState)
+
+	assert.Contains(t, string(buf.Bytes()), "could not compute next reward level")
+}
+
+func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
+	require.True(t, ok)
+	proto.RewardsCalculationFix = true
+	proto.MinBalance = 10
+
+	state := RewardsState{
+		RewardsLevel:              math.MaxUint64,
+		RewardsRate:               0,
+		RewardsResidue:            1,
+		RewardsRecalculationRound: 100,
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	newState := state.NextRewardsState(
+		state.RewardsRecalculationRound-1, proto, basics.MicroAlgos{Raw: 1000}, 1, log)
+	assert.Equal(t, state, newState)
+
+	assert.Contains(t, string(buf.Bytes()), "could not compute next reward level")
 }

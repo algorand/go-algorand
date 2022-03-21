@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,4 +85,9 @@ func (m *Monotonic) Decode(data []byte) (Clock, error) {
 
 func (m *Monotonic) String() string {
 	return time.Time(m.zero).String()
+}
+
+// Since returns the time that has passed between the time the clock was last zeroed out and now
+func (m *Monotonic) Since() time.Duration {
+	return time.Since(m.zero)
 }

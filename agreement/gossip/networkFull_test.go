@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 
 	logging.Base().SetLevel(logging.Debug)
 	// increase limit on max allowed number of sockets
-	err := util.RaiseRlimit(500)
+	err := util.SetFdSoftLimit(500)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -46,11 +46,9 @@ func TestMain(m *testing.M) {
 }
 
 // create a fully connected network of size `nodesCount`
-func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounter) {
-	cfg := config.GetDefaultLocal()
+func spinNetwork(t *testing.T, nodesCount int, cfg config.Local) ([]*networkImpl, []*messageCounter) {
 	cfg.GossipFanout = nodesCount - 1
 	cfg.NetAddress = "127.0.0.1:0"
-	cfg.IncomingConnectionsLimit = -1
 	cfg.IncomingMessageFilterBucketCount = 5
 	cfg.IncomingMessageFilterBucketSize = 32
 	cfg.OutgoingMessageFilterBucketCount = 3
@@ -81,7 +79,7 @@ func spinNetwork(t *testing.T, nodesCount int) ([]*networkImpl, []*messageCounte
 	networkImpls := []*networkImpl{}
 	msgCounters := []*messageCounter{}
 	for _, gossipNode := range gossipNodes {
-		networkImpl := WrapNetwork(gossipNode, log).(*networkImpl)
+		networkImpl := WrapNetwork(gossipNode, log, cfg).(*networkImpl)
 		networkImpls = append(networkImpls, networkImpl)
 		networkImpl.Start()
 		msgCounter := startMessageCounter(networkImpl)
@@ -145,10 +143,10 @@ func TestNetworkImplFullStackQuick(t *testing.T) {
 	testNetworkImplFull(t, 5)
 }
 
-func testNetworkImplAgreementVote(t *testing.T, nodesCount int) {
+func testNetworkImplAgreementVote(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	nets[0].Broadcast(protocol.AgreementVoteTag, []byte{1})
@@ -164,10 +162,10 @@ func testNetworkImplAgreementVote(t *testing.T, nodesCount int) {
 	}
 }
 
-func testNetworkImplProposalPayload(t *testing.T, nodesCount int) {
+func testNetworkImplProposalPayload(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	nets[0].Broadcast(protocol.ProposalPayloadTag, []byte{1})
@@ -183,10 +181,10 @@ func testNetworkImplProposalPayload(t *testing.T, nodesCount int) {
 	}
 }
 
-func testNetworkImplVoteBundle(t *testing.T, nodesCount int) {
+func testNetworkImplVoteBundle(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	nets[0].Broadcast(protocol.VoteBundleTag, []byte{1})
@@ -202,10 +200,10 @@ func testNetworkImplVoteBundle(t *testing.T, nodesCount int) {
 	}
 }
 
-func testNetworkImplMixed(t *testing.T, nodesCount int) {
+func testNetworkImplMixed(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	nets[0].Broadcast(protocol.AgreementVoteTag, []byte{1})
@@ -226,10 +224,10 @@ func testNetworkImplMixed(t *testing.T, nodesCount int) {
 	}
 }
 
-func testNetworkImplMixed2(t *testing.T, nodesCount int) {
+func testNetworkImplMixed2(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	const loadSize = 12
@@ -259,10 +257,10 @@ func testNetworkImplMixed2(t *testing.T, nodesCount int) {
 	}
 }
 
-func testNetworkImplReordered(t *testing.T, nodesCount int) {
+func testNetworkImplReordered(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	sendStart := time.Now()
@@ -301,10 +299,10 @@ func testNetworkImplReordered(t *testing.T, nodesCount int) {
 	}
 }
 
-func testNetworkImplMultisource(t *testing.T, nodesCount int) {
+func testNetworkImplMultisource(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	for i := byte(0); i < byte(nodesCount); i++ {
@@ -318,10 +316,10 @@ func testNetworkImplMultisource(t *testing.T, nodesCount int) {
 	}
 }
 
-func testNetworkImplRebroadcast(t *testing.T, nodesCount int) {
+func testNetworkImplRebroadcast(t *testing.T, nodesCount int, cfg config.Local) {
 	t.Logf("%s start", t.Name())
 	defer t.Logf("%s end", t.Name())
-	nets, counters := spinNetwork(t, nodesCount)
+	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
 	rebroadcastNodes := nodesCount
@@ -363,38 +361,39 @@ func testNetworkImplFull(t *testing.T, nodesCount int) {
 	// through. Production code will drop messages sometimes,
 	// which is a different test of logic that agremeent needs to
 	// deal with.
-	voteBufferSize = 100
-	proposalBufferSize = 100
-	bundleBufferSize = 100
+	cfg := config.GetDefaultLocal()
+	cfg.AgreementIncomingVotesQueueLength = 100
+	cfg.AgreementIncomingProposalsQueueLength = 100
+	cfg.AgreementIncomingBundlesQueueLength = 100
 	t.Run("AgreementVoteTag", func(t *testing.T) {
-		testNetworkImplAgreementVote(t, nodesCount)
+		testNetworkImplAgreementVote(t, nodesCount, cfg)
 	})
 
 	t.Run("ProposalPayloadTag", func(t *testing.T) {
-		testNetworkImplProposalPayload(t, nodesCount)
+		testNetworkImplProposalPayload(t, nodesCount, cfg)
 	})
 
 	t.Run("VoteBundleTag", func(t *testing.T) {
-		testNetworkImplVoteBundle(t, nodesCount)
+		testNetworkImplVoteBundle(t, nodesCount, cfg)
 	})
 
 	t.Run("MixedTags", func(t *testing.T) {
-		testNetworkImplMixed(t, nodesCount)
+		testNetworkImplMixed(t, nodesCount, cfg)
 	})
 
 	t.Run("MixedTags2", func(t *testing.T) {
-		testNetworkImplMixed2(t, nodesCount)
+		testNetworkImplMixed2(t, nodesCount, cfg)
 	})
 
 	t.Run("Reordered", func(t *testing.T) {
-		testNetworkImplReordered(t, nodesCount)
+		testNetworkImplReordered(t, nodesCount, cfg)
 	})
 
 	t.Run("Multisource", func(t *testing.T) {
-		testNetworkImplMultisource(t, nodesCount)
+		testNetworkImplMultisource(t, nodesCount, cfg)
 	})
 
 	t.Run("Rebroadcast", func(t *testing.T) {
-		testNetworkImplRebroadcast(t, nodesCount)
+		testNetworkImplRebroadcast(t, nodesCount, cfg)
 	})
 }

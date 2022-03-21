@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,6 +69,10 @@ func (c *testingClock) Zero() timers.Clock {
 	c.TA = make(map[time.Duration]chan time.Time)
 	c.monitor.clearClock()
 	return c
+}
+
+func (c *testingClock) Since() time.Duration {
+	return 0
 }
 
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {

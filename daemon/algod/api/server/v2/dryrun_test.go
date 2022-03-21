@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -381,9 +382,34 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 	} else if response.Txns[0].AppCallMessages == nil || len(*response.Txns[0].AppCallMessages) < 1 {
 		t.Error("no response app msg")
 	} else {
-		messages := *response.Txns[0].AppCallMessages
-		assert.GreaterOrEqual(t, len(messages), 1)
-		assert.Equal(t, "PASS", messages[len(messages)-1])
+		assert.NotNil(t, response.Txns[0].AppCallMessages)
+		for idx := range response.Txns {
+			if response.Txns[idx].AppCallMessages != nil {
+				messages := *response.Txns[idx].AppCallMessages
+				assert.GreaterOrEqual(t, len(messages), 1)
+				assert.Equal(t, "PASS", messages[len(messages)-1])
+			}
+		}
+	}
+}
+
+type expectedSlotType struct {
+	slot int
+	tt   basics.TealType
+}
+
+func checkAppCallScratchType(t *testing.T, response *generated.DryrunResponse, txnIdx int, expected []expectedSlotType) {
+	txn := response.Txns[txnIdx]
+	// We should have a trace
+	assert.NotNil(t, txn.AppCallTrace)
+	// The first stack entry should be nil since we haven't stored anything in scratch yet
+	assert.Nil(t, (*txn.AppCallTrace)[0].Scratch)
+	// Last one should be not nil, we should have some number of scratch vars
+	traceLine := (*txn.AppCallTrace)[len(*txn.AppCallTrace)-1]
+	assert.NotNil(t, traceLine.Scratch)
+	for _, exp := range expected {
+		// The TealType at the given slot index should match what we expect
+		assert.Equal(t, exp.tt, basics.TealType((*traceLine.Scratch)[exp.slot].Type))
 	}
 }
 
@@ -1365,35 +1391,24 @@ int 1`
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
-	app, err := basics.UnmarshalChecksumAddress("6BPQU5WNZMTO4X72A2THZCGNJNTTE7YL6AWCYSUUTZEIYMJSEPJCQQ6DQI")
-	a.NoError(err)
 
 	// make balance records
 	appIdx := basics.AppIndex(100)
 	dr := DryrunRequest{
-		Txns: []transactions.SignedTxn{{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: transactions.Header{
-					Sender: sender,
-					Fee:    basics.MicroAlgos{Raw: 100},
-					Note:   []byte{1, 2, 3},
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: appIdx,
-				},
+		ProtocolVersion: string(dryrunProtoVersion),
+		Txns: []transactions.SignedTxn{txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender,
+			ApplicationID: appIdx,
+		}.SignedTxn()},
+		Apps: []generated.Application{{
+			Id: uint64(appIdx),
+			Params: generated.ApplicationParams{
+				Creator:           sender.String(),
+				ApprovalProgram:   approval,
+				ClearStateProgram: clst,
 			},
 		}},
-		Apps: []generated.Application{
-			{
-				Id: uint64(appIdx),
-				Params: generated.ApplicationParams{
-					Creator:           sender.String(),
-					ApprovalProgram:   approval,
-					ClearStateProgram: clst,
-				},
-			},
-		},
 		Accounts: []generated.Account{
 			{
 				Address:                     sender.String(),
@@ -1402,23 +1417,16 @@ int 1`
 				AmountWithoutPendingRewards: 10000000,
 			},
 			{
-				Address:                     app.String(),
+				Address:                     appIdx.Address().String(),
 				Status:                      "Offline",
 				Amount:                      10000000,
 				AmountWithoutPendingRewards: 10000000,
 			},
-			{
-				Address: basics.Address{}.String(),
-				Status:  "Offline",
-			},
 		},
 	}
 
-	dr.ProtocolVersion = string(dryrunProtoVersion)
-
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
-	require.NoError(t, err)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
@@ -1480,6 +1488,149 @@ int 0
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
 	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
+
+func TestDryrunInnerPay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	paySender, err := logic.AssembleString(`
+#pragma version 5
+itxn_begin
+int pay
+itxn_field TypeEnum
+txn Sender
+itxn_field Receiver
+int 10
+itxn_field Amount
+itxn_submit
+int 1
+`)
+	require.NoError(t, err)
+
+	ops, err := logic.AssembleString("int 1")
+	clst := ops.Program
+	require.NoError(t, err)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(7)
+	dr := DryrunRequest{
+		ProtocolVersion: string(dryrunProtoVersion),
+		Txns: []transactions.SignedTxn{txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender,
+			ApplicationID: appIdx,
+		}.SignedTxn()},
+		Apps: []generated.Application{{
+			Id: uint64(appIdx),
+			Params: generated.ApplicationParams{
+				ApprovalProgram:   paySender.Program,
+				ClearStateProgram: clst,
+			},
+		}},
+		// Sender must exist (though no fee is ever taken)
+		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
+		Accounts: []generated.Account{
+			{Address: sender.String(), Status: "Offline"},                                                // sender
+			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: 1_010}}, // app account
+	}
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
+
+func TestDryrunScratchSpace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	approvalOps, err := logic.AssembleString(`
+#pragma version 5
+txn GroupIndex
+int 3
+==
+bnz checkgload
+pushint 123
+store 0
+pushbytes "def"
+store 251
+pushint 123
+store 252
+pushbytes "abc"
+store 253
+txn GroupIndex
+store 254
+b exit
+checkgload:
+int 0
+gloads 254
+int 0
+==
+int 1
+gloads 254
+int 1
+==
+&&
+int 2
+gloads 254
+int 2
+==
+&&
+assert
+exit:
+int 1`)
+	require.NoError(t, err)
+
+	ops, err := logic.AssembleString("int 1")
+	clst := ops.Program
+	require.NoError(t, err)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	txns := make([]transactions.SignedTxn, 0, 4)
+	apps := make([]generated.Application, 0, 4)
+	for appIdx := basics.AppIndex(1); appIdx <= basics.AppIndex(4); appIdx++ {
+		txns = append(txns, txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender,
+			ApplicationID: appIdx}.SignedTxn())
+		apps = append(apps, generated.Application{
+			Id: uint64(appIdx),
+			Params: generated.ApplicationParams{
+				ApprovalProgram:   approvalOps.Program,
+				ClearStateProgram: clst,
+			},
+		})
+	}
+	dr := DryrunRequest{
+		ProtocolVersion: string(dryrunProtoVersion),
+		Txns:            txns,
+		Apps:            apps,
+		Accounts: []generated.Account{
+			{Address: sender.String(), Status: "Offline", Amount: 100_000_000}, // sender
+		},
+	}
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+
+	checkAppCallScratchType(t, &response, 1, []expectedSlotType{
+		{0, basics.TealUintType},
+		{1, basics.TealType(0)},
+		{251, basics.TealBytesType},
+		{252, basics.TealUintType},
+		{253, basics.TealBytesType},
+		{254, basics.TealUintType},
+	})
+
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,17 @@
 package basics
 
 import (
+	"encoding/binary"
+	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
+)
+
+const (
+	// ErrIndexOutOfBound returned when an index is out of the array's bound
+	ErrIndexOutOfBound = "pos %d past end %d"
 )
 
 // A Participant corresponds to an account whose AccountData.Status
@@ -33,18 +42,46 @@ import (
 type Participant struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// PK is AccountData.VoteID.
-	PK crypto.OneTimeSignatureVerifier `codec:"p"`
+	// PK is the identifier used to verify the signature for a specific participant
+	PK merklesignature.Verifier `codec:"p"`
 
 	// Weight is AccountData.MicroAlgos.
 	Weight uint64 `codec:"w"`
-
-	// KeyDilution is AccountData.KeyDilution() with the protocol for sigRound
-	// as expected by the Builder.
-	KeyDilution uint64 `codec:"d"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
+// In order to create a more SNARK-friendly commitments on the signature we must avoid using the msgpack infrastructure.
+// msgpack creates a compressed representation of the struct which might be varied in length, which will
+// be bad for creating SNARK
 func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertPart, protocol.Encode(&p)
+
+	weightAsBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(weightAsBytes, p.Weight)
+
+	publicKeyBytes := p.PK
+
+	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes))
+	partCommitment = append(partCommitment, weightAsBytes...)
+	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+
+	return protocol.CompactCertPart, partCommitment
+}
+
+// ParticipantsArray implements merklearray.Array and is used to commit
+// to a Merkle tree of online accounts.
+//msgp:ignore ParticipantsArray
+type ParticipantsArray []Participant
+
+// Length returns the ledger of the array.
+func (p ParticipantsArray) Length() uint64 {
+	return uint64(len(p))
+}
+
+// Marshal Returns the hash for the given position.
+func (p ParticipantsArray) Marshal(pos uint64) (crypto.Hashable, error) {
+	if pos >= uint64(len(p)) {
+		return nil, fmt.Errorf(ErrIndexOutOfBound, pos, len(p))
+	}
+
+	return p[pos], nil
 }

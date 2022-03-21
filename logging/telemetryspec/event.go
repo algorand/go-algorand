@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -73,9 +73,11 @@ const BlockAcceptedEvent Event = "BlockAccepted"
 
 // BlockAcceptedEventDetails contains details for the BlockAcceptedEvent
 type BlockAcceptedEventDetails struct {
-	Address string
-	Hash    string
-	Round   uint64
+	Address      string
+	Hash         string
+	Round        uint64
+	ValidatedAt  time.Duration
+	PreValidated bool
 }
 
 // TopAccountsEvent event

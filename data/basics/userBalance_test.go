@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -108,6 +109,8 @@ func makeString(len int) string {
 func getSampleAccountData() AccountData {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID[:])
 
 	return AccountData{
 		Status:             NotParticipating,
@@ -116,6 +119,7 @@ func getSampleAccountData() AccountData {
 		RewardedMicroAlgos: MicroAlgos{},
 		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
 		SelectionID:        vrfSecrets.PK,
+		StateProofID:       stateProofID,
 		VoteFirstValid:     Round(0x1234123412341234),
 		VoteLastValid:      Round(0x1234123412341234),
 		VoteKeyDilution:    0x1234123412341234,
@@ -190,8 +194,11 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		}
 		maxLocalState[maxKey] = maxValue
 	}
-
-	for appCreatorApps := 0; appCreatorApps < currentConsensusParams.MaxAppsCreated; appCreatorApps++ {
+	maxAppsCreate := currentConsensusParams.MaxAppsCreated
+	if maxAppsCreate == 0 {
+		maxAppsCreate = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	}
+	for appCreatorApps := 0; appCreatorApps < maxAppsCreate; appCreatorApps++ {
 		ap := AppParams{
 			ApprovalProgram:   maxProg,
 			ClearStateProgram: maxProg,
@@ -204,7 +211,11 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.AppParams[AppIndex(0x1234123412341234-appCreatorApps)] = ap
 	}
 
-	for appHolderApps := 0; appHolderApps < currentConsensusParams.MaxAppsOptedIn; appHolderApps++ {
+	maxAppsOptedIn := currentConsensusParams.MaxAppsOptedIn
+	if maxAppsOptedIn == 0 {
+		maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
+	}
+	for appHolderApps := 0; appHolderApps < maxAppsOptedIn; appHolderApps++ {
 		ls := AppLocalState{
 			KeyValue: maxLocalState,
 			Schema:   maxStateSchema,
@@ -222,13 +233,13 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
 	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
+		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
 			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsCreated > EncodedMaxAppParams {
+		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > EncodedMaxAppParams {
 			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
+		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
 			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
 		}
 		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {

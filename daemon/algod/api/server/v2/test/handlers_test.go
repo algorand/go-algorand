@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,9 +30,11 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -122,7 +124,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	l := handler.Node.Ledger()
+	l := handler.Node.LedgerForAPI()
 
 	genBlk, err := l.Block(0)
 	require.NoError(t, err)
@@ -167,7 +169,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, l.Latest(), totalsRound)
 	totalRewardUnits := totals.RewardUnits()
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	require.NoError(t, err)
 
 	var blk bookkeeping.Block
@@ -177,7 +179,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 		Round:        l.Latest() + 1,
 		Branch:       genBlk.Hash(),
 		TimeStamp:    0,
-		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: genBlk.UpgradeState,
 	}
 
@@ -194,7 +196,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	blk.TxnRoot, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
-	err = l.AddBlock(blk, agreement.Certificate{})
+	err = l.(*data.Ledger).AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
@@ -522,7 +524,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
-		Node:     &mockNode,
+		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
 	}
@@ -562,7 +564,7 @@ func tealDryrunTest(
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
-		Node:     &mockNode,
+		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
 	}
@@ -671,4 +673,127 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
+}
+
+func TestAppendParticipationKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
+	defer releasefunc()
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: make(chan struct{}),
+	}
+
+	id := account.ParticipationID{}
+	id[0] = 10
+
+	t.Run("Happy path", func(t *testing.T) {
+		// Create test object to append.
+		keys := make(account.StateProofKeys, 2)
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
+
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
+
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, id, mockNode.id)
+		require.Len(t, mockNode.keys, 2)
+		require.Equal(t, mockNode.keys[0].Round, keys[0].Round)
+		require.Equal(t, mockNode.keys[0].Key, keys[0].Key)
+
+		require.Equal(t, mockNode.keys[1].Round, keys[1].Round)
+		require.Equal(t, mockNode.keys[1].Key, keys[1].Key)
+
+	})
+
+	t.Run("Invalid body", func(t *testing.T) {
+		// Create request with bogus bytes in the body
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte{0x99, 0x88, 0x77}))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "unable to parse keys from body: msgpack decode error")
+	})
+
+	t.Run("Empty body", func(t *testing.T) {
+		// Create test object with no keys to append.
+		keys := make(account.StateProofKeys, 0)
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "empty request, please attach keys to request body")
+	})
+
+	t.Run("Internal error", func(t *testing.T) {
+		// Create mock node with an error.
+		expectedErr := errors.New("expected error")
+		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr)
+		handler := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: make(chan struct{}),
+		}
+
+		keys := make(account.StateProofKeys, 2)
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
+
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
+
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
+		keyBytes := protocol.Encode(keys)
+
+		// Put keys in the body.
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(keyBytes))
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		// Call handler with request.
+		err := handler.AppendKeys(c, id.String())
+
+		// Verify that request was properly received and deserialized.
+		require.NoError(t, err)
+		require.Equal(t, http.StatusInternalServerError, rec.Code)
+		require.Contains(t, rec.Body.String(), expectedErr.Error())
+	})
 }

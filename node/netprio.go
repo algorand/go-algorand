@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -67,7 +67,7 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	// Find the participation key that has the highest weight in the
 	// latest round.
 	var maxWeight uint64
-	var maxPart account.Participation
+	var maxPart account.ParticipationRecordForRound
 
 	latest := node.ledger.LastRound()
 	proto, err := node.ledger.ConsensusParams(latest)
@@ -79,7 +79,7 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	// it's unlikely to be deleted from underneath of us.
 	voteRound := latest + 2
 	for _, part := range node.accountManager.Keys(voteRound) {
-		parent := part.Address()
+		parent := part.Account
 		data, err := node.ledger.LookupAgreement(latest, parent)
 		if err != nil {
 			continue
@@ -97,10 +97,10 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	}
 
 	signer := maxPart.VotingSigner()
-	ephID := basics.OneTimeIDForRound(voteRound, signer.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(voteRound, signer.KeyDilution(proto.DefaultKeyDilution))
 
 	rs.Round = voteRound
-	rs.Sender = maxPart.Address()
+	rs.Sender = maxPart.Account
 	rs.Sig = signer.Sign(ephID, rs.Response)
 
 	return protocol.Encode(&rs)
@@ -131,7 +131,7 @@ func (node *AlgorandFullNode) VerifyPrioResponse(challenge string, response []by
 	}
 
 	ephID := basics.OneTimeIDForRound(rs.Round, data.KeyDilution(proto))
-	if !data.VoteID.Verify(ephID, rs.Response, rs.Sig) {
+	if !data.VoteID.Verify(ephID, rs.Response, rs.Sig, proto.EnableBatchVerification) {
 		err = fmt.Errorf("signature verification failure")
 		return
 	}

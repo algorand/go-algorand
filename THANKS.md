@@ -4,15 +4,18 @@
 A big thank you to everyone who has contributed to the `go-algorand` codebase.
 
 ### External Contributors
-In no particular order:
-- zacharyestep
-- jecassis
-- mxmauro
-- scnale
-- jsign
-- RomitKumar
-- jeapostrophe
 - aybehrouz
+- fionnachan
+- jeapostrophe
+- jecassis
+- jsign
+- Matt-Ryley
+- mxmauro
+- Olshansk
+- qkniep
+- RomitKumar
+- scnale
+- zacharyestep
 
 ### Bug Reports
 - Nanyan

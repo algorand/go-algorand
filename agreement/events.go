@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -930,5 +931,10 @@ func (e checkpointEvent) ConsensusRound() round {
 }
 
 func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
+	return e
+}
+
+func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
+	e.Input.Proposal.validatedAt = d
 	return e
 }

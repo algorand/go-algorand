@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,7 +108,6 @@ func init() {
 	defaultConfig.GossipFanout = 4
 	defaultConfig.NetAddress = "127.0.0.1:0"
 	defaultConfig.BaseLoggerDebugLevel = uint32(logging.Debug)
-	defaultConfig.IncomingConnectionsLimit = -1
 	defaultConfig.DNSBootstrapID = ""
 	defaultConfig.MaxConnectionsPerIP = 30
 }

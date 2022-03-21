@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package data
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -28,17 +27,18 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 // AccountManager loads and manages accounts for the node
 type AccountManager struct {
 	mu deadlock.Mutex
 
+	// syncronized by mu
 	partKeys map[account.ParticipationKeyIdentity]account.PersistedParticipation
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
+	// syncronized by mu
 	registeredAccounts map[string]bool
 
 	registry account.ParticipationRegistry
@@ -56,42 +56,34 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 	return manager
 }
 
-// Keys returns a list of Participation accounts.
-func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participation) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	for _, part := range manager.partKeys {
+// Keys returns a list of Participation accounts, and their keys/secrets for requested round.
+func (manager *AccountManager) Keys(rnd basics.Round) (out []account.ParticipationRecordForRound) {
+	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(rnd, rnd) {
-			out = append(out, part.Participation)
+			partRndSecrets, err := manager.registry.GetForRound(part.ParticipationID, rnd)
+			if err != nil {
+				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				continue
+			}
+			out = append(out, partRndSecrets)
 		}
 	}
 	return out
+}
 
-	// PKI TODO: source keys from the registry.
-	// This kinda works, but voting keys are not updated.
-	/*
-		for _, record := range manager.registry.GetAll() {
-			part := account.Participation{
-				Parent:      record.Account,
-				VRF:         record.VRF,
-				Voting:      record.Voting,
-				FirstValid:  record.FirstValid,
-				LastValid:   record.LastValid,
-				KeyDilution: record.KeyDilution,
+// StateProofKeys returns a list of Participation accounts, and their stateproof secrets
+func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+	for _, part := range manager.registry.GetAll() {
+		if part.OverlapsInterval(rnd, rnd) {
+			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ParticipationID, rnd)
+			if err != nil {
+				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				continue
 			}
-
-			if part.OverlapsInterval(rnd, rnd) {
-				out = append(out, part)
-
-				id := part.ID()
-				if !bytes.Equal(id[:], record.ParticipationID[:]) {
-					manager.log.Warnf("Participation IDs do not equal while fetching keys... %s != %s\n", id, record.ParticipationID)
-				}
-			}
+			out = append(out, partRndSecrets)
 		}
-		return out
-	*/
+	}
+	return out
 }
 
 // HasLiveKeys returns true if we have any Participation
@@ -100,7 +92,7 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partKeys {
+	for _, part := range manager.registry.GetAll() {
 		if part.OverlapsInterval(from, to) {
 			return true
 		}
@@ -165,42 +157,27 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 
 // DeleteOldKeys deletes all accounts' ephemeral keys strictly older than the
 // next round needed for each account.
-func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, ccSigs map[basics.Address]basics.Round, agreementProto config.ConsensusParams) {
-	latestProto := config.Consensus[latestHdr.CurrentProtocol]
-
+func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, agreementProto config.ConsensusParams) {
 	manager.mu.Lock()
 	pendingItems := make(map[string]<-chan error, len(manager.partKeys))
-	func() {
-		defer manager.mu.Unlock()
-		for _, part := range manager.partKeys {
-			// We need a key for round r+1 for agreement.
-			nextRound := latestHdr.Round + 1
 
-			if latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound > 0 {
-				// We need a key for the next compact cert round.
-				// This would be CompactCertNextRound+1 (+1 because compact
-				// cert code uses the next round's ephemeral key), except
-				// if we already used that key to produce a signature (as
-				// reported in ccSigs).
-				nextCC := latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound + 1
-				if ccSigs[part.Parent] >= nextCC {
-					nextCC = ccSigs[part.Parent] + basics.Round(latestProto.CompactCertRounds) + 1
-				}
+	partKeys := make([]account.PersistedParticipation, 0, len(manager.partKeys))
+	for _, part := range manager.partKeys {
+		partKeys = append(partKeys, part)
+	}
+	manager.mu.Unlock()
+	for _, part := range partKeys {
+		// We need a key for round r+1 for agreement.
+		nextRound := latestHdr.Round + 1
 
-				if nextCC < nextRound {
-					nextRound = nextCC
-				}
-			}
+		// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
+		first, last := part.ValidInterval()
+		errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
+			part.Address().String(), first, last, nextRound)
+		errCh := part.DeleteOldKeys(nextRound, agreementProto)
 
-			// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
-			first, last := part.ValidInterval()
-			errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
-				part.Address().String(), first, last, nextRound)
-			errCh := part.DeleteOldKeys(nextRound, agreementProto)
-
-			pendingItems[errString] = errCh
-		}
-	}()
+		pendingItems[errString] = errCh
+	}
 
 	// wait for all disk flushes, and report errors as they appear.
 	for errString, errCh := range pendingItems {
@@ -210,10 +187,8 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 		}
 	}
 
-	// PKI TODO: This needs to update the partkeys also, see the 'DeleteOldKeys' function above, it's part
-	//       is part of PersistedParticipation, but just calls 'part.Voting.DeleteBeforeFineGrained'
 	// Delete expired records from participation registry.
-	if err := manager.registry.DeleteExpired(latestHdr.Round); err != nil {
+	if err := manager.registry.DeleteExpired(latestHdr.Round, agreementProto); err != nil {
 		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)
 	}
 }
@@ -221,14 +196,6 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 // Registry fetches the ParticipationRegistry.
 func (manager *AccountManager) Registry() account.ParticipationRegistry {
 	return manager.registry
-}
-
-// FlushRegistry tells the underlying participation registry to flush it's change cache to the DB.
-func (manager *AccountManager) FlushRegistry(timeout time.Duration) {
-	err := manager.registry.Flush(timeout)
-	if err != nil {
-		manager.log.Warnf("error while flushing the registry: %w", err)
-	}
 }
 
 // Record asynchronously records a participation key usage event.

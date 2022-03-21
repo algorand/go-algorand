@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -154,6 +154,7 @@ type AccountsUpdateMetrics struct {
 	DatabaseCommitDuration    time.Duration
 	MemoryUpdatesDuration     time.Duration
 	UpdatedAccountsCount      uint64
+	UpdatedResourcesCount     uint64
 	UpdatedCreatablesCount    uint64
 }
 

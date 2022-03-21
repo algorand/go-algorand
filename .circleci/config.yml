@@ -166,7 +166,6 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
-
       #- windows_x64_build
 
 commands:
@@ -322,8 +321,7 @@ commands:
             export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
-            export PARALLEL_FLAG="-p 1"
-            gotestsum --format testname --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format standard-verbose --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
@@ -432,6 +430,7 @@ commands:
             export TEST_RESULTS=<< parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
+            export PARALLEL_FLAG="-p 1"
             test/scripts/run_integration_tests.sh
       - store_artifacts:
           path: << parameters.result_path >>
@@ -478,11 +477,14 @@ commands:
         - attach_workspace:
             at: << parameters.build_dir >>
         - run:
-            name: Upload binaries << parameters.platform >>
+            name: Upload Binaries << parameters.platform >>
             command: |
+              if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
+              then
+                export NO_BUILD="true"
+              fi
               export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"
-              export NO_BUILD=true
               export TRAVIS_BRANCH=${CIRCLE_BRANCH}
               scripts/travis/deploy_packages.sh
         - when:

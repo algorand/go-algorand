@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ func newPersistedAccountList() *persistedAccountDataList {
 	return l
 }
 
-func (l *persistedAccountDataList) inserNodeToFreeList(otherNode *persistedAccountDataListNode) {
+func (l *persistedAccountDataList) insertNodeToFreeList(otherNode *persistedAccountDataListNode) {
 	otherNode.next = l.freeList.next
 	otherNode.prev = nil
 	otherNode.Value = nil
@@ -67,19 +67,19 @@ func (l *persistedAccountDataList) allocateFreeNodes(numAllocs int) *persistedAc
 		return l
 	}
 	for i := 0; i < numAllocs; i++ {
-		l.inserNodeToFreeList(new(persistedAccountDataListNode))
+		l.insertNodeToFreeList(new(persistedAccountDataListNode))
 	}
 
 	return l
 }
 
-func isEmpty(list *persistedAccountDataList) bool {
-	// assumes we are inserting correctly to the list - using pushFront.
-	return list.root.next == &list.root
-}
-
 // Back returns the last element of list l or nil if the list is empty.
 func (l *persistedAccountDataList) back() *persistedAccountDataListNode {
+	isEmpty := func(list *persistedAccountDataList) bool {
+		// assumes we are inserting correctly to the list - using pushFront.
+		return list.root.next == &list.root
+	}
+
 	if isEmpty(l) {
 		return nil
 	}
@@ -95,7 +95,7 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 	e.next = nil // avoid memory leaks
 	e.prev = nil // avoid memory leaks
 
-	l.inserNodeToFreeList(e)
+	l.insertNodeToFreeList(e)
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.

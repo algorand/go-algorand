@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,9 +20,12 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    19,
+	Version:                                    21,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
+	AgreementIncomingBundlesQueueLength:        7,
+	AgreementIncomingProposalsQueueLength:      25,
+	AgreementIncomingVotesQueueLength:          10000,
 	AnnounceParticipationKey:                   true,
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
@@ -44,6 +47,7 @@ var defaultLocal = Local{
 	DNSBootstrapID:                             "<network>.algorand.network",
 	DNSSecurityFlags:                           1,
 	DeadlockDetection:                          0,
+	DeadlockDetectionThreshold:                 30,
 	DisableLocalhostConnectionRateLimit:        true,
 	DisableNetworking:                          false,
 	DisableOutgoingConnectionThrottling:        false,
@@ -79,6 +83,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",
 	LogSizeLimit:                               1073741824,
+	MaxAPIResourcesPerAccount:                  100000,
 	MaxCatchpointDownloadDuration:              7200000000000,
 	MaxConnectionsPerIP:                        30,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,
@@ -98,6 +103,8 @@ var defaultLocal = Local{
 	PublicAddress:                              "",
 	ReconnectTime:                              60000000000,
 	ReservedFDs:                                256,
+	RestConnectionsHardLimit:                   2048,
+	RestConnectionsSoftLimit:                   1024,
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
