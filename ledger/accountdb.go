@@ -1820,13 +1820,13 @@ func performTxtailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
 		latest, err := blockLatest(blockTx)
 		if err != nil {
-			return err
+			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 		}
 		latestHdr, err := blockGetHdr(blockTx, latest)
 		if err != nil {
-			return err
+			return fmt.Errorf("latest block header %d cannot be retrieved : %w", latest, err)
 		}
-		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife + 1)
+		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife - 1)
 		firstRound := latest.SubSaturate(maxTxnLife)
 		// we don't need to have the txtail for round 0.
 		if firstRound == basics.Round(0) {
@@ -1836,7 +1836,7 @@ func performTxtailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		for rnd := firstRound; rnd <= latest; rnd++ {
 			blk, err := blockGet(blockTx, rnd)
 			if err != nil {
-				return err
+				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, latest, err)
 			}
 
 			tail, err := txTailRoundFromBlock(blk)

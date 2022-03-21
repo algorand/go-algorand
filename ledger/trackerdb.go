@@ -451,13 +451,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 	}
 	err = performOnlineAccountsTableMigration(ctx, tx, migrationProcessLog)
 	if err != nil {
-		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete data migration : %v", err)
+		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online account data migration : %w", err)
 	}
 
 	if !tu.newDatabase {
 		err = performTxtailTableMigration(context.Background(), tx, tu.blockDb.Rdb)
 		if err != nil {
-			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete data migration : %v", err)
+			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete transaction tail data migration : %w", err)
 		}
 	}
 
