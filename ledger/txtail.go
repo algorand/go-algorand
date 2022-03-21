@@ -95,7 +95,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 
 	// allocate with size 0, just so that we can start from fresh.
 	// the roundTailHashes and consensusVersions always has 1 extra element being unused, so preallocate that.
-	roundTailHashes = append([]crypto.Digest{crypto.Digest{}}, roundTailHashes...)
+	roundTailHashes = append([]crypto.Digest{{}}, roundTailHashes...)
 	consensusVersions := make([]protocol.ConsensusVersion, 1)
 	roundTailSerializedData := make([][]byte, 0)
 
