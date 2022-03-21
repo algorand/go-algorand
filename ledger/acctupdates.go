@@ -285,11 +285,6 @@ func (au *accountUpdates) close() {
 	au.baseResources.prune(0)
 }
 
-// // LookupOnlineAccountData returns the online account data for a given address at a given round.
-// func (au *accountUpdates) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
-// 	return au.lookupOnlineAccountData(rnd, addr)
-// }
-
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
 }
@@ -1322,7 +1317,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	err = dcc.compactAccountDeltas.accountsLoadOld(tx, "accountbase")
+	err = dcc.compactAccountDeltas.accountsLoadOld(tx)
 	if err != nil {
 		return err
 	}

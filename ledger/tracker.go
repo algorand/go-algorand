@@ -236,8 +236,8 @@ type deferredCommitContext struct {
 	updatedPersistedAccounts  []persistedAccountData
 	updatedPersistedResources map[basics.Address][]persistedResourcesData
 
-	compactAccountDeltasOnline     compactAccountDeltas
-	updatedPersistedAccountsOnline []persistedAccountData
+	compactOnlineAccountDeltas     compactOnlineAccountDeltas
+	updatedPersistedOnlineAccounts []persistedOnlineAccountData
 
 	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest

@@ -81,6 +81,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	for addr, data := range accts {
 		expected := ledgercore.ToAccountData(data)
+		expected.VotingData = ledgercore.VotingData{}
 		pad, err := aq.lookup(addr)
 		require.NoError(t, err)
 		d := pad.accountData.GetLedgerCoreAccountData()
@@ -261,8 +262,12 @@ func TestAccountDBRound(t *testing.T) {
 
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts)
 		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
+		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), baseAccounts)
 
-		err = updatesCnt.accountsLoadOld(tx, "accountbase")
+		err = updatesCnt.accountsLoadOld(tx)
+		require.NoError(t, err)
+
+		err = updatesOnlineCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
 
 		knownAddresses := make(map[basics.Address]int64)
@@ -286,9 +291,12 @@ func TestAccountDBRound(t *testing.T) {
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 
-		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesCnt, proto, basics.Round(i))
+		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
-		require.Equal(t, updatedAccts, updatedOnlineAccts)
+
+		// TODO: calculate exact number of updates?
+		// newly created online accounts + accounts went offline + voting data/stake modifed accounts
+		require.NotEmpty(t, updatedOnlineAccts)
 
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
@@ -392,7 +400,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			)
 			require.Equal(t, 1, len(outAccountDeltas.misses))
 
-			err = outAccountDeltas.accountsLoadOld(tx, "accountbase")
+			err = outAccountDeltas.accountsLoadOld(tx)
 			require.NoError(t, err)
 
 			knownAddresses := make(map[basics.Address]int64)
@@ -441,7 +449,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 
 func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
 	for _, data := range accts {
-		if data.StateProofID.IsEmpty() {
+		if data.Status == basics.Online && data.StateProofID.IsEmpty() {
 			return false
 		}
 	}
@@ -2118,7 +2126,53 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	}
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"UpdateRound":0}`
+		require.NoError(t, err)
+		require.Equal(t, expectedEncoding, string(encoding))
+	}
+	t.Run("Positive", positiveTesting)
+	t.Run("Negative", negativeTesting)
+	t.Run("Structure", structureTesting)
+
+}
+
+func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	positiveTesting := func(t *testing.T) {
+		var ba baseOnlineAccountData
+		require.True(t, ba.IsEmpty())
+		require.True(t, ba.IsVotingEmpty())
+		ba.MicroAlgos.Raw = 100
+		require.True(t, ba.IsVotingEmpty())
+		ba.RewardsBase = 200
+		require.True(t, ba.IsVotingEmpty())
+	}
+	var empty baseOnlineAccountData
+	negativeTesting := func(t *testing.T) {
+		for i := 0; i < 10; i++ {
+			randObj, _ := protocol.RandomizeObjectField(&baseOnlineAccountData{})
+			ba := randObj.(*baseOnlineAccountData)
+			if *ba == empty {
+				continue
+			}
+			require.False(t, ba.IsEmpty(), "base account : %v", ba)
+			break
+		}
+		{
+			var ba baseOnlineAccountData
+			ba.MicroAlgos.Raw = 100
+			require.False(t, ba.IsEmpty())
+		}
+		{
+			var ba baseOnlineAccountData
+			ba.RewardsBase = 200
+			require.False(t, ba.IsEmpty())
+		}
+	}
+	structureTesting := func(t *testing.T) {
+		encoding, err := json.Marshal(&empty)
+		expectedEncoding := `{"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"MicroAlgos":{"Raw":0},"RewardsBase":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -2306,7 +2360,7 @@ func (m *mockAccountWriter) lookupResource(addr basics.Address, cidx basics.Crea
 	return
 }
 
-func (m *mockAccountWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
+func (m *mockAccountWriter) insertAccount(addr basics.Address, data baseAccountData) (rowid int64, err error) {
 	rowid, ok := m.addresses[addr]
 	if ok {
 		err = fmt.Errorf("insertAccount: addr %s, rowid %d: UNIQUE constraint failed", addr.String(), rowid)
@@ -2333,7 +2387,7 @@ func (m *mockAccountWriter) deleteAccount(rowid int64) (rowsAffected int64, err 
 	return 1, nil
 }
 
-func (m *mockAccountWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
+func (m *mockAccountWriter) updateAccount(rowid int64, data baseAccountData) (rowsAffected int64, err error) {
 	if _, ok := m.rowids[rowid]; !ok {
 		return 0, fmt.Errorf("updateAccount: not found rowid %d", rowid)
 	}

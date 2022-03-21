@@ -86,7 +86,8 @@ type onlineAccounts struct {
 	voters *votersTracker
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
-	baseAccounts lruAccounts
+	// TODO: restore the cache
+	// baseAccounts lruAccounts
 }
 
 // initialize initializes the accountUpdates structure
@@ -143,7 +144,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.accounts = make(map[basics.Address]modifiedAccount)
 	ao.deltasAccum = []int{0}
 
-	ao.baseAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+	// ao.baseAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	return
 }
 
@@ -163,7 +164,7 @@ func (ao *onlineAccounts) close() {
 		ao.voters = nil
 	}
 
-	ao.baseAccounts.prune(0)
+	// ao.baseAccounts.prune(0)
 }
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
@@ -192,7 +193,7 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	ao.versions = append(ao.versions, blk.CurrentProtocol)
 	ao.deltasAccum = append(ao.deltasAccum, delta.Accts.Len()+ao.deltasAccum[len(ao.deltasAccum)-1])
 
-	ao.baseAccounts.flushPendingWrites()
+	// ao.baseAccounts.flushPendingWrites()
 
 	for i := 0; i < delta.Accts.Len(); i++ {
 		addr, data := delta.Accts.GetByIdx(i)
@@ -205,8 +206,8 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	ao.roundTotals = append(ao.roundTotals, delta.Totals)
 
 	// calling prune would drop old entries from the base accounts.
-	newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
-	ao.baseAccounts.prune(newBaseAccountSize)
+	// newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
+	// ao.baseAccounts.prune(newBaseAccountSize)
 
 	if ao.voters != nil {
 		ao.voters.newBlock(blk.BlockHeader)
@@ -327,13 +328,9 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 
-	// once the consensus upgrade to resource separation is complete, all resources/accounts are also tagged with
-	// their corresponding update round.
-	setUpdateRound := config.Consensus[ao.versions[1]].EnableAccountDataResourceSeparation
-
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactAccountDeltasOnline = makeCompactAccountDeltas(deltas, dcc.oldBaseOnline, setUpdateRound, ao.baseAccounts)
+	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBaseOnline, lruAccounts{})
 
 	ao.accountsMu.RUnlock()
 
@@ -353,14 +350,14 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = dcc.compactAccountDeltasOnline.accountsLoadOld(tx, "onlineaccounts")
+	err = dcc.compactOnlineAccountDeltas.accountsLoadOld(tx)
 	if err != nil {
 		return err
 	}
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccountsOnline, err = onlineAccountsNewRound(tx, dcc.compactAccountDeltasOnline, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedOnlineAccounts, err = onlineAccountsNewRound(tx, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
@@ -375,8 +372,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
-	for i := 0; i < dcc.compactAccountDeltasOnline.len(); i++ {
-		acctUpdate := dcc.compactAccountDeltasOnline.getByIdx(i)
+	for i := 0; i < dcc.compactOnlineAccountDeltas.len(); i++ {
+		acctUpdate := dcc.compactOnlineAccountDeltas.getByIdx(i)
 		cnt := acctUpdate.nAcctDeltas
 		macct, ok := ao.accounts[acctUpdate.address]
 		if !ok {
@@ -393,9 +390,10 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	for _, persistedAcct := range dcc.updatedPersistedAccountsOnline {
-		ao.baseAccounts.write(persistedAcct)
-	}
+	// TODO: restore the cache
+	// for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
+	// 	ao.baseAccounts.write(persistedAcct)
+	// }
 
 	ao.deltas = ao.deltas[offset:]
 	ao.deltasAccum = ao.deltasAccum[offset:]
@@ -480,14 +478,14 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			}
 		}
 
-		// check the baseAccounts -
-		if macct, has := ao.baseAccounts.read(addr); has && macct.round == currentDbRound {
-			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
-			// would ensure that we promote this field.
-			ao.baseAccounts.writePending(macct)
-			u := macct.accountData.GetLedgerCoreAccountData()
-			return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
-		}
+		// // check the baseAccounts -
+		// if macct, has := ao.baseAccounts.read(addr); has && macct.round == currentDbRound {
+		// 	// we don't technically need this, since it's already in the baseAccounts, however, writing this over
+		// 	// would ensure that we promote this field.
+		// 	ao.baseAccounts.writePending(macct)
+		// 	u := macct.accountData.GetLedgerCoreAccountData()
+		// 	return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
+		// }
 
 		ao.accountsMu.RUnlock()
 		needUnlock = false
@@ -502,7 +500,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			var u ledgercore.AccountData
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
-				ao.baseAccounts.writePending(persistedData)
+				// ao.baseAccounts.writePending(persistedData)
 				u = persistedData.accountData.GetLedgerCoreAccountData()
 			}
 			// otherwise return empty
