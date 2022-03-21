@@ -60,6 +60,9 @@ for LEDGER in $LEDGERS; do
       onlineaccounts)
         SORT=address
         ;;
+      txtail)
+        SORT=address
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1
