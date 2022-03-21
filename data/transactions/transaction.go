@@ -17,7 +17,6 @@
 package transactions
 
 import (
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -191,10 +190,6 @@ func (tx Transaction) InnerID(parent Txid, index int) Txid {
 	binary.BigEndian.PutUint64(buf, uint64(index))
 	input = append(input, buf...)
 	enc := tx.MarshalMsg(input)
-
-	fmt.Printf("\nRaw: %+v\n", tx)
-	fmt.Printf("\nMARSHALLED: %s\n", base64.StdEncoding.EncodeToString(enc))
-
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
 }

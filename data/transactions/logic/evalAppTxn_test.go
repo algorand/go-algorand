@@ -1287,6 +1287,12 @@ itxn_submit;
 itxn Logs 0
 
 !=
+
+itxn TxID
+itxn Logs 0
+==
+&&
+
 `, ep)
 }
 
