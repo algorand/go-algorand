@@ -3934,10 +3934,10 @@ func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, rou
 	return err
 }
 
-func loadTxTail(ctx context.Context, tx *sql.Tx, trackerRound basics.Round) (roundData []*txTailRound, baseRound basics.Round, err error) {
+func loadTxTail(ctx context.Context, tx *sql.Tx, trackerRound basics.Round) (roundData []*txTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	rows, err := tx.QueryContext(ctx, "SELECT round, data FROM txtail ORDER BY round DESC")
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 	defer rows.Close()
 
@@ -3947,17 +3947,18 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, trackerRound basics.Round) (rou
 		var data []byte
 		err = rows.Scan(&round, &data)
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, 0, err
 		}
 		if round != expectedRound {
-			return nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)
+			return nil, nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)
 		}
 		tail := &txTailRound{}
 		err = protocol.Decode(data, tail)
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, 0, err
 		}
 		roundData = append(roundData, tail)
+		roundHash = append(roundHash, crypto.Hash(data))
 		expectedRound--
 	}
 	// reverse the array ordering in-place so that it would be incremental order.
@@ -3965,6 +3966,9 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, trackerRound basics.Round) (rou
 		bottom := roundData[i]
 		roundData[i] = roundData[len(roundData)-i-1]
 		roundData[len(roundData)-i-1] = bottom
+		hash := roundHash[i]
+		roundHash[i] = roundHash[len(roundHash)-i-1]
+		roundHash[len(roundHash)-i-1] = hash
 	}
-	return roundData, expectedRound + 1, nil
+	return roundData, roundHash, expectedRound + 1, nil
 }

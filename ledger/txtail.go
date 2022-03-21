@@ -70,10 +70,11 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 	rdb := l.trackerDB().Rdb
 
 	var roundData []*txTailRound
+	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
 	if trackerRound > 0 {
 		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			roundData, baseRound, err = loadTxTail(context.Background(), tx, trackerRound)
+			roundData, roundTailHashes, baseRound, err = loadTxTail(context.Background(), tx, trackerRound)
 			return err
 		})
 		if err != nil {
@@ -94,7 +95,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 
 	// allocate with size 0, just so that we can start from fresh.
 	// the roundTailHashes and consensusVersions always has 1 extra element being unused, so preallocate that.
-	roundTailHashes := make([]crypto.Digest, 1)
+	roundTailHashes = append([]crypto.Digest{crypto.Digest{}}, roundTailHashes...)
 	consensusVersions := make([]protocol.ConsensusVersion, 1)
 	roundTailSerializedData := make([][]byte, 0)
 
@@ -132,8 +133,6 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 			}
 		}
 
-		_, tailHash := txTailRound.encode()
-		roundTailHashes = append(roundTailHashes, tailHash)
 		consensusVersions = append(consensusVersions, txTailRound.ConsensusVersion)
 		roundData = roundData[1:]
 	}
