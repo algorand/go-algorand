@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -221,18 +222,17 @@ ed25519verify`), uint64(6))
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], vec[2], vec[1]}
-			sb := strings.Builder{}
 
 			// try with EnableBatchVerification = false
-			evalParams := defaultEvalParams(&sb, &txn)
+			evalParams := defaultEvalParams(&txn)
 			evalParams.Proto.EnableBatchVerification = false
-			pass, err := Eval(ops.Program, evalParams)
+			pass, err := EvalSignature(0, evalParams)
 			require.False(t, pass)
 			require.NoError(t, err)
 
 			// try with EnableBatchVerification = true
 			evalParams.Proto.EnableBatchVerification = true
-			pass, err = Eval(ops.Program, evalParams)
+			pass, err = EvalSignature(0, evalParams)
 			require.True(t, pass)
 			require.NoError(t, err)
 		})
@@ -311,9 +311,9 @@ func TestEd25519verifyCompatPayment(t *testing.T) {
 					txn.Lsig.Args = [][]byte{data[:], vec[2], vec[1]}
 					sb := strings.Builder{}
 					txn.Txn.Amount = basics.MicroAlgos{Raw: tc.amount}
-					evalParams := defaultEvalParams(&sb, &txn)
+					evalParams := defaultEvalParams(&txn)
 					evalParams.Proto.EnableBatchVerification = tc.enableBatchVerification
-					pass, err := Eval(ops.Program, evalParams)
+					pass, err := EvalSignature(0, evalParams)
 					require.Equal(t, tc.valid, pass, "trace %s", sb.String())
 					t.Log(sb.String())
 					require.NoError(t, err)
