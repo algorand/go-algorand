@@ -33,6 +33,10 @@ func NanoSleep(d time.Duration) {
 // NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
 func NanoAfter(d time.Duration) <-chan time.Time {
 	// The following is a workaround for the go 1.16 bug, where timers are rounded up to the next millisecond resolution.
+	// Go implementation for "time.After" avoids creating the go-routine until it's needed for writing the time
+	// to the channel. This is a pretty impressive implementation compared to the one below, since it's much more
+	// resource-efficient. For that reason, we'll keep calling the efficient implementation when timing is not
+	// critical ( i.e. > 10ms ).
 	if d > 10*time.Millisecond {
 		return time.After(d)
 	}
