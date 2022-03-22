@@ -51,7 +51,6 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	shortPartKeysProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	// keys round = current - 2 * (2 * 1) (see selector.go)
 	// new keys must exist at least 4 rounds prior use
-	shortPartKeysProtocol.SeedLookback = 2
 	shortPartKeysProtocol.SeedRefreshInterval = 1
 	if runtime.GOARCH == "amd64" {
 		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.

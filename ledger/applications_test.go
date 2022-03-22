@@ -38,7 +38,7 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	l.trackers.scheduleCommit(l.Latest(), l.Latest()-(dbRound+basics.Round(offset)))
+	l.trackers.scheduleCommit(l.Latest())
 	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
 	// use that as an indicator.
 	for {

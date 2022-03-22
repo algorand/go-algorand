@@ -400,22 +400,8 @@ func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.Creat
 }
 
 // committedUpTo implements the ledgerTracker interface for accountUpdates.
-// The method informs the tracker that committedRound and all it's previous rounds have
-// been committed to the block database. The method returns what is the oldest round
-// number that can be removed from the blocks database as well as the lookback that this
-// tracker maintains.
-func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, lookback basics.Round) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-
-	retRound = basics.Round(0)
-	lookback = basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
-	if committedRound < lookback {
-		return
-	}
-
-	retRound = au.cachedDBRound
-	return
+func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Round {
+	return au.cachedDBRound + 1
 }
 
 // produceCommittingTask enqueues committing the balances for round committedRound-lookback.

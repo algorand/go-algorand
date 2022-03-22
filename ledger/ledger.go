@@ -402,9 +402,17 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 
 	if l.archival {
 		// Do not forget any blocks.
-		minToSave = 0
+		return 0
 	}
 
+	if r + 1 <= basics.Round(protocol.SeedLookback) {
+		return 0
+	}
+
+	x := r + 1 - basics.Round(protocol.SeedLookback)
+	if x < minToSave {
+		return x
+	}
 	return minToSave
 }
 

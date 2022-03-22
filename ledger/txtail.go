@@ -143,7 +143,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 }
 
-func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
 	for r := range t.recent {
 		if r+maxlife < rnd {
@@ -154,7 +154,7 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 		delete(t.lastValid, t.lowWaterMark)
 	}
 
-	return (rnd + 1).SubSaturate(maxlife), basics.Round(0)
+	return (rnd + 1).SubSaturate(maxlife)
 }
 
 func (t *txTail) prepareCommit(*deferredCommitContext) error {

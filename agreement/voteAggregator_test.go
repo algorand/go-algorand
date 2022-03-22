@@ -871,7 +871,7 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cparams := config.Consensus[protocol.ConsensusCurrentVersion]
-	maxNumBlocks := 2 * cparams.SeedRefreshInterval * cparams.SeedLookback
+	maxNumBlocks := 2 * cparams.SeedRefreshInterval * protocol.SeedLookback
 	ledger := makeTestLedgerMaxBlocks(readOnlyGenesis100, maxNumBlocks)
 	addresses, vrfSecrets, otSecrets := readOnlyAddrs100, readOnlyVRF100, readOnlyOT100
 	round := ledger.NextRound()

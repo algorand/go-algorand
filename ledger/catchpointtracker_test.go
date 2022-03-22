@@ -400,7 +400,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
@@ -579,9 +578,9 @@ func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.Stat
 }
 
 // committedUpTo in the blockingTracker just stores the committed round.
-func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
+func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) basics.Round {
 	atomic.StoreInt64(&bt.committedUpToRound, int64(committedRnd))
-	return committedRnd, basics.Round(0)
+	return committedRnd
 }
 
 // produceCommittingTask is not used by the blockingTracker

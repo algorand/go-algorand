@@ -103,9 +103,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	catchpointCatchupProtocol.SeedLookback = 2
 	catchpointCatchupProtocol.SeedRefreshInterval = 8
-	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
+	catchpointCatchupProtocol.MaxBalLookback = 2 * protocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
 	catchpointCatchupProtocol.MaxTxnLife = 33
 
 	if runtime.GOARCH == "amd64" {

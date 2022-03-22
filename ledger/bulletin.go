@@ -92,7 +92,7 @@ func (b *bulletin) close() {
 func (b *bulletin) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
-func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+func (b *bulletin) committedUpTo(rnd basics.Round) basics.Round {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -106,7 +106,7 @@ func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Ro
 	}
 
 	b.latestRound = rnd
-	return rnd, basics.Round(0)
+	return rnd + 1
 }
 
 func (b *bulletin) prepareCommit(dcc *deferredCommitContext) error {

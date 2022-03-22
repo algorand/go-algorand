@@ -803,7 +803,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	for _, trk := range wl.l.trackers.trackers {
 		if au, ok := trk.(*accountUpdates); ok {
 			wl.l.trackers.waitAccountsWriting()
-			minSave, _ = trk.committedUpTo(rnd)
+			minSave = trk.committedUpTo(rnd)
 			wl.l.trackers.committedUpTo(rnd)
 			wl.l.trackers.waitAccountsWriting()
 			if minSave < minMinSave {
@@ -819,7 +819,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			cfg.Archival = true
 			au.initialize(cfg)
 		} else {
-			minSave, _ = trk.committedUpTo(rnd)
+			minSave = trk.committedUpTo(rnd)
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}

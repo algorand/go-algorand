@@ -124,9 +124,8 @@ type ConsensusParams struct {
 	// rewards level is recomputed for the next RewardsRateRefreshInterval rounds.
 	RewardsRateRefreshInterval uint64
 
-	// seed-related parameters
-	SeedLookback        uint64 // how many blocks back we use seeds from in sortition. delta_s in the spec
-	SeedRefreshInterval uint64 // how often an old block hash is mixed into the seed. delta_r in the spec
+	// How often an old block hash is mixed into the seed. delta_r in the spec.
+	SeedRefreshInterval uint64
 
 	// ledger retention policy
 	MaxBalLookback uint64 // (current round - MaxBalLookback) is the oldest round the ledger must answer balance queries for
@@ -688,7 +687,6 @@ func initConsensusProtocols() {
 
 		FastRecoveryLambda: 5 * time.Minute,
 
-		SeedLookback:        2,
 		SeedRefreshInterval: 100,
 
 		MaxBalLookback: 320,

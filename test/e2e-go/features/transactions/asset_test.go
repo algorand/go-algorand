@@ -1009,9 +1009,8 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 8
-	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
+	consensusParams.MaxBalLookback = 2 * protocol.SeedLookback * consensusParams.SeedRefreshInterval // 32
 
 	configurableConsensus[consensusVersion] = consensusParams
 

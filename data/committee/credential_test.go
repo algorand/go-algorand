@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -232,7 +233,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 	N := 1
 	for i := 0; i < N; i++ {
 		selParams, _, round, addresses, _, _, _, _ := testingenv(t, 10, 2000)
-		lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
+		lookback := basics.Round(2*proto.SeedRefreshInterval + protocol.SeedLookback + 1)
 		gen := rand.New(rand.NewSource(2))
 		_, _, zeroVRFSecret, _ := newAccount(t, gen, lookback, 5)
 		period := Period(0)

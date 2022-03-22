@@ -601,14 +601,7 @@ func (s *Service) sync() {
 		StartRound: uint64(pr),
 	})
 
-	seedLookback := uint64(2)
-	proto, err := s.ledger.ConsensusParams(pr)
-	if err != nil {
-		s.log.Errorf("catchup: could not get consensus parameters for round %v: %v", pr, err)
-	} else {
-		seedLookback = proto.SeedLookback
-	}
-	s.pipelinedFetch(seedLookback)
+	s.pipelinedFetch(protocol.SeedLookback)
 
 	initSync := false
 

@@ -747,7 +747,6 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
@@ -1941,7 +1940,6 @@ func TestAcctUpdatesResources(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesResources")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 2
-	protoParams.SeedLookback = 1
 	protoParams.SeedRefreshInterval = 1
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
@@ -2059,17 +2057,13 @@ func TestAcctUpdatesResources(t *testing.T) {
 		ml.trackers.newBlock(blk, delta)
 
 		// commit changes synchroniously
-		_, maxLookback := au.committedUpTo(i)
-		dcc := &deferredCommitContext{
-			deferredCommitRange: deferredCommitRange{
-				lookback: maxLookback,
-			},
-		}
-		cdr := &dcc.deferredCommitRange
-		cdr = au.produceCommittingTask(i, ml.trackers.dbRound, cdr)
-		if cdr != nil {
+		au.committedUpTo(i)
+		dcc := &deferredCommitContext{}
+		dcr := &dcc.deferredCommitRange
+		dcr = au.produceCommittingTask(i, ml.trackers.dbRound, dcr)
+		if dcr != nil {
 			func() {
-				dcc.deferredCommitRange = *cdr
+				dcc.deferredCommitRange = *dcr
 				ml.trackers.accountsWriting.Add(1)
 				defer ml.trackers.accountsWriting.Done()
 
@@ -2377,7 +2371,6 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupLatestCacheRetry")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 2
-	protoParams.SeedLookback = 1
 	protoParams.SeedRefreshInterval = 1
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
@@ -2404,17 +2397,13 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
 	commitSync := func(rnd basics.Round) {
-		_, maxLookback := au.committedUpTo(rnd)
-		dcc := &deferredCommitContext{
-			deferredCommitRange: deferredCommitRange{
-				lookback: maxLookback,
-			},
-		}
-		cdr := &dcc.deferredCommitRange
-		cdr = au.produceCommittingTask(rnd, ml.trackers.dbRound, cdr)
-		if cdr != nil {
+		au.committedUpTo(rnd)
+		dcc := &deferredCommitContext{}
+		dcr := &dcc.deferredCommitRange
+		dcr = au.produceCommittingTask(rnd, ml.trackers.dbRound, dcr)
+		if dcr != nil {
 			func() {
-				dcc.deferredCommitRange = *cdr
+				dcc.deferredCommitRange = *dcr
 				ml.trackers.accountsWriting.Add(1)
 				defer ml.trackers.accountsWriting.Done()
 

@@ -48,11 +48,11 @@ func (sel selector) CommitteeSize(proto config.ConsensusParams) uint64 {
 }
 
 func balanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
+	return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * protocol.SeedLookback))
 }
 
 func seedRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	return r.SubSaturate(basics.Round(cparams.SeedLookback))
+	return r.SubSaturate(basics.Round(protocol.SeedLookback))
 }
 
 // a helper function for obtaining membership verification parameters.

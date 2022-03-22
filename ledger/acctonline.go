@@ -214,22 +214,8 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 }
 
 // committedUpTo implements the ledgerTracker interface for accountUpdates.
-// The method informs the tracker that committedRound and all it's previous rounds have
-// been committed to the block database. The method returns what is the oldest round
-// number that can be removed from the blocks database as well as the lookback that this
-// tracker maintains.
-func (ao *onlineAccounts) committedUpTo(committedRound basics.Round) (retRound, lookback basics.Round) {
-	ao.accountsMu.RLock()
-	defer ao.accountsMu.RUnlock()
-
-	retRound = basics.Round(0)
-	lookback = basics.Round(config.Consensus[ao.versions[len(ao.versions)-1]].MaxBalLookback)
-	if committedRound < lookback {
-		return
-	}
-
-	retRound = ao.cachedDBRoundOnline
-	return
+func (ao *onlineAccounts) committedUpTo(committedRound basics.Round) basics.Round {
+	return ao.cachedDBRoundOnline + 1
 }
 
 // produceCommittingTask enqueues committing the balances for round committedRound-lookback.

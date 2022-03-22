@@ -199,7 +199,6 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
 	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
@@ -297,7 +296,6 @@ func TestFullCatchpointWriter(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
 	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)

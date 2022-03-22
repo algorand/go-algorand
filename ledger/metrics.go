@@ -62,8 +62,8 @@ func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	mt.ledgerRewardClaimsTotal.Add(float64(1), map[string]string{})
 }
 
-func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) (retRound, lookback basics.Round) {
-	return committedRnd, basics.Round(0)
+func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) basics.Round {
+	return committedRnd + 1
 }
 
 func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {

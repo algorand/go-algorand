@@ -78,7 +78,6 @@ func TestTrackerScheduleCommit(t *testing.T) {
 
 	expectedOffset := uint64(100)
 	blockqRound := basics.Round(1000)
-	lookback := basics.Round(16)
 	dbRound := basics.Round(1)
 
 	// prepare deltas and versions
@@ -99,33 +98,29 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	au.accountsMu.Unlock()
 
 	// ensure au and ct produce data we expect
-	dcc := &deferredCommitContext{
-		deferredCommitRange: deferredCommitRange{
-			lookback: lookback,
-		},
-	}
-	cdr := &dcc.deferredCommitRange
+	dcc := &deferredCommitContext{}
+	dcr := &dcc.deferredCommitRange
 
-	cdr = au.produceCommittingTask(blockqRound, dbRound, cdr)
-	a.NotNil(cdr)
-	a.Equal(expectedOffset, cdr.offset)
+	dcr = au.produceCommittingTask(blockqRound, dbRound, dcr)
+	a.NotNil(dcr)
+	a.Equal(expectedOffset, dcr.offset)
 
-	cdr = ct.produceCommittingTask(blockqRound, dbRound, cdr)
-	a.NotNil(cdr)
+	dcr = ct.produceCommittingTask(blockqRound, dbRound, dcr)
+	a.NotNil(dcr)
 	// before the fix
 	// expectedOffset = uint64(blockqRound - lookback - dbRound) // 983
-	a.Equal(expectedOffset, cdr.offset)
+	a.Equal(expectedOffset, dcr.offset)
 
-	cdr = ao.produceCommittingTask(blockqRound, dbRound, cdr)
-	a.NotNil(cdr)
-	a.Equal(expectedOffset, cdr.offsetOnline)
+	dcr = ao.produceCommittingTask(blockqRound, dbRound, dcr)
+	a.NotNil(dcr)
+	a.Equal(expectedOffset, dcr.offsetOnline)
 
 	// schedule the commit. au is expected to return offset 100 and
 	ml.trackers.mu.Lock()
 	ml.trackers.dbRound = dbRound
 	ml.trackers.dbRoundOnline = dbRound
 	ml.trackers.mu.Unlock()
-	ml.trackers.scheduleCommit(blockqRound, lookback)
+	ml.trackers.scheduleCommit(blockqRound)
 
 	a.Equal(1, len(ml.trackers.deferredCommits))
 	// before the fix

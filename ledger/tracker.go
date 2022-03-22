@@ -83,9 +83,7 @@ type ledgerTracker interface {
 	// save space, and the tracker is expected to still function
 	// after a restart and a call to loadFromDisk().
 	// For example, returning 0 means that no blocks can be deleted.
-	// Separetly, the method returns the lookback that is being
-	// maintained by the tracker.
-	committedUpTo(basics.Round) (minRound, lookback basics.Round)
+	committedUpTo(basics.Round) basics.Round
 
 	// produceCommittingTask prepares a deferredCommitRange; Preparing a deferredCommitRange is a joint
 	// effort, and all the trackers contribute to that effort. All the trackers are being handed a
@@ -330,55 +328,48 @@ func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.Stat
 
 func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 	minBlock := rnd
-	maxLookback := basics.Round(0)
 	for _, lt := range tr.trackers {
-		retainRound, lookback := lt.committedUpTo(rnd)
+		retainRound := lt.committedUpTo(rnd)
 		if retainRound < minBlock {
 			minBlock = retainRound
 		}
-		if lookback > maxLookback {
-			maxLookback = lookback
-		}
 	}
 
-	tr.scheduleCommit(rnd, maxLookback)
+	tr.scheduleCommit(rnd)
 
 	return minBlock
 }
 
-func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
+func (tr *trackerRegistry) scheduleCommit(blockqRound basics.Round) {
 	tr.mu.RLock()
 	dbRound := tr.dbRound
 	dbRoundOnline := tr.dbRoundOnline
 	tr.mu.RUnlock()
 
-	dcc := &deferredCommitContext{
-		deferredCommitRange: deferredCommitRange{
-			lookback: maxLookback,
-		},
-	}
-	cdr := &dcc.deferredCommitRange
+	dcc := &deferredCommitContext{}
+	dcr := &dcc.deferredCommitRange
+
 	for _, lt := range tr.trackers {
-		base := cdr.oldBase
-		offset := cdr.offset
+		base := dcr.oldBase
+		offset := dcr.offset
 		if _, ok := lt.(*onlineAccounts); ok {
 			// TODO: remove
-			cdr = lt.produceCommittingTask(blockqRound, dbRoundOnline, cdr)
+			dcr = lt.produceCommittingTask(blockqRound, dbRoundOnline, dcr)
 		} else {
-			cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
+			dcr = lt.produceCommittingTask(blockqRound, dbRound, dcr)
 		}
-		if cdr == nil {
+		if dcr == nil {
 			break
 		}
-		if offset > 0 && cdr.offset > offset {
-			tr.log.Warnf("tracker %T produced offset %d but expected not greater than %d, dbRound %d, latestRound %d", lt, cdr.offset, offset, dbRound, blockqRound)
+		if offset > 0 && dcr.offset > offset {
+			tr.log.Warnf("tracker %T produced offset %d but expected not greater than %d, dbRound %d, latestRound %d", lt, dcr.offset, offset, dbRound, blockqRound)
 		}
-		if base > 0 && base != cdr.oldBase {
-			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
+		if base > 0 && base != dcr.oldBase {
+			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, dcr.oldBase, base, dbRound, blockqRound)
 		}
 	}
-	if cdr != nil {
-		dcc.deferredCommitRange = *cdr
+	if dcr != nil {
+		dcc.deferredCommitRange = *dcr
 	} else {
 		dcc = nil
 	}
@@ -679,7 +670,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 			var roundsBehind basics.Round
 
 			// flush the account data
-			tr.scheduleCommit(blk.Round(), basics.Round(config.Consensus[blk.BlockHeader.CurrentProtocol].MaxBalLookback))
+			tr.scheduleCommit(blk.Round())
 			// wait for the writing to complete.
 			tr.waitAccountsWriting()
 

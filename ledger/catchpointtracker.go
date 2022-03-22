@@ -255,12 +255,8 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 }
 
 // committedUpTo implements the ledgerTracker interface for catchpointTracker.
-// The method informs the tracker that committedRound and all it's previous rounds have
-// been committed to the block database. The method returns what is the oldest round
-// number that can be removed from the blocks database as well as the lookback that this
-// tracker maintains.
-func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
-	return rnd, basics.Round(0)
+func (ct *catchpointTracker) committedUpTo(rnd basics.Round) basics.Round {
+	return rnd + 1
 }
 
 func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
