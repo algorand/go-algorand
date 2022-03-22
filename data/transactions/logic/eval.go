@@ -904,18 +904,23 @@ func (cx *EvalContext) step() error {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
-	cx.cost += deets.Cost
+
+	opcost := deets.Cost
+	if opcost == 0 {
+		opcost = deets.costFunc(cx.program, cx.pc)
+	}
+	cx.cost += opcost
 	if cx.PooledApplicationBudget != nil {
-		*cx.PooledApplicationBudget -= deets.Cost
+		*cx.PooledApplicationBudget -= opcost
 	}
 
 	if cx.remainingBudget() < 0 {
 		// We're not going to execute the instruction, so give the cost back.
 		// This only matters if this is an inner ClearState - the caller should
 		// not be over debited. (Normally, failure causes total txtree failure.)
-		cx.cost -= deets.Cost
+		cx.cost -= opcost
 		if cx.PooledApplicationBudget != nil {
-			*cx.PooledApplicationBudget += deets.Cost
+			*cx.PooledApplicationBudget += opcost
 		}
 		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 			cx.pc, spec.Name, cx.cost)
@@ -1019,6 +1024,10 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
+	opcost := deets.Cost
+	if opcost == 0 {
+		opcost = deets.costFunc(cx.program, cx.pc)
+	}
 	prevpc := cx.pc
 	if deets.checkFunc != nil {
 		err := deets.checkFunc(cx)
@@ -1042,7 +1051,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
-	return deets.Cost, nil
+	return opcost, nil
 }
 
 func opErr(cx *EvalContext) error {
@@ -2062,7 +2071,7 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2098,7 +2107,7 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2125,7 +2134,7 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2356,7 +2365,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2804,8 +2813,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 
 	return sv, err
@@ -2964,6 +2973,11 @@ func unmarshalCompressed(curve elliptic.Curve, data []byte) (x, y *big.Int) {
 	return
 }
 
+var ecdsaVerifyCosts = map[byte]int{
+	byte(Secp256k1): 1700,
+	byte(Secp256r1): 2500,
+}
+
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
@@ -3018,6 +3032,11 @@ func opEcdsaVerify(cx *EvalContext) error {
 	cx.stack[fifth].Bytes = nil
 	cx.stack = cx.stack[:fourth]
 	return nil
+}
+
+var ecdsaDecompressCosts = map[byte]int{
+	byte(Secp256k1): 650,
+	byte(Secp256r1): 2400,
 }
 
 func opEcdsaPkDecompress(cx *EvalContext) error {
@@ -4130,7 +4149,7 @@ func opTxBegin(cx *EvalContext) error {
 	return addInnerTxn(cx)
 }
 
-func opTxNext(cx *EvalContext) error {
+func opItxnNext(cx *EvalContext) error {
 	if len(cx.subtxns) == 0 {
 		return errors.New("itxn_next without itxn_begin")
 	}
@@ -4444,7 +4463,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	return
 }
 
-func opTxField(cx *EvalContext) error {
+func opItxnField(cx *EvalContext) error {
 	itx := len(cx.subtxns) - 1
 	if itx < 0 {
 		return errors.New("itxn_field without itxn_begin")
@@ -4461,7 +4480,7 @@ func opTxField(cx *EvalContext) error {
 	return err
 }
 
-func opTxSubmit(cx *EvalContext) error {
+func opItxnSubmit(cx *EvalContext) error {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.

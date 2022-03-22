@@ -170,26 +170,38 @@ const (
 
 // FieldSpec unifies the various specs for presentation
 type FieldSpec interface {
+	Field() byte
 	Type() StackType
 	OpVersion() uint64
 	Note() string
 	Version() uint64
 }
 
-// TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
-var TxnFieldNames []string
+// FieldSpeccer is something that yields a FieldSpec, given a name for the field
+type FieldSpeccer interface {
+	SpecByName(name string) FieldSpec
+}
 
-var txnFieldSpecByField map[TxnField]txnFieldSpec
+// FieldGroup binds all the info for a field (names, int value, spec access) so
+// they can be attached to opcodes and used by doc generation
+type FieldGroup struct {
+	names []string
+	spec  FieldSpeccer
+}
+
+// TxnFieldNames are arguments to the 'txn' family of opcodes.
+var TxnFieldNames [invalidTxnField]string
+
+var txnFieldSpecByField map[TxnField]txnFieldSpec = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 
 // TxnFieldSpecByName gives access to the field specs by field name
-var TxnFieldSpecByName tfNameSpecMap
+var TxnFieldSpecByName tfNameSpecMap = make(map[string]txnFieldSpec, len(TxnFieldNames))
 
 // simple interface used by doc generator for fields versioning
 type tfNameSpecMap map[string]txnFieldSpec
 
 func (s tfNameSpecMap) SpecByName(name string) FieldSpec {
-	fs := s[name]
-	return &fs
+	return s[name]
 }
 
 type txnFieldSpec struct {
@@ -201,19 +213,23 @@ type txnFieldSpec struct {
 	effects    bool   // Is this a field on the "effects"? That is, something in ApplyData
 }
 
-func (fs *txnFieldSpec) Type() StackType {
+func (fs txnFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs txnFieldSpec) Type() StackType {
 	return fs.ftype
 }
 
-func (fs *txnFieldSpec) OpVersion() uint64 {
+func (fs txnFieldSpec) OpVersion() uint64 {
 	return 0
 }
 
-func (fs *txnFieldSpec) Version() uint64 {
+func (fs txnFieldSpec) Version() uint64 {
 	return fs.version
 }
 
-func (fs *txnFieldSpec) Note() string {
+func (fs txnFieldSpec) Note() string {
 	note := txnFieldDocs[fs.field.String()]
 	if fs.effects {
 		note = addExtra(note, "Application mode only")
@@ -287,6 +303,8 @@ var txnFieldSpecs = []txnFieldSpec{
 	{CreatedAssetID, StackUint64, false, 5, 0, true},
 	{CreatedApplicationID, StackUint64, false, 5, 0, true},
 	{LastLog, StackBytes, false, 6, 0, true},
+
+	// Not an effect. Just added after the effects fields.
 	{StateProofPK, StackBytes, false, 6, 6, false},
 }
 
@@ -407,7 +425,7 @@ const (
 )
 
 // GlobalFieldNames are arguments to the 'global' opcode
-var GlobalFieldNames []string
+var GlobalFieldNames [invalidGlobalField]string
 
 type globalFieldSpec struct {
 	field   GlobalField
@@ -416,18 +434,22 @@ type globalFieldSpec struct {
 	version uint64
 }
 
-func (fs *globalFieldSpec) Type() StackType {
+func (fs globalFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs globalFieldSpec) Type() StackType {
 	return fs.ftype
 }
 
-func (fs *globalFieldSpec) OpVersion() uint64 {
+func (fs globalFieldSpec) OpVersion() uint64 {
 	return 0
 }
 
-func (fs *globalFieldSpec) Version() uint64 {
+func (fs globalFieldSpec) Version() uint64 {
 	return fs.version
 }
-func (fs *globalFieldSpec) Note() string {
+func (fs globalFieldSpec) Note() string {
 	note := globalFieldDocs[fs.field.String()]
 	if fs.mode == runModeApplication {
 		note = addExtra(note, "Application mode only.")
@@ -454,16 +476,15 @@ var globalFieldSpecs = []globalFieldSpec{
 	{CallerApplicationAddress, StackBytes, runModeApplication, 6},
 }
 
-var globalFieldSpecByField map[GlobalField]globalFieldSpec
+var globalFieldSpecByField map[GlobalField]globalFieldSpec = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
 
 // GlobalFieldSpecByName gives access to the field specs by field name
-var GlobalFieldSpecByName gfNameSpecMap
+var GlobalFieldSpecByName gfNameSpecMap = make(gfNameSpecMap, len(GlobalFieldNames))
 
 type gfNameSpecMap map[string]globalFieldSpec
 
 func (s gfNameSpecMap) SpecByName(name string) FieldSpec {
-	fs := s[name]
-	return &fs
+	return s[name]
 }
 
 // EcdsaCurve is an enum for `ecdsa_` opcodes
@@ -478,26 +499,30 @@ const (
 )
 
 // EcdsaCurveNames are arguments to the 'ecdsa_' opcode
-var EcdsaCurveNames []string
+var EcdsaCurveNames [invalidEcdsaCurve]string
 
 type ecdsaCurveSpec struct {
 	field   EcdsaCurve
 	version uint64
 }
 
-func (fs *ecdsaCurveSpec) Type() StackType {
+func (fs ecdsaCurveSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs ecdsaCurveSpec) Type() StackType {
 	return StackNone // Will not show, since all are the same
 }
 
-func (fs *ecdsaCurveSpec) OpVersion() uint64 {
+func (fs ecdsaCurveSpec) OpVersion() uint64 {
 	return 5
 }
 
-func (fs *ecdsaCurveSpec) Version() uint64 {
+func (fs ecdsaCurveSpec) Version() uint64 {
 	return fs.version
 }
 
-func (fs *ecdsaCurveSpec) Note() string {
+func (fs ecdsaCurveSpec) Note() string {
 	note := EcdsaCurveDocs[fs.field.String()]
 	return note
 }
@@ -507,17 +532,20 @@ var ecdsaCurveSpecs = []ecdsaCurveSpec{
 	{Secp256r1, fidoVersion},
 }
 
-var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
+var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
 
 // EcdsaCurveSpecByName gives access to the field specs by field name
-var EcdsaCurveSpecByName ecDsaCurveNameSpecMap
+var EcdsaCurveSpecByName ecDsaCurveNameSpecMap = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
 
-// simple interface used by doc generator for fields versioning
 type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
 
 func (s ecDsaCurveNameSpecMap) SpecByName(name string) FieldSpec {
-	fs := s[name]
-	return &fs
+	return s[name]
+}
+
+var ecdsaCurves = FieldGroup{
+	names: EcdsaCurveNames[:],
+	spec:  EcdsaCurveSpecByName,
 }
 
 // Base64Encoding is an enum for the `base64decode` opcode
@@ -545,8 +573,8 @@ var base64EncodingSpecs = []base64EncodingSpec{
 	{StdEncoding, StackBytes, 6},
 }
 
-var base64EncodingSpecByField map[Base64Encoding]base64EncodingSpec
-var base64EncodingSpecByName base64EncodingSpecMap
+var base64EncodingSpecByField map[Base64Encoding]base64EncodingSpec = make(map[Base64Encoding]base64EncodingSpec, len(base64EncodingNames))
+var base64EncodingSpecByName base64EncodingSpecMap = make(base64EncodingSpecMap, len(base64EncodingNames))
 
 type base64EncodingSpecMap map[string]base64EncodingSpec
 
@@ -595,8 +623,8 @@ var jsonRefSpecs = []jsonRefSpec{
 	{JSONObject, StackBytes, fidoVersion},
 }
 
-var jsonRefSpecByField map[JSONRefType]jsonRefSpec
-var jsonRefSpecByName jsonRefSpecMap
+var jsonRefSpecByField map[JSONRefType]jsonRefSpec = make(map[JSONRefType]jsonRefSpec, len(jsonRefTypeNames))
+var jsonRefSpecByName jsonRefSpecMap = make(jsonRefSpecMap, len(jsonRefTypeNames))
 
 type jsonRefSpecMap map[string]jsonRefSpec
 
@@ -612,7 +640,7 @@ const (
 )
 
 // AssetHoldingFieldNames are arguments to the 'asset_holding_get' opcode
-var AssetHoldingFieldNames []string
+var AssetHoldingFieldNames [invalidAssetHoldingField]string
 
 type assetHoldingFieldSpec struct {
 	field   AssetHoldingField
@@ -620,19 +648,23 @@ type assetHoldingFieldSpec struct {
 	version uint64
 }
 
-func (fs *assetHoldingFieldSpec) Type() StackType {
+func (fs assetHoldingFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs assetHoldingFieldSpec) Type() StackType {
 	return fs.ftype
 }
 
-func (fs *assetHoldingFieldSpec) OpVersion() uint64 {
+func (fs assetHoldingFieldSpec) OpVersion() uint64 {
 	return 2
 }
 
-func (fs *assetHoldingFieldSpec) Version() uint64 {
+func (fs assetHoldingFieldSpec) Version() uint64 {
 	return fs.version
 }
 
-func (fs *assetHoldingFieldSpec) Note() string {
+func (fs assetHoldingFieldSpec) Note() string {
 	note := assetHoldingFieldDocs[fs.field.String()]
 	return note
 }
@@ -642,16 +674,15 @@ var assetHoldingFieldSpecs = []assetHoldingFieldSpec{
 	{AssetFrozen, StackUint64, 2},
 }
 
-var assetHoldingFieldSpecByField map[AssetHoldingField]assetHoldingFieldSpec
+var assetHoldingFieldSpecByField map[AssetHoldingField]assetHoldingFieldSpec = make(map[AssetHoldingField]assetHoldingFieldSpec, len(AssetHoldingFieldNames))
 
 // AssetHoldingFieldSpecByName gives access to the field specs by field name
-var AssetHoldingFieldSpecByName ahfNameSpecMap
+var AssetHoldingFieldSpecByName ahfNameSpecMap = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
 
 type ahfNameSpecMap map[string]assetHoldingFieldSpec
 
 func (s ahfNameSpecMap) SpecByName(name string) FieldSpec {
-	fs := s[name]
-	return &fs
+	return s[name]
 }
 
 // AssetParamsField is an enum for `asset_params_get` opcode
@@ -688,7 +719,7 @@ const (
 )
 
 // AssetParamsFieldNames are arguments to the 'asset_params_get' opcode
-var AssetParamsFieldNames []string
+var AssetParamsFieldNames [invalidAssetParamsField]string
 
 type assetParamsFieldSpec struct {
 	field   AssetParamsField
@@ -696,19 +727,23 @@ type assetParamsFieldSpec struct {
 	version uint64
 }
 
-func (fs *assetParamsFieldSpec) Type() StackType {
+func (fs assetParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs assetParamsFieldSpec) Type() StackType {
 	return fs.ftype
 }
 
-func (fs *assetParamsFieldSpec) OpVersion() uint64 {
+func (fs assetParamsFieldSpec) OpVersion() uint64 {
 	return 2
 }
 
-func (fs *assetParamsFieldSpec) Version() uint64 {
+func (fs assetParamsFieldSpec) Version() uint64 {
 	return fs.version
 }
 
-func (fs *assetParamsFieldSpec) Note() string {
+func (fs assetParamsFieldSpec) Note() string {
 	note := assetParamsFieldDocs[fs.field.String()]
 	return note
 }
@@ -728,16 +763,15 @@ var assetParamsFieldSpecs = []assetParamsFieldSpec{
 	{AssetCreator, StackBytes, 5},
 }
 
-var assetParamsFieldSpecByField map[AssetParamsField]assetParamsFieldSpec
+var assetParamsFieldSpecByField map[AssetParamsField]assetParamsFieldSpec = make(map[AssetParamsField]assetParamsFieldSpec, len(AssetParamsFieldNames))
 
 // AssetParamsFieldSpecByName gives access to the field specs by field name
-var AssetParamsFieldSpecByName apfNameSpecMap
+var AssetParamsFieldSpecByName apfNameSpecMap = make(apfNameSpecMap, len(AssetParamsFieldNames))
 
 type apfNameSpecMap map[string]assetParamsFieldSpec
 
 func (s apfNameSpecMap) SpecByName(name string) FieldSpec {
-	fs := s[name]
-	return &fs
+	return s[name]
 }
 
 // AppParamsField is an enum for `app_params_get` opcode
@@ -769,7 +803,7 @@ const (
 )
 
 // AppParamsFieldNames are arguments to the 'app_params_get' opcode
-var AppParamsFieldNames []string
+var AppParamsFieldNames [invalidAppParamsField]string
 
 type appParamsFieldSpec struct {
 	field   AppParamsField
@@ -777,19 +811,23 @@ type appParamsFieldSpec struct {
 	version uint64
 }
 
-func (fs *appParamsFieldSpec) Type() StackType {
+func (fs appParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs appParamsFieldSpec) Type() StackType {
 	return fs.ftype
 }
 
-func (fs *appParamsFieldSpec) OpVersion() uint64 {
+func (fs appParamsFieldSpec) OpVersion() uint64 {
 	return 5
 }
 
-func (fs *appParamsFieldSpec) Version() uint64 {
+func (fs appParamsFieldSpec) Version() uint64 {
 	return fs.version
 }
 
-func (fs *appParamsFieldSpec) Note() string {
+func (fs appParamsFieldSpec) Note() string {
 	note := appParamsFieldDocs[fs.field.String()]
 	return note
 }
@@ -806,17 +844,16 @@ var appParamsFieldSpecs = []appParamsFieldSpec{
 	{AppAddress, StackBytes, 5},
 }
 
-var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec
+var appParamsFieldSpecByField map[AppParamsField]appParamsFieldSpec = make(map[AppParamsField]appParamsFieldSpec, len(AppParamsFieldNames))
 
 // AppParamsFieldSpecByName gives access to the field specs by field name
-var AppParamsFieldSpecByName appNameSpecMap
+var AppParamsFieldSpecByName appNameSpecMap = make(appNameSpecMap, len(AppParamsFieldNames))
 
 // simple interface used by doc generator for fields versioning
 type appNameSpecMap map[string]appParamsFieldSpec
 
 func (s appNameSpecMap) SpecByName(name string) FieldSpec {
-	fs := s[name]
-	return &fs
+	return s[name]
 }
 
 // AcctParamsField is an enum for `acct_params_get` opcode
@@ -834,7 +871,7 @@ const (
 )
 
 // AcctParamsFieldNames are arguments to the 'acct_params_get' opcode
-var AcctParamsFieldNames []string
+var AcctParamsFieldNames [invalidAcctParamsField]string
 
 type acctParamsFieldSpec struct {
 	field   AcctParamsField
@@ -842,19 +879,23 @@ type acctParamsFieldSpec struct {
 	version uint64
 }
 
-func (fs *acctParamsFieldSpec) Type() StackType {
+func (fs acctParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs acctParamsFieldSpec) Type() StackType {
 	return fs.ftype
 }
 
-func (fs *acctParamsFieldSpec) OpVersion() uint64 {
+func (fs acctParamsFieldSpec) OpVersion() uint64 {
 	return 6
 }
 
-func (fs *acctParamsFieldSpec) Version() uint64 {
+func (fs acctParamsFieldSpec) Version() uint64 {
 	return fs.version
 }
 
-func (fs *acctParamsFieldSpec) Note() string {
+func (fs acctParamsFieldSpec) Note() string {
 	note := acctParamsFieldDocs[fs.field.String()]
 	return note
 }
@@ -865,146 +906,96 @@ var acctParamsFieldSpecs = []acctParamsFieldSpec{
 	{AcctAuthAddr, StackBytes, 6},
 }
 
-var acctParamsFieldSpecByField map[AcctParamsField]acctParamsFieldSpec
+var acctParamsFieldSpecByField map[AcctParamsField]acctParamsFieldSpec = make(map[AcctParamsField]acctParamsFieldSpec, len(AcctParamsFieldNames))
 
 // AcctParamsFieldSpecByName gives access to the field specs by field name
-var AcctParamsFieldSpecByName acctNameSpecMap
+var AcctParamsFieldSpecByName acctNameSpecMap = make(acctNameSpecMap, len(AcctParamsFieldNames))
 
 // simple interface used by doc generator for fields versioning
 type acctNameSpecMap map[string]acctParamsFieldSpec
 
 func (s acctNameSpecMap) SpecByName(name string) FieldSpec {
-	fs := s[name]
-	return &fs
+	return s[name]
 }
 
 func init() {
-	TxnFieldNames = make([]string, int(invalidTxnField))
-	for fi := Sender; fi < invalidTxnField; fi++ {
-		TxnFieldNames[fi] = fi.String()
-	}
-	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
 		if int(s.field) != i {
 			panic("txnFieldSpecs disjoint with TxnField enum")
 		}
+		TxnFieldNames[s.field] = s.field.String()
 		txnFieldSpecByField[s.field] = s
-	}
-	TxnFieldSpecByName = make(map[string]txnFieldSpec, len(TxnFieldNames))
-	for i, tfn := range TxnFieldNames {
-		TxnFieldSpecByName[tfn] = txnFieldSpecByField[TxnField(i)]
+		TxnFieldSpecByName[s.field.String()] = s
 	}
 
-	GlobalFieldNames = make([]string, int(invalidGlobalField))
-	for i := MinTxnFee; i < invalidGlobalField; i++ {
-		GlobalFieldNames[i] = i.String()
-	}
-	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
 	for i, s := range globalFieldSpecs {
 		if int(s.field) != i {
 			panic("globalFieldSpecs disjoint with GlobalField enum")
 		}
+		GlobalFieldNames[s.field] = s.field.String()
 		globalFieldSpecByField[s.field] = s
-	}
-	GlobalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
-	for i, gfn := range GlobalFieldNames {
-		GlobalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
+		GlobalFieldSpecByName[s.field.String()] = s
 	}
 
-	EcdsaCurveNames = make([]string, int(invalidEcdsaCurve))
-	for i := Secp256k1; i < invalidEcdsaCurve; i++ {
-		EcdsaCurveNames[i] = i.String()
-	}
-	ecdsaCurveSpecByField = make(map[EcdsaCurve]ecdsaCurveSpec, len(EcdsaCurveNames))
-	for _, s := range ecdsaCurveSpecs {
+	for i, s := range ecdsaCurveSpecs {
+		if int(s.field) != i {
+			panic("ecdsaCurveSpecs disjoint with EcdsaCurve enum")
+		}
+		EcdsaCurveNames[s.field] = s.field.String()
 		ecdsaCurveSpecByField[s.field] = s
+		EcdsaCurveSpecByName[s.field.String()] = s
 	}
 
-	EcdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(EcdsaCurveNames))
-	for i, ahfn := range EcdsaCurveNames {
-		EcdsaCurveSpecByName[ahfn] = ecdsaCurveSpecByField[EcdsaCurve(i)]
-	}
-
-	base64EncodingSpecByField = make(map[Base64Encoding]base64EncodingSpec, len(base64EncodingNames))
-	for _, s := range base64EncodingSpecs {
+	for i, s := range base64EncodingSpecs {
+		if int(s.field) != i {
+			panic("base64EncodingSpecs disjoint with Base64Encoding enum")
+		}
 		base64EncodingSpecByField[s.field] = s
+		base64EncodingSpecByName[s.field.String()] = s
 	}
 
-	base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
-	for i, encoding := range base64EncodingNames {
-		base64EncodingSpecByName[encoding] = base64EncodingSpecByField[Base64Encoding(i)]
-	}
-
-	base64EncodingSpecByField = make(map[Base64Encoding]base64EncodingSpec, len(base64EncodingNames))
-	for _, s := range base64EncodingSpecs {
-		base64EncodingSpecByField[s.field] = s
-	}
-
-	base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
-	for i, encoding := range base64EncodingNames {
-		base64EncodingSpecByName[encoding] = base64EncodingSpecByField[Base64Encoding(i)]
-	}
-
-	jsonRefSpecByField = make(map[JSONRefType]jsonRefSpec, len(jsonRefTypeNames))
-	for _, s := range jsonRefSpecs {
+	for i, s := range jsonRefSpecs {
+		if int(s.field) != i {
+			panic("jsonRefSpecs disjoint with JSONRefType enum")
+		}
 		jsonRefSpecByField[s.field] = s
+		jsonRefSpecByName[s.field.String()] = s
 	}
 
-	jsonRefSpecByName = make(jsonRefSpecMap, len(jsonRefTypeNames))
-	for i, typename := range jsonRefTypeNames {
-		jsonRefSpecByName[typename] = jsonRefSpecByField[JSONRefType(i)]
-	}
-
-	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
-	for i := AssetBalance; i < invalidAssetHoldingField; i++ {
-		AssetHoldingFieldNames[i] = i.String()
-	}
-	assetHoldingFieldSpecByField = make(map[AssetHoldingField]assetHoldingFieldSpec, len(AssetHoldingFieldNames))
-	for _, s := range assetHoldingFieldSpecs {
+	for i, s := range assetHoldingFieldSpecs {
+		if int(s.field) != i {
+			panic("assetHoldingFieldSpecs disjoint with AssetHoldingField enum")
+		}
+		AssetHoldingFieldNames[i] = s.field.String()
 		assetHoldingFieldSpecByField[s.field] = s
-	}
-	AssetHoldingFieldSpecByName = make(ahfNameSpecMap, len(AssetHoldingFieldNames))
-	for i, ahfn := range AssetHoldingFieldNames {
-		AssetHoldingFieldSpecByName[ahfn] = assetHoldingFieldSpecByField[AssetHoldingField(i)]
+		AssetHoldingFieldSpecByName[s.field.String()] = s
 	}
 
-	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
-	for i := AssetTotal; i < invalidAssetParamsField; i++ {
-		AssetParamsFieldNames[i] = i.String()
-	}
-	assetParamsFieldSpecByField = make(map[AssetParamsField]assetParamsFieldSpec, len(AssetParamsFieldNames))
-	for _, s := range assetParamsFieldSpecs {
+	for i, s := range assetParamsFieldSpecs {
+		if int(s.field) != i {
+			panic("assetParamsFieldSpecs disjoint with AssetParamsField enum")
+		}
+		AssetParamsFieldNames[i] = s.field.String()
 		assetParamsFieldSpecByField[s.field] = s
-	}
-	AssetParamsFieldSpecByName = make(apfNameSpecMap, len(AssetParamsFieldNames))
-	for i, apfn := range AssetParamsFieldNames {
-		AssetParamsFieldSpecByName[apfn] = assetParamsFieldSpecByField[AssetParamsField(i)]
+		AssetParamsFieldSpecByName[s.field.String()] = s
 	}
 
-	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
-	for i := AppApprovalProgram; i < invalidAppParamsField; i++ {
-		AppParamsFieldNames[i] = i.String()
-	}
-	appParamsFieldSpecByField = make(map[AppParamsField]appParamsFieldSpec, len(AppParamsFieldNames))
-	for _, s := range appParamsFieldSpecs {
+	for i, s := range appParamsFieldSpecs {
+		if int(s.field) != i {
+			panic("appParamsFieldSpecs disjoint with AppParamsField enum")
+		}
+		AppParamsFieldNames[i] = s.field.String()
 		appParamsFieldSpecByField[s.field] = s
-	}
-	AppParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
-	for i, apfn := range AppParamsFieldNames {
-		AppParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
+		AppParamsFieldSpecByName[s.field.String()] = s
 	}
 
-	AcctParamsFieldNames = make([]string, int(invalidAcctParamsField))
-	for i := AcctBalance; i < invalidAcctParamsField; i++ {
-		AcctParamsFieldNames[i] = i.String()
-	}
-	acctParamsFieldSpecByField = make(map[AcctParamsField]acctParamsFieldSpec, len(AcctParamsFieldNames))
-	for _, s := range acctParamsFieldSpecs {
+	for i, s := range acctParamsFieldSpecs {
+		if int(s.field) != i {
+			panic("acctParamsFieldSpecs disjoint with AcctParamsField enum")
+		}
+		AcctParamsFieldNames[i] = s.field.String()
 		acctParamsFieldSpecByField[s.field] = s
-	}
-	AcctParamsFieldSpecByName = make(acctNameSpecMap, len(AcctParamsFieldNames))
-	for i, apfn := range AcctParamsFieldNames {
-		AcctParamsFieldSpecByName[apfn] = acctParamsFieldSpecByField[AcctParamsField(i)]
+		AcctParamsFieldSpecByName[s.field.String()] = s
 	}
 
 	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))

@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -349,20 +351,34 @@ var OpGroups = map[string][]string{
 type OpCost struct {
 	From int
 	To   int
-	Cost int
+	Cost string
 }
 
-// OpAllCosts returns an array of the cost score for an op by version.
-// Each entry indicates the cost over a range of versions, so if the
-// cost has remained constant, there is only one result, otherwise
-// each entry shows the cost for a consecutive range of versions,
-// inclusive.
+// OpAllCosts returns an array of the cost of an op by version.  Each entry
+// indicates the cost over a range of versions, so if the cost has remained
+// constant, there is only one result, otherwise each entry shows the cost for a
+// consecutive range of versions, inclusive.
 func OpAllCosts(opName string) []OpCost {
 	var costs []OpCost
 	for v := 1; v <= LogicVersion; v++ {
-		cost := OpsByName[v][opName].Details.Cost
-		if cost == 0 {
+		spec, ok := OpsByName[v][opName]
+		if !ok {
 			continue
+		}
+		cost := fmt.Sprintf("%d", spec.Details.Cost)
+		if cost == "0" {
+			cost = ""
+			// This is quite brittle code, but sufficient for doc generation.
+			// Right now, costFuncs are only used to inspect the next byte to
+			// see the field in use.
+			fakeProgram := make([]byte, 2)
+			// brittle. these func are on single immediate opcodes right now.
+			group := spec.Details.Immediates[0].group
+			for _, name := range group.names {
+				fakeProgram[1] = group.spec.SpecByName(name).Field()
+				fcost := spec.Details.costFunc(fakeProgram, 0)
+				cost += fmt.Sprintf(" %s=%d", name, fcost)
+			}
 		}
 		if costs == nil || cost != costs[len(costs)-1].Cost {
 			costs = append(costs, OpCost{v, v, cost})

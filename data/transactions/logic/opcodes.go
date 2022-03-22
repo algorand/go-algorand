@@ -65,25 +65,28 @@ const fidoVersion = 7 // base64, json, secp256r1
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {
 	Cost       int
+	costFunc   opCostFunc
 	Size       int
 	checkFunc  opCheckFunc
 	Immediates []immediate
 	typeFunc   opTypeFunc
 }
 
-var opDefault = opDetails{1, 1, nil, nil, nil}
-var opBranch = opDetails{1, 3, checkBranch, []immediate{{"target", immLabel}}, nil}
+type opCostFunc func(program []byte, pc int) int
+
+var opDefault = opDetails{1, nil, 1, nil, nil, nil}
+var opBranch = opDetails{1, nil, 3, checkBranch, []immediate{{"target", immLabel, nil}}, nil}
 
 func costly(cost int) opDetails {
-	return opDetails{cost, 1, nil, nil, nil}
+	return opDetails{cost, nil, 1, nil, nil, nil}
 }
 
 func immediates(names ...string) opDetails {
 	immediates := make([]immediate, len(names))
 	for i, name := range names {
-		immediates[i] = immediate{name, immByte}
+		immediates[i] = immediate{name, immByte, nil}
 	}
-	return opDetails{1, 1 + len(immediates), nil, immediates, nil}
+	return opDetails{1, nil, 1 + len(immediates), nil, immediates, nil}
 }
 
 func stacky(typer opTypeFunc, imms ...string) opDetails {
@@ -92,13 +95,27 @@ func stacky(typer opTypeFunc, imms ...string) opDetails {
 	return d
 }
 
-func varies(checker opCheckFunc, name string, kind immKind) opDetails {
-	return opDetails{1, 0, checker, []immediate{{name, kind}}, nil}
+func sizeVaries(checker opCheckFunc, name string, kind immKind) opDetails {
+	return opDetails{1, nil, 0, checker, []immediate{{name, kind, nil}}, nil}
 }
 
 func costlyImm(cost int, names ...string) opDetails {
 	opd := immediates(names...)
 	opd.Cost = cost
+	return opd
+}
+
+func costByField(immediate string, group *FieldGroup, costs map[byte]int) opDetails {
+	opd := immediates(immediate)
+	opd.Immediates[0].group = group
+	opd.Cost = 0
+	opd.costFunc = func(program []byte, pc int) int {
+		cost, ok := costs[program[pc+1]]
+		if ok {
+			return cost
+		}
+		return 1
+	}
 	return opd
 }
 
@@ -115,8 +132,9 @@ const (
 )
 
 type immediate struct {
-	Name string
-	kind immKind
+	Name  string
+	kind  immKind
+	group *FieldGroup
 }
 
 // OpSpec defines an opcode
@@ -168,8 +186,8 @@ var OpSpecs = []OpSpec{
 	{0x04, "ed25519verify", opEd25519Verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, costly(1900)},
 	{0x04, "ed25519verify", opEd25519Verify, asmDefault, disDefault, threeBytes, oneInt, 5, modeAny, costly(1900)},
 
-	{0x05, "ecdsa_verify", opEcdsaVerify, asmEcdsa, disEcdsa, threeBytes.plus(twoBytes), oneInt, 5, modeAny, costlyImm(1700, "v")},
-	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, asmEcdsa, disEcdsa, oneBytes, twoBytes, 5, modeAny, costlyImm(650, "v")},
+	{0x05, "ecdsa_verify", opEcdsaVerify, asmEcdsa, disEcdsa, threeBytes.plus(twoBytes), oneInt, 5, modeAny, costByField("v", &ecdsaCurves, ecdsaVerifyCosts)},
+	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, asmEcdsa, disEcdsa, oneBytes, twoBytes, 5, modeAny, costByField("v", &ecdsaCurves, ecdsaDecompressCosts)},
 	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, asmEcdsa, disEcdsa, oneBytes.plus(oneInt).plus(twoBytes), twoBytes, 5, modeAny, costlyImm(2000, "v")},
 
 	{0x08, "+", opPlus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
@@ -197,13 +215,13 @@ var OpSpecs = []OpSpec{
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
 	{0x1f, "divmodw", opDivModw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, costly(20)},
 
-	{0x20, "intcblock", opIntConstBlock, asmIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
+	{0x20, "intcblock", opIntConstBlock, asmIntCBlock, disIntcblock, nil, nil, 1, modeAny, sizeVaries(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, asmIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},
 	{0x22, "intc_0", opIntConst0, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
 	{0x23, "intc_1", opIntConst1, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
 	{0x24, "intc_2", opIntConst2, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
 	{0x25, "intc_3", opIntConst3, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
-	{0x26, "bytecblock", opByteConstBlock, asmByteCBlock, disBytecblock, nil, nil, 1, modeAny, varies(checkByteConstBlock, "bytes ...", immBytess)},
+	{0x26, "bytecblock", opByteConstBlock, asmByteCBlock, disBytecblock, nil, nil, 1, modeAny, sizeVaries(checkByteConstBlock, "bytes ...", immBytess)},
 	{0x27, "bytec", opByteConstLoad, asmByteC, disBytec, nil, oneBytes, 1, modeAny, immediates("i")},
 	{0x28, "bytec_0", opByteConst0, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
 	{0x29, "bytec_1", opByteConst1, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
@@ -299,8 +317,8 @@ var OpSpecs = []OpSpec{
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
-	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(opPushBytes, "bytes", immBytes)},
-	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(opPushInt, "uint", immInt)},
+	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, sizeVaries(opPushBytes, "bytes", immBytes)},
+	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, sizeVaries(opPushInt, "uint", immInt)},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, asmDefault, disDefault, threeBytes, oneInt, 7, modeAny, costly(1900)},
 
@@ -341,11 +359,11 @@ var OpSpecs = []OpSpec{
 	// AVM "effects"
 	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
 	{0xb1, "itxn_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
-	{0xb2, "itxn_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
-	{0xb3, "itxn_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
+	{0xb2, "itxn_field", opItxnField, asmItxnField, disItxnField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
+	{0xb3, "itxn_submit", opItxnSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
 	{0xb4, "itxn", opItxn, asmItxn, disTxn, nil, oneAny, 5, runModeApplication, immediates("f")},
 	{0xb5, "itxna", opItxna, asmTxna, disTxna, nil, oneAny, 5, runModeApplication, immediates("f", "i")},
-	{0xb6, "itxn_next", opTxNext, asmDefault, disDefault, nil, nil, 6, runModeApplication, opDefault},
+	{0xb6, "itxn_next", opItxnNext, asmDefault, disDefault, nil, nil, 6, runModeApplication, opDefault},
 	{0xb7, "gitxn", opGitxn, asmGitxn, disGtxn, nil, oneAny, 6, runModeApplication, immediates("t", "f")},
 	{0xb8, "gitxna", opGitxna, asmGtxna, disGtxna, nil, oneAny, 6, runModeApplication, immediates("t", "f", "i")},
 

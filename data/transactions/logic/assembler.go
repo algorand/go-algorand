@@ -799,7 +799,7 @@ func txnFieldImm(name string, expectArray bool, ops *OpStream) (*txnFieldSpec, e
 	}
 	if fs.version > ops.Version {
 		return nil,
-			fmt.Errorf("field %#v available in version %d. Missed #pragma version?", name, fs.version)
+			fmt.Errorf("%s field was introduced in TEAL v%d. Missed #pragma version?", name, fs.version)
 	}
 	return &fs, nil
 }
@@ -1058,7 +1058,7 @@ func asmGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if fs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
 	val := fs.field
@@ -1079,7 +1079,7 @@ func asmAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if fs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
 	val := fs.field
@@ -1100,7 +1100,7 @@ func asmAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if fs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
 	val := fs.field
@@ -1121,7 +1121,7 @@ func asmAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if fs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
 	val := fs.field
@@ -1142,7 +1142,7 @@ func asmAcctParams(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if fs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], fs.version)
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.version)
 	}
 
 	val := fs.field
@@ -1153,7 +1153,7 @@ func asmAcctParams(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
+func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
@@ -1165,7 +1165,7 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorf("%s %#v available in version %d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
+		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
@@ -1183,7 +1183,7 @@ func asmEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if cs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], cs.version)
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], cs.version)
 	}
 
 	val := cs.field
@@ -1203,7 +1203,7 @@ func asmBase64Decode(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	if encoding.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
-		ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], encoding.version)
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], encoding.version)
 	}
 
 	val := encoding.field
@@ -1224,7 +1224,7 @@ func asmJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unsupported JSON value type: %#v", spec.Name, args[0])
 	}
 	if jsonSpec.version > ops.Version {
-		return ops.errorf("%s %s available in version %d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
+		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
 	}
 
 	valueType := jsonSpec.field
@@ -1407,15 +1407,18 @@ func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	return StackTypes{fs.ftype}, nil
 }
 
-// keywords handle parsing and assembling special asm language constructs like 'addr'
-// We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
+var pseudoOpDetails = opDetails{1, nil, 2, nil, nil, nil}
+
+// keywords or "pseudo-ops" handle parsing and assembling special asm language
+// constructs like 'addr' We use an OpSpec here, but it's somewhat degenerate,
+// since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, asmInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
-	"byte": {0, "byte", nil, asmByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"int":  {0, "int", nil, asmInt, nil, nil, oneInt, 1, modeAny, pseudoOpDetails},
+	"byte": {0, "byte", nil, asmByte, nil, nil, oneBytes, 1, modeAny, pseudoOpDetails},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, asmAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"addr": {0, "addr", nil, asmAddr, nil, nil, oneBytes, 1, modeAny, pseudoOpDetails},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, asmMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"method": {0, "method", nil, asmMethod, nil, nil, oneBytes, 1, modeAny, pseudoOpDetails},
 }
 
 type lineError struct {
@@ -2641,7 +2644,7 @@ func disAcctParams(dis *disassembleState, spec *OpSpec) (string, error) {
 	return fmt.Sprintf("%s %s", spec.Name, AcctParamsFieldNames[arg]), nil
 }
 
-func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
+func disItxnField(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1

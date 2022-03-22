@@ -50,7 +50,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Opcode: 0x05 {uint8 curve index}
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., uint64
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**: 1700
+- **Cost**:  Secp256k1=1700 Secp256r1=2500
 - Availability: v5
 
 `ECDSA` Curves:
@@ -68,7 +68,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 - Opcode: 0x06 {uint8 curve index}
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
-- **Cost**: 650
+- **Cost**:  Secp256k1=650 Secp256r1=2400
 - Availability: v5
 
 `ECDSA` Curves:

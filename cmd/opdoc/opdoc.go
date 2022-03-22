@@ -77,11 +77,7 @@ func integerConstantsTableMarkdown(out io.Writer) {
 	out.Write([]byte("\n"))
 }
 
-type speccer interface {
-	SpecByName(name string) logic.FieldSpec
-}
-
-func fieldSpecsMarkdown(out io.Writer, names []string, specs speccer) {
+func fieldSpecsMarkdown(out io.Writer, names []string, specs logic.FieldSpeccer) {
 	showTypes := false
 	showVers := false
 	spec0 := specs.SpecByName(names[0])
@@ -127,37 +123,37 @@ func fieldSpecsMarkdown(out io.Writer, names []string, specs speccer) {
 
 func transactionFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`txn` Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/)):\n\n")
-	fieldSpecsMarkdown(out, logic.TxnFieldNames, logic.TxnFieldSpecByName)
+	fieldSpecsMarkdown(out, logic.TxnFieldNames[:], logic.TxnFieldSpecByName)
 }
 
 func globalFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`global` Fields:\n\n")
-	fieldSpecsMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldSpecByName)
+	fieldSpecsMarkdown(out, logic.GlobalFieldNames[:], logic.GlobalFieldSpecByName)
 }
 
 func assetHoldingFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`asset_holding_get` Fields:\n\n")
-	fieldSpecsMarkdown(out, logic.AssetHoldingFieldNames, logic.AssetHoldingFieldSpecByName)
+	fieldSpecsMarkdown(out, logic.AssetHoldingFieldNames[:], logic.AssetHoldingFieldSpecByName)
 }
 
 func assetParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`asset_params_get` Fields:\n\n")
-	fieldSpecsMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldSpecByName)
+	fieldSpecsMarkdown(out, logic.AssetParamsFieldNames[:], logic.AssetParamsFieldSpecByName)
 }
 
 func appParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`app_params_get` Fields:\n\n")
-	fieldSpecsMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
+	fieldSpecsMarkdown(out, logic.AppParamsFieldNames[:], logic.AppParamsFieldSpecByName)
 }
 
 func acctParamsFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`acct_params_get` Fields:\n\n")
-	fieldSpecsMarkdown(out, logic.AcctParamsFieldNames, logic.AcctParamsFieldSpecByName)
+	fieldSpecsMarkdown(out, logic.AcctParamsFieldNames[:], logic.AcctParamsFieldSpecByName)
 }
 
 func ecDsaCurvesMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`ECDSA` Curves:\n\n")
-	fieldSpecsMarkdown(out, logic.EcdsaCurveNames, logic.EcdsaCurveSpecByName)
+	fieldSpecsMarkdown(out, logic.EcdsaCurveNames[:], logic.EcdsaCurveSpecByName)
 }
 
 func immediateMarkdown(op *logic.OpSpec) string {
@@ -214,19 +210,19 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		fmt.Fprintf(out, "- **Cost**:\n")
 		for _, cost := range costs {
 			if cost.From == cost.To {
-				fmt.Fprintf(out, "    - %d (v%d)\n", cost.Cost, cost.To)
+				fmt.Fprintf(out, "    - %s (v%d)\n", cost.Cost, cost.To)
 			} else {
 				if cost.To < logic.LogicVersion {
-					fmt.Fprintf(out, "    - %d (v%d - v%d)\n", cost.Cost, cost.From, cost.To)
+					fmt.Fprintf(out, "    - %s (v%d - v%d)\n", cost.Cost, cost.From, cost.To)
 				} else {
-					fmt.Fprintf(out, "    - %d (since v%d)\n", cost.Cost, cost.From)
+					fmt.Fprintf(out, "    - %s (since v%d)\n", cost.Cost, cost.From)
 				}
 			}
 		}
 	} else {
 		cost := costs[0].Cost
-		if cost != 1 {
-			fmt.Fprintf(out, "- **Cost**: %d\n", cost)
+		if cost != "1" {
+			fmt.Fprintf(out, "- **Cost**: %s\n", cost)
 		}
 	}
 	if op.Version > 1 {
@@ -321,7 +317,7 @@ func typeString(types []logic.StackType) string {
 	return string(out)
 }
 
-func fieldsAndTypes(names []string, specs speccer) ([]string, string) {
+func fieldsAndTypes(names []string, specs logic.FieldSpeccer) ([]string, string) {
 	types := make([]logic.StackType, len(names))
 	for i, name := range names {
 		types[i] = specs.SpecByName(name).Type()
@@ -332,18 +328,18 @@ func fieldsAndTypes(names []string, specs speccer) ([]string, string) {
 func argEnums(name string) (names []string, types string) {
 	switch name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn", "itxn_field":
-		return fieldsAndTypes(logic.TxnFieldNames, logic.TxnFieldSpecByName)
+		return fieldsAndTypes(logic.TxnFieldNames[:], logic.TxnFieldSpecByName)
 	case "global":
 		return
 	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
 		// Map is the whole txn field spec map.  That's fine, we only lookup the given names.
 		return fieldsAndTypes(logic.TxnaFieldNames(), logic.TxnFieldSpecByName)
 	case "asset_holding_get":
-		return fieldsAndTypes(logic.AssetHoldingFieldNames, logic.AssetHoldingFieldSpecByName)
+		return fieldsAndTypes(logic.AssetHoldingFieldNames[:], logic.AssetHoldingFieldSpecByName)
 	case "asset_params_get":
-		return fieldsAndTypes(logic.AssetParamsFieldNames, logic.AssetParamsFieldSpecByName)
+		return fieldsAndTypes(logic.AssetParamsFieldNames[:], logic.AssetParamsFieldSpecByName)
 	case "app_params_get":
-		return fieldsAndTypes(logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
+		return fieldsAndTypes(logic.AppParamsFieldNames[:], logic.AppParamsFieldSpecByName)
 	default:
 		return nil, ""
 	}
@@ -401,27 +397,27 @@ func main() {
 	constants.Close()
 
 	txnfields := create("txn_fields.md")
-	fieldSpecsMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldSpecByName)
+	fieldSpecsMarkdown(txnfields, logic.TxnFieldNames[:], logic.TxnFieldSpecByName)
 	txnfields.Close()
 
 	globalfields := create("global_fields.md")
-	fieldSpecsMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldSpecByName)
+	fieldSpecsMarkdown(globalfields, logic.GlobalFieldNames[:], logic.GlobalFieldSpecByName)
 	globalfields.Close()
 
 	assetholding := create("asset_holding_fields.md")
-	fieldSpecsMarkdown(assetholding, logic.AssetHoldingFieldNames, logic.AssetHoldingFieldSpecByName)
+	fieldSpecsMarkdown(assetholding, logic.AssetHoldingFieldNames[:], logic.AssetHoldingFieldSpecByName)
 	assetholding.Close()
 
 	assetparams := create("asset_params_fields.md")
-	fieldSpecsMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldSpecByName)
+	fieldSpecsMarkdown(assetparams, logic.AssetParamsFieldNames[:], logic.AssetParamsFieldSpecByName)
 	assetparams.Close()
 
 	appparams := create("app_params_fields.md")
-	fieldSpecsMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldSpecByName)
+	fieldSpecsMarkdown(appparams, logic.AppParamsFieldNames[:], logic.AppParamsFieldSpecByName)
 	appparams.Close()
 
 	acctparams, _ := os.Create("acct_params_fields.md")
-	fieldSpecsMarkdown(acctparams, logic.AcctParamsFieldNames, logic.AcctParamsFieldSpecByName)
+	fieldSpecsMarkdown(acctparams, logic.AcctParamsFieldNames[:], logic.AcctParamsFieldSpecByName)
 	acctparams.Close()
 
 	langspecjs := create("langspec.json")

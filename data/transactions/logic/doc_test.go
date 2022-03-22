@@ -137,12 +137,12 @@ func TestOpAllCosts(t *testing.T) {
 
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
-	require.Equal(t, 1, a[0].Cost)
+	require.Equal(t, "1", a[0].Cost)
 
 	a = OpAllCosts("sha256")
 	require.Len(t, a, 2)
 	for _, cost := range a {
-		require.True(t, cost.Cost > 1)
+		require.True(t, cost.Cost != "0")
 	}
 }
 
