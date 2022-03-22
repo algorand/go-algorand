@@ -408,7 +408,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				if done.err != nil {
 					// if there is an error, report the error to the output channel.
 					p.outChan <- LoadedTransactionGroup{
-						Err: done.err,
+						Err: ledgercore.GroupTaskError{Err: done.err, GroupIdx: done.groupIdx},
 					}
 					return
 				}

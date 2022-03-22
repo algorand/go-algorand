@@ -18,6 +18,7 @@ package prefetcher_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -50,9 +51,10 @@ func makeAddress(addressSeed int) (o basics.Address) {
 const proto = protocol.ConsensusCurrentVersion
 
 type prefetcherTestLedger struct {
-	round    basics.Round
-	balances map[basics.Address]ledgercore.AccountData
-	creators map[basics.CreatableIndex]basics.Address
+	round        basics.Round
+	balances     map[basics.Address]ledgercore.AccountData
+	creators     map[basics.CreatableIndex]basics.Address
+	errorAddress map[basics.Address]bool
 }
 
 func (l *prefetcherTestLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
@@ -61,7 +63,10 @@ func (l *prefetcherTestLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, 
 func (l *prefetcherTestLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
-func (l *prefetcherTestLedger) LookupWithoutRewards(_ basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+func (l *prefetcherTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	if _, has := l.errorAddress[addr]; has {
+		return ledgercore.AccountData{}, l.round, fmt.Errorf("Lookup Error")
+	}
 	if data, has := l.balances[addr]; has {
 		return data, l.round, nil
 	}
@@ -71,9 +76,15 @@ func (l *prefetcherTestLedger) LookupApplication(rnd basics.Round, addr basics.A
 	return ledgercore.AppResource{}, nil
 }
 func (l *prefetcherTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	if aidx > 1000000 {
+		return ledgercore.AssetResource{}, fmt.Errorf("Asset Lookup Error")
+	}
 	return ledgercore.AssetResource{}, nil
 }
 func (l *prefetcherTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, error) {
+	if cidx > 1000000 {
+		return basics.Address{}, false, fmt.Errorf("Get Creator Error")
+	}
 	if addr, has := l.creators[cidx]; has {
 		return addr, true, nil
 	}
@@ -151,16 +162,17 @@ func compareLoadedResourcesEntries(t *testing.T, expected []prefetcher.LoadedRes
 	require.Equal(t, expectedForTest, actualForTest)
 }
 
-func TestEvaluatorPrefetcher(t *testing.T) {
+func TestEvaluatorPrefetcherX(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	rnd := basics.Round(5)
 	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 
 	var ledger = &prefetcherTestLedger{
-		round:    rnd,
-		balances: make(map[basics.Address]ledgercore.AccountData),
-		creators: make(map[basics.CreatableIndex]basics.Address),
+		round:        rnd,
+		balances:     make(map[basics.Address]ledgercore.AccountData),
+		creators:     make(map[basics.CreatableIndex]basics.Address),
+		errorAddress: make(map[basics.Address]bool),
 	}
 	ledger.balances[makeAddress(1)] = ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
@@ -493,6 +505,85 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 			require.False(t, ok)
 		})
 	}
+
+	// Test for the GroupIdx in the returned error
+	tc := testCases[3]
+	t.Run(tc.name, func(t *testing.T) {
+		errorReceived := false
+		groups := make([][]transactions.SignedTxnWithAD, 5)
+		for i := 0; i < 5; i++ {
+			groups[i] = make([]transactions.SignedTxnWithAD, 2)
+			for j := 0; j < 2; j++ {
+				groups[i][j].SignedTxn = tc.signedTxn
+				if tc.signedTxn.Txn.Type == protocol.AssetTransferTx {
+					if i == 2 {
+						// force error in asset lookup
+						groups[i][j].SignedTxn.Txn.AssetTransferTxnFields.XferAsset = 1000001
+					}
+				}
+			}
+		}
+		preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+		for loadedTxnGroup := range preloadedTxnGroupsCh {
+			if err, ok := loadedTxnGroup.Err.(ledgercore.GroupTaskError); ok {
+				errorReceived = true
+				require.Equal(t, int64(2), err.GroupIdx)
+			}
+		}
+		require.True(t, errorReceived)
+	})
+
+	tc = testCases[2]
+	errorReceived := false
+	// Test for errors generated from GetCreatorForRound
+	t.Run(tc.name, func(t *testing.T) {
+		groups := make([][]transactions.SignedTxnWithAD, 5)
+		for i := 0; i < 5; i++ {
+			groups[i] = make([]transactions.SignedTxnWithAD, 10)
+			for j := 0; j < 10; j++ {
+				groups[i][j].SignedTxn = tc.signedTxn
+				if tc.signedTxn.Txn.AssetConfigTxnFields.ConfigAsset > 0 {
+					// creatable index
+					tc.signedTxn.Txn.AssetConfigTxnFields.ConfigAsset = 1000001
+				}
+			}
+		}
+		preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+
+		for loadedTxnGroup := range preloadedTxnGroupsCh {
+			if err, ok := loadedTxnGroup.Err.(ledgercore.GroupTaskError); ok {
+				errorReceived = true
+				fmt.Println(err)
+			}
+		}
+		require.True(t, errorReceived)
+	})
+
+	// Test for errors generated from LookupWithoutRewards
+	errorReceived = false
+	t.Run(tc.name, func(t *testing.T) {
+		groups := make([][]transactions.SignedTxnWithAD, 5)
+		for i := 0; i < 5; i++ {
+			groups[i] = make([]transactions.SignedTxnWithAD, 10)
+			for j := 0; j < 10; j++ {
+				groups[i][j].SignedTxn = tc.signedTxn
+				if i > 3 && j > 7 {
+					// force lookup error
+					ledger.errorAddress[groups[i][j].SignedTxn.Txn.Sender] = true
+				}
+			}
+		}
+		preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+
+		for loadedTxnGroup := range preloadedTxnGroupsCh {
+			if err, ok := loadedTxnGroup.Err.(ledgercore.GroupTaskError); ok {
+				errorReceived = true
+				fmt.Println(err)
+			}
+		}
+		require.True(t, errorReceived)
+	})
+
 }
 
 func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
