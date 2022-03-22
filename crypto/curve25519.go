@@ -123,6 +123,17 @@ func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) b
 	return result == 0
 }
 
+func ed25519VerifyOld(public ed25519PublicKey, data []byte, sig ed25519Signature) bool {
+	// &data[0] will make Go panic if msg is zero length
+	d := (*C.uchar)(C.NULL)
+	if len(data) != 0 {
+		d = (*C.uchar)(&data[0])
+	}
+	// https://download.libsodium.org/doc/public-key_cryptography/public-key_signatures#detached-mode
+	result := C.crypto_sign_ed25519_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
+	return result == 0
+}
+
 // A Signature is a cryptographic signature. It proves that a message was
 // produced by a holder of a cryptographic secret.
 type Signature ed25519Signature
@@ -213,12 +224,13 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 //
 func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
-	b := ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
-	if !b {
-		s := fmt.Sprintf("batch verification failed for: messages: %v, signatures: %v, pks:%v", message, sig, v)
+	resultNew := ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
+	resultOld := ed25519VerifyOld(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
+	if resultNew != resultOld {
+		s := fmt.Sprintf("batch verification failed for: messages: %v, signatures: %v, pks:%v. old version says %v new version says %v", message, sig, v, resultOld, resultNew)
 		panic(s)
 	}
-	return true
+	return resultNew
 }
 
 // VerifyBytes verifies a signature, where the message is not hashed first.
@@ -226,10 +238,11 @@ func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 // If the message is a Hashable, Verify() can be used instead.
 func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
-	b := ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
-	if !b {
-		s := fmt.Sprintf("batch verification failed for: messages: %v, signatures: %v, pks:%v", message, sig, v)
+	resultNew := ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
+	resultOld := ed25519VerifyOld(ed25519PublicKey(v), message, ed25519Signature(sig))
+	if resultNew != resultOld {
+		s := fmt.Sprintf("batch verification failed for: messages: %v, signatures: %v, pks:%v. old version says %v new version says %v", message, sig, v, resultOld, resultNew)
 		panic(s)
 	}
-	return true
+	return resultNew
 }
