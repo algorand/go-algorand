@@ -405,7 +405,7 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 		return 0
 	}
 
-	if r + 1 <= basics.Round(protocol.SeedLookback) {
+	if r+1 <= basics.Round(protocol.SeedLookback) {
 		return 0
 	}
 
