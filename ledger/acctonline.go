@@ -215,6 +215,9 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 
 // committedUpTo implements the ledgerTracker interface for accountUpdates.
 func (ao *onlineAccounts) committedUpTo(committedRound basics.Round) basics.Round {
+	ao.accountsMu.RLock()
+	defer ao.accountsMu.RUnlock()
+
 	return ao.cachedDBRoundOnline + 1
 }
 

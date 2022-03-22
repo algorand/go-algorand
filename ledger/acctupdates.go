@@ -401,6 +401,9 @@ func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.Creat
 
 // committedUpTo implements the ledgerTracker interface for accountUpdates.
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Round {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+
 	return au.cachedDBRound + 1
 }
 
