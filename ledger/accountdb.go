@@ -2664,16 +2664,15 @@ func (qs *accountsDbQueries) close() {
 //
 // Note that this does not check if the accounts have a vote key valid for any
 // particular round (past, present, or future).
-func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
-	// TODO: add round number filter as needed
-
+func accountsOnlineTop(tx *sql.Tx, rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
 	// onlineaccounts has historical data ordered by updround for both online and offline accounts.
 	// This means some account A might have norm balance != 0 at round N and norm balance == 0 at some round K > N.
 	// For online top query one needs to find entries not fresher than X with norm balance != 0.
 	// To do that the query groups row by address and takes the latest updround, and then filters out rows with zero nor balance.
 	rows, err := tx.Query(`SELECT address, normalizedonlinebalance, data, max(updround) FROM onlineaccounts
+WHERE updround <= ?
 GROUP BY address HAVING normalizedonlinebalance > 0
-ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, n, offset)
+ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -2825,10 +2824,10 @@ func (w *onlineAccountsSQLWriter) close() {
 	}
 }
 
-func makeAccountsSQLWriter(tx *sql.Tx, accountsTable string, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
+func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
 	w = new(accountsSQLWriter)
 
-	if len(accountsTable) > 0 {
+	if hasAccounts {
 		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
 		if err != nil {
 			return
@@ -3008,11 +3007,7 @@ func accountsNewRound(
 	hasResources := resources.len() > 0
 	hasCreatables := len(creatables) > 0
 
-	accountsTableName := ""
-	if hasAccounts {
-		accountsTableName = "accountbase"
-	}
-	writer, err := makeAccountsSQLWriter(tx, accountsTableName, hasResources, hasCreatables)
+	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasCreatables)
 	if err != nil {
 		return
 	}

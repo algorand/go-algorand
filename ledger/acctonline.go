@@ -578,7 +578,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
 			err = ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				accts, err = accountsOnlineTop(tx, batchOffset, batchSize, genesisProto)
+				accts, err = accountsOnlineTop(tx, rnd, batchOffset, batchSize, genesisProto)
 				if err != nil {
 					return
 				}

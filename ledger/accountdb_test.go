@@ -126,28 +126,28 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		}
 	}
 
+	// Compute the top-N accounts ourselves
+	var testtop []ledgercore.OnlineAccount
+	for _, data := range onlineAccounts {
+		testtop = append(testtop, *data)
+	}
+
+	sort.Slice(testtop, func(i, j int) bool {
+		ibal := testtop[i].NormalizedOnlineBalance
+		jbal := testtop[j].NormalizedOnlineBalance
+		if ibal > jbal {
+			return true
+		}
+		if ibal < jbal {
+			return false
+		}
+		return bytes.Compare(testtop[i].Address[:], testtop[j].Address[:]) > 0
+	})
+
 	for i := 0; i < len(onlineAccounts); i++ {
-		dbtop, err := accountsOnlineTop(tx, 0, uint64(i), proto)
+		dbtop, err := accountsOnlineTop(tx, rnd, 0, uint64(i), proto)
 		require.NoError(t, err)
 		require.Equal(t, i, len(dbtop))
-
-		// Compute the top-N accounts ourselves
-		var testtop []ledgercore.OnlineAccount
-		for _, data := range onlineAccounts {
-			testtop = append(testtop, *data)
-		}
-
-		sort.Slice(testtop, func(i, j int) bool {
-			ibal := testtop[i].NormalizedOnlineBalance
-			jbal := testtop[j].NormalizedOnlineBalance
-			if ibal > jbal {
-				return true
-			}
-			if ibal < jbal {
-				return false
-			}
-			return bytes.Compare(testtop[i].Address[:], testtop[j].Address[:]) > 0
-		})
 
 		for j := 0; j < i; j++ {
 			_, ok := dbtop[testtop[j].Address]
@@ -155,7 +155,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		}
 	}
 
-	top, err := accountsOnlineTop(tx, 0, uint64(len(onlineAccounts)+1), proto)
+	top, err := accountsOnlineTop(tx, rnd, 0, uint64(len(onlineAccounts)+1), proto)
 	require.NoError(t, err)
 	require.Equal(t, len(top), len(onlineAccounts))
 }
@@ -260,9 +260,10 @@ func TestAccountDBRound(t *testing.T) {
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegment)
 
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
-		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), baseAccounts)
+		oldBase := i - 1
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), true, baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), true, baseAccounts, baseResources)
+		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), baseAccounts)
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
@@ -288,10 +289,11 @@ func TestAccountDBRound(t *testing.T) {
 			numResUpdates += len(rs)
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
-		err = updateAccountsRound(tx, basics.Round(i))
-		require.NoError(t, err)
 
 		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
+		require.NoError(t, err)
+
+		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 
 		// TODO: calculate exact number of updates?
