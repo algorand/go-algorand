@@ -6,12 +6,12 @@ require (
 	github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123
 	github.com/algorand/go-codec v1.1.8 // indirect
 	github.com/algorand/go-codec/codec v1.1.8
-	github.com/algorand/go-deadlock v0.2.1
+	github.com/algorand/go-deadlock v0.2.2
 	github.com/algorand/go-sumhash v0.1.0
-	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64
-	github.com/algorand/msgp v1.1.49
-	github.com/algorand/oapi-codegen v1.3.5-algorand5
-	github.com/algorand/websocket v1.4.4
+	github.com/algorand/graphtrace v0.1.0
+	github.com/algorand/msgp v1.1.50
+	github.com/algorand/oapi-codegen v1.3.7
+	github.com/algorand/websocket v1.4.5
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
@@ -28,7 +28,6 @@ require (
 	github.com/gopherjs/gopherwasm v1.0.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
-	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/hid v1.0.0
