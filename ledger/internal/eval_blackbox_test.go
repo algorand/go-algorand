@@ -489,7 +489,10 @@ func txns(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, tx
 func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
-	stxn := txn.SignedTxn()
+	stxn(t, ledger, eval, txn.SignedTxn(), problem...)
+}
+
+func stxn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, stxn transactions.SignedTxn, problem ...string) {
 	err := eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
 	if err != nil {
 		if len(problem) == 1 {

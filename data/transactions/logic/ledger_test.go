@@ -679,7 +679,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	if !pass {
 		return errors.New("Approval program failed")
 	}
-	ad.EvalDelta = cx.Txn.EvalDelta
+	ad.EvalDelta = cx.txn.EvalDelta
 
 	switch appl.OnCompletion {
 	case transactions.NoOpOC:
