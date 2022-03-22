@@ -17,8 +17,6 @@
 package logic
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -568,10 +566,6 @@ func (fs *base64EncodingSpec) Note() string {
 	note := "" // no doc list?
 	return note
 }
-func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 6 here because base64_decode fields were introduced in 6
-	return
-}
 
 // JSONRefType is an enum for the `json_ref` opcode
 type JSONRefType int
@@ -605,14 +599,6 @@ var jsonRefSpecByField map[JSONRefType]jsonRefSpec
 var jsonRefSpecByName jsonRefSpecMap
 
 type jsonRefSpecMap map[string]jsonRefSpec
-
-func (s jsonRefSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 6 here because base64_decode fields were introduced in 6
-	if s[name].version > 6 {
-		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
-	}
-	return
-}
 
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int

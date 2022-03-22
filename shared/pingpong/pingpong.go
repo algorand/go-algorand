@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // CreatablesInfo has information about created assets, apps and opting in
@@ -882,7 +883,7 @@ func (pps *WorkerState) sendFromTo(
 			timeCredit -= took
 			if timeCredit > 0 {
 				time.Sleep(timeCredit)
-				timeCredit = time.Duration(0)
+				timeCredit -= time.Since(now)
 			} else if timeCredit < -1000*time.Millisecond {
 				// cap the "time debt" to 1000 ms.
 				timeCredit = -1000 * time.Millisecond
@@ -1232,7 +1233,7 @@ func (t *throttler) maybeSleep(count int) {
 		desiredSeconds := float64(countsum) / t.xps
 		extraSeconds := desiredSeconds - dt.Seconds()
 		t.iterm += 0.1 * extraSeconds / float64(len(t.times))
-		time.Sleep(time.Duration(int64(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times)))))
+		util.NanoSleep(time.Duration(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times))))
 
 	} else {
 		t.iterm *= 0.95
