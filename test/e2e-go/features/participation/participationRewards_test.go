@@ -358,7 +358,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound - 1))
 	balanceOfRewardsPool, roundQueried := fixture.GetBalanceAndRound(rewardsAccount)
 	if roundQueried != rewardRecalcRound-1 {
-		r.FailNow("got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
+		r.FailNow("", "got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
 	}
 	lastRoundBeforeRewardRecals, err := client.Block(rewardRecalcRound - 1)
 	r.NoError(err)
@@ -381,7 +381,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound - 1))
 	balanceOfRewardsPool, roundQueried = fixture.GetBalanceAndRound(rewardsAccount)
 	if roundQueried != rewardRecalcRound-1 {
-		r.FailNow("got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
+		r.FailNow("", "got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
 	}
 	lastRoundBeforeRewardRecals, err = client.Block(rewardRecalcRound - 1)
 	r.NoError(err)

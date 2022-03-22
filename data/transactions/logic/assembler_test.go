@@ -2207,6 +2207,52 @@ func TestErrShortBytecblock(t *testing.T) {
 	require.Equal(t, err, errShortIntcblock)
 }
 
+func TestMethodWarning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		method string
+		pass   bool
+	}{
+		{
+			method: "abc(uint64)void",
+			pass:   true,
+		},
+		{
+			method: "abc(uint64)",
+			pass:   false,
+		},
+		{
+			method: "abc(uint65)void",
+			pass:   false,
+		},
+		{
+			method: "(uint64)void",
+			pass:   false,
+		},
+		{
+			method: "abc(uint65,void",
+			pass:   false,
+		},
+	}
+
+	for _, test := range tests {
+		for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+			src := fmt.Sprintf("method \"%s\"\nint 1", test.method)
+			ops, err := AssembleStringWithVersion(src, v)
+			require.NoError(t, err)
+
+			if test.pass {
+				require.Len(t, ops.Warnings, 0)
+				continue
+			}
+
+			require.Len(t, ops.Warnings, 1)
+			require.Contains(t, ops.Warnings[0].Error(), "Invalid ARC-4 ABI method signature for method op")
+		}
+	}
+}
+
 func TestBranchAssemblyTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
