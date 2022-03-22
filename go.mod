@@ -4,7 +4,8 @@ go 1.16
 
 require (
 	github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123
-	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
+	github.com/algorand/go-codec v1.1.8 // indirect
+	github.com/algorand/go-codec/codec v1.1.8
 	github.com/algorand/go-deadlock v0.2.1
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64
@@ -31,6 +32,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/hid v1.0.0
+	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
@@ -39,14 +41,13 @@ require (
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/olivere/elastic v6.2.14+incompatible
 	github.com/russross/blackfriday v1.5.2 // indirect
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
-	golang.org/x/text v0.3.3
+	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654
+	golang.org/x/text v0.3.7
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
