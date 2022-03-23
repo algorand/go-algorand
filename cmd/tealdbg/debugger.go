@@ -102,7 +102,7 @@ type programMeta struct {
 // )
 
 type debugConfig struct {
-	StepOver    bool `json:"stepover`
+	StepOver    bool `json:"stepover"`
 	NoBreak     bool `json:"nobreak"`
 	StepBreak   bool `json:"stepbreak"`
 	BreakAtLine int  `json:"breakatline"`
