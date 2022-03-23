@@ -102,6 +102,7 @@ type programMeta struct {
 // )
 
 type debugConfig struct {
+	StepOver    bool `json:"stepover`
 	NoBreak     bool `json:"nobreak"`
 	StepBreak   bool `json:"stepbreak"`
 	BreakAtLine int  `json:"breakatline"`
@@ -180,7 +181,6 @@ func (s *session) resume() {
 	for i := 0; i < 50; i++ {
 		select {
 		case s.acknowledged <- true:
-			// log.Printf("ACK\n")
 			return
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -200,6 +200,7 @@ func (s *session) Step() {
 
 func (s *session) StepOver() {
 	initialCallStackDepth := len(s.callStack)
+	nextLine := s.line.Load() + 1
 	// Get the first TEAL opcode in the line
 	currentOp := strings.Fields(s.lines[s.line.Load()])[0]
 
@@ -210,25 +211,25 @@ func (s *session) StepOver() {
 		// Set a breakpoint at the next line and resume until we reach our
 		// desired call stack height.
 		if currentOp == "callsub" {
-			// log.Printf("Stack 1: %+v, %v\n", (s.callStack), initialCallStackDepth)
-			err := s.setBreakpoint(s.line.Load() + 1)
+			err := s.setBreakpoint(nextLine)
 			if err != nil {
 				s.debugConfig = debugConfig{StepBreak: true}
 			}
+			// We need a flag to let Update() pass a message back to
+			// updateChannel and let execution resume.
+			s.debugConfig.StepOver = true
 			s.resume()
 			<-s.updateChannel
-			// log.Printf("Stack 2: %+v, %v\n", (s.callStack), initialCallStackDepth)
 			for len(s.callStack) != initialCallStackDepth {
-				// log.Printf("Stack 2: %+v, %v\n", (s.callStack), initialCallStackDepth)
-				err = s.setBreakpoint(s.line.Load() + 1)
+				err = s.setBreakpoint(nextLine)
 				if err != nil {
 					s.debugConfig = debugConfig{StepBreak: true}
 				}
+				s.debugConfig.StepOver = true
 				s.resume()
 				<-s.updateChannel
-				// log.Printf("End: %v, %v\n", len(s.callStack), initialCallStackDepth)
-				// log.Printf("Stack det: %v \n", (s.callStack))
 			}
+			s.debugConfig.StepOver = false
 		} else {
 			s.debugConfig = debugConfig{StepBreak: true}
 			s.resume()
@@ -534,10 +535,14 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 		if !cfg.NoBreak {
 			if cfg.StepBreak || (localState.Line) == cfg.BreakAtLine {
 				// Breakpoint hit! Inform the user
-				// log.Printf("Update 2 %v\n", state.CallStack)
-				s.notifications <- Notification{"updated", localState}
-				// Send message to internal update channel to resume execution after updating the debug state.
-				s.updateChannel <- true
+				defer func() {
+					s.notifications <- Notification{"updated", localState}
+				}()
+				// Send message to internal update channel to resume execution
+				// after updating the debug state.
+				if cfg.StepOver {
+					s.updateChannel <- true
+				}
 			} else {
 				// Continue if we haven't hit the next breakpoint
 				s.acknowledged <- true
