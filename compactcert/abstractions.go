@@ -32,7 +32,7 @@ import (
 // TransactionSender is an interface that captures the node's ability
 // to broadcast a new transaction.
 type TransactionSender interface {
-	BroadcastSignedTxGroup([]transactions.SignedTxn) error
+	BroadcastInternalSignedTxGroup([]transactions.SignedTxn) error
 }
 
 // Ledger captures the aspects of the ledger that are used by this package.
