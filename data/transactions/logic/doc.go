@@ -26,7 +26,9 @@ var opDocByName = map[string]string{
 	"sha256":              "SHA256 hash of value A, yields [32]byte",
 	"keccak256":           "Keccak256 hash of value A, yields [32]byte",
 	"sha512_256":          "SHA512_256 hash of value A, yields [32]byte",
+	"sha3_256":            "SHA3_256 hash of value A, yields [32]byte",
 	"ed25519verify":       "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
+	"ed25519verify_bare":  "for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y",
 	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key",
@@ -130,10 +132,10 @@ var opDocByName = map[string]string{
 	"concat":         "join A and B",
 	"substring":      "A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails",
 	"substring3":     "A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails",
-	"getbit":         "Bth bit of (byte-array or integer) A.",
-	"setbit":         "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C",
-	"getbyte":        "Bth byte of A, as an integer",
-	"setbyte":        "Copy of A with the Bth byte set to small integer (between 0..255) C",
+	"getbit":         "Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"setbit":         "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"getbyte":        "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
+	"setbyte":        "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
 	"extract":        "A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
 	"extract3":       "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
 	"extract_uint16": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
@@ -332,7 +334,7 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},

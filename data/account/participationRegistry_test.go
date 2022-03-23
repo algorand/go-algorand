@@ -22,6 +22,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"strconv"
 
 	"strings"
 	"sync"
@@ -44,18 +48,33 @@ import (
 // TODO: change to ConsensusCurrentVersion when updated
 var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 
-func getRegistry(t *testing.T) *participationDB {
-	rootDB, err := db.OpenPair(t.Name(), true)
+func getRegistry(t testing.TB) (registry *participationDB, dbfile string) {
+	return getRegistryImpl(t, true, false)
+}
+
+func getRegistryImpl(t testing.TB, inMem bool, erasable bool) (registry *participationDB, dbName string) {
+	var rootDB db.Pair
+	var err error
+	dbName = strings.Replace(t.Name(), "/", "_", -1)
+	if erasable {
+		require.False(t, inMem, "erasable registry can't be in-memory")
+		rootDB, err = db.OpenErasablePair(dbName)
+	} else {
+		rootDB, err = db.OpenPair(dbName, inMem)
+	}
 	require.NoError(t, err)
 
-	registry, err := makeParticipationRegistry(rootDB, logging.TestingLog(t))
+	registry, err = makeParticipationRegistry(rootDB, logging.TestingLog(t))
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
-	return registry
+	if inMem { // no files to clean up
+		dbName = ""
+	}
+	return registry, dbName
 }
 
-func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) {
+func assertParticipation(t testing.TB, p Participation, pr ParticipationRecord) {
 	require.Equal(t, p.FirstValid, pr.FirstValid)
 	require.Equal(t, p.LastValid, pr.LastValid)
 	require.Equal(t, p.KeyDilution, pr.KeyDilution)
@@ -67,16 +86,34 @@ func assertParticipation(t *testing.T, p Participation, pr ParticipationRecord) 
 }
 
 func makeTestParticipation(a *require.Assertions, addrID int, first, last basics.Round, dilution uint64) Participation {
+	a.True(first < last)
+
 	// Generate sample of stateproof keys. because it might take time we will reduce the number always to get 2 keys
 	stateProofSecrets, err := merklesignature.New(uint64(first), uint64(last), (uint64(last)+1)/2)
 	a.NoError(err)
+
+	// Generate part keys like in partGenerateCmd and FillDBWithParticipationKeys
+	if dilution == 0 {
+		dilution = 1 + uint64(math.Sqrt(float64(last-first)))
+	}
+
+	// Compute how many distinct participation keys we should generate
+	firstID := basics.OneTimeIDForRound(first, dilution)
+	lastID := basics.OneTimeIDForRound(last, dilution)
+	numBatches := lastID.Batch - firstID.Batch + 1
+
+	// Generate them
+	votingSecrets := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, numBatches)
+
+	// Generate a new VRF key, which lives in the participation keys db
+	vrf := crypto.GenerateVRFSecrets()
 
 	p := Participation{
 		FirstValid:        first,
 		LastValid:         last,
 		KeyDilution:       dilution,
-		Voting:            &crypto.OneTimeSignatureSecrets{},
-		VRF:               &crypto.VRFSecrets{},
+		Voting:            votingSecrets,
+		VRF:               vrf,
 		StateProofSecrets: stateProofSecrets,
 	}
 
@@ -84,19 +121,28 @@ func makeTestParticipation(a *require.Assertions, addrID int, first, last basics
 	return p
 }
 
-func registryCloseTest(t *testing.T, registry *participationDB) {
+func registryCloseTest(t testing.TB, registry *participationDB, dbfilePrefix string) {
 	start := time.Now()
 	registry.Close()
 	duration := time.Since(start)
 	assert.Less(t, uint64(duration), uint64(defaultTimeout))
+	// clean up DB files
+	if dbfilePrefix != "" {
+		dbfiles, err := filepath.Glob(dbfilePrefix + "*")
+		require.NoError(t, err)
+		for _, f := range dbfiles {
+			t.Log("removing", f)
+			require.NoError(t, os.Remove(f))
+		}
+	}
 }
 
 // Insert participation records and make sure they can be fetched.
 func TestParticipation_InsertGet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	p := makeTestParticipation(a, 1, 1, 2, 3)
 	p2 := makeTestParticipation(a, 2, 4, 5, 6)
@@ -148,8 +194,8 @@ func TestParticipation_InsertGet(t *testing.T) {
 func TestParticipation_InsertGetWithoutEmptyStateproof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	p := Participation{
 		FirstValid:  1,
@@ -188,8 +234,8 @@ func TestParticipation_InsertGetWithoutEmptyStateproof(t *testing.T) {
 func TestParticipation_Delete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistryImpl(t, false, true) // inMem=false, erasable=true
+	defer registryCloseTest(t, registry, dbfile)
 
 	p := makeTestParticipation(a, 1, 1, 2, 3)
 	p2 := makeTestParticipation(a, 2, 4, 5, 6)
@@ -217,40 +263,67 @@ func TestParticipation_Delete(t *testing.T) {
 	assertParticipation(t, p2, results[0])
 }
 
+type testMessage string
+
+func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Message, []byte(m)
+}
+
 func TestParticipation_DeleteExpired(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistryImpl(t, false, true) // inMem=false, erasable=true
+	defer registryCloseTest(t, registry, dbfile)
 
+	keyDilution := 1
 	for i := 10; i < 20; i++ {
-		p := makeTestParticipation(a, i, 1, basics.Round(i), 1)
+		p := makeTestParticipation(a, i, 1, basics.Round(i), uint64(keyDilution))
 		id, err := registry.Insert(p)
 		a.NoError(err)
 		a.Equal(p.ID(), id)
 	}
 
-	err := registry.DeleteExpired(15)
+	latestRound := basics.Round(15)
+	err := registry.DeleteExpired(latestRound, config.Consensus[protocol.ConsensusCurrentVersion])
 	a.NoError(err)
 
-	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
+	checkExpired := func(getAll []ParticipationRecord) {
+		a.Len(getAll, 5, "The first 5 should be deleted.")
+
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		for _, p := range getAll {
+			// like in loadRoundParticipationKeys
+			prfr := ParticipationRecordForRound{p}
+			voting := prfr.VotingSigner()
+
+			// count remaining batches (with keyDilution = 1)
+			keysLeft := len(p.Voting.Offsets) + len(p.Voting.Batches)*keyDilution
+			a.Equal(int(p.LastValid-latestRound), keysLeft)
+
+			// attempt to sign old rounds (will log warning)
+			ephID := basics.OneTimeIDForRound(basics.Round(latestRound), voting.KeyDilution(proto.DefaultKeyDilution))
+			sig := voting.Sign(ephID, testMessage("hello"))
+			a.Empty(sig)
+		}
+	}
+	checkExpired(registry.GetAll())
 
 	// Check persisting. Verify by re-initializing the cache.
 	a.NoError(registry.Flush(defaultTimeout))
 	a.NoError(registry.initializeCache())
-	a.Len(registry.GetAll(), 5, "The first 5 should be deleted.")
+	checkExpired(registry.GetAll())
 }
 
 // Make sure the register function properly sets effective first/last for all effected records.
 func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	// Overlapping keys.
-	p := makeTestParticipation(a, 1, 250000, 3000000, 1)
-	p2 := makeTestParticipation(a, 1, 200000, 4000000, 2)
+	p := makeTestParticipation(a, 1, 250000, 3000000, 0)
+	p2 := makeTestParticipation(a, 1, 200000, 4000000, 0)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -283,10 +356,10 @@ func TestParticipation_Register(t *testing.T) {
 func TestParticipation_RegisterInvalidID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
-	p := makeTestParticipation(a, 0, 250000, 3000000, 1)
+	p := makeTestParticipation(a, 0, 250000, 3000000, 0)
 
 	err := registry.Register(p.ID(), 10000000)
 	a.EqualError(err, ErrParticipationIDNotFound.Error())
@@ -296,10 +369,10 @@ func TestParticipation_RegisterInvalidID(t *testing.T) {
 func TestParticipation_RegisterInvalidRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
-	p := makeTestParticipation(a, 0, 250000, 3000000, 1)
+	p := makeTestParticipation(a, 0, 250000, 3000000, 0)
 
 	id, err := registry.Insert(p)
 	a.NoError(err)
@@ -314,14 +387,14 @@ func TestParticipation_RegisterInvalidRange(t *testing.T) {
 func TestParticipation_Record(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	// Setup p
-	p := makeTestParticipation(a, 1, 0, 3000000, 1)
+	p := makeTestParticipation(a, 1, 0, 3000000, 0)
 	// Setup some other keys to make sure they are not updated.
-	p2 := makeTestParticipation(a, 2, 0, 3000000, 1)
-	p3 := makeTestParticipation(a, 3, 0, 3000000, 1)
+	p2 := makeTestParticipation(a, 2, 0, 3000000, 0)
+	p3 := makeTestParticipation(a, 3, 0, 3000000, 0)
 
 	// Install and register all of the keys
 	for _, part := range []Participation{p, p2, p3} {
@@ -368,10 +441,10 @@ func TestParticipation_Record(t *testing.T) {
 func TestParticipation_RecordInvalidActionAndOutOfRange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
-	p := makeTestParticipation(a, 1, 0, 3000000, 1)
+	p := makeTestParticipation(a, 1, 0, 3000000, 0)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	err = registry.Register(id, 0)
@@ -390,8 +463,8 @@ func TestParticipation_RecordInvalidActionAndOutOfRange(t *testing.T) {
 func TestParticipation_RecordNoKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	err := registry.Record(basics.Address{}, 0, Vote)
 	a.EqualError(err, ErrActiveKeyNotFound.Error())
@@ -402,14 +475,14 @@ func TestParticipation_RecordNoKey(t *testing.T) {
 func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	// We'll test that recording at this round fails because both keys are active
 	testRound := basics.Round(5000)
 
-	p := makeTestParticipation(a, 1, 0, 3000000, 1)
-	p2 := makeTestParticipation(a, 1, 1, 3000000, 1)
+	p := makeTestParticipation(a, 1, 0, 3000000, 0)
+	p2 := makeTestParticipation(a, 1, 1, 3000000, 0)
 
 	_, err := registry.Insert(p)
 	a.NoError(err)
@@ -452,8 +525,8 @@ func TestParticipation_RecordMultipleUpdates(t *testing.T) {
 func TestParticipation_MultipleInsertError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	p := makeTestParticipation(a, 1, 1, 2, 3)
 
@@ -471,9 +544,9 @@ func TestParticipation_MultipleInsertError(t *testing.T) {
 func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
+	registry, _ := getRegistry(t)
 
-	p := makeTestParticipation(a, 1, 1, 2000000, 3)
+	p := makeTestParticipation(a, 1, 1, 2000000, 0)
 	id := p.ID()
 
 	// Insert the same record twice
@@ -573,8 +646,8 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 func TestParticipation_NoKeyToUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		record := ParticipationRecord{
@@ -596,8 +669,8 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 func TestParticipion_Blobs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	access, err := db.MakeAccessor("writetest_root", false, true)
 	if err != nil {
@@ -639,8 +712,8 @@ func TestParticipion_Blobs(t *testing.T) {
 func TestParticipion_EmptyBlobs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	access, err := db.MakeAccessor("writetest_root", false, true)
 	if err != nil {
@@ -683,8 +756,8 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 func TestRegisterUpdatedEvent(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	p := makeTestParticipation(a, 1, 1, 2, 3)
 	p2 := makeTestParticipation(a, 2, 4, 5, 6)
@@ -740,8 +813,8 @@ func TestFlushDeadlock(t *testing.T) {
 	var wg sync.WaitGroup
 
 	partitiontest.PartitionTest(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	spam := func() {
 		defer wg.Done()
@@ -769,8 +842,8 @@ func TestFlushDeadlock(t *testing.T) {
 func TestAddStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	// Install a key to add StateProof keys.
 	max := uint64(20)
@@ -821,8 +894,8 @@ func TestAddStateProofKeys(t *testing.T) {
 func TestSecretNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	// Install a key for testing
 	p := makeTestParticipation(a, 1, 0, 2, 3)
@@ -843,8 +916,8 @@ func TestSecretNotFound(t *testing.T) {
 func TestAddingSecretTwice(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	access, err := db.MakeAccessor("stateprooftest", false, true)
 	if err != nil {
@@ -881,8 +954,8 @@ func TestAddingSecretTwice(t *testing.T) {
 func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	access, err := db.MakeAccessor("stateprooftest", false, true)
 	if err != nil {
@@ -933,8 +1006,8 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 func TestFlushResetsLastError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
-	registry := getRegistry(t)
-	defer registryCloseTest(t, registry)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
 
 	access, err := db.MakeAccessor("stateprooftest", false, true)
 	a.NoError(err)
@@ -964,4 +1037,88 @@ func TestFlushResetsLastError(t *testing.T) {
 
 	a.Error(registry.Flush(10 * time.Second))
 	a.NoError(registry.Flush(10 * time.Second))
+}
+
+// based on BenchmarkOldKeysDeletion
+func BenchmarkDeleteExpired(b *testing.B) {
+	for _, erasable := range []bool{true, false} {
+		b.Run(fmt.Sprintf("erasable=%v", erasable), func(b *testing.B) {
+			a := require.New(b)
+
+			registry, dbfile := getRegistryImpl(b, false, erasable) // set inMem=false
+			defer func() {
+				registryCloseTest(b, registry, dbfile)
+			}()
+
+			// make participation key
+			lastValid := 3000000
+			keyDilution := 10000
+			if kd, err := strconv.Atoi(os.Getenv("DILUTION")); err == nil { // allow setting key dilution via env var
+				keyDilution = kd
+			}
+			if lv, err := strconv.Atoi(os.Getenv("LASTVALID")); err == nil { // allow setting last valid via env var
+				lastValid = lv
+			}
+			var part Participation
+
+			numKeys := 1
+			if nk, err := strconv.Atoi(os.Getenv("NUMKEYS")); err == nil { // allow setting numKeys via env var
+				numKeys = nk
+			}
+			for i := 0; i < numKeys; i++ {
+				if os.Getenv("SLOWKEYS") == "" {
+					// makeTestParticipation makes small state proof secrets to save time
+					b.Log("making fast part key", i, "for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
+					part = makeTestParticipation(a, i+1, 0, basics.Round(lastValid), uint64(keyDilution))
+					a.NotNil(part)
+				} else {
+					// generate key the same way as BenchmarkOldKeysDeletion
+					var rootAddr basics.Address
+					crypto.RandBytes(rootAddr[:])
+
+					ppartDB, err := db.MakeErasableAccessor("bench_part")
+					a.NoError(err)
+					a.NotNil(ppartDB)
+					defer func() {
+						os.Remove("bench_part")
+					}()
+
+					b.Log("making part key", i, "for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
+					ppart, err := FillDBWithParticipationKeys(ppartDB, rootAddr, 0, basics.Round(lastValid), uint64(keyDilution))
+					ppartDB.Close()
+					a.NoError(err)
+					part = ppart.Participation
+				}
+
+				// insertAndVerify new registry key
+				id, err := registry.Insert(part)
+				a.NoError(err)
+				a.Equal(part.ID(), id)
+				record := registry.Get(part.ID())
+				a.False(record.IsZero())
+				assertParticipation(b, part, record)
+			}
+
+			results := registry.GetAll()
+			a.Len(results, numKeys, "registry.GetAll() should return %d keys, but instead returned %v", numKeys, len(results))
+
+			// run N rounds of DeleteExpired + Flush
+			var err error
+			proto := config.Consensus[protocol.ConsensusCurrentVersion]
+			b.Log("starting DeleteExpired benchmark up to round", b.N)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				err = registry.DeleteExpired(basics.Round(i), proto)
+				if err != nil {
+					break
+				}
+				err = registry.Flush(defaultTimeout)
+				if err != nil {
+					break
+				}
+			}
+			b.StopTimer()
+			a.NoError(err)
+		})
+	}
 }

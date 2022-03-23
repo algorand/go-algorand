@@ -712,7 +712,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 - Opcode: 0x53
 - Stack: ..., A, B: uint64 &rarr; ..., uint64
-- Bth bit of (byte-array or integer) A.
+- Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
 - Availability: v3
 
 see explanation of bit ordering in setbit
@@ -721,7 +721,7 @@ see explanation of bit ordering in setbit
 
 - Opcode: 0x54
 - Stack: ..., A, B: uint64, C: uint64 &rarr; ..., any
-- Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C
+- Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
 - Availability: v3
 
 When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.
@@ -730,14 +730,14 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 - Opcode: 0x55
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
-- Bth byte of A, as an integer
+- Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails
 - Availability: v3
 
 ## setbyte
 
 - Opcode: 0x56
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
-- Copy of A with the Bth byte set to small integer (between 0..255) C
+- Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails
 - Availability: v3
 
 ## extract s l
@@ -1012,6 +1012,14 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
+## ed25519verify_bare
+
+- Opcode: 0x84
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
+- for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
+- **Cost**: 1900
+- Availability: v7
+
 ## callsub target
 
 - Opcode: 0x88 {int16 branch offset, big endian}
@@ -1092,6 +1100,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Availability: v6
 
 The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
+
+## sha3_256
+
+- Opcode: 0x98
+- Stack: ..., A: []byte &rarr; ..., []byte
+- SHA3_256 hash of value A, yields [32]byte
+- **Cost**: 130
+- Availability: v7
 
 ## b+
 

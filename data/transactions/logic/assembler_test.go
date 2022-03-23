@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -370,11 +369,16 @@ pushbytes 0x0123456789abcd
 dup
 dup
 ecdsa_verify Secp256r1
+sha3_256
+pushbytes 0x012345
+dup
+dup
+ed25519verify_bare
 `
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
-const v7Compiled = v6Compiled + "5c005d018120af060180070123456789abcd49490501"
+const v7Compiled = v6Compiled + "5c005d018120af060180070123456789abcd49490501988003012345494984"
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -435,14 +439,9 @@ func TestAssemble(t *testing.T) {
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
 			expectedBytes, _ := hex.DecodeString(compiled[v])
-			if bytes.Compare(expectedBytes, ops.Program) != 0 {
-				// this print is for convenience if
-				// the program has been changed. the
-				// hex string can be copy pasted back
-				// in as a new expected result.
-				t.Log(hex.EncodeToString(ops.Program))
-			}
-			require.Equal(t, expectedBytes, ops.Program)
+			// the hex is for convenience if the program has been changed. the
+			// hex string can be copy pasted back in as a new expected result.
+			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
 		})
 	}
 }
@@ -2206,6 +2205,52 @@ func TestErrShortBytecblock(t *testing.T) {
 	cx.program = ops.Program
 	err = checkIntConstBlock(&cx)
 	require.Equal(t, err, errShortIntcblock)
+}
+
+func TestMethodWarning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		method string
+		pass   bool
+	}{
+		{
+			method: "abc(uint64)void",
+			pass:   true,
+		},
+		{
+			method: "abc(uint64)",
+			pass:   false,
+		},
+		{
+			method: "abc(uint65)void",
+			pass:   false,
+		},
+		{
+			method: "(uint64)void",
+			pass:   false,
+		},
+		{
+			method: "abc(uint65,void",
+			pass:   false,
+		},
+	}
+
+	for _, test := range tests {
+		for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+			src := fmt.Sprintf("method \"%s\"\nint 1", test.method)
+			ops, err := AssembleStringWithVersion(src, v)
+			require.NoError(t, err)
+
+			if test.pass {
+				require.Len(t, ops.Warnings, 0)
+				continue
+			}
+
+			require.Len(t, ops.Warnings, 1)
+			require.Contains(t, ops.Warnings[0].Error(), "Invalid ARC-4 ABI method signature for method op")
+		}
+	}
 }
 
 func TestBranchAssemblyTypeCheck(t *testing.T) {

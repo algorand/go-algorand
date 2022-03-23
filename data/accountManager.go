@@ -18,7 +18,6 @@ package data
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -28,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 // AccountManager loads and manages accounts for the node
@@ -159,9 +157,7 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 
 // DeleteOldKeys deletes all accounts' ephemeral keys strictly older than the
 // next round needed for each account.
-func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, ccSigs map[basics.Address]basics.Round, agreementProto config.ConsensusParams) {
-	latestProto := config.Consensus[latestHdr.CurrentProtocol]
-
+func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, agreementProto config.ConsensusParams) {
 	manager.mu.Lock()
 	pendingItems := make(map[string]<-chan error, len(manager.partKeys))
 
@@ -173,22 +169,6 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 	for _, part := range partKeys {
 		// We need a key for round r+1 for agreement.
 		nextRound := latestHdr.Round + 1
-
-		if latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound > 0 {
-			// We need a key for the next compact cert round.
-			// This would be CompactCertNextRound+1 (+1 because compact
-			// cert code uses the next round's ephemeral key), except
-			// if we already used that key to produce a signature (as
-			// reported in ccSigs).
-			nextCC := latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound + 1
-			if ccSigs[part.Parent] >= nextCC {
-				nextCC = ccSigs[part.Parent] + basics.Round(latestProto.CompactCertRounds) + 1
-			}
-
-			if nextCC < nextRound {
-				nextRound = nextCC
-			}
-		}
 
 		// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
 		first, last := part.ValidInterval()
@@ -207,10 +187,8 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 		}
 	}
 
-	// PKI TODO: This needs to update the partkeys also, see the 'DeleteOldKeys' function above, it's part
-	//       is part of PersistedParticipation, but just calls 'part.Voting.DeleteBeforeFineGrained'
 	// Delete expired records from participation registry.
-	if err := manager.registry.DeleteExpired(latestHdr.Round); err != nil {
+	if err := manager.registry.DeleteExpired(latestHdr.Round, agreementProto); err != nil {
 		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)
 	}
 }
@@ -218,14 +196,6 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 // Registry fetches the ParticipationRegistry.
 func (manager *AccountManager) Registry() account.ParticipationRegistry {
 	return manager.registry
-}
-
-// FlushRegistry tells the underlying participation registry to flush it's change cache to the DB.
-func (manager *AccountManager) FlushRegistry(timeout time.Duration) {
-	err := manager.registry.Flush(timeout)
-	if err != nil {
-		manager.log.Warnf("error while flushing the registry: %w", err)
-	}
 }
 
 // Record asynchronously records a participation key usage event.
