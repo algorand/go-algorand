@@ -530,17 +530,29 @@ func (r *LocalRunner) RunAll() error {
 		return fmt.Errorf("no program to debug")
 	}
 
+	configureDebugger := func(ep *logic.EvalParams) {
+		// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
+		// r.debugger = nil
+		// ep.Debugger = r.debugger
+		// if ep.Debugger != nil // FALSE
+		if r.debugger != nil {
+			ep.Debugger = r.debugger
+		}
+	}
+
 	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
 	failed := 0
 	start := time.Now()
 
 	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
-	ep.Debugger = r.debugger
+	configureDebugger(ep)
 
 	var last error
 	for i := range r.runs {
 		run := &r.runs[i]
-		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
+		if r.debugger != nil {
+			r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
+		}
 
 		run.result.pass, run.result.err = run.eval(int(run.groupIndex), ep)
 		if run.result.err != nil {
@@ -553,27 +565,4 @@ func (r *LocalRunner) RunAll() error {
 		return fmt.Errorf("all %d program(s) failed in less than a second, invocation error? %w", failed, last)
 	}
 	return nil
-}
-
-// Run starts the first program in list
-func (r *LocalRunner) Run() (bool, error) {
-	if len(r.runs) < 1 {
-		return false, fmt.Errorf("no program to debug")
-	}
-
-	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
-
-	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
-
-	run := r.runs[0]
-	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
-	// r.debugger = nil
-	// ep.Debugger = r.debugger
-	// if ep.Debugger != nil // FALSE
-	if r.debugger != nil {
-		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
-		ep.Debugger = r.debugger
-	}
-
-	return run.eval(int(run.groupIndex), ep)
 }
