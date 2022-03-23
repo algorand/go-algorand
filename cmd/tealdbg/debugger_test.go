@@ -192,7 +192,7 @@ func TestSession(t *testing.T) {
 	require.Greater(t, len(data), 0)
 }
 
-// Tests control functions for stepping over recursive functions and checks
+// Tests control functions for stepping over subroutines and checks
 // that call stack is inspected correctly.
 func TestCallStackControl(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -200,6 +200,7 @@ func TestCallStackControl(t *testing.T) {
 	s.callStack = []logic.CallFrame{
 		{FrameLine: 2, LabelName: "lab1"},
 	}
+	// Check for step over on a callsub line
 	s.line.Store(3)
 
 	err := s.SetBreakpoint(3)
@@ -210,29 +211,32 @@ func TestCallStackControl(t *testing.T) {
 	done := make(chan struct{})
 
 	// Update function.
-	ackFuncRecurse := func() {
-		s.callStack = append(s.callStack, logic.CallFrame{FrameLine: 2, LabelName: "lab1"})
-		s.callStack = s.callStack[:len(s.callStack)-1]
+	ackFunc := func() {
 		ackCount++
 		<-s.acknowledged
-
 		done <- struct{}{}
 	}
 
-	go ackFuncRecurse()
+	go ackFunc()
 
 	s.StepOver()
 	<-done
 
 	require.Equal(t, 4, s.debugConfig.BreakAtLine)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
-	// Need to check that callstack is equal to initial depth
-	// and check that the StepOver went through twice.
 	require.Equal(t, 1, ackCount)
 	require.Equal(t, initialStackDepth, len(s.callStack))
 
-	s.RemoveBreakpoint(4)
-	require.Equal(t, breakpoint{false, false}, s.breakpoints[4])
+	// Check for step over on a non callsub line
+	s.line.Store(4)
+
+	go ackFunc()
+
+	s.StepOver()
+	<-done
+
+	require.Equal(t, true, s.debugConfig.StepBreak)
+	require.Equal(t, 2, ackCount)
 
 	data, err := s.GetSourceMap()
 	require.NoError(t, err)
