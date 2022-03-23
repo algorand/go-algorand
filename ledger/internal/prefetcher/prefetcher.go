@@ -69,7 +69,7 @@ type LoadedTransactionGroup struct {
 
 	// Err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
 	// one of the entries in the balances would be uninitialized.
-	Err error
+	Err *GroupTaskError
 }
 
 // accountPrefetcher used to prefetch accounts balances and resources before the evaluator is being called.
@@ -408,7 +408,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				if done.err != nil {
 					// if there is an error, report the error to the output channel.
 					p.outChan <- LoadedTransactionGroup{
-						Err: ledgercore.GroupTaskError{Err: done.err, GroupIdx: done.groupIdx},
+						Err: &GroupTaskError{err: done.err, GroupIdx: done.groupIdx},
 					}
 					return
 				}

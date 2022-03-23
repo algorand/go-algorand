@@ -107,14 +107,3 @@ type ErrNonSequentialBlockEval struct {
 func (err ErrNonSequentialBlockEval) Error() string {
 	return fmt.Sprintf("block evaluation for round %d requires sequential evaluation while the latest round is %d", err.EvaluatorRound, err.LatestRound)
 }
-
-// GroupTaskError indicates the group index of the unfulfilled resource
-type GroupTaskError struct {
-	Err      error
-	GroupIdx int64
-}
-
-// Error satisfies builtin interface `error`
-func (err GroupTaskError) Error() string {
-	return fmt.Sprintf("Prefetch failed for groupIdx %d cause: %v", err.GroupIdx, err.Err)
-}
