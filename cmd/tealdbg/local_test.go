@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -36,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 

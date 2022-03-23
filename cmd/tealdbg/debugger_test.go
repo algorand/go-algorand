@@ -121,9 +121,8 @@ int 1
 	require.Equal(t, 3, da.eventCount) // register, update, complete
 }
 
-func TestSession(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	source := fmt.Sprintf("#pragma version %d\nint 1\ndup\n+\n", logic.LogicVersion)
+func createSessionFromSource(t *testing.T, program string) *session {
+	source := fmt.Sprintf(program, logic.LogicVersion)
 	ops, err := logic.AssembleStringWithVersion(source, logic.LogicVersion)
 	require.NoError(t, err)
 	disassembly, err := logic.Disassemble(ops.Program)
@@ -141,7 +140,14 @@ func TestSession(t *testing.T) {
 	s.programName = "test"
 	s.offsetToLine = ops.OffsetToLine
 	s.pcOffset = pcOffset
-	err = s.SetBreakpoint(2)
+
+	return s
+}
+
+func TestSession(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	s := createSessionFromSource(t, "#pragma version %d\nint 1\ndup\n+\n")
+	err := s.SetBreakpoint(2)
 	require.NoError(t, err)
 
 	ackCount := 0
@@ -156,7 +162,7 @@ func TestSession(t *testing.T) {
 	s.Resume()
 	<-done
 
-	require.Equal(t, breakpointLine(2), s.debugConfig.BreakAtLine)
+	require.Equal(t, (2), s.debugConfig.BreakAtLine)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
 	require.Equal(t, 1, ackCount)
 
@@ -174,8 +180,68 @@ func TestSession(t *testing.T) {
 	s.Step()
 	<-done
 
-	require.Equal(t, stepBreak, s.debugConfig.BreakAtLine)
+	require.Equal(t, true, s.debugConfig.StepBreak)
 	require.Equal(t, 2, ackCount)
+
+	data, err := s.GetSourceMap()
+	require.NoError(t, err)
+	require.Greater(t, len(data), 0)
+
+	name, data := s.GetSource()
+	require.NotEmpty(t, name)
+	require.Greater(t, len(data), 0)
+}
+
+// Tests control functions for stepping over recursive functions and checks
+// that call stack is inspected correctly.
+func TestCallStackControl(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	s := createSessionFromSource(t, "#pragma version %d\nlab1:\nint 1\ncallsub lab1\ndup\n+\n")
+	s.callStack = []logic.CallFrame{
+		{FrameLine: 2, LabelName: "lab1"},
+	}
+	s.line.Store(3)
+
+	err := s.SetBreakpoint(3)
+	require.NoError(t, err)
+
+	ackCount := 0
+	initialStackDepth := len(s.callStack)
+	done := make(chan struct{})
+
+	// Update function.
+	// For odd numbered calls, increase the stack depth by 1.
+	// For even numbered calls, decrease the stack depth by 1.
+	ackFuncRecurse := func() {
+		// Loop execution until StepOver() resumes exactly twice.
+		for {
+			<-s.acknowledged
+			if ackCount%2 == 0 {
+				s.callStack = append(s.callStack, logic.CallFrame{FrameLine: 2, LabelName: "lab1"})
+			} else {
+				s.callStack = s.callStack[:len(s.callStack)-1]
+			}
+			ackCount++
+			s.updateChannel <- true
+			if ackCount == 2 {
+				done <- struct{}{}
+			}
+		}
+	}
+	go ackFuncRecurse()
+
+	s.StepOver()
+	<-done
+
+	require.Equal(t, 4, s.debugConfig.BreakAtLine)
+	require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
+	// Need to check that callstack is equal to initial depth
+	// and check that the StepOver went through twice.
+	require.Equal(t, 2, ackCount)
+	require.Equal(t, initialStackDepth, len(s.callStack))
+
+	s.RemoveBreakpoint(4)
+	require.Equal(t, breakpoint{false, false}, s.breakpoints[4])
 
 	data, err := s.GetSourceMap()
 	require.NoError(t, err)

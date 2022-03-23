@@ -94,15 +94,18 @@ type programMeta struct {
 // -1 do not break
 //  0 break at next instruction
 //  N break at line N
-type breakpointLine int
+// type breakpointLine int
 
-const (
-	noBreak   breakpointLine = -1
-	stepBreak breakpointLine = 0
-)
+// const (
+// 	noBreak   breakpointLine = -1
+// 	stepBreak breakpointLine = 0
+// )
 
 type debugConfig struct {
-	BreakAtLine breakpointLine `json:"breakatline"`
+	StepOver    bool `json:"stepover"`
+	NoBreak     bool `json:"nobreak"`
+	StepBreak   bool `json:"stepbreak"`
+	BreakAtLine int  `json:"breakatline"`
 }
 
 type session struct {
@@ -118,6 +121,9 @@ type session struct {
 	// notifications from eval
 	notifications chan Notification
 
+	// channel to check if state has been updated after the breakpoint
+	updateChannel chan bool
+
 	// program that is being debugged
 	disassembly string
 	lines       []string
@@ -130,6 +136,8 @@ type session struct {
 
 	breakpoints []breakpoint
 	line        atomicInt
+
+	callStack []logic.CallFrame
 
 	states AppState
 }
@@ -148,17 +156,19 @@ func makeSession(disassembly string, line int) (s *session) {
 
 	// Allocate a default debugConfig (don't break)
 	s.debugConfig = debugConfig{
-		BreakAtLine: noBreak,
+		NoBreak: true,
 	}
 
 	// Allocate an acknowledgement and notifications channels
 	s.acknowledged = make(chan bool)
 	s.notifications = make(chan Notification)
+	s.updateChannel = make(chan bool)
 
 	s.disassembly = disassembly
 	s.lines = strings.Split(disassembly, "\n")
 	s.breakpoints = make([]breakpoint, len(s.lines))
 	s.line.Store(line)
+	s.callStack = []logic.CallFrame{}
 	return
 }
 
@@ -171,6 +181,7 @@ func (s *session) resume() {
 	for i := 0; i < 50; i++ {
 		select {
 		case s.acknowledged <- true:
+			// log.Printf("ACK\n")
 			return
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -182,32 +193,50 @@ func (s *session) Step() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{BreakAtLine: stepBreak}
+		s.debugConfig = debugConfig{StepBreak: true}
 	}()
 
 	s.resume()
 }
 
 func (s *session) StepOver() {
-	currentLine := s.line.Load()
+	initialCallStackDepth := len(s.callStack)
 	// Get the first TEAL opcode in the line
-	currentOp := strings.Fields(s.lines[currentLine])[0]
+	currentOp := strings.Fields(s.lines[s.line.Load()])[0]
 
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		// Step over a function call (callsub op).
+		// Set a breakpoint at the next line and resume until we reach our
+		// desired call stack height.
 		if currentOp == "callsub" {
-			err := s.setBreakpoint(currentLine + 1)
+			s.debugConfig.StepOver = true
+			// log.Printf("Stack 1: %+v, %v\n", (s.callStack), initialCallStackDepth)
+			err := s.setBreakpoint(s.line.Load() + 1)
 			if err != nil {
-				s.debugConfig = debugConfig{BreakAtLine: stepBreak}
+				s.debugConfig = debugConfig{StepBreak: true}
 			}
+			s.resume()
+			<-s.updateChannel
+			// log.Printf("Stack 2: %+v, %v\n", (s.callStack), initialCallStackDepth)
+			for len(s.callStack) != initialCallStackDepth {
+				// log.Printf("Stack 2: %+v, %v\n", (s.callStack), initialCallStackDepth)
+				err = s.setBreakpoint(s.line.Load() + 1)
+				if err != nil {
+					s.debugConfig = debugConfig{StepBreak: true}
+				}
+				s.resume()
+				<-s.updateChannel
+				// log.Printf("End: %v, %v\n", len(s.callStack), initialCallStackDepth)
+				// log.Printf("Stack det: %v \n", (s.callStack))
+			}
+			s.debugConfig.StepOver = false
 		} else {
-			s.debugConfig = debugConfig{BreakAtLine: stepBreak}
+			s.debugConfig = debugConfig{StepBreak: true}
+			s.resume()
 		}
 	}()
-
-	s.resume()
 }
 
 func (s *session) Resume() {
@@ -216,9 +245,11 @@ func (s *session) Resume() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{BreakAtLine: noBreak} // reset possible break after Step
+		s.debugConfig = debugConfig{NoBreak: true} // reset possible break after Step
 		// find any active breakpoints and set next break
 		if currentLine < len(s.breakpoints) {
+			// Need to check upper frame to set the next breakpoint?
+			// Or recursively call all the upper frames?
 			for line, state := range s.breakpoints[currentLine+1:] {
 				if state.set && state.active {
 					s.setBreakpoint(line + currentLine + 1)
@@ -237,7 +268,7 @@ func (s *session) setBreakpoint(line int) error {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	s.breakpoints[line] = breakpoint{set: true, active: true}
-	s.debugConfig = debugConfig{BreakAtLine: breakpointLine(line)}
+	s.debugConfig = debugConfig{BreakAtLine: (line)}
 	return nil
 }
 
@@ -255,7 +286,7 @@ func (s *session) RemoveBreakpoint(line int) error {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	if s.breakpoints[line].NonEmpty() {
-		s.debugConfig = debugConfig{BreakAtLine: noBreak}
+		s.debugConfig = debugConfig{NoBreak: true}
 		s.breakpoints[line] = breakpoint{}
 	}
 	return nil
@@ -271,7 +302,7 @@ func (s *session) SetBreakpointsActive(active bool) {
 		}
 	}
 	if !active {
-		s.debugConfig = debugConfig{BreakAtLine: noBreak}
+		s.debugConfig = debugConfig{NoBreak: true}
 	}
 }
 
@@ -500,11 +531,17 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 
 	// copy state to prevent a data race in this the go-routine and upcoming updates to the state
 	go func(localState logic.DebugState) {
+		// Copy callstack information
+		s.callStack = state.CallStack
 		// Check if we are triggered and acknowledge asynchronously
-		if cfg.BreakAtLine != noBreak {
-			if cfg.BreakAtLine == stepBreak || breakpointLine(localState.Line) == cfg.BreakAtLine {
+		if !cfg.NoBreak {
+			if cfg.StepBreak || (localState.Line) == cfg.BreakAtLine {
 				// Breakpoint hit! Inform the user
+				// log.Printf("Update 2 %v\n", state.CallStack)
 				s.notifications <- Notification{"updated", localState}
+				if cfg.StepOver {
+					s.updateChannel <- true
+				}
 			} else {
 				// Continue if we haven't hit the next breakpoint
 				s.acknowledged <- true
