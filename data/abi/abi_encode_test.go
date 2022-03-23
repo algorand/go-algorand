@@ -1224,3 +1224,42 @@ func TestParseMethodSignature(t *testing.T) {
 		})
 	}
 }
+
+func TestInferToSlice(t *testing.T) {
+	var emptySlice []int
+	tests := []struct {
+		toBeInferred interface{}
+		length       int
+	}{
+		{
+			toBeInferred: []int{},
+			length:       0,
+		},
+		{
+			toBeInferred: make([]int, 0),
+			length:       0,
+		},
+		{
+			toBeInferred: emptySlice,
+			length:       0,
+		},
+		{
+			toBeInferred: [0]int{},
+			length:       0,
+		},
+		{
+			toBeInferred: [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			length:       32,
+		},
+		{
+			toBeInferred: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			length:       32,
+		},
+	}
+
+	for i, test := range tests {
+		inferredSlice, err := inferToSlice(test.toBeInferred)
+		require.NoError(t, err, "inferToSlice on testcase %d failed to successfully infer %v", i, test.toBeInferred)
+		require.Equal(t, test.length, len(inferredSlice), "inferToSlice on testcase %d inferred different length, expected %d", i, test.length)
+	}
+}
