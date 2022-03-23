@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/chrismcguire/gobberish"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1264,4 +1265,9 @@ func TestInferToSlice(t *testing.T) {
 		require.NoError(t, err, "inferToSlice on testcase %d failed to successfully infer %v", i, test.toBeInferred)
 		require.Equal(t, test.length, len(inferredSlice), "inferToSlice on testcase %d inferred different length, expected %d", i, test.length)
 	}
+
+	// one more testcase for totally nil (with no type information) is bad, should not pass the test
+	_, err := inferToSlice(nil)
+	require.Error(t, err, "infer to Slice should not accept nil interface")
+	assert.EqualError(t, err, "cannot infer an interface value as a slice of interface element", "inferToSlice should return no error else other than interface type inference")
 }
