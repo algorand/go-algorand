@@ -210,7 +210,7 @@ func LedgerEnumerate() ([]usb.DeviceInfo, error) {
 	var infos []usb.DeviceInfo
 	// The enumeration process is based on:
 	//  https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py#L212
-	//  we search for the Ledger Vendor id and igonre devices that don't have specific usagepage or interface
+	//  we search for the Ledger Vendor id and ignore devices that don't have specific usagepage or interface
 	hids, err := usb.EnumerateHid(ledgerVendorID, 0)
 	if err != nil {
 		return []usb.DeviceInfo{}, err
