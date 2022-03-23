@@ -210,28 +210,15 @@ func TestCallStackControl(t *testing.T) {
 	done := make(chan struct{})
 
 	// Update function.
-	// For even numbered calls, increase the stack depth by 1.
-	// For odd numbered calls, decrease the stack depth by 1.
 	ackFuncRecurse := func() {
-		// Loop execution until ackCount is incremented exactly twice.
-		// Then send signal to the done channel.
-		for {
-			<-s.acknowledged
-			if ackCount%2 == 0 {
-				s.callStack = append(s.callStack, logic.CallFrame{FrameLine: 2, LabelName: "lab1"})
-			} else {
-				s.callStack = s.callStack[:len(s.callStack)-1]
-			}
-			ackCount++
-			if s.debugConfig.StepOver {
-				// Send a message to let StepOver resume execution.
-				s.updateChannel <- true
-			}
-			if ackCount == 2 {
-				done <- struct{}{}
-			}
-		}
+		s.callStack = append(s.callStack, logic.CallFrame{FrameLine: 2, LabelName: "lab1"})
+		s.callStack = s.callStack[:len(s.callStack)-1]
+		ackCount++
+		<-s.acknowledged
+
+		done <- struct{}{}
 	}
+
 	go ackFuncRecurse()
 
 	s.StepOver()
@@ -241,7 +228,7 @@ func TestCallStackControl(t *testing.T) {
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
 	// Need to check that callstack is equal to initial depth
 	// and check that the StepOver went through twice.
-	require.Equal(t, 2, ackCount)
+	require.Equal(t, 1, ackCount)
 	require.Equal(t, initialStackDepth, len(s.callStack))
 
 	s.RemoveBreakpoint(4)

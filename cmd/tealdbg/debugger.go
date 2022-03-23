@@ -90,22 +90,13 @@ type programMeta struct {
 	states       AppState
 }
 
-// breakpointLine is a source line number with a couple special values:
-// -1 do not break
-//  0 break at next instruction
-//  N break at line N
-// type breakpointLine int
-
-// const (
-// 	noBreak   breakpointLine = -1
-// 	stepBreak breakpointLine = 0
-// )
-
+// debugConfig contains information about control execution and breakpoints.
 type debugConfig struct {
 	StepOver    bool `json:"stepover"`
 	NoBreak     bool `json:"nobreak"`
 	StepBreak   bool `json:"stepbreak"`
 	BreakAtLine int  `json:"breakatline"`
+	CallDepth   int  `json:"calldepth"`
 }
 
 type session struct {
@@ -215,21 +206,12 @@ func (s *session) StepOver() {
 			if err != nil {
 				s.debugConfig = debugConfig{StepBreak: true}
 			}
-			// We need a flag to let Update() pass a message back to
-			// updateChannel and let execution resume.
+			// We need a flag to check if we are in StepOver mode and to
+			// save our initial call depth so we can pass breakpoints that
+			// are not on the correct call depth.
 			s.debugConfig.StepOver = true
+			s.debugConfig.CallDepth = initialCallStackDepth
 			s.resume()
-			<-s.updateChannel
-			for len(s.callStack) != initialCallStackDepth {
-				err = s.setBreakpoint(nextLine)
-				if err != nil {
-					s.debugConfig = debugConfig{StepBreak: true}
-				}
-				s.debugConfig.StepOver = true
-				s.resume()
-				<-s.updateChannel
-			}
-			s.debugConfig.StepOver = false
 		} else {
 			s.debugConfig = debugConfig{StepBreak: true}
 			s.resume()
@@ -533,16 +515,10 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 		s.callStack = state.CallStack
 		// Check if we are triggered and acknowledge asynchronously
 		if !cfg.NoBreak {
-			if cfg.StepBreak || (localState.Line) == cfg.BreakAtLine {
+			if cfg.StepBreak || (localState.Line == cfg.BreakAtLine &&
+				(!cfg.StepOver || cfg.CallDepth == len(state.CallStack))) {
 				// Breakpoint hit! Inform the user
-				defer func() {
-					s.notifications <- Notification{"updated", localState}
-				}()
-				// Send message to internal update channel to resume execution
-				// after updating the debug state.
-				if cfg.StepOver {
-					s.updateChannel <- true
-				}
+				s.notifications <- Notification{"updated", localState}
 			} else {
 				// Continue if we haven't hit the next breakpoint
 				s.acknowledged <- true
