@@ -1226,6 +1226,8 @@ func TestParseMethodSignature(t *testing.T) {
 }
 
 func TestInferToSlice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var emptySlice []int
 	tests := []struct {
 		toBeInferred interface{}
