@@ -210,10 +210,11 @@ func TestCallStackControl(t *testing.T) {
 	done := make(chan struct{})
 
 	// Update function.
-	// For odd numbered calls, increase the stack depth by 1.
-	// For even numbered calls, decrease the stack depth by 1.
+	// For even numbered calls, increase the stack depth by 1.
+	// For odd numbered calls, decrease the stack depth by 1.
 	ackFuncRecurse := func() {
 		// Loop execution until StepOver() resumes exactly twice.
+		// Then send signal to the done channel.
 		for {
 			<-s.acknowledged
 			if ackCount%2 == 0 {

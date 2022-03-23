@@ -102,7 +102,6 @@ type programMeta struct {
 // )
 
 type debugConfig struct {
-	StepOver    bool `json:"stepover"`
 	NoBreak     bool `json:"nobreak"`
 	StepBreak   bool `json:"stepbreak"`
 	BreakAtLine int  `json:"breakatline"`
@@ -211,7 +210,6 @@ func (s *session) StepOver() {
 		// Set a breakpoint at the next line and resume until we reach our
 		// desired call stack height.
 		if currentOp == "callsub" {
-			s.debugConfig.StepOver = true
 			// log.Printf("Stack 1: %+v, %v\n", (s.callStack), initialCallStackDepth)
 			err := s.setBreakpoint(s.line.Load() + 1)
 			if err != nil {
@@ -231,7 +229,6 @@ func (s *session) StepOver() {
 				// log.Printf("End: %v, %v\n", len(s.callStack), initialCallStackDepth)
 				// log.Printf("Stack det: %v \n", (s.callStack))
 			}
-			s.debugConfig.StepOver = false
 		} else {
 			s.debugConfig = debugConfig{StepBreak: true}
 			s.resume()
@@ -539,9 +536,8 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 				// Breakpoint hit! Inform the user
 				// log.Printf("Update 2 %v\n", state.CallStack)
 				s.notifications <- Notification{"updated", localState}
-				if cfg.StepOver {
-					s.updateChannel <- true
-				}
+				// Send message to internal update channel to resume execution after updating the debug state.
+				s.updateChannel <- true
 			} else {
 				// Continue if we haven't hit the next breakpoint
 				s.acknowledged <- true
