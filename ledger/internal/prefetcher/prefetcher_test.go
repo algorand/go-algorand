@@ -534,7 +534,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 	}
 }
 
-// Test for error from LookupAsset 
+// Test for error from LookupAsset
 func TestAssetLookupError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -576,6 +576,9 @@ func TestAssetLookupError(t *testing.T) {
 			errorReceived = true
 			require.Equal(t, int64(2), loadedTxnGroup.Err.GroupIdx)
 			require.True(t, errors.Is(loadedTxnGroup.Err, assetLookupError{}))
+			require.Equal(t, makeAddress(2), *loadedTxnGroup.Err.Address)
+			require.Equal(t, errorTriggerAssetIndex, int(loadedTxnGroup.Err.CreatableIndex))
+			require.Equal(t, basics.AssetCreatable, loadedTxnGroup.Err.CreatableType)
 		}
 	}
 	require.True(t, errorReceived)
@@ -617,6 +620,9 @@ func TestGetCreatorForRoundError(t *testing.T) {
 		if loadedTxnGroup.Err != nil {
 			errorReceived = true
 			require.True(t, errors.Is(loadedTxnGroup.Err, getCreatorError{}))
+			require.Nil(t, loadedTxnGroup.Err.Address)
+			require.Equal(t, errorTriggerCreatableIndex, int(loadedTxnGroup.Err.CreatableIndex))
+			require.Equal(t, basics.AssetCreatable, loadedTxnGroup.Err.CreatableType)
 		}
 	}
 	require.True(t, errorReceived)
@@ -652,13 +658,16 @@ func TestLookupWithoutRewards(t *testing.T) {
 			groups[i][j].SignedTxn = createAssetTxn
 		}
 	}
-	ledger.errorTriggerAddress[createAssetTxn.Txn.Sender] = true	
+	ledger.errorTriggerAddress[createAssetTxn.Txn.Sender] = true
 	preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
 
 	for loadedTxnGroup := range preloadedTxnGroupsCh {
 		if loadedTxnGroup.Err != nil {
 			errorReceived = true
 			require.True(t, errors.Is(loadedTxnGroup.Err, lookupError{}))
+			require.Equal(t, makeAddress(1), *loadedTxnGroup.Err.Address)
+			require.Equal(t, 0, int(loadedTxnGroup.Err.CreatableIndex))
+			require.Equal(t, basics.AssetCreatable, loadedTxnGroup.Err.CreatableType)
 		}
 	}
 	require.True(t, errorReceived)

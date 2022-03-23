@@ -18,17 +18,23 @@ package prefetcher
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // GroupTaskError indicates the group index of the unfulfilled resource
 type GroupTaskError struct {
-	err      error
-	GroupIdx int64
+	err            error
+	GroupIdx       int64
+	Address        *basics.Address
+	CreatableIndex basics.CreatableIndex
+	CreatableType  basics.CreatableType
 }
 
 // Error satisfies builtin interface `error`
 func (err *GroupTaskError) Error() string {
-	return fmt.Sprintf("Prefetch failed for groupIdx %d cause: %v", err.GroupIdx, err.err)
+	return fmt.Sprintf("Prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %v",
+		err.GroupIdx, err.Address, err.CreatableIndex, err.CreatableType, err.err)
 }
 
 // Unwrap provides access to the underlying error
