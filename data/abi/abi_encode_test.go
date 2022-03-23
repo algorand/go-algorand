@@ -1272,7 +1272,7 @@ func TestInferToSlice(t *testing.T) {
 	assert.EqualError(
 		t, err,
 		"cannot infer an interface value as a slice of interface element",
-		"inferToSlice should return no error else other than interface type inference")
+		"inferToSlice should return type inference error when passed in nil with unexpected Kind")
 
 	var nilPt *uint64 = nil
 	_, err = inferToSlice(nilPt)
@@ -1280,5 +1280,5 @@ func TestInferToSlice(t *testing.T) {
 	assert.EqualError(
 		t, err,
 		"cannot infer an interface value as a slice of interface element",
-		"inferToSlice should return error type inference when passing argument type other than slice or array")
+		"inferToSlice should return type inference error when passing argument type other than slice or array")
 }
