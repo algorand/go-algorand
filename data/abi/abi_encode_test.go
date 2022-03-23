@@ -1269,5 +1269,16 @@ func TestInferToSlice(t *testing.T) {
 	// one more testcase for totally nil (with no type information) is bad, should not pass the test
 	_, err := inferToSlice(nil)
 	require.Error(t, err, "infer to Slice should not accept nil interface")
-	assert.EqualError(t, err, "cannot infer an interface value as a slice of interface element", "inferToSlice should return no error else other than interface type inference")
+	assert.EqualError(
+		t, err,
+		"cannot infer an interface value as a slice of interface element",
+		"inferToSlice should return no error else other than interface type inference")
+
+	var nilPt *uint64 = nil
+	_, err = inferToSlice(nilPt)
+	require.Error(t, err, "infer to Slice should not accept nil interface")
+	assert.EqualError(
+		t, err,
+		"cannot infer an interface value as a slice of interface element",
+		"inferToSlice should return error type inference when passing argument type other than slice or array")
 }
