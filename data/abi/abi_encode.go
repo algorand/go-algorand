@@ -204,12 +204,8 @@ func inferToSlice(value interface{}) ([]interface{}, error) {
 	if reflectVal.Kind() != reflect.Slice && reflectVal.Kind() != reflect.Array {
 		return nil, fmt.Errorf("cannot infer an interface value as a slice of interface element")
 	}
-	if reflectVal.IsNil() {
-		if reflectVal.Kind() == reflect.Slice {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("cannot infer nil value for array kind interface")
-	}
+	// * if input is a slice, with nil, then reflectVal.Len() == 0
+	// * if input is an array, it is not possible it is nil
 	values := make([]interface{}, reflectVal.Len())
 	for i := 0; i < reflectVal.Len(); i++ {
 		values[i] = reflectVal.Index(i).Interface()
