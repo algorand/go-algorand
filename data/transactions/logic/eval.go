@@ -1787,7 +1787,7 @@ func opBytesZero(cx *EvalContext) error {
 
 func opIntConstBlock(cx *EvalContext) error {
 	var err error
-	cx.intc, cx.nextpc, err = parseIntcblock(cx.program, cx.pc)
+	cx.intc, cx.nextpc, err = parseIntcblock(cx.program, cx.pc+1)
 	return err
 }
 
@@ -1828,7 +1828,7 @@ func opPushInt(cx *EvalContext) error {
 
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = parseBytecBlock(cx.program, cx.pc)
+	cx.bytec, cx.nextpc, err = parseBytecBlock(cx.program, cx.pc+1)
 	return err
 }
 
@@ -2147,7 +2147,10 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	}
 	var cx EvalContext
 	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
-	fs := txnFieldSpecByField[field]
+	fs, ok := txnFieldSpecByField(field)
+	if !ok {
+		return basics.TealValue{}, fmt.Errorf("invalid field %s", field)
+	}
 	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, inner)
 	return sv.toTealValue(), err
 }
@@ -2229,7 +2232,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case Type:
 		sv.Bytes = []byte(txn.Type)
 	case TypeEnum:
-		sv.Uint = txnTypeIndexes[string(txn.Type)]
+		sv.Uint = txnTypeMap[string(txn.Type)]
 	case XferAsset:
 		sv.Uint = uint64(txn.XferAsset)
 	case AssetAmount:
@@ -2372,7 +2375,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 }
 
 func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSpec, error) {
-	fs, ok := txnFieldSpecByField[field]
+	fs, ok := txnFieldSpecByField(field)
 	if !ok || fs.version > cx.version {
 		return nil, fmt.Errorf("invalid txn field %d", field)
 	}
@@ -2822,7 +2825,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 
 func opGlobal(cx *EvalContext) error {
 	globalField := GlobalField(cx.program[cx.pc+1])
-	fs, ok := globalFieldSpecByField[globalField]
+	fs, ok := globalFieldSpecByField(globalField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid global field %s", globalField)
 	}
@@ -2980,7 +2983,7 @@ var ecdsaVerifyCosts = map[byte]int{
 
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid curve %d", ecdsaCurve)
 	}
@@ -3041,7 +3044,7 @@ var ecdsaDecompressCosts = map[byte]int{
 
 func opEcdsaPkDecompress(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid curve %d", ecdsaCurve)
 	}
@@ -3085,7 +3088,7 @@ func opEcdsaPkDecompress(cx *EvalContext) error {
 
 func opEcdsaPkRecover(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid curve %d", ecdsaCurve)
 	}
@@ -3930,7 +3933,7 @@ func opAssetHoldingGet(cx *EvalContext) error {
 	prev := last - 1          // account
 
 	holdingField := AssetHoldingField(cx.program[cx.pc+1])
-	fs, ok := assetHoldingFieldSpecByField[holdingField]
+	fs, ok := assetHoldingFieldSpecByField(holdingField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid asset_holding_get field %d", holdingField)
 	}
@@ -3965,7 +3968,7 @@ func opAssetParamsGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // asset
 
 	paramField := AssetParamsField(cx.program[cx.pc+1])
-	fs, ok := assetParamsFieldSpecByField[paramField]
+	fs, ok := assetParamsFieldSpecByField(paramField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid asset_params_get field %d", paramField)
 	}
@@ -3995,7 +3998,7 @@ func opAppParamsGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // app
 
 	paramField := AppParamsField(cx.program[cx.pc+1])
-	fs, ok := appParamsFieldSpecByField[paramField]
+	fs, ok := appParamsFieldSpecByField(paramField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid app_params_get field %d", paramField)
 	}
@@ -4039,7 +4042,7 @@ func opAcctParamsGet(cx *EvalContext) error {
 	}
 
 	paramField := AcctParamsField(cx.program[cx.pc+1])
-	fs, ok := acctParamsFieldSpecByField[paramField]
+	fs, ok := acctParamsFieldSpecByField(paramField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid acct_params_get field %d", paramField)
 	}
@@ -4470,7 +4473,7 @@ func opItxnField(cx *EvalContext) error {
 	}
 	last := len(cx.stack) - 1
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
+	fs, ok := txnFieldSpecByField(field)
 	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
 		return fmt.Errorf("invalid itxn_field %s", field)
 	}
@@ -4649,7 +4652,7 @@ func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 func opBase64Decode(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	encodingField := Base64Encoding(cx.program[cx.pc+1])
-	fs, ok := base64EncodingSpecByField[encodingField]
+	fs, ok := base64EncodingSpecByField(encodingField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid base64_decode encoding %d", encodingField)
 	}
@@ -4759,7 +4762,7 @@ func opJSONRef(cx *EvalContext) error {
 		}
 		stval.Bytes = parsed[key]
 	default:
-		return fmt.Errorf("unsupported json_ref return type, should not have reached here")
+		return fmt.Errorf("unsupported json_ref return type %s", expectedType)
 	}
 	cx.stack[last] = stval
 	return nil

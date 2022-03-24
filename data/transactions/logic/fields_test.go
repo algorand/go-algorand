@@ -176,7 +176,7 @@ func TestTxnEffectsAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	for _, fs := range txnFieldSpecByField {
+	for _, fs := range txnFieldSpecs {
 		if !fs.effects {
 			continue
 		}

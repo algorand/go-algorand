@@ -1089,7 +1089,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
-	require.Equal(t, len(onCompletionConstToUint64), len(onCompletionDescriptions))
+	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
@@ -1099,8 +1099,8 @@ func TestOnCompletionConstants(t *testing.T) {
 	for i := 0; i < last; i++ {
 		oc := OnCompletionConstType(i)
 		symbol := oc.String()
-		require.Contains(t, onCompletionConstToUint64, symbol)
-		require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
+		require.Contains(t, onCompletionMap, symbol)
+		require.Equal(t, uint64(i), onCompletionMap[symbol])
 		t.Run(symbol, func(t *testing.T) {
 			testAccepts(t, fmt.Sprintf("int %s; int %s; ==;", symbol, oc), 1)
 		})
@@ -1543,7 +1543,7 @@ func TestTxn(t *testing.T) {
 	}
 
 	for i, txnField := range TxnFieldNames {
-		fs := txnFieldSpecByField[TxnField(i)]
+		fs := txnFieldSpecs[i]
 		// Ensure that each field appears, starting in the version it was introduced
 		for v := uint64(1); v <= uint64(LogicVersion); v++ {
 			if v < fs.version {
@@ -5127,4 +5127,9 @@ func TestOpJSONRef(t *testing.T) {
 		require.EqualError(t, err, s.error)
 	}
 
+}
+
+func TestTypeComplaints(t *testing.T) {
+	t.Skip("Issue #3837")
+	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
 }

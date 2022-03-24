@@ -77,7 +77,11 @@ func integerConstantsTableMarkdown(out io.Writer) {
 	out.Write([]byte("\n"))
 }
 
-func fieldSpecsMarkdown(out io.Writer, names []string, specs logic.FieldSpeccer) {
+func fieldGroupMarkdown(out io.Writer, group logic.FieldGroup) {
+	fieldSpecsMarkdown(out, group.Names, group.Specs)
+}
+
+func fieldSpecsMarkdown(out io.Writer, names []string, specs logic.FieldSpecMap) {
 	showTypes := false
 	showVers := false
 	spec0 := specs.SpecByName(names[0])
@@ -246,10 +250,8 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		appParamsFieldsMarkdown(out)
 	case "acct_params_get":
 		acctParamsFieldsMarkdown(out)
-	default:
-		if strings.HasPrefix(op.Name, "ecdsa") {
-			ecDsaCurvesMarkdown(out)
-		}
+	case "ecdsa_verify":
+		ecDsaCurvesMarkdown(out)
 	}
 	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {
@@ -317,7 +319,7 @@ func typeString(types []logic.StackType) string {
 	return string(out)
 }
 
-func fieldsAndTypes(names []string, specs logic.FieldSpeccer) ([]string, string) {
+func fieldsAndTypes(names []string, specs logic.FieldSpecMap) ([]string, string) {
 	types := make([]logic.StackType, len(names))
 	for i, name := range names {
 		types[i] = specs.SpecByName(name).Type()
@@ -396,29 +398,18 @@ func main() {
 	integerConstantsTableMarkdown(constants)
 	constants.Close()
 
-	txnfields := create("txn_fields.md")
-	fieldSpecsMarkdown(txnfields, logic.TxnFieldNames[:], logic.TxnFieldSpecByName)
-	txnfields.Close()
-
-	globalfields := create("global_fields.md")
-	fieldSpecsMarkdown(globalfields, logic.GlobalFieldNames[:], logic.GlobalFieldSpecByName)
-	globalfields.Close()
-
-	assetholding := create("asset_holding_fields.md")
-	fieldSpecsMarkdown(assetholding, logic.AssetHoldingFieldNames[:], logic.AssetHoldingFieldSpecByName)
-	assetholding.Close()
-
-	assetparams := create("asset_params_fields.md")
-	fieldSpecsMarkdown(assetparams, logic.AssetParamsFieldNames[:], logic.AssetParamsFieldSpecByName)
-	assetparams.Close()
-
-	appparams := create("app_params_fields.md")
-	fieldSpecsMarkdown(appparams, logic.AppParamsFieldNames[:], logic.AppParamsFieldSpecByName)
-	appparams.Close()
-
-	acctparams, _ := os.Create("acct_params_fields.md")
-	fieldSpecsMarkdown(acctparams, logic.AcctParamsFieldNames[:], logic.AcctParamsFieldSpecByName)
-	acctparams.Close()
+	written := make(map[string]bool)
+	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	for _, spec := range opSpecs {
+		for _, imm := range spec.Details.Immediates {
+			if imm.Group != nil && !written[imm.Group.Name] {
+				out := create(imm.Group.Name + "_fields.md")
+				fieldSpecsMarkdown(out, imm.Group.Names, imm.Group.Specs)
+				out.Close()
+				written[imm.Group.Name] = true
+			}
+		}
+	}
 
 	langspecjs := create("langspec.json")
 	enc := json.NewEncoder(langspecjs)

@@ -122,11 +122,18 @@ func buildSyntaxHighlight() *tmLanguage {
 		},
 	}
 	var allNamedFields []string
-	allNamedFields = append(allNamedFields, logic.TxnFieldNames[:]...)
-	allNamedFields = append(allNamedFields, logic.GlobalFieldNames[:]...)
-	allNamedFields = append(allNamedFields, logic.AssetHoldingFieldNames[:]...)
-	allNamedFields = append(allNamedFields, logic.AssetParamsFieldNames[:]...)
+	allNamedFields = append(allNamedFields, logic.TxnTypeNames[:]...)
 	allNamedFields = append(allNamedFields, logic.OnCompletionNames[:]...)
+	accumulated := make(map[string]bool)
+	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	for _, spec := range opSpecs {
+		for _, imm := range spec.Details.Immediates {
+			if imm.Group != nil && !accumulated[imm.Group.Name] {
+				allNamedFields = append(allNamedFields, imm.Group.Names[:]...)
+				accumulated[imm.Group.Name] = true
+			}
+		}
+	}
 
 	literals.Patterns = append(literals.Patterns, pattern{
 		Name:  "variable.parameter.teal",

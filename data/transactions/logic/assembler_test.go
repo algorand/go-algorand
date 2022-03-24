@@ -1522,7 +1522,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for txn")
 
 	source = `txna Accounts 0`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1530,7 +1530,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for txna")
 
 	source = `gtxn 0 Sender`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1538,7 +1538,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[3] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for gtxn")
 
 	source = `gtxna 0 Accounts 0`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1546,7 +1546,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[3] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for gtxna")
 
 	source = `global MinTxnFee`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1554,7 +1554,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid global arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for global")
 
 	ops.Program[0] = 0x11 // version
 	out, err := Disassemble(ops.Program)
@@ -1573,7 +1573,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[7] = 0x50 // holding field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset holding arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for asset_holding_get")
 
 	source = "int 0\nasset_params_get AssetTotal"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1581,7 +1581,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[4] = 0x50 // params field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset params arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for asset_params_get")
 
 	source = "int 0\nasset_params_get AssetTotal"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1591,17 +1591,22 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected asset_params_get opcode end: missing 1 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate f for asset_params_get")
 
 	source = "gtxna 0 Accounts 0"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	ops.Program = ops.Program[0 : len(ops.Program)-2]
-	_, err = Disassemble(ops.Program)
+	_, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected gtxna opcode end: missing 2 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate i for gtxna")
+	_, err = Disassemble(ops.Program[0 : len(ops.Program)-2])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "program end while reading immediate f for gtxna")
+	_, err = Disassemble(ops.Program[0 : len(ops.Program)-3])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "program end while reading immediate t for gtxna")
 
 	source = "txna Accounts 0"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1611,7 +1616,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected txna opcode end: missing 1 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate i for txna")
 
 	source = "byte 0x4141\nsubstring 0 1"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1621,7 +1626,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected substring opcode end: missing 1 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate e for substring")
 }
 
 func TestAssembleVersions(t *testing.T) {
@@ -2198,7 +2203,7 @@ func TestErrShortBytecblock(t *testing.T) {
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
 	ops, err := AssembleStringWithVersion(text, 1)
 	require.NoError(t, err)
-	_, _, err = parseIntcblock(ops.Program, 0)
+	_, _, err = parseIntcblock(ops.Program, 1)
 	require.Equal(t, err, errShortIntcblock)
 
 	var cx EvalContext

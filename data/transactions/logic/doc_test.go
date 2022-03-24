@@ -40,15 +40,8 @@ func TestOpDocs(t *testing.T) {
 		assert.True(t, seen, "opDocByName is missing doc for %#v", op)
 	}
 
-	require.Len(t, txnFieldDocs, len(TxnFieldNames))
 	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
-	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
-	require.Len(t, assetHoldingFieldDocs, len(AssetHoldingFieldNames))
-	require.Len(t, assetParamsFieldDocs, len(AssetParamsFieldNames))
-	require.Len(t, appParamsFieldDocs, len(AppParamsFieldNames))
-	require.Len(t, acctParamsFieldDocs, len(AcctParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
-	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }
 
 // TestDocStragglers confirms that we don't have any docs laying
