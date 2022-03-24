@@ -342,12 +342,14 @@ func txnaFieldNames() []string {
 	return names
 }
 
+// TxnFields contains info on the arguments to the txn* family of opcodes
 var TxnFields = FieldGroup{
 	"txn",
 	TxnFieldNames[:],
 	txnFieldSpecByName,
 }
 
+// TxnaFields narows TxnFields to only have the names of array fetching opcodes
 var TxnaFields = FieldGroup{
 	"txna",
 	txnaFieldNames(),
@@ -532,6 +534,7 @@ func (s gfNameSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
+// GlobalFields has info on the global opcode's immediate
 var GlobalFields = FieldGroup{
 	"global",
 	GlobalFieldNames[:],
@@ -597,6 +600,7 @@ func (s ecDsaCurveNameSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
+// EcdsaCurves collects details about the constants used to describe EcdsaCurves
 var EcdsaCurves = FieldGroup{
 	"ecdsa",
 	ecdsaCurveNames[:],
@@ -663,6 +667,7 @@ func (s base64EncodingSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
+// Base64Encodings describes the base64_encode immediate
 var Base64Encodings = FieldGroup{
 	"base64",
 	base64EncodingNames[:],
@@ -732,7 +737,8 @@ func (s jsonRefSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
-var JsonRefTypes = FieldGroup{
+// JSONRefTypes describes the json_ref immediate
+var JSONRefTypes = FieldGroup{
 	"json_ref",
 	jsonRefTypeNames[:],
 	jsonRefSpecByName,
@@ -798,6 +804,7 @@ func (s ahfNameSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
+// AssetHoldingFields describes asset_holding_get's immediates
 var AssetHoldingFields = FieldGroup{
 	"asset_holding",
 	assetHoldingFieldNames[:],
@@ -896,6 +903,7 @@ func (s apfNameSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
+// AssetParamsFields describes asset_params_get's immediates
 var AssetParamsFields = FieldGroup{
 	"asset_params",
 	assetParamsFieldNames[:],
@@ -987,6 +995,7 @@ func (s appNameSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
+// AppParamsFields describes app_params_get's immediates
 var AppParamsFields = FieldGroup{
 	"app_params",
 	appParamsFieldNames[:],
@@ -1057,6 +1066,7 @@ func (s acctNameSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
+// AcctParamsFields describes acct_params_get's immediates
 var AcctParamsFields = FieldGroup{
 	"acct_params",
 	acctParamsFieldNames[:],
