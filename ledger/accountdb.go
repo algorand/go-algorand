@@ -170,10 +170,11 @@ type persistedAccountData struct {
 }
 
 type persistedOnlineAccountData struct {
-	addr        basics.Address
-	accountData baseOnlineAccountData
-	rowid       int64
-	round       basics.Round
+	addr              basics.Address
+	accountData       baseOnlineAccountData
+	rowid             int64
+	round             basics.Round
+	normalizedBalance basics.MicroAlgos
 }
 
 //msgp:ignore persistedResourcesData
@@ -1325,21 +1326,6 @@ func (ba baseAccountData) IsEmpty() bool {
 		ba.TotalAppLocalStates == 0
 }
 
-func (ba baseOnlineAccountData) IsVotingEmpty() bool {
-	return ba.VoteID.MsgIsZero() &&
-		ba.SelectionID.MsgIsZero() &&
-		ba.StateProofID.MsgIsZero() &&
-		ba.VoteFirstValid == 0 &&
-		ba.VoteLastValid == 0 &&
-		ba.VoteKeyDilution == 0
-}
-
-func (ba baseOnlineAccountData) IsEmpty() bool {
-	return ba.IsVotingEmpty() &&
-		ba.MicroAlgos.Raw == 0 &&
-		ba.RewardsBase == 0
-}
-
 func (ba baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
@@ -1436,6 +1422,23 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 	}
 }
 
+func (ba baseOnlineAccountData) IsVotingEmpty() bool {
+	return ba.VoteID.MsgIsZero() &&
+		ba.SelectionID.MsgIsZero() &&
+		ba.StateProofID.MsgIsZero() &&
+		ba.VoteFirstValid == 0 &&
+		ba.VoteLastValid == 0 &&
+		ba.VoteKeyDilution == 0
+}
+
+func (ba baseOnlineAccountData) IsEmpty() bool {
+	return ba.IsVotingEmpty() &&
+		ba.MicroAlgos.Raw == 0 &&
+		ba.RewardsBase == 0
+}
+
+// GetOnlineAccount returns ledgercore.OnlineAccount for top online accounts / voters
+// TODO: unify
 func (ba baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalance uint64) ledgercore.OnlineAccount {
 	return ledgercore.OnlineAccount{
 		Address:                 addr,
@@ -1445,6 +1448,23 @@ func (ba baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalanc
 		VoteFirstValid:          ba.VoteFirstValid,
 		VoteLastValid:           ba.VoteLastValid,
 		StateProofID:            ba.StateProofID,
+	}
+}
+
+// GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
+// TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
+func (ba baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
+	microAlgos, _, _ := basics.WithUpdatedRewards(
+		proto, basics.Online, ba.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
+	)
+
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: microAlgos,
+		VoteID:                ba.VoteID,
+		SelectionID:           ba.SelectionID,
+		VoteFirstValid:        ba.VoteFirstValid,
+		VoteLastValid:         ba.VoteLastValid,
+		VoteKeyDilution:       ba.VoteKeyDilution,
 	}
 }
 
@@ -2288,7 +2308,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? WHERE id='onlineacctbase'")
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='onlineacctbase' ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
@@ -2492,18 +2512,10 @@ func (qs *accountsDbQueries) lookupAllResources(addr basics.Address) (data []per
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
 func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, err error) {
-	return lookupAccount(addr, qs.lookupStmt)
-}
-
-func (qs *accountsDbQueries) lookupOnline(addr basics.Address) (data persistedAccountData, err error) {
-	return lookupAccount(addr, qs.lookupOnlineStmt)
-}
-
-func lookupAccount(addr basics.Address, lookupStmt *sql.Stmt) (data persistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
+		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
@@ -2523,7 +2535,33 @@ func lookupAccount(addr basics.Address, lookupStmt *sql.Stmt) (data persistedAcc
 
 		return err
 	})
+	return
+}
 
+func (qs *accountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, err error) {
+	err = db.Retry(func() error {
+		var buf []byte
+		var rowid sql.NullInt64
+		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &data.round, &buf)
+		if err == nil {
+			data.addr = addr
+			if len(buf) > 0 && rowid.Valid {
+				data.rowid = rowid.Int64
+				err = protocol.Decode(buf, &data.accountData)
+				return err
+			}
+			// we don't have that account, just return the database round.
+			return nil
+		}
+
+		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
+		if err == sql.ErrNoRows {
+			// Return the zero value of data
+			return fmt.Errorf("unable to query online account data for address %v : %w", addr, err)
+		}
+
+		return err
+	})
 	return
 }
 
@@ -2673,6 +2711,16 @@ func accountsOnlineTop(tx *sql.Tx, rnd basics.Round, offset uint64, n uint64, pr
 WHERE updround <= ?
 GROUP BY address HAVING normalizedonlinebalance > 0
 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, offset)
+
+	// TODO: make it as a test
+	// sqlite> create table t (a char, b int, r int, primary key(a, b) );
+	// sqlite> insert into t (a, b, r) values ('a', 100, 1), ('a', 0, 2), ('b', 200, 1);
+	// sqlite> select a, b, max(r) from t WHERE r <= 1 group by a HAVING b > 0 order by b desc;
+	// b|200|1
+	// a|100|1
+	// sqlite> select a, b, max(r) from t WHERE r <= 2 group by a HAVING b > 0 order by b desc;
+	// b|200|1
+
 	if err != nil {
 		return nil, err
 	}

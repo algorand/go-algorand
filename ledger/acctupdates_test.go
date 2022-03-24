@@ -34,6 +34,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/internal"
@@ -318,8 +319,9 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			for addr, data := range accts[rnd] {
 				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, d, ledgercore.ToAccountData(data))
+				require.Equal(t, d.AccountBaseData, ledgercore.ToAccountData(data).AccountBaseData)
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
+				// d, validThrough, err := ao.LookupAgreement(rnd, addr)
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
 				switch d.Status {
@@ -2163,10 +2165,19 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	err := au.loadFromDisk(ml, 0)
 	defer au.close()
 	require.NoError(t, err)
+	withoutVotingData := func(ad basics.AccountData) basics.AccountData {
+		ad.VoteID = crypto.OneTimeSignatureVerifier{}
+		ad.SelectionID = crypto.VRFVerifier{}
+		ad.StateProofID = merklesignature.Verifier{}
+		ad.VoteKeyDilution = 0
+		ad.VoteFirstValid = 0
+		ad.VoteLastValid = 0
+		return ad
+	}
 	for addr, acct := range accts {
 		acctData, validThrough, withoutRewards, err := au.lookupLatest(addr)
 		require.NoError(t, err)
-		require.Equal(t, acct, acctData)
+		require.Equal(t, withoutVotingData(acct), acctData)
 
 		// check "withoutRewards" matches result of LookupWithoutRewards
 		d, r, err := au.LookupWithoutRewards(validThrough, addr)
@@ -2355,7 +2366,8 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, _, _, err := au.lookupWithoutRewards(rnd, addr, true)
 			require.NoError(t, err)
-			require.Equal(t, d, ledgercore.ToAccountData(data))
+			require.Equal(t, d.AccountBaseData, ledgercore.ToAccountData(data).AccountBaseData)
+			// TODO: add online account data check
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
 }

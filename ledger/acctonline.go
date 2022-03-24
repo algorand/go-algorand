@@ -445,7 +445,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	var persistedData persistedAccountData
+	var persistedData persistedOnlineAccountData
 	for {
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
@@ -454,6 +454,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			return
 		}
 
+		// TODO: ensure protocol version and totals are available after shrinking deltas
 		rewardsProto = config.Consensus[ao.versions[offset]]
 		rewardsLevel = ao.roundTotals[offset].RewardsLevel
 
@@ -495,13 +496,13 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = ao.accountsq.lookupOnline(addr)
+		persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
 		if persistedData.round == currentDbRound {
 			var u ledgercore.AccountData
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
 				// ao.baseAccounts.writePending(persistedData)
-				u = persistedData.accountData.GetLedgerCoreAccountData()
+				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
 			}
 			// otherwise return empty
 			return u.OnlineAccountData(rewardsProto, rewardsLevel), err

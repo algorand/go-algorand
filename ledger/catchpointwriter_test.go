@@ -389,11 +389,21 @@ func TestFullCatchpointWriter(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	withoutVotingData := func(ad basics.AccountData) basics.AccountData {
+		ad.VoteID = crypto.OneTimeSignatureVerifier{}
+		ad.SelectionID = crypto.VRFVerifier{}
+		ad.StateProofID = merklesignature.Verifier{}
+		ad.VoteKeyDilution = 0
+		ad.VoteFirstValid = 0
+		ad.VoteLastValid = 0
+		return ad
+	}
+
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
 		acctData, validThrough, _, err := l.LookupLatest(addr)
 		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
-		require.Equal(t, acct, acctData)
+		require.Equal(t, withoutVotingData(acct), acctData)
 		require.Equal(t, basics.Round(0), validThrough)
 	}
 }

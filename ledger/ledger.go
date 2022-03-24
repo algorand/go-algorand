@@ -473,6 +473,18 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
 
+	// mixin online data
+	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+	}
+	// TODO: add StateProofID, it is not in basics.OnlineAccountData
+	data.SelectionID = onlineData.SelectionID
+	data.VoteID = onlineData.VoteID
+	data.VoteKeyDilution = onlineData.VoteKeyDilution
+	data.VoteFirstValid = onlineData.VoteFirstValid
+	data.VoteLastValid = onlineData.VoteLastValid
+
 	return data, rnd, withoutRewards, nil
 }
 
@@ -494,6 +506,18 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards = data.MicroAlgos
 	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
+
+	// mixin online data
+	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+	}
+	// TODO: add StateProofID, it is not in basics.OnlineAccountData
+	data.SelectionID = onlineData.SelectionID
+	data.VoteID = onlineData.VoteID
+	data.VoteKeyDilution = onlineData.VoteKeyDilution
+	data.VoteFirstValid = onlineData.VoteFirstValid
+	data.VoteLastValid = onlineData.VoteLastValid
 
 	return data, rnd, withoutRewards, nil
 }
@@ -548,6 +572,18 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), err
 	}
+
+	// mixin online data
+	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return ledgercore.AccountData{}, basics.Round(0), err
+	}
+	// TODO: add StateProofID, it is not in basics.OnlineAccountData
+	data.SelectionID = onlineData.SelectionID
+	data.VoteID = onlineData.VoteID
+	data.VoteKeyDilution = onlineData.VoteKeyDilution
+	data.VoteFirstValid = onlineData.VoteFirstValid
+	data.VoteLastValid = onlineData.VoteLastValid
 
 	return data, validThrough, nil
 }
