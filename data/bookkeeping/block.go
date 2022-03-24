@@ -133,9 +133,9 @@ type (
 
 	// TxnRoot represents the root of the merkle tree generated from the transaction in this block.
 	TxnRoot struct {
-		_struct    struct{}      `codec:",omitempty,omitemptyarray"`
-		SHA256     crypto.Digest `codec:"txn256"` // root of transaction merkle tree using SHA256 hash function
-		SHA512_256 crypto.Digest `codec:"txn"`    // root of transaction merkle tree using SHA512_256 hash function
+		_struct          struct{}      `codec:",omitempty,omitemptyarray"`
+		DigestSha256     crypto.Digest `codec:"txn256"` // root of transaction merkle tree using SHA256 hash function
+		DigestSha512_256 crypto.Digest `codec:"txn"`    // root of transaction merkle tree using SHA512_256 hash function
 	}
 
 	// ParticipationUpdates represents participation account data that
@@ -533,8 +533,8 @@ func (block Block) PaysetCommit() (TxnRoot, error) {
 	}
 
 	return TxnRoot{
-		SHA256:     digestSHA256,
-		SHA512_256: digestSHA512_256,
+		DigestSha256:     digestSHA256,
+		DigestSha512_256: digestSHA512_256,
 	}, nil
 }
 

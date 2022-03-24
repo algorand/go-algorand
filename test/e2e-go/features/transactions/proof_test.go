@@ -121,9 +121,9 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems := make(map[uint64]crypto.Hashable)
 
 	elems[proofresp.Idx] = &element
-	err = merklearray.Verify(blk.TxnRoot.SHA512_256.ToSlice(), elems, &proof)
+	err = merklearray.Verify(blk.TxnRoot.DigestSha512_256.ToSlice(), elems, &proof)
 	if err != nil {
-		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnRoot.SHA512_256.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
+		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnRoot.DigestSha512_256.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
 		a.NoError(err)
 	}
 

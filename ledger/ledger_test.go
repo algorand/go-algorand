@@ -324,11 +324,11 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot.SHA512_256 = crypto.Hash([]byte{0})
+	badBlock.BlockHeader.TxnRoot.DigestSha512_256 = crypto.Hash([]byte{0})
 	a.Error(l.appendUnvalidated(badBlock), "added block header with empty transaction root")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot.SHA512_256[0]++
+	badBlock.BlockHeader.TxnRoot.DigestSha512_256[0]++
 	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid transaction root")
 
 	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}

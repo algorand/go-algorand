@@ -180,11 +180,11 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 		zb0004Len--
 		zb0004Mask |= 0x1000000
 	}
-	if (*z).BlockHeader.TxnRoot.SHA512_256.MsgIsZero() {
+	if (*z).BlockHeader.TxnRoot.DigestSha512_256.MsgIsZero() {
 		zb0004Len--
 		zb0004Mask |= 0x2000000
 	}
-	if (*z).BlockHeader.TxnRoot.SHA256.MsgIsZero() {
+	if (*z).BlockHeader.TxnRoot.DigestSha256.MsgIsZero() {
 		zb0004Len--
 		zb0004Mask |= 0x4000000
 	}
@@ -332,12 +332,12 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x2000000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			o = (*z).BlockHeader.TxnRoot.SHA512_256.MarshalMsg(o)
+			o = (*z).BlockHeader.TxnRoot.DigestSha512_256.MarshalMsg(o)
 		}
 		if (zb0004Mask & 0x4000000) == 0 { // if not empty
 			// string "txn256"
 			o = append(o, 0xa6, 0x74, 0x78, 0x6e, 0x32, 0x35, 0x36)
-			o = (*z).BlockHeader.TxnRoot.SHA256.MarshalMsg(o)
+			o = (*z).BlockHeader.TxnRoot.DigestSha256.MarshalMsg(o)
 		}
 		if (zb0004Mask & 0x8000000) == 0 { // if not empty
 			// string "txns"
@@ -407,17 +407,17 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.TxnRoot.SHA256.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.TxnRoot.DigestSha256.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SHA256")
+				err = msgp.WrapError(err, "struct-from-array", "DigestSha256")
 				return
 			}
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.TxnRoot.SHA512_256.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.TxnRoot.DigestSha512_256.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SHA512_256")
+				err = msgp.WrapError(err, "struct-from-array", "DigestSha512_256")
 				return
 			}
 		}
@@ -680,15 +680,15 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "txn256":
-				bts, err = (*z).BlockHeader.TxnRoot.SHA256.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.TxnRoot.DigestSha256.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "SHA256")
+					err = msgp.WrapError(err, "DigestSha256")
 					return
 				}
 			case "txn":
-				bts, err = (*z).BlockHeader.TxnRoot.SHA512_256.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.TxnRoot.DigestSha512_256.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "SHA512_256")
+					err = msgp.WrapError(err, "DigestSha512_256")
 					return
 				}
 			case "ts":
@@ -886,7 +886,7 @@ func (_ *Block) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Block) Msgsize() (s int) {
-	s = 3 + 4 + (*z).BlockHeader.Round.Msgsize() + 5 + (*z).BlockHeader.Branch.Msgsize() + 5 + (*z).BlockHeader.Seed.Msgsize() + 7 + (*z).BlockHeader.TxnRoot.SHA256.Msgsize() + 4 + (*z).BlockHeader.TxnRoot.SHA512_256.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).BlockHeader.GenesisID) + 3 + (*z).BlockHeader.GenesisHash.Msgsize() + 5 + (*z).BlockHeader.RewardsState.FeeSink.Msgsize() + 4 + (*z).BlockHeader.RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).BlockHeader.RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).BlockHeader.UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).BlockHeader.UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).BlockHeader.UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).BlockHeader.UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
+	s = 3 + 4 + (*z).BlockHeader.Round.Msgsize() + 5 + (*z).BlockHeader.Branch.Msgsize() + 5 + (*z).BlockHeader.Seed.Msgsize() + 7 + (*z).BlockHeader.TxnRoot.DigestSha256.Msgsize() + 4 + (*z).BlockHeader.TxnRoot.DigestSha512_256.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).BlockHeader.GenesisID) + 3 + (*z).BlockHeader.GenesisHash.Msgsize() + 5 + (*z).BlockHeader.RewardsState.FeeSink.Msgsize() + 4 + (*z).BlockHeader.RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).BlockHeader.RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).BlockHeader.UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).BlockHeader.UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).BlockHeader.UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).BlockHeader.UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
 	if (*z).BlockHeader.CompactCert != nil {
 		for zb0001, zb0002 := range (*z).BlockHeader.CompactCert {
 			_ = zb0001
@@ -904,7 +904,7 @@ func (z *Block) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Block) MsgIsZero() bool {
-	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnRoot.SHA256.MsgIsZero()) && ((*z).BlockHeader.TxnRoot.SHA512_256.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.CompactCert) == 0) && (len((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Payset.MsgIsZero())
+	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnRoot.DigestSha256.MsgIsZero()) && ((*z).BlockHeader.TxnRoot.DigestSha512_256.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.CompactCert) == 0) && (len((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Payset.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1021,11 +1021,11 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte) {
 		zb0004Len--
 		zb0004Mask |= 0x1000000
 	}
-	if (*z).TxnRoot.SHA512_256.MsgIsZero() {
+	if (*z).TxnRoot.DigestSha512_256.MsgIsZero() {
 		zb0004Len--
 		zb0004Mask |= 0x2000000
 	}
-	if (*z).TxnRoot.SHA256.MsgIsZero() {
+	if (*z).TxnRoot.DigestSha256.MsgIsZero() {
 		zb0004Len--
 		zb0004Mask |= 0x4000000
 	}
@@ -1169,12 +1169,12 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x2000000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			o = (*z).TxnRoot.SHA512_256.MarshalMsg(o)
+			o = (*z).TxnRoot.DigestSha512_256.MarshalMsg(o)
 		}
 		if (zb0004Mask & 0x4000000) == 0 { // if not empty
 			// string "txn256"
 			o = append(o, 0xa6, 0x74, 0x78, 0x6e, 0x32, 0x35, 0x36)
-			o = (*z).TxnRoot.SHA256.MarshalMsg(o)
+			o = (*z).TxnRoot.DigestSha256.MarshalMsg(o)
 		}
 		if (zb0004Mask & 0x8000000) == 0 { // if not empty
 			// string "upgradedelay"
@@ -1239,17 +1239,17 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).TxnRoot.SHA256.UnmarshalMsg(bts)
+			bts, err = (*z).TxnRoot.DigestSha256.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SHA256")
+				err = msgp.WrapError(err, "struct-from-array", "DigestSha256")
 				return
 			}
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).TxnRoot.SHA512_256.UnmarshalMsg(bts)
+			bts, err = (*z).TxnRoot.DigestSha512_256.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SHA512_256")
+				err = msgp.WrapError(err, "struct-from-array", "DigestSha512_256")
 				return
 			}
 		}
@@ -1504,15 +1504,15 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "txn256":
-				bts, err = (*z).TxnRoot.SHA256.UnmarshalMsg(bts)
+				bts, err = (*z).TxnRoot.DigestSha256.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "SHA256")
+					err = msgp.WrapError(err, "DigestSha256")
 					return
 				}
 			case "txn":
-				bts, err = (*z).TxnRoot.SHA512_256.UnmarshalMsg(bts)
+				bts, err = (*z).TxnRoot.DigestSha512_256.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "SHA512_256")
+					err = msgp.WrapError(err, "DigestSha512_256")
 					return
 				}
 			case "ts":
@@ -1704,7 +1704,7 @@ func (_ *BlockHeader) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BlockHeader) Msgsize() (s int) {
-	s = 3 + 4 + (*z).Round.Msgsize() + 5 + (*z).Branch.Msgsize() + 5 + (*z).Seed.Msgsize() + 7 + (*z).TxnRoot.SHA256.Msgsize() + 4 + (*z).TxnRoot.SHA512_256.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 3 + (*z).GenesisHash.Msgsize() + 5 + (*z).RewardsState.FeeSink.Msgsize() + 4 + (*z).RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
+	s = 3 + 4 + (*z).Round.Msgsize() + 5 + (*z).Branch.Msgsize() + 5 + (*z).Seed.Msgsize() + 7 + (*z).TxnRoot.DigestSha256.Msgsize() + 4 + (*z).TxnRoot.DigestSha512_256.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 3 + (*z).GenesisHash.Msgsize() + 5 + (*z).RewardsState.FeeSink.Msgsize() + 4 + (*z).RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
 	if (*z).CompactCert != nil {
 		for zb0001, zb0002 := range (*z).CompactCert {
 			_ = zb0001
@@ -1721,7 +1721,7 @@ func (z *BlockHeader) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *BlockHeader) MsgIsZero() bool {
-	return ((*z).Round.MsgIsZero()) && ((*z).Branch.MsgIsZero()) && ((*z).Seed.MsgIsZero()) && ((*z).TxnRoot.SHA256.MsgIsZero()) && ((*z).TxnRoot.SHA512_256.MsgIsZero()) && ((*z).TimeStamp == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).RewardsState.FeeSink.MsgIsZero()) && ((*z).RewardsState.RewardsPool.MsgIsZero()) && ((*z).RewardsState.RewardsLevel == 0) && ((*z).RewardsState.RewardsRate == 0) && ((*z).RewardsState.RewardsResidue == 0) && ((*z).RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocolApprovals == 0) && ((*z).UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).UpgradeVote.UpgradeApprove == false) && ((*z).TxnCounter == 0) && (len((*z).CompactCert) == 0) && (len((*z).ParticipationUpdates.ExpiredParticipationAccounts) == 0)
+	return ((*z).Round.MsgIsZero()) && ((*z).Branch.MsgIsZero()) && ((*z).Seed.MsgIsZero()) && ((*z).TxnRoot.DigestSha256.MsgIsZero()) && ((*z).TxnRoot.DigestSha512_256.MsgIsZero()) && ((*z).TimeStamp == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).RewardsState.FeeSink.MsgIsZero()) && ((*z).RewardsState.RewardsPool.MsgIsZero()) && ((*z).RewardsState.RewardsLevel == 0) && ((*z).RewardsState.RewardsRate == 0) && ((*z).RewardsState.RewardsResidue == 0) && ((*z).RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocolApprovals == 0) && ((*z).UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).UpgradeVote.UpgradeApprove == false) && ((*z).TxnCounter == 0) && (len((*z).CompactCert) == 0) && (len((*z).ParticipationUpdates.ExpiredParticipationAccounts) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2732,11 +2732,11 @@ func (z *TxnRoot) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if (*z).SHA512_256.MsgIsZero() {
+	if (*z).DigestSha512_256.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).SHA256.MsgIsZero() {
+	if (*z).DigestSha256.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -2746,12 +2746,12 @@ func (z *TxnRoot) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			o = (*z).SHA512_256.MarshalMsg(o)
+			o = (*z).DigestSha512_256.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "txn256"
 			o = append(o, 0xa6, 0x74, 0x78, 0x6e, 0x32, 0x35, 0x36)
-			o = (*z).SHA256.MarshalMsg(o)
+			o = (*z).DigestSha256.MarshalMsg(o)
 		}
 	}
 	return
@@ -2777,17 +2777,17 @@ func (z *TxnRoot) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SHA256.UnmarshalMsg(bts)
+			bts, err = (*z).DigestSha256.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SHA256")
+				err = msgp.WrapError(err, "struct-from-array", "DigestSha256")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SHA512_256.UnmarshalMsg(bts)
+			bts, err = (*z).DigestSha512_256.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SHA512_256")
+				err = msgp.WrapError(err, "struct-from-array", "DigestSha512_256")
 				return
 			}
 		}
@@ -2815,15 +2815,15 @@ func (z *TxnRoot) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "txn256":
-				bts, err = (*z).SHA256.UnmarshalMsg(bts)
+				bts, err = (*z).DigestSha256.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "SHA256")
+					err = msgp.WrapError(err, "DigestSha256")
 					return
 				}
 			case "txn":
-				bts, err = (*z).SHA512_256.UnmarshalMsg(bts)
+				bts, err = (*z).DigestSha512_256.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "SHA512_256")
+					err = msgp.WrapError(err, "DigestSha512_256")
 					return
 				}
 			default:
@@ -2846,13 +2846,13 @@ func (_ *TxnRoot) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *TxnRoot) Msgsize() (s int) {
-	s = 1 + 7 + (*z).SHA256.Msgsize() + 4 + (*z).SHA512_256.Msgsize()
+	s = 1 + 7 + (*z).DigestSha256.Msgsize() + 4 + (*z).DigestSha512_256.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *TxnRoot) MsgIsZero() bool {
-	return ((*z).SHA256.MsgIsZero()) && ((*z).SHA512_256.MsgIsZero())
+	return ((*z).DigestSha256.MsgIsZero()) && ((*z).DigestSha512_256.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
