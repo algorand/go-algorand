@@ -1272,6 +1272,7 @@ func TestInferToSlice(t *testing.T) {
 		"cannot infer an interface value as a slice of interface element",
 		"inferToSlice should return type inference error when passed in nil with unexpected Kind")
 
+	// one moar testcase for wrong typed nil is bad, should not pass the test
 	var nilPt *uint64 = nil
 	_, err = inferToSlice(nilPt)
 	require.EqualError(
