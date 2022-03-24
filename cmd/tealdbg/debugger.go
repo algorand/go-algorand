@@ -258,6 +258,12 @@ func (s *session) SetBreakpoint(line int) error {
 	return s.setBreakpoint(line)
 }
 
+func (s *session) setCallStack(callStack []logic.CallFrame) {
+	s.mu.Lock()
+	s.callStack = callStack
+	s.mu.Unlock()
+}
+
 func (s *session) RemoveBreakpoint(line int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -512,7 +518,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 	// copy state to prevent a data race in this the go-routine and upcoming updates to the state
 	go func(localState logic.DebugState) {
 		// Copy callstack information
-		s.callStack = state.CallStack
+		s.setCallStack(state.CallStack)
 		// Check if we are triggered and acknowledge asynchronously
 		if !cfg.NoBreak {
 			if cfg.StepBreak || (localState.Line == cfg.BreakAtLine &&
