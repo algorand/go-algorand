@@ -34,6 +34,15 @@ func (block Block) TxnMerkleTree() (*merklearray.Tree, error) {
 	return merklearray.Build(&txnMerkleArray{block: block}, crypto.HashFactory{HashType: crypto.Sha512_256})
 }
 
+// TxnMerkleTreeSHA256 returns a cryptographic commitment to the transactions in the
+// block, along with their ApplyData, as a Merkle tree vector commitment, using SHA256. This allows the
+// caller to either extract the root hash (for inclusion in the block
+// header), or to generate proofs of membership for transactions that are
+// in this block.
+func (block Block) TxnMerkleTreeSHA256() (*merklearray.Tree, error) {
+	return merklearray.BuildVectorCommitmentTree(&txnMerkleArray{block: block}, crypto.HashFactory{HashType: crypto.Sha256})
+}
+
 // txnMerkleArray is a representation of the transactions in this block,
 // along with their ApplyData, as an array for the merklearray package.
 type txnMerkleArray struct {

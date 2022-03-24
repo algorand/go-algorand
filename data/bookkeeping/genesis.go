@@ -167,7 +167,7 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 			Round:        0,
 			Branch:       BlockHash{},
 			Seed:         committee.Seed(genesisHash),
-			TxnRoot:      transactions.Payset{}.CommitGenesis(),
+			TxnRoot:      TxnRoot{SHA512_256: transactions.Payset{}.CommitGenesis(), SHA256: crypto.Digest{}},
 			TimeStamp:    genesisBal.Timestamp,
 			GenesisID:    genesisID,
 			RewardsState: genesisRewardsState,

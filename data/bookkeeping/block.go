@@ -41,7 +41,7 @@ type (
 		Round basics.Round `codec:"rnd"`
 
 		// The hash of the previous block
-		Branch BlockHash `codec:"prev"`
+		Branch BlockHash `codec:"prev"` // TODO Stateproof: replace with struct containing SHA256 as well?
 
 		// Sortition seed
 		Seed committee.Seed `codec:"seed"`
@@ -49,7 +49,7 @@ type (
 		// TxnRoot authenticates the set of transactions appearing in the block.
 		// The commitment is computed based on the PaysetCommit type specified
 		// in the block's consensus protocol.
-		TxnRoot crypto.Digest `codec:"txn"`
+		TxnRoot
 
 		// TimeStamp in seconds since epoch
 		TimeStamp int64 `codec:"ts"`
@@ -129,6 +129,13 @@ type (
 		// ParticipationUpdates contains the information needed to mark
 		// certain accounts offline because their participation keys expired
 		ParticipationUpdates
+	}
+
+	// TxnRoot represents the root of the merkle tree generated from the transaction in this block.
+	TxnRoot struct {
+		_struct    struct{}      `codec:",omitempty,omitemptyarray"`
+		SHA256     crypto.Digest `codec:"txn256"` // root of transaction merkle tree using SHA256 hash function
+		SHA512_256 crypto.Digest `codec:"txn"`    // root of transaction merkle tree using SHA512_256 hash function
 	}
 
 	// ParticipationUpdates represents participation account data that
@@ -500,6 +507,7 @@ func MakeBlock(prev BlockHeader) Block {
 	if err != nil {
 		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
 	}
+
 	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
 	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
 	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
@@ -508,13 +516,26 @@ func MakeBlock(prev BlockHeader) Block {
 
 // PaysetCommit computes the commitment to the payset, using the appropriate
 // commitment plan based on the block's protocol.
-func (block Block) PaysetCommit() (crypto.Digest, error) {
+func (block Block) PaysetCommit() (TxnRoot, error) {
 	params, ok := config.Consensus[block.CurrentProtocol]
 	if !ok {
-		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
+		return TxnRoot{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
 	}
 
-	return block.paysetCommit(params.PaysetCommit)
+	digestSHA512_256, err := block.paysetCommit(params.PaysetCommit)
+	if err != nil {
+		return TxnRoot{}, err
+	}
+
+	digestSHA256, err := block.paysetCommitSHA256()
+	if err != nil {
+		return TxnRoot{}, err
+	}
+
+	return TxnRoot{
+		SHA256:     digestSHA256,
+		SHA512_256: digestSHA512_256,
+	}, nil
 }
 
 func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error) {
@@ -537,6 +558,31 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 	default:
 		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}
+}
+
+func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
+	params, ok := config.Consensus[block.CurrentProtocol]
+	if !ok {
+		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
+	}
+
+	if !params.EnableSHA256TxnRootHeader {
+		return crypto.Digest{}, nil
+	}
+
+	tree, err := block.TxnMerkleTreeSHA256()
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+	// in case there are no leaves (e.g empty block with 0 txns) the merkle root is a slice with length of 0.
+	// Here we convert the empty slice to a 32-bytes of zeros. this conversion is okay because this merkle
+	// tree uses sha256 function. for this function the pre-image of [0x0...0x0] is not known
+	// (it might not be the cases for a different hash function)
+	// TODO Stateproof: veirfy with Chris that this statement is correct
+	rootSlice := tree.Root()
+	var rootAsByteArray crypto.Digest
+	copy(rootAsByteArray[:], rootSlice)
+	return rootAsByteArray, nil
 }
 
 // PreCheck checks if the block header bh is a valid successor to

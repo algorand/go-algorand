@@ -88,6 +88,10 @@ func TestTxnMerkle(t *testing.T) {
 	}
 }
 
+func TestBlock_TxnMerkleTreeSHA256(t *testing.T) {
+	// TODO Stateproof
+}
+
 func BenchmarkTxnRoots(b *testing.B) {
 	var blk Block
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion

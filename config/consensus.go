@@ -432,6 +432,11 @@ type ConsensusParams struct {
 	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
+
+	// EnableSHA256TxnRootHeader enables a new header field: the transaction merkle tree's root using SHA256 (actually vector commitment and not merkle tree).
+	// This new header is in addition to the existing SHA512_256 merkle root.
+	// It is required for State Proofs, as different blockchains may not support SHA512_256 OPCODE natively but SHA256 is common.
+	EnableSHA256TxnRootHeader bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1138,6 +1143,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4
+
+	vFuture.EnableSHA256TxnRootHeader = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
