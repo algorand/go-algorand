@@ -781,7 +781,7 @@ func asmSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func txnFieldImm(name string, expectArray bool, ops *OpStream) (*txnFieldSpec, error) {
-	fs, ok := TxnFieldSpecByName[name]
+	fs, ok := txnFieldSpecByName[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown field: %#v", name)
 	}
@@ -1046,7 +1046,7 @@ func asmGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := GlobalFieldSpecByName[args[0]]
+	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1067,7 +1067,7 @@ func asmAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := AssetHoldingFieldSpecByName[args[0]]
+	fs, ok := assetHoldingFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1088,7 +1088,7 @@ func asmAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := AssetParamsFieldSpecByName[args[0]]
+	fs, ok := assetParamsFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1109,7 +1109,7 @@ func asmAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := AppParamsFieldSpecByName[args[0]]
+	fs, ok := appParamsFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1130,7 +1130,7 @@ func asmAcctParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := AcctParamsFieldSpecByName[args[0]]
+	fs, ok := acctParamsFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1151,15 +1151,17 @@ func asmItxnField(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
-	fs, ok := TxnFieldSpecByName[args[0]]
+	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.itxVersion == 0 {
-		return ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %#v is not allowed.", spec.Name, args[0])
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
@@ -1171,7 +1173,7 @@ func asmEcdsa(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s expects one argument", spec.Name)
 	}
 
-	cs, ok := EcdsaCurveSpecByName[args[0]]
+	cs, ok := ecdsaCurveSpecByName[args[0]]
 	if !ok {
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
@@ -1218,7 +1220,8 @@ func asmJSONRef(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s unsupported JSON value type: %#v", spec.Name, args[0])
 	}
 	if jsonSpec.version > ops.Version {
-		return ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
+		//nolint:errcheck // we continue to maintain typestack
+		ops.errorf("%s %s field was introduced in TEAL v%d. Missed #pragma version?", spec.Name, args[0], jsonSpec.version)
 	}
 
 	valueType := jsonSpec.field
@@ -1394,7 +1397,7 @@ func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	if len(args) != 1 {
 		return oneAny, nil
 	}
-	fs, ok := TxnFieldSpecByName[args[0]]
+	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
 		return oneAny, nil
 	}
