@@ -161,8 +161,7 @@ func TestSession(t *testing.T) {
 
 	s.Resume()
 	<-done
-
-	require.Equal(t, (2), s.debugConfig.BreakAtLine)
+	require.Equal(t, map[int]struct{}{2: {}}, s.debugConfig.ActiveBreak)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
 	require.Equal(t, 1, ackCount)
 
@@ -222,8 +221,10 @@ func TestCallStackControl(t *testing.T) {
 	s.StepOver()
 	<-done
 
-	require.Equal(t, 4, s.debugConfig.BreakAtLine)
+	require.Equal(t, map[int]struct{}{4: {}}, s.debugConfig.ActiveBreak)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
+	require.Equal(t, false, s.debugConfig.NoBreak)
+	require.Equal(t, false, s.debugConfig.StepBreak)
 	require.Equal(t, true, s.debugConfig.StepOutOver)
 
 	require.Equal(t, 1, ackCount)
@@ -237,6 +238,7 @@ func TestCallStackControl(t *testing.T) {
 	s.StepOver()
 	<-done
 
+	require.Equal(t, false, s.debugConfig.NoBreak)
 	require.Equal(t, true, s.debugConfig.StepBreak)
 	require.Equal(t, false, s.debugConfig.StepOutOver)
 
@@ -250,8 +252,10 @@ func TestCallStackControl(t *testing.T) {
 	s.StepOut()
 	<-done
 
-	require.Equal(t, 3, s.debugConfig.BreakAtLine)
+	require.Equal(t, map[int]struct{}{3: {}}, s.debugConfig.ActiveBreak)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[3])
+	require.Equal(t, false, s.debugConfig.NoBreak)
+	require.Equal(t, false, s.debugConfig.StepBreak)
 	require.Equal(t, true, s.debugConfig.StepOutOver)
 
 	require.Equal(t, 3, ackCount)
@@ -265,9 +269,32 @@ func TestCallStackControl(t *testing.T) {
 	<-done
 
 	require.Equal(t, true, s.debugConfig.NoBreak)
+	require.Equal(t, false, s.debugConfig.StepBreak)
 	require.Equal(t, false, s.debugConfig.StepOutOver)
 
 	require.Equal(t, 4, ackCount)
+	require.Equal(t, 0, len(s.callStack))
+
+	// Check that resume keeps track of every breakpoint
+	s.RemoveBreakpoint(3)
+	require.Equal(t, breakpoint{false, false}, s.breakpoints[2])
+	err = s.SetBreakpoint(2)
+	require.NoError(t, err)
+	err = s.SetBreakpoint(4)
+	require.NoError(t, err)
+
+	go ackFunc()
+
+	s.Resume()
+	<-done
+	require.Equal(t, map[int]struct{}{2: {}, 4: {}}, s.debugConfig.ActiveBreak)
+	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
+	require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
+	require.Equal(t, false, s.debugConfig.NoBreak)
+	require.Equal(t, false, s.debugConfig.StepBreak)
+	require.Equal(t, false, s.debugConfig.StepOutOver)
+
+	require.Equal(t, 5, ackCount)
 	require.Equal(t, 0, len(s.callStack))
 
 	// Source and source map checks

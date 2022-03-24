@@ -93,11 +93,52 @@ type programMeta struct {
 
 // debugConfig contains information about control execution and breakpoints.
 type debugConfig struct {
-	StepOutOver bool `json:"stepover"`
 	NoBreak     bool `json:"nobreak"`
 	StepBreak   bool `json:"stepbreak"`
-	BreakAtLine int  `json:"breakatline"`
-	CallDepth   int  `json:"calldepth"`
+	StepOutOver bool `json:"stepover"`
+
+	ActiveBreak map[int]struct{} `json:"activebreak"`
+	CallDepth   int              `json:"calldepth"`
+}
+
+func makeDebugConfig() debugConfig {
+	dc := debugConfig{}
+	dc.ActiveBreak = make(map[int]struct{})
+	return dc
+}
+
+func (dc *debugConfig) setNoBreak() {
+	dc.NoBreak = true
+}
+
+func (dc *debugConfig) setStepBreak() {
+	dc.StepBreak = true
+}
+
+func (dc *debugConfig) setStepOutOver(callDepth int) {
+	dc.StepOutOver = true
+	dc.CallDepth = callDepth
+}
+
+// setActiveBreak does not check if the line is a valid value, so it should
+// be called inside the setBreakpoint() in session.
+func (dc *debugConfig) setActiveBreak(line int) {
+	dc.ActiveBreak[line] = struct{}{}
+}
+
+// isBreak checks if Update() should break at this line and callDepth.
+func (dc *debugConfig) isBreak(line int, callDepth int) bool {
+	if dc.StepBreak {
+		return true
+	}
+
+	_, ok := dc.ActiveBreak[line]
+	if !dc.StepOutOver || dc.CallDepth == callDepth {
+		// If we are in stepOver or stepOut, then make sure we check
+		// callstack depth before breaking at this line.
+		return ok
+	}
+	return false
 }
 
 type session struct {
@@ -112,9 +153,6 @@ type session struct {
 
 	// notifications from eval
 	notifications chan Notification
-
-	// channel to check if state has been updated after the breakpoint
-	updateChannel chan bool
 
 	// program that is being debugged
 	disassembly string
@@ -147,14 +185,12 @@ func makeSession(disassembly string, line int) (s *session) {
 	s = new(session)
 
 	// Allocate a default debugConfig (don't break)
-	s.debugConfig = debugConfig{
-		NoBreak: true,
-	}
+	s.debugConfig = makeDebugConfig()
+	s.debugConfig.setNoBreak()
 
 	// Allocate an acknowledgement and notifications channels
 	s.acknowledged = make(chan bool)
 	s.notifications = make(chan Notification)
-	s.updateChannel = make(chan bool)
 
 	s.disassembly = disassembly
 	s.lines = strings.Split(disassembly, "\n")
@@ -184,7 +220,8 @@ func (s *session) Step() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{StepBreak: true}
+		s.debugConfig = makeDebugConfig()
+		s.debugConfig.setStepBreak()
 	}()
 
 	s.resume()
@@ -198,20 +235,20 @@ func (s *session) StepOver() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		// Step over a function call (callsub op).
-		// Set a breakpoint at the next line and resume until we reach our
-		// desired call stack height.
 		if currentOp == "callsub" {
+			s.debugConfig = makeDebugConfig()
+			// Set a flag to check if we are in StepOver mode and to
+			// save our initial call depth so we can pass over breakpoints that
+			// are not on the correct call depth.
+			s.debugConfig.setStepOutOver(len(s.callStack))
 			err := s.setBreakpoint(s.line.Load() + 1)
 			if err != nil {
-				s.debugConfig = debugConfig{StepBreak: true}
+				s.debugConfig = makeDebugConfig()
+				s.debugConfig.setStepBreak()
 			}
-			// We need a flag to check if we are in StepOver mode and to
-			// save our initial call depth so we can pass breakpoints that
-			// are not on the correct call depth.
-			s.debugConfig.StepOutOver = true
-			s.debugConfig.CallDepth = len(s.callStack)
 		} else {
-			s.debugConfig = debugConfig{StepBreak: true}
+			s.debugConfig = makeDebugConfig()
+			s.debugConfig.setStepBreak()
 		}
 	}()
 	s.resume()
@@ -221,13 +258,15 @@ func (s *session) StepOut() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		s.debugConfig = makeDebugConfig()
 		if len(s.callStack) == 0 {
-			s.debugConfig = debugConfig{NoBreak: true}
+			s.debugConfig.setNoBreak()
 		} else {
 			callFrame := s.callStack[len(s.callStack)-1]
 			err := s.setBreakpoint(callFrame.FrameLine + 1)
 			if err != nil {
-				s.debugConfig = debugConfig{StepBreak: true}
+				s.debugConfig = makeDebugConfig()
+				s.debugConfig.setStepBreak()
 			}
 			s.debugConfig.StepOutOver = true
 			s.debugConfig.CallDepth = len(s.callStack)
@@ -238,21 +277,14 @@ func (s *session) StepOut() {
 }
 
 func (s *session) Resume() {
-	currentLine := s.line.Load()
-
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{NoBreak: true} // reset possible break after Step
-		// find any active breakpoints and set next break
-		if currentLine < len(s.breakpoints) {
-			// Need to check upper frame to set the next breakpoint?
-			// Or recursively call all the upper frames?
-			for line, state := range s.breakpoints[currentLine+1:] {
-				if state.set && state.active {
-					s.setBreakpoint(line + currentLine + 1)
-					break
-				}
+		s.debugConfig = makeDebugConfig()
+		// find any active breakpoints and set break
+		for line, state := range s.breakpoints {
+			if state.set && state.active {
+				s.setBreakpoint(line)
 			}
 		}
 	}()
@@ -261,18 +293,21 @@ func (s *session) Resume() {
 }
 
 // setBreakpoint must be called with lock taken
+// Used for setting a breakpoint in step execution and adding bp to the session.
 func (s *session) setBreakpoint(line int) error {
 	if line >= len(s.breakpoints) {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	s.breakpoints[line] = breakpoint{set: true, active: true}
-	s.debugConfig = debugConfig{BreakAtLine: (line)}
+	s.debugConfig.setActiveBreak(line)
 	return nil
 }
 
 func (s *session) SetBreakpoint(line int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Reset all existing flags and breakpoints and set a new bp.
+	s.debugConfig = makeDebugConfig()
 	return s.setBreakpoint(line)
 }
 
@@ -290,7 +325,8 @@ func (s *session) RemoveBreakpoint(line int) error {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	if s.breakpoints[line].NonEmpty() {
-		s.debugConfig = debugConfig{NoBreak: true}
+		s.debugConfig = makeDebugConfig()
+		s.debugConfig.setNoBreak()
 		s.breakpoints[line] = breakpoint{}
 	}
 	return nil
@@ -306,7 +342,8 @@ func (s *session) SetBreakpointsActive(active bool) {
 		}
 	}
 	if !active {
-		s.debugConfig = debugConfig{NoBreak: true}
+		s.debugConfig = makeDebugConfig()
+		s.debugConfig.setNoBreak()
 	}
 }
 
@@ -535,12 +572,11 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 
 	// copy state to prevent a data race in this the go-routine and upcoming updates to the state
 	go func(localState logic.DebugState) {
-		// Copy callstack information
-		s.setCallStack(state.CallStack)
 		// Check if we are triggered and acknowledge asynchronously
 		if !cfg.NoBreak {
-			if cfg.StepBreak || (localState.Line == cfg.BreakAtLine &&
-				(!cfg.StepOutOver || cfg.CallDepth == len(state.CallStack))) {
+			if cfg.isBreak(localState.Line, len(localState.CallStack)) {
+				// Copy callstack information
+				s.setCallStack(state.CallStack)
 				// Breakpoint hit! Inform the user
 				s.notifications <- Notification{"updated", localState}
 			} else {
