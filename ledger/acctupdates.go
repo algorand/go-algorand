@@ -277,6 +277,9 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
+
 	if au.accountsq != nil {
 		au.accountsq.close()
 		au.accountsq = nil
@@ -418,22 +421,19 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 
-	if committedRound < dcr.lookback {
-		return nil
-	}
-
-	newBase := committedRound - dcr.lookback
-	if newBase <= dbRound {
-		// Already forgotten
-		return nil
-	}
-
+	newBase := committedRound
 	if newBase > dbRound+basics.Round(len(au.deltas)) {
-		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, au.cachedDBRound, len(au.deltas))
+		au.log.Warnf(
+			"newBlock() hasn't been called for committedRound %d yet", committedRound)
+		newBase = dbRound+basics.Round(len(au.deltas))
+	}
+
+	if newBase <= dbRound {
+		// Nothing to do.
+		return nil
 	}
 
 	offset = uint64(newBase - dbRound)
-
 	offset = au.consecutiveVersion(offset)
 
 	// calculate the number of pending deltas

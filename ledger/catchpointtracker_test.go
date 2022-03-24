@@ -396,15 +396,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
-	// create new protocol version, which has lower lookback
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedRefreshInterval = 8
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
@@ -419,7 +410,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, false, 1, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
 
 	cfg := config.GetDefaultLocal()
@@ -439,7 +430,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	catchpointLabels := make(map[basics.Round]string)
 	ledgerHistory := make(map[basics.Round]*mockLedgerForTracker)
 	roundDeltas := make(map[basics.Round]ledgercore.StateDelta)
-	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
+	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval) + 1; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
@@ -457,7 +448,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		require.Equal(t, prevTotals.All(), curTotals.All())
 		newAccts := applyPartialDeltas(base, updates)
 
-		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
+		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, config.Consensus[protocol.ConsensusCurrentVersion], base, prevTotals)
 		require.Equal(t, newTotals.All(), curTotals.All())
 
 		blk := bookkeeping.Block{
@@ -466,7 +457,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			},
 		}
 		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = testProtocolVersion
+		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
@@ -497,14 +488,14 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 
 		ct2 := newCatchpointTracker(t, ml2, cfg, ".")
 		defer ct2.close()
-		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
+		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval) + 1; i++ {
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
 					Round: basics.Round(i),
 				},
 			}
 			blk.RewardsLevel = rewardsLevels[i]
-			blk.CurrentProtocol = testProtocolVersion
+			blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 			delta := roundDeltas[i]
 			ml2.trackers.newBlock(blk, delta)
 			ml2.trackers.committedUpTo(i)
@@ -517,11 +508,13 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		}
 	}
 
+	require.Len(t, ct.roundDigest, 1)
+
 	// test to see that after loadFromDisk, all the tracker content is lost ( as expected )
-	require.NotZero(t, len(ct.roundDigest))
 	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
 	require.Zero(t, len(ct.roundDigest))
 	require.Zero(t, ct.catchpointWriting)
+
 	select {
 	case _, closed := <-ct.catchpointSlowWriting:
 		require.False(t, closed)
@@ -535,24 +528,21 @@ func TestCatchpointTrackerPrepareCommit(t *testing.T) {
 
 	ct := &catchpointTracker{}
 	const maxOffset = 40
-	const maxLookback = 320
-	ct.roundDigest = make([]crypto.Digest, maxOffset+maxLookback)
+	ct.roundDigest = make([]crypto.Digest, maxOffset)
 	for i := 0; i < len(ct.roundDigest); i++ {
-		ct.roundDigest[i] = crypto.Hash([]byte{byte(i), byte(i / 256)})
+		round := basics.Round(i + 1)
+		ct.roundDigest[i] = crypto.Hash([]byte{byte(round), byte(round / 256)})
 	}
 	dcc := &deferredCommitContext{}
 	for offset := uint64(1); offset < maxOffset; offset++ {
 		dcc.offset = offset
-		for lookback := basics.Round(0); lookback < maxLookback; lookback += 20 {
-			dcc.lookback = lookback
-			for _, isCatchpointRound := range []bool{false, true} {
-				dcc.isCatchpointRound = isCatchpointRound
-				require.NoError(t, ct.prepareCommit(dcc))
-				if isCatchpointRound {
-					expectedRound := offset + uint64(lookback) - 1
-					expectedHash := crypto.Hash([]byte{byte(expectedRound), byte(expectedRound / 256)})
-					require.Equal(t, expectedHash[:], dcc.committedRoundDigest[:])
-				}
+		for _, isCatchpointRound := range []bool{false, true} {
+			dcc.isCatchpointRound = isCatchpointRound
+			require.NoError(t, ct.prepareCommit(dcc))
+			if isCatchpointRound {
+				expectedRound := offset
+				expectedHash := crypto.Hash([]byte{byte(expectedRound), byte(expectedRound / 256)})
+				require.Equal(t, expectedHash[:], dcc.committedRoundDigest[:])
 			}
 		}
 	}
@@ -655,14 +645,6 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	ledger.trackers.trackers = append(ledger.trackers.trackers, writeStallingTracker)
 	ledger.trackers.mu.Unlock()
 	ledger.trackerMu.Unlock()
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	// create the first MaxBalLookback blocks
-	for rnd := ledger.Latest() + 1; rnd <= basics.Round(proto.MaxBalLookback); rnd++ {
-		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
-		require.NoError(t, err)
-	}
 
 	// make sure to get to a catchpoint round, and block the writing there.
 	for {

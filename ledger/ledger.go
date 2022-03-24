@@ -405,6 +405,8 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 		return 0
 	}
 
+	// TODO: preserve the last `protocol.SeedLookback * cparams.SeedRefreshInterval` blocks
+	// because agreement needs block digest this many rounds back.
 	if r+1 <= basics.Round(protocol.SeedLookback) {
 		return 0
 	}

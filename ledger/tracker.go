@@ -193,7 +193,6 @@ type trackerRegistry struct {
 type deferredCommitRange struct {
 	offset   uint64
 	oldBase  basics.Round
-	lookback basics.Round
 
 	// TODO: remove
 	offsetOnline  uint64

@@ -115,16 +115,8 @@ type catchpointTracker struct {
 	// catchpointsMu is the synchronization mutex for accessing the various non-static variables.
 	catchpointsMu deadlock.RWMutex
 
-	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
+	// roundDigest stores the digest of the block for every round starting with dbRound+1 and every round after it.
 	roundDigest []crypto.Digest
-
-	// accountDataResourceSeparationRound is a round where the EnableAccountDataResourceSeparation feature was enabled via the consensus.
-	// we avoid generating catchpoints before that round in order to ensure the network remain consistent in the catchpoint
-	// label being produced. This variable could be "wrong" in two cases -
-	// 1. It's zero, meaning that the EnableAccountDataResourceSeparation has yet to be seen.
-	// 2. It's non-zero meaning that it the given round is after the EnableAccountDataResourceSeparation was enabled ( it might be exact round
-	//    but that's only if newBlock was called with that round ), plus the lookback.
-	accountDataResourceSeparationRound basics.Round
 
 	// forceCatchpointFileWriting used for debugging purpose by bypassing the test against
 	// accountDataResourceSeparationRound in isCatchpointRound(), so that we could generate
@@ -247,11 +239,6 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 	ct.catchpointsMu.Lock()
 	defer ct.catchpointsMu.Unlock()
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
-
-	if config.Consensus[blk.CurrentProtocol].EnableAccountDataResourceSeparation && ct.accountDataResourceSeparationRound == 0 {
-		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
-	}
-
 }
 
 // committedUpTo implements the ledgerTracker interface for catchpointTracker.
@@ -260,23 +247,24 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) basics.Round {
 }
 
 func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	var hasMultipleIntermediateCatchpoint, hasIntermediateCatchpoint bool
-
+	var hasMultipleIntermediateCatchpoints, hasIntermediateCatchpoint bool
 	newBase := dcr.oldBase + basics.Round(dcr.offset)
 
-	// check if there was a catchpoint between dcc.oldBase+lookback and dcc.oldBase+offset+lookback
 	if ct.catchpointInterval > 0 {
-		nextCatchpointRound := ((uint64(dcr.oldBase+dcr.lookback) + ct.catchpointInterval) / ct.catchpointInterval) * ct.catchpointInterval
+		// The smallest catchpoint round > `dcr.oldBase`.
+		nextCatchpointRound :=
+			((uint64(dcr.oldBase)) / ct.catchpointInterval) * ct.catchpointInterval + 1
+		// Largest catchpoint round <= `committedRound`.
+		mostRecentCatchpointRound :=
+			(uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
 
-		if nextCatchpointRound < uint64(dcr.oldBase+dcr.lookback)+dcr.offset {
-			mostRecentCatchpointRound := (uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
-			newBase = basics.Round(nextCatchpointRound) - dcr.lookback
-			if mostRecentCatchpointRound > nextCatchpointRound {
-				hasMultipleIntermediateCatchpoint = true
-				// skip if there is more than one catchpoint in queue
-				newBase = basics.Round(mostRecentCatchpointRound) - dcr.lookback
-			}
+		if nextCatchpointRound <= mostRecentCatchpointRound {
 			hasIntermediateCatchpoint = true
+			newBase = basics.Round(mostRecentCatchpointRound)
+
+			if nextCatchpointRound < mostRecentCatchpointRound {
+				hasMultipleIntermediateCatchpoints = true
+			}
 		}
 	}
 
@@ -304,13 +292,13 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	}
 
 	// check to see if this is a catchpoint round
-	dcr.isCatchpointRound = ct.isCatchpointRound(dcr.offset, dcr.oldBase, dcr.lookback)
+	dcr.isCatchpointRound = ct.isCatchpointRound(dcr.oldBase + basics.Round(dcr.offset))
 
 	if dcr.isCatchpointRound && ct.enableGeneratingCatchpointFiles {
 		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
 		atomic.StoreInt32(&ct.catchpointWriting, int32(-1))
 		ct.catchpointSlowWriting = make(chan struct{}, 1)
-		if hasMultipleIntermediateCatchpoint {
+		if hasMultipleIntermediateCatchpoints {
 			close(ct.catchpointSlowWriting)
 		}
 	}
@@ -327,7 +315,7 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	ct.catchpointsMu.RLock()
 	defer ct.catchpointsMu.RUnlock()
 	if dcc.isCatchpointRound {
-		dcc.committedRoundDigest = ct.roundDigest[dcc.offset+uint64(dcc.lookback)-1]
+		dcc.committedRoundDigest = ct.roundDigest[dcc.offset - 1]
 	}
 	return nil
 }
@@ -397,7 +385,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	var err error
 	if dcc.isCatchpointRound {
-		dcc.catchpointLabel, err = ct.accountsCreateCatchpointLabel(dcc.newBase+dcc.lookback, dcc.roundTotals, dcc.committedRoundDigest, dcc.trieBalancesHash)
+		dcc.catchpointLabel, err = ct.accountsCreateCatchpointLabel(dcc.newBase, dcc.roundTotals, dcc.committedRoundDigest, dcc.trieBalancesHash)
 		if err != nil {
 			ct.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
 		}
@@ -429,7 +417,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	if dcc.isCatchpointRound && ct.enableGeneratingCatchpointFiles && dcc.catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
-		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
+		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
 	}
 
 	// in scheduleCommit, we expect that this function to update the catchpointWriting when
@@ -567,18 +555,9 @@ func (ct *catchpointTracker) IsWritingCatchpointFile() bool {
 	return atomic.LoadInt32(&ct.catchpointWriting) != 0
 }
 
-// isCatchpointRound returns true if the round at the given offset, dbRound with the provided lookback should be a catchpoint round.
-func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
-	if !ct.forceCatchpointFileWriting {
-		if ct.accountDataResourceSeparationRound == basics.Round(0) {
-			return false
-		}
-
-		if ct.accountDataResourceSeparationRound > (basics.Round(offset) + dbRound + lookback) {
-			return false
-		}
-	}
-	return ((offset + uint64(lookback+dbRound)) > 0) && (ct.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % ct.catchpointInterval) == 0)
+func (ct *catchpointTracker) isCatchpointRound(round basics.Round) bool {
+	return (round > 0) && (ct.catchpointInterval != 0) &&
+		(uint64(round) % ct.catchpointInterval == 0)
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.

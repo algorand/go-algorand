@@ -233,27 +233,22 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	defer ao.accountsMu.RUnlock()
 
 	// repeat logic from account updates
-	// TODO: after clean up removing 320 rounds lookback
-	if committedRound < dcr.lookback {
-		return nil
-	}
-
-	newBase := committedRound - dcr.lookback
-	if newBase <= dbRound {
-		// Already forgotten
-		return nil
-	}
-
+	newBase := committedRound
 	if newBase > dbRound+basics.Round(len(ao.deltas)) {
-		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
+		ao.log.Warnf(
+			"newBlock() hasn't been called for committedRound %d yet", committedRound)
+		newBase = dbRound+basics.Round(len(ao.deltas))
 	}
-
 	if ao.voters != nil {
 		newBase = ao.voters.lowestRound(newBase)
 	}
 
-	offset = uint64(newBase - dbRound)
+	if newBase <= dbRound {
+		// Nothing to do.
+		return nil
+	}
 
+	offset = uint64(newBase - dbRound)
 	offset = ao.consecutiveVersion(offset)
 
 	// submit committing task only if offset is non-zero in addition to
