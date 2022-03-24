@@ -148,7 +148,8 @@ type session struct {
 	acknowledged chan bool
 
 	// debugConfigs holds information about this debugging session,
-	// currently just when we want to break
+	// such as the breakpoints, initial call stack depth, and whether we want
+	// to step over/out/in.
 	debugConfig debugConfig
 
 	// notifications from eval
