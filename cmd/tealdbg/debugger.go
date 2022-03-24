@@ -54,6 +54,7 @@ type DebugAdapter interface {
 type Control interface {
 	Step()
 	StepOver()
+	StepOut()
 	Resume()
 	SetBreakpoint(line int) error
 	RemoveBreakpoint(line int) error
@@ -92,7 +93,7 @@ type programMeta struct {
 
 // debugConfig contains information about control execution and breakpoints.
 type debugConfig struct {
-	StepOver    bool `json:"stepover"`
+	StepOutOver bool `json:"stepover"`
 	NoBreak     bool `json:"nobreak"`
 	StepBreak   bool `json:"stepbreak"`
 	BreakAtLine int  `json:"breakatline"`
@@ -190,8 +191,6 @@ func (s *session) Step() {
 }
 
 func (s *session) StepOver() {
-	initialCallStackDepth := len(s.callStack)
-	nextLine := s.line.Load() + 1
 	// Get the first TEAL opcode in the line
 	currentOp := strings.Fields(s.lines[s.line.Load()])[0]
 
@@ -202,21 +201,40 @@ func (s *session) StepOver() {
 		// Set a breakpoint at the next line and resume until we reach our
 		// desired call stack height.
 		if currentOp == "callsub" {
-			err := s.setBreakpoint(nextLine)
+			err := s.setBreakpoint(s.line.Load() + 1)
 			if err != nil {
 				s.debugConfig = debugConfig{StepBreak: true}
 			}
 			// We need a flag to check if we are in StepOver mode and to
 			// save our initial call depth so we can pass breakpoints that
 			// are not on the correct call depth.
-			s.debugConfig.StepOver = true
-			s.debugConfig.CallDepth = initialCallStackDepth
-			s.resume()
+			s.debugConfig.StepOutOver = true
+			s.debugConfig.CallDepth = len(s.callStack)
 		} else {
 			s.debugConfig = debugConfig{StepBreak: true}
-			s.resume()
 		}
 	}()
+	s.resume()
+}
+
+func (s *session) StepOut() {
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if len(s.callStack) == 0 {
+			s.debugConfig = debugConfig{NoBreak: true}
+		} else {
+			callFrame := s.callStack[len(s.callStack)-1]
+			err := s.setBreakpoint(callFrame.FrameLine + 1)
+			if err != nil {
+				s.debugConfig = debugConfig{StepBreak: true}
+			}
+			s.debugConfig.StepOutOver = true
+			s.debugConfig.CallDepth = len(s.callStack)
+		}
+	}()
+
+	s.resume()
 }
 
 func (s *session) Resume() {
@@ -522,7 +540,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 		// Check if we are triggered and acknowledge asynchronously
 		if !cfg.NoBreak {
 			if cfg.StepBreak || (localState.Line == cfg.BreakAtLine &&
-				(!cfg.StepOver || cfg.CallDepth == len(state.CallStack))) {
+				(!cfg.StepOutOver || cfg.CallDepth == len(state.CallStack))) {
 				// Breakpoint hit! Inform the user
 				s.notifications <- Notification{"updated", localState}
 			} else {

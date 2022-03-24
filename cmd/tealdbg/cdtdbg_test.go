@@ -109,6 +109,9 @@ func (c *MockDebugControl) Step() {
 func (c *MockDebugControl) StepOver() {
 }
 
+func (c *MockDebugControl) StepOut() {
+}
+
 func (c *MockDebugControl) Resume() {
 }
 

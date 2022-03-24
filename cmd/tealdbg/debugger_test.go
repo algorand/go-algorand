@@ -224,6 +224,8 @@ func TestCallStackControl(t *testing.T) {
 
 	require.Equal(t, 4, s.debugConfig.BreakAtLine)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
+	require.Equal(t, true, s.debugConfig.StepOutOver)
+
 	require.Equal(t, 1, ackCount)
 	require.Equal(t, initialStackDepth, len(s.callStack))
 
@@ -236,8 +238,39 @@ func TestCallStackControl(t *testing.T) {
 	<-done
 
 	require.Equal(t, true, s.debugConfig.StepBreak)
-	require.Equal(t, 2, ackCount)
+	require.Equal(t, false, s.debugConfig.StepOutOver)
 
+	require.Equal(t, 2, ackCount)
+	require.Equal(t, initialStackDepth, len(s.callStack))
+
+	// Check that step out when call stack depth is 1 sets breakpoint to the
+	// line after frame.
+	go ackFunc()
+
+	s.StepOut()
+	<-done
+
+	require.Equal(t, 3, s.debugConfig.BreakAtLine)
+	require.Equal(t, breakpoint{true, true}, s.breakpoints[3])
+	require.Equal(t, true, s.debugConfig.StepOutOver)
+
+	require.Equal(t, 3, ackCount)
+	require.Equal(t, initialStackDepth, len(s.callStack))
+
+	// Check that step out when call stack depth is 0 sets NoBreak to true
+	s.callStack = nil
+	go ackFunc()
+
+	s.StepOut()
+	<-done
+
+	require.Equal(t, true, s.debugConfig.NoBreak)
+	require.Equal(t, false, s.debugConfig.StepOutOver)
+
+	require.Equal(t, 4, ackCount)
+	require.Equal(t, 0, len(s.callStack))
+
+	// Source and source map checks
 	data, err := s.GetSourceMap()
 	require.NoError(t, err)
 	require.Greater(t, len(data), 0)
