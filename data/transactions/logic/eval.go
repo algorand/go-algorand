@@ -1265,6 +1265,7 @@ func opDivw(cx *EvalContext) {
 func bytesToBN254Field(b []byte) (ret fp.Element) {
 	var x big.Int
 	x.SetBytes(b[:32])
+	ret.SetBigInt(&x)
 	return
 }
 
@@ -1342,7 +1343,7 @@ func opBn256ScalarMul(cx *EvalContext) {
 	a := bytesToBN254G1(aBytes)
 
 	kBytes := cx.stack[last].Bytes
-	k := new(big.Int).SetBytes(kBytes[:32])
+	k := new(big.Int).SetBytes(kBytes[:])
 
 	res := new(bn254.G1Affine).ScalarMultiplication(&a, k)
 
