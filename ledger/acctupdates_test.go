@@ -258,7 +258,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	return
 }
 
-func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) *accountUpdates {
+func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, dbPathPrefix string) (*accountUpdates, *onlineAccounts) {
 	au := &accountUpdates{}
 	au.initialize(conf)
 	ao := &onlineAccounts{}
@@ -271,10 +271,10 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
 
-	return au
+	return au, ao
 }
 
-func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
+func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
@@ -321,7 +321,14 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 				require.NoError(t, err)
 				require.Equal(t, d.AccountBaseData, ledgercore.ToAccountData(data).AccountBaseData)
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
-				// d, validThrough, err := ao.LookupAgreement(rnd, addr)
+				// TODO: make lookupOnlineAccountData returning extended version of ledgercore.VotingData ?
+				od, err := ao.lookupOnlineAccountData(rnd, addr)
+				require.NoError(t, err)
+				require.Equal(t, od.VoteID, data.VoteID)
+				require.Equal(t, od.SelectionID, data.SelectionID)
+				require.Equal(t, od.VoteFirstValid, data.VoteFirstValid)
+				require.Equal(t, od.VoteLastValid, data.VoteLastValid)
+				require.Equal(t, od.VoteKeyDilution, data.VoteKeyDilution)
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
 				switch d.Status {
@@ -351,9 +358,13 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 			require.Equal(t, d, ledgercore.AccountData{})
+			od, err := ao.lookupOnlineAccountData(rnd, ledgertesting.RandomAddress())
+			require.NoError(t, err)
+			require.Equal(t, od, basics.OnlineAccountData{})
 		}
 	}
 	checkAcctUpdatesConsistency(t, au, latestRnd)
+	checkOnlineAcctUpdatesConsistency(t, ao, latestRnd)
 }
 
 func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Round) {
@@ -408,6 +419,34 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 	}
 }
 
+func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd basics.Round) {
+	accounts := make(map[basics.Address]modifiedAccount)
+
+	for _, rdelta := range ao.deltas {
+		for i := 0; i < rdelta.Len(); i++ {
+			addr, adelta := rdelta.GetByIdx(i)
+			macct := accounts[addr]
+			macct.data = adelta
+			macct.ndeltas++
+			accounts[addr] = macct
+		}
+	}
+
+	require.Equal(t, ao.accounts, accounts)
+
+	latest := ao.deltas[len(ao.deltas)-1]
+	for i := 0; i < latest.Len(); i++ {
+		addr, acct := latest.GetByIdx(i)
+		od, err := ao.lookupOnlineAccountData(rnd, addr)
+		require.NoError(t, err)
+		require.Equal(t, acct.VoteID, od.VoteID)
+		require.Equal(t, acct.SelectionID, od.SelectionID)
+		require.Equal(t, acct.VoteFirstValid, od.VoteFirstValid)
+		require.Equal(t, acct.VoteLastValid, od.VoteLastValid)
+		require.Equal(t, acct.VoteKeyDilution, od.VoteKeyDilution)
+	}
+}
+
 func TestAcctUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -433,8 +472,9 @@ func TestAcctUpdates(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
@@ -443,7 +483,7 @@ func TestAcctUpdates(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	checkAcctUpdates(t, au, 0, 9, accts, rewardsLevels, proto)
+	checkAcctUpdates(t, au, ao, 0, 9, accts, rewardsLevels, proto)
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
@@ -488,7 +528,7 @@ func TestAcctUpdates(t *testing.T) {
 		// checkAcctUpdates is kind of slow because of amount of data it needs to compare
 		// instead, compare at start, end in between approx 10 rounds
 		if i == start || i == end-1 || crypto.RandUint64()%10 == 0 {
-			checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
+			checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
 		}
 	}
 
@@ -498,7 +538,7 @@ func TestAcctUpdates(t *testing.T) {
 
 		ml.trackers.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
 		ml.trackers.waitAccountsWriting()
-		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
+		checkAcctUpdates(t, au, ao, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
 
 	// check the account totals.
@@ -549,8 +589,9 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
@@ -559,7 +600,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	checkAcctUpdates(t, au, 0, 9, accts, rewardsLevels, proto)
+	checkAcctUpdates(t, au, ao, 0, 9, accts, rewardsLevels, proto)
 
 	wg := sync.WaitGroup{}
 
@@ -637,8 +678,9 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(b, ml, conf, ".")
+	au, ao := newAcctUpdates(b, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -775,7 +817,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
 	// cover 10 genesis blocks
@@ -883,7 +925,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		}
 
 		conf := config.GetDefaultLocal()
-		au := newAcctUpdates(t, ml, conf, ".")
+		au, _ := newAcctUpdates(t, ml, conf, ".")
 		defer au.close()
 
 		// cover 10 genesis blocks
@@ -1242,7 +1284,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	au := newAcctUpdates(b, ml, cfg, ".")
+	au, _ := newAcctUpdates(b, ml, cfg, ".")
 	defer au.close()
 
 	// at this point, the database was created. We want to fill the accounts data
@@ -1583,7 +1625,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -1643,7 +1685,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	ml2.deltas = ml.deltas
 
 	conf = config.GetDefaultLocal()
-	au = newAcctUpdates(t, ml2, conf, ".")
+	au, _ = newAcctUpdates(t, ml2, conf, ".")
 	defer au.close()
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
@@ -1682,7 +1724,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
@@ -1803,7 +1845,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
@@ -1960,7 +2002,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
 	var addr1 basics.Address
@@ -2161,7 +2203,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	err := au.loadFromDisk(ml, 0)
 	defer au.close()
 	require.NoError(t, err)
@@ -2222,8 +2264,9 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
@@ -2232,7 +2275,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	checkAcctUpdates(t, au, 0, 9, accts, rewardsLevels, proto)
+	checkAcctUpdates(t, au, ao, 0, 9, accts, rewardsLevels, proto)
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
@@ -2271,7 +2314,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
-		checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
+		checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
 	}
 
 	flushRound := func(i basics.Round) {
@@ -2408,7 +2451,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
 	var addr1 basics.Address
