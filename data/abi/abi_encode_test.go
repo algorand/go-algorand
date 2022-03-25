@@ -1264,4 +1264,19 @@ func TestInferToSlice(t *testing.T) {
 		require.NoError(t, err, "inferToSlice on testcase %d failed to successfully infer %v", i, test.toBeInferred)
 		require.Equal(t, test.length, len(inferredSlice), "inferToSlice on testcase %d inferred different length, expected %d", i, test.length)
 	}
+
+	// one more testcase for totally nil (with no type information) is bad, should not pass the test
+	_, err := inferToSlice(nil)
+	require.EqualError(
+		t, err,
+		"cannot infer an interface value as a slice of interface element",
+		"inferToSlice should return type inference error when passed in nil with unexpected Kind")
+
+	// one moar testcase for wrong typed nil is bad, should not pass the test
+	var nilPt *uint64 = nil
+	_, err = inferToSlice(nilPt)
+	require.EqualError(
+		t, err,
+		"cannot infer an interface value as a slice of interface element",
+		"inferToSlice should return type inference error when passing argument type other than slice or array")
 }
