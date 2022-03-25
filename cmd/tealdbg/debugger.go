@@ -235,20 +235,18 @@ func (s *session) StepOver() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		s.debugConfig = makeDebugConfig()
 		// Step over a function call (callsub op).
-		if currentOp == "callsub" {
-			s.debugConfig = makeDebugConfig()
+		if currentOp == "callsub" && s.line.Load() < len(s.breakpoints) {
 			// Set a flag to check if we are in StepOver mode and to
 			// save our initial call depth so we can pass over breakpoints that
 			// are not on the correct call depth.
 			s.debugConfig.setStepOutOver(len(s.callStack))
 			err := s.setBreakpoint(s.line.Load() + 1)
 			if err != nil {
-				s.debugConfig = makeDebugConfig()
 				s.debugConfig.setStepBreak()
 			}
 		} else {
-			s.debugConfig = makeDebugConfig()
 			s.debugConfig.setStepBreak()
 		}
 	}()
@@ -266,7 +264,6 @@ func (s *session) StepOut() {
 			callFrame := s.callStack[len(s.callStack)-1]
 			err := s.setBreakpoint(callFrame.FrameLine + 1)
 			if err != nil {
-				s.debugConfig = makeDebugConfig()
 				s.debugConfig.setStepBreak()
 			}
 			s.debugConfig.StepOutOver = true
@@ -285,7 +282,10 @@ func (s *session) Resume() {
 		// find any active breakpoints and set break
 		for line, state := range s.breakpoints {
 			if state.set && state.active {
-				s.setBreakpoint(line)
+				err := s.setBreakpoint(line)
+				if err != nil {
+					s.debugConfig.setStepBreak()
+				}
 			}
 		}
 	}()
