@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -160,7 +161,15 @@ func buildSyntaxHighlight() *tmLanguage {
 		},
 	}
 	var allArithmetics []string
-	for grp, names := range logic.OpGroups {
+
+	var keys []string
+	for key := range logic.OpGroups {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, grp := range keys {
+		names := logic.OpGroups[grp]
+		sort.Strings(names)
 		switch grp {
 		case "Flow Control":
 			keywords.Patterns = append(keywords.Patterns, pattern{

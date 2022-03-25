@@ -63,20 +63,20 @@
           }
         },
         {
-          "name": "keyword.other.teal",
-          "match": "^(int|byte|addr|intcblock|intc|intc_0|intc_1|intc_2|intc_3|pushint|bytecblock|bytec|bytec_0|bytec_1|bytec_2|bytec_3|pushbytes|bzero|arg|arg_0|arg_1|arg_2|arg_3|args|txn|gtxn|txna|txnas|gtxna|gtxnas|gtxns|gtxnsa|gtxnsas|global|load|loads|store|stores|gload|gloads|gloadss|gaid|gaids)\\b"
+          "name": "keyword.control.teal",
+          "match": "^(assert|b|bnz|bz|callsub|cover|dig|dup|dup2|err|pop|retsub|return|select|swap|uncover)\\b"
         },
         {
-          "name": "keyword.control.teal",
-          "match": "^(err|bnz|bz|b|return|pop|dup|dup2|dig|cover|uncover|swap|select|assert|callsub|retsub)\\b"
+          "name": "keyword.other.teal",
+          "match": "^(int|byte|addr|arg|arg_0|arg_1|arg_2|arg_3|args|bytec|bytec_0|bytec_1|bytec_2|bytec_3|bytecblock|bzero|gaid|gaids|gload|gloads|gloadss|global|gtxn|gtxna|gtxnas|gtxns|gtxnsa|gtxnsas|intc|intc_0|intc_1|intc_2|intc_3|intcblock|load|loads|pushbytes|pushint|store|stores|txn|txna|txnas)\\b"
         },
         {
           "name": "keyword.other.unit.teal",
-          "match": "^(balance|min_balance|app_opted_in|app_local_get|app_local_get_ex|app_global_get|app_global_get_ex|app_local_put|app_global_put|app_local_del|app_global_del|asset_holding_get|asset_params_get|app_params_get|acct_params_get|log)\\b"
+          "match": "^(acct_params_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|asset_holding_get|asset_params_get|balance|log|min_balance)\\b"
         },
         {
           "name": "keyword.operator.teal",
-          "match": "^(b\\||b\u0026|b\\^|b\\~|itxn_begin|itxn_next|itxn_field|itxn_submit|itxn|itxna|itxnas|gitxn|gitxna|gitxnas|sha256|keccak256|sha512_256|sha3_256|ed25519verify|ed25519verify_bare|ecdsa_verify|ecdsa_pk_recover|ecdsa_pk_decompress|\\+|\\-|/|\\*|\\\u003c|\\\u003e|\\\u003c\\=|\\\u003e\\=|\u0026\u0026|\\|\\||shl|shr|sqrt|bitlen|exp|\\=\\=|\\!\\=|\\!|len|itob|btoi|%|\\||\u0026|\\^|\\~|mulw|addw|divw|divmodw|expw|getbit|setbit|getbyte|setbyte|concat|substring|substring3|extract|extract3|extract_uint16|extract_uint32|extract_uint64|base64_decode|json_ref|b\\+|b\\-|b/|b\\*|b\\\u003c|b\\\u003e|b\\\u003c\\=|b\\\u003e\\=|b\\=\\=|b\\!\\=|b%|bsqrt)\\b"
+          "match": "^(\\!|\\!\\=|%|\u0026|\u0026\u0026|\\*|\\+|\\-|/|\\\u003c|\\\u003c\\=|\\=\\=|\\\u003e|\\\u003e\\=|\\^|addw|bitlen|btoi|concat|divmodw|divw|ecdsa_pk_decompress|ecdsa_pk_recover|ecdsa_verify|ed25519verify|ed25519verify_bare|exp|expw|getbit|getbyte|itob|keccak256|len|mulw|setbit|setbyte|sha256|sha3_256|sha512_256|shl|shr|sqrt|\\||\\|\\||\\~|b\\!\\=|b%|b\\*|b\\+|b\\-|b/|b\\\u003c|b\\\u003c\\=|b\\=\\=|b\\\u003e|b\\\u003e\\=|bsqrt|b\u0026|b\\^|b\\||b\\~|base64_decode|extract|extract3|extract_uint16|extract_uint32|extract_uint64|json_ref|substring|substring3|gitxn|gitxna|gitxnas|itxn|itxn_begin|itxn_field|itxn_next|itxn_submit|itxna|itxnas)\\b"
         }
       ]
     },
