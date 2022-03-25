@@ -278,7 +278,6 @@ type OpRecord struct {
 	Name    string
 	Args    string `json:",omitempty"`
 	Returns string `json:",omitempty"`
-	Cost    int
 	Size    int
 
 	ArgEnum      []string `json:",omitempty"`
@@ -359,7 +358,6 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Args)
 		records[i].Returns = typeString(spec.Returns)
-		records[i].Cost = spec.Details.Cost
 		records[i].Size = spec.Details.Size
 		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
 		records[i].Doc = logic.OpDoc(spec.Name)

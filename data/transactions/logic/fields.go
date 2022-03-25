@@ -592,11 +592,11 @@ func ecdsaCurveSpecByField(c EcdsaCurve) (ecdsaCurveSpec, bool) {
 	return ecdsaCurveSpecs[c], true
 }
 
-var ecdsaCurveSpecByName = make(ecDsaCurveNameSpecMap, len(ecdsaCurveNames))
+var ecdsaCurveSpecByName = make(ecdsaCurveNameSpecMap, len(ecdsaCurveNames))
 
-type ecDsaCurveNameSpecMap map[string]ecdsaCurveSpec
+type ecdsaCurveNameSpecMap map[string]ecdsaCurveSpec
 
-func (s ecDsaCurveNameSpecMap) SpecByName(name string) FieldSpec {
+func (s ecdsaCurveNameSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 

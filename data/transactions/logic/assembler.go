@@ -2285,7 +2285,7 @@ func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
 			}
 			pc = nextpc
 		default:
-			return "", fmt.Errorf("disDefault asked to disassemble complex immediate")
+			return "", fmt.Errorf("unknown immKind %d", imm.kind)
 		}
 	}
 
