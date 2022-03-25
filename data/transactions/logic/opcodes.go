@@ -131,7 +131,7 @@ func costByField(immediate string, group *FieldGroup, costs map[byte]int) opDeta
 		if ok {
 			return cost
 		}
-		return 1
+		return 0 // Will panic the AVM - implies a bad field is in the bytecode
 	}
 	return opd
 }

@@ -909,6 +909,9 @@ func (cx *EvalContext) step() error {
 	if opcost == 0 {
 		opcost = deets.costFunc(cx.program, cx.pc)
 	}
+	if opcost == 0 {
+		return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
+	}
 	cx.cost += opcost
 	if cx.PooledApplicationBudget != nil {
 		*cx.PooledApplicationBudget -= opcost
