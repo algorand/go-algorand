@@ -2254,8 +2254,8 @@ func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
 			if end > uint64(len(dis.program)) || end < uint64(pc) {
 				return "", fmt.Errorf("could not decode immediate %s for %s", imm.Name, spec.Name)
 			}
-			bytes := dis.program[pc:end]
-			out += fmt.Sprintf("0x%s // %s", hex.EncodeToString(bytes), guessByteFormat(bytes))
+			constant := dis.program[pc:end]
+			out += fmt.Sprintf("0x%s // %s", hex.EncodeToString(constant), guessByteFormat(constant))
 			pc = int(end)
 		case immInts:
 			intc, nextpc, err := parseIntcblock(dis.program, pc)
@@ -2437,40 +2437,6 @@ func checkByteConstBlock(cx *EvalContext) error {
 	return nil
 }
 
-func disIntc(dis *disassembleState, spec *OpSpec) (string, error) {
-	lastIdx := dis.pc + spec.Details.Size - 1
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-	}
-	dis.nextpc = dis.pc + spec.Details.Size
-	var suffix string
-	var b int
-	switch spec.Opcode {
-	case 0x22:
-		suffix = "_0"
-		b = 0
-	case 0x23:
-		suffix = "_1"
-		b = 1
-	case 0x24:
-		suffix = "_2"
-		b = 2
-	case 0x25:
-		suffix = "_3"
-		b = 3
-	case 0x21:
-		b = int(dis.program[dis.pc+1])
-		suffix = fmt.Sprintf(" %d", b)
-	default:
-		return "", fmt.Errorf("disIntc on %v", spec)
-	}
-	if b < len(dis.intc) {
-		return fmt.Sprintf("intc%s // %d", suffix, dis.intc[b]), nil
-	}
-	return fmt.Sprintf("intc%s", suffix), nil
-}
-
 func allPrintableASCII(bytes []byte) bool {
 	for _, b := range bytes {
 		if b < 32 || b > 126 {
@@ -2490,38 +2456,6 @@ func guessByteFormat(bytes []byte) string {
 		return fmt.Sprintf("%#v", string(bytes))
 	}
 	return "0x" + hex.EncodeToString(bytes)
-}
-
-func disBytec(dis *disassembleState, spec *OpSpec) (string, error) {
-	lastIdx := dis.pc + spec.Details.Size - 1
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-	}
-	dis.nextpc = dis.pc + spec.Details.Size
-	var suffix string
-	var b int
-	switch spec.Opcode {
-	case 0x28:
-		suffix = "_0"
-		b = 0
-	case 0x29:
-		suffix = "_1"
-		b = 1
-	case 0x2a:
-		suffix = "_2"
-		b = 2
-	case 0x2b:
-		suffix = "_3"
-		b = 3
-	case 0x27:
-		b = int(dis.program[dis.pc+1])
-		suffix = fmt.Sprintf(" %d", b)
-	}
-	if b < len(dis.bytec) {
-		return fmt.Sprintf("bytec%s // %s", suffix, guessByteFormat(dis.bytec[b])), nil
-	}
-	return fmt.Sprintf("bytec%s", suffix), nil
 }
 
 type disInfo struct {
