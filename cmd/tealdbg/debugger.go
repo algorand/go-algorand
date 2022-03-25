@@ -229,13 +229,13 @@ func (s *session) Step() {
 }
 
 func (s *session) StepOver() {
-	// Get the first TEAL opcode in the line
-	currentOp := strings.Fields(s.lines[s.line.Load()])[0]
-
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		// Get the first TEAL opcode in the line
+		currentOp := strings.Fields(s.lines[s.line.Load()])[0]
 		s.debugConfig = makeDebugConfig()
+
 		// Step over a function call (callsub op).
 		if currentOp == "callsub" && s.line.Load() < len(s.breakpoints) {
 			// Set a flag to check if we are in StepOver mode and to
