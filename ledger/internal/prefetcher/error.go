@@ -33,7 +33,7 @@ type GroupTaskError struct {
 
 // Error satisfies builtin interface `error`
 func (err *GroupTaskError) Error() string {
-	return fmt.Sprintf("Prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %v",
+	return fmt.Sprintf("prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %v",
 		err.GroupIdx, err.Address, err.CreatableIndex, err.CreatableType, err.err)
 }
 
