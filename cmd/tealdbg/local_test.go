@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -54,6 +55,55 @@ var txnSample string = `{
 	}
   }
 `
+
+type runAllResult struct {
+	invocationError error
+	results         []evalResult
+}
+
+func runAllResultFromInvocation(lr LocalRunner) runAllResult {
+	err := lr.RunAll()
+	results := make([]evalResult, len(lr.runs))
+	for i := range results {
+		results[i] = lr.runs[i].result
+	}
+
+	return runAllResult{
+		invocationError: err,
+		results:         results,
+	}
+}
+
+func (r runAllResult) allErrors() []error {
+	es := make([]error, len(r.results)+1)
+	es[0] = r.invocationError
+	for i := range r.results {
+		es[i+1] = r.results[i].err
+	}
+	return es
+}
+
+func allPassing(runCount int) runAllResult {
+	results := make([]evalResult, runCount)
+	for i := range results {
+		results[i].pass = true
+	}
+	return runAllResult{
+		invocationError: nil,
+		results:         results,
+	}
+}
+
+func allErrors(es []error) assert.Comparison {
+	return func() bool {
+		for _, e := range es {
+			if e == nil {
+				return false
+			}
+		}
+		return true
+	}
+}
 
 func TestTxnJSONInput(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -473,9 +523,7 @@ int 100
 	err = local.Setup(&ds)
 	a.NoError(err)
 
-	pass, err := local.Run()
-	a.NoError(err)
-	a.True(pass)
+	a.Equal(allPassing(len(local.runs)), runAllResultFromInvocation(*local))
 
 	// check relaxed - opted in for both
 	source = `#pragma version 2
@@ -496,9 +544,8 @@ int 1
 	err = local.Setup(&ds)
 	a.NoError(err)
 
-	pass, err = local.Run()
-	a.NoError(err)
-	a.True(pass)
+	a.Equal(allPassing(len(local.runs)), runAllResultFromInvocation(*local))
+
 	ds.Painless = false
 
 	// check ForeignApp
@@ -516,9 +563,8 @@ byte 0x676c6f62616c // global
 	err = local.Setup(&ds)
 	a.NoError(err)
 
-	pass, err = local.Run()
-	a.Error(err)
-	a.False(pass)
+	r := runAllResultFromInvocation(*local)
+	a.Condition(allErrors(r.allErrors()))
 }
 
 func TestDebugFromPrograms(t *testing.T) {
@@ -1136,9 +1182,8 @@ int 1`
 	err = local.Setup(&ds)
 	a.NoError(err)
 
-	pass, err := local.Run()
-	a.NoError(err)
-	a.True(pass)
+	r := runAllResultFromInvocation(*local)
+	a.Equal(allPassing(len(local.runs)), r)
 }
 
 func TestDebugFeePooling(t *testing.T) {
@@ -1195,12 +1240,20 @@ int 1`
 
 	// two testcase: success with enough fees and fail otherwise
 	var tests = []struct {
-		pass bool
-		fee  uint64
+		fee      uint64
+		expected func(LocalRunner, runAllResult)
 	}{
-		{true, 2000},
-		{false, 1500},
+		{2000, func(l LocalRunner, r runAllResult) {
+			a.Equal(allPassing(len(l.runs)), r)
+		}},
+		{1500, func(_ LocalRunner, r runAllResult) {
+			a.Condition(allErrors(r.allErrors()))
+			for _, result := range r.results {
+				a.False(result.pass)
+			}
+		}},
 	}
+
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("fee=%d", test.fee), func(t *testing.T) {
 
@@ -1223,14 +1276,8 @@ int 1`
 			err = local.Setup(&ds)
 			a.NoError(err)
 
-			pass, err := local.Run()
-			if test.pass {
-				a.NoError(err)
-				a.True(pass)
-			} else {
-				a.Error(err)
-				a.False(pass)
-			}
+			r := runAllResultFromInvocation(*local)
+			test.expected(*local, r)
 		})
 	}
 }
@@ -1315,11 +1362,22 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	balanceBlob := protocol.EncodeMsgp(&br)
 
 	var tests = []struct {
-		pass           bool
 		additionalApps int
+		expected       func(LocalRunner, runAllResult)
 	}{
-		{false, 2},
-		{true, 3},
+		{2, func(_ LocalRunner, r runAllResult) {
+			a.ErrorContains(r.results[0].err, "dynamic cost budget exceeded")
+
+			a.Equal(
+				allPassing(len(r.results)-1),
+				runAllResult{
+					invocationError: r.invocationError,
+					results:         r.results[1:],
+				})
+		}},
+		{3, func(l LocalRunner, r runAllResult) {
+			a.Equal(allPassing(len(l.runs)), r)
+		}},
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("txn-count=%d", test.additionalApps+1), func(t *testing.T) {
@@ -1347,15 +1405,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 			err = local.Setup(&ds)
 			a.NoError(err)
 
-			pass, err := local.Run()
-			if test.pass {
-				a.NoError(err)
-				a.True(pass)
-			} else {
-				a.Error(err)
-				a.Contains(err.Error(), "dynamic cost budget exceeded")
-				a.False(pass)
-			}
+			test.expected(*local, runAllResultFromInvocation(*local))
 		})
 	}
 }
@@ -1455,7 +1505,6 @@ func TestGroupTxnIdx(t *testing.T) {
 	err := local.Setup(&ds)
 	a.NoError(err)
 
-	pass, err := local.Run()
-	a.NoError(err)
-	a.True(pass)
+	r := runAllResultFromInvocation(*local)
+	a.Equal(allPassing(len(local.runs)), r)
 }

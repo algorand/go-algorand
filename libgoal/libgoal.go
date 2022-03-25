@@ -687,7 +687,7 @@ func (c *Client) RawAccountApplicationInformation(accountAddress string, applica
 	return
 }
 
-// AccountAssetInformation gets account information about a given app.
+// AccountAssetInformation gets account information about a given asset.
 func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp generatedV2.AccountAssetResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -696,7 +696,7 @@ func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) 
 	return
 }
 
-// RawAccountAssetInformation gets account information about a given app.
+// RawAccountAssetInformation gets account information about a given asset.
 func (c *Client) RawAccountAssetInformation(accountAddress string, assetID uint64) (accountResource modelV2.AccountAssetModel, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
