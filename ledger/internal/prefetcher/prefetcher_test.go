@@ -541,7 +541,6 @@ func TestAssetLookupError(t *testing.T) {
 	rnd := basics.Round(5)
 	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	ledger := getPrefetcherTestLedger(rnd)
-
 	assetTransferTxn :=
 		transactions.SignedTxn{
 			Txn: transactions.Transaction{
@@ -552,8 +551,8 @@ func TestAssetLookupError(t *testing.T) {
 				AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 					XferAsset:     1001,
 					AssetSender:   makeAddress(2),
-					AssetReceiver: makeAddress(3),
-					AssetCloseTo:  makeAddress(4),
+					AssetReceiver: makeAddress(2),
+					AssetCloseTo:  makeAddress(2),
 				},
 			},
 		}
