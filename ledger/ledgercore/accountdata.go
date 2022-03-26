@@ -152,6 +152,11 @@ func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (m
 
 // OnlineAccountData calculates the online account data given an AccountData, by adding the rewards.
 func (u *AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
+	if u.Status != basics.Online {
+		// if the account is not Online and agreement requests it for some reason, clear it out
+		return basics.OnlineAccountData{}
+	}
+
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)

@@ -422,7 +422,7 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
 	var infoParams accountInformationParams
 	if includeCreatables {
-		infoParams = accountInformationParams{Exclude: "", Format: "json"}
+		infoParams = accountInformationParams{Exclude: "none", Format: "json"}
 	} else {
 		infoParams = accountInformationParams{Exclude: "all", Format: "json"}
 	}
