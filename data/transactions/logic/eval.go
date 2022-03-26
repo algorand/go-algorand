@@ -907,6 +907,10 @@ func (cx *EvalContext) step() error {
 
 	opcost := deets.Cost
 	if opcost == 0 {
+		// We use a constant (deets.Cost) to avoid the cost of an indirect
+		// function call in most cases.  Consider getting the cost details into
+		// OpSpec so that a single (inlinable?) function can compute the cost,
+		// rather than a per opcode function pointer.
 		opcost = deets.costFunc(cx.program, cx.pc)
 	}
 	if opcost == 0 {
