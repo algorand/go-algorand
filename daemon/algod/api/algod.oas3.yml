@@ -2610,12 +2610,12 @@
           {
             "description": "The hash function to use for the proof.",
             "in": "query",
-            "name": "hash",
+            "name": "hashtype",
             "required": true,
             "schema": {
               "enum": [
-                "SHA512_256",
-                "SHA256"
+                "sha512_256",
+                "sha256"
               ],
               "type": "string"
             }

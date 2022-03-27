@@ -369,6 +369,10 @@ type rawFormat struct {
 	Format string `url:"format"`
 }
 
+type rawHash struct {
+	HashType string `url:"hashtype"`
+}
+
 type accountInformationParams struct {
 	Format  string `url:"format"`
 	Exclude string `url:"exclude"`
@@ -651,9 +655,9 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 }
 
 // Proof gets a Merkle proof for a transaction in a block.
-func (client RestClient) Proof(txid string, round uint64) (response generatedV2.ProofResponse, err error) {
+func (client RestClient) Proof(txid string, round uint64, hashType crypto.HashType) (response generatedV2.ProofResponse, err error) { // TODO Stateproof: add hashtype param
 	txid = stripTransaction(txid)
-	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), rawHash{HashType: hashType.String()})
 	return
 }
 

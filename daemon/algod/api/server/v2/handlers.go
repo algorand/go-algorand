@@ -586,7 +586,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
 	}
 
-	if params.Hash == "SHA256" && !proto.EnableSHA256TxnRootHeader {
+	if params.Hashtype == "sha256" && !proto.EnableSHA256TxnRootHeader {
 		return notFound(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
 	}
 
@@ -598,13 +598,13 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 	for idx := range txns {
 		if txns[idx].Txn.ID() == txID {
 			var tree *merklearray.Tree
-			switch params.Hash {
-			case "SHA256":
+			switch params.Hashtype {
+			case "sha256":
 				tree, err = block.TxnMerkleTreeSHA256()
 				if err != nil {
 					return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
 				}
-			case "SHA512_256":
+			case "sha512_256":
 				tree, err = block.TxnMerkleTree()
 				if err != nil {
 					return internalError(ctx, err, "building Merkle tree", v2.Log)

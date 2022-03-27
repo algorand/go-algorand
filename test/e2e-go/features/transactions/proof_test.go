@@ -94,7 +94,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
 	a.NoError(err)
 
-	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound)
+	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
 	a.NoError(err)
 
 	hashtype, err := crypto.UnmarshalHashType(proofresp.Hashtype)
