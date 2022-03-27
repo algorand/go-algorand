@@ -550,6 +550,17 @@
             "required": true
           },
           {
+            "type": "string",
+            "enum": [
+              "SHA512_256",
+              "SHA256"
+            ],
+            "description": "The hash function to use for the proof.",
+            "name": "hash",
+            "in": "query",
+            "required": true
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],

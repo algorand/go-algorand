@@ -574,11 +574,7 @@ func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
 	if err != nil {
 		return crypto.Digest{}, err
 	}
-	// in case there are no leaves (e.g empty block with 0 txns) the merkle root is a slice with length of 0.
-	// Here we convert the empty slice to a 32-bytes of zeros. this conversion is okay because this merkle
-	// tree uses sha256 function. for this function the pre-image of [0x0...0x0] is not known
-	// (it might not be the cases for a different hash function)
-	// TODO Stateproof: veirfy with Chris that this statement is correct
+
 	rootSlice := tree.Root()
 	var rootAsByteArray crypto.Digest
 	copy(rootAsByteArray[:], rootSlice)
@@ -655,7 +651,7 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 // as the header is what the block hash authenticates.
 // If we're given an untrusted block and a known-good hash, we can't trust the
 // block's transactions unless we validate this.
-func (block Block) ContentsMatchHeader() bool {
+func (block Block) ContentsMatchHeader() bool { // TODO Stateproof: add unit test
 	expected, err := block.PaysetCommit()
 	if err != nil {
 		logging.Base().Warnf("ContentsMatchHeader: cannot compute commitment: %v", err)

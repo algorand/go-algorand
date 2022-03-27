@@ -2608,6 +2608,19 @@
             }
           },
           {
+            "description": "The hash function to use for the proof.",
+            "in": "query",
+            "name": "hash",
+            "required": true,
+            "schema": {
+              "enum": [
+                "SHA512_256",
+                "SHA256"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded.",
             "in": "query",
             "name": "format",
