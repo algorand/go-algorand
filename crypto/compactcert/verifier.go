@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"math"
+	"math/big"
 	"math/bits"
 )
 
@@ -31,6 +32,7 @@ var (
 	ErrNoRevealInPos                    = errors.New("no reveal for position")
 	ErrSignedWeightLessThanProvenWeight = errors.New("signed weight is less than or equal to proven weight")
 	ErrTooManyReveals                   = errors.New("too many reveals in cert")
+	ErrZeroSignedWeight                 = errors.New("signed weight can not be zero")
 	ErrInsufficientImpliedProvenWeight  = errors.New("signed weight and number of reveals yield insufficient proven weight")
 )
 
@@ -38,17 +40,90 @@ var (
 type Verifier struct {
 	Params
 
-	partcom crypto.GenericDigest
+	lnProvenWeightThresholdAsInteger uint64 // ln(provenWeightThreshold) with 16 bits of precision
+	partcom                          crypto.GenericDigest
 }
 
 // MkVerifier constructs a verifier to check the compact certificate
 // on the message specified in p, with partcom specifying the Merkle
 // root of the participants that must sign the message.
 func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
+	provenWt := lnWithPrecision(p.ProvenWeightThreshold, precisionBits)
 	return &Verifier{
-		Params:  p,
-		partcom: partcom,
+		Params:                           p,
+		lnProvenWeightThresholdAsInteger: provenWt,
+		partcom:                          partcom,
 	}
+}
+
+func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error {
+	if numOfReveals > MaxReveals {
+		return ErrTooManyReveals
+	}
+
+	if signedWeight == 0 {
+		return ErrZeroSignedWeight
+	}
+
+	if signedWeight <= v.ProvenWeightThreshold {
+		return fmt.Errorf("%w - signed weight %d <= proven weight %d", ErrSignedWeightLessThanProvenWeight, signedWeight, v.ProvenWeightThreshold)
+	}
+
+	// find d s.t 2^(d+1) >= signedWeight >= 2^(d)
+	d := uint64(bits.Len64(signedWeight)) - 1
+
+	signedWtPower2 := &big.Int{}
+	signedWtPower2.SetUint64(signedWeight)
+	signedWtPower2.Mul(signedWtPower2, signedWtPower2)
+
+	// Y = signedWt^2 + 4*2^d*signedWt +2^2d
+	// 		   tmp = 4*2^d*signedWt
+	tmp := &big.Int{}
+	tmp.SetUint64(4)
+	tmp.Mul(tmp, (&big.Int{}).SetUint64(1<<d))
+	tmp.Mul(tmp, (&big.Int{}).SetUint64(signedWeight))
+
+	y := &big.Int{}
+	y.Add(signedWtPower2, tmp)
+	y.Add(y, (&big.Int{}).SetUint64(1<<(2*d)))
+
+	// a = 3*2^b*(signedWt^2-2^2d) + d*(T-1)*Y
+	// 			tmp = d*(T-1)*Y
+	tmp.SetUint64(d)
+	tmp.Mul(tmp, (&big.Int{}).SetUint64(ln2AsInteger-1))
+	tmp.Mul(tmp, y)
+
+	a := &big.Int{}
+	a.Sub(signedWtPower2, (&big.Int{}).SetUint64(1<<(2*d)))
+	a.Mul(a, (&big.Int{}).SetUint64(3))
+	a.Mul(a, (&big.Int{}).SetUint64(precisionBits))
+	a.Add(a, tmp)
+
+	// left = NumReveals*a
+	left := &big.Int{}
+	left.Mul(a, (&big.Int{}).SetUint64(numOfReveals))
+
+	// right = (secParam*t + NumReveals*P)*Y
+	//			tmp = secParam*t
+	tmp.SetUint64(v.SecKQ)
+	tmp.Mul(tmp, (&big.Int{}).SetUint64(ln2AsInteger))
+
+	right := &big.Int{}
+	right.Mul((&big.Int{}).SetUint64(v.lnProvenWeightThresholdAsInteger), (&big.Int{}).SetUint64(numOfReveals))
+	right.Add(tmp, right)
+	right.Mul(right, y)
+
+	if left.Cmp(right) < 0 {
+		return ErrInsufficientImpliedProvenWeight
+	}
+
+	return nil
+}
+
+func lnWithPrecision(x uint64, precisionBits uint64) uint64 {
+	result := math.Log(float64(x))
+	expendWithPer := result * float64(precisionBits)
+	return uint64(math.Ceil(expendWithPer))
 }
 
 // Verify checks if c is a valid compact certificate for the message
@@ -123,40 +198,4 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 
 	return nil
-}
-
-func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error {
-	if numOfReveals > MaxReveals {
-		return ErrTooManyReveals
-	}
-
-	if signedWeight <= v.ProvenWeightThreshold {
-		return fmt.Errorf("%w - signed weight %d <= proven weight %d", ErrSignedWeightLessThanProvenWeight, signedWeight, v.ProvenWeightThreshold)
-	}
-
-	weightLowerBond := log2Up(signedWeight) - log2Down(v.ProvenWeightThreshold)
-	fmt.Printf("sw : %f  pw: %f\n", math.Log2(float64(signedWeight)), math.Log2(float64(v.ProvenWeightThreshold)))
-	fmt.Printf("func sw : %d  pw: %d\n", log2Down(signedWeight), log2Up(v.ProvenWeightThreshold))
-	fmt.Printf("sw - pw=%d\n", log2Up(signedWeight)-log2Down(v.ProvenWeightThreshold))
-	fmt.Printf("numRev*(sw-pw) = %d\n", uint64(weightLowerBond)*numOfReveals)
-	if uint64(weightLowerBond)*numOfReveals < v.SecKQ {
-		return ErrInsufficientImpliedProvenWeight
-	}
-	return nil
-}
-
-func log2Up(x uint64) uint64 {
-	bits := uint64(bits.Len64(x))
-	if 1<<(bits-1) == x {
-		return bits - 1
-	}
-	return (bits - 1) + 1
-}
-
-func log2Down(x uint64) uint64 {
-	bits := uint64(bits.Len64(x))
-	if 1<<(bits-1) == x {
-		return bits - 1
-	}
-	return bits - 1
 }

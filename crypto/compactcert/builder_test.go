@@ -554,3 +554,24 @@ func BenchmarkBuildVerify(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkNumReveals(b *testing.B) {
+	billion := uint64(1000 * 1000 * 1000)
+	microalgo := uint64(1000 * 1000)
+	provenWeight := 100 * billion * microalgo
+	signedWeight := 110 * billion * microalgo
+	secKQ := uint64(compactCertSecKQForTests)
+	bound := uint64(1000)
+
+	nr, err := numReveals(signedWeight, provenWeight, secKQ, bound)
+	if nr < 900 {
+		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, secKQ, nr)
+	}
+
+	for i := 0; i < b.N; i++ {
+		_, err = numReveals(signedWeight, provenWeight, secKQ, bound)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}

@@ -18,6 +18,7 @@ package compactcert
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -104,12 +105,12 @@ func TestVerifySignedWeightLessThanProvenWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signedWeight := uint64(9)
-	provenWeight := uint64(10)
+	signedWeight := uint64(1 << 10)
+	provenWeight := uint64(1<<10 + 1)
 
-	param := Params{SecKQ: 128, ProvenWeightThreshold: provenWeight}
+	param := Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
 	verifier := MkVerifier(param, crypto.GenericDigest{})
-	err := verifier.verifyWeights(signedWeight, 128)
+	err := verifier.verifyWeights(signedWeight, compactCertSecKQForTests)
 	a.ErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 }
 
@@ -117,28 +118,70 @@ func TestVerifyImpliedProvenBiggerThanThreshold(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// those would need to result in 128 reveals
 	signedWeight := uint64(1 << 11)
-	provenWeight := uint64(1 << 10)
+	provenWeight := uint64(1<<10 - 1)
 
-	param := Params{SecKQ: 128, ProvenWeightThreshold: provenWeight}
-	verifier := MkVerifier(param, crypto.GenericDigest{})
-	err := verifier.verifyWeights(signedWeight, 130)
-	a.NoError(err)
-}
-
-func TestVerifyImpliedProvend(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	signedWeight := uint64(1<<11 - 1)
-	provenWeight := uint64(1<<10 + 3)
-
-	numOfReveals, err := numReveals(signedWeight, provenWeight, 128, MaxReveals)
+	numOfReveals, err := numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
 	fmt.Println(numOfReveals)
 
-	param := Params{SecKQ: 128, ProvenWeightThreshold: provenWeight}
+	param := Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
 	verifier := MkVerifier(param, crypto.GenericDigest{})
 	err = verifier.verifyWeights(signedWeight, numOfReveals)
 	a.NoError(err)
+}
+
+func TestVerifyImpliedProvenBiggerThanThresholdApproximationError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signedWeight := uint64(1 << 11)
+	provenWeight := uint64(1 << 10)
+
+	numOfReveals, err := numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
+	fmt.Println(numOfReveals)
+
+	param := Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
+	verifier := MkVerifier(param, crypto.GenericDigest{})
+	err = verifier.verifyWeights(signedWeight, numOfReveals)
+	a.ErrorIs(err, ErrInsufficientImpliedProvenWeight)
+}
+
+func TestLnWithPrecision(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	for i := 1; i < 32; i++ {
+		exp := 1 << i
+		val := lnWithPrecision(2, uint64(exp))
+		a.GreaterOrEqual(float64(val)/float64(exp), math.Log(2))
+		a.Greater(math.Log(2), float64(val-1)/float64(exp))
+	}
+
+	a.Equal(ln2AsInteger, lnWithPrecision(2, precisionBits))
+}
+
+func TestNumReveals(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	billion := uint64(1000 * 1000 * 1000)
+	microalgo := uint64(1000 * 1000)
+	provenWeight := 2 * billion * microalgo
+	secKQ := uint64(compactCertSecKQForTests)
+	bound := uint64(1000)
+
+	for i := uint64(3); i < 10; i++ {
+		signedWeight := i * billion * microalgo
+		n, err := numReveals(signedWeight, provenWeight, secKQ, bound)
+		require.NoError(t, err)
+		if n < 50 || n > 300 {
+			t.Errorf("numReveals(%d, %d, %d) = %d looks suspect",
+				signedWeight, provenWeight, secKQ, n)
+		}
+
+		param := Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
+		verifier := MkVerifier(param, crypto.GenericDigest{})
+		err = verifier.verifyWeights(signedWeight, n)
+		require.NoError(t, err)
+
+	}
 }

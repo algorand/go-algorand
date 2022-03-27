@@ -163,6 +163,64 @@ again:
 	goto again
 }
 
+// numReveals computes the number of reveals necessary to achieve the desired
+// security parameters.  See section 8 of the ``Compact Certificates''
+// document for the analysis.
+//
+// numReveals is the smallest number that satisfies
+//
+// 2^-k >= 2^q * (provenWeight / signedWeight) ^ numReveals
+//
+// which is equivalent to the following:
+//
+// signedWeight ^ numReveals >= 2^(k+q) * provenWeight ^ numReveals
+//
+// To ensure that rounding errors do not reduce the security parameter,
+// we compute the left-hand side with rounding-down, and compute the
+// right-hand side with rounding-up.
+func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
+	n := uint64(0)
+
+	sw := &bigFloatDn{}
+	err := sw.setu64(signedWeight)
+	if err != nil {
+		return 0, err
+	}
+
+	pw := &bigFloatUp{}
+	err = pw.setu64(provenWeight)
+	if err != nil {
+		return 0, err
+	}
+
+	lhs := &bigFloatDn{}
+	err = lhs.setu64(1)
+	if err != nil {
+		return 0, err
+	}
+
+	rhs := &bigFloatUp{}
+	rhs.setpow2(int32(secKQ))
+
+	for {
+		if lhs.ge(rhs) {
+			return n, nil
+		}
+
+		if n >= bound {
+			return 0, fmt.Errorf("numReveals(%d, %d, %d) > %d", signedWeight, provenWeight, secKQ, bound)
+		}
+
+		lhs.mul(sw)
+		rhs.mul(pw)
+		n++
+	}
+}
+
+func (p *Params) numReveals(signedWeight uint64) (uint64, error) {
+	return numReveals(signedWeight, p.ProvenWeightThreshold, p.SecKQ, MaxReveals)
+}
+
 // Build returns a compact certificate, if the builder has accumulated
 // enough signatures to construct it.
 func (b *Builder) Build() (*Cert, error) {
