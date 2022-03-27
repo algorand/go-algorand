@@ -2142,6 +2142,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 			baseOnlineAD := ba.baseOnlineAccountData
 			// TODO: recalculate MicroAlgos/RewardsBase?
 			// Probably it is OK to proceed since lookup functions will apply pending reward anyway
+			baseOnlineAD.MicroAlgos = ba.baseAccountData.MicroAlgos
 			baseOnlineAD.RewardsBase = ba.baseAccountData.RewardsBase
 			encodedOnlineAcctData := protocol.Encode(&baseOnlineAD)
 			insertRes, err = insertOnlineAcct.ExecContext(ctx, addrbuf, encodedOnlineAcctData, normBal.Int64, ba.UpdateRound, baseOnlineAD.VoteLastValid)
