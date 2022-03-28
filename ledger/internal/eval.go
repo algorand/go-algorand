@@ -43,8 +43,8 @@ type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
-	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
-	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
+	LookupAsset(basics.Address, basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error)
+	LookupApplication(basics.Address, basics.AppIndex) (ledgercore.AppResource, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
@@ -225,9 +225,12 @@ func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex
 		return ledgercore.AppParamsDelta{}, false, fmt.Errorf("lookupAppParams couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
-	resourceData, err := x.l.LookupApplication(x.rnd, addr, aidx)
+	resourceData, rnd, err := x.l.LookupApplication(addr, aidx)
 	if err != nil {
 		return ledgercore.AppParamsDelta{}, false, err
+	}
+	if rnd != x.rnd {
+		return ledgercore.AppParamsDelta{}, false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd, LatestRound: rnd}
 	}
 
 	x.updateAppResourceCache(aa, resourceData)
@@ -251,9 +254,12 @@ func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetI
 		return ledgercore.AssetParamsDelta{}, false, fmt.Errorf("lookupAssetParams couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
-	resourceData, err := x.l.LookupAsset(x.rnd, addr, aidx)
+	resourceData, rnd, err := x.l.LookupAsset(addr, aidx)
 	if err != nil {
 		return ledgercore.AssetParamsDelta{}, false, err
+	}
+	if rnd != x.rnd {
+		return ledgercore.AssetParamsDelta{}, false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd, LatestRound: rnd}
 	}
 
 	x.updateAssetResourceCache(aa, resourceData)
@@ -277,9 +283,12 @@ func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppI
 		return ledgercore.AppLocalStateDelta{}, false, fmt.Errorf("lookupAppLocalState couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
-	resourceData, err := x.l.LookupApplication(x.rnd, addr, aidx)
+	resourceData, rnd, err := x.l.LookupApplication(addr, aidx)
 	if err != nil {
 		return ledgercore.AppLocalStateDelta{}, false, err
+	}
+	if rnd != x.rnd {
+		return ledgercore.AppLocalStateDelta{}, false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd, LatestRound: rnd}
 	}
 
 	x.updateAppResourceCache(aa, resourceData)
@@ -303,9 +312,12 @@ func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.Asset
 		return ledgercore.AssetHoldingDelta{}, false, fmt.Errorf("lookupAssetHolding couldn't find addr %s aidx %d in cache: %w", addr.String(), aidx, ErrNotInCowCache)
 	}
 
-	resourceData, err := x.l.LookupAsset(x.rnd, addr, aidx)
+	resourceData, rnd, err := x.l.LookupAsset(addr, aidx)
 	if err != nil {
 		return ledgercore.AssetHoldingDelta{}, false, err
+	}
+	if rnd != x.rnd {
+		return ledgercore.AssetHoldingDelta{}, false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd, LatestRound: rnd}
 	}
 
 	x.updateAssetResourceCache(aa, resourceData)

@@ -528,7 +528,7 @@ func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
-func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+func (ledger *evalTestLedger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
 	res := ledgercore.AppResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
@@ -543,7 +543,7 @@ func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Ad
 	return res, nil
 }
 
-func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+func (ledger *evalTestLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
 	res := ledgercore.AssetResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
@@ -728,11 +728,11 @@ func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (
 	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+func (l *testCowBaseLedger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
 	return ledgercore.AppResource{}, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+func (l *testCowBaseLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
 	return ledgercore.AssetResource{}, errors.New("not implemented")
 }
 

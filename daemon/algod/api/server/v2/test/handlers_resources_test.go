@@ -64,10 +64,10 @@ func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, er
 
 func (l *mockLedger) Latest() basics.Round { return l.latest }
 
-func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ar ledgercore.AssetResource, err error) {
+func (l *mockLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ar ledgercore.AssetResource, round basics.Round, err error) {
 	ad, ok := l.accounts[addr]
 	if !ok {
-		return ledgercore.AssetResource{}, nil
+		return ledgercore.AssetResource{}, 0, nil
 	}
 	if ap, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
 		ar.AssetParams = &ap
@@ -75,12 +75,12 @@ func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx bas
 	if ah, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
 		ar.AssetHolding = &ah
 	}
-	return ar, nil
+	return ar, l.Latest(), nil
 }
-func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ar ledgercore.AppResource, err error) {
+func (l *mockLedger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ar ledgercore.AppResource, round basics.Round, err error) {
 	ad, ok := l.accounts[addr]
 	if !ok {
-		return ledgercore.AppResource{}, nil
+		return ledgercore.AppResource{}, 0, nil
 	}
 	if ap, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
 		ar.AppParams = &ap
@@ -88,7 +88,7 @@ func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, ai
 	if ls, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
 		ar.AppLocalState = &ls
 	}
-	return ar, nil
+	return ar, l.Latest(), nil
 }
 func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
 	panic("not implemented")

@@ -286,7 +286,8 @@ return`
 	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedUserLocalResource, buf)
 
-	ar, err := l.LookupApplication(dbRound, userLocal, appIdx)
+	ar, round, err := l.LookupApplication(userLocal, appIdx)
+	a.Equal(basics.Round(4), round)
 	a.NoError(err)
 	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 

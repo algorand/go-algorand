@@ -115,31 +115,31 @@ func (l indexerLedgerConnector) LookupWithoutRewards(round basics.Round, address
 	return *accountData, round, nil
 }
 
-func (l indexerLedgerConnector) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
-	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+func (l indexerLedgerConnector) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
+	r, rnd, err := l.lookupResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, rnd, err
 }
 
-func (l indexerLedgerConnector) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
-	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+func (l indexerLedgerConnector) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
+	r, rnd, err := l.lookupResource(addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, rnd, err
 }
 
-func (l indexerLedgerConnector) lookupResource(round basics.Round, address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (l indexerLedgerConnector) lookupResource(address basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	// check to see if the account data in the cache.
 	if creatableMap, ok := l.roundResources.Resources[address]; ok {
 		if resource, ok := creatableMap[Creatable{aidx, ctype}]; ok {
-			return resource, nil
+			return resource, l.latestRound, nil
 		}
 	}
 
 	accountResourceMap, err :=
 		l.il.LookupResources(map[basics.Address]map[Creatable]struct{}{address: {{aidx, ctype}: {}}})
 	if err != nil {
-		return ledgercore.AccountResource{}, err
+		return ledgercore.AccountResource{}, 0, err
 	}
 
-	return accountResourceMap[address][Creatable{aidx, ctype}], nil
+	return accountResourceMap[address][Creatable{aidx, ctype}], l.latestRound, nil
 }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.

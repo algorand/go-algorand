@@ -247,7 +247,7 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (dl *dryrunLedger) lookup(addr basics.Address) (basics.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
 	out := basics.AccountData{}
 	accti, ok := dl.accountsIn[addr]
@@ -285,21 +285,21 @@ func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.Ac
 	// Returns a 0 account for account that wasn't supplied.  This is new as of
 	// AVM 1.1 timeframe, but seems correct (allows using app accounts, and the
 	// fee sink without supplying them)
-	return out, rnd, nil
+	return out, basics.Round(dl.dr.Round), nil
 }
 
 func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	ad, rnd, err := dl.lookup(rnd, addr)
+	ad, rnd, err := dl.lookup(addr)
 	if err != nil {
 		return ledgercore.AccountData{}, 0, err
 	}
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
-func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	ad, _, err := dl.lookup(rnd, addr)
+func (dl *dryrunLedger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
+	ad, rnd, err := dl.lookup(addr)
 	if err != nil {
-		return ledgercore.AppResource{}, err
+		return ledgercore.AppResource{}, 0, err
 	}
 	var result ledgercore.AppResource
 	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
@@ -308,13 +308,13 @@ func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address,
 	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
 		result.AppLocalState = &s
 	}
-	return result, nil
+	return result, rnd, nil
 }
 
-func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	ad, _, err := dl.lookup(rnd, addr)
+func (dl *dryrunLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
+	ad, rnd, err := dl.lookup(addr)
 	if err != nil {
-		return ledgercore.AssetResource{}, err
+		return ledgercore.AssetResource{}, 0, err
 	}
 	var result ledgercore.AssetResource
 	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
@@ -323,7 +323,7 @@ func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx 
 	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
 		result.AssetHolding = &p
 	}
-	return result, nil
+	return result, rnd, nil
 }
 
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

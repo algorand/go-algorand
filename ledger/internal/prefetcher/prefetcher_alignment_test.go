@@ -110,7 +110,7 @@ func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, add
 	}
 	return ledgercore.AccountData{}, 0, nil
 }
-func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+func (l *prefetcherAlignmentTestLedger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
 	l.mu.Lock()
 	if l.requestedApps == nil {
 		l.requestedApps = make(map[basics.Address]map[basics.AppIndex]struct{})
@@ -125,7 +125,7 @@ func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr
 
 	return l.apps[addr][aidx], nil
 }
-func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+func (l *prefetcherAlignmentTestLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
 	l.mu.Lock()
 	if l.requestedAssets == nil {
 		l.requestedAssets = make(map[basics.Address]map[basics.AssetIndex]struct{})

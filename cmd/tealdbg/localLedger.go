@@ -285,10 +285,10 @@ func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Roun
 	return nil
 }
 
-func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+func (l *localLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
 	ad, ok := l.balances[addr]
 	if !ok {
-		return ledgercore.AssetResource{}, nil
+		return ledgercore.AssetResource{}, 0, nil
 	}
 	var result ledgercore.AssetResource
 	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
@@ -298,13 +298,13 @@ func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx ba
 		result.AssetHolding = &p
 	}
 
-	return result, nil
+	return result, basics.Round(l.round), nil
 }
 
-func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+func (l *localLedger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
 	ad, ok := l.balances[addr]
 	if !ok {
-		return ledgercore.AppResource{}, nil
+		return ledgercore.AppResource{}, 0, nil
 	}
 	var result ledgercore.AppResource
 	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
@@ -314,7 +314,7 @@ func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, a
 		result.AppLocalState = &s
 	}
 
-	return result, nil
+	return result, basics.Round(l.round), nil
 }
 
 func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {

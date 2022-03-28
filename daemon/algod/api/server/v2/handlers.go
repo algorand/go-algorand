@@ -64,8 +64,8 @@ type LedgerForAPI interface {
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
-	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
-	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
+	LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error)
+	LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
@@ -430,8 +430,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 
 	ledger := v2.Node.LedgerForAPI()
 
-	lastRound := ledger.Latest()
-	record, err := ledger.LookupAsset(lastRound, addr, basics.AssetIndex(assetID))
+	record, lastRound, err := ledger.LookupAsset(addr, basics.AssetIndex(assetID))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -483,8 +482,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 
 	ledger := v2.Node.LedgerForAPI()
 
-	lastRound := ledger.Latest()
-	record, err := ledger.LookupApplication(lastRound, addr, basics.AppIndex(applicationID))
+	record, lastRound, err := ledger.LookupApplication(addr, basics.AppIndex(applicationID))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -1065,9 +1063,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
 	}
 
-	lastRound := ledger.Latest()
-
-	record, err := ledger.LookupApplication(lastRound, creator, basics.AppIndex(applicationID))
+	record, _, err := ledger.LookupApplication(creator, basics.AppIndex(applicationID))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -1094,8 +1090,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 	}
 
-	lastRound := ledger.Latest()
-	record, err := ledger.LookupAsset(lastRound, creator, basics.AssetIndex(assetID))
+	record, _, err := ledger.LookupAsset(creator, basics.AssetIndex(assetID))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

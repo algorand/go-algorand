@@ -294,8 +294,8 @@ func (au *accountUpdates) LookupOnlineAccountData(rnd basics.Round, addr basics.
 	return au.lookupOnlineAccountData(rnd, addr)
 }
 
-func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
-	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
+func (au *accountUpdates) LookupResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
+	return au.lookupResource(addr, aidx, ctype, true /* take lock */)
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
@@ -713,14 +713,14 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 	return data, validThrough, err
 }
 
-func (aul *accountUpdatesLedgerEvaluator) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	r, _, err := aul.au.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable, false /* don't sync */)
-	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+func (aul *accountUpdatesLedgerEvaluator) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
+	r, rnd, err := aul.au.lookupResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable, false /* don't sync */)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, rnd, err
 }
 
-func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	r, _, err := aul.au.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable, false /* don't sync */)
-	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+func (aul *accountUpdatesLedgerEvaluator) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
+	r, rnd, err := aul.au.lookupResource(addr, basics.CreatableIndex(aidx), basics.AssetCreatable, false /* don't sync */)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, rnd, err
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -1179,7 +1179,7 @@ func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	}
 }
 
-func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (data ledgercore.AccountResource, validThrough basics.Round, err error) {
+func (au *accountUpdates) lookupResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (data ledgercore.AccountResource, validThrough basics.Round, err error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -1195,6 +1195,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
+		rnd := currentDbRound + basics.Round(currentDeltaLen)
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return

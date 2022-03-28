@@ -801,8 +801,7 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
 	var appIdx basics.AppIndex = 1
 
-	rnd := l.Latest()
-	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
+	acctRes, _, err := l.LookupApplication(creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
@@ -832,18 +831,13 @@ int 1
 	}}
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
-	rnd = l.Latest()
-	acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
+	acctworRes, _, err := l.LookupApplication(creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctworRes, err = l.LookupApplication(l.Latest()-1, creator, appIdx)
-	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
-
-	acctRes, err = l.LookupApplication(rnd, user, appIdx)
+	acctRes, _, err = l.LookupApplication(user, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
@@ -925,8 +919,7 @@ int 1                   // [1]
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
 	var appIdx basics.AppIndex = 1
 
-	rnd := l.Latest()
-	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
+	acctRes, _, err := l.LookupApplication(creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
@@ -1002,8 +995,7 @@ int 1                   // [1]
 			a.NoError(err)
 
 			expected := uint64(base + value1 + value2)
-			rnd = l.Latest()
-			acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
+			acctworRes, _, err := l.LookupApplication(creator, appIdx)
 			a.NoError(err)
 			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})

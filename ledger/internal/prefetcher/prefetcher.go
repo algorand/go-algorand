@@ -35,8 +35,8 @@ const asyncAccountLoadingThreadCount = 4
 // Ledger is a ledger interfaces for prefetcher.
 type Ledger interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
-	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
-	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
+	LookupAsset(basics.Address, basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error)
+	LookupApplication(basics.Address, basics.AppIndex) (ledgercore.AppResource, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
@@ -528,19 +528,24 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			task.address = &creator
 		}
 		var resource ledgercore.AccountResource
+		var latestRound basics.Round
 		if task.creatableType == basics.AppCreatable {
 			var appResource ledgercore.AppResource
-			appResource, err = p.ledger.LookupApplication(p.rnd, *task.address, basics.AppIndex(task.creatableIndex))
+			appResource, latestRound, err = p.ledger.LookupApplication(*task.address, basics.AppIndex(task.creatableIndex))
 			resource.AppParams = appResource.AppParams
 			resource.AppLocalState = appResource.AppLocalState
 		} else {
 			var assetResource ledgercore.AssetResource
-			assetResource, err = p.ledger.LookupAsset(p.rnd, *task.address, basics.AssetIndex(task.creatableIndex))
+			assetResource, latestRound, err = p.ledger.LookupAsset(*task.address, basics.AssetIndex(task.creatableIndex))
 			resource.AssetParams = assetResource.AssetParams
 			resource.AssetHolding = assetResource.AssetHolding
 		}
 		if err != nil {
 			// there was an error loading that entry.
+			break
+		}
+		if p.rnd != latestRound {
+			// entry of incorrect round was loaded
 			break
 		}
 		re := LoadedResourcesEntry{

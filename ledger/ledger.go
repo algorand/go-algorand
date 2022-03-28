@@ -496,29 +496,24 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 }
 
 // LookupApplication loads an application resource that matches the request parameters from the ledger.
-func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
-	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+func (l *Ledger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
+	r, rnd, err := l.lookupResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, rnd, err
 }
 
 // LookupAsset loads an asset resource that matches the request parameters from the ledger.
-func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
-	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+func (l *Ledger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
+	r, rnd, err := l.lookupResource(addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, rnd, err
 }
 
 // lookupResource loads a resource that matches the request parameters from the accounts update
-func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+func (l *Ledger) lookupResource(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	res, _, err := l.accts.LookupResource(rnd, addr, aidx, ctype)
-	if err != nil {
-		return ledgercore.AccountResource{}, err
-	}
-
-	return res, nil
+	return l.accts.LookupResource(addr, aidx, ctype)
 }
 
 // LookupAgreement returns account data used by agreement.
