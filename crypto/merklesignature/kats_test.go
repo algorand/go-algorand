@@ -18,8 +18,8 @@ package merklesignature
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -89,17 +89,18 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 
 var shouldGenerateKATs bool
 
-func init() {
-	flag.BoolVar(&shouldGenerateKATs, "kat", false, "runs Merkle Signature Scheme KATS")
-}
-
 func TestGenerateKat(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	if !shouldGenerateKATs {
-		t.Skip()
+	// This test produces MSS samples for the SNARK verifier.
+	// it will only run explicitly by:
+	//
+	//   GEN_MSS_KATS=x go test -v . -run=GenerateKat -count=1
+	if os.Getenv("GEN_MSS_KATS") == "" {
+		t.Skip("Skipping; GEN_MSS_KATS not set")
 	}
+
 	kat, err := generateMssKat(256, 512, 9, []byte("test"))
 	a.NoError(err)
 
