@@ -2170,13 +2170,6 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		return err
 	}
 
-	// init onlineacctbase
-	// TODO: remove
-	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('onlineacctbase', 0)")
-	if err != nil {
-		return err
-	}
-
 	for _, stmt := range applyNewAcctBase {
 		_, err = tx.Exec(stmt)
 		if err != nil {
@@ -2284,17 +2277,6 @@ func accountsHashRound(tx *sql.Tx) (hashrnd basics.Round, err error) {
 	return
 }
 
-// onlineAccountsRound returns the round of the online accounts table
-// TODO: remove after synchronizing online accounts writes with acct updates
-func onlineAccountsRound(tx *sql.Tx) (hashrnd basics.Round, err error) {
-	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='onlineacctbase'").Scan(&hashrnd)
-	if err == sql.ErrNoRows {
-		hashrnd = basics.Round(0)
-		err = nil
-	}
-	return
-}
-
 func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
@@ -2309,7 +2291,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='onlineacctbase' ORDER BY updround DESC LIMIT 1")
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
@@ -3416,38 +3398,6 @@ func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
 	if aff != 1 {
 		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
 		return
-	}
-	return
-}
-
-// updates the round number associated with the online account table
-// TODO: remove
-func updateOnlineAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
-
-	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='onlineacctbase' AND rnd<?", rnd, rnd)
-	if err != nil {
-		return
-	}
-
-	aff, err := res.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	if aff != 1 {
-		// try to figure out why we couldn't update the round number.
-		var base basics.Round
-		err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='onlineacctbase'").Scan(&base)
-		if err != nil {
-			return
-		}
-		if base > rnd {
-			err = fmt.Errorf("newRound %d is not after base %d", rnd, base)
-			return
-		} else if base != rnd {
-			err = fmt.Errorf("updateAccountsRound(onlineacctbase, %d): expected to update 1 row but got %d", rnd, aff)
-			return
-		}
 	}
 	return
 }

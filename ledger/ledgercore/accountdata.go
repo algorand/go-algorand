@@ -174,3 +174,10 @@ func (u *AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLev
 func (u *AccountData) NormalizedOnlineBalance(genesisProto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, genesisProto)
 }
+
+// ClearVotingData clears VotingData component
+// TODO: remove / reorg AccountData
+func (u AccountData) ClearVotingData() AccountData {
+	u.VotingData = VotingData{}
+	return u
+}

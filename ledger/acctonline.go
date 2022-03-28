@@ -271,16 +271,11 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	// submit committing task only if offset is non-zero in addition to
 	// 1) no pending catchpoint writes
 	// 2) batching requirements meet or catchpoint round
-	dcr.oldBaseOnline = dbRound
-	dcr.offsetOnline = offset
 
 	// TODO: remove
 	// synchronize base and offset with account updates
-	if dcr.offset < dcr.offsetOnline {
-		dcr.offsetOnline = dcr.offset
-	}
-	if dcr.offsetOnline < dcr.offset {
-		dcr.offset = dcr.offsetOnline
+	if offset < dcr.offset {
+		dcr.offset = offset
 	}
 	return dcr
 }
@@ -306,7 +301,7 @@ func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
-	offset := dcc.offsetOnline
+	offset := dcc.offset
 
 	ao.accountsMu.RLock()
 
@@ -330,7 +325,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBaseOnline, lruAccounts{})
+	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, lruAccounts{})
 
 	ao.accountsMu.RUnlock()
 
@@ -342,8 +337,8 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 // commitRound closure is called within the same transaction for all trackers
 // it receives current offset and dbRound
 func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
-	offset := dcc.offsetOnline
-	dbRound := dcc.oldBaseOnline
+	offset := dcc.offset
+	dbRound := dcc.oldBase
 
 	_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
@@ -366,8 +361,8 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 }
 
 func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	offset := dcc.offsetOnline
-	newBase := dcc.newBaseOnline
+	offset := dcc.offset
+	newBase := dcc.newBase
 
 	ao.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
@@ -583,7 +578,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 				if err != nil {
 					return
 				}
-				dbRound, err = onlineAccountsRound(tx)
+				dbRound, err = accountsRound(tx)
 				return
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)

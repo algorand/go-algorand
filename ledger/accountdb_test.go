@@ -2919,9 +2919,6 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		err = updateAccountsRound(tx, rnd)
 		require.NoError(t, err)
-
-		err = updateOnlineAccountsRound(tx, rnd)
-		require.NoError(t, err)
 	}
 
 	addRound(1, delta1)

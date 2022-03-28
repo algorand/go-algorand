@@ -840,7 +840,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if macct, has := au.accounts[addr]; has {
 			// This is the most recent round, so we can
 			// use a cache of the most recent account state.
-			ad = macct.data
+			ad = macct.data.ClearVotingData()
 			foundAccount = true
 		} else if pad, has := au.baseAccounts.read(addr); has && pad.round == currentDbRound {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
@@ -1075,7 +1075,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return macct.data, rnd, rewardsVersion, rewardsLevel, nil
+				return macct.data.ClearVotingData(), rnd, rewardsVersion, rewardsLevel, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -1087,7 +1087,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
-					return d, rnd, rewardsVersion, rewardsLevel, nil
+					return d.ClearVotingData(), rnd, rewardsVersion, rewardsLevel, nil
 				}
 			}
 		} else {

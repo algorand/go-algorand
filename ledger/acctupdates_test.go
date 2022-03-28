@@ -2383,10 +2383,20 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 				break
 			}
 
+			withoutVotingData := func(ad basics.AccountData) basics.AccountData {
+				ad.VoteID = crypto.OneTimeSignatureVerifier{}
+				ad.SelectionID = crypto.VRFVerifier{}
+				ad.StateProofID = merklesignature.Verifier{}
+				ad.VoteKeyDilution = 0
+				ad.VoteFirstValid = 0
+				ad.VoteLastValid = 0
+				return ad
+			}
+
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
 			require.NoError(t, err)
-			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			require.Equal(t, withoutVotingData(accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough])), d)
 			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
