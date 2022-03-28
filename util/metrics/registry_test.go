@@ -58,4 +58,5 @@ func TestWriteAdd(t *testing.T) {
 	require.Equal(t, bufBefore.String(), bufAfter.String())
 
 	counter.Deregister(nil)
+	labelCounter.Deregister(nil)
 }
