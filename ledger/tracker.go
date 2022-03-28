@@ -483,9 +483,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 			}
 		}
 
-		err = updateAccountsRound(tx, dbRound+basics.Round(offset))
-		return err
-		return nil
+		return updateAccountsRound(tx, dbRound+basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
