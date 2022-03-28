@@ -177,13 +177,13 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 - Opcode: 0x16
 - Stack: ..., A: uint64 &rarr; ..., []byte
-- converts uint64 A to big endian bytes
+- converts uint64 A to big-endian byte array, always of length 8
 
 ## btoi
 
 - Opcode: 0x17
 - Stack: ..., A: []byte &rarr; ..., uint64
-- converts bytes A as big endian to uint64
+- converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.
 
 `btoi` fails if the input is longer than 8 bytes.
 
@@ -427,19 +427,6 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key commitment |
 
 
-TypeEnum mapping:
-
-| Index | "Type" string | Description |
-| --- | --- | --- |
-| 0 | unknown | Unknown type. Invalid transaction |
-| 1 | pay | Payment |
-| 2 | keyreg | KeyRegistration |
-| 3 | acfg | AssetConfig |
-| 4 | axfer | AssetTransfer |
-| 5 | afrz | AssetFreeze |
-| 6 | appl | ApplicationCall |
-
-
 FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## global f
@@ -575,7 +562,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## bnz target
 
-- Opcode: 0x40 {int16 branch offset, big endian}
+- Opcode: 0x40 {int16 branch offset, big-endian}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
 
@@ -585,7 +572,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 
 ## bz target
 
-- Opcode: 0x41 {int16 branch offset, big endian}
+- Opcode: 0x41 {int16 branch offset, big-endian}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
 - Availability: v2
@@ -594,7 +581,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b target
 
-- Opcode: 0x42 {int16 branch offset, big endian}
+- Opcode: 0x42 {int16 branch offset, big-endian}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
 - Availability: v2
@@ -764,8 +751,16 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x5c {uint8 encoding index}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 25
+- **Cost**: 1 + 1 per 16 bytes
 - Availability: v7
+
+`base64` Encodings:
+
+| Index | Name | Notes |
+| - | ------ | --------- |
+| 0 | URLEncoding |  |
+| 1 | StdEncoding |  |
+
 
 Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href="https://rfc-editor.org/rfc/rfc4648.html#section-4">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\n` and `\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\r`, or `\n`.
 
@@ -775,6 +770,15 @@ Decodes A using the base64 encoding E. Specify the encoding with an immediate ar
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
 - Availability: v7
+
+`json_ref` Types:
+
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | JSONString | []byte |  |
+| 1 | JSONUint64 | uint64 |  |
+| 2 | JSONObject | []byte |  |
+
 
 specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.
 
@@ -888,7 +892,7 @@ Deleting a key which is already absent has no effect on the application global s
 - Availability: v2
 - Mode: Application
 
-`asset_holding_get` Fields:
+`asset_holding` Fields:
 
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
@@ -906,7 +910,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 - Availability: v2
 - Mode: Application
 
-`asset_params_get` Fields:
+`asset_params` Fields:
 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
@@ -934,7 +938,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 - Availability: v5
 - Mode: Application
 
-`app_params_get` Fields:
+`app_params` Fields:
 
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
@@ -959,7 +963,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 - Availability: v6
 - Mode: Application
 
-`acct_params_get` Fields:
+`acct_params` Fields:
 
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
@@ -1006,7 +1010,7 @@ pushint args are not added to the intcblock during assembly processes
 
 ## callsub target
 
-- Opcode: 0x88 {int16 branch offset, big endian}
+- Opcode: 0x88 {int16 branch offset, big-endian}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4

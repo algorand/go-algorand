@@ -130,7 +130,7 @@ func buildSyntaxHighlight() *tmLanguage {
 	for _, spec := range opSpecs {
 		for _, imm := range spec.Details.Immediates {
 			if imm.Group != nil && !accumulated[imm.Group.Name] {
-				allNamedFields = append(allNamedFields, imm.Group.Names[:]...)
+				allNamedFields = append(allNamedFields, imm.Group.Names...)
 				accumulated[imm.Group.Name] = true
 			}
 		}

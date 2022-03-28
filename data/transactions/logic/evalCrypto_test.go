@@ -507,7 +507,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 }
 
 func TestEcdsaCostVariation(t *testing.T) {
-	// Doesn't matter if it passes or fails. Just confirm the cost depends on curve.
+	// Doesn't matter if the actual verify returns true or false. Just confirm the cost depends on curve.
 	source := `
 global ZeroAddress				// need 32 bytes
 byte "signature r"
@@ -542,20 +542,20 @@ int ` + fmt.Sprintf("%d", 20_000-2500-8) + `
 func BenchmarkHash(b *testing.B) {
 	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
 		b.Run(hash+"-0w", func(b *testing.B) { // hash 0 bytes
-			benchmarkOperation(b, "byte 0x;", hash, "pop; int 1")
+			benchmarkOperation(b, "", "byte 0x; "+hash+"; pop", "int 1")
 		})
-		b.Run(hash+"-1w", func(b *testing.B) { // hash 32 bytes
+		b.Run(hash+"-32", func(b *testing.B) { // hash 32 bytes
 			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
 		})
-		b.Run(hash+"-4w", func(b *testing.B) { // hash 128 bytes
+		b.Run(hash+"-128", func(b *testing.B) { // hash 128 bytes
 			benchmarkOperation(b, "int 32; bzero",
 				"dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
-		b.Run(hash+"-16w", func(b *testing.B) { // hash 512 bytes
+		b.Run(hash+"-512", func(b *testing.B) { // hash 512 bytes
 			benchmarkOperation(b, "int 32; bzero",
 				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
-		b.Run(hash+"-128w", func(b *testing.B) { // hash 4k bytes
+		b.Run(hash+"-4096", func(b *testing.B) { // hash 4k bytes
 			benchmarkOperation(b, "int 32; bzero",
 				"dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
