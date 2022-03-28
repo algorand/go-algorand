@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build telemetry
-
 package metrics
 
 import (
@@ -34,16 +32,16 @@ func TestWriteAdd(t *testing.T) {
 	counter.Add(12.34, nil)
 
 	labelCounter := MakeCounter(MetricName{Name: "label-counter", Description: "counter with labels"})
-	counter.Add(5, map[string]string{"label": "a label value"})
+	labelCounter.Add(5, map[string]string{"label": "a label value"})
 
 	results := make(map[string]float64)
 	DefaultRegistry().AddMetrics(results)
 
 	require.Equal(t, 2, len(results))
-	require.True(t, hasKey(results, "gauge-name"))
+	require.Contains(t, results, "gauge-name")
 	require.InDelta(t, 12.34, results["gauge-name"], 0.01)
-	require.True(t, hasKey(results, "label-counter_a_label_value"))
-	require.InDelta(t, 5, results["label-counter_a_label_value"], 0.01)
+	require.Contains(t, results, "label-counter_label__a_label_value_")
+	require.InDelta(t, 5, results["label-counter_label__a_label_value_"], 0.01)
 
 	bufBefore := strings.Builder{}
 	DefaultRegistry().WriteMetrics(&bufBefore, "label")
@@ -51,7 +49,7 @@ func TestWriteAdd(t *testing.T) {
 
 	DefaultRegistry().AddMetrics(results)
 
-	require.True(t, hasKey(results, "gauge-name"))
+	require.Contains(t, results, "gauge-name")
 	require.InDelta(t, 12.34, results["gauge-name"], 0.01)
 
 	// not included in string builder
@@ -59,6 +57,5 @@ func TestWriteAdd(t *testing.T) {
 	DefaultRegistry().WriteMetrics(&bufAfter, "label")
 	require.Equal(t, bufBefore.String(), bufAfter.String())
 
-	stringGauge.Deregister(nil)
 	counter.Deregister(nil)
 }

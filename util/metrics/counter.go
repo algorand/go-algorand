@@ -199,6 +199,10 @@ func (counter *Counter) AddMetric(values map[string]float64) {
 		if len(l.labels) == 0 {
 			sum += float64(atomic.LoadUint64(&counter.intValue))
 		}
-		values[sanitizeTelemetryName(counter.name+":"+l.formattedLabels)] = sum
+		var suffix string
+		if len(l.formattedLabels) > 0 {
+			suffix = ":" + l.formattedLabels
+		}
+		values[sanitizeTelemetryName(counter.name+suffix)] = sum
 	}
 }

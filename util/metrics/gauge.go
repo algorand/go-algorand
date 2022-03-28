@@ -183,6 +183,10 @@ func (gauge *Gauge) AddMetric(values map[string]float64) {
 	}
 
 	for _, l := range gauge.valuesIndices {
-		values[sanitizeTelemetryName(gauge.name+":"+l.formattedLabels)] = l.gauge
+		var suffix string
+		if len(l.formattedLabels) > 0 {
+			suffix = ":" + l.formattedLabels
+		}
+		values[sanitizeTelemetryName(gauge.name+suffix)] = l.gauge
 	}
 }
