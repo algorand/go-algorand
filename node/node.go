@@ -654,7 +654,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	maxRound := latest
 	minRound := maxRound.SubSaturate(maxLife)
 
-	for r := minRound; r <= maxRound; r++ {
+	for r := maxRound; r >= minRound; r-- {
 		tx, found, err := node.ledger.LookupTxid(txID, r)
 		if err != nil || !found {
 			continue
