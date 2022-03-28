@@ -2611,7 +2611,6 @@
             "description": "The hash function to use for the proof.",
             "in": "query",
             "name": "hashtype",
-            "required": true,
             "schema": {
               "enum": [
                 "sha512_256",

@@ -569,6 +569,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 // GetProof generates a Merkle proof for a transaction in a block.
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params generated.GetProofParams) error {
+
 	var txID transactions.Txid
 	err := txID.UnmarshalText([]byte(txid))
 	if err != nil {
@@ -586,7 +587,11 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
 	}
 
-	if params.Hashtype == "sha256" && !proto.EnableSHA256TxnRootHeader {
+	hashtype := "sha512_256" // default hash type for proof
+	if params.Hashtype != nil {
+		hashtype = *params.Hashtype
+	}
+	if hashtype == "sha256" && !proto.EnableSHA256TxnRootHeader {
 		return notFound(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
 	}
 
@@ -598,7 +603,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 	for idx := range txns {
 		if txns[idx].Txn.ID() == txID {
 			var tree *merklearray.Tree
-			switch params.Hashtype {
+			switch hashtype {
 			case "sha256":
 				tree, err = block.TxnMerkleTreeSHA256()
 				if err != nil {

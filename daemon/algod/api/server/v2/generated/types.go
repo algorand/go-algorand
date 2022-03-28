@@ -817,7 +817,7 @@ type GetBlockParams struct {
 type GetProofParams struct {
 
 	// The hash function to use for the proof.
-	Hashtype string `json:"hashtype"`
+	Hashtype *string `json:"hashtype,omitempty"`
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
