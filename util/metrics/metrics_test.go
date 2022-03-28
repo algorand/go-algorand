@@ -105,6 +105,7 @@ func TestSanitizeTelemetryName(t *testing.T) {
 		{in: "myMetricName1{hello=x}", out: "myMetricName1_hello_x_"},
 		{in: "myMetricName1.moreNames-n.3", out: "myMetricName1_moreNames-n_3"},
 		{in: "-my-metric-name", out: "_my-metric-name"},
+		{in: `label-counter:label="a label value"`, out: "label-counter_label__a_label_value_"},
 	} {
 		t.Run(tc.in, func(t *testing.T) {
 			require.Equal(t, tc.out, sanitizeTelemetryName(tc.in))

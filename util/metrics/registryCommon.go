@@ -17,7 +17,6 @@
 package metrics
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -41,6 +40,5 @@ var sanitizeTelemetryCharactersRegexp = regexp.MustCompile("(^[^a-zA-Z_]|[^a-zA-
 // sanitizeTelemetryName ensures a metric name reported to telemetry doesn't contain any
 // non-alphanumeric characters (apart from - or _) and doesn't start with a number or a hyphen.
 func sanitizeTelemetryName(name string) string {
-	fmt.Println(name)
 	return sanitizeTelemetryCharactersRegexp.ReplaceAllString(name, "_")
 }
