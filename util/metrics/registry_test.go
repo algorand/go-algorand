@@ -35,7 +35,8 @@ func TestWriteAdd(t *testing.T) {
 	labelCounter.Add(5, map[string]string{"label": "a label value"})
 
 	results := make(map[string]float64)
-	DefaultRegistry().AddMetrics(results)
+	registry := MakeRegistry()
+	registry.AddMetrics(results)
 
 	require.Equal(t, 2, len(results))
 	require.Contains(t, results, "gauge-name")
@@ -44,18 +45,19 @@ func TestWriteAdd(t *testing.T) {
 	require.InDelta(t, 5, results["label-counter_label__a_label_value_"], 0.01)
 
 	bufBefore := strings.Builder{}
-	DefaultRegistry().WriteMetrics(&bufBefore, "label")
+	registry.WriteMetrics(&bufBefore, "label")
 	require.True(t, bufBefore.Len() > 0)
 
-	DefaultRegistry().AddMetrics(results)
+	registry.AddMetrics(results)
 
 	require.Contains(t, results, "gauge-name")
 	require.InDelta(t, 12.34, results["gauge-name"], 0.01)
 
 	// not included in string builder
 	bufAfter := strings.Builder{}
-	DefaultRegistry().WriteMetrics(&bufAfter, "label")
+	registry.WriteMetrics(&bufAfter, "label")
 	require.Equal(t, bufBefore.String(), bufAfter.String())
 
 	counter.Deregister(nil)
+	labelCounter.Deregister(nil)
 }
