@@ -2804,7 +2804,8 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 // - for round 1 A and B returned
 // - for round 2 only B returned
 // - for round 3 only C returned
-func TestAccountOnlineTop(t *testing.T) {
+// The test also checks accountsDbQueries.lookupOnline
+func TestAccountOnlineQueries(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -2914,18 +2915,25 @@ func TestAccountOnlineTop(t *testing.T) {
 
 		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
 		require.NoError(t, err)
+		require.NotEmpty(t, updatedOnlineAccts)
 
 		err = updateAccountsRound(tx, rnd)
 		require.NoError(t, err)
 
-		require.NotEmpty(t, updatedOnlineAccts)
+		err = updateOnlineAccountsRound(tx, rnd)
+		require.NoError(t, err)
 	}
 
 	addRound(1, delta1)
 	addRound(2, delta2)
 	addRound(3, delta3)
 
-	online, err := accountsOnlineTop(tx, 1, 0, 10, proto)
+	queries, err := accountsInitDbQueries(tx, tx)
+	require.NoError(t, err)
+
+	// check round 1
+	rnd := basics.Round(1)
+	online, err := accountsOnlineTop(tx, rnd, 0, 10, proto)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(online))
 	require.NotContains(t, online, addrC)
@@ -2933,16 +2941,38 @@ func TestAccountOnlineTop(t *testing.T) {
 	onlineAcctA, ok := online[addrA]
 	require.True(t, ok)
 	require.NotNil(t, onlineAcctA)
-	require.Equal(t, onlineAcctA.Address, addrA)
-	require.Equal(t, onlineAcctA.MicroAlgos, dataA1.AccountBaseData.MicroAlgos)
+	require.Equal(t, addrA, onlineAcctA.Address)
+	require.Equal(t, dataA1.AccountBaseData.MicroAlgos, onlineAcctA.MicroAlgos)
 
 	onlineAcctB, ok := online[addrB]
 	require.True(t, ok)
 	require.NotNil(t, onlineAcctB)
-	require.Equal(t, onlineAcctB.Address, addrB)
-	require.Equal(t, onlineAcctB.MicroAlgos, dataB1.AccountBaseData.MicroAlgos)
+	require.Equal(t, addrB, onlineAcctB.Address)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
 
-	online, err = accountsOnlineTop(tx, 2, 0, 10, proto)
+	paod, err := queries.lookupOnline(addrA, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrA, paod.addr)
+	require.Equal(t, dataA1.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDA, paod.accountData.VoteID)
+
+	paod, err = queries.lookupOnline(addrB, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrB, paod.addr)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDB, paod.accountData.VoteID)
+
+	paod, err = queries.lookupOnline(addrC, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrC, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	// check round 2
+	rnd = basics.Round(2)
+	online, err = accountsOnlineTop(tx, rnd, 0, 10, proto)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(online))
 	require.NotContains(t, online, addrA)
@@ -2951,10 +2981,31 @@ func TestAccountOnlineTop(t *testing.T) {
 	onlineAcctB, ok = online[addrB]
 	require.True(t, ok)
 	require.NotNil(t, onlineAcctB)
-	require.Equal(t, onlineAcctB.Address, addrB)
-	require.Equal(t, onlineAcctB.MicroAlgos, dataB1.AccountBaseData.MicroAlgos)
+	require.Equal(t, addrB, onlineAcctB.Address)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
 
-	online, err = accountsOnlineTop(tx, 3, 0, 10, proto)
+	paod, err = queries.lookupOnline(addrA, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrA, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	paod, err = queries.lookupOnline(addrB, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrB, paod.addr)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDB, paod.accountData.VoteID)
+
+	paod, err = queries.lookupOnline(addrC, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrC, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	// check round 3
+	rnd = basics.Round(3)
+	online, err = accountsOnlineTop(tx, rnd, 0, 10, proto)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(online))
 	require.NotContains(t, online, addrA)
@@ -2963,6 +3014,25 @@ func TestAccountOnlineTop(t *testing.T) {
 	onlineAcctC, ok := online[addrC]
 	require.True(t, ok)
 	require.NotNil(t, onlineAcctC)
-	require.Equal(t, onlineAcctC.Address, addrC)
-	require.Equal(t, onlineAcctC.MicroAlgos, dataC3.AccountBaseData.MicroAlgos)
+	require.Equal(t, addrC, onlineAcctC.Address)
+	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, onlineAcctC.MicroAlgos)
+
+	paod, err = queries.lookupOnline(addrA, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrA, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	paod, err = queries.lookupOnline(addrB, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrB, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	paod, err = queries.lookupOnline(addrC, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrC, paod.addr)
+	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDC, paod.accountData.VoteID)
 }
