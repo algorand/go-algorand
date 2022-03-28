@@ -50,6 +50,7 @@ func TestValidateCompactCert(t *testing.T) {
 	certHdr.Round = 1
 	proto := config.Consensus[certHdr.CurrentProtocol]
 	proto.CompactCertRounds = 2
+	proto.CompactCertSecKQ = 128
 	config.Consensus[certHdr.CurrentProtocol] = proto
 
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)

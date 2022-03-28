@@ -17,14 +17,14 @@
 package compactcert
 
 import (
-	"fmt"
 	"math"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestVerifyRevelForEachPosition(t *testing.T) {
@@ -122,7 +122,6 @@ func TestVerifyImpliedProvenBiggerThanThreshold(t *testing.T) {
 	provenWeight := uint64(1<<10 - 1)
 
 	numOfReveals, err := numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
-	fmt.Println(numOfReveals)
 
 	param := Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
 	verifier := MkVerifier(param, crypto.GenericDigest{})
@@ -138,7 +137,6 @@ func TestVerifyImpliedProvenBiggerThanThresholdApproximationError(t *testing.T) 
 	provenWeight := uint64(1 << 10)
 
 	numOfReveals, err := numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
-	fmt.Println(numOfReveals)
 
 	param := Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
 	verifier := MkVerifier(param, crypto.GenericDigest{})
@@ -152,12 +150,33 @@ func TestLnWithPrecision(t *testing.T) {
 
 	for i := 1; i < 32; i++ {
 		exp := 1 << i
-		val := lnWithPrecision(2, uint64(exp))
+		val := lnIntApproximation(2, uint64(exp))
 		a.GreaterOrEqual(float64(val)/float64(exp), math.Log(2))
 		a.Greater(math.Log(2), float64(val-1)/float64(exp))
 	}
 
-	a.Equal(ln2AsInteger, lnWithPrecision(2, precisionBits))
+	a.Equal(ln2IntApproximation, lnIntApproximation(2, precisionBits))
+}
+
+func TestVerifyLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signedWeight := uint64(0)
+	provenWeight := uint64(1<<10 - 1)
+
+	param := Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
+	verifier := MkVerifier(param, crypto.GenericDigest{})
+	err := verifier.verifyWeights(signedWeight, 130)
+	a.ErrorIs(err, ErrZeroSignedWeight)
+
+	signedWeight = 101
+	provenWeight = 0
+
+	param = Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
+	verifier = MkVerifier(param, crypto.GenericDigest{})
+	err = verifier.verifyWeights(signedWeight, 0)
+	a.ErrorIs(err, ErrZeroProvenWeightThreshold)
 }
 
 func TestNumReveals(t *testing.T) {
@@ -182,6 +201,28 @@ func TestNumReveals(t *testing.T) {
 		verifier := MkVerifier(param, crypto.GenericDigest{})
 		err = verifier.verifyWeights(signedWeight, n)
 		require.NoError(t, err)
+	}
+}
 
+func BenchmarkWeight(b *testing.B) {
+	billion := uint64(1000 * 1000 * 1000)
+	microalgo := uint64(1000 * 1000)
+	provenWeight := 100 * billion * microalgo
+	signedWeight := 110 * billion * microalgo
+	secKQ := uint64(compactCertSecKQForTests)
+	bound := uint64(1000)
+
+	nr, err := numReveals(signedWeight, provenWeight, secKQ, bound)
+	if nr < 900 {
+		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, secKQ, nr)
+	}
+	param := Params{SecKQ: secKQ, ProvenWeightThreshold: provenWeight}
+	verifier := MkVerifier(param, crypto.GenericDigest{})
+
+	for i := 0; i < b.N; i++ {
+		err = verifier.verifyWeights(signedWeight, nr)
+		if err != nil {
+			b.Error(err)
+		}
 	}
 }

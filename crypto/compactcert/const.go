@@ -22,11 +22,11 @@ import (
 
 // HashType/ hashSize relate to the type of hash this package uses.
 const (
-	HashType      = crypto.Sumhash
-	HashSize      = crypto.SumhashDigestSize
-	CoinHashType  = crypto.Sumhash
-	precisionBits = uint64(1 << 16) // number of bits used for log approximation
-	ln2AsInteger  = uint64(45427)   // the value of the ln(2) with 16 bits of precision
+	HashType            = crypto.Sumhash
+	HashSize            = crypto.SumhashDigestSize
+	CoinHashType        = crypto.Sumhash
+	precisionBits       = uint64(1 << 16) // number of bits used for log approximation
+	ln2IntApproximation = uint64(45427)   // the value of the ln(2) with 16 bits of precision
 )
 
 const (

@@ -26,7 +26,7 @@ import (
 type Message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// Commitment over the sha256 of the block headers in the interval between two compact certificates.
-	BlockHeadersCommitment []byte `codec:"b"`
+	BlockHeadersCommitment []byte `codec:"b,allocbound=crypto.Sha256Size"`
 }
 
 // ToBeHashed returns the bytes of the message.
