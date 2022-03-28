@@ -2794,3 +2794,175 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(makeResourcesData(uint64(0)), upd[0].data)
 	}
 }
+
+// TestAccountTopOnline ensures accountsOnlineTop return a right subset of accounts
+// from the history table.
+// Start with two online accounts A, B at round 1
+// At round 2 make A offline.
+// At round 3 make B offline and add a new online account C.
+// Ensure
+// - for round 1 A and B returned
+// - for round 2 only B returned
+// - for round 3 only C returned
+func TestAccountOnlineTop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := ledgertesting.RandomAccounts(0, true)
+	accountsInitTest(t, tx, accts, proto)
+	totals, err := accountsTotals(tx, false)
+	require.NoError(t, err)
+
+	var baseAccounts lruAccounts
+	var baseResources lruResources
+	baseAccounts.init(nil, 100, 80)
+	baseResources.init(nil, 100, 80)
+
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+
+	var voteIDA crypto.OneTimeSignatureVerifier
+	crypto.RandBytes(voteIDA[:])
+	var voteIDB crypto.OneTimeSignatureVerifier
+	crypto.RandBytes(voteIDB[:])
+	var voteIDC crypto.OneTimeSignatureVerifier
+	crypto.RandBytes(voteIDC[:])
+
+	dataA1 := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			Status:     basics.Online,
+		},
+		VotingData: ledgercore.VotingData{
+			VoteID: voteIDA,
+		},
+	}
+
+	dataB1 := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+			Status:     basics.Online,
+		},
+		VotingData: ledgercore.VotingData{
+			VoteID: voteIDB,
+		},
+	}
+
+	dataC3 := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
+			Status:     basics.Online,
+		},
+		VotingData: ledgercore.VotingData{
+			VoteID: voteIDC,
+		},
+	}
+
+	dataA2 := dataA1
+	dataA2.Status = basics.Offline
+	dataA2.VoteID = crypto.OneTimeSignatureVerifier{}
+
+	dataB2 := dataB1
+	dataB2.Status = basics.Offline
+	dataB2.VoteID = crypto.OneTimeSignatureVerifier{}
+
+	delta1 := ledgercore.AccountDeltas{}
+	delta1.Upsert(addrA, dataA1)
+	delta1.Upsert(addrB, dataB1)
+
+	delta2 := ledgercore.AccountDeltas{}
+	delta2.Upsert(addrA, dataA2)
+
+	delta3 := ledgercore.AccountDeltas{}
+	delta3.Upsert(addrB, dataB2)
+	delta3.Upsert(addrC, dataC3)
+
+	addRound := func(rnd basics.Round, updates ledgercore.AccountDeltas) {
+		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
+		accts = applyPartialDeltas(accts, updates)
+
+		oldBase := rnd - 1
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, oldBase, true, baseAccounts)
+		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, oldBase, baseAccounts)
+
+		err = updatesCnt.accountsLoadOld(tx)
+		require.NoError(t, err)
+
+		err = updatesOnlineCnt.accountsLoadOld(tx)
+		require.NoError(t, err)
+
+		knownAddresses := make(map[basics.Address]int64)
+		for _, delta := range updatesCnt.deltas {
+			knownAddresses[delta.oldAcct.addr] = delta.oldAcct.rowid
+		}
+
+		err = accountsPutTotals(tx, totals, false)
+		require.NoError(t, err)
+		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, map[basics.CreatableIndex]ledgercore.ModifiedCreatable{}, proto, rnd)
+		require.NoError(t, err)
+		require.Equal(t, updatesCnt.len(), len(updatedAccts))
+
+		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+		require.NoError(t, err)
+
+		err = updateAccountsRound(tx, rnd)
+		require.NoError(t, err)
+
+		require.NotEmpty(t, updatedOnlineAccts)
+	}
+
+	addRound(1, delta1)
+	addRound(2, delta2)
+	addRound(3, delta3)
+
+	online, err := accountsOnlineTop(tx, 1, 0, 10, proto)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(online))
+	require.NotContains(t, online, addrC)
+
+	onlineAcctA, ok := online[addrA]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctA)
+	require.Equal(t, onlineAcctA.Address, addrA)
+	require.Equal(t, onlineAcctA.MicroAlgos, dataA1.AccountBaseData.MicroAlgos)
+
+	onlineAcctB, ok := online[addrB]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctB)
+	require.Equal(t, onlineAcctB.Address, addrB)
+	require.Equal(t, onlineAcctB.MicroAlgos, dataB1.AccountBaseData.MicroAlgos)
+
+	online, err = accountsOnlineTop(tx, 2, 0, 10, proto)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(online))
+	require.NotContains(t, online, addrA)
+	require.NotContains(t, online, addrC)
+
+	onlineAcctB, ok = online[addrB]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctB)
+	require.Equal(t, onlineAcctB.Address, addrB)
+	require.Equal(t, onlineAcctB.MicroAlgos, dataB1.AccountBaseData.MicroAlgos)
+
+	online, err = accountsOnlineTop(tx, 3, 0, 10, proto)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(online))
+	require.NotContains(t, online, addrA)
+	require.NotContains(t, online, addrB)
+
+	onlineAcctC, ok := online[addrC]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctC)
+	require.Equal(t, onlineAcctC.Address, addrC)
+	require.Equal(t, onlineAcctC.MicroAlgos, dataC3.AccountBaseData.MicroAlgos)
+}

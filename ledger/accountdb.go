@@ -2713,15 +2713,6 @@ WHERE updround <= ?
 GROUP BY address HAVING normalizedonlinebalance > 0
 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, offset)
 
-	// TODO: make it as a test
-	// sqlite> create table t (a char, b int, r int, primary key(a, b) );
-	// sqlite> insert into t (a, b, r) values ('a', 100, 1), ('a', 0, 2), ('b', 200, 1);
-	// sqlite> select a, b, max(r) from t WHERE r <= 1 group by a HAVING b > 0 order by b desc;
-	// b|200|1
-	// a|100|1
-	// sqlite> select a, b, max(r) from t WHERE r <= 2 group by a HAVING b > 0 order by b desc;
-	// b|200|1
-
 	if err != nil {
 		return nil, err
 	}
@@ -2755,7 +2746,12 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 		}
 
 		copy(addr[:], addrbuf)
-		oa := data.GetOnlineAccount(addr, uint64(normBal.Int64))
+		// TODO: figure out protocol to use for rewards
+		// The original implementation uses current proto to recalculate norm balance
+		// In the same time, in accountsNewRound genesis protocol is used to fill norm balance value
+		// In order to be consistent with the original implementation recalculate the balance with current proto
+		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
+		oa := data.GetOnlineAccount(addr, normBalance)
 		res[addr] = &oa
 	}
 
