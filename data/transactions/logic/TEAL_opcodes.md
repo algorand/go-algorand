@@ -50,15 +50,15 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Opcode: 0x05 {uint8 curve index}
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., uint64
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**: 1700
+- **Cost**:  Secp256k1=1700 Secp256r1=2500
 - Availability: v5
 
 `ECDSA` Curves:
 
 | Index | Name | In | Notes |
 | - | ------ | - | --------- |
-| 0 | Secp256k1 |      | secp256k1 curve |
-| 1 | Secp256r1 | v7  | secp256r1 curve |
+| 0 | Secp256k1 |      | secp256k1 curve, used in Bitcoin |
+| 1 | Secp256r1 | v7  | secp256r1 curve, NIST standard |
 
 
 The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.
@@ -68,16 +68,8 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 - Opcode: 0x06 {uint8 curve index}
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
-- **Cost**: 650
+- **Cost**:  Secp256k1=650 Secp256r1=2400
 - Availability: v5
-
-`ECDSA` Curves:
-
-| Index | Name | In | Notes |
-| - | ------ | - | --------- |
-| 0 | Secp256k1 |      | secp256k1 curve |
-| 1 | Secp256r1 | v7  | secp256r1 curve |
-
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
 
@@ -88,14 +80,6 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 - for (data A, recovery id B, signature C, D) recover a public key
 - **Cost**: 2000
 - Availability: v5
-
-`ECDSA` Curves:
-
-| Index | Name | In | Notes |
-| - | ------ | - | --------- |
-| 0 | Secp256k1 |      | secp256k1 curve |
-| 1 | Secp256r1 | v7  | secp256r1 curve |
-
 
 S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.
 
@@ -396,7 +380,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 16 | TypeEnum | uint64 |      | See table below |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | []byte |      | 32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset. |
+| 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
 | 20 | AssetReceiver | []byte |      | 32 byte address |
 | 21 | AssetCloseTo | []byte |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
@@ -417,7 +401,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 37 | ConfigAssetUnitName | []byte | v2  | Unit name of the asset |
 | 38 | ConfigAssetName | []byte | v2  | The asset name |
 | 39 | ConfigAssetURL | []byte | v2  | URL |
-| 40 | ConfigAssetMetadataHash | []byte | v2  | 32 byte commitment to some unspecified asset metadata |
+| 40 | ConfigAssetMetadataHash | []byte | v2  | 32 byte commitment to unspecified asset metadata |
 | 41 | ConfigAssetManager | []byte | v2  | 32 byte address |
 | 42 | ConfigAssetReserve | []byte | v2  | 32 byte address |
 | 43 | ConfigAssetFreeze | []byte | v2  | 32 byte address |
@@ -933,7 +917,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 | 4 | AssetName | []byte |      | Asset name |
 | 5 | AssetURL | []byte |      | URL with additional info about the asset |
 | 6 | AssetMetadataHash | []byte |      | Arbitrary commitment |
-| 7 | AssetManager | []byte |      | Manager commitment |
+| 7 | AssetManager | []byte |      | Manager address |
 | 8 | AssetReserve | []byte |      | Reserve address |
 | 9 | AssetFreeze | []byte |      | Freeze address |
 | 10 | AssetClawback | []byte |      | Clawback address |

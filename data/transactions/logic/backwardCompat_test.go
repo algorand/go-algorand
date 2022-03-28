@@ -360,9 +360,9 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
-		testLine(t, text, assemblerNoVersion, "...available in version...")
+		testLine(t, text, assemblerNoVersion, "...was introduced in...")
 		for v := uint64(0); v < field.version; v++ {
-			testLine(t, text, v, "...available in version...")
+			testLine(t, text, v, "...was introduced in...")
 		}
 
 		ops := testProg(t, text, AssemblerMaxVersion)
@@ -410,7 +410,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
-			asmError := "...available in version ..."
+			asmError := "...was introduced in ..."
 			if fs.array {
 				parts := strings.Split(text, " ")
 				op := parts[0]

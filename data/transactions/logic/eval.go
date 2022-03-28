@@ -904,18 +904,30 @@ func (cx *EvalContext) step() error {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
-	cx.cost += deets.Cost
+
+	opcost := deets.Cost
+	if opcost == 0 {
+		// We use a constant (deets.Cost) to avoid the cost of an indirect
+		// function call in most cases.  Consider getting the cost details into
+		// OpSpec so that a single (inlinable?) function can compute the cost,
+		// rather than a per opcode function pointer.
+		opcost = deets.costFunc(cx.program, cx.pc)
+	}
+	if opcost == 0 {
+		return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
+	}
+	cx.cost += opcost
 	if cx.PooledApplicationBudget != nil {
-		*cx.PooledApplicationBudget -= deets.Cost
+		*cx.PooledApplicationBudget -= opcost
 	}
 
 	if cx.remainingBudget() < 0 {
 		// We're not going to execute the instruction, so give the cost back.
 		// This only matters if this is an inner ClearState - the caller should
 		// not be over debited. (Normally, failure causes total txtree failure.)
-		cx.cost -= deets.Cost
+		cx.cost -= opcost
 		if cx.PooledApplicationBudget != nil {
-			*cx.PooledApplicationBudget += deets.Cost
+			*cx.PooledApplicationBudget += opcost
 		}
 		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 			cx.pc, spec.Name, cx.cost)
@@ -1019,6 +1031,10 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
+	opcost := deets.Cost
+	if opcost == 0 {
+		opcost = deets.costFunc(cx.program, cx.pc)
+	}
 	prevpc := cx.pc
 	if deets.checkFunc != nil {
 		err := deets.checkFunc(cx)
@@ -1042,7 +1058,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
-	return deets.Cost, nil
+	return opcost, nil
 }
 
 func opErr(cx *EvalContext) error {
@@ -1778,7 +1794,7 @@ func opBytesZero(cx *EvalContext) error {
 
 func opIntConstBlock(cx *EvalContext) error {
 	var err error
-	cx.intc, cx.nextpc, err = parseIntcblock(cx.program, cx.pc)
+	cx.intc, cx.nextpc, err = parseIntcblock(cx.program, cx.pc+1)
 	return err
 }
 
@@ -1819,7 +1835,7 @@ func opPushInt(cx *EvalContext) error {
 
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = parseBytecBlock(cx.program, cx.pc)
+	cx.bytec, cx.nextpc, err = parseBytecBlock(cx.program, cx.pc+1)
 	return err
 }
 
@@ -2062,7 +2078,7 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2098,7 +2114,7 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2125,7 +2141,7 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2138,7 +2154,10 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	}
 	var cx EvalContext
 	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
-	fs := txnFieldSpecByField[field]
+	fs, ok := txnFieldSpecByField(field)
+	if !ok {
+		return basics.TealValue{}, fmt.Errorf("invalid field %s", field)
+	}
 	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, inner)
 	return sv.toTealValue(), err
 }
@@ -2220,7 +2239,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case Type:
 		sv.Bytes = []byte(txn.Type)
 	case TypeEnum:
-		sv.Uint = txnTypeIndexes[string(txn.Type)]
+		sv.Uint = txnTypeMap[string(txn.Type)]
 	case XferAsset:
 		sv.Uint = uint64(txn.XferAsset)
 	case AssetAmount:
@@ -2356,14 +2375,14 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
+	if fs.ftype != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
 }
 
 func (cx *EvalContext) fetchField(field TxnField, expectArray bool) (*txnFieldSpec, error) {
-	fs, ok := txnFieldSpecByField[field]
+	fs, ok := txnFieldSpecByField(field)
 	if !ok || fs.version > cx.version {
 		return nil, fmt.Errorf("invalid txn field %d", field)
 	}
@@ -2804,8 +2823,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
 
-	if !typecheck(fs.ftype, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 
 	return sv, err
@@ -2813,7 +2832,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 
 func opGlobal(cx *EvalContext) error {
 	globalField := GlobalField(cx.program[cx.pc+1])
-	fs, ok := globalFieldSpecByField[globalField]
+	fs, ok := globalFieldSpecByField(globalField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid global field %s", globalField)
 	}
@@ -2964,9 +2983,14 @@ func unmarshalCompressed(curve elliptic.Curve, data []byte) (x, y *big.Int) {
 	return
 }
 
+var ecdsaVerifyCosts = map[byte]int{
+	byte(Secp256k1): 1700,
+	byte(Secp256r1): 2500,
+}
+
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid curve %d", ecdsaCurve)
 	}
@@ -3020,9 +3044,14 @@ func opEcdsaVerify(cx *EvalContext) error {
 	return nil
 }
 
+var ecdsaDecompressCosts = map[byte]int{
+	byte(Secp256k1): 650,
+	byte(Secp256r1): 2400,
+}
+
 func opEcdsaPkDecompress(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid curve %d", ecdsaCurve)
 	}
@@ -3066,7 +3095,7 @@ func opEcdsaPkDecompress(cx *EvalContext) error {
 
 func opEcdsaPkRecover(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField[ecdsaCurve]
+	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid curve %d", ecdsaCurve)
 	}
@@ -3911,7 +3940,7 @@ func opAssetHoldingGet(cx *EvalContext) error {
 	prev := last - 1          // account
 
 	holdingField := AssetHoldingField(cx.program[cx.pc+1])
-	fs, ok := assetHoldingFieldSpecByField[holdingField]
+	fs, ok := assetHoldingFieldSpecByField(holdingField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid asset_holding_get field %d", holdingField)
 	}
@@ -3946,7 +3975,7 @@ func opAssetParamsGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // asset
 
 	paramField := AssetParamsField(cx.program[cx.pc+1])
-	fs, ok := assetParamsFieldSpecByField[paramField]
+	fs, ok := assetParamsFieldSpecByField(paramField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid asset_params_get field %d", paramField)
 	}
@@ -3976,7 +4005,7 @@ func opAppParamsGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // app
 
 	paramField := AppParamsField(cx.program[cx.pc+1])
-	fs, ok := appParamsFieldSpecByField[paramField]
+	fs, ok := appParamsFieldSpecByField(paramField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid app_params_get field %d", paramField)
 	}
@@ -4020,7 +4049,7 @@ func opAcctParamsGet(cx *EvalContext) error {
 	}
 
 	paramField := AcctParamsField(cx.program[cx.pc+1])
-	fs, ok := acctParamsFieldSpecByField[paramField]
+	fs, ok := acctParamsFieldSpecByField(paramField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid acct_params_get field %d", paramField)
 	}
@@ -4130,7 +4159,7 @@ func opTxBegin(cx *EvalContext) error {
 	return addInnerTxn(cx)
 }
 
-func opTxNext(cx *EvalContext) error {
+func opItxnNext(cx *EvalContext) error {
 	if len(cx.subtxns) == 0 {
 		return errors.New("itxn_next without itxn_begin")
 	}
@@ -4444,14 +4473,14 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	return
 }
 
-func opTxField(cx *EvalContext) error {
+func opItxnField(cx *EvalContext) error {
 	itx := len(cx.subtxns) - 1
 	if itx < 0 {
 		return errors.New("itxn_field without itxn_begin")
 	}
 	last := len(cx.stack) - 1
 	field := TxnField(cx.program[cx.pc+1])
-	fs, ok := txnFieldSpecByField[field]
+	fs, ok := txnFieldSpecByField(field)
 	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
 		return fmt.Errorf("invalid itxn_field %s", field)
 	}
@@ -4461,7 +4490,7 @@ func opTxField(cx *EvalContext) error {
 	return err
 }
 
-func opTxSubmit(cx *EvalContext) error {
+func opItxnSubmit(cx *EvalContext) error {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
@@ -4630,7 +4659,7 @@ func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 func opBase64Decode(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	encodingField := Base64Encoding(cx.program[cx.pc+1])
-	fs, ok := base64EncodingSpecByField[encodingField]
+	fs, ok := base64EncodingSpecByField(encodingField)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid base64_decode encoding %d", encodingField)
 	}
@@ -4740,7 +4769,7 @@ func opJSONRef(cx *EvalContext) error {
 		}
 		stval.Bytes = parsed[key]
 	default:
-		return fmt.Errorf("unsupported json_ref return type, should not have reached here")
+		return fmt.Errorf("unsupported json_ref return type %s", expectedType)
 	}
 	cx.stack[last] = stval
 	return nil
