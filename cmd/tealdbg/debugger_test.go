@@ -326,7 +326,7 @@ func TestCallStackControl(t *testing.T) {
 			go ackFunc()
 			s.Resume()
 			<-done
-			
+
 			require.Equal(t, map[int]struct{}{2: {}, 4: {}}, s.debugConfig.ActiveBreak)
 			require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
 			require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
