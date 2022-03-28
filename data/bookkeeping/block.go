@@ -134,7 +134,7 @@ type (
 	// TxnRoot represents the root of the merkle tree generated from the transaction in this block.
 	TxnRoot struct {
 		_struct          struct{}      `codec:",omitempty,omitemptyarray"`
-		DigestSha256     crypto.Digest `codec:"txn256"` // root of transaction merkle tree using SHA256 hash function
+		DigestSha256     crypto.Digest `codec:"txn256"` // root of transaction vector commitment merkle tree using SHA256 hash function
 		DigestSha512_256 crypto.Digest `codec:"txn"`    // root of transaction merkle tree using SHA512_256 hash function
 	}
 
@@ -527,9 +527,12 @@ func (block Block) PaysetCommit() (TxnRoot, error) {
 		return TxnRoot{}, err
 	}
 
-	digestSHA256, err := block.paysetCommitSHA256()
-	if err != nil {
-		return TxnRoot{}, err
+	var digestSHA256 crypto.Digest
+	if params.EnableSHA256TxnRootHeader {
+		digestSHA256, err = block.paysetCommitSHA256()
+		if err != nil {
+			return TxnRoot{}, err
+		}
 	}
 
 	return TxnRoot{
@@ -561,15 +564,6 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 }
 
 func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
-	params, ok := config.Consensus[block.CurrentProtocol]
-	if !ok {
-		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
-	}
-
-	if !params.EnableSHA256TxnRootHeader {
-		return crypto.Digest{}, nil
-	}
-
 	tree, err := block.TxnMerkleTreeSHA256()
 	if err != nil {
 		return crypto.Digest{}, err

@@ -433,9 +433,9 @@ type ConsensusParams struct {
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
 
-	// EnableSHA256TxnRootHeader enables a new header field: the transaction merkle tree's root using SHA256 (actually vector commitment and not merkle tree).
+	// EnableSHA256TxnRootHeader enables a new header field: the transaction vector commitment tree's root using SHA256 (vector commitment is an implementation of merkle tree).
 	// This new header is in addition to the existing SHA512_256 merkle root.
-	// It is required for State Proofs, as different blockchains may not support SHA512_256 OPCODE natively but SHA256 is common.
+	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
 	EnableSHA256TxnRootHeader bool
 }
 

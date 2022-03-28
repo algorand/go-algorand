@@ -94,10 +94,19 @@ func TestTxnMerkleProof(t *testing.T) {
 	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
 	a.NoError(err)
 
+	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
+	a.NoError(err)
+
 	proofresp, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
 	a.NoError(err)
 
+	proofrespSHA256, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
+	a.NoError(err)
+
 	hashtype, err := crypto.UnmarshalHashType(proofresp.Hashtype)
+	a.NoError(err)
+
+	hashtypeSHA256, err := crypto.UnmarshalHashType(proofrespSHA256.Hashtype)
 	a.NoError(err)
 
 	var proof merklearray.Proof
@@ -112,8 +121,17 @@ func TestTxnMerkleProof(t *testing.T) {
 		proofconcat = proofconcat[len(d):]
 	}
 
-	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
-	a.NoError(err)
+	var proofSHA256 merklearray.Proof
+	proofSHA256.HashFactory = crypto.HashFactory{HashType: hashtypeSHA256}
+	proofSHA256.TreeDepth = uint8(proofrespSHA256.Treedepth)
+	a.NotEqual(proofSHA256.TreeDepth, 0)
+	proofconcatSHA256 := []byte(proofrespSHA256.Proof)
+	for len(proofconcatSHA256) > 0 {
+		var d crypto.Digest
+		copy(d[:], proofconcatSHA256)
+		proofSHA256.Path = append(proofSHA256.Path, d[:])
+		proofconcatSHA256 = proofconcatSHA256[len(d):]
+	}
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], proofresp.Stibhash[:])
@@ -127,4 +145,15 @@ func TestTxnMerkleProof(t *testing.T) {
 		a.NoError(err)
 	}
 
+	element = TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
+	copy(element.Stib[:], proofrespSHA256.Stibhash[:])
+
+	elems = make(map[uint64]crypto.Hashable)
+
+	elems[proofrespSHA256.Idx] = &element
+	err = merklearray.VerifyVectorCommitment(blk.TxnRoot.DigestSha256.ToSlice(), elems, &proofSHA256)
+	if err != nil {
+		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnRoot.DigestSha256.ToSlice(), proofSHA256.Path, proofSHA256.TreeDepth, proofrespSHA256.Stibhash, proofrespSHA256.Idx)
+		a.NoError(err)
+	}
 }
