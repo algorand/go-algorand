@@ -3903,7 +3903,6 @@ func TestAllowedOpcodesV3(t *testing.T) {
 func TestLinearOpcodes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
 	for _, spec := range OpSpecs {
 		if spec.Version < backBranchEnabledVersion {
 			require.Zero(t, spec.Details.FullCost.chunkCost, spec)

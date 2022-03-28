@@ -840,7 +840,7 @@ func asmItxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
 }
 
-// asmGitxn substitutes gitna's spec if there are 3 args
+// asmGitxn substitutes gitna's spec if the are 3 args
 func asmGitxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 2 {
 		return asmDefault(ops, spec, args)
