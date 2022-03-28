@@ -123,7 +123,7 @@ func (l *prefetcherAlignmentTestLedger) LookupApplication(addr basics.Address, a
 	c[aidx] = struct{}{}
 	l.mu.Unlock()
 
-	return l.apps[addr][aidx], nil
+	return l.apps[addr][aidx], 0, nil
 }
 func (l *prefetcherAlignmentTestLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
 	l.mu.Lock()
@@ -138,7 +138,7 @@ func (l *prefetcherAlignmentTestLedger) LookupAsset(addr basics.Address, aidx ba
 	c[aidx] = struct{}{}
 	l.mu.Unlock()
 
-	return l.assets[addr][aidx], nil
+	return l.assets[addr][aidx], 0, nil
 }
 func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	l.mu.Lock()
