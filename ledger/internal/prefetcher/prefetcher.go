@@ -546,6 +546,7 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 		}
 		if p.rnd != latestRound {
 			// entry of incorrect round was loaded
+			err = ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: p.rnd, LatestRound: latestRound}
 			break
 		}
 		re := LoadedResourcesEntry{

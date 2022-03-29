@@ -288,7 +288,7 @@ func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Roun
 func (l *localLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, basics.Round, error) {
 	ad, ok := l.balances[addr]
 	if !ok {
-		return ledgercore.AssetResource{}, 0, nil
+		return ledgercore.AssetResource{}, basics.Round(l.round), nil
 	}
 	var result ledgercore.AssetResource
 	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
@@ -304,7 +304,7 @@ func (l *localLedger) LookupAsset(addr basics.Address, aidx basics.AssetIndex) (
 func (l *localLedger) LookupApplication(addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, basics.Round, error) {
 	ad, ok := l.balances[addr]
 	if !ok {
-		return ledgercore.AppResource{}, 0, nil
+		return ledgercore.AppResource{}, basics.Round(l.round), nil
 	}
 	var result ledgercore.AppResource
 	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {

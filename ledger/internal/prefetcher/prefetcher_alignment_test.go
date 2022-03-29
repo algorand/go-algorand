@@ -253,7 +253,7 @@ func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) l
 	group := makeGroupFromTxn(txn)
 
 	ch := prefetcher.PrefetchAccounts(
-		context.Background(), l, 1,
+		context.Background(), l, 0,
 		[][]transactions.SignedTxnWithAD{group},
 		feeSink(), config.Consensus[proto])
 	loaded, ok := <-ch
