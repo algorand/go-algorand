@@ -61,6 +61,7 @@ type VotingData struct {
 	VoteKeyDilution uint64
 }
 
+// OnlineAccountData holds MicroAlgosWithRewards and VotingData as needed for agreement
 type OnlineAccountData struct {
 	MicroAlgosWithRewards basics.MicroAlgos
 	VotingData

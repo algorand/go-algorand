@@ -97,6 +97,7 @@ func UnmarshalStatus(value string) (s Status, err error) {
 	return
 }
 
+// VotingData holds voting-related data
 type VotingData struct {
 	VoteID       crypto.OneTimeSignatureVerifier
 	SelectionID  crypto.VRFVerifier
