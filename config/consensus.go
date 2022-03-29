@@ -118,6 +118,14 @@ type ConsensusParams struct {
 	//
 	// Rewards are received by whole reward units.  Fractions of
 	// RewardUnits do not receive rewards.
+	//
+	// Ensure both considerations below  are taken into account if RewardUnit is planned for change:
+	// 1. RewardUnits should not be changed without touching all accounts to apply their rewards
+	// based on the old RewardUnits and then use the new RewardUnits for all subsequent calculations.
+	// 2. Having a consistent RewardUnit is also important for preserving
+	// a constant amount of total algos in the system:
+	// the block header tracks how many reward units worth of algos are in existence
+	// and have logically received rewards.
 	RewardUnit uint64
 
 	// RewardsRateRefreshInterval is the number of rounds after which the
