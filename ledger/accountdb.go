@@ -1335,12 +1335,6 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
-	// ba.VoteID = ad.VoteID
-	// ba.SelectionID = ad.SelectionID
-	// ba.StateProofID = ad.StateProofID
-	// ba.VoteFirstValid = ad.VoteFirstValid
-	// ba.VoteLastValid = ad.VoteLastValid
-	// ba.VoteKeyDilution = ad.VoteKeyDilution
 	ba.AuthAddr = ad.AuthAddr
 	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
 	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
@@ -1356,12 +1350,6 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
 	ba.RewardedMicroAlgos = ad.RewardedMicroAlgos
-	// ba.VoteID = ad.VoteID
-	// ba.SelectionID = ad.SelectionID
-	// ba.StateProofID = ad.StateProofID
-	// ba.VoteFirstValid = ad.VoteFirstValid
-	// ba.VoteLastValid = ad.VoteLastValid
-	// ba.VoteKeyDilution = ad.VoteKeyDilution
 	ba.AuthAddr = ad.AuthAddr
 	ba.TotalAppSchemaNumUint = ad.TotalAppSchema.NumUint
 	ba.TotalAppSchemaNumByteSlice = ad.TotalAppSchema.NumByteSlice
@@ -1403,13 +1391,7 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 		MicroAlgos:         ba.MicroAlgos,
 		RewardsBase:        ba.RewardsBase,
 		RewardedMicroAlgos: ba.RewardedMicroAlgos,
-		// VoteID:             ba.VoteID,
-		// SelectionID:        ba.SelectionID,
-		// StateProofID:       ba.StateProofID,
-		// VoteFirstValid:     ba.VoteFirstValid,
-		// VoteLastValid:      ba.VoteLastValid,
-		// VoteKeyDilution:    ba.VoteKeyDilution,
-		AuthAddr: ba.AuthAddr,
+		AuthAddr:           ba.AuthAddr,
 		TotalAppSchema: basics.StateSchema{
 			NumUint:      ba.TotalAppSchemaNumUint,
 			NumByteSlice: ba.TotalAppSchemaNumByteSlice,

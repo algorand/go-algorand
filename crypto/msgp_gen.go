@@ -882,6 +882,9 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	o = bts
+	if err = z.Validate(); err != nil {
+		return
+	}
 	return
 }
 
