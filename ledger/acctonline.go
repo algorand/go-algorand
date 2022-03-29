@@ -38,6 +38,18 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
+type modifiedOnlineAccount struct {
+	// data stores the most recent ledgercore.AccountData for this modified
+	// account.
+	data ledgercore.AccountData
+
+	// ndelta keeps track of how many times this account appears in
+	// accountUpdates.deltas.  This is used to evict modifiedAccount
+	// entries when all changes to an account have been reflected in
+	// the account DB, and no outstanding modifications remain.
+	ndeltas int
+}
+
 // onlineAccounts tracks history of online accounts
 type onlineAccounts struct {
 	// Connection to the database.
@@ -55,7 +67,7 @@ type onlineAccounts struct {
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
-	accounts map[basics.Address]modifiedAccount
+	accounts map[basics.Address]modifiedOnlineAccount
 
 	// versions stores consensus version dbRound and every
 	// round after it; i.e., versions is one longer than deltas.
@@ -141,7 +153,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	ao.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
 	ao.deltas = nil
-	ao.accounts = make(map[basics.Address]modifiedAccount)
+	ao.accounts = make(map[basics.Address]modifiedOnlineAccount)
 	ao.deltasAccum = []int{0}
 
 	// ao.baseAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
@@ -406,7 +418,20 @@ func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredC
 
 // LookupOnlineAccountData returns the online account data for a given address at a given round.
 func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
-	return ao.lookupOnlineAccountData(rnd, addr)
+	oad, err := ao.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return
+	}
+
+	data.MicroAlgosWithRewards = oad.MicroAlgosWithRewards
+	data.VotingData.VoteID = oad.VotingData.VoteID
+	data.VotingData.SelectionID = oad.VotingData.SelectionID
+	data.VotingData.StateProofID = oad.VotingData.StateProofID
+	data.VotingData.VoteFirstValid = oad.VotingData.VoteFirstValid
+	data.VotingData.VoteLastValid = oad.VotingData.VoteLastValid
+	data.VotingData.VoteKeyDilution = oad.VotingData.VoteKeyDilution
+
+	return
 }
 
 // roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.
@@ -429,7 +454,7 @@ func (ao *onlineAccounts) roundOffset(rnd basics.Round) (offset uint64, err erro
 }
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
+func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data ledgercore.OnlineAccountData, err error) {
 	ao.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -493,19 +518,18 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// against the database.
 		persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
 		if persistedData.round == currentDbRound {
-			var u ledgercore.AccountData
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
 				// ao.baseAccounts.writePending(persistedData)
 				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
 			}
 			// otherwise return empty
-			return u.OnlineAccountData(rewardsProto, rewardsLevel), err
+			return ledgercore.OnlineAccountData{}, err
 		}
 
 		if persistedData.round < currentDbRound {
 			ao.log.Errorf("accountUpdates.lookupOnlineAccountData: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-			return basics.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 		ao.accountsMu.RLock()
 		needUnlock = true

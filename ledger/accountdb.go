@@ -1372,32 +1372,28 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
 }
 
-func (ba *baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
+func (ba baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 	return ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			Status:             ba.Status,
-			MicroAlgos:         ba.MicroAlgos,
-			RewardsBase:        ba.RewardsBase,
-			RewardedMicroAlgos: ba.RewardedMicroAlgos,
-			AuthAddr:           ba.AuthAddr,
-			TotalAppSchema: basics.StateSchema{
-				NumUint:      ba.TotalAppSchemaNumUint,
-				NumByteSlice: ba.TotalAppSchemaNumByteSlice,
-			},
-			TotalExtraAppPages:  ba.TotalExtraAppPages,
-			TotalAppParams:      ba.TotalAppParams,
-			TotalAppLocalStates: ba.TotalAppLocalStates,
-			TotalAssetParams:    ba.TotalAssetParams,
-			TotalAssets:         ba.TotalAssets,
+		AccountBaseData: ba.GetLedgerCoreAccountBaseData(),
+	}
+}
+
+func (ba baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseData {
+	return ledgercore.AccountBaseData{
+		Status:             ba.Status,
+		MicroAlgos:         ba.MicroAlgos,
+		RewardsBase:        ba.RewardsBase,
+		RewardedMicroAlgos: ba.RewardedMicroAlgos,
+		AuthAddr:           ba.AuthAddr,
+		TotalAppSchema: basics.StateSchema{
+			NumUint:      ba.TotalAppSchemaNumUint,
+			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
 		},
-		// VotingData: ledgercore.VotingData{
-		// 	VoteID:          ba.VoteID,
-		// 	SelectionID:     ba.SelectionID,
-		// 	StateProofID:    ba.StateProofID,
-		// 	VoteFirstValid:  ba.VoteFirstValid,
-		// 	VoteLastValid:   ba.VoteLastValid,
-		// 	VoteKeyDilution: ba.VoteKeyDilution,
-		// },
+		TotalExtraAppPages:  ba.TotalExtraAppPages,
+		TotalAppParams:      ba.TotalAppParams,
+		TotalAppLocalStates: ba.TotalAppLocalStates,
+		TotalAssetParams:    ba.TotalAssetParams,
+		TotalAssets:         ba.TotalAssets,
 	}
 }
 
@@ -1453,18 +1449,21 @@ func (ba baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalanc
 
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
-func (ba baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
+func (ba baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, basics.Online, ba.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
 	)
 
-	return basics.OnlineAccountData{
+	return ledgercore.OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
-		VoteID:                ba.VoteID,
-		SelectionID:           ba.SelectionID,
-		VoteFirstValid:        ba.VoteFirstValid,
-		VoteLastValid:         ba.VoteLastValid,
-		VoteKeyDilution:       ba.VoteKeyDilution,
+		VotingData: ledgercore.VotingData{
+			VoteID:          ba.VoteID,
+			SelectionID:     ba.SelectionID,
+			StateProofID:    ba.StateProofID,
+			VoteFirstValid:  ba.VoteFirstValid,
+			VoteLastValid:   ba.VoteLastValid,
+			VoteKeyDilution: ba.VoteKeyDilution,
+		},
 	}
 }
 

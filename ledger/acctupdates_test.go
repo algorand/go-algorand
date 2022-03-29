@@ -319,7 +319,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			for addr, data := range accts[rnd] {
 				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, d.AccountBaseData, ledgercore.ToAccountData(data).AccountBaseData)
+				require.Equal(t, d, ledgercore.ToAccountData(data).AccountBaseData)
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 				// TODO: make lookupOnlineAccountData returning extended version of ledgercore.VotingData ?
 				od, err := ao.lookupOnlineAccountData(rnd, addr)
@@ -357,10 +357,10 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			d, validThrough, err := au.LookupWithoutRewards(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
-			require.Equal(t, d, ledgercore.AccountData{})
+			require.Equal(t, d, ledgercore.AccountBaseData{})
 			od, err := ao.lookupOnlineAccountData(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
-			require.Equal(t, od, basics.OnlineAccountData{})
+			require.Equal(t, od, ledgercore.OnlineAccountData{})
 		}
 	}
 	checkAcctUpdatesConsistency(t, au, latestRnd)
@@ -375,7 +375,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 		for i := 0; i < rdelta.Len(); i++ {
 			addr, adelta := rdelta.GetByIdx(i)
 			macct := accounts[addr]
-			macct.data = adelta
+			macct.data = adelta.AccountBaseData
 			macct.ndeltas++
 			accounts[addr] = macct
 		}
@@ -420,7 +420,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 }
 
 func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd basics.Round) {
-	accounts := make(map[basics.Address]modifiedAccount)
+	accounts := make(map[basics.Address]modifiedOnlineAccount)
 
 	for _, rdelta := range ao.deltas {
 		for i := 0; i < rdelta.Len(); i++ {
@@ -964,7 +964,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 				fromAccountDataNew.MicroAlgos.Raw -= uint64(i - 10)
 				toAccountDataNew.MicroAlgos.Raw += uint64(i - 10)
-				updates[fromAccount] = fromAccountDataNew
+				data := ledgercore.AccountData{AccountBaseData: fromAccountDataNew}
+				updates[fromAccount] = data
 
 				moneyAccountsExpectedAmounts[i][j] = fromAccountDataNew.MicroAlgos.Raw
 			}
@@ -1003,7 +1004,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				}
 			}
 
-			updates[toAccount] = toAccountDataNew
+			data := ledgercore.AccountData{AccountBaseData: toAccountDataNew}
+			updates[toAccount] = data
 
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
@@ -2419,7 +2421,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, _, _, err := au.lookupWithoutRewards(rnd, addr, true)
 			require.NoError(t, err)
-			require.Equal(t, d.AccountBaseData, ledgercore.ToAccountData(data).AccountBaseData)
+			require.Equal(t, d, ledgercore.ToAccountData(data).AccountBaseData)
 			// TODO: add online account data check
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
