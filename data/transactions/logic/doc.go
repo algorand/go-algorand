@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -349,20 +351,34 @@ var OpGroups = map[string][]string{
 type OpCost struct {
 	From int
 	To   int
-	Cost int
+	Cost string
 }
 
-// OpAllCosts returns an array of the cost score for an op by version.
-// Each entry indicates the cost over a range of versions, so if the
-// cost has remained constant, there is only one result, otherwise
-// each entry shows the cost for a consecutive range of versions,
-// inclusive.
+// OpAllCosts returns an array of the cost of an op by version.  Each entry
+// indicates the cost over a range of versions, so if the cost has remained
+// constant, there is only one result, otherwise each entry shows the cost for a
+// consecutive range of versions, inclusive.
 func OpAllCosts(opName string) []OpCost {
 	var costs []OpCost
 	for v := 1; v <= LogicVersion; v++ {
-		cost := OpsByName[v][opName].Details.Cost
-		if cost == 0 {
+		spec, ok := OpsByName[v][opName]
+		if !ok {
 			continue
+		}
+		cost := fmt.Sprintf("%d", spec.Details.Cost)
+		if cost == "0" {
+			cost = ""
+			// This is quite brittle code, but sufficient for doc generation.
+			// Right now, costFuncs are only used to inspect the next byte to
+			// see the field in use.
+			fakeProgram := make([]byte, 2)
+			// brittle. these func are on single immediate opcodes right now.
+			group := spec.Details.Immediates[0].Group
+			for _, name := range group.Names {
+				fakeProgram[1] = group.Specs.SpecByName(name).Field()
+				fcost := spec.Details.costFunc(fakeProgram, 0)
+				cost += fmt.Sprintf(" %s=%d", name, fcost)
+			}
 		}
 		if costs == nil || cost != costs[len(costs)-1].Cost {
 			costs = append(costs, OpCost{v, v, cost})
@@ -408,99 +424,6 @@ func OnCompletionDescription(value uint64) string {
 // OnCompletionPreamble describes what the OnCompletion constants represent.
 const OnCompletionPreamble = "An application transaction must indicate the action to be taken following the execution of its approvalProgram or clearStateProgram. The constants below describe the available actions."
 
-var txnFieldDocs = map[string]string{
-	"Type":           "Transaction type as bytes",
-	"TypeEnum":       "See table below",
-	"Sender":         "32 byte address",
-	"Fee":            "microalgos",
-	"FirstValid":     "round number",
-	"FirstValidTime": "Causes program to fail; reserved for future use",
-	"LastValid":      "round number",
-	"Note":           "Any data up to 1024 bytes",
-	"Lease":          "32 byte lease value",
-	"RekeyTo":        "32 byte Sender's new AuthAddr",
-
-	"GroupIndex": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
-	"TxID":       "The computed ID for this transaction. 32 bytes.",
-
-	"Receiver":         "32 byte address",
-	"Amount":           "microalgos",
-	"CloseRemainderTo": "32 byte address",
-
-	"VotePK":           "32 byte address",
-	"SelectionPK":      "32 byte address",
-	"StateProofPK":     "64 byte state proof public key commitment",
-	"VoteFirst":        "The first round that the participation key is valid.",
-	"VoteLast":         "The last round that the participation key is valid.",
-	"VoteKeyDilution":  "Dilution for the 2-level participation key",
-	"Nonparticipation": "Marks an account nonparticipating for rewards",
-
-	"XferAsset":     "Asset ID",
-	"AssetAmount":   "value in Asset's units",
-	"AssetSender":   "32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset.",
-	"AssetReceiver": "32 byte address",
-	"AssetCloseTo":  "32 byte address",
-
-	"ApplicationID":      "ApplicationID from ApplicationCall transaction",
-	"OnCompletion":       "ApplicationCall transaction on completion action",
-	"ApplicationArgs":    "Arguments passed to the application in the ApplicationCall transaction",
-	"NumAppArgs":         "Number of ApplicationArgs",
-	"Accounts":           "Accounts listed in the ApplicationCall transaction",
-	"NumAccounts":        "Number of Accounts",
-	"Assets":             "Foreign Assets listed in the ApplicationCall transaction",
-	"NumAssets":          "Number of Assets",
-	"Applications":       "Foreign Apps listed in the ApplicationCall transaction",
-	"NumApplications":    "Number of Applications",
-	"GlobalNumUint":      "Number of global state integers in ApplicationCall",
-	"GlobalNumByteSlice": "Number of global state byteslices in ApplicationCall",
-	"LocalNumUint":       "Number of local state integers in ApplicationCall",
-	"LocalNumByteSlice":  "Number of local state byteslices in ApplicationCall",
-	"ApprovalProgram":    "Approval program",
-	"ClearStateProgram":  "Clear state program",
-	"ExtraProgramPages":  "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
-
-	"ConfigAsset":              "Asset ID in asset config transaction",
-	"ConfigAssetTotal":         "Total number of units of this asset created",
-	"ConfigAssetDecimals":      "Number of digits to display after the decimal place when displaying the asset",
-	"ConfigAssetDefaultFrozen": "Whether the asset's slots are frozen by default or not, 0 or 1",
-	"ConfigAssetUnitName":      "Unit name of the asset",
-	"ConfigAssetName":          "The asset name",
-	"ConfigAssetURL":           "URL",
-	"ConfigAssetMetadataHash":  "32 byte commitment to some unspecified asset metadata",
-	"ConfigAssetManager":       "32 byte address",
-	"ConfigAssetReserve":       "32 byte address",
-	"ConfigAssetFreeze":        "32 byte address",
-	"ConfigAssetClawback":      "32 byte address",
-
-	"FreezeAsset":        "Asset ID being frozen or un-frozen",
-	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
-	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
-
-	"Logs":                 "Log messages emitted by an application call (only with `itxn` in v5)",
-	"NumLogs":              "Number of Logs (only with `itxn` in v5)",
-	"LastLog":              "The last message emitted. Empty bytes if none were emitted",
-	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (only with `itxn` in v5)",
-	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (only with `itxn` in v5)",
-}
-
-var globalFieldDocs = map[string]string{
-	"MinTxnFee":                 "microalgos",
-	"MinBalance":                "microalgos",
-	"MaxTxnLife":                "rounds",
-	"ZeroAddress":               "32 byte address of all zero bytes",
-	"GroupSize":                 "Number of transactions in this atomic transaction group. At least 1",
-	"LogicSigVersion":           "Maximum supported version",
-	"Round":                     "Current round number",
-	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative",
-	"CurrentApplicationID":      "ID of current application executing",
-	"CreatorAddress":            "Address of the creator of the current application",
-	"CurrentApplicationAddress": "Address that the current application controls",
-	"GroupID":                   "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
-	"OpcodeBudget":              "The remaining cost that can be spent by opcodes in this program.",
-	"CallerApplicationID":       "The application ID of the application that called this application. 0 if this application is at the top-level.",
-	"CallerApplicationAddress":  "The application address of the application that called this application. ZeroAddress if this application is at the top-level.",
-}
-
 func addExtra(original string, extra string) string {
 	if len(original) == 0 {
 		return extra
@@ -513,52 +436,4 @@ func addExtra(original string, extra string) string {
 		sep = " "
 	}
 	return original + sep + extra
-}
-
-// AssetHoldingFieldDocs are notes on fields available in `asset_holding_get`
-var assetHoldingFieldDocs = map[string]string{
-	"AssetBalance": "Amount of the asset unit held by this account",
-	"AssetFrozen":  "Is the asset frozen or not",
-}
-
-// assetParamsFieldDocs are notes on fields available in `asset_params_get`
-var assetParamsFieldDocs = map[string]string{
-	"AssetTotal":         "Total number of units of this asset",
-	"AssetDecimals":      "See AssetParams.Decimals",
-	"AssetDefaultFrozen": "Frozen by default or not",
-	"AssetUnitName":      "Asset unit name",
-	"AssetName":          "Asset name",
-	"AssetURL":           "URL with additional info about the asset",
-	"AssetMetadataHash":  "Arbitrary commitment",
-	"AssetManager":       "Manager commitment",
-	"AssetReserve":       "Reserve address",
-	"AssetFreeze":        "Freeze address",
-	"AssetClawback":      "Clawback address",
-	"AssetCreator":       "Creator address",
-}
-
-// appParamsFieldDocs are notes on fields available in `app_params_get`
-var appParamsFieldDocs = map[string]string{
-	"AppApprovalProgram":    "Bytecode of Approval Program",
-	"AppClearStateProgram":  "Bytecode of Clear State Program",
-	"AppGlobalNumUint":      "Number of uint64 values allowed in Global State",
-	"AppGlobalNumByteSlice": "Number of byte array values allowed in Global State",
-	"AppLocalNumUint":       "Number of uint64 values allowed in Local State",
-	"AppLocalNumByteSlice":  "Number of byte array values allowed in Local State",
-	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
-	"AppCreator":            "Creator address",
-	"AppAddress":            "Address for which this application has authority",
-}
-
-// acctParamsFieldDocs are notes on fields available in `app_params_get`
-var acctParamsFieldDocs = map[string]string{
-	"AcctBalance":    "Account balance in microalgos",
-	"AcctMinBalance": "Minimum required blance for account, in microalgos",
-	"AcctAuthAddr":   "Address the account is rekeyed to.",
-}
-
-// EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes
-var EcdsaCurveDocs = map[string]string{
-	"Secp256k1": "secp256k1 curve",
-	"Secp256r1": "secp256r1 curve",
 }

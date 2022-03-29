@@ -437,9 +437,9 @@ byte 0x%s
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
-				testAcceptsWithField(t, src, 5, fidoVersion)
+				testAccepts(t, src, fidoVersion)
 			} else {
-				testPanicsWithField(t, src, 5, fidoVersion)
+				testPanics(t, src, fidoVersion)
 			}
 		})
 	}
@@ -479,9 +479,9 @@ ecdsa_verify Secp256r1
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
-				testAcceptsWithField(t, src, 5, fidoVersion)
+				testAccepts(t, src, fidoVersion)
 			} else {
-				testRejectsWithField(t, src, 5, fidoVersion)
+				testRejects(t, src, fidoVersion)
 			}
 		})
 	}
@@ -531,18 +531,58 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	testAccepts(t, progText, 5)
 }
 
+func TestEcdsaCostVariation(t *testing.T) {
+	// Doesn't matter if it passes or fails. Just confirm the cost depends on curve.
+	source := `
+global ZeroAddress				// need 32 bytes
+byte "signature r"
+byte "signature s"
+byte "PK x"
+byte "PK y"
+ecdsa_verify Secp256k1
+!
+assert
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-1700-8) + `
+==
+`
+	testAccepts(t, source, 6) // Secp256k1 was 5, but OpcodeBudget is 6
+
+	source = `
+global ZeroAddress				// need 32 bytes
+byte "signature r"
+byte "signature s"
+byte "PK x"
+byte "PK y"
+ecdsa_verify Secp256r1
+!
+assert
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-2500-8) + `
+==
+`
+	testAccepts(t, source, fidoVersion)
+}
+
 func BenchmarkHash(b *testing.B) {
 	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
-		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
+		b.Run(hash+"-0w", func(b *testing.B) { // hash 0 bytes
+			benchmarkOperation(b, "byte 0x;", hash, "pop; int 1")
+		})
+		b.Run(hash+"-1w", func(b *testing.B) { // hash 32 bytes
 			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
 		})
-		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
+		b.Run(hash+"-4w", func(b *testing.B) { // hash 128 bytes
 			benchmarkOperation(b, "int 32; bzero",
 				"dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
-		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
+		b.Run(hash+"-16w", func(b *testing.B) { // hash 512 bytes
 			benchmarkOperation(b, "int 32; bzero",
 				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
+		})
+		b.Run(hash+"-128w", func(b *testing.B) { // hash 4k bytes
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
 	}
 }
@@ -664,10 +704,9 @@ func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
 	if curve == Secp256k1 {
 		version = 5
 	} else if curve == Secp256r1 {
-		version = 6
+		version = fidoVersion
 	}
-	ops, err := AssembleStringWithVersion(source, version)
-	require.NoError(b, err)
+	ops := testProg(b, source, version)
 	for i := 0; i < b.N; i++ {
 		data[i].programs = ops.Program
 	}
@@ -707,7 +746,7 @@ ecdsa_verify Secp256k1`
 	if LogicVersion >= fidoVersion {
 		b.Run("ecdsa_verify secp256r1", func(b *testing.B) {
 			source := `#pragma version ` + strconv.Itoa(fidoVersion) + `
-	arg 0d
+	arg 0
 	arg 1
 	arg 2
 	arg 3
