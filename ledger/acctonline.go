@@ -97,6 +97,8 @@ type onlineAccounts struct {
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
 	voters *votersTracker
 
+	expirations []onlineAccountExpiration
+
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	// TODO: restore the cache
 	// baseAccounts lruAccounts
@@ -128,6 +130,13 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
 
+	latest := l.Latest()
+	hdr, err := l.BlockHdr(latest)
+	if err != nil {
+		return
+	}
+	proto := config.Consensus[hdr.CurrentProtocol]
+
 	err = ao.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		totals, err0 := accountsTotals(tx, false)
 		if err0 != nil {
@@ -135,6 +144,12 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		}
 
 		ao.roundTotals = []ledgercore.AccountTotals{totals}
+
+		ao.expirations, err0 = onlineAccountsExpiration(tx, lastBalancesRound, l.Latest(), proto.MaxBalLookback)
+		if err0 != nil {
+			return err0
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -146,7 +161,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	hdr, err := l.BlockHdr(lastBalancesRound)
+	hdr, err = l.BlockHdr(lastBalancesRound)
 	if err != nil {
 		return
 	}
@@ -320,6 +335,16 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset)
 	copy(deltas, ao.deltas[:offset])
+	var expirations []int64
+	var expirationOffset uint64
+	for i := 0; i < len(ao.expirations); i++ {
+		if ao.expirations[i].rnd <= dcc.oldBase+basics.Round(offset) {
+			expirations = append(expirations, ao.expirations[i].rowids...)
+			expirationOffset++
+		} else {
+			break
+		}
+	}
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if ao.versions[1] != ao.versions[offset] {
@@ -340,6 +365,9 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, lruAccounts{})
 
 	ao.accountsMu.RUnlock()
+
+	dcc.onlineAccountExpiredRowids = expirations
+	dcc.expirationOffset = expirationOffset
 
 	dcc.genesisProto = ao.ledger.GenesisProto()
 
@@ -364,7 +392,12 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedOnlineAccounts, err = onlineAccountsNewRound(tx, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedOnlineAccounts, dcc.onlineAccountExpirations, err = onlineAccountsNewRound(tx, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	if err != nil {
+		return err
+	}
+
+	err = onlineAccountsDeleteExpired(tx, dcc.onlineAccountExpiredRowids)
 	if err != nil {
 		return err
 	}
@@ -375,6 +408,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	offset := dcc.offset
 	newBase := dcc.newBase
+	expirationOffset := dcc.expirationOffset
 
 	ao.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
@@ -407,6 +441,10 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.versions = ao.versions[offset:]
 	ao.roundTotals = ao.roundTotals[offset:]
 	ao.cachedDBRoundOnline = newBase
+	ao.expirations = ao.expirations[expirationOffset:]
+
+	// simply contatenate since both sequences are sorted
+	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
 	ao.accountsMu.Unlock()
 

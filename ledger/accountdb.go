@@ -22,6 +22,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -2721,6 +2723,121 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 	return res, rows.Err()
 }
 
+type onlineAccountExpiration struct {
+	rnd    basics.Round
+	rowids []int64
+}
+
+// onlineAccountsExpiration scans onlineaccounts table and builds expirations map using the following algorithm
+// 1. Query the table ordred by update round and address.
+// 2. for every address record "online" entries, when encounter "offline" record mark previous "online" for deletion.
+// Set expiration round to the "offline" round + MaxBalLookback
+// 3. If there are multiple "online" entires, mark all except the last one for deletion as well.
+// Expiration round is set to the last online + MaxBalLookback
+func onlineAccountsExpiration(tx *sql.Tx, balancesRound basics.Round, latestRound basics.Round, maxBalLookback uint64) (result []onlineAccountExpiration, err error) {
+	rows, err := tx.Query(`SELECT rowid, address, normalizedonlinebalance, updround FROM onlineaccounts ORDER BY address, updround ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	expirations := make(map[basics.Round][]int64)
+
+	addToExpiration := func(targetRound basics.Round, rowids []int64) {
+		if len(rowids) > 0 {
+			var entries []int64
+			var ok bool
+			if entries, ok = expirations[targetRound]; ok {
+				entries = append(entries, rowids...)
+			} else {
+				entries = make([]int64, 0, len(rowids))
+				copy(entries, rowids)
+			}
+			expirations[targetRound] = entries
+		}
+	}
+
+	var lastAddr basics.Address
+	var rowids []int64
+	var rounds []int64
+
+	for rows.Next() {
+		var addrbuf []byte
+		var rowid sql.NullInt64
+		var updround sql.NullInt64
+		var normBal sql.NullInt64
+		err = rows.Scan(&rowid, &addrbuf, &normBal, &updround)
+		if err != nil {
+			return nil, err
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return nil, err
+		}
+		copy(addr[:], addrbuf)
+
+		if addr != lastAddr {
+			// when switching from one account to another
+			// mark older online entries for deletion.
+			// offline entries explicitly processed below
+			if len(rowids) > 1 {
+				if len(rowids) != len(rounds) {
+					return nil, fmt.Errorf("inconsistence: len(rowids) %d != %d len(rounds)", len(rowids), len(rounds))
+				}
+				targetRound := uint64(rounds[len(rounds)-1]) + maxBalLookback
+				prevRowids := rowids[:len(rowids)-1]
+				addToExpiration(basics.Round(targetRound), prevRowids)
+			}
+
+			// reset the state
+			rowids = rowids[:0]
+			rounds = rounds[:0]
+			copy(lastAddr[:], addr[:])
+		}
+
+		if normBal.Valid && normBal.Int64 > 0 {
+			// online account, save rowids and rounds
+			rowids = append(rowids, rowid.Int64)
+			rounds = append(rounds, updround.Int64)
+		} else {
+			// became offline: add all previous online rowids and this row id
+			rowids = append(rowids, rowid.Int64)
+			targetRound := uint64(updround.Int64) + maxBalLookback
+			addToExpiration(basics.Round(targetRound), rowids)
+
+			rowids = rowids[:0]
+			rounds = rounds[:0]
+		}
+	}
+
+	// process the last address
+	if len(rowids) > 1 {
+		if len(rowids) != len(rounds) {
+			return nil, fmt.Errorf("inconsistence: len(rowids) %d != %d len(rounds)", len(rowids), len(rounds))
+		}
+		targetRound := uint64(rounds[len(rounds)-1]) + maxBalLookback
+		rowids = rowids[:len(rowids)-1]
+		addToExpiration(basics.Round(targetRound), rowids)
+	}
+
+	// convert map to a sorted array
+	if len(expirations) > 0 {
+		result = make([]onlineAccountExpiration, len(expirations))
+		i := 0
+		for rnd, rowids := range expirations {
+			result[i] = onlineAccountExpiration{rnd: rnd, rowids: rowids}
+			i++
+		}
+		sort.SliceStable(result, func(i, j int) bool {
+			return result[i].rnd < result[j].rnd
+		})
+	}
+
+	return result, nil
+}
+
 func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
@@ -2766,7 +2883,6 @@ type accountsWriter interface {
 
 type onlineAccountsWriter interface {
 	insertOnlineAccount(addr basics.Address, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error)
-	deleteOnlineAccount(rowid int64) (rowsAffected int64, err error)
 	updateOnlineAccount(rowid int64, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowsAffected int64, err error)
 
 	close()
@@ -2779,7 +2895,7 @@ type accountsSQLWriter struct {
 }
 
 type onlineAccountsSQLWriter struct {
-	deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
+	insertStmt, updateStmt *sql.Stmt
 }
 
 func (w *accountsSQLWriter) close() {
@@ -2818,10 +2934,6 @@ func (w *accountsSQLWriter) close() {
 }
 
 func (w *onlineAccountsSQLWriter) close() {
-	if w.deleteByRowIDStmt != nil {
-		w.deleteByRowIDStmt.Close()
-		w.deleteByRowIDStmt = nil
-	}
 	if w.insertStmt != nil {
 		w.insertStmt.Close()
 		w.insertStmt = nil
@@ -2959,11 +3071,6 @@ func makeOnlineAccountsSQLWriter(tx *sql.Tx, hasAccounts bool) (w *onlineAccount
 	w = new(onlineAccountsSQLWriter)
 
 	if hasAccounts {
-		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM onlineaccounts WHERE rowid=?")
-		if err != nil {
-			return
-		}
-
 		w.insertStmt, err = tx.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
 		if err != nil {
 			return
@@ -2984,15 +3091,6 @@ func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBa
 		return
 	}
 	rowid, err = result.LastInsertId()
-	return
-}
-
-func (w onlineAccountsSQLWriter) deleteOnlineAccount(rowid int64) (rowsAffected int64, err error) {
-	result, err := w.deleteByRowIDStmt.Exec(rowid)
-	if err != nil {
-		return
-	}
-	rowsAffected, err = result.RowsAffected()
 	return
 }
 
@@ -3028,7 +3126,7 @@ func onlineAccountsNewRound(
 	tx *sql.Tx,
 	updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, err error) {
+) (updatedAccounts []persistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
 	hasAccounts := updates.len() > 0
 
 	writer, err := makeOnlineAccountsSQLWriter(tx, hasAccounts)
@@ -3037,7 +3135,7 @@ func onlineAccountsNewRound(
 	}
 	defer writer.close()
 
-	updatedAccounts, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updatedAccounts, expirations, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	return
 }
 
@@ -3263,7 +3361,9 @@ func accountsNewRoundImpl(
 func onlineAccountsNewRoundImpl(
 	writer onlineAccountsWriter, updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, err error) {
+) (updatedAccounts []persistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
+
+	expirationMap := make(map[basics.Round][]int64)
 
 	for i := 0; i < updates.len(); i++ {
 		data := updates.getByIdx(i)
@@ -3300,11 +3400,27 @@ func onlineAccountsNewRoundImpl(
 				if err == nil {
 					updated := persistedOnlineAccountData{
 						addr:        data.address,
-						accountData: data.newAcct,
+						accountData: baseOnlineAccountData{},
 						round:       lastUpdateRound,
 						rowid:       rowid,
 					}
 					updatedAccounts = append(updatedAccounts, updated)
+					targetRound := lastUpdateRound + basics.Round(proto.MaxBalLookback)
+					if entries, ok := expirationMap[targetRound]; ok {
+						// if old data is completely empty
+						// then the account was offline and expired on a prev invocation
+						if !data.oldAcct.accountData.IsEmpty() {
+							entries = append(entries, data.oldAcct.rowid)
+						}
+						entries = append(entries, rowid)
+						expirationMap[targetRound] = entries
+					} else {
+						if !data.oldAcct.accountData.IsEmpty() {
+							expirationMap[targetRound] = []int64{data.oldAcct.rowid, rowid}
+						} else {
+							expirationMap[targetRound] = []int64{rowid}
+						}
+					}
 				} else if data.newStatus == basics.Online {
 					err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), data.newAcct)
 				}
@@ -3321,6 +3437,14 @@ func onlineAccountsNewRoundImpl(
 							rowid:       rowid,
 						}
 						updatedAccounts = append(updatedAccounts, updated)
+
+						targetRound := lastUpdateRound + basics.Round(proto.MaxBalLookback)
+						if entries, ok := expirationMap[targetRound]; ok {
+							entries = append(entries, data.oldAcct.rowid)
+							expirationMap[targetRound] = entries
+						} else {
+							expirationMap[targetRound] = []int64{data.oldAcct.rowid}
+						}
 					}
 				}
 			}
@@ -3331,7 +3455,30 @@ func onlineAccountsNewRoundImpl(
 		}
 	}
 
+	expirations = make([]onlineAccountExpiration, len(expirationMap))
+	i := 0
+	for rnd, rowids := range expirationMap {
+		expirations[i] = onlineAccountExpiration{rnd: rnd, rowids: rowids}
+		i++
+	}
+	sort.SliceStable(expirations, func(i, j int) bool {
+		return expirations[i].rnd < expirations[j].rnd
+	})
+
 	return
+}
+
+func onlineAccountsDeleteExpired(tx *sql.Tx, rowids []int64) (err error) {
+	if len(rowids) == 0 {
+		return
+	}
+
+	args := make([]interface{}, len(rowids))
+	for i, rowid := range rowids {
+		args[i] = interface{}(rowid)
+	}
+	_, err = tx.Exec("DELETE FROM onlineaccounts WHERE rowid IN (?"+strings.Repeat(",?", len(rowids)-1)+")", args...)
+	return err
 }
 
 // updates the round number associated with the current account data.

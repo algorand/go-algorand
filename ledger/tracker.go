@@ -230,6 +230,9 @@ type deferredCommitContext struct {
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
 	updatedPersistedOnlineAccounts []persistedOnlineAccountData
+	onlineAccountExpirations       []onlineAccountExpiration
+	onlineAccountExpiredRowids     []int64
+	expirationOffset               uint64
 
 	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest
@@ -295,7 +298,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
 
-	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
+	// the votes have a special dependency on the account updates, so we need to initialize these separately.
 	tr.acctsOnline.voters = &votersTracker{}
 	err = tr.acctsOnline.voters.loadFromDisk(l, tr.acctsOnline)
 	if err != nil {

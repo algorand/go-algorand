@@ -290,7 +290,8 @@ func TestAccountDBRound(t *testing.T) {
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
 
-		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
+		// TODO: check expirations?
+		updatedOnlineAccts, _, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
 
 		err = updateAccountsRound(tx, basics.Round(i))
@@ -2913,7 +2914,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 
-		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+		updatedOnlineAccts, _, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
 		require.NoError(t, err)
 		require.NotEmpty(t, updatedOnlineAccts)
 
