@@ -158,7 +158,22 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+    if [ $KEEP_TEMPS ]; then
+	echo "Keeping temporary running"
+	"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py --keep-temps ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+    else
+	"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+    fi
+
+    pushd "${TEMPDIR}" || exit 1
+
+    tar -j -c -f net_done.tar.bz2 --exclude node.log --exclude agreement.cdv net
+    rm -rf "${TEMPDIR}/net"
+    RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
+    echo "COPY AND PASTE THIS TO UPLOAD:"
+    echo aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
+    popd
+
     duration "parallel client runner"
 
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
