@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"path/filepath"
 	"testing"
 
@@ -105,33 +106,28 @@ func TestTxnMerkleProof(t *testing.T) {
 
 	hashtype, err := crypto.UnmarshalHashType(proofresp.Hashtype)
 	a.NoError(err)
+	a.Equal(crypto.Sha512_256, hashtype)
 
 	hashtypeSHA256, err := crypto.UnmarshalHashType(proofrespSHA256.Hashtype)
 	a.NoError(err)
+	a.Equal(crypto.Sha256, hashtypeSHA256)
 
-	var proof merklearray.Proof
-	proof.HashFactory = crypto.HashFactory{HashType: hashtype}
-	proof.TreeDepth = uint8(proofresp.Treedepth)
-	a.NotEqual(proof.TreeDepth, 0)
-	proofconcat := []byte(proofresp.Proof)
-	for len(proofconcat) > 0 {
-		var d crypto.Digest
-		copy(d[:], proofconcat)
-		proof.Path = append(proof.Path, d[:])
-		proofconcat = proofconcat[len(d):]
+	generateProof := func(h crypto.HashType, prfRsp generated.ProofResponse) (p merklearray.Proof) {
+		p.HashFactory = crypto.HashFactory{HashType: h}
+		p.TreeDepth = uint8(prfRsp.Treedepth)
+		a.NotEqual(p.TreeDepth, 0)
+		proofconcat := prfRsp.Proof
+		for len(proofconcat) > 0 {
+			var d crypto.Digest
+			copy(d[:], proofconcat)
+			p.Path = append(p.Path, d[:])
+			proofconcat = proofconcat[len(d):]
+		}
+		return
 	}
 
-	var proofSHA256 merklearray.Proof
-	proofSHA256.HashFactory = crypto.HashFactory{HashType: hashtypeSHA256}
-	proofSHA256.TreeDepth = uint8(proofrespSHA256.Treedepth)
-	a.NotEqual(proofSHA256.TreeDepth, 0)
-	proofconcatSHA256 := []byte(proofrespSHA256.Proof)
-	for len(proofconcatSHA256) > 0 {
-		var d crypto.Digest
-		copy(d[:], proofconcatSHA256)
-		proofSHA256.Path = append(proofSHA256.Path, d[:])
-		proofconcatSHA256 = proofconcatSHA256[len(d):]
-	}
+	proof := generateProof(crypto.Sha512_256, proofresp)
+	proofSHA256 := generateProof(crypto.Sha256, proofrespSHA256)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], proofresp.Stibhash[:])

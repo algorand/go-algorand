@@ -41,7 +41,7 @@ type (
 		Round basics.Round `codec:"rnd"`
 
 		// The hash of the previous block
-		Branch BlockHash `codec:"prev"` // TODO Stateproof: replace with struct containing SHA256 as well?
+		Branch BlockHash `codec:"prev"`
 
 		// Sortition seed
 		Seed committee.Seed `codec:"seed"`
