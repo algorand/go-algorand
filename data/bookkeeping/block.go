@@ -645,7 +645,7 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 // as the header is what the block hash authenticates.
 // If we're given an untrusted block and a known-good hash, we can't trust the
 // block's transactions unless we validate this.
-func (block Block) ContentsMatchHeader() bool { // TODO Stateproof: add unit test
+func (block Block) ContentsMatchHeader() bool {
 	expected, err := block.PaysetCommit()
 	if err != nil {
 		logging.Base().Warnf("ContentsMatchHeader: cannot compute commitment: %v", err)

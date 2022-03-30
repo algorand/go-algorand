@@ -769,3 +769,54 @@ func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
 
 	assert.Contains(t, string(buf.Bytes()), "could not compute next reward level")
 }
+
+func TestBlock_ContentsMatchHeader(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// Create a block without SHA256 TxnRoot
+	var block Block
+	block.CurrentProtocol = protocol.ConsensusCurrentVersion // TODO Stateproof: when SHA256 is enabled in current protocol, change to previous version
+	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
+
+	for i := 0; i < 1024; i++ {
+		txn := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				GenesisHash: block.BlockHeader.GenesisHash,
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Amount: basics.MicroAlgos{Raw: crypto.RandUint64()},
+			},
+		}
+
+		crypto.RandBytes(txn.Sender[:])
+		crypto.RandBytes(txn.PaymentTxnFields.Receiver[:])
+
+		sigtxn := transactions.SignedTxn{Txn: txn}
+		ad := transactions.ApplyData{}
+
+		stib, err := block.BlockHeader.EncodeSignedTxn(sigtxn, ad)
+		a.NoError(err)
+
+		block.Payset = append(block.Payset, stib)
+	}
+	tree, err := block.TxnMerkleTree()
+	a.NoError(err)
+	rootSlice := tree.Root()
+	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSlice)
+
+	a.True(block.ContentsMatchHeader())
+
+	// Create a block with SHA256 TxnRoot
+	block.CurrentProtocol = protocol.ConsensusFuture
+	a.False(block.ContentsMatchHeader()) // ??????????????????
+
+	// Now update the SHA256 header to its correct value
+	tree, err = block.TxnMerkleTreeSHA256()
+	a.NoError(err)
+	rootSlice = tree.Root()
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSlice)
+
+	a.True(block.ContentsMatchHeader())
+}
