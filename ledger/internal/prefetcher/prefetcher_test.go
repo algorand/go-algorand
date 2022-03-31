@@ -102,7 +102,7 @@ func (l *prefetcherTestLedger) LookupAsset(rnd basics.Round, addr basics.Address
 	}
 	return ledgercore.AssetResource{}, nil
 }
-func (l *prefetcherTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, error) {
+func (l *prefetcherTestLedger) GetCreator(cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, error) {
 	if cidx == errorTriggerCreatableIndex {
 		return basics.Address{}, false, getCreatorError{}
 	}
@@ -583,7 +583,7 @@ func TestAssetLookupError(t *testing.T) {
 	require.True(t, errorReceived)
 }
 
-// Test for error from GetCreatorForRound
+// Test for error from GetCreator
 func TestGetCreatorForRoundError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

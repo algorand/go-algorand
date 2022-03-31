@@ -808,7 +808,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 		assets = make(map[uint64]v1.AssetHolding)
 		for curid, holding := range record.Assets {
 			var creator string
-			creatorAddr, ok, err := ledger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
+			creatorAddr, ok, _, err := ledger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
 			if err == nil && ok {
 				creator = creatorAddr.String()
 			} else {
@@ -1305,7 +1305,7 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 
 	ledger := ctx.Node.Ledger()
 	aidx := basics.AssetIndex(queryIndex)
-	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
+	creator, ok, _, err := ledger.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil || !ok {
 		// Treat a database error and a nonexistent application the
 		// same to avoid changing API behavior

@@ -45,7 +45,7 @@ type LedgerForCowBase interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	GetCreator(basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, basics.Round, error)
 }
 
 // ErrRoundZero is self-explanatory
@@ -157,12 +157,14 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 		return foundAddress.address, foundAddress.exists, nil
 	}
 
-	address, exists, err := x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	address, exists, rnd, err := x.l.GetCreator(cidx, ctype)
 	if err != nil {
 		return basics.Address{}, false, fmt.Errorf(
 			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
 	}
-
+	if rnd != x.rnd {
+		// XXX TODO
+	}
 	x.creators[creatable] = foundAddress{address: address, exists: exists}
 	return address, exists, nil
 }

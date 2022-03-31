@@ -140,7 +140,7 @@ func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basic
 
 	return l.assets[addr][aidx], nil
 }
-func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (l *prefetcherAlignmentTestLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	l.mu.Lock()
 	if l.requestedCreators == nil {
 		l.requestedCreators = make(map[creatable]struct{})
@@ -149,9 +149,9 @@ func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx 
 	l.mu.Unlock()
 
 	if addr, has := l.creators[cidx]; has {
-		return addr, true, nil
+		return addr, true, 0, nil
 	}
-	return basics.Address{}, false, nil
+	return basics.Address{}, false, 0, nil
 }
 func (l *prefetcherAlignmentTestLedger) GenesisHash() crypto.Digest {
 	return crypto.Digest{}

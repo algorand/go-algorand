@@ -373,14 +373,16 @@ func TestResourceCaching(t *testing.T) {
 		assert.Equal(t, expected, accountResource)
 	}
 	{
-		address, found, err := ilc.GetCreatorForRound(basics.Round(0), basics.CreatableIndex(6), basics.AssetCreatable)
+		address, found, rnd, err := ilc.GetCreator(basics.CreatableIndex(6), basics.AssetCreatable)
 		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), rnd)
 		require.True(t, found)
 		assert.Equal(t, address, address)
 	}
 	{
-		_, found, err := ilc.GetCreatorForRound(basics.Round(0), basics.CreatableIndex(6), basics.AppCreatable)
+		_, found, rnd, err := ilc.GetCreator(basics.CreatableIndex(6), basics.AppCreatable)
 		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), rnd)
 		require.False(t, found)
 	}
 }

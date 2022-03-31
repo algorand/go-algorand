@@ -326,7 +326,7 @@ func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx 
 	return result, nil
 }
 
-func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	switch ctype {
 	case basics.AssetCreatable:
 		for _, acct := range dl.dr.Accounts {
@@ -336,11 +336,11 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 			for _, asset := range *acct.CreatedAssets {
 				if asset.Index == uint64(cidx) {
 					addr, err := basics.UnmarshalChecksumAddress(acct.Address)
-					return addr, true, err
+					return addr, true, 0, err
 				}
 			}
 		}
-		return basics.Address{}, false, fmt.Errorf("no asset %d", cidx)
+		return basics.Address{}, false, 0, fmt.Errorf("no asset %d", cidx)
 	case basics.AppCreatable:
 		for _, app := range dl.dr.Apps {
 			if app.Id == uint64(cidx) {
@@ -349,15 +349,15 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 					var err error
 					addr, err = basics.UnmarshalChecksumAddress(app.Params.Creator)
 					if err != nil {
-						return basics.Address{}, false, err
+						return basics.Address{}, false, 0, err
 					}
 				}
-				return addr, true, nil
+				return addr, true, 0, nil
 			}
 		}
-		return basics.Address{}, false, fmt.Errorf("no app %d", cidx)
+		return basics.Address{}, false, 0, fmt.Errorf("no app %d", cidx)
 	}
-	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
+	return basics.Address{}, false, 0, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
 func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (ba apply.Balances, err error) {

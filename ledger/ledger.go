@@ -413,21 +413,14 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 	return l.catchpoint.GetLastCatchpointLabel()
 }
 
-// GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
-// look up a creator address, setting ok to false if the query succeeded but no
+// GetCreator takes a CreatableIndex and a CreatableType and tries to
+// look up a creator address, for the latest round and race-free
+// with respect to ledger.Latest(), setting ok to false if the query succeeded but no
 // creator was found.
-func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.GetCreatorForRound(rnd, cidx, ctype)
-}
-
-// GetCreator is like GetCreatorForRound, but for the latest round and race-free
-// with respect to ledger.Latest()
-func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
+	return l.accts.GetCreator(cidx, ctype)
 }
 
 // CompactCertVoters returns the top online accounts at round rnd.

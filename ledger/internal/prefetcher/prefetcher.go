@@ -37,7 +37,7 @@ type Ledger interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	GetCreator(basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, basics.Round, error)
 }
 
 // LoadedAccountDataEntry describes a loaded account.
@@ -520,7 +520,8 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			// start off by figuring out the creator in case it's a global resource.
 			var creator basics.Address
 			var ok bool
-			creator, ok, err = p.ledger.GetCreatorForRound(p.rnd, task.creatableIndex, task.creatableType)
+			var rnd basics.Round
+			creator, ok, rnd, err = p.ledger.GetCreator(task.creatableIndex, task.creatableType)			
 			if err != nil {
 				// there was an error loading that entry.
 				break
@@ -535,6 +536,9 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 					wt.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
 				}
 				continue
+			}
+			if rnd != p.rnd {
+				// XXX TODO
 			}
 			task.address = &creator
 		}

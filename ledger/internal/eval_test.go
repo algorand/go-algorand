@@ -500,22 +500,6 @@ func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 		})
 }
 
-// GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
-// look up a creator address, setting ok to false if the query succeeded but no
-// creator was found.
-func (ledger *evalTestLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	balances := ledger.roundBalances[rnd]
-	for addr, balance := range balances {
-		if _, has := balance.AssetParams[basics.AssetIndex(cidx)]; has {
-			return addr, true, nil
-		}
-		if _, has := balance.AppParams[basics.AppIndex(cidx)]; has {
-			return addr, true, nil
-		}
-	}
-	return basics.Address{}, false, nil
-}
-
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
 func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1), ledger.latestTotals, nil
@@ -627,11 +611,21 @@ func (ledger *evalTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.V
 	return nil, errors.New("untested code path")
 }
 
-// GetCreator is like GetCreatorForRound, but for the latest round and race-free
-// with respect to ledger.Latest()
-func (ledger *evalTestLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+// GetCreator takes a CreatableIndex and a CreatableType and tries to
+// look up a creator address, setting ok to false if the query succeeded but no
+// creator was found.
+func (ledger *evalTestLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	latestRound := ledger.Latest()
-	return ledger.GetCreatorForRound(latestRound, cidx, ctype)
+	balances := ledger.roundBalances[latestRound]
+	for addr, balance := range balances {
+		if _, has := balance.AssetParams[basics.AssetIndex(cidx)]; has {
+			return addr, true, 0, nil
+		}
+		if _, has := balance.AppParams[basics.AppIndex(cidx)]; has {
+			return addr, true, 0, nil
+		}
+	}
+	return basics.Address{}, false, 0, nil
 }
 
 func (ledger *evalTestLedger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -694,7 +688,7 @@ func (ledger *evalTestLedger) asa(t testing.TB, addr basics.Address, asset basic
 
 // asaParams gets the asset params for a given asa index
 func (ledger *evalTestLedger) asaParams(t testing.TB, asset basics.AssetIndex) (basics.AssetParams, error) {
-	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
+	creator, ok, _, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
 	if err != nil {
 		return basics.AssetParams{}, err
 	}
@@ -736,10 +730,10 @@ func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, a
 	return ledgercore.AssetResource{}, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (l *testCowBaseLedger) GetCreator(cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	res := l.creators[0]
 	l.creators = l.creators[1:]
-	return res.address, res.exists, nil
+	return res.address, res.exists, 0, nil
 }
 
 func TestCowBaseCreatorsCache(t *testing.T) {

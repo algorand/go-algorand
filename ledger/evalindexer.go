@@ -142,13 +142,13 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 	return accountResourceMap[address][Creatable{aidx, ctype}], nil
 }
 
-// GetCreatorForRound is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+// GetCreator is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) GetCreator(cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	var foundAddress FoundAddress
 	var has bool
 	// check to see if the account data in the cache.
 	if foundAddress, has = l.roundResources.Creators[Creatable{Index: cindex, Type: ctype}]; has {
-		return foundAddress.Address, foundAddress.Exists, nil
+		return foundAddress.Address, foundAddress.Exists, 0, nil
 	}
 
 	switch ctype {
@@ -156,21 +156,21 @@ func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics
 		foundAddresses, err :=
 			l.il.GetAssetCreator(map[basics.AssetIndex]struct{}{basics.AssetIndex(cindex): {}})
 		if err != nil {
-			return basics.Address{}, false, err
+			return basics.Address{}, false, 0, err
 		}
 		foundAddress = foundAddresses[basics.AssetIndex(cindex)]
 	case basics.AppCreatable:
 		foundAddresses, err :=
 			l.il.GetAppCreator(map[basics.AppIndex]struct{}{basics.AppIndex(cindex): {}})
 		if err != nil {
-			return basics.Address{}, false, err
+			return basics.Address{}, false, 0, err
 		}
 		foundAddress = foundAddresses[basics.AppIndex(cindex)]
 	default:
-		return basics.Address{}, false, fmt.Errorf("unknown creatable type %v", ctype)
+		return basics.Address{}, false, 0, fmt.Errorf("unknown creatable type %v", ctype)
 	}
 
-	return foundAddress.Address, foundAddress.Exists, nil
+	return foundAddress.Address, foundAddress.Exists, 0, nil
 }
 
 // GenesisHash is part of LedgerForEvaluator interface.

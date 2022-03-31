@@ -645,7 +645,7 @@ func holding(t testing.TB, ledger *ledger.Ledger, addr basics.Address, asset bas
 
 // asaParams gets the asset params for a given asa index
 func asaParams(t testing.TB, ledger *ledger.Ledger, asset basics.AssetIndex) (basics.AssetParams, error) {
-	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
+	creator, ok, _, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
 	if err != nil {
 		return basics.AssetParams{}, err
 	}

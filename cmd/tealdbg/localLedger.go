@@ -324,24 +324,24 @@ func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
-func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (l *localLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	switch ctype {
 	case basics.AssetCreatable:
 		assetIdx := basics.AssetIndex(cidx)
 		for addr, br := range l.balances {
 			if _, ok := br.AssetParams[assetIdx]; ok {
-				return addr, true, nil
+				return addr, true, 0, nil
 			}
 		}
-		return basics.Address{}, false, nil
+		return basics.Address{}, false, 0, nil
 	case basics.AppCreatable:
 		appIdx := basics.AppIndex(cidx)
 		for addr, br := range l.balances {
 			if _, ok := br.AppParams[appIdx]; ok {
-				return addr, true, nil
+				return addr, true, 0, nil
 			}
 		}
-		return basics.Address{}, false, nil
+		return basics.Address{}, false, 0, nil
 	}
-	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
+	return basics.Address{}, false, 0, fmt.Errorf("unknown creatable type %d", ctype)
 }
