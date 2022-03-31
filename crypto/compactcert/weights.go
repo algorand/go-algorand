@@ -24,6 +24,7 @@ import (
 	"math/bits"
 )
 
+// errors for the weights verification
 var (
 	ErrSignedWeightLessThanProvenWeight = errors.New("signed weight is less than or equal to proven weight")
 	ErrTooManyReveals                   = errors.New("too many reveals in cert")
@@ -31,6 +32,30 @@ var (
 	ErrZeroProvenWeightThreshold        = errors.New("proven weight can not be zero")
 	ErrInsufficientImpliedProvenWeight  = errors.New("signed weight and number of reveals yield insufficient proven weight")
 )
+
+// The function in this file are used to compute and verify the number of reveals necessary for the security parameter
+// of the compactcert. According to section 8 of the ``Compact Certificates'' the following equation must hold to meet
+// the security parameter:
+//
+// numReveals is the smallest number that satisfies
+// 2^-k >= 2^q * (provenWeight/signedWeight)^numReveals
+//
+// in order to make the verification SNARK friendly we will not compute the exact number of reveals.
+// Alternatively, we would use a lower bound on the implied provenWeight using a given numReveals and signedWeight.
+// i.e we need to verify that:
+// numReveals * (log2(signedWeight) - log2(provenWeightThreshold)) >= k+q
+// In addition, we would like to avoid the log2 calculation.
+//
+// For that we will use the following approximation that if it holds the security parameter is guarantee:
+// numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((k+q) * T + numReveals * P) * Y
+//
+// where signedWeight/(2^d) >=1 for some integer d>=0, p = P/(2^b) >= ln(provenWeightThreshold), t = T/(2^b) >= ln(2) >= (T-1)/(2^b)
+// for some integers P,T >= 0 , b=16 and y = signedWeight^2 + 2^(d+2) * signedWeight + 2^2d
+//
+// In order for the prover to satisfy the equation above, it suffices (by slightly rearranging) to use any value of numReveals that satisfies:
+//
+// numReveals > = ((k+q) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
+// more details can be found on the Algorand's spec
 
 func bigInt(num uint64) *big.Int {
 	return (&big.Int{}).SetUint64(num)
@@ -43,25 +68,17 @@ func lnIntApproximation(x uint64, precisionBits uint64) uint64 {
 	result := math.Log(float64(x))
 	expendWithPer := result * float64(precisionBits)
 	return uint64(math.Ceil(expendWithPer))
+
 }
 
 // verifyWeights makes sure that the number of reveals in the cert is correct with respect
 // to the signedWeight and a provenWeight threshold.
-// According to the security analysis the number of reveals is given by the following:
+// This function that the following equation is satisfied
 //
-// numReveals is the smallest number that satisfies
-// 2^-k >= 2^q * (provenWeight / signedWeight) ^ numReveals
+// numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((k+q) * T + numReveals * P) * Y
 //
-// in order to make the verification SNARK friendly we will not compute the exact number of reveals (as it is done in the build)
-// Alternatively, we would use a lower bound on the implied provenWeight using a given numReveals and signedWeight .
-// i.e we need to verify that:
-// numReveals*(log2(signedWeight)-log2(provenWeightThreshold)) >= k+q
-// In addition, we would like to use a friendly log2 approximation. it is sufficient to verify the following inequality:
-//
-// numReveals * ( 3 * 2^b * (signedWeight^2-2^2d) + d * (T-1) * Y) >= ((k+q) * T + numReveals * P) * Y
 // where signedWeight/(2^d) >=1 for some integer d>=0, p = P/(2^b) >= ln(provenWeightThreshold), t = T/(2^b) >= ln(2) >= (T-1)/(2^b)
 // for some integers P,T >= 0 and b=16
-//
 func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error {
 	if numOfReveals > MaxReveals {
 		return ErrTooManyReveals
@@ -79,13 +96,23 @@ func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error
 		return fmt.Errorf("%w - signed weight %d <= proven weight %d", ErrSignedWeightLessThanProvenWeight, signedWeight, v.ProvenWeightThreshold)
 	}
 
+	// in order to make the code more readable and reusable we will define the following expressions:
+	// y = signedWeight^2 + 2^(d + 2) * signedWeight + 2^2d
+	// a = 3 * 2^b * (signedWeight^2 - 2^2d)
+	// b = d * (T - 1)
+	//
+	//  numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((k+q) * T + numReveals * P) * Y
+	//        ||
+	//        \/
+	// numReveals * (a + b * Y) >= ((k+q) * T + numReveals * P) * Y
 	y, a, b := getSubExpressions(signedWeight)
 	lhs := &big.Int{}
 	lhs.Set(b).
 		Mul(lhs, y).
 		Add(a, lhs).
-		Mul(lhs, bigInt(numOfReveals))
+		Mul(bigInt(numOfReveals), lhs)
 
+	// todo canoverflow???
 	rhs := bigInt(v.SecKQ * ln2IntApproximation)
 	rhs.Add(rhs, bigInt(numOfReveals*v.lnProvenWeightThreshold)).
 		Mul(rhs, y)
@@ -97,24 +124,14 @@ func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error
 	return nil
 }
 
+func (p *Builder) numReveals(signedWeight uint64) (uint64, error) {
+	return numReveals(signedWeight, p.ProvenWeightThreshold, p.SecKQ, MaxReveals)
+}
+
 // numReveals computes the number of reveals necessary to achieve the desired
-// security parameters.  See section 8 of the ``Compact Certificates''
-// document for the analysis.
+// security parameters. we use value which satisfies the following equation:
 //
-// numReveals is the smallest number that satisfies
-//
-// 2^-k >= 2^q * (provenWeight / signedWeight) ^ numReveals
-//
-// which is equivalent to the following:
-//
-// signedWeight ^ numReveals >= 2^(k+q) * provenWeight ^ numReveals
-//
-// ***********
-// numReveals*(3*2^b*(signedWeight^2-2^2d)+d*(T-1)*Y) >= ((k+q)*T+numReveals*P)*Y
-// numReveals*(3*2^b*(signedWeight^2-2^2d)+(d*(T-1)-P)*Y) >= (k+q)*T*Y
-// numReveals >= (k+q)*T*Y/(3*2^b*(signedWeight^2-2^2d)+(d*(T-1)-P)*Y)
-// numReveals =Ceil( (k+q)*T*Y/(3*2^b*(signedWeight^2-2^2d)+(d*(T-1)-P)*Y) )
-// To ensure tsdkfjgalskdnglasdg
+// numReveals > = ((k+q) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
 func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
 	if provenWeight == 0 {
 		return 0, ErrZeroProvenWeightThreshold
@@ -122,6 +139,15 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 
 	lnProvenWe := lnIntApproximation(provenWeight, precisionBits)
 
+	// in order to make the code more readable and reusable we will define the following expressions:
+	// y = signedWeight^2 + 2^(d + 2) * signedWeight + 2^2d
+	// a = 3 * 2^b * (signedWeight^2 - 2^2d)
+	// b = d * (T - 1)
+	//
+	// numReveals > = ((k+q) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
+	// 						||
+	//						\/
+	// numReveals >= ((k+q) * T * Y / (a + (b - P) * Y)
 	y, a, b := getSubExpressions(signedWeight)
 
 	numerator := bigInt(secKQ)
@@ -139,6 +165,44 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 		return 0, ErrTooManyReveals
 	}
 	return res, nil
+}
+
+// getSubExpressions calculate the following expression to make the code more readable and reusable
+// y = signedWeight^2 + 2^(d + 2) * signedWeight + 2^2d
+// a = 3 * 2^b * (signedWeight^2 - 2^2d)
+// b = d * (T - 1)
+func getSubExpressions(signedWeight uint64) (y *big.Int, a *big.Int, b *big.Int) {
+	// find d s.t 2^(d+1) >= signedWeight >= 2^(d)
+	d := uint64(bits.Len64(signedWeight)) - 1
+
+	signedWtPower2 := &big.Int{}
+	signedWtPower2.SetUint64(signedWeight)
+	signedWtPower2.Mul(signedWtPower2, signedWtPower2)
+
+	//tmp = 2^(d+2)*signedWt
+	tmp := (&big.Int{}).Mul(
+		bigInt(1<<(d+2)),
+		bigInt(signedWeight),
+	)
+
+	// Y = signedWeight^2 + 2^(d+2)*signedWeight +2^2d == signedWeight^2 + tmp +2^2d
+	y = bigInt(1)
+	y.Lsh(y, uint(2*d)).
+		Add(y, tmp).
+		Add(y, signedWtPower2)
+
+	// a =  3*2^b*(signedWeight^2-2^2d)
+	a = bigInt(1)
+	a.Lsh(a, uint(2*d)).
+		Sub(signedWtPower2, a).
+		Mul(a, bigInt(3)).
+		Mul(a, bigInt(precisionBits))
+
+	// b = d*(T-1)
+	b = bigInt(d)
+	b.Mul(b, bigInt(ln2IntApproximation-1))
+
+	return
 }
 
 func old(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
@@ -178,41 +242,4 @@ func old(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (
 		rhs.mul(pw)
 		n++
 	}
-}
-func (p *Builder) numReveals(signedWeight uint64) (uint64, error) {
-	return numReveals(signedWeight, p.ProvenWeightThreshold, p.SecKQ, MaxReveals)
-}
-
-func getSubExpressions(signedWeight uint64) (*big.Int, *big.Int, *big.Int) {
-	// find d s.t 2^(d+1) >= signedWeight >= 2^(d)
-	d := uint64(bits.Len64(signedWeight)) - 1
-
-	signedWtPower2 := &big.Int{}
-	signedWtPower2.SetUint64(signedWeight)
-	signedWtPower2.Mul(signedWtPower2, signedWtPower2)
-
-	//tmp = 2^(d+2)*signedWt == 4*2^d*signedWt
-	tmp := (&big.Int{}).Mul(
-		bigInt(1<<(d+2)),
-		bigInt(signedWeight),
-	)
-
-	// Y = signedWt^2 + 2^(d+2)*signedWt +2^2d == signedWt^2 + tmp +2^2d
-	y := bigInt(1)
-	y.Lsh(y, uint(2*d)).
-		Add(y, tmp).
-		Add(y, signedWtPower2)
-
-	// a =  3*2^b*(signedWt^2-2^2d)
-	a := bigInt(1)
-	a.Lsh(a, uint(2*d)).
-		Sub(signedWtPower2, a).
-		Mul(a, bigInt(3)).
-		Mul(a, bigInt(precisionBits))
-
-	// b = d*(T-1)
-	b := bigInt(d)
-	b.Mul(b, bigInt(ln2IntApproximation-1))
-
-	return y, a, b
 }
