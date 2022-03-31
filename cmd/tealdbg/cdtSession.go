@@ -476,7 +476,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		if len(state.callStack) == 0 {
 			// If we are not in a subroutine, pause at the end so user can
 			// inspect the final state of the program.
-			state.pauseOnCompeted.SetTo(true)
+			state.pauseOnCompleted.SetTo(true)
 		}
 		s.debugger.StepOut()
 		if state.completed.IsSet() {
@@ -509,7 +509,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 
 func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
 	if state.completed.IsSet() {
-		if state.pauseOnCompeted.IsSet() {
+		if state.pauseOnCompleted.IsSet() {
 			event = s.makeDebuggerPausedEvent(state)
 			return
 		}

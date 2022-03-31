@@ -52,10 +52,10 @@ type cdtState struct {
 	AppState
 
 	// debugger states
-	lastAction      atomicString
-	pauseOnError    atomicBool
-	pauseOnCompeted atomicBool
-	completed       atomicBool
+	lastAction       atomicString
+	pauseOnError     atomicBool
+	pauseOnCompleted atomicBool
+	completed        atomicBool
 }
 
 type cdtStateUpdate struct {
