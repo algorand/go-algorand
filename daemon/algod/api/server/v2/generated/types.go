@@ -437,6 +437,9 @@ type PendingTransactionResponse struct {
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
+// StateProof defines model for StateProof.
+type StateProof map[string]interface{}
+
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {
 	Key string `json:"key"`
@@ -721,6 +724,9 @@ type ProofResponse struct {
 	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
 }
+
+// StateProofResponse defines model for StateProofResponse.
+type StateProofResponse StateProof
 
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {
