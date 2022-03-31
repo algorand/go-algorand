@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -109,9 +110,9 @@ restart:
 // GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
 // This is the message the Compact Certificate will attest to.
-func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) ([]byte, error) {
+func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (stateproof.Message, error) {
 	if compactCertRound < basics.Round(compactCertInterval) {
-		return nil, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
+		return stateproof.Message{}, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
 	}
 	var blkHdrArr blockHeadersArray
 	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, compactCertInterval)
@@ -120,7 +121,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 		rnd := firstRound + basics.Round(i)
 		hdr, err := ledger.BlockHdr(rnd)
 		if err != nil {
-			return nil, err
+			return stateproof.Message{}, err
 		}
 		blkHdrArr.blockHeaders[i] = hdr
 	}
@@ -128,10 +129,12 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 	// Build merkle tree from encoded headers
 	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
 	if err != nil {
-		return nil, err
+		return stateproof.Message{}, err
 	}
 
-	return tree.Root().ToSlice(), nil
+	return stateproof.Message{
+		BlockHeadersCommitment: tree.Root().ToSlice(),
+	}, nil
 }
 
 func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
@@ -168,6 +171,14 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 
 	sigs := make([]sigFromAddr, 0, len(keys))
 	ids := make([]account.ParticipationID, 0, len(keys))
+
+	stateproofMessage, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.CompactCertRounds)
+	if err != nil {
+		ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
+		return
+	}
+	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+
 	for _, key := range keys {
 		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
 			continue
@@ -178,12 +189,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
-		commitment, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.CompactCertRounds)
-		if err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
-			continue
-		}
-		sig, err := key.StateProofSecrets.SignBytes(commitment)
+		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
 			continue

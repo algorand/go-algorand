@@ -1423,7 +1423,8 @@
       "type": "object",
       "required": [
         "rnd",
-        "cert"
+        "cert",
+        "certmsg"
       ],
       "properties": {
         "cert": {
@@ -1431,6 +1432,12 @@
           "type": "string",
           "format": "byte",
           "x-go-name": "Cert"
+        },
+        "certmsg": {
+          "description": "CertMsg is the msgpack encoding of the state proof message.",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "CertMsg"
         },
         "rnd": {
           "description": "CertIntervalLatestRound is the latest round in the interval this compact cert attests to.",

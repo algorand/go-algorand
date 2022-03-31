@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -472,6 +472,8 @@ type EcdsaCurve int
 const (
 	// Secp256k1 curve for bitcoin/ethereum
 	Secp256k1 EcdsaCurve = iota
+	// Secp256r1 curve
+	Secp256r1
 	invalidEcdsaCurve
 )
 
@@ -502,6 +504,7 @@ func (fs *ecdsaCurveSpec) Note() string {
 
 var ecdsaCurveSpecs = []ecdsaCurveSpec{
 	{Secp256k1, 5},
+	{Secp256r1, fidoVersion},
 }
 
 var ecdsaCurveSpecByField map[EcdsaCurve]ecdsaCurveSpec
@@ -563,10 +566,39 @@ func (fs *base64EncodingSpec) Note() string {
 	note := "" // no doc list?
 	return note
 }
-func (s base64EncodingSpecMap) getExtraFor(name string) (extra string) {
-	// Uses 6 here because base64_decode fields were introduced in 6
-	return
+
+// JSONRefType is an enum for the `json_ref` opcode
+type JSONRefType int
+
+const (
+	// JSONString represents string json value
+	JSONString JSONRefType = iota
+	// JSONUint64 represents uint64 json value
+	JSONUint64
+	// JSONObject represents json object
+	JSONObject
+	invalidJSONRefType
+)
+
+// After running `go generate` these strings will be available:
+var jsonRefTypeNames [3]string = [...]string{JSONString.String(), JSONUint64.String(), JSONObject.String()}
+
+type jsonRefSpec struct {
+	field   JSONRefType
+	ftype   StackType
+	version uint64
 }
+
+var jsonRefSpecs = []jsonRefSpec{
+	{JSONString, StackBytes, fidoVersion},
+	{JSONUint64, StackUint64, fidoVersion},
+	{JSONObject, StackBytes, fidoVersion},
+}
+
+var jsonRefSpecByField map[JSONRefType]jsonRefSpec
+var jsonRefSpecByName jsonRefSpecMap
+
+type jsonRefSpecMap map[string]jsonRefSpec
 
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
@@ -911,6 +943,16 @@ func init() {
 	base64EncodingSpecByName = make(base64EncodingSpecMap, len(base64EncodingNames))
 	for i, encoding := range base64EncodingNames {
 		base64EncodingSpecByName[encoding] = base64EncodingSpecByField[Base64Encoding(i)]
+	}
+
+	jsonRefSpecByField = make(map[JSONRefType]jsonRefSpec, len(jsonRefTypeNames))
+	for _, s := range jsonRefSpecs {
+		jsonRefSpecByField[s.field] = s
+	}
+
+	jsonRefSpecByName = make(jsonRefSpecMap, len(jsonRefTypeNames))
+	for i, typename := range jsonRefTypeNames {
+		jsonRefSpecByName[typename] = jsonRefSpecByField[JSONRefType(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))

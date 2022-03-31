@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -38,7 +39,7 @@ func TestValidateCompactCert(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var nextCertRnd basics.Round
 	var atRound basics.Round
-	msg := []byte("this is an arbitrary message")
+	msg := stateproof.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
 	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
@@ -122,7 +123,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	require.Equal(t, uint64(100), out)
 
 	// this should exercise the second return case
-	firstValid = basics.Round(5)
+	firstValid = basics.Round(3)
 	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
@@ -134,7 +135,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 
 	proto.CompactCertRounds = 10000
 	votersHdr.Round = 10000
-	firstValid = basics.Round(29000)
+	firstValid = basics.Round(29000 - 2)
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	cc.CompactCertVotersTotal.Raw = 0x7fffffffffffffff
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
@@ -151,9 +152,8 @@ func TestCompactCertParams(t *testing.T) {
 
 	var votersHdr bookkeeping.BlockHeader
 	var hdr bookkeeping.BlockHeader
-	var msg []byte
 
-	msg = []byte("testest")
+	msg := stateproof.Message{BlockHeadersCommitment: []byte("testest")}
 
 	res, err := CompactCertParams(msg, votersHdr, hdr)
 	require.Error(t, err) // not enabled

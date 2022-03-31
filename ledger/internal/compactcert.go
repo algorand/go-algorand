@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -50,19 +51,10 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 		return total.ToUint64()
 	}
 
-	// During the first proto.CompactCertRound/2 + 1 + 1 blocks, the
+	// During the first proto.CompactCertRound/2 blocks, the
 	// signatures are still being broadcast, so, continue requiring
 	// 100% votes.
-	//
-	// The first +1 comes from CompactCertWorker.broadcastSigs: it only
-	// broadcasts signatures for round R starting with round R+1, to
-	// ensure nodes have the block for round R already in their ledger,
-	// to check the sig.
-	//
-	// The second +1 comes from the fact that, if we are checking this
-	// acceptable weight to decide whether to allow this transaction in
-	// a block, the transaction was sent out one round ago.
-	offset = offset.SubSaturate(basics.Round(proto.CompactCertRounds/2 + 2))
+	offset = offset.SubSaturate(basics.Round(proto.CompactCertRounds / 2))
 	if offset == 0 {
 		return total.ToUint64()
 	}
@@ -104,7 +96,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 
 // CompactCertParams computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
@@ -133,10 +125,10 @@ func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookke
 	}
 
 	res = compactcert.Params{
-		Msg:          msg,
-		ProvenWeight: provenWeight,
-		SigRound:     hdr.Round,
-		SecKQ:        proto.CompactCertSecKQ,
+		StateProofMessageHash: msg.IntoStateProofMessageHash(),
+		ProvenWeight:          provenWeight,
+		SigRound:              hdr.Round,
+		SecKQ:                 proto.CompactCertSecKQ,
 	}
 	return
 }
@@ -152,7 +144,7 @@ var (
 )
 
 // validateCompactCert checks that a compact cert is valid.
-func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round, msg []byte) error {
+func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round, msg stateproof.Message) error {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {

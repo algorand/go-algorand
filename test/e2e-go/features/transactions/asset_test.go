@@ -237,6 +237,7 @@ func TestAssetConfig(t *testing.T) {
 	if maxAssetsCount == 0 {
 		maxAssetsCount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
 	}
+
 	txids := make(map[string]string)
 	for i := 0; i < maxAssetsCount; i++ {
 		// re-generate wh, since this test takes a while and sometimes
@@ -248,31 +249,27 @@ func TestAssetConfig(t *testing.T) {
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
-
-		// Travis is slow, so help it along by waiting every once in a while
-		// for these transactions to commit..
-		if (i % 50) == 0 {
-			_, curRound := fixture.GetBalanceAndRound(account0)
-			confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
-			a.True(confirmed)
-			txids = make(map[string]string)
-		}
 	}
 
-	_, curRound := fixture.GetBalanceAndRound(account0)
-	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	status, err := fixture.AlgodClient.Status()
+	a.NoError(err)
+	confirmed := fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "creating max number of assets")
+	txids = make(map[string]string)
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
 	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	// Creating more assets should return an error
-	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash, 0)
-	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-	a.Error(err)
-	a.True(strings.Contains(err.Error(), "too many assets in account:"))
+	var tx transactions.Transaction
+	if config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount != 0 {
+		// Creating more assets should return an error
+		tx, err = client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash, 0)
+		_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+		a.Error(err)
+		a.True(strings.Contains(err.Error(), "too many assets in account:"))
+	}
 
 	// Check that assets are visible
 	info, err = client.AccountInformation(account0)
@@ -335,13 +332,15 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	txids[txid] = manager
 
-	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	status, err = fixture.AlgodClient.Status()
+	a.NoError(err)
+	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "changing keys")
+	txids = make(map[string]string)
 
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount)
+	a.Equal(maxAssetsCount, len(info.AssetParams))
 	for idx, cp := range info.AssetParams {
 		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
 		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
@@ -404,19 +403,11 @@ func TestAssetConfig(t *testing.T) {
 		txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
 		a.NoError(err)
 		txids[txid] = sender
-
-		// Travis is slow, so help it along by waiting every once in a while
-		// for these transactions to commit..
-		if (idx % 50) == 0 {
-			_, curRound = fixture.GetBalanceAndRound(account0)
-			confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
-			a.True(confirmed)
-			txids = make(map[string]string)
-		}
 	}
 
-	_, curRound = fixture.GetBalanceAndRound(account0)
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	status, err = fixture.AlgodClient.Status()
+	a.NoError(err)
+	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "destroying assets")
 
 	// re-generate wh, since this test takes a while and sometimes

@@ -28,6 +28,18 @@ type AccountResource struct {
 	AppParams     *basics.AppParams
 }
 
+// AssetResource used to retrieve a generic asset resource information from the data tier
+type AssetResource struct {
+	AssetParams  *basics.AssetParams
+	AssetHolding *basics.AssetHolding
+}
+
+// AppResource used to retrieve a generic app resource information from the data tier
+type AppResource struct {
+	AppLocalState *basics.AppLocalState
+	AppParams     *basics.AppParams
+}
+
 // AssignAccountResourceToAccountData assignes the Asset/App params/holdings contained
 // in the AccountResource to the given basics.AccountData, creating maps if necessary.
 func AssignAccountResourceToAccountData(cindex basics.CreatableIndex, resource AccountResource, ad *basics.AccountData) {

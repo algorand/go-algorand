@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/apply"
@@ -85,7 +86,7 @@ type Ledger struct {
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
 
-	headerCache heapLRUCache
+	headerCache blockHeaderCache
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
@@ -119,7 +120,7 @@ func OpenLedger(
 		cfg:                            cfg,
 	}
 
-	l.headerCache.maxEntries = 10
+	l.headerCache.initialize()
 
 	defer func() {
 		if err != nil {
@@ -495,8 +496,20 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 	return data, rnd, withoutRewards, nil
 }
 
-// LookupResource loads a resource that matches the request parameters from the accounts update
-func (l *Ledger) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
+// LookupApplication loads an application resource that matches the request parameters from the ledger.
+func (l *Ledger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+// LookupAsset loads an asset resource that matches the request parameters from the ledger.
+func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+// lookupResource loads a resource that matches the request parameters from the accounts update
+func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
@@ -548,11 +561,7 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	totals, err := l.accts.Totals(rnd)
-	if err != nil {
-		return basics.MicroAlgos{}, err
-	}
-	return totals.Online.Money, nil
+	return l.accts.OnlineTotals(rnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
@@ -583,15 +592,14 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	value, exists := l.headerCache.Get(rnd)
+	blk, exists := l.headerCache.get(rnd)
 	if exists {
-		blk = value.(bookkeeping.BlockHeader)
 		return
 	}
 
 	blk, err = l.blockQ.getBlockHdr(rnd)
 	if err == nil {
-		l.headerCache.Put(rnd, blk)
+		l.headerCache.put(blk)
 	}
 	return
 }
@@ -641,7 +649,7 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 	if err != nil {
 		return err
 	}
-	l.headerCache.Put(blk.Round(), blk.BlockHeader)
+	l.headerCache.put(blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
@@ -763,7 +771,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 // CompactCertParams computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-func CompactCertParams(msg []byte, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
 	return internal.CompactCertParams(msg, votersHdr, hdr)
 }
 

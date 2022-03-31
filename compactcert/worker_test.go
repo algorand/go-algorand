@@ -207,7 +207,7 @@ func (s *testWorkerStubs) Broadcast(ctx context.Context, tag protocol.Tag, data 
 	return nil
 }
 
-func (s *testWorkerStubs) BroadcastSignedTxGroup(tx []transactions.SignedTxn) error {
+func (s *testWorkerStubs) BroadcastInternalSignedTxGroup(tx []transactions.SignedTxn) error {
 	require.Equal(s.t, len(tx), 1)
 	s.txmsg <- tx[0]
 	return nil
@@ -295,10 +295,10 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.False(t, overflowed)
 
 			ccparams := compactcert.Params{
-				Msg:          tx.Txn.CertMsg,
-				ProvenWeight: provenWeight,
-				SigRound:     tx.Txn.CertIntervalLatestRound,
-				SecKQ:        proto.CompactCertSecKQ,
+				StateProofMessageHash: tx.Txn.CertMsg.IntoStateProofMessageHash(),
+				ProvenWeight:          provenWeight,
+				SigRound:              tx.Txn.CertIntervalLatestRound,
+				SecKQ:                 proto.CompactCertSecKQ,
 			}
 
 			voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
@@ -359,10 +359,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.False(t, overflowed)
 
 	ccparams := compactcert.Params{
-		Msg:          msg,
-		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(tx.Txn.CertIntervalLatestRound),
-		SecKQ:        proto.CompactCertSecKQ,
+		StateProofMessageHash: msg.IntoStateProofMessageHash(),
+		ProvenWeight:          provenWeight,
+		SigRound:              basics.Round(tx.Txn.CertIntervalLatestRound),
+		SecKQ:                 proto.CompactCertSecKQ,
 	}
 
 	voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))

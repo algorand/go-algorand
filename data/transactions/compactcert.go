@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -30,7 +31,7 @@ type CompactCertTxnFields struct {
 	CertIntervalLatestRound basics.Round             `codec:"crtrnd"`
 	CertType                protocol.CompactCertType `codec:"crttype"`
 	Cert                    compactcert.Cert         `codec:"crt"`
-	CertMsg                 []byte                   `codec:"crtmsg"`
+	CertMsg                 stateproof.Message       `codec:"crtmsg"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,
@@ -48,7 +49,7 @@ func (cc CompactCertTxnFields) Empty() bool {
 	if len(cc.Cert.Reveals) != 0 {
 		return false
 	}
-	if cc.CertMsg != nil {
+	if !cc.CertMsg.MsgIsZero() {
 		return false
 	}
 

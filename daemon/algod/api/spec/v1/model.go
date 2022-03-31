@@ -789,6 +789,12 @@ type CompactCertTransactionType struct {
 	// required: true
 	// swagger:strfmt byte
 	Cert []byte `json:"cert"`
+
+	// CertMsg is the msgpack encoding of the state proof message.
+	//
+	// required: true
+	// swagger:strfmt byte
+	CertMsg []byte `json:"certmsg"`
 }
 
 // TransactionList contains a list of transactions

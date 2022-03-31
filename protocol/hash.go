@@ -38,9 +38,10 @@ const (
 	AuctionParams     HashID = "aP"
 	AuctionSettlement HashID = "aS"
 
-	CompactCertCoin HashID = "ccc"
-	CompactCertPart HashID = "ccp"
-	CompactCertSig  HashID = "ccs"
+	CompactCertCoin    HashID = "ccc"
+	CompactCertMessage HashID = "ccm"
+	CompactCertPart    HashID = "ccp"
+	CompactCertSig     HashID = "ccs"
 
 	AgreementSelector                HashID = "AS"
 	BlockHeader                      HashID = "BH"

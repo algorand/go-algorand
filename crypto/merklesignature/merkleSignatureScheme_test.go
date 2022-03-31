@@ -339,12 +339,12 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 	sig, err := signer.GetSigner(20).SignBytes(h)
 	a.NoError(err)
 
-	sig.MerkleArrayIndex = 0
+	sig.VectorCommitmentIndex = 0
 	err = signer.GetVerifier().VerifyBytes(20, h, sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
-	sig.MerkleArrayIndex = math.MaxUint64
+	sig.VectorCommitmentIndex = math.MaxUint64
 	err = signer.GetVerifier().VerifyBytes(20, h, sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)

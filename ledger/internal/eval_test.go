@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -206,7 +207,7 @@ func TestCowCompactCert(t *testing.T) {
 	var cert compactcert.Cert
 	var atRound basics.Round
 	var validate bool
-	var msg []byte
+	msg := stateproof.Message{}
 
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
@@ -530,29 +531,32 @@ func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
-// LookupResource loads resources the requested round rnd.
-func (ledger *evalTestLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	res := ledgercore.AccountResource{}
+func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	res := ledgercore.AppResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
 		return res, fmt.Errorf("no such account %s", addr.String())
 	}
-	if ctype == basics.AppCreatable {
-		if params, ok := ad.AppParams[basics.AppIndex(cidx)]; ok {
-			res.AppParams = &params
-		}
-		if ls, ok := ad.AppLocalStates[basics.AppIndex(cidx)]; ok {
-			res.AppLocalState = &ls
-		}
-	} else if ctype == basics.AssetCreatable {
-		if params, ok := ad.AssetParams[basics.AssetIndex(cidx)]; ok {
-			res.AssetParams = &params
-		}
-		if h, ok := ad.Assets[basics.AssetIndex(cidx)]; ok {
-			res.AssetHolding = &h
-		}
-	} else {
-		return res, fmt.Errorf("unknown ctype %d", ctype)
+	if params, ok := ad.AppParams[aidx]; ok {
+		res.AppParams = &params
+	}
+	if ls, ok := ad.AppLocalStates[aidx]; ok {
+		res.AppLocalState = &ls
+	}
+	return res, nil
+}
+
+func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	res := ledgercore.AssetResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if params, ok := ad.AssetParams[aidx]; ok {
+		res.AssetParams = &params
+	}
+	if h, ok := ad.Assets[aidx]; ok {
+		res.AssetHolding = &h
 	}
 	return res, nil
 }
@@ -727,8 +731,12 @@ func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (
 	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupResource(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	return ledgercore.AccountResource{}, errors.New("not implemented")
+func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	return ledgercore.AppResource{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	return ledgercore.AssetResource{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

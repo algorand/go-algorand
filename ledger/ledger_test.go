@@ -19,13 +19,14 @@ package ledger
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/util/db"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime/pprof"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
 
 	"github.com/stretchr/testify/require"
 
@@ -801,7 +802,7 @@ int 1
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
@@ -832,17 +833,17 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
 	rnd = l.Latest()
-	acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctworRes, err = l.LookupResource(l.Latest()-1, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctworRes, err = l.LookupApplication(l.Latest()-1, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
-	acctRes, err = l.LookupResource(rnd, user, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctRes, err = l.LookupApplication(rnd, user, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
@@ -925,7 +926,7 @@ int 1                   // [1]
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acctRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
@@ -1002,7 +1003,7 @@ int 1                   // [1]
 
 			expected := uint64(base + value1 + value2)
 			rnd = l.Latest()
-			acctworRes, err := l.LookupResource(rnd, creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+			acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 			a.NoError(err)
 			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})
@@ -1363,6 +1364,7 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 
 func TestLedgerBlockHdrCaching(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
@@ -1371,20 +1373,89 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 	cfg.Archival = true
 	log := logging.TestingLog(t)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
+	a.NoError(err)
 	defer l.Close()
 
 	blk := genesisInitState.Block
 
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 1024; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		a.NoError(err)
 
 		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
-		require.NoError(t, err)
-		require.Equal(t, blk.BlockHeader, hdr)
+		a.NoError(err)
+		a.Equal(blk.BlockHeader, hdr)
+	}
+
+	rnd := basics.Round(128)
+	hdr, err := l.BlockHdr(rnd) // should update LRU cache but not latestBlockHeaderCache
+	a.NoError(err)
+	a.Equal(rnd, hdr.Round)
+
+	_, exists := l.headerCache.lruCache.Get(rnd)
+	a.True(exists)
+
+	_, exists = l.headerCache.latestHeaderCache.get(rnd)
+	a.False(exists)
+}
+
+func BenchmarkLedgerBlockHdrCaching(b *testing.B) {
+	benchLedgerCache(b, 1024-256+1)
+}
+
+func BenchmarkLedgerBlockHdrWithoutCaching(b *testing.B) {
+	benchLedgerCache(b, 100)
+}
+
+type nullWriter struct{} // logging output not required
+
+func (w nullWriter) Write(data []byte) (n int, err error) {
+	return len(data), nil
+}
+
+func benchLedgerCache(b *testing.B, startRound basics.Round) {
+	a := require.New(b)
+
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = false // benchmark actual DB stored in disk instead of on memory
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(b)
+	log.SetOutput(nullWriter{})
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	a.NoError(err)
+	defer func() { // close ledger and remove temporary DB file
+		l.Close()
+		err := os.Remove(dbName + ".tracker.sqlite")
+		if err != nil {
+			fmt.Printf("os.Remove: %v \n", err)
+		}
+		err = os.Remove(dbName + ".block.sqlite")
+		if err != nil {
+			fmt.Printf("os.Remove: %v \n", err)
+		}
+
+	}()
+
+	blk := genesisInitState.Block
+
+	// Fill ledger (and its cache) with blocks
+	for i := 0; i < 1024; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := l.AddBlock(blk, agreement.Certificate{})
+		a.NoError(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		for j := startRound; j < startRound+256; j++ { // these rounds should be in cache
+			hdr, err := l.BlockHdr(j)
+			a.NoError(err)
+			a.Equal(j, hdr.Round)
+		}
 	}
 }
 

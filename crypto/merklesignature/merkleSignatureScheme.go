@@ -35,10 +35,10 @@ type (
 	Signature struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Signature        crypto.FalconSignature      `codec:"sig"`
-		MerkleArrayIndex uint64                      `codec:"idx"`
-		Proof            merklearray.SingleLeafProof `codec:"prf"`
-		VerifyingKey     crypto.FalconVerifier       `codec:"vkey"`
+		Signature             crypto.FalconSignature      `codec:"sig"`
+		VectorCommitmentIndex uint64                      `codec:"idx"`
+		Proof                 merklearray.SingleLeafProof `codec:"prf"`
+		VerifyingKey          crypto.FalconVerifier       `codec:"vkey"`
 	}
 
 	// Secrets contains the private data needed by the merkle signature scheme.
@@ -176,10 +176,10 @@ func (s *Signer) SignBytes(msg []byte) (Signature, error) {
 	}
 
 	return Signature{
-		Signature:        sig,
-		Proof:            *proof,
-		VerifyingKey:     *s.SigningKey.GetVerifyingKey(),
-		MerkleArrayIndex: index,
+		Signature:             sig,
+		Proof:                 *proof,
+		VerifyingKey:          *s.SigningKey.GetVerifyingKey(),
+		VectorCommitmentIndex: index,
 	}, nil
 }
 
@@ -247,7 +247,7 @@ func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
 	// verification path and the index.
 	err := merklearray.VerifyVectorCommitment(
 		v[:],
-		map[uint64]crypto.Hashable{sig.MerkleArrayIndex: &ephkey},
+		map[uint64]crypto.Hashable{sig.VectorCommitmentIndex: &ephkey},
 		sig.Proof.ToProof(),
 	)
 	if err != nil {
@@ -275,7 +275,7 @@ func (s *Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 	verifierBytes := s.VerifyingKey.GetFixedLengthHashableRepresentation()
 
 	binaryMerkleIndex := make([]byte, 8)
-	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.MerkleArrayIndex)
+	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.VectorCommitmentIndex)
 
 	proofBytes := s.Proof.GetFixedLengthHashableRepresentation()
 
