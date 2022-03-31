@@ -103,9 +103,6 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context:
-            - slack-secrets
-            - aws-secrets
 
 
       - e2e_expect:
@@ -135,6 +132,9 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-default
+          context:
+            - slack-secrets
+            - aws-secrets
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -144,7 +144,9 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+          context:
+            - slack-secrets
+            - aws-secrets
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
