@@ -134,7 +134,7 @@ workflows:
             <<: *filters-default
           context:
             - slack-secrets
-            - aws-secrets
+            - aws-secrets-sandbox
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -146,7 +146,7 @@ workflows:
             <<: *filters-nightly
           context:
             - slack-secrets
-            - aws-secrets
+            - aws-secrets-sandbox
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification

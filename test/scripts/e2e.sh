@@ -171,7 +171,8 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 	RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
 	echo "COPY AND PASTE THIS TO UPLOAD:"
 	echo aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
-	aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
+	#aws s3 cp "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
+	aws s3 cp "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata-sandbox/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
 	popd
 
     else
