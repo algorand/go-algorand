@@ -164,6 +164,8 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
 	pushd "${TEMPDIR}" || exit 1
 
+	aws configure list
+
 	tar -j -c -f net_done.tar.bz2 --exclude node.log --exclude agreement.cdv net
 	rm -rf "${TEMPDIR}/net"
 	RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
