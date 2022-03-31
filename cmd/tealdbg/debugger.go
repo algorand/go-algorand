@@ -262,12 +262,11 @@ func (s *session) StepOut() {
 			s.debugConfig.setNoBreak()
 		} else {
 			callFrame := s.callStack[len(s.callStack)-1]
+			s.debugConfig.setStepOutOver(len(s.callStack) - 1)
 			err := s.setBreakpoint(callFrame.FrameLine + 1)
 			if err != nil {
 				s.debugConfig.setStepBreak()
 			}
-			s.debugConfig.StepOutOver = true
-			s.debugConfig.CallDepth = len(s.callStack)
 		}
 	}()
 

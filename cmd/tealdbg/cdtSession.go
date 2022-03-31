@@ -473,7 +473,11 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.stepOut":
 		state.lastAction.Store("step")
-		state.pauseOnCompeted.SetTo(true)
+		if len(state.callStack) == 0 {
+			// If we are not in a subroutine, pause at the end so user can
+			// inspect the final state of the program.
+			state.pauseOnCompeted.SetTo(true)
+		}
 		s.debugger.StepOut()
 		if state.completed.IsSet() {
 			evDestroyed := s.makeContextDestroyedEvent()

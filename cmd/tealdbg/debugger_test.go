@@ -285,7 +285,7 @@ func TestCallStackControl(t *testing.T) {
 
 			require.Equal(t, map[int]struct{}{3: {}}, s.debugConfig.ActiveBreak)
 			require.Equal(t, breakpoint{true, true}, s.breakpoints[3])
-			require.Equal(t, true, s.debugConfig.isBreak(3, len(s.callStack)))
+			require.Equal(t, true, s.debugConfig.isBreak(3, len(s.callStack)-1))
 
 			require.Equal(t, false, s.debugConfig.NoBreak)
 			require.Equal(t, false, s.debugConfig.StepBreak)
