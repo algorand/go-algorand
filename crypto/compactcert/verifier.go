@@ -19,23 +19,14 @@ package compactcert
 import (
 	"errors"
 	"fmt"
-	"math"
-	"math/big"
-	"math/bits"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
 // Errors for the CompactCert verifier
 var (
-	ErrCoinNotInRange                   = errors.New("coin is not within slot weight range")
-	ErrNoRevealInPos                    = errors.New("no reveal for position")
-	ErrSignedWeightLessThanProvenWeight = errors.New("signed weight is less than or equal to proven weight")
-	ErrTooManyReveals                   = errors.New("too many reveals in cert")
-	ErrZeroSignedWeight                 = errors.New("signed weight can not be zero")
-	ErrZeroProvenWeightThreshold        = errors.New("proven weight can not be zero")
-	ErrInsufficientImpliedProvenWeight  = errors.New("signed weight and number of reveals yield insufficient proven weight")
+	ErrCoinNotInRange = errors.New("coin is not within slot weight range")
+	ErrNoRevealInPos  = errors.New("no reveal for position")
 )
 
 // Verifier is used to verify a compact certificate.
@@ -57,97 +48,6 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
 		lnProvenWeightThreshold: lnProvenWt,
 		partcom:                 partcom,
 	}
-}
-
-// verifyWeights makes sure that the number of reveals in the cert is correct with respect
-// to the signedWeight and a provenWeight threshold.
-// According to the security analysis the number of reveals is given by the following:
-//
-// numReveals is the smallest number that satisfies
-// 2^-k >= 2^q * (provenWeight / signedWeight) ^ numReveals
-//
-// in order to make the verification SNARK friendly we will not compute the exact number of reveals (as it is done in the build)
-// Alternatively, we would use a lower bound on the implied provenWeight using a given numReveals and signedWeight .
-// i.e we need to verify that:
-// numReveals*(log2(signedWeight)-log2(provenWeightThreshold)) >= k+q
-// In addition, we would like to use a friendly log2 approximation. it is sufficient to verify the following inequality:
-//
-// numReveals*(3*2^b*(signedWeight^2-2^2d)+d(T-1)*Y) >= ((k+q)*T+numReveals*P)*Y
-// where signedWeight/(2^d) >=1 for some integer d>=0, p = P/(2^b) >= ln(provenWeightThreshold), t = T/(2^b) >= ln(2) >= (T-1)/(2^b)
-// for some integers P,T >= 0 and b=16
-func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error {
-	if numOfReveals > MaxReveals {
-		return ErrTooManyReveals
-	}
-
-	if signedWeight == 0 {
-		return ErrZeroSignedWeight
-	}
-
-	if v.ProvenWeightThreshold == 0 {
-		return ErrZeroProvenWeightThreshold
-	}
-
-	if signedWeight <= v.ProvenWeightThreshold {
-		return fmt.Errorf("%w - signed weight %d <= proven weight %d", ErrSignedWeightLessThanProvenWeight, signedWeight, v.ProvenWeightThreshold)
-	}
-
-	// find d s.t 2^(d+1) >= signedWeight >= 2^(d)
-	d := uint64(bits.Len64(signedWeight)) - 1
-
-	signedWtPower2 := &big.Int{}
-	signedWtPower2.SetUint64(signedWeight)
-	signedWtPower2.Mul(signedWtPower2, signedWtPower2)
-
-	// Y = signedWt^2 + 4*2^d*signedWt +2^2d
-	tmp := &big.Int{}
-	tmp.SetUint64(4)
-	tmp.Mul(tmp, (&big.Int{}).SetUint64(1<<d))
-	tmp.Mul(tmp, (&big.Int{}).SetUint64(signedWeight)) //tmp = 4*2^d*signedWt
-
-	y := &big.Int{}
-	y.Add(signedWtPower2, tmp)
-	y.Add(y, (&big.Int{}).SetUint64(1<<(2*d)))
-
-	// a = 3*2^b*(signedWt^2-2^2d) + d*(T-1)*Y
-	tmp.SetUint64(d)
-	tmp.Mul(tmp, (&big.Int{}).SetUint64(ln2IntApproximation-1))
-	tmp.Mul(tmp, y) //tmp = d*(T-1)*Y
-
-	a := &big.Int{}
-	a.Sub(signedWtPower2, (&big.Int{}).SetUint64(1<<(2*d)))
-	a.Mul(a, (&big.Int{}).SetUint64(3))
-	a.Mul(a, (&big.Int{}).SetUint64(precisionBits))
-	a.Add(a, tmp)
-
-	// left = NumReveals*a
-	left := &big.Int{}
-	left.Mul(a, (&big.Int{}).SetUint64(numOfReveals))
-
-	// right = (secParam*t + NumReveals*P)*Y
-	//			tmp = secParam*t
-	tmp.SetUint64(v.SecKQ)
-	tmp.Mul(tmp, (&big.Int{}).SetUint64(ln2IntApproximation))
-
-	right := &big.Int{}
-	right.Mul((&big.Int{}).SetUint64(v.lnProvenWeightThreshold), (&big.Int{}).SetUint64(numOfReveals))
-	right.Add(tmp, right)
-	right.Mul(right, y)
-
-	if left.Cmp(right) < 0 {
-		return ErrInsufficientImpliedProvenWeight
-	}
-
-	return nil
-}
-
-func lnIntApproximation(x uint64, precisionBits uint64) uint64 {
-	if x == 0 {
-		return 0
-	}
-	result := math.Log(float64(x))
-	expendWithPer := result * float64(precisionBits)
-	return uint64(math.Ceil(expendWithPer))
 }
 
 // Verify checks if c is a valid compact certificate for the message
