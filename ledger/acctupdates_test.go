@@ -1185,7 +1185,7 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	_ = accountsInitTest(t, tx, accts, proto)
+	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 
 	err = accountsAddNormalizedBalance(tx, proto)

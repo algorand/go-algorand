@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/algorand/go-algorand/protocol"
 	"io"
 	"os"
 	"path/filepath"
@@ -74,7 +75,16 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		return
 	}
 
+
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		lastBalancesRound, err := accountsRound(tx)
+		if err != nil {
+			return err
+		}
+		block, err := l.Block(lastestBlockRound)
+		if err != nil {
+			return err
+		}
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
 			initProto:         l.GenesisProto(),
@@ -83,13 +93,9 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 			blockDb:           bdbs,
 		}
 		var err0 error
-		mgr, err0 = trackerDBInitializeImpl(ctx, tx, tp, log)
+		mgr, err0 = trackerDBInitializeImpl(ctx, tx, tp, block.CurrentProtocol, log)
 		if err0 != nil {
 			return err0
-		}
-		lastBalancesRound, err := accountsRound(tx)
-		if err != nil {
-			return err
 		}
 		// Check for blocks DB and tracker DB un-sync
 		if lastBalancesRound > lastestBlockRound {
@@ -98,7 +104,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 			if err0 != nil {
 				return err0
 			}
-			mgr, err0 = trackerDBInitializeImpl(ctx, tx, tp, log)
+			mgr, err0 = trackerDBInitializeImpl(ctx, tx, tp, block.CurrentProtocol, log)
 			if err0 != nil {
 				return err0
 			}
@@ -112,7 +118,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 // trackerDBInitializeImpl initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBParams, log logging.Logger) (mgr trackerDBInitParams, err error) {
+func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBParams, proto protocol.ConsensusVersion, log logging.Logger) (mgr trackerDBInitParams, err error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
@@ -176,7 +182,7 @@ func trackerDBInitializeImpl(ctx context.Context, tx *sql.Tx, params trackerDBPa
 					return
 				}
 			case 6:
-				err = tu.upgradeDatabaseSchema6(ctx, tx)
+				err = tu.upgradeDatabaseSchema6(ctx, tx, proto)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 6 : %v", err)
 					return
@@ -429,7 +435,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
 // adding a new onlineaccounts table
 // TODO: onlineaccounts: upgrade as needed after switching to the final table version
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, tx *sql.Tx, proto protocol.ConsensusVersion) (err error) {
 	err = accountsCreateOnlineAccountsTable(ctx, tx)
 	if err != nil {
 		return err
@@ -449,7 +455,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		lastProgressInfoMsg = time.Now()
 		tu.log.Infof("upgradeDatabaseSchema6 upgraded %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
 	}
-	err = performOnlineAccountsTableMigration(ctx, tx, migrationProcessLog)
+	err = performOnlineAccountsTableMigration(ctx, tx, proto, migrationProcessLog)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online account data migration : %w", err)
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // AlgoCount represents a total of algos of a certain class
@@ -50,6 +51,14 @@ type AccountTotals struct {
 
 	// Total number of algos received per reward unit since genesis
 	RewardsLevel uint64 `codec:"rwdlvl"`
+}
+
+type OnlineRoundParamsData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	OnlineSupply uint64 `codec:"a"`
+	RewardsLevel uint64 `codec:"b"`
+	CurrentProtocol protocol.ConsensusVersion `codec:"c"`
 }
 
 func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {

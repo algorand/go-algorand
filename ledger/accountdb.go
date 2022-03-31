@@ -2096,7 +2096,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	return err
 }
 
-func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
+func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, proto protocol.ConsensusVersion, log func(processed, total uint64)) (err error) {
 
 	now := time.Now().UnixNano()
 	idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
@@ -2234,8 +2234,41 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		}
 	}
 
+	createOnlineRoundParams := []string{
+		`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
+        round INTEGER NOT NULL PRIMARY KEY,
+        data blob)`, // contains a msgp encoded OnlineRoundParamsData
+	}
+
+	for _, stmt := range createOnlineRoundParams {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	var data ledgercore.OnlineRoundParamsData
+	err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
+	if err != nil {
+		return err
+	}
+
+	data.CurrentProtocol = proto
+
+	rnd, err := accountsRound(tx)
+	if err != nil {
+		return
+	}
+
+	_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
+		rnd,
+		protocol.Encode(&data),
+	)
+
 	return err
 }
+
+
 
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
 // and optionally returns list of addresses that were eliminated
@@ -2937,6 +2970,25 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 		totals.Offline.Money.Raw, totals.Offline.RewardUnits,
 		totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
 		totals.RewardsLevel)
+	return err
+}
+
+func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error) {
+	row := tx.QueryRow("SELECT data FROM onlineroundparamstail")
+	var encodedOnlineRoundParamsData []byte
+	err = row.Scan(&encodedOnlineRoundParamsData)
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(encodedOnlineRoundParamsData, &onlineRoundParamsData)
+	return
+}
+
+func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData ledgercore.OnlineRoundParamsData, round basics.Round) error {
+	_, err := tx.Exec("REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
+		round,
+		protocol.Encode(&onlineRoundParamsData),
+	)
 	return err
 }
 
