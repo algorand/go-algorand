@@ -521,7 +521,7 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			var creator basics.Address
 			var ok bool
 			var rnd basics.Round
-			creator, ok, rnd, err = p.ledger.GetCreator(task.creatableIndex, task.creatableType)			
+			creator, ok, rnd, err = p.ledger.GetCreator(task.creatableIndex, task.creatableType)
 			if err != nil {
 				// there was an error loading that entry.
 				break
