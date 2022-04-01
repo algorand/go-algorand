@@ -2918,9 +2918,9 @@ func opEd25519VerifyBare(cx *EvalContext) error {
 }
 
 func leadingZeros(size int, b *big.Int) ([]byte, error) {
-	data := b.Bytes()
-	if size < len(data) {
-		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, len(data))
+	byteLength := (b.BitLen() + 7) / 8
+	if size < byteLength {
+		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, byteLength)
 	}
 	buf := make([]byte, size)
 	b.FillBytes(buf)
