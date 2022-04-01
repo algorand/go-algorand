@@ -101,7 +101,7 @@ func (l *prefetcherTestLedger) LookupAsset(addr basics.Address, aidx basics.Asse
 	if aidx == errorTriggerAssetIndex {
 		return ledgercore.AssetResource{}, 0, assetLookupError{}
 	}
-		return ledgercore.AssetResource{}, l.round, nil
+	return ledgercore.AssetResource{}, l.round, nil
 }
 func (l *prefetcherTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, error) {
 	if cidx == errorTriggerCreatableIndex {
