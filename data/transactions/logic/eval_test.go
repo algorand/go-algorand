@@ -1089,7 +1089,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
-	require.Equal(t, len(onCompletionConstToUint64), len(onCompletionDescriptions))
+	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
@@ -1099,8 +1099,8 @@ func TestOnCompletionConstants(t *testing.T) {
 	for i := 0; i < last; i++ {
 		oc := OnCompletionConstType(i)
 		symbol := oc.String()
-		require.Contains(t, onCompletionConstToUint64, symbol)
-		require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
+		require.Contains(t, onCompletionMap, symbol)
+		require.Equal(t, uint64(i), onCompletionMap[symbol])
 		t.Run(symbol, func(t *testing.T) {
 			testAccepts(t, fmt.Sprintf("int %s; int %s; ==;", symbol, oc), 1)
 		})
@@ -1543,7 +1543,7 @@ func TestTxn(t *testing.T) {
 	}
 
 	for i, txnField := range TxnFieldNames {
-		fs := txnFieldSpecByField[TxnField(i)]
+		fs := txnFieldSpecs[i]
 		// Ensure that each field appears, starting in the version it was introduced
 		for v := uint64(1); v <= uint64(LogicVersion); v++ {
 			if v < fs.version {
@@ -2855,12 +2855,15 @@ func TestPanic(t *testing.T) {
 			ops := testProg(t, `int 1`, v)
 			var hackedOpcode int
 			var oldSpec OpSpec
+			// Find an unused opcode to temporarily convert to a panicing opcde,
+			// and append it to program.
 			for opcode, spec := range opsByOpcode[v] {
 				if spec.op == nil {
 					hackedOpcode = opcode
 					oldSpec = spec
 					opsByOpcode[v][opcode].op = opPanic
 					opsByOpcode[v][opcode].Modes = modeAny
+					opsByOpcode[v][opcode].Details.Cost = 1
 					opsByOpcode[v][opcode].Details.checkFunc = checkPanic
 					ops.Program = append(ops.Program, byte(opcode))
 					break
@@ -3921,17 +3924,8 @@ func obfuscate(program string) string {
 
 type evalTester func(pass bool, err error) bool
 
-func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester, xtras ...uint64) error {
+func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
 	t.Helper()
-
-	numXtras := len(xtras)
-	require.LessOrEqual(t, numXtras, 1, "can handle at most 1 extra parameter but provided %d", numXtras)
-	withField := false
-	var introducedField uint64
-	if numXtras == 1 {
-		withField = true
-		introducedField = xtras[0]
-	}
 
 	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -3939,9 +3933,6 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 			t.Helper()
 			if v < introduced {
 				testProg(t, obfuscate(program), v, Expect{0, "...was introduced..."})
-				return
-			} else if withField && v < introducedField {
-				testProg(t, obfuscate(program), v, Expect{0, "...available in version..."})
 				return
 			}
 			ops := testProg(t, program, v)
@@ -3992,32 +3983,12 @@ func testRejects(t *testing.T, program string, introduced uint64) {
 		return !pass && err == nil
 	})
 }
-func testRejectsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
-	t.Helper()
-	testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
-		// Returned False, but didn't panic
-		return !pass && err == nil
-	}, introducedField)
-}
-func testAcceptsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
-	t.Helper()
-	testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
-		return pass && err == nil
-	}, introducedField)
-}
 func testPanics(t *testing.T, program string, introduced uint64) error {
 	t.Helper()
 	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
 	})
-}
-func testPanicsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) error {
-	t.Helper()
-	return testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
-		// TEAL panic! not just reject at exit
-		return !pass && err != nil
-	}, introducedField)
 }
 
 func TestAssert(t *testing.T) {
@@ -5156,4 +5127,9 @@ func TestOpJSONRef(t *testing.T) {
 		require.EqualError(t, err, s.error)
 	}
 
+}
+
+func TestTypeComplaints(t *testing.T) {
+	t.Skip("Issue #3837")
+	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
 }

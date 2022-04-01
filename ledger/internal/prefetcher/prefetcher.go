@@ -69,7 +69,7 @@ type LoadedTransactionGroup struct {
 
 	// Err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
 	// one of the entries in the balances would be uninitialized.
-	Err error
+	Err *GroupTaskError
 }
 
 // accountPrefetcher used to prefetch accounts balances and resources before the evaluator is being called.
@@ -146,6 +146,7 @@ type preloaderTaskQueue struct {
 type groupTaskDone struct {
 	groupIdx int64
 	err      error
+	task     *preloaderTask
 }
 
 func allocPreloaderQueue(count int, maxTxnGroupEntries int) preloaderTaskQueue {
@@ -408,7 +409,13 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				if done.err != nil {
 					// if there is an error, report the error to the output channel.
 					p.outChan <- LoadedTransactionGroup{
-						Err: done.err,
+						Err: &GroupTaskError{
+							err:            done.err,
+							GroupIdx:       done.groupIdx,
+							Address:        done.task.address,
+							CreatableIndex: done.task.creatableIndex,
+							CreatableType:  done.task.creatableType,
+						},
 					}
 					return
 				}
@@ -463,14 +470,18 @@ func (gt *groupTask) markCompletionResource(idx int, res LoadedResourcesEntry, g
 	}
 }
 
-func (gt *groupTask) markCompletionAcctError(err error, groupDoneCh chan groupTaskDone) {
+func (gt *groupTask) markCompletionAcctError(err error, task *preloaderTask, groupDoneCh chan groupTaskDone) {
 	for {
 		curVal := atomic.LoadInt64(&gt.incompleteCount)
 		if curVal <= 0 {
 			return
 		}
 		if atomic.CompareAndSwapInt64(&gt.incompleteCount, curVal, 0) {
-			groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex, err: err}
+			groupDoneCh <- groupTaskDone{
+				groupIdx: gt.groupTaskIndex,
+				err:      err,
+				task:     task,
+			}
 			return
 		}
 	}
@@ -564,6 +575,6 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 	// in every case we get here, the task is gurenteed to be a non-nil.
 	for _, wt := range task.groups {
 		// notify the channel of the error.
-		wt.markCompletionAcctError(err, groupDoneCh)
+		wt.markCompletionAcctError(err, task, groupDoneCh)
 	}
 }

@@ -259,7 +259,7 @@ func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) l
 	loaded, ok := <-ch
 	require.True(t, ok)
 
-	require.NoError(t, loaded.Err)
+	require.Nil(t, loaded.Err)
 	require.Equal(t, group, loaded.TxnGroup)
 
 	_, ok = <-ch

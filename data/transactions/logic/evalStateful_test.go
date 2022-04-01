@@ -905,14 +905,14 @@ func TestAssets(t *testing.T) {
 }
 
 func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
-	for _, field := range AssetHoldingFieldNames {
-		fs := AssetHoldingFieldSpecByName[field]
+	for _, field := range assetHoldingFieldNames {
+		fs := assetHoldingFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
-	for _, field := range AssetParamsFieldNames {
-		fs := AssetParamsFieldSpecByName[field]
+	for _, field := range assetParamsFieldNames {
+		fs := assetParamsFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
@@ -2197,12 +2197,12 @@ func TestEnumFieldErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	source := `txn Amount`
-	origSpec := txnFieldSpecByField[Amount]
+	origSpec := txnFieldSpecs[Amount]
 	changed := origSpec
 	changed.ftype = StackBytes
-	txnFieldSpecByField[Amount] = changed
+	txnFieldSpecs[Amount] = changed
 	defer func() {
-		txnFieldSpecByField[Amount] = origSpec
+		txnFieldSpecs[Amount] = origSpec
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "Amount expected field type is []byte but got uint64")
@@ -2210,12 +2210,12 @@ func TestEnumFieldErrors(t *testing.T) {
 
 	source = `global MinTxnFee`
 
-	origMinTxnFs := globalFieldSpecByField[MinTxnFee]
+	origMinTxnFs := globalFieldSpecs[MinTxnFee]
 	badMinTxnFs := origMinTxnFs
 	badMinTxnFs.ftype = StackBytes
-	globalFieldSpecByField[MinTxnFee] = badMinTxnFs
+	globalFieldSpecs[MinTxnFee] = badMinTxnFs
 	defer func() {
-		globalFieldSpecByField[MinTxnFee] = origMinTxnFs
+		globalFieldSpecs[MinTxnFee] = origMinTxnFs
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "MinTxnFee expected field type is []byte but got uint64")
@@ -2242,12 +2242,12 @@ int 55
 asset_holding_get AssetBalance
 assert
 `
-	origBalanceFs := assetHoldingFieldSpecByField[AssetBalance]
+	origBalanceFs := assetHoldingFieldSpecs[AssetBalance]
 	badBalanceFs := origBalanceFs
 	badBalanceFs.ftype = StackBytes
-	assetHoldingFieldSpecByField[AssetBalance] = badBalanceFs
+	assetHoldingFieldSpecs[AssetBalance] = badBalanceFs
 	defer func() {
-		assetHoldingFieldSpecByField[AssetBalance] = origBalanceFs
+		assetHoldingFieldSpecs[AssetBalance] = origBalanceFs
 	}()
 
 	testApp(t, source, ep, "AssetBalance expected field type is []byte but got uint64")
@@ -2256,12 +2256,12 @@ assert
 asset_params_get AssetTotal
 assert
 `
-	origTotalFs := assetParamsFieldSpecByField[AssetTotal]
+	origTotalFs := assetParamsFieldSpecs[AssetTotal]
 	badTotalFs := origTotalFs
 	badTotalFs.ftype = StackBytes
-	assetParamsFieldSpecByField[AssetTotal] = badTotalFs
+	assetParamsFieldSpecs[AssetTotal] = badTotalFs
 	defer func() {
-		assetParamsFieldSpecByField[AssetTotal] = origTotalFs
+		assetParamsFieldSpecs[AssetTotal] = origTotalFs
 	}()
 
 	testApp(t, source, ep, "AssetTotal expected field type is []byte but got uint64")
