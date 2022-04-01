@@ -2917,18 +2917,13 @@ func opEd25519VerifyBare(cx *EvalContext) error {
 	return nil
 }
 
-// leadingZeros needs to be replaced by big.Int.FillBytes
 func leadingZeros(size int, b *big.Int) ([]byte, error) {
 	data := b.Bytes()
 	if size < len(data) {
 		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, len(data))
 	}
-	if size == len(data) {
-		return data, nil
-	}
-
 	buf := make([]byte, size)
-	copy(buf[size-len(data):], data)
+	b.FillBytes(buf)
 	return buf, nil
 }
 
