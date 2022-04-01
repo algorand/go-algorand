@@ -405,16 +405,20 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 		return 0
 	}
 
-	// TODO: preserve the last `protocol.SeedLookback * cparams.SeedRefreshInterval` blocks
-	// because agreement needs block digest this many rounds back.
-	if r+1 <= basics.Round(protocol.SeedLookback) {
+	hdr, err := l.blockQ.getBlockHdr(r)
+	if err != nil {
 		return 0
 	}
+	cparams := config.Consensus[hdr.CurrentProtocol]
 
-	x := r + 1 - basics.Round(protocol.SeedLookback)
+	// Agreement needs access to block header
+	// (current round - cparams.SeedLookback * cparams.SeedRefreshInterval).
+	x := (r + 1).SubSaturate(
+		basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
 	if x < minToSave {
-		return x
+		minToSave = x
 	}
+
 	return minToSave
 }
 
