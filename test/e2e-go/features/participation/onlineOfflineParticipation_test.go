@@ -122,6 +122,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	consensus := make(config.ConsensusProtocols)
 	shortPartKeysProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	shortPartKeysProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	shortPartKeysProtocol.SeedLookback = 2
 	shortPartKeysProtocol.SeedRefreshInterval = 8
 	if runtime.GOARCH == "amd64" {
 		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
@@ -226,7 +227,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 // Returns the earliest round which will have the balanceRound equal to r
 func balanceRoundOf(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	return basics.Round(2*cparams.SeedRefreshInterval*protocol.SeedLookback) + r
+	return basics.Round(2*cparams.SeedRefreshInterval*cparams.SeedLookback) + r
 }
 
 // make sure that a user can register online even if the participation period

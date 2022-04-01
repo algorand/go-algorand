@@ -170,9 +170,9 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	}
 
 	input := seedInput{Alpha: alpha}
-	rerand := rnd % basics.Round(protocol.SeedLookback*cparams.SeedRefreshInterval)
-	if rerand < basics.Round(protocol.SeedLookback) {
-		digrnd := rnd.SubSaturate(basics.Round(protocol.SeedLookback * cparams.SeedRefreshInterval))
+	rerand := rnd % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
+	if rerand < basics.Round(cparams.SeedLookback) {
+		digrnd := rnd.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
 		oldDigest, err := ledger.LookupDigest(digrnd)
 		if err != nil {
 			reterr = fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
@@ -224,9 +224,9 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	}
 
 	input := seedInput{Alpha: alpha}
-	rerand := rnd % basics.Round(protocol.SeedLookback*cparams.SeedRefreshInterval)
-	if rerand < basics.Round(protocol.SeedLookback) {
-		digrnd := rnd.SubSaturate(basics.Round(protocol.SeedLookback * cparams.SeedRefreshInterval))
+	rerand := rnd % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
+	if rerand < basics.Round(cparams.SeedLookback) {
+		digrnd := rnd.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
 		oldDigest, err := ledger.LookupDigest(digrnd)
 		if err != nil {
 			return fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)

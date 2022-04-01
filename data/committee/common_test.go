@@ -68,7 +68,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 	vrfSecrets := make([]*crypto.VrfPrivkey, P)
 	otSecrets := make([]*crypto.OneTimeSignatureSecrets, P)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	lookback := basics.Round(2*proto.SeedRefreshInterval + protocol.SeedLookback + 1)
+	lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
 	var total basics.MicroAlgos
 	for i := 0; i < P; i++ {
 		addr, sigSec, vrfSec, otSec := newAccount(t, gen, lookback, keyBatchesForward)

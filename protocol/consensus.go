@@ -198,7 +198,3 @@ func (err Error) Error() string {
 	proto := ConsensusVersion(err)
 	return fmt.Sprintf("protocol not supported: %s", proto)
 }
-
-// SeedLookback is how many blocks back we use seeds from in sortition.
-// delta_s in the spec.
-const SeedLookback uint64 = 2
