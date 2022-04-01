@@ -173,23 +173,10 @@ ed25519verify_bare`, pkStr), v)
 	}
 }
 
-// bitIntFillBytes is a replacement for big.Int.FillBytes from future Go
-func bitIntFillBytes(b *big.Int, buf []byte) []byte {
-	for i := range buf {
-		buf[i] = 0
-	}
-	bytes := b.Bytes()
-	if len(bytes) > len(buf) {
-		panic(fmt.Sprintf("bitIntFillBytes: has %d but got %d buffer", len(bytes), len(buf)))
-	}
-	copy(buf[len(buf)-len(bytes):], bytes)
-	return buf
-}
-
 func keyToByte(tb testing.TB, b *big.Int) []byte {
 	k := make([]byte, 32)
 	require.NotPanics(tb, func() {
-		k = bitIntFillBytes(b, k)
+		b.FillBytes(k)
 	})
 	return k
 }
@@ -381,18 +368,6 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	require.True(t, pass)
 }
 
-// MarshalCompressed converts a point on the curve into the compressed form
-// specified in section 4.3.6 of ANSI X9.62.
-//
-// TODO: replace with elliptic.MarshalCompressed when updating to go 1.15+
-func marshalCompressed(curve elliptic.Curve, x, y *big.Int) []byte {
-	byteLen := (curve.Params().BitSize + 7) / 8
-	compressed := make([]byte, 1+byteLen)
-	compressed[0] = byte(y.Bit(0)) | 2
-	bitIntFillBytes(x, compressed[1:])
-	return compressed
-}
-
 func TestEcdsaWithSecp256r1(t *testing.T) {
 	if LogicVersion < fidoVersion {
 		return
@@ -403,7 +378,7 @@ func TestEcdsaWithSecp256r1(t *testing.T) {
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	pk := marshalCompressed(elliptic.P256(), key.X, key.Y)
+	pk := elliptic.MarshalCompressed(elliptic.P256(), key.X, key.Y)
 	x := keyToByte(t, key.PublicKey.X)
 	y := keyToByte(t, key.PublicKey.Y)
 
@@ -676,7 +651,7 @@ func benchmarkEcdsaGenData(b *testing.B, curve EcdsaCurve) (data []benchmarkEcds
 		if curve == Secp256k1 {
 			data[i].pk = secp256k1.CompressPubkey(key.PublicKey.X, key.PublicKey.Y)
 		} else if curve == Secp256r1 {
-			data[i].pk = marshalCompressed(elliptic.P256(), key.PublicKey.X, key.PublicKey.Y)
+			data[i].pk = elliptic.MarshalCompressed(elliptic.P256(), key.PublicKey.X, key.PublicKey.Y)
 		}
 
 		d := []byte("testdata")
