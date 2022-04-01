@@ -801,8 +801,9 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
 	var appIdx basics.AppIndex = 1
 
-	acctRes, _, err := l.LookupApplication(creator, appIdx)
+	acctRes, rnd, err := l.LookupApplication(creator, appIdx)
 	a.NoError(err)
+	a.Equal(l.Latest(), rnd)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
@@ -831,14 +832,16 @@ int 1
 	}}
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
-	acctworRes, _, err := l.LookupApplication(creator, appIdx)
+	acctworRes, rnd, err := l.LookupApplication(creator, appIdx)
 	a.NoError(err)
+	a.Equal(l.Latest(), rnd)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctRes, _, err = l.LookupApplication(user, appIdx)
+	acctRes, rnd, err = l.LookupApplication(user, appIdx)
 	a.NoError(err)
+	a.Equal(l.Latest(), rnd)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
 
@@ -919,8 +922,9 @@ int 1                   // [1]
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
 	var appIdx basics.AppIndex = 1
 
-	acctRes, _, err := l.LookupApplication(creator, appIdx)
+	acctRes, rnd, err := l.LookupApplication(creator, appIdx)
 	a.NoError(err)
+	a.Equal(l.Latest(), rnd)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
 	// make two app call txns and put into the same block, with and without groupping
@@ -995,8 +999,9 @@ int 1                   // [1]
 			a.NoError(err)
 
 			expected := uint64(base + value1 + value2)
-			acctworRes, _, err := l.LookupApplication(creator, appIdx)
+			acctworRes, rnd, err := l.LookupApplication(creator, appIdx)
 			a.NoError(err)
+			a.Equal(l.Latest(), rnd)
 			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})
 	}
