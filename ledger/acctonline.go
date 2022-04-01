@@ -145,7 +145,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 		ao.roundTotals = []ledgercore.AccountTotals{totals}
 
-		ao.expirations, err0 = onlineAccountsExpiration(tx, lastBalancesRound, l.Latest(), proto.MaxBalLookback)
+		ao.expirations, err0 = onlineAccountsExpirations(tx, proto.MaxBalLookback)
 		if err0 != nil {
 			return err0
 		}

@@ -2728,13 +2728,13 @@ type onlineAccountExpiration struct {
 	rowids []int64
 }
 
-// onlineAccountsExpiration scans onlineaccounts table and builds expirations map using the following algorithm
+// onlineAccountsExpirations scans onlineaccounts table and builds expirations map using the following algorithm
 // 1. Query the table ordred by update round and address.
 // 2. for every address record "online" entries, when encounter "offline" record mark previous "online" for deletion.
 // Set expiration round to the "offline" round + MaxBalLookback
 // 3. If there are multiple "online" entires, mark all except the last one for deletion as well.
 // Expiration round is set to the last online + MaxBalLookback
-func onlineAccountsExpiration(tx *sql.Tx, balancesRound basics.Round, latestRound basics.Round, maxBalLookback uint64) (result []onlineAccountExpiration, err error) {
+func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onlineAccountExpiration, err error) {
 	rows, err := tx.Query(`SELECT rowid, address, normalizedonlinebalance, updround FROM onlineaccounts ORDER BY address, updround ASC`)
 	if err != nil {
 		return nil, err
@@ -2750,7 +2750,7 @@ func onlineAccountsExpiration(tx *sql.Tx, balancesRound basics.Round, latestRoun
 			if entries, ok = expirations[targetRound]; ok {
 				entries = append(entries, rowids...)
 			} else {
-				entries = make([]int64, 0, len(rowids))
+				entries = make([]int64, len(rowids))
 				copy(entries, rowids)
 			}
 			expirations[targetRound] = entries
@@ -2779,9 +2779,9 @@ func onlineAccountsExpiration(tx *sql.Tx, balancesRound basics.Round, latestRoun
 		copy(addr[:], addrbuf)
 
 		if addr != lastAddr {
-			// when switching from one account to another
-			// mark older online entries for deletion.
-			// offline entries explicitly processed below
+			// when switching from one account to another:
+			// expire older online entries.
+			// offline entries explicitly processed below on a previous iteration
 			if len(rowids) > 1 {
 				if len(rowids) != len(rounds) {
 					return nil, fmt.Errorf("inconsistence: len(rowids) %d != %d len(rounds)", len(rowids), len(rounds))
@@ -2802,7 +2802,7 @@ func onlineAccountsExpiration(tx *sql.Tx, balancesRound basics.Round, latestRoun
 			rowids = append(rowids, rowid.Int64)
 			rounds = append(rounds, updround.Int64)
 		} else {
-			// became offline: add all previous online rowids and this row id
+			// became offline: expire all previous online rowids and this row id
 			rowids = append(rowids, rowid.Int64)
 			targetRound := uint64(updround.Int64) + maxBalLookback
 			addToExpiration(basics.Round(targetRound), rowids)
@@ -2883,7 +2883,6 @@ type accountsWriter interface {
 
 type onlineAccountsWriter interface {
 	insertOnlineAccount(addr basics.Address, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error)
-	updateOnlineAccount(rowid int64, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowsAffected int64, err error)
 
 	close()
 }
@@ -2937,10 +2936,6 @@ func (w *onlineAccountsSQLWriter) close() {
 	if w.insertStmt != nil {
 		w.insertStmt.Close()
 		w.insertStmt = nil
-	}
-	if w.updateStmt != nil {
-		w.updateStmt.Close()
-		w.updateStmt = nil
 	}
 }
 
@@ -3091,15 +3086,6 @@ func (w onlineAccountsSQLWriter) insertOnlineAccount(addr basics.Address, normBa
 		return
 	}
 	rowid, err = result.LastInsertId()
-	return
-}
-
-func (w onlineAccountsSQLWriter) updateOnlineAccount(rowid int64, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowsAffected int64, err error) {
-	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), updRound, voteLastValid, rowid)
-	if err != nil {
-		return
-	}
-	rowsAffected, err = result.RowsAffected()
 	return
 }
 
