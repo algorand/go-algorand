@@ -1096,7 +1096,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.txnCounter())
 	if err != nil {
-		return fmt.Errorf("transaction %v: %v", txid, err)
+		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 
 	// Validate applyData if we are validating an existing block.

@@ -1120,3 +1120,77 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
 	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
 }
+
+// TestLedgerBehindEval tests that eval gets an error when ledger is behind and cannot get Apps/Assets
+func TestLedgerBehindEval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+	sendAddr := addrs[0]
+
+	// the target round we want to advance the evaluator to
+	targetRound := basics.Round(4)
+
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	})
+
+	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
+
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	require.NoError(t, err)
+
+	// Advance the evaluator a couple rounds...
+	for i := uint64(0); i < uint64(targetRound); i++ {
+		l.endBlock(t, eval)
+		eval = l.nextBlock(t)
+	}
+
+	genHash := l.GenesisHash()
+
+	// force ledger to be one round behind
+	delete(l.blocks, l.Latest())
+
+	txn := transactions.Transaction{
+		Type: protocol.AssetConfigTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   eval.Round(),
+			GenesisHash: genHash,
+		},
+		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
+			ConfigAsset: 0,
+		},
+	}
+
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	expectedErr := ledgercore.ErrNonSequentialBlockEval{}
+	require.ErrorAs(t, err, &expectedErr)
+
+	txn = transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      sendAddr,
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   eval.Round(),
+			GenesisHash: genHash,
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 0,
+		},
+	}
+
+	st = txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	expectedErr = ledgercore.ErrNonSequentialBlockEval{}
+	require.ErrorAs(t, err, &expectedErr)
+
+}
