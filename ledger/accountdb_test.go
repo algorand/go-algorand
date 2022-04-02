@@ -3179,3 +3179,124 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.Len(t, result[0].rowids, 6)
 	})
 }
+
+type mockOnlineAccountsWriter struct {
+	rowid int64
+}
+
+func (w *mockOnlineAccountsWriter) insertOnlineAccount(addr basics.Address, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
+	w.rowid++
+	return w.rowid, nil
+}
+
+func (w *mockOnlineAccountsWriter) close() {}
+
+func TestAccountOnlineAccountsNewRound(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	writer := &mockOnlineAccountsWriter{rowid: 100}
+
+	updates := compactOnlineAccountDeltas{}
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+	addrD := ledgertesting.RandomAddress()
+	addrE := ledgertesting.RandomAddress()
+
+	// acct A is empty
+	deltaA := onlineAccountDelta{
+		address: addrA,
+	}
+	// acct B is new and offline
+	deltaB := onlineAccountDelta{
+		address: addrB,
+		newAcct: baseOnlineAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+		},
+		updRound:  1,
+		newStatus: basics.Offline,
+	}
+	// acct C is new and online
+	deltaC := onlineAccountDelta{
+		address: addrC,
+		newAcct: baseOnlineAccountData{
+			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+			VoteFirstValid: 500,
+		},
+		newStatus: basics.Online,
+		updRound:  2,
+	}
+	// acct D is old and went offline
+	deltaD := onlineAccountDelta{
+		address: addrD,
+		oldAcct: persistedOnlineAccountData{
+			addr: addrD,
+			accountData: baseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 400_000_000},
+				VoteFirstValid: 500,
+			},
+			rowid: 1,
+		},
+		newAcct: baseOnlineAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 400_000_000},
+		},
+		newStatus: basics.Offline,
+		updRound:  3,
+	}
+
+	// acct E is old online
+	deltaE := onlineAccountDelta{
+		address: addrE,
+		oldAcct: persistedOnlineAccountData{
+			addr: addrE,
+			accountData: baseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
+				VoteFirstValid: 500,
+			},
+			rowid: 2,
+		},
+		newAcct: baseOnlineAccountData{
+			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
+			VoteFirstValid: 600,
+		},
+		newStatus: basics.Online,
+		updRound:  4,
+	}
+
+	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC, deltaD, deltaE)
+	lastUpdateRound := basics.Round(1)
+	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+
+	require.Len(t, updated, 3)
+	require.Equal(t, updated[0].addr, addrC)
+	require.Equal(t, updated[1].addr, addrD)
+	require.Equal(t, updated[2].addr, addrE)
+
+	require.Len(t, expired, 2)
+	// deltaD old and new
+	require.Equal(t, proto.MaxBalLookback+3, uint64(expired[0].rnd))
+	require.Equal(t, []int64{1, 102}, expired[0].rowids)
+	// deltaE old
+	require.Equal(t, proto.MaxBalLookback+4, uint64(expired[1].rnd))
+	require.Equal(t, []int64{2}, expired[1].rowids)
+
+	// check errors: new online with empty voting data
+	deltaC.newStatus = basics.Online
+	deltaC.newAcct.VoteFirstValid = 0
+	updates.deltas = []onlineAccountDelta{deltaC}
+	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+
+	// check errors: new non-online with non-empty voting data
+	deltaB.newStatus = basics.Offline
+	deltaB.newAcct.VoteFirstValid = 1
+	updates.deltas = []onlineAccountDelta{deltaB}
+	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+
+	// check errors: new online with empty voting data
+	deltaD.newStatus = basics.Online
+	updates.deltas = []onlineAccountDelta{deltaD}
+	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+}

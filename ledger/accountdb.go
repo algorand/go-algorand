@@ -3360,18 +3360,22 @@ func onlineAccountsNewRoundImpl(
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				if data.newStatus == basics.Online {
-					// create a new entry.
-					var rowid int64
-					normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-					rowid, err = writer.insertOnlineAccount(data.address, normBalance, data.newAcct, data.updRound, uint64(data.newAcct.VoteLastValid))
-					if err == nil {
-						updated := persistedOnlineAccountData{
-							addr:        data.address,
-							accountData: data.newAcct,
-							round:       lastUpdateRound,
-							rowid:       rowid,
+					if data.newAcct.IsVotingEmpty() {
+						err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), data.newAcct)
+					} else {
+						// create a new entry.
+						var rowid int64
+						normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+						rowid, err = writer.insertOnlineAccount(data.address, normBalance, data.newAcct, data.updRound, uint64(data.newAcct.VoteLastValid))
+						if err == nil {
+							updated := persistedOnlineAccountData{
+								addr:        data.address,
+								accountData: data.newAcct,
+								round:       lastUpdateRound,
+								rowid:       rowid,
+							}
+							updatedAccounts = append(updatedAccounts, updated)
 						}
-						updatedAccounts = append(updatedAccounts, updated)
 					}
 				} else if !data.newAcct.IsVotingEmpty() {
 					err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), data.newAcct)
@@ -3381,34 +3385,27 @@ func onlineAccountsNewRoundImpl(
 			// non-zero rowid means we had a previous value.
 			if data.newAcct.IsVotingEmpty() {
 				// new value is zero then go offline
-				var rowid int64
-				rowid, err = writer.insertOnlineAccount(data.address, 0, baseOnlineAccountData{}, data.updRound, 0)
-				if err == nil {
-					updated := persistedOnlineAccountData{
-						addr:        data.address,
-						accountData: baseOnlineAccountData{},
-						round:       lastUpdateRound,
-						rowid:       rowid,
-					}
-					updatedAccounts = append(updatedAccounts, updated)
-					targetRound := lastUpdateRound + basics.Round(proto.MaxBalLookback)
-					if entries, ok := expirationMap[targetRound]; ok {
-						// if old data is completely empty
-						// then the account was offline and expired on a prev invocation
-						if !data.oldAcct.accountData.IsEmpty() {
-							entries = append(entries, data.oldAcct.rowid)
+				if data.newStatus == basics.Online {
+					err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), data.newAcct)
+				} else {
+					var rowid int64
+					rowid, err = writer.insertOnlineAccount(data.address, 0, baseOnlineAccountData{}, data.updRound, 0)
+					if err == nil {
+						updated := persistedOnlineAccountData{
+							addr:        data.address,
+							accountData: baseOnlineAccountData{},
+							round:       lastUpdateRound,
+							rowid:       rowid,
 						}
-						entries = append(entries, rowid)
-						expirationMap[targetRound] = entries
-					} else {
-						if !data.oldAcct.accountData.IsEmpty() {
-							expirationMap[targetRound] = []int64{data.oldAcct.rowid, rowid}
+						updatedAccounts = append(updatedAccounts, updated)
+						targetRound := basics.Round(data.updRound + proto.MaxBalLookback)
+						if entries, ok := expirationMap[targetRound]; ok {
+							entries = append(entries, data.oldAcct.rowid, rowid)
+							expirationMap[targetRound] = entries
 						} else {
-							expirationMap[targetRound] = []int64{rowid}
+							expirationMap[targetRound] = []int64{data.oldAcct.rowid, rowid}
 						}
 					}
-				} else if data.newStatus == basics.Online {
-					err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), data.newAcct)
 				}
 			} else {
 				if data.oldAcct.accountData != data.newAcct {
@@ -3424,7 +3421,7 @@ func onlineAccountsNewRoundImpl(
 						}
 						updatedAccounts = append(updatedAccounts, updated)
 
-						targetRound := lastUpdateRound + basics.Round(proto.MaxBalLookback)
+						targetRound := basics.Round(data.updRound + proto.MaxBalLookback)
 						if entries, ok := expirationMap[targetRound]; ok {
 							entries = append(entries, data.oldAcct.rowid)
 							expirationMap[targetRound] = entries

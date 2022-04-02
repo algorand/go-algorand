@@ -925,7 +925,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		}
 
 		conf := config.GetDefaultLocal()
-		au, _ := newAcctUpdates(t, ml, conf, ".")
+		au, ao := newAcctUpdates(t, ml, conf, ".")
 		defer au.close()
 
 		// cover 10 genesis blocks
@@ -965,6 +965,12 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				fromAccountDataNew.MicroAlgos.Raw -= uint64(i - 10)
 				toAccountDataNew.MicroAlgos.Raw += uint64(i - 10)
 				data := ledgercore.AccountData{AccountBaseData: fromAccountDataNew}
+				if data.Status == basics.Online {
+					// pull voting data to make a consistent update
+					onlineData, err := ao.lookupOnlineAccountData(i-1, fromAccount)
+					require.NoError(t, err)
+					data.VotingData = onlineData.VotingData
+				}
 				updates[fromAccount] = data
 
 				moneyAccountsExpectedAmounts[i][j] = fromAccountDataNew.MicroAlgos.Raw
@@ -1005,6 +1011,12 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			}
 
 			data := ledgercore.AccountData{AccountBaseData: toAccountDataNew}
+			if data.Status == basics.Online {
+				// pull voting data to make a consistent update
+				onlineData, err := ao.lookupOnlineAccountData(i-1, toAccount)
+				require.NoError(t, err)
+				data.VotingData = onlineData.VotingData
+			}
 			updates[toAccount] = data
 
 			blk := bookkeeping.Block{
