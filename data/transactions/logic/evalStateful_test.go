@@ -2577,6 +2577,8 @@ func appAddr(id int) basics.Address {
 }
 
 func TestAppInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := makeSampleEnv()
 	require.Equal(t, 888, int(tx.ApplicationID))
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2595,6 +2597,8 @@ func TestAppInfo(t *testing.T) {
 }
 
 func TestBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep := defaultEvalParams(nil)
 	source := `
 global OpcodeBudget
@@ -2609,6 +2613,8 @@ int 695
 }
 
 func TestSelfMutate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, _, ledger := makeSampleEnv()
 
 	/* In order to test the added protection of mutableAccountReference, we're
