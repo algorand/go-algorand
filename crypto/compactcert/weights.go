@@ -31,6 +31,7 @@ var (
 	ErrZeroSignedWeight                 = errors.New("signed weight can not be zero")
 	ErrZeroProvenWeightThreshold        = errors.New("proven weight can not be zero")
 	ErrInsufficientImpliedProvenWeight  = errors.New("signed weight and number of reveals yield insufficient proven weight")
+	ErrNegativeNumOfRevealsEquation     = errors.New("cert creation failed: weights will not be able to satisfy the verification equation")
 )
 
 // The function in this file are used to compute and verify the number of reveals necessary for the security parameter
@@ -112,9 +113,13 @@ func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error
 		Add(a, lhs).
 		Mul(bigInt(numOfReveals), lhs)
 
-	// todo canoverflow???
-	rhs := bigInt(v.SecKQ * ln2IntApproximation)
-	rhs.Add(rhs, bigInt(numOfReveals*v.lnProvenWeightThreshold)).
+	revealsTimesP := &big.Int{}
+	revealsTimesP.Set(bigInt(numOfReveals)).Mul(revealsTimesP, bigInt(v.lnProvenWeightThreshold))
+
+	rhs := &big.Int{}
+	rhs.Set(bigInt(v.SecKQ))
+	rhs.Mul(rhs, bigInt(ln2IntApproximation)).
+		Add(rhs, revealsTimesP).
 		Mul(rhs, y)
 
 	if lhs.Cmp(rhs) < 0 {
@@ -159,6 +164,10 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 		Sub(denom, bigInt(lnProvenWe)).
 		Mul(denom, y).
 		Add(a, denom)
+
+	if denom.Sign() <= 0 {
+		return 0, ErrNegativeNumOfRevealsEquation
+	}
 
 	res := numerator.Div(numerator, denom).Uint64() + 1
 	if res > MaxReveals {

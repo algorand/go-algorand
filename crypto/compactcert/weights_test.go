@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-func TestVerifyMaxNumberOfReveals(t *testing.T) {
+func TestVerifyMaxNumberOfRevealsInVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -34,6 +34,17 @@ func TestVerifyMaxNumberOfReveals(t *testing.T) {
 	param := Params{SecKQ: 128, ProvenWeightThreshold: provenWeight}
 	verifier := MkVerifier(param, crypto.GenericDigest{})
 	err := verifier.verifyWeights(signedWeight, MaxReveals+1)
+	a.ErrorIs(err, ErrTooManyReveals)
+}
+
+func TestVerifyMaxNumberOfReveals(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signedWeight := uint64(1<<10 + 1)
+	provenWeight := uint64(1 << 10)
+
+	_, err := numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
@@ -54,7 +65,7 @@ func TestVerifyImpliedProvenGreaterThanThreshold(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	signedWeight := uint64(1 << 11)
+	signedWeight := uint64(1<<10 + 93)
 	provenWeight := uint64(1 << 10)
 
 	numOfReveals, err := numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
@@ -63,6 +74,27 @@ func TestVerifyImpliedProvenGreaterThanThreshold(t *testing.T) {
 	verifier := MkVerifier(param, crypto.GenericDigest{})
 	err = verifier.verifyWeights(signedWeight, numOfReveals)
 	a.NoError(err)
+
+	signedWeight = uint64(1<<10 + 92)
+	provenWeight = uint64(1 << 10)
+
+	numOfReveals, err = numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
+
+	param = Params{SecKQ: compactCertSecKQForTests, ProvenWeightThreshold: provenWeight}
+	verifier = MkVerifier(param, crypto.GenericDigest{})
+	err = verifier.verifyWeights(signedWeight, numOfReveals)
+	a.ErrorIs(err, ErrInsufficientImpliedProvenWeight)
+}
+
+func TestVerifyZeroNumberOfRevealsEquation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signedWeight := uint64(1<<15 + 1)
+	provenWeight := uint64(1 << 15)
+
+	_, err := numReveals(signedWeight, provenWeight, compactCertSecKQForTests, MaxReveals)
+	a.ErrorIs(err, ErrNegativeNumOfRevealsEquation)
 }
 
 func TestLnWithPrecision(t *testing.T) {
