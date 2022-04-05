@@ -431,7 +431,7 @@ func (r runMode) String() string {
 	return "Unknown"
 }
 
-func (ep EvalParams) log() logging.Logger {
+func (ep *EvalParams) log() logging.Logger {
 	if ep.logger != nil {
 		return ep.logger
 	}
@@ -469,7 +469,7 @@ type EvalContext struct {
 
 	// the index of the transaction being evaluated
 	groupIndex int
-	// the transaction being evaluated (initialized from GroupIndex + ep.TxnGroup)
+	// the transaction being evaluated (initialized from groupIndex + ep.TxnGroup)
 	txn *transactions.SignedTxnWithAD
 
 	// Txn.EvalDelta maintains a summary of changes as we go.  We used to
@@ -934,7 +934,7 @@ func (cx *EvalContext) step() error {
 
 	if err == nil {
 		postheight := len(cx.stack)
-		if postheight-preheight != len(spec.Returns)-len(spec.Args) && spec.Name != "return" {
+		if postheight-preheight != len(spec.Returns)-len(spec.Args) && !spec.Exits() {
 			return fmt.Errorf("%s changed stack height improperly %d != %d",
 				spec.Name, postheight-preheight, len(spec.Returns)-len(spec.Args))
 		}
@@ -942,6 +942,9 @@ func (cx *EvalContext) step() error {
 		for i, argType := range spec.Returns {
 			stackType := cx.stack[first+i].argType()
 			if !opCompat(argType, stackType) {
+				if spec.Exits() { // We test in the loop because it's the uncommon case.
+					break
+				}
 				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
 			}
 			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > maxStringSize {

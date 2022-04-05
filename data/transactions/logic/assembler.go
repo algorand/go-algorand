@@ -214,9 +214,9 @@ func (ref byteReference) makeNewReference(ops *OpStream, singleton bool, newInde
 type OpStream struct {
 	Version  uint64
 	Trace    io.Writer
-	Warnings []error      // informational warnings, shouldn't stop assembly
-	Errors   []*lineError // errors that should prevent final assembly
-	Program  []byte       // Final program bytes. Will stay nil if any errors
+	Warnings []error     // informational warnings, shouldn't stop assembly
+	Errors   []lineError // errors that should prevent final assembly
+	Program  []byte      // Final program bytes. Will stay nil if any errors
 
 	// Running bytes as they are assembled. jumps must be resolved
 	// and cblocks added before these bytes become a legal program.
@@ -248,8 +248,8 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
-// createLabel inserts a label reference to point to the next
-// instruction, reporting an error for a duplicate.
+// createLabel inserts a label to point to the next instruction, reporting an
+// error for a duplicate.
 func (ops *OpStream) createLabel(label string) {
 	if ops.labels == nil {
 		ops.labels = make(map[string]int)
@@ -260,16 +260,16 @@ func (ops *OpStream) createLabel(label string) {
 	ops.labels[label] = ops.pending.Len()
 }
 
-// RecordSourceLine adds an entry to pc to line mapping
-func (ops *OpStream) RecordSourceLine() {
+// recordSourceLine adds an entry to pc to line mapping
+func (ops *OpStream) recordSourceLine() {
 	if ops.OffsetToLine == nil {
 		ops.OffsetToLine = make(map[int]int)
 	}
 	ops.OffsetToLine[ops.pending.Len()] = ops.sourceLine - 1
 }
 
-// ReferToLabel records an opcode label refence to resolve later
-func (ops *OpStream) ReferToLabel(pc int, label string) {
+// referToLabel records an opcode label reference to resolve later
+func (ops *OpStream) referToLabel(pc int, label string) {
 	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
 }
 
@@ -759,7 +759,7 @@ func asmBranch(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error("branch operation needs label argument")
 	}
 
-	ops.ReferToLabel(ops.pending.Len(), args[0])
+	ops.referToLabel(ops.pending.Len(), args[0])
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
@@ -1087,11 +1087,11 @@ type lineError struct {
 	Err  error
 }
 
-func (le *lineError) Error() string {
+func (le lineError) Error() string {
 	return fmt.Sprintf("%d: %s", le.Line, le.Err.Error())
 }
 
-func (le *lineError) Unwrap() error {
+func (le lineError) Unwrap() error {
 	return le.Err
 }
 
@@ -1188,16 +1188,21 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 	fmt.Fprintf(ops.Trace, format, args...)
 }
 
-// checks (and pops) arg types from arg type stack
-func (ops *OpStream) checkStack(args StackTypes, returns StackTypes, instruction []string) {
+func (ops *OpStream) typeError(err error) {
+	if len(ops.labelReferences) > 0 {
+		ops.warnf("%w; but branches have happened so assembler can not precisely track the stack", err)
+	} else {
+		ops.error(err)
+	}
+}
+
+// trackStack checks that the typeStack has `args` on it, then pushes `returns` to it.
+func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction []string) {
 	argcount := len(args)
 	if argcount > len(ops.typeStack) {
-		err := fmt.Errorf("%s expects %d stack arguments but stack height is %d", strings.Join(instruction, " "), argcount, len(ops.typeStack))
-		if len(ops.labelReferences) > 0 {
-			ops.warnf("%w; but branches have happened and assembler does not precisely track the stack in this case", err)
-		} else {
-			ops.error(err)
-		}
+		err := fmt.Errorf("%s expects %d stack arguments but stack height is %d",
+			strings.Join(instruction, " "), argcount, len(ops.typeStack))
+		ops.typeError(err)
 	} else {
 		firstPop := true
 		for i := argcount - 1; i >= 0; i-- {
@@ -1210,12 +1215,9 @@ func (ops *OpStream) checkStack(args StackTypes, returns StackTypes, instruction
 				ops.trace(", %s", argType)
 			}
 			if !typecheck(argType, stype) {
-				err := fmt.Errorf("%s arg %d wanted type %s got %s", strings.Join(instruction, " "), i, argType, stype)
-				if len(ops.labelReferences) > 0 {
-					ops.warnf("%w; but branches have happened and assembler does not precisely track types in this case", err)
-				} else {
-					ops.error(err)
-				}
+				err := fmt.Errorf("%s arg %d wanted type %s got %s",
+					strings.Join(instruction, " "), i, argType, stype)
+				ops.typeError(err)
 			}
 		}
 		if !firstPop {
@@ -1247,21 +1249,21 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		line := scanner.Text()
 		line = strings.TrimSpace(line)
 		if len(line) == 0 {
-			ops.trace("%d: 0 line\n", ops.sourceLine)
+			ops.trace("%3d: 0 line\n", ops.sourceLine)
 			continue
 		}
 		if strings.HasPrefix(line, "//") {
-			ops.trace("%d: // line\n", ops.sourceLine)
+			ops.trace("%3d: // line\n", ops.sourceLine)
 			continue
 		}
 		if strings.HasPrefix(line, "#pragma") {
-			ops.trace("%d: #pragma line\n", ops.sourceLine)
+			ops.trace("%3d: #pragma line\n", ops.sourceLine)
 			ops.pragma(line)
 			continue
 		}
 		fields := fieldsFromLine(line)
 		if len(fields) == 0 {
-			ops.trace("%d: no fields\n", ops.sourceLine)
+			ops.trace("%3d: no fields\n", ops.sourceLine)
 			continue
 		}
 		// we're about to begin processing opcodes, so fix the Version
@@ -1274,7 +1276,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.createLabel(opstring[:len(opstring)-1])
 			fields = fields[1:]
 			if len(fields) == 0 {
-				// There was a label, not need to ops.trace this
+				ops.trace("%3d: label only\n", ops.sourceLine)
 				continue
 			}
 			opstring = fields[0]
@@ -1289,7 +1291,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-			ops.RecordSourceLine()
+			ops.recordSourceLine()
 			if spec.Modes == runModeApplication {
 				ops.HasStatefulOps = true
 			}
@@ -1297,7 +1299,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			if spec.Details.typeFunc != nil {
 				args, returns = spec.Details.typeFunc(ops, fields[1:])
 			}
-			ops.checkStack(args, returns, fields)
+			ops.trackStack(args, returns, fields)
 			spec.asm(ops, &spec, fields[1:])
 			ops.trace("\n")
 			continue
@@ -1390,7 +1392,7 @@ func (ops *OpStream) resolveLabels() {
 	raw := ops.pending.Bytes()
 	reported := make(map[string]bool)
 	for _, lr := range ops.labelReferences {
-		ops.sourceLine = lr.sourceLine
+		ops.sourceLine = lr.sourceLine // so errors get reported where the label was used
 		dest, ok := ops.labels[lr.label]
 		if !ok {
 			if !reported[lr.label] {
@@ -1727,17 +1729,17 @@ func (ops *OpStream) error(problem interface{}) error {
 }
 
 func (ops *OpStream) lineError(line int, problem interface{}) error {
-	var le *lineError
+	var err lineError
 	switch p := problem.(type) {
 	case string:
-		le = &lineError{Line: line, Err: errors.New(p)}
+		err = lineError{Line: line, Err: errors.New(p)}
 	case error:
-		le = &lineError{Line: line, Err: p}
+		err = lineError{Line: line, Err: p}
 	default:
-		le = &lineError{Line: line, Err: fmt.Errorf("%#v", p)}
+		err = lineError{Line: line, Err: fmt.Errorf("%#v", p)}
 	}
-	ops.Errors = append(ops.Errors, le)
-	return le
+	ops.Errors = append(ops.Errors, err)
+	return err
 }
 
 func (ops *OpStream) errorf(format string, a ...interface{}) error {
@@ -1818,13 +1820,11 @@ type disassembleState struct {
 	labelCount     int
 	pendingLabels  map[int]string
 
-	// If we find a (back) jump to a label we did not generate
-	// (because we didn't know about it yet), rerun is set to
-	// true, and we make a second attempt to assemble once the
-	// first attempt is done. The second attempt retains all the
-	// labels found in the first pass.  In effect, the first
-	// attempt to assemble becomes a first-pass in a two-pass
-	// assembly process that simply collects jump target labels.
+	// If we find a (back) jump to a label we did not generate (because we
+	// didn't know it was needed yet), rerun is set to true, and we make a
+	// second attempt to disassemble once the first attempt is done. The second
+	// attempt retains all the labels found in the first pass.  In effect, the
+	// first attempt simply collects jump target labels for the second pass.
 	rerun bool
 
 	nextpc int

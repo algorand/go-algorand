@@ -265,6 +265,11 @@ var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
 var anyInt = StackTypes{StackAny, StackUint64}
 var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
+var exits = StackTypes{StackNone} // err and return
+
+func (spec *OpSpec) Exits() bool {
+	return len(spec.Returns) == 1 && spec.Returns[0] == StackNone
+}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -273,7 +278,7 @@ var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
 // Note: assembly can specialize an Any return type if known at
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, asmDefault, disDefault, nil, nil, 1, modeAny, opDefault},
+	{0x00, "err", opErr, asmDefault, disDefault, nil, exits, 1, modeAny, opDefault},
 	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(7)},
 	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(26)},
 	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(9)},
@@ -381,7 +386,7 @@ var OpSpecs = []OpSpec{
 	{0x40, "bnz", opBnz, asmBranch, disDefault, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, asmBranch, disDefault, oneInt, nil, 2, modeAny, opBranch},
 	{0x42, "b", opB, asmBranch, disDefault, nil, nil, 2, modeAny, opBranch},
-	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, opDefault},
+	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, exits, 2, modeAny, opDefault},
 	{0x44, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opDefault},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opDefault},
 	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, stacky(typeDup)},

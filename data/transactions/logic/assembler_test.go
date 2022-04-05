@@ -523,7 +523,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 				var found *lineError
 				for _, err := range errors {
 					if err.Line == exp.l {
-						found = err
+						found = &err
 						break
 					}
 				}
@@ -2396,6 +2396,7 @@ func TestUncoverAsm(t *testing.T) {
 
 func TestTxTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{2, "itxn_field Sender expects 1 stack argument..."})
 	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{3, "...wanted type []byte got uint64"})
 	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
