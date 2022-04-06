@@ -170,7 +170,7 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			reflect.ValueOf(a.dis).Pointer() == reflect.ValueOf(b.dis).Pointer() &&
 			reflect.DeepEqual(a.Args, b.Args) && reflect.DeepEqual(a.Returns, b.Returns) &&
 			a.Modes == b.Modes &&
-			a.Details.Cost == b.Details.Cost && a.Details.Size == b.Details.Size &&
+			a.Details.FullCost == b.Details.FullCost && a.Details.Size == b.Details.Size &&
 			reflect.ValueOf(a.Details.checkFunc).Pointer() == reflect.ValueOf(b.Details.checkFunc).Pointer()
 		return
 	}

@@ -292,8 +292,8 @@ return stack matches the name of the input value.
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | A == 0 yields 1; else 0 |
 | `len` | yields length of byte value A |
-| `itob` | converts uint64 A to big endian bytes |
-| `btoi` | converts bytes A as big endian to uint64 |
+| `itob` | converts uint64 A to big-endian byte array, always of length 8 |
+| `btoi` | converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8. |
 | `%` | A modulo B. Fail if B == 0. |
 | `\|` | A bitwise-or B |
 | `&` | A bitwise-and B |

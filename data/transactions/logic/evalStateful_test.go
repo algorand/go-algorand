@@ -237,9 +237,8 @@ log
 
 	// check err opcode work in both modes
 	source := "err"
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "encountered err")
-	testApp(t, source, defaultEvalParams(nil), "encountered err")
-	// require.NotContains(t, err.Error(), "not allowed in current mode")
+	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "err opcode executed")
+	testApp(t, source, defaultEvalParams(nil), "err opcode executed")
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
 	disallowedV4 := []string{

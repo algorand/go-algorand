@@ -17,8 +17,6 @@
 package logic
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -49,8 +47,8 @@ var opDocByName = map[string]string{
 	"!=":      "A is not equal to B => {0 or 1}",
 	"!":       "A == 0 yields 1; else 0",
 	"len":     "yields length of byte value A",
-	"itob":    "converts uint64 A to big endian bytes",
-	"btoi":    "converts bytes A as big endian to uint64",
+	"itob":    "converts uint64 A to big-endian byte array, always of length 8",
+	"btoi":    "converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.",
 	"%":       "A modulo B. Fail if B == 0.",
 	"|":       "A bitwise-or B",
 	"&":       "A bitwise-and B",
@@ -215,10 +213,10 @@ var opcodeImmediateNotes = map[string]string{
 	"gtxnas":  "{uint8 transaction group index} {uint8 transaction field index}",
 	"gtxnsas": "{uint8 transaction field index}",
 
-	"bnz":     "{int16 branch offset, big endian}",
-	"bz":      "{int16 branch offset, big endian}",
-	"b":       "{int16 branch offset, big endian}",
-	"callsub": "{int16 branch offset, big endian}",
+	"bnz":     "{int16 branch offset, big-endian}",
+	"bz":      "{int16 branch offset, big-endian}",
+	"b":       "{int16 branch offset, big-endian}",
+	"callsub": "{int16 branch offset, big-endian}",
 
 	"load":   "{uint8 position in scratch space to load from}",
 	"store":  "{uint8 position in scratch space to store to}",
@@ -346,11 +344,13 @@ var OpGroups = map[string][]string{
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 
-// OpCost indicates the cost of an operation over the range of
+// VerCost indicates the cost of an operation over the range of
 // LogicVersions from From to To.
-type OpCost struct {
+type VerCost struct {
 	From int
 	To   int
+	// Cost is a human readable string to describe costs. Simple opcodes are
+	// just an integer, but some opcodes have field or stack dependencies.
 	Cost string
 }
 
@@ -358,30 +358,16 @@ type OpCost struct {
 // indicates the cost over a range of versions, so if the cost has remained
 // constant, there is only one result, otherwise each entry shows the cost for a
 // consecutive range of versions, inclusive.
-func OpAllCosts(opName string) []OpCost {
-	var costs []OpCost
+func OpAllCosts(opName string) []VerCost {
+	var costs []VerCost
 	for v := 1; v <= LogicVersion; v++ {
 		spec, ok := OpsByName[v][opName]
 		if !ok {
 			continue
 		}
-		cost := fmt.Sprintf("%d", spec.Details.Cost)
-		if cost == "0" {
-			cost = ""
-			// This is quite brittle code, but sufficient for doc generation.
-			// Right now, costFuncs are only used to inspect the next byte to
-			// see the field in use.
-			fakeProgram := make([]byte, 2)
-			// brittle. these func are on single immediate opcodes right now.
-			group := spec.Details.Immediates[0].Group
-			for _, name := range group.Names {
-				fakeProgram[1] = group.Specs.SpecByName(name).Field()
-				fcost := spec.Details.costFunc(fakeProgram, 0)
-				cost += fmt.Sprintf(" %s=%d", name, fcost)
-			}
-		}
+		cost := spec.Details.docCost()
 		if costs == nil || cost != costs[len(costs)-1].Cost {
-			costs = append(costs, OpCost{v, v, cost})
+			costs = append(costs, VerCost{v, v, cost})
 		} else {
 			costs[len(costs)-1].To = v
 		}

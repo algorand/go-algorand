@@ -25,6 +25,40 @@ import (
 
 //go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType -output=fields_string.go
 
+// FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
+type FieldSpec interface {
+	Field() byte
+	Type() StackType
+	OpVersion() uint64
+	Note() string
+	Version() uint64
+}
+
+// fieldSpecMap is something that yields a FieldSpec, given a name for the field
+type fieldSpecMap interface {
+	get(name string) (FieldSpec, bool)
+}
+
+// FieldGroup binds all the info for a field (names, int value, spec access) so
+// they can be attached to opcodes and used by doc generation
+type FieldGroup struct {
+	Name  string
+	Doc   string
+	Names []string
+	specs fieldSpecMap
+}
+
+// SpecByName returns a FieldsSpec for a name, respecting the "sparseness" of
+// the Names array to hide some names
+func (fg *FieldGroup) SpecByName(name string) (FieldSpec, bool) {
+	if fs, ok := fg.specs.get(name); ok {
+		if fg.Names[fs.Field()] != "" {
+			return fs, true
+		}
+	}
+	return nil, false
+}
+
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
 
@@ -170,31 +204,6 @@ const (
 	invalidTxnField // compile-time constant for number of fields
 )
 
-// FieldSpec unifies the various specs for presentation
-type FieldSpec interface {
-	Field() byte
-	Type() StackType
-	OpVersion() uint64
-	Note() string
-	Version() uint64
-}
-
-// FieldSpecMap is something that yields a FieldSpec, given a name for the field
-type FieldSpecMap interface {
-	SpecByName(name string) FieldSpec
-}
-
-// FieldGroup binds all the info for a field (names, int value, spec access) so
-// they can be attached to opcodes and used by doc generation
-type FieldGroup struct {
-	Name  string
-	Names []string
-	Specs FieldSpecMap
-}
-
-// TxnFieldNames are arguments to the 'txn' family of opcodes.
-var TxnFieldNames [invalidTxnField]string
-
 func txnFieldSpecByField(f TxnField) (txnFieldSpec, bool) {
 	if int(f) >= len(txnFieldSpecs) {
 		return txnFieldSpec{}, false
@@ -202,13 +211,17 @@ func txnFieldSpecByField(f TxnField) (txnFieldSpec, bool) {
 	return txnFieldSpecs[f], true
 }
 
+// TxnFieldNames are arguments to the 'txn' family of opcodes.
+var TxnFieldNames [invalidTxnField]string
+
 var txnFieldSpecByName = make(tfNameSpecMap, len(TxnFieldNames))
 
 // simple interface used by doc generator for fields versioning
 type tfNameSpecMap map[string]txnFieldSpec
 
-func (s tfNameSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s tfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 type txnFieldSpec struct {
@@ -224,19 +237,15 @@ type txnFieldSpec struct {
 func (fs txnFieldSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs txnFieldSpec) Type() StackType {
 	return fs.ftype
 }
-
 func (fs txnFieldSpec) OpVersion() uint64 {
 	return 0
 }
-
 func (fs txnFieldSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs txnFieldSpec) Note() string {
 	note := fs.doc
 	if fs.effects {
@@ -326,10 +335,47 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{StateProofPK, StackBytes, false, 6, 6, false, "64 byte state proof public key commitment"},
 }
 
-// TxnaFieldNames are txn field names that return arrays. Return value is a
-// "sparse" slice, the names appear at their usual index, non-array alots are
-// set to "".  It need not be fast, as it's only called once. They laid out this
-// way so that it is possible to get the name from the index value.
+// TxnFields contains info on the arguments to the txn* family of opcodes
+var TxnFields = FieldGroup{
+	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
+	TxnFieldNames[:],
+	txnFieldSpecByName,
+}
+
+// TxnScalarFields narows TxnFields to only have the names of scalar fetching opcodes
+var TxnScalarFields = FieldGroup{
+	"txn", "",
+	txnScalarFieldNames(),
+	txnFieldSpecByName,
+}
+
+// txnScalarFieldNames are txn field names that return scalars. Return value is
+// a "sparse" slice, the names appear at their usual index, array slots are set
+// to "".  They are laid out this way so that it is possible to get the name
+// from the index value.
+func txnScalarFieldNames() []string {
+	names := make([]string, len(txnFieldSpecs))
+	for i, fs := range txnFieldSpecs {
+		if fs.array {
+			names[i] = ""
+		} else {
+			names[i] = fs.field.String()
+		}
+	}
+	return names
+}
+
+// TxnArrayFields narows TxnFields to only have the names of array fetching opcodes
+var TxnArrayFields = FieldGroup{
+	"txna", "",
+	txnaFieldNames(),
+	txnFieldSpecByName,
+}
+
+// txnaFieldNames are txn field names that return arrays. Return value is a
+// "sparse" slice, the names appear at their usual index, non-array slots are
+// set to "".  They are laid out this way so that it is possible to get the name
+// from the index value.
 func txnaFieldNames() []string {
 	names := make([]string, len(txnFieldSpecs))
 	for i, fs := range txnFieldSpecs {
@@ -340,20 +386,6 @@ func txnaFieldNames() []string {
 		}
 	}
 	return names
-}
-
-// TxnFields contains info on the arguments to the txn* family of opcodes
-var TxnFields = FieldGroup{
-	"txn",
-	TxnFieldNames[:],
-	txnFieldSpecByName,
-}
-
-// TxnaFields narows TxnFields to only have the names of array fetching opcodes
-var TxnaFields = FieldGroup{
-	"txna",
-	txnaFieldNames(),
-	txnFieldSpecByName,
 }
 
 var innerTxnTypes = map[string]uint64{
@@ -471,15 +503,12 @@ type globalFieldSpec struct {
 func (fs globalFieldSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs globalFieldSpec) Type() StackType {
 	return fs.ftype
 }
-
 func (fs globalFieldSpec) OpVersion() uint64 {
 	return 0
 }
-
 func (fs globalFieldSpec) Version() uint64 {
 	return fs.version
 }
@@ -530,13 +559,14 @@ var globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 
 type gfNameSpecMap map[string]globalFieldSpec
 
-func (s gfNameSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s gfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // GlobalFields has info on the global opcode's immediate
 var GlobalFields = FieldGroup{
-	"global",
+	"global", "Fields",
 	GlobalFieldNames[:],
 	globalFieldSpecByName,
 }
@@ -563,19 +593,15 @@ type ecdsaCurveSpec struct {
 func (fs ecdsaCurveSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs ecdsaCurveSpec) Type() StackType {
-	return StackNone // Will not show, since all are the same
+	return StackNone // Will not show, since all are untyped
 }
-
 func (fs ecdsaCurveSpec) OpVersion() uint64 {
 	return 5
 }
-
 func (fs ecdsaCurveSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs ecdsaCurveSpec) Note() string {
 	return fs.doc
 }
@@ -596,13 +622,14 @@ var ecdsaCurveSpecByName = make(ecdsaCurveNameSpecMap, len(ecdsaCurveNames))
 
 type ecdsaCurveNameSpecMap map[string]ecdsaCurveSpec
 
-func (s ecdsaCurveNameSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s ecdsaCurveNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // EcdsaCurves collects details about the constants used to describe EcdsaCurves
 var EcdsaCurves = FieldGroup{
-	"ecdsa",
+	"ECDSA", "Curves",
 	ecdsaCurveNames[:],
 	ecdsaCurveSpecByName,
 }
@@ -622,13 +649,12 @@ var base64EncodingNames [invalidBase64Encoding]string
 
 type base64EncodingSpec struct {
 	field   Base64Encoding
-	ftype   StackType
 	version uint64
 }
 
 var base64EncodingSpecs = [...]base64EncodingSpec{
-	{URLEncoding, StackBytes, 6},
-	{StdEncoding, StackBytes, 6},
+	{URLEncoding, 6},
+	{StdEncoding, 6},
 }
 
 func base64EncodingSpecByField(e Base64Encoding) (base64EncodingSpec, bool) {
@@ -645,31 +671,28 @@ type base64EncodingSpecMap map[string]base64EncodingSpec
 func (fs base64EncodingSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs base64EncodingSpec) Type() StackType {
-	return fs.ftype
+	return StackAny // Will not show in docs, since all are untyped
 }
-
 func (fs base64EncodingSpec) OpVersion() uint64 {
 	return 6
 }
-
 func (fs base64EncodingSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs base64EncodingSpec) Note() string {
 	note := "" // no doc list?
 	return note
 }
 
-func (s base64EncodingSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s base64EncodingSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // Base64Encodings describes the base64_encode immediate
 var Base64Encodings = FieldGroup{
-	"base64",
+	"base64", "Encodings",
 	base64EncodingNames[:],
 	base64EncodingSpecByName,
 }
@@ -715,31 +738,28 @@ type jsonRefSpecMap map[string]jsonRefSpec
 func (fs jsonRefSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs jsonRefSpec) Type() StackType {
 	return fs.ftype
 }
-
 func (fs jsonRefSpec) OpVersion() uint64 {
 	return fidoVersion
 }
-
 func (fs jsonRefSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs jsonRefSpec) Note() string {
 	note := "" // no doc list?
 	return note
 }
 
-func (s jsonRefSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s jsonRefSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // JSONRefTypes describes the json_ref immediate
 var JSONRefTypes = FieldGroup{
-	"json_ref",
+	"json_ref", "Types",
 	jsonRefTypeNames[:],
 	jsonRefSpecByName,
 }
@@ -767,19 +787,15 @@ type assetHoldingFieldSpec struct {
 func (fs assetHoldingFieldSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs assetHoldingFieldSpec) Type() StackType {
 	return fs.ftype
 }
-
 func (fs assetHoldingFieldSpec) OpVersion() uint64 {
 	return 2
 }
-
 func (fs assetHoldingFieldSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs assetHoldingFieldSpec) Note() string {
 	return fs.doc
 }
@@ -800,13 +816,14 @@ var assetHoldingFieldSpecByName = make(ahfNameSpecMap, len(assetHoldingFieldName
 
 type ahfNameSpecMap map[string]assetHoldingFieldSpec
 
-func (s ahfNameSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s ahfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // AssetHoldingFields describes asset_holding_get's immediates
 var AssetHoldingFields = FieldGroup{
-	"asset_holding",
+	"asset_holding", "Fields",
 	assetHoldingFieldNames[:],
 	assetHoldingFieldSpecByName,
 }
@@ -856,19 +873,15 @@ type assetParamsFieldSpec struct {
 func (fs assetParamsFieldSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs assetParamsFieldSpec) Type() StackType {
 	return fs.ftype
 }
-
 func (fs assetParamsFieldSpec) OpVersion() uint64 {
 	return 2
 }
-
 func (fs assetParamsFieldSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs assetParamsFieldSpec) Note() string {
 	return fs.doc
 }
@@ -899,13 +912,14 @@ var assetParamsFieldSpecByName = make(apfNameSpecMap, len(assetParamsFieldNames)
 
 type apfNameSpecMap map[string]assetParamsFieldSpec
 
-func (s apfNameSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s apfNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // AssetParamsFields describes asset_params_get's immediates
 var AssetParamsFields = FieldGroup{
-	"asset_params",
+	"asset_params", "Fields",
 	assetParamsFieldNames[:],
 	assetParamsFieldSpecByName,
 }
@@ -950,19 +964,15 @@ type appParamsFieldSpec struct {
 func (fs appParamsFieldSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs appParamsFieldSpec) Type() StackType {
 	return fs.ftype
 }
-
 func (fs appParamsFieldSpec) OpVersion() uint64 {
 	return 5
 }
-
 func (fs appParamsFieldSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs appParamsFieldSpec) Note() string {
 	return fs.doc
 }
@@ -991,13 +1001,14 @@ var appParamsFieldSpecByName = make(appNameSpecMap, len(appParamsFieldNames))
 // simple interface used by doc generator for fields versioning
 type appNameSpecMap map[string]appParamsFieldSpec
 
-func (s appNameSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s appNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // AppParamsFields describes app_params_get's immediates
 var AppParamsFields = FieldGroup{
-	"app_params",
+	"app_params", "Fields",
 	appParamsFieldNames[:],
 	appParamsFieldSpecByName,
 }
@@ -1028,19 +1039,15 @@ type acctParamsFieldSpec struct {
 func (fs acctParamsFieldSpec) Field() byte {
 	return byte(fs.field)
 }
-
 func (fs acctParamsFieldSpec) Type() StackType {
 	return fs.ftype
 }
-
 func (fs acctParamsFieldSpec) OpVersion() uint64 {
 	return 6
 }
-
 func (fs acctParamsFieldSpec) Version() uint64 {
 	return fs.version
 }
-
 func (fs acctParamsFieldSpec) Note() string {
 	return fs.doc
 }
@@ -1062,13 +1069,14 @@ var acctParamsFieldSpecByName = make(acctNameSpecMap, len(acctParamsFieldNames))
 
 type acctNameSpecMap map[string]acctParamsFieldSpec
 
-func (s acctNameSpecMap) SpecByName(name string) FieldSpec {
-	return s[name]
+func (s acctNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
 }
 
 // AcctParamsFields describes acct_params_get's immediates
 var AcctParamsFields = FieldGroup{
-	"acct_params",
+	"acct_params", "Fields",
 	acctParamsFieldNames[:],
 	acctParamsFieldSpecByName,
 }
