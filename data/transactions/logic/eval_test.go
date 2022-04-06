@@ -699,6 +699,8 @@ int 1
 }
 
 func TestMulDiv(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Demonstrate a "function" that expects three u64s on stack,
 	// and calculates B*C/A. (Following opcode documentation
 	// convention, C is top-of-stack, B is below it, and A is

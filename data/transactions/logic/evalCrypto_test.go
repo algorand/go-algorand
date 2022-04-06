@@ -480,6 +480,8 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 
 // test compatibility with ethereum signatures
 func TestEcdsaEthAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	/*
 		pip install eth-keys pycryptodome
 		from eth_keys import keys
@@ -507,7 +509,9 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 }
 
 func TestEcdsaCostVariation(t *testing.T) {
-	// Doesn't matter if the actual verify returns true or false. Just confirm the cost depends on curve.
+	partitiontest.PartitionTest(t)
+
+	// Doesn't matter if it passes or fails. Just confirm the cost depends on curve.
 	source := `
 global ZeroAddress				// need 32 bytes
 byte "signature r"
