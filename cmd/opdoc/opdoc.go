@@ -33,7 +33,6 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 | - | -- |
 `)
 	opSpecs := logic.OpsByName[logic.LogicVersion]
-	// TODO: sort by logic.OpSpecs[].Opcode
 	for _, opname := range names {
 		spec, ok := opSpecs[opname]
 		if !ok {
@@ -47,15 +46,6 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 
 func markdownTableEscape(x string) string {
 	return strings.ReplaceAll(x, "|", "\\|")
-}
-
-func typeEnumTableMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "| Index | \"Type\" string | Description |\n")
-	fmt.Fprintf(out, "| --- | --- | --- |\n")
-	for i, name := range logic.TxnTypeNames {
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescriptions[name])
-	}
-	out.Write([]byte("\n"))
 }
 
 func integerConstantsTableMarkdown(out io.Writer) {
