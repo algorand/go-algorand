@@ -77,13 +77,15 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 	OpSpecs[1] = OpSpecs[4]
 	OpSpecs[4] = tmp
 
-	t.Run("TestOpcodesByVersion", TestOpcodesByVersion)
+	t.Run("TestOpcodesByVersion", testOpcodesByVersion)
 }
 
 func TestOpcodesByVersion(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// has partitioning in the TestOpcodesByVersionReordered()
+	partitiontest.PartitionTest(t)
+	testOpcodesByVersion(t)
+}
 
+func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := make([]OpSpec, len(OpSpecs))
 	for idx, opspec := range OpSpecs {
