@@ -797,3 +797,74 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Contains(t, rec.Body.String(), expectedErr.Error())
 	})
 }
+
+func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
+	genBlk, err := l.Block(0)
+	a.NoError(err)
+
+	totalsRound, totals, err := l.LatestTotals()
+	a.NoError(err)
+	a.Equal(l.Latest(), totalsRound)
+
+	totalRewardUnits := totals.RewardUnits()
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
+	a.NoError(err)
+
+	latestBlock, err := l.Block(l.Latest())
+	a.NoError(err)
+
+	var blk bookkeeping.Block
+	blk.BlockHeader = bookkeeping.BlockHeader{
+		GenesisID:    genBlk.GenesisID(),
+		GenesisHash:  genBlk.GenesisHash(),
+		Round:        l.Latest() + 1,
+		Branch:       latestBlock.Hash(),
+		RewardsState: latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+		UpgradeState: latestBlock.UpgradeState,
+	}
+
+	blk.BlockHeader.TxnCounter = latestBlock.TxnCounter
+
+	blk.RewardsPool = latestBlock.RewardsPool
+	blk.FeeSink = latestBlock.FeeSink
+	blk.CurrentProtocol = latestBlock.CurrentProtocol
+	blk.TimeStamp = latestBlock.TimeStamp + 1
+
+	blk.BlockHeader.TxnCounter++
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+
+	return blk
+}
+
+func TestStateProofOutOfBoundsRound(t *testing.T) {
+	// TODO:find a way to create enough blocks to generate comp-cert.
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	// we only have block for round 0:
+	a.NoError(handler.StateProof(ctx, 1))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestStateProof404(t *testing.T) {
+	// TODO: we have an overflow in the test.
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	ldger := handler.Node.LedgerForAPI()
+
+	for i := 0; i < 2; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+	}
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(404, responseRecorder.Code)
+}

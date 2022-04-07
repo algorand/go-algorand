@@ -1169,10 +1169,12 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 
 	consensus, err := ledger.ConsensusParams(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for round (%d)", round), v2.Log)
+		return notFound(ctx, err, fmt.Sprintf("could not retrieve consensus information for round (%d)", round), v2.Log)
 	}
 
-	for current := round; current > round-consensus.CompactCertRounds; current-- {
+	// as a start we presume the rounds given are only from current rounds
+	// assuming i'm starting from rounds where a compcert are valid.
+	for current := round; current > round-consensus.CompactCertRounds && current > 0; current-- {
 		block, err := ledger.Block(basics.Round(current))
 		if err != nil {
 			return internalError(ctx, err, "couldn't retrieve block, and locate state-proof", v2.Log)
