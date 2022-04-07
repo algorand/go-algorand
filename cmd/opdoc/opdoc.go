@@ -297,6 +297,8 @@ func argEnums(name string) ([]string, string) {
 		return fieldsAndTypes(logic.AssetParamsFields)
 	case "app_params_get":
 		return fieldsAndTypes(logic.AppParamsFields)
+	case "acct_params_get":
+		return fieldsAndTypes(logic.AcctParamsFields)
 	default:
 		return nil, ""
 	}
@@ -367,6 +369,7 @@ func main() {
 
 	langspecjs := create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
+	enc.SetIndent("", "  ")
 	enc.Encode(buildLanguageSpec(opGroups))
 	langspecjs.Close()
 
