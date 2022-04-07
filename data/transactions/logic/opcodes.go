@@ -69,10 +69,16 @@ type linearCost struct {
 	chunkSize int
 }
 
+// divideCeil provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
+func divideCeil(numerator int, denominator int) int {
+	return (numerator + denominator - 1) / denominator
+}
+
 func (lc *linearCost) compute(stack []stackValue) int {
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
-		cost += lc.chunkCost * (len(stack[len(stack)-1].Bytes) + lc.chunkSize - 1) / lc.chunkSize
+		// Uses divideCeil rather than (len/size) to match how Ethereum discretizes hashing costs.
+		cost += divideCeil(lc.chunkCost*len(stack[len(stack)-1].Bytes), lc.chunkSize)
 	}
 	return cost
 }
