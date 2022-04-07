@@ -438,7 +438,14 @@ type PendingTransactionResponse struct {
 type StateDelta []EvalDeltaKeyValue
 
 // StateProof defines model for StateProof.
-type StateProof map[string]interface{}
+type StateProof struct {
+
+	// The encoded StateProof certificate.
+	StateProof []byte `json:"StateProof"`
+
+	// The encoded StateProof message.
+	StateProofMessage []byte `json:"StateProofMessage"`
+}
 
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {

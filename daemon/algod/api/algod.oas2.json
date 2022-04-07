@@ -1235,7 +1235,15 @@
         }
       ]
     },
-    "/v2/transactions/state-proof": {
+    "/v2/transactions/state-proof/{round}": {
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true
+        }
+      ],
       "get": {
         "produces": [
           "application/json"
@@ -2310,7 +2318,7 @@
         "accounts": {
           "type": "array",
           "items": {
-              "$ref": "#/definitions/Account"
+            "$ref": "#/definitions/Account"
           }
         },
         "apps": {
@@ -2515,8 +2523,21 @@
       "description": "StateProof transaction.",
       "type": "object",
       "required": [
+        "StateProofMessage",
+        "StateProof"
       ],
-      "properties": {}
+      "properties": {
+        "StateProofMessage": {
+          "description": "The encoded StateProof message.",
+          "type": "string",
+          "format": "byte"
+        },
+        "StateProof": {
+          "description": "The encoded StateProof certificate.",
+          "type": "string",
+          "format": "byte"
+        }
+      }
     }
   },
   "parameters": {

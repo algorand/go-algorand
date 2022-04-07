@@ -58,12 +58,53 @@ type Handlers struct {
 	Shutdown <-chan struct{}
 }
 
+var errNilLedger = errors.New("could not contact ledger")
+var errNoStateProofInRange = errors.New("no state proof in range")
+
+// StateProof returns the state proof for a given round.
+// (GET /v2/transaction/state-proof/{round})
+func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	if ledger == nil {
+		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
+	}
+
+	consensus, err := ledger.ConsensusParams(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for round (%d)", round), v2.Log)
+	}
+
+	for current := round; current > round-consensus.CompactCertRounds; current-- {
+		block, err := ledger.Block(basics.Round(current))
+		if err != nil {
+			return internalError(ctx, err, "couldn't retrieve block, and locate state-proof", v2.Log)
+		}
+
+		txn := searchForCompactCert(block)
+		if txn == nil {
+			continue
+		}
+
+		response := generated.StateProofResponse{
+			StateProofMessage: protocol.Encode(&txn.CertMsg),
+			StateProof:        protocol.Encode(&txn.Cert),
+		}
+		return ctx.JSON(http.StatusOK, response)
+	}
+	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d)", round), v2.Log)
+}
+
+func searchForCompactCert(block bookkeeping.Block) *transactions.Transaction {
+	for _, txn := range block.Payset {
+		if txn.Txn.Sender == transactions.CompactCertSender {
+			return &txn.Txn
+		}
+	}
+	return nil
+}
+
 // StateProof returns a wanted Algorand state proof.
 // (GET /v2/transactions/state-proof)
-func (v2 *Handlers) StateProof(ctx echo.Context) error {
-	//TODO implement me
-	panic("implement me")
-}
 
 // LedgerForAPI describes the Ledger methods used by the v2 API.
 type LedgerForAPI interface {
