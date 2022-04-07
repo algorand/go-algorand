@@ -799,6 +799,7 @@ func benchmarkBn256DataGenData(b *testing.B) (data []benchmarkBn256Data) {
 		data[i].b = bN254G1ToBytes(&b)
 		data[i].k = new(big.Int).SetUint64(mrand.Uint64()).Bytes()
 
+		// Pair one g1 and one g2
 		data[i].g1, _ = hex.DecodeString("0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e32")
 		data[i].g2, _ = hex.DecodeString("217fbd9a9db5719cfbe3580e3d8750cada058fdfffe95c440a0528ffc608f36e05d6a67604658d40b3e4cac3c46150f2702d87739b7774d79a8147f7271773b420f9429ee13c1843404bfd70e75efa886c173e57dde32970274d8bc53dfd562403f6276318990d053785b4ca342ebc4581a23a39285804bb74e079aa2ef3ba66")
 		// data[i].g1, _ = hex.DecodeString("0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e3226a30a875a3f67768a5fa6967e27e301e0a417b21bb9cace9f68a3ab83178e2e07060c2efe16605495a4fd9396819c53cccf1ea48012c0481d3abe65470f1d4f2af861d56dda2857f11e4b4c840e69964b4b7c4a8dec61cca3603dd5f88060fb2e1721a874180b5ab5da85a13529d17b515c65d6fdb17ed4bf9a2cc5e3cb25ce17ea15dc9e34f6e0205d9df2ec3c327884d305f728e8f6871dd89d6ec13becb701cee1732410ec49c4131536e285b78d168cc3793d2925aa24816bb50d0ff7bc")
@@ -837,8 +838,8 @@ func benchmarkBn256(b *testing.B, source string) {
 
 func BenchmarkBn256AddRaw(b *testing.B) {
 	data := benchmarkBn256DataGenData(b)
-	a1 := bytesToBN254G1(data[0].a)
-	a2 := bytesToBN254G1(data[0].b)
+	a1 := bytesToBN254G1(data[0].g1)
+	a2 := bytesToBN254G1(data[0].g1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -846,7 +847,21 @@ func BenchmarkBn256AddRaw(b *testing.B) {
 	}
 }
 
-func BenchmarkBn256Raw(b *testing.B) {
+func BenchmarkBn256AddWithMarshal(b *testing.B) {
+	b.ResetTimer()
+	var v [][]byte
+	v = make([][]byte, b.N)
+	g1, _ := hex.DecodeString("0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e32")
+
+	for i := 0; i < b.N; i++ {
+		a1 := bytesToBN254G1(g1)
+		a2 := bytesToBN254G1(g1)
+		r := new(bn254.G1Affine).Add(&a1, &a2)
+		v[i] = r.Marshal()
+	}
+}
+
+func BenchmarkBn256PairingRaw(b *testing.B) {
 	data := benchmarkBn256DataGenData(b)
 	g1s := bytesToBN254G1s(data[0].g1)
 	g2s := bytesToBN254G2s(data[0].g2)
@@ -854,20 +869,13 @@ func BenchmarkBn256Raw(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ok, _ := bn254.PairingCheck(g1s, g2s)
-		require.True(b, ok)
+		require.False(b, ok)
 	}
 }
 
 func BenchmarkBn256(b *testing.B) {
 	b.Run("bn256 add", func(b *testing.B) {
-		source := `#pragma version 6
-arg 0
-arg 1
-bn256_add
-pop
-int 1
-`
-		benchmarkBn256(b, source)
+		benchmarkOperation(b, "byte 0x0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e32", "dup; bn256_add", "pop; int 1")
 	})
 
 	b.Run("bn256 scalar mul", func(b *testing.B) {

@@ -1263,9 +1263,10 @@ func opDivw(cx *EvalContext) {
 }
 
 func bytesToBN254Field(b []byte) (ret fp.Element) {
-	var x big.Int
-	x.SetBytes(b[:32])
-	ret.SetBigInt(&x)
+	// var x big.Int
+	// x.SetBytes(b[:32])
+	// ret.SetBigInt(&x)
+	ret.SetBytesRaw(b)
 	return
 }
 
@@ -1327,12 +1328,15 @@ func opBn256Add(cx *EvalContext) {
 	a := bytesToBN254G1(aBytes)
 	b := bytesToBN254G1(bBytes)
 
-	res := new(bn254.G1Affine).Add(&a, &b)
+	_ = new(bn254.G1Affine).Add(&a, &b)
 
-	resBytes := bN254G1ToBytes(res)
+	resBytes := a.Marshal()
+	resBytes = b.Marshal()
 
 	cx.stack = cx.stack[:last]
+	cx.stack[prev].Bytes = bBytes
 	cx.stack[prev].Bytes = resBytes
+
 }
 
 func opBn256ScalarMul(cx *EvalContext) {
