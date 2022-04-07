@@ -237,9 +237,8 @@ log
 
 	// check err opcode work in both modes
 	source := "err"
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "encountered err")
-	testApp(t, source, defaultEvalParams(nil), "encountered err")
-	// require.NotContains(t, err.Error(), "not allowed in current mode")
+	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "err opcode executed")
+	testApp(t, source, defaultEvalParams(nil), "err opcode executed")
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
 	disallowedV4 := []string{
@@ -2577,6 +2576,8 @@ func appAddr(id int) basics.Address {
 }
 
 func TestAppInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := makeSampleEnv()
 	require.Equal(t, 888, int(tx.ApplicationID))
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2595,6 +2596,8 @@ func TestAppInfo(t *testing.T) {
 }
 
 func TestBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep := defaultEvalParams(nil)
 	source := `
 global OpcodeBudget
@@ -2609,6 +2612,8 @@ int 695
 }
 
 func TestSelfMutate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, _, ledger := makeSampleEnv()
 
 	/* In order to test the added protection of mutableAccountReference, we're

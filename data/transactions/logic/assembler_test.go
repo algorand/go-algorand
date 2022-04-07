@@ -556,40 +556,46 @@ func testLine(t *testing.T, line string, ver uint64, expected string) {
 func TestAssembleTxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
-	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
-	testLine(t, "txna Sender 256", AssemblerMaxVersion, "txna found scalar field \"Sender\"...")
-	testLine(t, "gtxna 0 Accounts 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
-	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
-	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna transaction index beyond 255: 256")
-	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna found scalar field \"Sender\"...")
-	testLine(t, "txn Accounts 0", 1, "txn expects one argument")
-	testLine(t, "txn Accounts 0 1", 2, "txn expects one or two arguments")
-	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects two immediate arguments")
-	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects one immediate argument")
+	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna i beyond 255: 256")
+	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna i beyond 255: 256")
+	testLine(t, "txna Sender 256", AssemblerMaxVersion, "txna unknown field: \"Sender\"")
+	testLine(t, "gtxna 0 Accounts 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
+	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
+	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna t beyond 255: 256")
+	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: \"Sender\"")
+	testLine(t, "txn Accounts 0", 1, "txn expects 1 immediate argument")
+	testLine(t, "txn Accounts 0 1", 2, "txn expects 1 or 2 immediate arguments")
+	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects 2 immediate arguments")
+	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects 1 immediate argument")
 	testLine(t, "txna Accounts a", AssemblerMaxVersion, "txna unable to parse...")
-	testLine(t, "gtxn 0 Sender 0", 1, "gtxn expects two arguments")
-	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects two or three arguments")
-	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects three arguments")
+	testLine(t, "gtxn 0 Sender 0", 1, "gtxn expects 2 immediate arguments")
+	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects 2 or 3 immediate arguments")
+	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects 3 immediate arguments")
 	testLine(t, "gtxna a Accounts 0", AssemblerMaxVersion, "gtxna unable to parse...")
 	testLine(t, "gtxna 0 Accounts a", AssemblerMaxVersion, "gtxna unable to parse...")
-	testLine(t, "gtxnas Accounts 1 2", AssemblerMaxVersion, "gtxnas expects two immediate arguments")
+	testLine(t, "gtxnas Accounts 1 2", AssemblerMaxVersion, "gtxnas expects 2 immediate arguments")
 	testLine(t, "txn ABC", 2, "txn unknown field: \"ABC\"")
 	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: \"ABC\"")
 	testLine(t, "gtxn a ABC", 2, "gtxn unable to parse...")
-	testLine(t, "txn Accounts", AssemblerMaxVersion, "txn found array field \"Accounts\"...")
-	testLine(t, "txn Accounts", 1, "txn found array field \"Accounts\"...")
+	testLine(t, "txn Accounts", 1, "txn unknown field: \"Accounts\"")
+	testLine(t, "txn Accounts", AssemblerMaxVersion, "txn unknown field: \"Accounts\"")
 	testLine(t, "txn Accounts 0", AssemblerMaxVersion, "")
-	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "gtxn found array field \"Accounts\"...")
-	testLine(t, "gtxn 0 Accounts", 1, "gtxn found array field \"Accounts\"...")
+	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "gtxn unknown field: \"Accounts\"...")
+	testLine(t, "gtxn 0 Accounts", 1, "gtxn unknown field: \"Accounts\"")
 	testLine(t, "gtxn 0 Accounts 1", AssemblerMaxVersion, "")
 }
 
 func TestAssembleGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testLine(t, "global", AssemblerMaxVersion, "global expects one argument")
+	testLine(t, "global", AssemblerMaxVersion, "global expects 1 immediate argument")
 	testLine(t, "global a", AssemblerMaxVersion, "global unknown field: \"a\"")
+	testProg(t, "global MinTxnFee; int 2; +", AssemblerMaxVersion)
+	testProg(t, "global ZeroAddress; byte 0x12; concat; len", AssemblerMaxVersion)
+	testProg(t, "global MinTxnFee; byte 0x12; concat", AssemblerMaxVersion,
+		Expect{3, "concat arg 0 wanted type []byte..."})
+	testProg(t, "int 2; global ZeroAddress; +", AssemblerMaxVersion,
+		Expect{3, "+ arg 1 wanted type uint64..."})
 }
 
 func TestAssembleDefault(t *testing.T) {
@@ -1676,21 +1682,28 @@ func TestAssembleAsset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	introduction := OpsByName[LogicVersion]["asset_holding_get"].Version
-	for v := introduction; v <= AssemblerMaxVersion; v++ {
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "asset_holding_get ABC 1", v,
 			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; asset_holding_get ABC 1", v,
 			Expect{2, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
-			Expect{3, "asset_holding_get expects one argument"})
+			Expect{3, "asset_holding_get expects 1 immediate argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
 			Expect{3, "asset_holding_get unknown field: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
 			Expect{2, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
-		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
+		// Test that AssetUnitName is known to return bytes
+		testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,
+			Expect{5, "+ arg 0 wanted type uint64..."})
+
+		// Test that AssetTotal is known to return uint64
+		testProg(t, "int 1; asset_params_get AssetTotal; pop; byte 0x12; concat", v,
+			Expect{5, "concat arg 0 wanted type []byte..."})
+
+		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects 1 immediate argument")
 		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
 	}
 }
@@ -2369,6 +2382,7 @@ func TestCoverAsm(t *testing.T) {
 	testProg(t, `int 4; byte "ayush"; int 5; cover 1; pop; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "john"; int 5; cover 2; +`, AssemblerMaxVersion, Expect{5, "+ arg 1..."})
 
+	testProg(t, `int 4; cover junk`, AssemblerMaxVersion, Expect{2, "cover unable to parse n ..."})
 }
 
 func TestUncoverAsm(t *testing.T) {
@@ -2381,6 +2395,7 @@ func TestUncoverAsm(t *testing.T) {
 }
 
 func TestTxTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{2, "itxn_field Sender expects 1 stack argument..."})
 	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{3, "...wanted type []byte got uint64"})
 	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
