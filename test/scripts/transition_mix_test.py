@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 # pip install py-algorand-sdk
@@ -40,6 +41,14 @@ def get_go_env():
             v = v[1:-1]
         out[k] = v
     return out
+
+def openkmd(algodata):
+    kmdnetpath = sorted(glob.glob(os.path.join(algodata,'kmd-*','kmd.net')))[-1]
+    kmdnet = open(kmdnetpath, 'rt').read().strip()
+    kmdtokenpath = sorted(glob.glob(os.path.join(algodata,'kmd-*','kmd.token')))[-1]
+    kmdtoken = open(kmdtokenpath, 'rt').read().strip()
+    kmd = algosdk.kmd.KMDClient(kmdtoken, 'http://' + kmdnet)
+    return kmd
 
 def openalgod(algodata):
     algodnetpath = os.path.join(algodata,'algod.net')
@@ -86,14 +95,69 @@ def startdaemon(cmd):
         logger.error('subprocess failed {!r}'.format(cmd), exc_info=True)
         raise
 
+class NodeContext:
+    def __init__(self, bindir, env=None, algodata=None):
+        self.bindir = bindir
+        self.algodata = algodata
+        self.env = env
+        if env and not algodata:
+            self.algodata = env['ALGORAND_DATA']
+        self.kmd = None
+        self.algod = None
+        self.lock = threading.Lock()
+        return
+
+    def _connect(self):
+        if self.algod and self.kmd:
+            return
+
+        # should run from inside self.lock
+        algodata = self.env['ALGORAND_DATA']
+
+        goal = os.path.join(self.bindir, 'goal')
+        xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
+        self.kmd = openkmd(algodata)
+        self.algod = openalgod(algodata)
+
+    def connect(self):
+        with self.lock:
+            self._connect()
+            return self.algod, self.kmd
+
+    def get_pub_wallet(self):
+        with self.lock:
+            self._connect()
+            if not (self.pubw and self.maxpubaddr):
+                # find private test node public wallet and its richest account
+                wallets = self.kmd.list_wallets()
+                pubwid = None
+                for xw in wallets:
+                    if xw['name'] == 'unencrypted-default-wallet':
+                        pubwid = xw['id']
+                pubw = self.kmd.init_wallet_handle(pubwid, '')
+                pubaddrs = self.kmd.list_keys(pubw)
+                pubbalances = []
+                maxamount = 0
+                maxpubaddr = None
+                for pa in pubaddrs:
+                    pai = self.algod.account_info(pa)
+                    if pai['amount'] > maxamount:
+                        maxamount = pai['amount']
+                        maxpubaddr = pai['address']
+                self.pubw = pubw
+                self.maxpubaddr = maxpubaddr
+            return self.pubw, self.maxpubaddr
+
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
 _logging_datefmt = '%Y%m%d_%H%M%S'
 
 def main():
     start = time.time()
     ap = argparse.ArgumentParser()
-    ap.add_argument('--new-branch', default=None, help='`git checkout {new-branch}` and build', required=True)
-    ap.add_argument('--old-branch', default=None, help='`git checkout {new-branch}` and build', required=True)
+    ap.add_argument('--new-branch', default=None, help='`git checkout {new-branch}` and build')
+    ap.add_argument('--old-branch', default=None, help='`git checkout {new-branch}` and build')
+    ap.add_argument('--no-build', default=False, action='store_true')
+    ap.add_argument('--work-dir')
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
@@ -109,7 +173,9 @@ def main():
     # start with a copy when making env for child processes
     env = dict(os.environ)
 
-    tempdir = os.getenv('TEMPDIR')
+    tempdir = args.work_dir
+    if not tempdir:
+        tempdir = os.getenv('TEMPDIR')
     if not tempdir:
         tempdir = tempfile.mkdtemp()
         env['TEMPDIR'] = tempdir
@@ -132,6 +198,8 @@ def main():
     os.makedirs(oldbin, exist_ok=True)
     changeBack = False
     if not os.path.exists(newalgod):
+        if args.no_build:
+            raise Exception('{} missing but --no-build set'.format(newalgod))
         xrun(['git', 'checkout', args.new_branch], cwd=repodir)
         if curbranch and not changeBack:
             changeBack = True
@@ -140,6 +208,8 @@ def main():
         for bn in ('algod', 'goal', 'kmd'):
             shutil.copy(os.path.join(gopath, 'bin', bn), os.path.join(newbin, bn))
     if not os.path.exists(oldalgod):
+        if args.no_build:
+            raise Exception('{} missing but --no-build set'.format(oldalgod))
         xrun(['git', 'checkout', args.old_branch], cwd=repodir)
         if curbranch and not changeBack:
             changeBack = True
@@ -159,14 +229,41 @@ def main():
     time.sleep(0.5)
     with open(os.path.join(relaydir, 'algod-listen.net')) as fin:
         relay_addr = fin.read().strip()
+    atexit.register(relay.terminate)
 
     n1dir = os.path.join(netdir, 'Node1')
     node1 = startdaemon([oldalgod, '-d', n1dir, '-p', relay_addr])
+    atexit.register(node1.terminate)
+    n1 = NodeContext(oldbin, algodata=n1dir)
     #~/Algorand/masterbin/algod -d ~/Algorand/tn3/Node1 -p $(cat ~/Algorand/tn3/Primary/algod-listen.net) > ~/Algorand/tn3/Primary/algod.out 2>&1 &
 
     n2dir = os.path.join(netdir, 'Node2')
-    node2 = startdaemon([oldalgod, '-d', n2dir, '-p', relay_addr])
+    node2 = startdaemon([newalgod, '-d', n2dir, '-p', relay_addr])
+    atexit.register(node2.terminate)
+    n2 = NodeContext(newbin, algodata=n1dir)
     #~/Algorand/txnsyncbin/algod -d ~/Algorand/tn3/Node2 -p $(cat ~/Algorand/tn3/Primary/algod-listen.net) > ~/Algorand/tn3/Primary/algod.out 2>&1 &
+
+    n1algod, _ = n1.conect()
+    n2algod, _ = n2.connect()
+    status = n1algod.status()
+    # TODO: timeout?
+    n1algod.status_after_block(status['round'])
+
+    pubw, maxpubaddr = n1.get_pub_wallet()
+    a1i = n1algod.account_info(maxpubaddr)
+    pubw2, maxpubaddr2 = n2.get_pub_wallet()
+    a2i = n2algod.account_info(maxpubaddr2)
+    params = n1algod.suggested_params()
+    round = params['lastRound']
+    max_init_wait_rounds = 5
+    tx1amt = 999000
+    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=maxpubaddr2, amt=tx1amt, flat_fee=True)
+    stxn = kmd.sign_transaction(pubw, '', txn)
+    txid = n1algod.send_transaction(stxn)
+
+    a2i2 = n2algod.account_info(maxpubaddr2)
+    assert(a2i2['amount'] - a2i['amount'] == tx1amt)
+
 
 if __name__ == '__main__':
     sys.exit(main())
