@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -145,6 +146,7 @@ substring 42 99
 intc 0
 intc 1
 substring3
+#pragma typetrack false
 bz there2
 b there2
 there2:
@@ -466,17 +468,23 @@ type Expect struct {
 	s string
 }
 
-func testMatch(t testing.TB, actual, expected string) {
+func testMatch(t testing.TB, actual, expected string) bool {
 	t.Helper()
 	if strings.HasPrefix(expected, "...") && strings.HasSuffix(expected, "...") {
-		require.Contains(t, actual, expected[3:len(expected)-3])
+		return assert.Contains(t, actual, expected[3:len(expected)-3])
 	} else if strings.HasPrefix(expected, "...") {
-		require.Contains(t, actual+"^", expected[3:]+"^")
+		return assert.Contains(t, actual+"^", expected[3:]+"^")
 	} else if strings.HasSuffix(expected, "...") {
-		require.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
+		return assert.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
 	} else {
-		require.Equal(t, expected, actual)
+		return assert.Equal(t, expected, actual)
 	}
+}
+
+func assemblyTrace(text string, ver uint64) string {
+	ops := OpStream{Version: ver, Trace: &strings.Builder{}}
+	ops.assemble(text)
+	return ops.Trace.String()
 }
 
 func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpStream {
@@ -485,7 +493,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 	ops, err := AssembleStringWithVersion(program, ver)
 	if len(expected) == 0 {
 		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
-			t.Log(program)
+			t.Log(assemblyTrace(program, ver))
 		}
 		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
@@ -497,7 +505,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 		// And, while the disassembly may not match input
 		// exactly, the assembly of the disassembly should
 		// give the same bytecode
-		ops2, err := AssembleStringWithVersion(dis, ver)
+		ops2, err := AssembleStringWithVersion(notrack(dis), ver)
 		if len(ops2.Errors) > 0 || err != nil || ops2 == nil || ops2.Program == nil {
 			t.Log(program)
 			t.Log(dis)
@@ -515,9 +523,16 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 			if exp.l == 0 {
 				// line 0 means: "must match all"
 				require.Len(t, expected, 1)
+				fail := false
 				for _, err := range errors {
 					msg := err.Unwrap().Error()
-					testMatch(t, msg, exp.s)
+					if !testMatch(t, msg, exp.s) {
+						fail = true
+					}
+				}
+				if fail {
+					t.Log(assemblyTrace(program, ver))
+					t.FailNow()
 				}
 			} else {
 				var found *lineError
@@ -530,9 +545,12 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 				if found == nil {
 					t.Log(fmt.Sprintf("Errors: %v", errors))
 				}
-				require.NotNil(t, found, "No error on line %d", exp.l)
+				require.NotNil(t, found, "Error %s was not found on line %d", exp.s, exp.l)
 				msg := found.Unwrap().Error()
-				testMatch(t, msg, exp.s)
+				if !testMatch(t, msg, exp.s) {
+					t.Log(assemblyTrace(program, ver))
+					t.FailNow()
+				}
 			}
 		}
 		require.Nil(t, ops.Program)
@@ -1459,10 +1477,10 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)
-			none := testProg(t, t2, assemblerNoVersion)
+			none := testProg(t, notrack(t2), assemblerNoVersion)
 			require.Equal(t, ops.Program[1:], none.Program[1:])
 			t3 := "// " + t2 // This comments out the #pragma version
-			current := testProg(t, t3, AssemblerMaxVersion)
+			current := testProg(t, notrack(t3), AssemblerMaxVersion)
 			require.Equal(t, ops.Program[1:], current.Program[1:])
 		})
 	}
@@ -2283,9 +2301,8 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 	btoi              // [n]
 `
 
-	sr := strings.NewReader(text)
 	ops := OpStream{Version: AssemblerMaxVersion}
-	err := ops.assemble(sr)
+	err := ops.assemble(text)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
 
@@ -2299,9 +2316,8 @@ flip:                 // [x]
 	btoi              // [n]
 `
 
-	sr = strings.NewReader(text)
 	ops = OpStream{Version: AssemblerMaxVersion}
-	err = ops.assemble(sr)
+	err = ops.assemble(text)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
 }
@@ -2421,4 +2437,73 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 6)
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{4, "...is not allowed."})
+}
+
+func TestTypeTracking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	testProg(t, "+", LogicVersion, Expect{1, "+ expects 2 stack arguments..."})
+	// hitting a label in deadcode starts analyzing again, with unknown stack
+	testProg(t, "b end; label: +; end: b label", LogicVersion)
+	// callsub also wipes our stack knowledge, this tests shows why: it's properly typed
+	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub", LogicVersion)
+	// retsub deadens code, like any unconditional branch
+	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub; concat", LogicVersion)
+
+	// Branching would have confused the old analysis, but the problem is local
+	// to a basic block, so it makes sense to report it.
+	testProg(t, `
+ int 1
+ b confusion
+label:
+ byte "john"					// detectable mistake
+ int 2
+ +
+confusion:
+ b label
+`, LogicVersion, Expect{7, "+ arg 0 wanted type uint64..."})
+
+	// Unless that same error is in dead code.
+	testProg(t, `
+ int 1
+ b confusion
+label:
+ err							// deadens the apparent error at +
+ byte "john"
+ int 2
+ +
+confusion:
+ b label
+`, LogicVersion)
+
+	// Unconditional branches also deaden
+	testProg(t, `
+ int 1
+ b confusion
+label:
+ b done							// deadens the apparent error at +
+ byte "john"
+ int 2
+ +
+confusion:
+ b label
+done:
+`, LogicVersion)
+
+	// Turning type tracking off and then back on, allows any follow-on code.
+	testProg(t, `
+ int 1
+ int 2
+#pragma typetrack false
+ concat
+`, LogicVersion)
+
+	testProg(t, `
+ int 1
+ int 2
+#pragma typetrack false
+ concat
+#pragma typetrack true
+ concat
+`, LogicVersion)
 }

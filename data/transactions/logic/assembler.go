@@ -213,7 +213,7 @@ func (ref byteReference) makeNewReference(ops *OpStream, singleton bool, newInde
 // OpStream is destination for program and scratch space
 type OpStream struct {
 	Version  uint64
-	Trace    io.Writer
+	Trace    *strings.Builder
 	Warnings []error     // informational warnings, shouldn't stop assembly
 	Errors   []lineError // errors that should prevent final assembly
 	Program  []byte      // Final program bytes. Will stay nil if any errors
@@ -230,8 +230,9 @@ type OpStream struct {
 	bytecRefs     []byteReference // references to byte/addr pseudo-op constants, used for optimization
 	hasBytecBlock bool            // prevent prepending bytecblock because asm has one
 
-	// Keep a stack of the types of what we would push and pop to typecheck a program
-	typeStack []StackType
+	// tracks information we know to be true at the point being assembled
+	known        ProgramKnowledge
+	typeTracking bool
 
 	// current sourceLine during assembly
 	sourceLine int
@@ -248,6 +249,48 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
+// ProgramKnowledge tracks statically known information as we assemble
+type ProgramKnowledge struct {
+	// known is the stack of known stack types, based on specs of opcodes seen.
+	// if the top entry is StackNone, we're in dead code, and no checking is done
+	stack StackTypes
+	// bottom is the type given out when known is empty. It is StackNone at
+	// program start, but when a label or callsub is encountered, `known` is
+	// truncated and bottom becomes StackAny, because we don't track program
+	// state coming in from elsewhere.
+	bottom StackType
+}
+
+func (pgm *ProgramKnowledge) pop() StackType {
+	if len(pgm.stack) == 0 {
+		return pgm.bottom
+	}
+	last := len(pgm.stack) - 1
+	t := pgm.stack[last]
+	pgm.stack = pgm.stack[:last]
+	return t
+}
+
+func (pgm *ProgramKnowledge) push(types ...StackType) {
+	pgm.stack = append(pgm.stack, types...)
+}
+
+func (pgm *ProgramKnowledge) deaden() {
+	pgm.stack = append(pgm.stack, StackNone)
+}
+
+// label resets knowledge to reflect that control may enter from elsewhere.
+func (pgm *ProgramKnowledge) label() {
+	if pgm.isDead() {
+		pgm.stack = nil
+		pgm.bottom = StackAny
+	}
+}
+
+func (pgm ProgramKnowledge) isDead() bool {
+	return len(pgm.stack) > 0 && pgm.stack[len(pgm.stack)-1] == StackNone
+}
+
 // createLabel inserts a label to point to the next instruction, reporting an
 // error for a duplicate.
 func (ops *OpStream) createLabel(label string) {
@@ -258,6 +301,7 @@ func (ops *OpStream) createLabel(label string) {
 		ops.errorf("duplicate label %#v", label)
 	}
 	ops.labels[label] = ops.pending.Len()
+	ops.known.label()
 }
 
 // recordSourceLine adds an entry to pc to line mapping
@@ -273,14 +317,17 @@ func (ops *OpStream) referToLabel(pc int, label string) {
 	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
 }
 
-type opTypeFunc func(ops *OpStream, immediates []string) (StackTypes, StackTypes)
+type refineFunc func(pgm ProgramKnowledge, immediates []string) (StackTypes, StackTypes)
 
 // returns allows opcodes like `txn` to be specific about their return value
 // types, based on the field requested, rather than use Any as specified by
 // opSpec. It replaces StackAny in the top `count` elements of the typestack.
 func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
-	end := len(ops.typeStack)
-	tip := ops.typeStack[end-len(spec.Returns):]
+	if ops.known.isDead() {
+		return
+	}
+	end := len(ops.known.stack)
+	tip := ops.known.stack[end-len(spec.Return.Types):]
 	for i := range tip {
 		if tip[i] == StackAny {
 			tip[i] = replacement
@@ -288,17 +335,7 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 		}
 	}
 	// returns was called on an OpSpec with no StackAny in its Returns
-	panic(spec)
-}
-
-func (ops *OpStream) tpop() StackType {
-	if len(ops.typeStack) == 0 {
-		return StackNone
-	}
-	last := len(ops.typeStack) - 1
-	t := ops.typeStack[last]
-	ops.typeStack = ops.typeStack[:last]
-	return t
+	panic(fmt.Sprintf("%+v", spec))
 }
 
 // Intc writes opcodes for loading a uint64 constant onto the stack.
@@ -322,7 +359,7 @@ func (ops *OpStream) Intc(constIndex uint) {
 	if constIndex >= uint(len(ops.intc)) {
 		ops.errorf("intc %d is not defined", constIndex)
 	} else {
-		ops.trace("intc %d %d", constIndex, ops.intc[constIndex])
+		ops.trace("intc %d: %d", constIndex, ops.intc[constIndex])
 	}
 }
 
@@ -875,7 +912,7 @@ type asmFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
-	expected := len(spec.Details.Immediates)
+	expected := len(spec.OpDetails.Immediates)
 	if len(args) != expected {
 		if expected == 1 {
 			return ops.errorf("%s expects 1 immediate argument", spec.Name)
@@ -883,7 +920,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("%s expects %d immediate arguments", spec.Name, expected)
 	}
 	ops.pending.WriteByte(spec.Opcode)
-	for i, imm := range spec.Details.Immediates {
+	for i, imm := range spec.OpDetails.Immediates {
 		switch imm.kind {
 		case immByte:
 			if imm.Group != nil {
@@ -915,100 +952,99 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func typeSwap(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	topTwo := oneAny.plus(oneAny)
-	top := len(ops.typeStack) - 1
+func typeSwap(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	topTwo := StackTypes{StackAny, StackAny}
+	top := len(pgm.stack) - 1
 	if top >= 0 {
-		topTwo[1] = ops.typeStack[top]
+		topTwo[1] = pgm.stack[top]
 		if top >= 1 {
-			topTwo[0] = ops.typeStack[top-1]
+			topTwo[0] = pgm.stack[top-1]
 		}
 	}
 	reversed := StackTypes{topTwo[1], topTwo[0]}
-	return topTwo, reversed
+	return nil, reversed
 }
 
-func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
+func typeDig(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	if len(args) == 0 {
-		return oneAny, oneAny
+		return nil, nil
 	}
 	n, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return oneAny, oneAny
+		return nil, nil
 	}
 	depth := int(n) + 1
 	anys := make(StackTypes, depth)
+	returns := make(StackTypes, depth+1)
 	for i := range anys {
 		anys[i] = StackAny
+		returns[i] = StackAny
 	}
-	returns := anys.plus(oneAny)
-	idx := len(ops.typeStack) - depth
+	returns[depth] = StackAny
+	idx := len(pgm.stack) - depth
 	if idx >= 0 {
-		returns[len(returns)-1] = ops.typeStack[idx]
-		for i := idx; i < len(ops.typeStack); i++ {
-			returns[i-idx] = ops.typeStack[i]
+		returns[len(returns)-1] = pgm.stack[idx]
+		for i := idx; i < len(pgm.stack); i++ {
+			returns[i-idx] = pgm.stack[i]
 		}
 	}
 	return anys, returns
 }
 
-func typeEquals(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	top := len(ops.typeStack) - 1
+func typeEquals(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	top := len(pgm.stack) - 1
 	if top >= 0 {
 		//Require arg0 and arg1 to have same type
-		return StackTypes{ops.typeStack[top], ops.typeStack[top]}, oneInt
+		return StackTypes{pgm.stack[top], pgm.stack[top]}, nil
 	}
-	return oneAny.plus(oneAny), oneInt
+	return nil, nil
 }
 
-func typeDup(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	top := len(ops.typeStack) - 1
+func typeDup(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	top := len(pgm.stack) - 1
 	if top >= 0 {
-		return StackTypes{ops.typeStack[top]}, StackTypes{ops.typeStack[top], ops.typeStack[top]}
+		return StackTypes{pgm.stack[top]}, StackTypes{pgm.stack[top], pgm.stack[top]}
 	}
-	return StackTypes{StackAny}, oneAny.plus(oneAny)
+	return nil, nil
 }
 
-func typeDupTwo(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	topTwo := oneAny.plus(oneAny)
-	top := len(ops.typeStack) - 1
+func typeDupTwo(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	topTwo := StackTypes{StackAny, StackAny}
+	top := len(pgm.stack) - 1
 	if top >= 0 {
-		topTwo[1] = ops.typeStack[top]
+		topTwo[1] = pgm.stack[top]
 		if top >= 1 {
-			topTwo[0] = ops.typeStack[top-1]
+			topTwo[0] = pgm.stack[top-1]
 		}
 	}
-	result := topTwo.plus(topTwo)
-	return topTwo, result
+	return nil, append(topTwo, topTwo...)
 }
 
-func typeSelect(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	selectArgs := twoAny.plus(oneInt)
-	top := len(ops.typeStack) - 1
+func typeSelect(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	top := len(pgm.stack) - 1
 	if top >= 2 {
-		if ops.typeStack[top-1] == ops.typeStack[top-2] {
-			return selectArgs, StackTypes{ops.typeStack[top-1]}
+		if pgm.stack[top-1] == pgm.stack[top-2] {
+			return nil, StackTypes{pgm.stack[top-1]}
 		}
 	}
-	return selectArgs, StackTypes{StackAny}
+	return nil, nil
 }
 
-func typeSetBit(ops *OpStream, args []string) (StackTypes, StackTypes) {
-	setBitArgs := oneAny.plus(twoInts)
-	top := len(ops.typeStack) - 1
+func typeSetBit(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	top := len(pgm.stack) - 1
 	if top >= 2 {
-		return setBitArgs, StackTypes{ops.typeStack[top-2]}
+		return nil, StackTypes{pgm.stack[top-2]}
 	}
-	return setBitArgs, StackTypes{StackAny}
+	return nil, nil
 }
 
-func typeCover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+func typeCover(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	if len(args) == 0 {
-		return oneAny, oneAny
+		return nil, nil
 	}
 	n, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return oneAny, oneAny
+		return nil, nil
 	}
 	depth := int(n) + 1
 	anys := make(StackTypes, depth)
@@ -1019,24 +1055,26 @@ func typeCover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	for i := range returns {
 		returns[i] = StackAny
 	}
-	idx := len(ops.typeStack) - depth
+	idx := len(pgm.stack) - depth
+	// This rotates all the types if idx is >= 0. But when stk.bottom is
+	// StackAny, and the cover is going "under" the known stack, the returns
+	// slice could still be partially populated bask on sth.know.
 	if idx >= 0 {
-		sv := ops.typeStack[len(ops.typeStack)-1]
-		for i := idx; i < len(ops.typeStack)-1; i++ {
-			returns[i-idx+1] = ops.typeStack[i]
+		returns[0] = pgm.stack[len(pgm.stack)-1]
+		for i := idx; i < len(pgm.stack)-1; i++ {
+			returns[i-idx+1] = pgm.stack[i]
 		}
-		returns[len(returns)-depth] = sv
 	}
 	return anys, returns
 }
 
-func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+func typeUncover(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	if len(args) == 0 {
-		return oneAny, oneAny
+		return nil, nil
 	}
 	n, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return oneAny, oneAny
+		return nil, nil
 	}
 	depth := int(n) + 1
 	anys := make(StackTypes, depth)
@@ -1047,24 +1085,24 @@ func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	for i := range returns {
 		returns[i] = StackAny
 	}
-	idx := len(ops.typeStack) - depth
+	idx := len(pgm.stack) - depth
+	// See precision comment in typeCover
 	if idx >= 0 {
-		sv := ops.typeStack[idx]
-		for i := idx + 1; i < len(ops.typeStack); i++ {
-			returns[i-idx-1] = ops.typeStack[i]
+		returns[len(returns)-1] = pgm.stack[idx]
+		for i := idx + 1; i < len(pgm.stack); i++ {
+			returns[i-idx-1] = pgm.stack[i]
 		}
-		returns[len(returns)-1] = sv
 	}
 	return anys, returns
 }
 
-func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
+func typeTxField(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	if len(args) != 1 {
-		return oneAny, nil
+		return nil, nil
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return oneAny, nil
+		return nil, nil
 	}
 	return StackTypes{fs.ftype}, nil
 }
@@ -1074,12 +1112,12 @@ func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
 // since they don't have opcodes or eval functions. But it does need a lot of
 // OpSpec, in order to support assembly - Mode, typing info, etc.
 var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, asmInt, nil, nil, oneInt, 1, modeAny, opDetails{}},
-	"byte": {0, "byte", nil, asmByte, nil, nil, oneBytes, 1, modeAny, opDetails{}},
+	"int":  {0, "int", nil, proto(":i"), 1, assembler(asmInt)},
+	"byte": {0, "byte", nil, proto(":b"), 1, assembler(asmByte)},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, asmAddr, nil, nil, oneBytes, 1, modeAny, opDetails{}},
+	"addr": {0, "addr", nil, proto(":b"), 1, assembler(asmAddr)},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, asmMethod, nil, nil, oneBytes, 1, modeAny, opDetails{}},
+	"method": {0, "method", nil, proto(":b"), 1, assembler(asmMethod)},
 }
 
 type lineError struct {
@@ -1189,25 +1227,27 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 }
 
 func (ops *OpStream) typeError(err error) {
-	if len(ops.labelReferences) > 0 {
-		ops.warnf("%w; but branches have happened so assembler can not precisely track the stack", err)
-	} else {
+	if ops.typeTracking {
 		ops.error(err)
 	}
 }
 
 // trackStack checks that the typeStack has `args` on it, then pushes `returns` to it.
 func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction []string) {
+	// If in deadcode, allow anything. Maybe it's some sort of onchain data.
+	if ops.known.isDead() {
+		return
+	}
 	argcount := len(args)
-	if argcount > len(ops.typeStack) {
+	if argcount > len(ops.known.stack) && ops.known.bottom == StackNone {
 		err := fmt.Errorf("%s expects %d stack arguments but stack height is %d",
-			strings.Join(instruction, " "), argcount, len(ops.typeStack))
+			strings.Join(instruction, " "), argcount, len(ops.known.stack))
 		ops.typeError(err)
 	} else {
 		firstPop := true
 		for i := argcount - 1; i >= 0; i-- {
 			argType := args[i]
-			stype := ops.tpop()
+			stype := ops.known.pop()
 			if firstPop {
 				firstPop = false
 				ops.trace("pops(%s", argType)
@@ -1226,7 +1266,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 
 	if len(returns) > 0 {
-		ops.typeStack = append(ops.typeStack, returns...)
+		ops.known.push(returns...)
 		ops.trace(" pushes(%s", returns[0])
 		if len(returns) > 1 {
 			for _, rt := range returns[1:] {
@@ -1238,10 +1278,12 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 }
 
 // assemble reads text from an input and accumulates the program
-func (ops *OpStream) assemble(fin io.Reader) error {
+func (ops *OpStream) assemble(text string) error {
+	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
+	ops.typeTracking = true
 	scanner := bufio.NewScanner(fin)
 	ops.sourceLine = 0
 	for scanner.Scan() {
@@ -1266,7 +1308,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.trace("%3d: no fields\n", ops.sourceLine)
 			continue
 		}
-		// we're about to begin processing opcodes, so fix the Version
+		// we're about to begin processing opcodes, so settle the Version
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
@@ -1289,28 +1331,44 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 				ok = false
 			}
 		}
+		if !ok {
+			// If the problem is only the version, it's useful to lookup the
+			// opcode from latest version, so we proceed with assembly well
+			// enough to report follow-on errors.  Of course, we still have to
+			// bail out on the assembly as a whole.
+			spec, ok = OpsByName[AssemblerMaxVersion][opstring]
+			if !ok {
+				spec, ok = keywords[opstring]
+			}
+			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
+		}
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.recordSourceLine()
-			if spec.Modes == runModeApplication {
+			if spec.Modes == modeApp {
 				ops.HasStatefulOps = true
 			}
-			args, returns := spec.Args, spec.Returns
-			if spec.Details.typeFunc != nil {
-				args, returns = spec.Details.typeFunc(ops, fields[1:])
+			args, returns := spec.Arg.Types, spec.Return.Types
+			if spec.OpDetails.refine != nil {
+				nargs, nreturns := spec.OpDetails.refine(ops.known, fields[1:])
+				if nargs != nil {
+					args = nargs
+				}
+				if nreturns != nil {
+					returns = nreturns
+				}
 			}
 			ops.trackStack(args, returns, fields)
 			spec.asm(ops, &spec, fields[1:])
+			if spec.alwaysJumps() { // An unconditional branch deadens the following code
+				ops.known.deaden()
+			}
+			if spec.Name == "callsub" {
+				// since retsub comes back to the callsub, it is an entry point like a label
+				ops.known.label()
+			}
 			ops.trace("\n")
 			continue
-		}
-		// unknown opcode, let's report a good error if version problem
-		spec, ok = OpsByName[AssemblerMaxVersion][opstring]
-		if !ok {
-			spec, ok = keywords[opstring]
-		}
-		if ok {
-			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
 		} else {
 			ops.errorf("unknown opcode: %s", opstring)
 		}
@@ -1380,6 +1438,21 @@ func (ops *OpStream) pragma(line string) error {
 			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
 		} else {
 			// ops.Version is already correct, or needed to be upped.
+		}
+		return nil
+	case "typetrack":
+		if len(fields) < 3 {
+			return ops.error("no typetrack value")
+		}
+		value := fields[2]
+		on, err := strconv.ParseBool(value)
+		if err != nil {
+			return ops.errorf("bad #pragma typetrack: %#v", value)
+		}
+		ops.typeTracking = on
+		if on {
+			ops.known.stack = nil
+			ops.known.bottom = StackAny
 		}
 		return nil
 	default:
@@ -1805,9 +1878,8 @@ func AssembleString(text string) (*OpStream, error) {
 // Note that AssemblerDefaultVersion is not the latest supported version,
 // and therefore we might need to pass in explicitly a higher version.
 func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
-	sr := strings.NewReader(text)
 	ops := OpStream{Version: version}
-	err := ops.assemble(sr)
+	err := ops.assemble(text)
 	return &ops, err
 }
 
@@ -1850,13 +1922,11 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 	return
 }
 
-type disFunc func(dis *disassembleState, spec *OpSpec) (string, error)
-
-// Basic disasemble. Immediates are decoded based on info in the OpSpec.
-func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
+// disassemble a single opcode at program[pc] according to spec
+func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	out := spec.Name
 	pc := dis.pc + 1
-	for _, imm := range spec.Details.Immediates {
+	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
 		case immByte:
@@ -2157,7 +2227,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			return
 		}
 		op := opsByOpcode[version][program[dis.pc]]
-		if op.Modes == runModeApplication {
+		if op.Modes == modeApp {
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {
@@ -2175,7 +2245,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 
 		// Actually do the disassembly
 		var line string
-		line, err = op.dis(&dis, &op)
+		line, err = disassemble(&dis, &op)
 		if err != nil {
 			return
 		}
