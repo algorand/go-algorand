@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -169,6 +170,38 @@ class NodeContext:
                 self.maxpubaddr = maxpubaddr
             return self.pubw, self.maxpubaddr
 
+def get_block_proposers(algod, lastRound):
+    oprops = {}
+    for i in range(1,lastRound+1):
+        try:
+            b2b = algod.block_info(i, response_format='msgpack')
+            b2 = algosdk.encoding.msgpack.unpackb(b2b)
+            oprop = b2['cert']['prop']['oprop']
+            oprops[oprop] = oprops.get(oprop, 0) + 1
+        except Exception as e:
+            print(e)
+            break
+    #assert(len(oprops) == 3)
+    print(json.dumps(oprops))
+    mean = statistics.mean(oprops.values())
+    mean_10pct = mean / 10
+    ok = []
+    bad = []
+    for op,count in oprops.items():
+        line = '{}\t{}'.format(algosdk.encoding.encode_address(op), count)
+        if abs(count-mean) > mean_10pct:
+            bad.append(line)
+        else:
+            ok.append(line)
+    if bad:
+        for line in ok:
+            print(line)
+        print("ERROR:")
+        for line in bad:
+            print(line)
+        raise Exception("too much variance in block proposers")
+    return
+
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
 _logging_datefmt = '%Y%m%d_%H%M%S'
 
@@ -283,23 +316,48 @@ def main():
             tryi += 1
             print('n1 get pub wallet retry sleep...')
             time.sleep(1)
+
     a1i = n1algod.account_info(maxpubaddr)
     pubw2, maxpubaddr2 = n2.get_pub_wallet()
     a2i = n2algod.account_info(maxpubaddr2)
+
+    # test txn on n1 account submitted through n1, seen at n2
+    tx1amt = 999000
     params = n1algod.suggested_params()
     round = params['lastRound']
     max_init_wait_rounds = 5
-    tx1amt = 999000
     txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=maxpubaddr2, amt=tx1amt, flat_fee=True)
     stxn = n1kmd.sign_transaction(pubw, '', txn)
     txid = n1algod.send_transaction(stxn)
-
     wait_for_transaction(n1algod, txid, round)
 
     a2i2 = n2algod.account_info(maxpubaddr2)
-    print(json.dumps(a2i, indent=2))
-    print(json.dumps(a2i2, indent=2))
+    #print(json.dumps(a2i, indent=2))
+    #print(json.dumps(a2i2, indent=2))
+    # check that recipient got it
     assert(a2i2['amount'] - a2i['amount'] == tx1amt)
+
+    # test txn on n2 account submitted through n2, seen at n1
+    a1i = n1algod.account_info(maxpubaddr)
+    tx2amt = 3000000
+    params = n2algod.suggested_params()
+    round = params['lastRound']
+    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr2, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=maxpubaddr, amt=tx2amt, flat_fee=True)
+    stxn = n2kmd.sign_transaction(pubw2, '', txn)
+    txid = n2algod.send_transaction(stxn)
+    wait_for_transaction(n2algod, txid, round)
+
+    a1i2 = n1algod.account_info(maxpubaddr)
+    # check that recipient got it
+    assert(a1i2['amount'] - a1i['amount'] == tx2amt)
+
+    # run for a bunch of rounds and ensure that block proposers are well distributed
+    ralgod = openalgod(relaydir)
+    st = ralgod.status()
+    while st['lastRound'] < 100:
+        st = ralgod.status_after_block(st['lastRound'])
+        print(st['lastRound'])
+    get_block_proposers(ralgod, st['lastRound'])
 
 
 if __name__ == '__main__':
