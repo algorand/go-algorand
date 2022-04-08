@@ -3,6 +3,8 @@
 
 import argparse
 import atexit
+import glob
+import json
 import logging
 import os
 import re
@@ -63,6 +65,7 @@ def xrun(cmd, *args, **kwargs):
     kwargs['stdout'] = subprocess.PIPE
     kwargs['stderr'] = subprocess.STDOUT
     try:
+        logger.debug('xrun: %r', cmd)
         p = subprocess.Popen(cmd, *args, **kwargs)
     except Exception as e:
         logger.error('subprocess failed {!r}'.format(cmd), exc_info=True)
@@ -89,11 +92,29 @@ def xrun(cmd, *args, **kwargs):
 
 def startdaemon(cmd):
     try:
+        logger.debug('start: %r', cmd)
         p = subprocess.Popen(cmd)
         return p
     except Exception as e:
         logger.error('subprocess failed {!r}'.format(cmd), exc_info=True)
         raise
+
+def wait_for_transaction(algod, txid, round, timeout=15):
+    start = time.time()
+    ti = algod.pending_transaction_info(txid)
+    #print(json.dumps(ti, indent=2))
+    while True:
+        if ti and ti.get('round') != 0:
+            # txn was committed
+            return True
+        if timeout and ((time.time() - start) > timeout):
+            return False
+        time.sleep(1)
+        st = algod.status_after_block(round)
+        #print(json.dumps(st, indent=2))
+        round = st['lastRound']
+        ti = algod.pending_transaction_info(txid)
+        #print(json.dumps(ti, indent=2))
 
 class NodeContext:
     def __init__(self, bindir, env=None, algodata=None):
@@ -104,20 +125,20 @@ class NodeContext:
             self.algodata = env['ALGORAND_DATA']
         self.kmd = None
         self.algod = None
+        self.pubw = None
+        self.maxpubaddr = None
         self.lock = threading.Lock()
         return
 
     def _connect(self):
+        # should run from inside self.lock
         if self.algod and self.kmd:
             return
 
-        # should run from inside self.lock
-        algodata = self.env['ALGORAND_DATA']
-
         goal = os.path.join(self.bindir, 'goal')
-        xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
-        self.kmd = openkmd(algodata)
-        self.algod = openalgod(algodata)
+        xrun([goal, 'kmd', 'start', '-t', '3600','-d', self.algodata], env=self.env, timeout=5)
+        self.kmd = openkmd(self.algodata)
+        self.algod = openalgod(self.algodata)
 
     def connect(self):
         with self.lock:
@@ -222,7 +243,7 @@ def main():
     env['NETDIR'] = netdir
 
     shutil.rmtree(netdir, ignore_errors=True)
-    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/ThreeNodesEvenDist.json')], timeout=90)
+    xrun([os.path.join(oldbin, 'goal'), 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/ThreeNodesEvenDist.json')], timeout=90)
 
     relaydir = os.path.join(netdir, 'Primary')
     relay = startdaemon([oldalgod, '-d', relaydir])
@@ -240,16 +261,28 @@ def main():
     n2dir = os.path.join(netdir, 'Node2')
     node2 = startdaemon([newalgod, '-d', n2dir, '-p', relay_addr])
     atexit.register(node2.terminate)
-    n2 = NodeContext(newbin, algodata=n1dir)
+    n2 = NodeContext(newbin, algodata=n2dir)
     #~/Algorand/txnsyncbin/algod -d ~/Algorand/tn3/Node2 -p $(cat ~/Algorand/tn3/Primary/algod-listen.net) > ~/Algorand/tn3/Primary/algod.out 2>&1 &
 
-    n1algod, _ = n1.conect()
-    n2algod, _ = n2.connect()
+    n1algod, n1kmd = n1.connect()
+    n2algod, n2kmd = n2.connect()
+    time.sleep(5)
     status = n1algod.status()
     # TODO: timeout?
-    n1algod.status_after_block(status['round'])
+    #print('status {!r}'.format(status))
+    n1algod.status_after_block(status['lastRound'])
 
-    pubw, maxpubaddr = n1.get_pub_wallet()
+    tryi = 0
+    while True:
+        try:
+            pubw, maxpubaddr = n1.get_pub_wallet()
+            break
+        except:
+            if tryi >= 5:
+                raise
+            tryi += 1
+            print('n1 get pub wallet retry sleep...')
+            time.sleep(1)
     a1i = n1algod.account_info(maxpubaddr)
     pubw2, maxpubaddr2 = n2.get_pub_wallet()
     a2i = n2algod.account_info(maxpubaddr2)
@@ -258,10 +291,14 @@ def main():
     max_init_wait_rounds = 5
     tx1amt = 999000
     txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=maxpubaddr2, amt=tx1amt, flat_fee=True)
-    stxn = kmd.sign_transaction(pubw, '', txn)
+    stxn = n1kmd.sign_transaction(pubw, '', txn)
     txid = n1algod.send_transaction(stxn)
 
+    wait_for_transaction(n1algod, txid, round)
+
     a2i2 = n2algod.account_info(maxpubaddr2)
+    print(json.dumps(a2i, indent=2))
+    print(json.dumps(a2i2, indent=2))
     assert(a2i2['amount'] - a2i['amount'] == tx1amt)
 
 
