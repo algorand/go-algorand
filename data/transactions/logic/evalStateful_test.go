@@ -237,9 +237,8 @@ log
 
 	// check err opcode work in both modes
 	source := "err"
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "encountered err")
-	testApp(t, source, defaultEvalParams(nil), "encountered err")
-	// require.NotContains(t, err.Error(), "not allowed in current mode")
+	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "err opcode executed")
+	testApp(t, source, defaultEvalParams(nil), "err opcode executed")
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
 	disallowedV4 := []string{
@@ -905,14 +904,14 @@ func TestAssets(t *testing.T) {
 }
 
 func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
-	for _, field := range AssetHoldingFieldNames {
-		fs := AssetHoldingFieldSpecByName[field]
+	for _, field := range assetHoldingFieldNames {
+		fs := assetHoldingFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
-	for _, field := range AssetParamsFieldNames {
-		fs := AssetParamsFieldSpecByName[field]
+	for _, field := range assetParamsFieldNames {
+		fs := assetParamsFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
@@ -2197,12 +2196,12 @@ func TestEnumFieldErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	source := `txn Amount`
-	origSpec := txnFieldSpecByField[Amount]
+	origSpec := txnFieldSpecs[Amount]
 	changed := origSpec
 	changed.ftype = StackBytes
-	txnFieldSpecByField[Amount] = changed
+	txnFieldSpecs[Amount] = changed
 	defer func() {
-		txnFieldSpecByField[Amount] = origSpec
+		txnFieldSpecs[Amount] = origSpec
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "Amount expected field type is []byte but got uint64")
@@ -2210,12 +2209,12 @@ func TestEnumFieldErrors(t *testing.T) {
 
 	source = `global MinTxnFee`
 
-	origMinTxnFs := globalFieldSpecByField[MinTxnFee]
+	origMinTxnFs := globalFieldSpecs[MinTxnFee]
 	badMinTxnFs := origMinTxnFs
 	badMinTxnFs.ftype = StackBytes
-	globalFieldSpecByField[MinTxnFee] = badMinTxnFs
+	globalFieldSpecs[MinTxnFee] = badMinTxnFs
 	defer func() {
-		globalFieldSpecByField[MinTxnFee] = origMinTxnFs
+		globalFieldSpecs[MinTxnFee] = origMinTxnFs
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "MinTxnFee expected field type is []byte but got uint64")
@@ -2242,12 +2241,12 @@ int 55
 asset_holding_get AssetBalance
 assert
 `
-	origBalanceFs := assetHoldingFieldSpecByField[AssetBalance]
+	origBalanceFs := assetHoldingFieldSpecs[AssetBalance]
 	badBalanceFs := origBalanceFs
 	badBalanceFs.ftype = StackBytes
-	assetHoldingFieldSpecByField[AssetBalance] = badBalanceFs
+	assetHoldingFieldSpecs[AssetBalance] = badBalanceFs
 	defer func() {
-		assetHoldingFieldSpecByField[AssetBalance] = origBalanceFs
+		assetHoldingFieldSpecs[AssetBalance] = origBalanceFs
 	}()
 
 	testApp(t, source, ep, "AssetBalance expected field type is []byte but got uint64")
@@ -2256,12 +2255,12 @@ assert
 asset_params_get AssetTotal
 assert
 `
-	origTotalFs := assetParamsFieldSpecByField[AssetTotal]
+	origTotalFs := assetParamsFieldSpecs[AssetTotal]
 	badTotalFs := origTotalFs
 	badTotalFs.ftype = StackBytes
-	assetParamsFieldSpecByField[AssetTotal] = badTotalFs
+	assetParamsFieldSpecs[AssetTotal] = badTotalFs
 	defer func() {
-		assetParamsFieldSpecByField[AssetTotal] = origTotalFs
+		assetParamsFieldSpecs[AssetTotal] = origTotalFs
 	}()
 
 	testApp(t, source, ep, "AssetTotal expected field type is []byte but got uint64")
@@ -2278,11 +2277,6 @@ func TestReturnTypes(t *testing.T) {
 		StackBytes:  "byte 0x33343536\n",
 	}
 	ep, tx, ledger := makeSampleEnv()
-
-	// This unit test reususes this `ep` willy-nilly.  Would be nice to rewrite,
-	// but for now, trun off budget pooling so that it doesn't get exhausted.
-	ep.Proto.EnableAppCostPooling = false
-	ep.PooledApplicationBudget = nil
 
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = 1
@@ -2322,22 +2316,22 @@ func TestReturnTypes(t *testing.T) {
 	ledger.NewLocal(tx.Receiver, 1, string(key), algoValue)
 	ledger.NewAccount(appAddr(1), 1000000)
 
+	// We try to form a snippet that will test every opcode, by sandwiching it
+	// between arguments that correspond to the opcodes input types, and then
+	// check to see if the proper output types end up on the stack.  But many
+	// opcodes require more specific inputs than a constant string or the number
+	// 1 for ints.  Defaults are also supplied for immediate arguments.  For
+	// opcodes that need to set up their own stack inputs, a ": at the front of
+	// the string means "start with an empty stack".
 	specialCmd := map[string]string{
 		"txn":               "txn Sender",
 		"txna":              "txna ApplicationArgs 0",
 		"gtxn":              "gtxn 0 Sender",
 		"gtxna":             "gtxna 0 ApplicationArgs 0",
 		"global":            "global MinTxnFee",
-		"arg":               "arg 0",
-		"load":              "load 0",
-		"store":             "store 0",
-		"gload":             "gload 0 0",
-		"gloads":            "gloads 0",
-		"gloadss":           "pop; pop; int 0; int 1; gloadss", // Needs txn index = 0 to work
-		"gaid":              "gaid 0",
-		"dig":               "dig 0",
-		"cover":             "cover 0",
-		"uncover":           "uncover 0",
+		"gaids":             ": int 0; gaids",
+		"gloads":            ": int 0; gloads 0",       // Needs txn index = 0 to work
+		"gloadss":           ": int 0; int 1; gloadss", // Needs txn index = 0 to work
 		"intc":              "intcblock 0; intc 0",
 		"intc_0":            "intcblock 0; intc_0",
 		"intc_1":            "intcblock 0 0; intc_1",
@@ -2349,28 +2343,32 @@ func TestReturnTypes(t *testing.T) {
 		"bytec_2":           "bytecblock 0x32 0x33 0x34; bytec_2",
 		"bytec_3":           "bytecblock 0x32 0x33 0x34 0x35; bytec_3",
 		"substring":         "substring 0 2",
-		"asset_params_get":  "asset_params_get AssetTotal",
+		"extract_uint32":    ": byte 0x0102030405; int 1; extract_uint32",
+		"extract_uint64":    ": byte 0x010203040506070809; int 1; extract_uint64",
+		"asset_params_get":  "asset_params_get AssetUnitName",
 		"asset_holding_get": "asset_holding_get AssetBalance",
 		"gtxns":             "gtxns Sender",
-		"gtxnsa":            "pop; int 0; gtxnsa ApplicationArgs 0",
-		"pushint":           "pushint 7272",
-		"pushbytes":         `pushbytes "jojogoodgorilla"`,
+		"gtxnsa":            ": int 0; gtxnsa ApplicationArgs 0",
 		"app_params_get":    "app_params_get AppGlobalNumUint",
 		"acct_params_get":   "acct_params_get AcctMinBalance",
 		"extract":           "extract 0 2",
 		"txnas":             "txnas ApplicationArgs",
 		"gtxnas":            "gtxnas 0 ApplicationArgs",
-		"gtxnsas":           "pop; pop; int 0; int 0; gtxnsas ApplicationArgs",
-		"divw":              "pop; pop; pop; int 1; int 2; int 3; divw",
-		"args":              "args",
-		"itxn":              "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
-		"itxna":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxna Accounts 0",
-		"itxnas":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxnas Accounts",
-		"gitxn":             "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxn 0 Sender",
-		"gitxna":            "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
-		"gitxnas":           "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxnas 0 Accounts",
-		"base64_decode":     `pushbytes "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; pushbytes "YWJjMTIzIT8kKiYoKSctPUB-"; base64_decode URLEncoding; pushbytes "abc123!?$*&()'-=@~"; ==; &&; assert`,
-		"json_ref":          "json_ref JSONUint64",
+		"gtxnsas":           ": int 0; int 0; gtxnsas ApplicationArgs",
+		"divw":              ": int 1; int 2; int 3; divw",
+
+		"itxn_field":  "itxn_begin; itxn_field TypeEnum",
+		"itxn_next":   "itxn_begin; int pay; itxn_field TypeEnum; itxn_next",
+		"itxn_submit": "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit",
+		"itxn":        "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxn CreatedAssetID",
+		"itxna":       "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; itxna Accounts 0",
+		"itxnas":      ": itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; int 0; itxnas Accounts",
+		"gitxn":       "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxn 0 Sender",
+		"gitxna":      "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
+		"gitxnas":     ": itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; int 0; gitxnas 0 Accounts",
+
+		"base64_decode": `: byte "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding`,
+		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2378,8 +2376,13 @@ func TestReturnTypes(t *testing.T) {
 		assert.Contains(t, cmd, opcode)
 	}
 
-	// these require special input data and tested separately
+	// these have strange stack semantics or require special input data /
+	// context, so they must be tested separately
 	skipCmd := map[string]bool{
+		"retsub": true,
+		"err":    true,
+		"return": true,
+
 		"ed25519verify":       true,
 		"ed25519verify_bare":  true,
 		"ecdsa_verify":        true,
@@ -2389,31 +2392,61 @@ func TestReturnTypes(t *testing.T) {
 
 	byName := OpsByName[LogicVersion]
 	for _, m := range []runMode{runModeSignature, runModeApplication} {
-		t.Run(fmt.Sprintf("m=%s", m.String()), func(t *testing.T) {
-			for name, spec := range byName {
-				if len(spec.Returns) == 0 || (m&spec.Modes) == 0 || skipCmd[name] {
-					continue
+		for name, spec := range byName {
+			// Only try an opcode in its modes
+			if (m & spec.Modes) == 0 {
+				continue
+			}
+			if skipCmd[name] {
+				continue
+			}
+			t.Run(fmt.Sprintf("mode=%s,opcode=%s", m, name), func(t *testing.T) {
+				provideStackInput := true
+				cmd := name
+				if special, ok := specialCmd[name]; ok {
+					if strings.HasPrefix(special, ":") {
+						cmd = special[1:]
+						provideStackInput = false
+					} else {
+						cmd = special
+					}
+				} else {
+					for _, imm := range spec.Details.Immediates {
+						switch imm.kind {
+						case immByte:
+							cmd += " 0"
+						case immInt:
+							cmd += " 10"
+						case immInts:
+							cmd += " 11 12 13"
+						case immBytes:
+							cmd += " 0x123456"
+						case immBytess:
+							cmd += " 0x12 0x34 0x56"
+						case immLabel:
+							cmd += " done; done: ;"
+						default:
+							require.Fail(t, "bad immediate", "%s", imm)
+						}
+					}
 				}
 				var sb strings.Builder
-				sb.Grow(64)
-				for _, t := range spec.Args {
-					sb.WriteString(typeToArg[t])
+				if provideStackInput {
+					for _, t := range spec.Args {
+						sb.WriteString(typeToArg[t])
+					}
 				}
-				if cmd, ok := specialCmd[name]; ok {
-					sb.WriteString(cmd + "\n")
-				} else {
-					sb.WriteString(name + "\n")
-				}
-				source := sb.String()
-				ops := testProg(t, source, AssemblerMaxVersion)
+				sb.WriteString(cmd + "\n")
+				ops := testProg(t, sb.String(), AssemblerMaxVersion)
 
-				// Setup as if evaluation is in tx1, since we want to test gaid
-				// that must look back.
+				ep.reset()                          // for Trace and budget isolation
+				ep.pastScratch[0] = &scratchSpace{} // for gload
+
 				cx := EvalContext{
 					EvalParams:   ep,
 					runModeFlags: m,
-					GroupIndex:   1,
-					Txn:          &ep.TxnGroup[1],
+					groupIndex:   1,
+					txn:          &ep.TxnGroup[1],
 					appID:        1,
 				}
 
@@ -2421,27 +2454,31 @@ func TestReturnTypes(t *testing.T) {
 				// This convinces them all to work.  Revisit.
 				cx.TxnGroup[0].ConfigAsset = 100
 
-				eval(ops.Program, &cx)
-
-				assert.Equal(
-					t,
-					len(spec.Returns), len(cx.stack),
-					fmt.Sprintf("\n%s%s expected to return %d values but stack is %#v", ep.Trace, spec.Name, len(spec.Returns), cx.stack),
-				)
-				for i := 0; i < len(spec.Returns); i++ {
-					sp := len(cx.stack) - 1 - i
-					if sp < 0 {
-						continue // We only assert this above, not require.
+				// These little programs need not pass. Since the returned stack
+				// is checked for typing, we can't get hung up on whether it is
+				// exactly one positive int. But if it fails for any *other*
+				// reason, we're not doing a good test.
+				_, err := eval(ops.Program, &cx)
+				if err != nil {
+					// Allow the kinds of errors we expect, but fail for stuff
+					// that indicates the opcode itself failed.
+					reason := err.Error()
+					if reason != "stack finished with bytes not int" &&
+						!strings.HasPrefix(reason, "stack len is") {
+						require.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
 					}
-					stackType := cx.stack[sp].argType()
+				}
+				require.Len(t, cx.stack, len(spec.Returns), "%s", ep.Trace)
+				for i := 0; i < len(spec.Returns); i++ {
+					stackType := cx.stack[i].argType()
 					retType := spec.Returns[i]
-					assert.True(
+					require.True(
 						t, typecheck(retType, stackType),
-						fmt.Sprintf("%s expected to return %s but actual is %s", spec.Name, retType.String(), stackType.String()),
+						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
 					)
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -2539,6 +2576,8 @@ func appAddr(id int) basics.Address {
 }
 
 func TestAppInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := makeSampleEnv()
 	require.Equal(t, 888, int(tx.ApplicationID))
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2557,6 +2596,8 @@ func TestAppInfo(t *testing.T) {
 }
 
 func TestBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep := defaultEvalParams(nil)
 	source := `
 global OpcodeBudget
@@ -2571,6 +2612,8 @@ int 695
 }
 
 func TestSelfMutate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, _, ledger := makeSampleEnv()
 
 	/* In order to test the added protection of mutableAccountReference, we're

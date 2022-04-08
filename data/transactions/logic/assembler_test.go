@@ -556,40 +556,46 @@ func testLine(t *testing.T, line string, ver uint64, expected string) {
 func TestAssembleTxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
-	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
-	testLine(t, "txna Sender 256", AssemblerMaxVersion, "txna found scalar field \"Sender\"...")
-	testLine(t, "gtxna 0 Accounts 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
-	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
-	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna transaction index beyond 255: 256")
-	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna found scalar field \"Sender\"...")
-	testLine(t, "txn Accounts 0", 1, "txn expects one argument")
-	testLine(t, "txn Accounts 0 1", 2, "txn expects one or two arguments")
-	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects two immediate arguments")
-	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects one immediate argument")
+	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna i beyond 255: 256")
+	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna i beyond 255: 256")
+	testLine(t, "txna Sender 256", AssemblerMaxVersion, "txna unknown field: \"Sender\"")
+	testLine(t, "gtxna 0 Accounts 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
+	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
+	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna t beyond 255: 256")
+	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: \"Sender\"")
+	testLine(t, "txn Accounts 0", 1, "txn expects 1 immediate argument")
+	testLine(t, "txn Accounts 0 1", 2, "txn expects 1 or 2 immediate arguments")
+	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects 2 immediate arguments")
+	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects 1 immediate argument")
 	testLine(t, "txna Accounts a", AssemblerMaxVersion, "txna unable to parse...")
-	testLine(t, "gtxn 0 Sender 0", 1, "gtxn expects two arguments")
-	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects two or three arguments")
-	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects three arguments")
+	testLine(t, "gtxn 0 Sender 0", 1, "gtxn expects 2 immediate arguments")
+	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects 2 or 3 immediate arguments")
+	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects 3 immediate arguments")
 	testLine(t, "gtxna a Accounts 0", AssemblerMaxVersion, "gtxna unable to parse...")
 	testLine(t, "gtxna 0 Accounts a", AssemblerMaxVersion, "gtxna unable to parse...")
-	testLine(t, "gtxnas Accounts 1 2", AssemblerMaxVersion, "gtxnas expects two immediate arguments")
+	testLine(t, "gtxnas Accounts 1 2", AssemblerMaxVersion, "gtxnas expects 2 immediate arguments")
 	testLine(t, "txn ABC", 2, "txn unknown field: \"ABC\"")
 	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: \"ABC\"")
 	testLine(t, "gtxn a ABC", 2, "gtxn unable to parse...")
-	testLine(t, "txn Accounts", AssemblerMaxVersion, "txn found array field \"Accounts\"...")
-	testLine(t, "txn Accounts", 1, "txn found array field \"Accounts\"...")
+	testLine(t, "txn Accounts", 1, "txn unknown field: \"Accounts\"")
+	testLine(t, "txn Accounts", AssemblerMaxVersion, "txn unknown field: \"Accounts\"")
 	testLine(t, "txn Accounts 0", AssemblerMaxVersion, "")
-	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "gtxn found array field \"Accounts\"...")
-	testLine(t, "gtxn 0 Accounts", 1, "gtxn found array field \"Accounts\"...")
+	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "gtxn unknown field: \"Accounts\"...")
+	testLine(t, "gtxn 0 Accounts", 1, "gtxn unknown field: \"Accounts\"")
 	testLine(t, "gtxn 0 Accounts 1", AssemblerMaxVersion, "")
 }
 
 func TestAssembleGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testLine(t, "global", AssemblerMaxVersion, "global expects one argument")
+	testLine(t, "global", AssemblerMaxVersion, "global expects 1 immediate argument")
 	testLine(t, "global a", AssemblerMaxVersion, "global unknown field: \"a\"")
+	testProg(t, "global MinTxnFee; int 2; +", AssemblerMaxVersion)
+	testProg(t, "global ZeroAddress; byte 0x12; concat; len", AssemblerMaxVersion)
+	testProg(t, "global MinTxnFee; byte 0x12; concat", AssemblerMaxVersion,
+		Expect{3, "concat arg 0 wanted type []byte..."})
+	testProg(t, "int 2; global ZeroAddress; +", AssemblerMaxVersion,
+		Expect{3, "+ arg 1 wanted type uint64..."})
 }
 
 func TestAssembleDefault(t *testing.T) {
@@ -1522,7 +1528,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for txn")
 
 	source = `txna Accounts 0`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1530,7 +1536,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for txna")
 
 	source = `gtxn 0 Sender`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1538,7 +1544,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[3] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for gtxn")
 
 	source = `gtxna 0 Accounts 0`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1546,7 +1552,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[3] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid txn arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for gtxna")
 
 	source = `global MinTxnFee`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1554,7 +1560,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid global arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for global")
 
 	ops.Program[0] = 0x11 // version
 	out, err := Disassemble(ops.Program)
@@ -1573,7 +1579,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[7] = 0x50 // holding field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset holding arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for asset_holding_get")
 
 	source = "int 0\nasset_params_get AssetTotal"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1581,7 +1587,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[4] = 0x50 // params field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset params arg index")
+	require.Contains(t, err.Error(), "invalid immediate f for asset_params_get")
 
 	source = "int 0\nasset_params_get AssetTotal"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1591,17 +1597,22 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected asset_params_get opcode end: missing 1 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate f for asset_params_get")
 
 	source = "gtxna 0 Accounts 0"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	ops.Program = ops.Program[0 : len(ops.Program)-2]
-	_, err = Disassemble(ops.Program)
+	_, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected gtxna opcode end: missing 2 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate i for gtxna")
+	_, err = Disassemble(ops.Program[0 : len(ops.Program)-2])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "program end while reading immediate f for gtxna")
+	_, err = Disassemble(ops.Program[0 : len(ops.Program)-3])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "program end while reading immediate t for gtxna")
 
 	source = "txna Accounts 0"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1611,7 +1622,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected txna opcode end: missing 1 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate i for txna")
 
 	source = "byte 0x4141\nsubstring 0 1"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1621,7 +1632,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unexpected substring opcode end: missing 1 bytes")
+	require.Contains(t, err.Error(), "program end while reading immediate e for substring")
 }
 
 func TestAssembleVersions(t *testing.T) {
@@ -1671,21 +1682,28 @@ func TestAssembleAsset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	introduction := OpsByName[LogicVersion]["asset_holding_get"].Version
-	for v := introduction; v <= AssemblerMaxVersion; v++ {
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "asset_holding_get ABC 1", v,
 			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; asset_holding_get ABC 1", v,
 			Expect{2, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
-			Expect{3, "asset_holding_get expects one argument"})
+			Expect{3, "asset_holding_get expects 1 immediate argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
 			Expect{3, "asset_holding_get unknown field: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
 			Expect{2, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
-		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
+		// Test that AssetUnitName is known to return bytes
+		testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,
+			Expect{5, "+ arg 0 wanted type uint64..."})
+
+		// Test that AssetTotal is known to return uint64
+		testProg(t, "int 1; asset_params_get AssetTotal; pop; byte 0x12; concat", v,
+			Expect{5, "concat arg 0 wanted type []byte..."})
+
+		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects 1 immediate argument")
 		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
 	}
 }
@@ -2198,13 +2216,59 @@ func TestErrShortBytecblock(t *testing.T) {
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
 	ops, err := AssembleStringWithVersion(text, 1)
 	require.NoError(t, err)
-	_, _, err = parseIntcblock(ops.Program, 0)
+	_, _, err = parseIntcblock(ops.Program, 1)
 	require.Equal(t, err, errShortIntcblock)
 
 	var cx EvalContext
 	cx.program = ops.Program
 	err = checkIntConstBlock(&cx)
 	require.Equal(t, err, errShortIntcblock)
+}
+
+func TestMethodWarning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		method string
+		pass   bool
+	}{
+		{
+			method: "abc(uint64)void",
+			pass:   true,
+		},
+		{
+			method: "abc(uint64)",
+			pass:   false,
+		},
+		{
+			method: "abc(uint65)void",
+			pass:   false,
+		},
+		{
+			method: "(uint64)void",
+			pass:   false,
+		},
+		{
+			method: "abc(uint65,void",
+			pass:   false,
+		},
+	}
+
+	for _, test := range tests {
+		for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+			src := fmt.Sprintf("method \"%s\"\nint 1", test.method)
+			ops, err := AssembleStringWithVersion(src, v)
+			require.NoError(t, err)
+
+			if test.pass {
+				require.Len(t, ops.Warnings, 0)
+				continue
+			}
+
+			require.Len(t, ops.Warnings, 1)
+			require.Contains(t, ops.Warnings[0].Error(), "Invalid ARC-4 ABI method signature for method op")
+		}
+	}
 }
 
 func TestBranchAssemblyTypeCheck(t *testing.T) {
@@ -2318,6 +2382,7 @@ func TestCoverAsm(t *testing.T) {
 	testProg(t, `int 4; byte "ayush"; int 5; cover 1; pop; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "john"; int 5; cover 2; +`, AssemblerMaxVersion, Expect{5, "+ arg 1..."})
 
+	testProg(t, `int 4; cover junk`, AssemblerMaxVersion, Expect{2, "cover unable to parse n ..."})
 }
 
 func TestUncoverAsm(t *testing.T) {
@@ -2330,6 +2395,7 @@ func TestUncoverAsm(t *testing.T) {
 }
 
 func TestTxTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{2, "itxn_field Sender expects 1 stack argument..."})
 	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{3, "...wanted type []byte got uint64"})
 	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
@@ -2337,4 +2403,21 @@ func TestTxTypes(t *testing.T) {
 	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{2, "itxn_field Amount expects 1 stack argument..."})
 	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{3, "...wanted type uint64 got []byte"})
 	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
+}
+
+func TestBadInnerFields(t *testing.T) {
+	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 5, Expect{3, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field FirstValidTime", 5, Expect{3, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{3, "...is not allowed."})
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{4, "...is not allowed."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{3, "...Note field was introduced in TEAL v6..."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{3, "...VotePK field was introduced in TEAL v6..."})
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{4, "...is not allowed."})
+
+	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{3, "...is not allowed."})
+	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 6, Expect{3, "...is not allowed."})
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 6, Expect{4, "...is not allowed."})
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
+	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 6)
+	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{4, "...is not allowed."})
 }

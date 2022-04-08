@@ -145,6 +145,7 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 
 		newDevs = append(newDevs, LedgerUSB{
 			hiddev: dev,
+			info:   info,
 		})
 	}
 

@@ -593,6 +593,7 @@ func TestDivw(t *testing.T) {
 func TestUint128(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Parallel()
 	x := uint128(0, 3)
 	require.Equal(t, x.String(), "3")
 	x = uint128(0, 0)
@@ -653,6 +654,7 @@ func TestDivModw(t *testing.T) {
 func TestWideMath(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Parallel()
 	// 2^64 = 18446744073709551616, we use a bunch of numbers close to that below
 	pattern := `
 int %d
@@ -697,11 +699,14 @@ int 1
 }
 
 func TestMulDiv(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Demonstrate a "function" that expects three u64s on stack,
 	// and calculates B*C/A. (Following opcode documentation
 	// convention, C is top-of-stack, B is below it, and A is
 	// below B.
 
+	t.Parallel()
 	muldiv := `
 muldiv:
 mulw				// multiply B*C. puts TWO u64s on stack
@@ -1089,7 +1094,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
-	require.Equal(t, len(onCompletionConstToUint64), len(onCompletionDescriptions))
+	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
@@ -1099,8 +1104,8 @@ func TestOnCompletionConstants(t *testing.T) {
 	for i := 0; i < last; i++ {
 		oc := OnCompletionConstType(i)
 		symbol := oc.String()
-		require.Contains(t, onCompletionConstToUint64, symbol)
-		require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
+		require.Contains(t, onCompletionMap, symbol)
+		require.Equal(t, uint64(i), onCompletionMap[symbol])
 		t.Run(symbol, func(t *testing.T) {
 			testAccepts(t, fmt.Sprintf("int %s; int %s; ==;", symbol, oc), 1)
 		})
@@ -1543,7 +1548,7 @@ func TestTxn(t *testing.T) {
 	}
 
 	for i, txnField := range TxnFieldNames {
-		fs := txnFieldSpecByField[TxnField(i)]
+		fs := txnFieldSpecs[i]
 		// Ensure that each field appears, starting in the version it was introduced
 		for v := uint64(1); v <= uint64(LogicVersion); v++ {
 			if v < fs.version {
@@ -2839,7 +2844,7 @@ func TestShortBytecblock2(t *testing.T) {
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
-func opPanic(cx *EvalContext) {
+func opPanic(cx *EvalContext) error {
 	panic(panicString)
 }
 func checkPanic(cx *EvalContext) error {
@@ -2855,12 +2860,15 @@ func TestPanic(t *testing.T) {
 			ops := testProg(t, `int 1`, v)
 			var hackedOpcode int
 			var oldSpec OpSpec
+			// Find an unused opcode to temporarily convert to a panicing opcde,
+			// and append it to program.
 			for opcode, spec := range opsByOpcode[v] {
 				if spec.op == nil {
 					hackedOpcode = opcode
 					oldSpec = spec
 					opsByOpcode[v][opcode].op = opPanic
 					opsByOpcode[v][opcode].Modes = modeAny
+					opsByOpcode[v][opcode].Details.FullCost.baseCost = 1
 					opsByOpcode[v][opcode].Details.checkFunc = checkPanic
 					ops.Program = append(ops.Program, byte(opcode))
 					break
@@ -2905,7 +2913,7 @@ func TestProgramTooNew(t *testing.T) {
 
 	t.Parallel()
 	var program [12]byte
-	vlen := binary.PutUvarint(program[:], EvalMaxVersion+1)
+	vlen := binary.PutUvarint(program[:], evalMaxVersion+1)
 	testLogicBytes(t, program[:vlen], defaultEvalParams(nil),
 		"greater than max supported", "greater than max supported")
 }
@@ -2924,10 +2932,10 @@ func TestProgramProtoForbidden(t *testing.T) {
 
 	t.Parallel()
 	var program [12]byte
-	vlen := binary.PutUvarint(program[:], EvalMaxVersion)
+	vlen := binary.PutUvarint(program[:], evalMaxVersion)
 	ep := defaultEvalParams(nil)
 	ep.Proto = &config.ConsensusParams{
-		LogicSigVersion: EvalMaxVersion - 1,
+		LogicSigVersion: evalMaxVersion - 1,
 	}
 	testLogicBytes(t, program[:vlen], ep, "greater than protocol", "greater than protocol")
 }
@@ -2983,7 +2991,7 @@ int 1`, v)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 			ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
 			testLogicBytes(t, ops.Program, defaultEvalParams(nil),
-				"beyond end of program", "beyond end of program")
+				"outside of program", "outside of program")
 		})
 	}
 }
@@ -3006,7 +3014,7 @@ int 1`, v)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 			ops.Program[6] = 0x70 // clobber hi byte of branch offset
-			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "beyond", "beyond")
+			testLogicBytes(t, ops.Program, defaultEvalParams(nil), "outside", "outside")
 		})
 	}
 	branches := []string{
@@ -3027,7 +3035,7 @@ intc_1
 			ops.Program[7] = 0xf0 // clobber the branch offset - highly negative
 			ops.Program[8] = 0xff // clobber the branch offset
 			testLogicBytes(t, ops.Program, defaultEvalParams(nil),
-				"branch target beyond", "branch target beyond")
+				"outside of program", "outside of program")
 		})
 	}
 }
@@ -3337,9 +3345,9 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 }
 
 // Rather than run b.N times, build a program that runs the operation
-// 2000 times, and does so for b.N / 2000 tuns.  This lets us amortize
+// 2000 times, and does so for b.N / 2000 runs.  This lets us amortize
 // away the creation and teardown of the evaluation system.  We report
-// the "waste/op" as the number of extra instructions that are run
+// the "extra/op" as the number of extra instructions that are run
 // during the "operation".  They are presumed to be fast (15/ns), so
 // the idea is that you can subtract that out from the reported speed
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
@@ -3349,11 +3357,12 @@ func benchmarkOperation(b *testing.B, prefix string, operation string, suffix st
 	source = strings.ReplaceAll(source, ";", "\n")
 	ops := testProg(b, source, AssemblerMaxVersion)
 	evalLoop(b, runs, ops.Program)
-	b.ReportMetric(float64(inst)*15.0, "waste/op")
+	b.ReportMetric(float64(inst), "extra/op")
 }
 
 func BenchmarkUintMath(b *testing.B) {
 	benches := [][]string{
+		{"dup", "int 23423", "dup; pop", ""},
 		{"pop1", "", "int 1234576; pop", "int 1"},
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
 		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
@@ -3370,6 +3379,7 @@ func BenchmarkUintMath(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
+			b.ReportAllocs()
 			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
@@ -3383,11 +3393,11 @@ func BenchmarkUintCmp(b *testing.B) {
 		})
 	}
 }
-func BenchmarkBigLogic(b *testing.B) {
+func BenchmarkByteLogic(b *testing.B) {
 	benches := [][]string{
-		{"b&", "byte 0x01234576", "byte 0x01ffffffffffffff; b&", "pop; int 1"},
-		{"b|", "byte 0x0ffff1234576", "byte 0x1202; b|", "pop; int 1"},
-		{"b^", "byte 0x01234576", "byte 0x0223627389; b^", "pop; int 1"},
+		{"b&", "", "byte 0x012345678901feab; byte 0x01ffffffffffffff; b&; pop", "int 1"},
+		{"b|", "", "byte 0x0ffff1234576abef; byte 0x1202120212021202; b|; pop", "int 1"},
+		{"b^", "", "byte 0x0ffff1234576abef; byte 0x1202120212021202; b^; pop", "int 1"},
 		{"b~", "byte 0x0123457673624736", "b~", "pop; int 1"},
 
 		{"b&big",
@@ -3398,7 +3408,7 @@ func BenchmarkBigLogic(b *testing.B) {
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
 			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b|",
 			"pop; int 1"},
-		{"b^big", "", // u256*u256
+		{"b^big", "", // u256^u256
 			`byte 0x123457601234576012345760123457601234576012345760123457601234576a
 			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b^; pop`,
 			"int 1"},
@@ -3408,12 +3418,13 @@ func BenchmarkBigLogic(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
+			b.ReportAllocs()
 			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
 }
 
-func BenchmarkBigMath(b *testing.B) {
+func BenchmarkByteMath(b *testing.B) {
 	benches := [][]string{
 		{"bpop", "", "byte 0x01ffffffffffffff; pop", "int 1"},
 
@@ -3464,18 +3475,13 @@ func BenchmarkBase64Decode(b *testing.B) {
 	bigStd := strings.Repeat(medStd, 4)
 	bigURL := strings.Repeat(medURL, 4)
 
-	tags := []string{"small", "medium", "large"}
-	stds := []string{smallStd, medStd, bigStd}
-	urls := []string{smallURL, medURL, bigURL}
+	tags := []string{"0", "64", "1024", "4096"}
+	stds := []string{"", smallStd, medStd, bigStd}
+	urls := []string{"", smallURL, medURL, bigURL}
 	ops := []string{
-		"",
-		"len",
+		"int 1; int 2; +; pop",
 		"b~",
 		"int 1; pop",
-		"keccak256",
-		"sha256",
-		"sha512_256",
-		"sha3_256",
 		"base64_decode StdEncoding",
 		"base64_decode URLEncoding",
 	}
@@ -3600,7 +3606,7 @@ func TestStackOverflow(t *testing.T) {
 
 	t.Parallel()
 	source := "int 1; int 2;"
-	for i := 1; i < MaxStackDepth/2; i++ {
+	for i := 1; i < maxStackDepth/2; i++ {
 		source += "dup2;"
 	}
 	testAccepts(t, source+"return", 2)
@@ -3692,6 +3698,7 @@ func TestArgType(t *testing.T) {
 func TestApplicationsDisallowOldTeal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Parallel()
 	const source = "int 1"
 
 	txn := makeSampleTxn()
@@ -3711,6 +3718,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Parallel()
 	const source = "int 1"
 
 	// Construct a group of two payments, no rekeying
@@ -3889,10 +3897,24 @@ func TestAllowedOpcodesV3(t *testing.T) {
 	require.Len(t, tests, cnt)
 }
 
+// TestLinearOpcodes ensures we don't have a linear cost opcode (which
+// inherently requires a dynamic cost model) before backBranchEnabledVersion,
+// which introduced our dynamic model.
+func TestLinearOpcodes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, spec := range OpSpecs {
+		if spec.Version < backBranchEnabledVersion {
+			require.Zero(t, spec.Details.FullCost.chunkCost, spec)
+		}
+	}
+}
+
 func TestRekeyFailsOnOldVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `int 1`, v)
@@ -3918,17 +3940,8 @@ func obfuscate(program string) string {
 
 type evalTester func(pass bool, err error) bool
 
-func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester, xtras ...uint64) error {
+func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
 	t.Helper()
-
-	numXtras := len(xtras)
-	require.LessOrEqual(t, numXtras, 1, "can handle at most 1 extra parameter but provided %d", numXtras)
-	withField := false
-	var introducedField uint64
-	if numXtras == 1 {
-		withField = true
-		introducedField = xtras[0]
-	}
 
 	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -3936,9 +3949,6 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 			t.Helper()
 			if v < introduced {
 				testProg(t, obfuscate(program), v, Expect{0, "...was introduced..."})
-				return
-			} else if withField && v < introducedField {
-				testProg(t, obfuscate(program), v, Expect{0, "...available in version..."})
 				return
 			}
 			ops := testProg(t, program, v)
@@ -3989,32 +3999,12 @@ func testRejects(t *testing.T, program string, introduced uint64) {
 		return !pass && err == nil
 	})
 }
-func testRejectsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
-	t.Helper()
-	testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
-		// Returned False, but didn't panic
-		return !pass && err == nil
-	}, introducedField)
-}
-func testAcceptsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) {
-	t.Helper()
-	testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
-		return pass && err == nil
-	}, introducedField)
-}
 func testPanics(t *testing.T, program string, introduced uint64) error {
 	t.Helper()
 	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
 	})
-}
-func testPanicsWithField(t *testing.T, program string, introducedOpcode, introducedField uint64) error {
-	t.Helper()
-	return testEvaluation(t, program, introducedOpcode, func(pass bool, err error) bool {
-		// TEAL panic! not just reject at exit
-		return !pass && err != nil
-	}, introducedField)
 }
 
 func TestAssert(t *testing.T) {
@@ -4492,6 +4482,7 @@ func TestBytesBits(t *testing.T) {
 func TestBytesConversions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Parallel()
 	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)
 }
@@ -4520,15 +4511,15 @@ func TestLog(t *testing.T) {
 			loglen: 2,
 		},
 		{
-			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls)),
-			loglen: MaxLogCalls,
+			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, maxLogCalls)),
+			loglen: maxLogCalls,
 		},
 		{
 			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <=; bnz loop;`,
 			loglen: 30,
 		},
 		{
-			source: fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", MaxLogSize)),
+			source: fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", maxLogSize)),
 			loglen: 1,
 		},
 	}
@@ -4538,7 +4529,7 @@ func TestLog(t *testing.T) {
 		delta := testApp(t, s.source, ep)
 		require.Len(t, delta.Logs, s.loglen)
 		if i == len(testCases)-1 {
-			require.Equal(t, strings.Repeat("a", MaxLogSize), delta.Logs[0])
+			require.Equal(t, strings.Repeat("a", maxLogSize), delta.Logs[0])
 		} else {
 			for _, l := range delta.Logs {
 				require.Equal(t, "a logging message", l)
@@ -4553,17 +4544,17 @@ func TestLog(t *testing.T) {
 		errContains string
 	}{
 		{
-			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", MaxLogSize+1)),
-			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
+			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
 			runMode:     runModeApplication,
 		},
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
-			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
 			runMode:     runModeApplication,
 		},
 		{
-			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, MaxLogCalls+1)),
+			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, maxLogCalls+1)),
 			errContains: "too many log calls",
 			runMode:     runModeApplication,
 		},
@@ -4574,7 +4565,7 @@ func TestLog(t *testing.T) {
 		},
 		{
 			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
-			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
 			runMode:     runModeApplication,
 		},
 		{
@@ -4631,6 +4622,7 @@ func TestPcDetails(t *testing.T) {
 		})
 	}
 }
+
 func TestOpBase64Decode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -4759,6 +4751,51 @@ By Herman Melville`, "",
 			}
 		}
 	}
+}
+
+func TestBase64CostVariation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+byte ""
+base64_decode URLEncoding
+pop
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-3-1) + ` // base64_decode cost = 1
+==
+`
+	testAccepts(t, source, fidoVersion)
+
+	source = `
+byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+base64_decode URLEncoding
+pop
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-3-5) + ` // base64_decode cost = 5 (64 bytes -> 1 + 64/16)
+==
+`
+	testAccepts(t, source, fidoVersion)
+
+	source = `
+byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567"
+base64_decode URLEncoding
+pop
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-3-5) + ` // base64_decode cost = 5 (60 bytes -> 1 + ceil(60/16))
+==
+`
+	testAccepts(t, source, fidoVersion)
+
+	source = `
+byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_AA=="
+base64_decode URLEncoding
+pop
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-3-6) + ` // base64_decode cost = 6 (68 bytes -> 1 + ceil(68/16))
+==
+`
+	testAccepts(t, source, fidoVersion)
 }
 
 func TestHasDuplicateKeys(t *testing.T) {
@@ -5153,4 +5190,9 @@ func TestOpJSONRef(t *testing.T) {
 		require.EqualError(t, err, s.error)
 	}
 
+}
+
+func TestTypeComplaints(t *testing.T) {
+	t.Skip("Issue #3837")
+	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
 }

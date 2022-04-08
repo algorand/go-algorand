@@ -511,7 +511,17 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 			node.mu.Unlock()
 		}()
 	}
+	return node.broadcastSignedTxGroup(txgroup)
+}
 
+// BroadcastInternalSignedTxGroup broadcasts a transaction group that has already been signed.
+// It is originated internally, and in DevMode, it will not advance the round.
+func (node *AlgorandFullNode) BroadcastInternalSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	return node.broadcastSignedTxGroup(txgroup)
+}
+
+// broadcastSignedTxGroup broadcasts a transaction group that has already been signed.
+func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
 	lastRound := node.ledger.Latest()
 	var b bookkeeping.BlockHeader
 	b, err = node.ledger.BlockHdr(lastRound)

@@ -175,23 +175,10 @@ ed25519verify_bare`, pkStr), v)
 	}
 }
 
-// bitIntFillBytes is a replacement for big.Int.FillBytes from future Go
-func bitIntFillBytes(b *big.Int, buf []byte) []byte {
-	for i := range buf {
-		buf[i] = 0
-	}
-	bytes := b.Bytes()
-	if len(bytes) > len(buf) {
-		panic(fmt.Sprintf("bitIntFillBytes: has %d but got %d buffer", len(bytes), len(buf)))
-	}
-	copy(buf[len(buf)-len(bytes):], bytes)
-	return buf
-}
-
 func keyToByte(tb testing.TB, b *big.Int) []byte {
 	k := make([]byte, 32)
 	require.NotPanics(tb, func() {
-		k = bitIntFillBytes(b, k)
+		b.FillBytes(k)
 	})
 	return k
 }
@@ -383,18 +370,6 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	require.True(t, pass)
 }
 
-// MarshalCompressed converts a point on the curve into the compressed form
-// specified in section 4.3.6 of ANSI X9.62.
-//
-// TODO: replace with elliptic.MarshalCompressed when updating to go 1.15+
-func marshalCompressed(curve elliptic.Curve, x, y *big.Int) []byte {
-	byteLen := (curve.Params().BitSize + 7) / 8
-	compressed := make([]byte, 1+byteLen)
-	compressed[0] = byte(y.Bit(0)) | 2
-	bitIntFillBytes(x, compressed[1:])
-	return compressed
-}
-
 func TestEcdsaWithSecp256r1(t *testing.T) {
 	if LogicVersion < fidoVersion {
 		return
@@ -405,7 +380,7 @@ func TestEcdsaWithSecp256r1(t *testing.T) {
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	pk := marshalCompressed(elliptic.P256(), key.X, key.Y)
+	pk := elliptic.MarshalCompressed(elliptic.P256(), key.X, key.Y)
 	x := keyToByte(t, key.PublicKey.X)
 	y := keyToByte(t, key.PublicKey.Y)
 
@@ -439,9 +414,9 @@ byte 0x%s
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
-				testAcceptsWithField(t, src, 5, fidoVersion)
+				testAccepts(t, src, fidoVersion)
 			} else {
-				testPanicsWithField(t, src, 5, fidoVersion)
+				testPanics(t, src, fidoVersion)
 			}
 		})
 	}
@@ -481,9 +456,9 @@ ecdsa_verify Secp256r1
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
-				testAcceptsWithField(t, src, 5, fidoVersion)
+				testAccepts(t, src, fidoVersion)
 			} else {
-				testRejectsWithField(t, src, 5, fidoVersion)
+				testRejects(t, src, fidoVersion)
 			}
 		})
 	}
@@ -507,6 +482,8 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 
 // test compatibility with ethereum signatures
 func TestEcdsaEthAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	/*
 		pip install eth-keys pycryptodome
 		from eth_keys import keys
@@ -533,18 +510,60 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	testAccepts(t, progText, 5)
 }
 
+func TestEcdsaCostVariation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Doesn't matter if it passes or fails. Just confirm the cost depends on curve.
+	source := `
+global ZeroAddress				// need 32 bytes
+byte "signature r"
+byte "signature s"
+byte "PK x"
+byte "PK y"
+ecdsa_verify Secp256k1
+!
+assert
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-1700-8) + `
+==
+`
+	testAccepts(t, source, 6) // Secp256k1 was 5, but OpcodeBudget is 6
+
+	source = `
+global ZeroAddress				// need 32 bytes
+byte "signature r"
+byte "signature s"
+byte "PK x"
+byte "PK y"
+ecdsa_verify Secp256r1
+!
+assert
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-2500-8) + `
+==
+`
+	testAccepts(t, source, fidoVersion)
+}
+
 func BenchmarkHash(b *testing.B) {
 	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
-		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
+		b.Run(hash+"-0w", func(b *testing.B) { // hash 0 bytes
+			benchmarkOperation(b, "", "byte 0x; "+hash+"; pop", "int 1")
+		})
+		b.Run(hash+"-32", func(b *testing.B) { // hash 32 bytes
 			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
 		})
-		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
+		b.Run(hash+"-128", func(b *testing.B) { // hash 128 bytes
 			benchmarkOperation(b, "int 32; bzero",
 				"dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
-		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
+		b.Run(hash+"-512", func(b *testing.B) { // hash 512 bytes
 			benchmarkOperation(b, "int 32; bzero",
 				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
+		})
+		b.Run(hash+"-4096", func(b *testing.B) { // hash 4k bytes
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
 	}
 }
@@ -638,7 +657,7 @@ func benchmarkEcdsaGenData(b *testing.B, curve EcdsaCurve) (data []benchmarkEcds
 		if curve == Secp256k1 {
 			data[i].pk = secp256k1.CompressPubkey(key.PublicKey.X, key.PublicKey.Y)
 		} else if curve == Secp256r1 {
-			data[i].pk = marshalCompressed(elliptic.P256(), key.PublicKey.X, key.PublicKey.Y)
+			data[i].pk = elliptic.MarshalCompressed(elliptic.P256(), key.PublicKey.X, key.PublicKey.Y)
 		}
 
 		d := []byte("testdata")
@@ -666,10 +685,9 @@ func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
 	if curve == Secp256k1 {
 		version = 5
 	} else if curve == Secp256r1 {
-		version = 6
+		version = fidoVersion
 	}
-	ops, err := AssembleStringWithVersion(source, version)
-	require.NoError(b, err)
+	ops := testProg(b, source, version)
 	for i := 0; i < b.N; i++ {
 		data[i].programs = ops.Program
 	}
@@ -709,7 +727,7 @@ ecdsa_verify Secp256k1`
 	if LogicVersion >= fidoVersion {
 		b.Run("ecdsa_verify secp256r1", func(b *testing.B) {
 			source := `#pragma version ` + strconv.Itoa(fidoVersion) + `
-	arg 0d
+	arg 0
 	arg 1
 	arg 2
 	arg 3
