@@ -458,7 +458,7 @@ var OpSpecs = []OpSpec{
 	{0x97, "divw", opDivw, asmDefault, disDefault, twoInts.plus(oneInt), oneInt, 6, modeAny, opDefault},
 	{0x98, "sha3_256", opSHA3_256, asmDefault, disDefault, oneBytes, oneBytes, 7, modeAny, costly(130)},
 	{0x99, "bn256_add", opBn256Add, asmDefault, disDefault, twoBytes, oneBytes, 6, modeAny, costly(70)},
-	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, asmDefault, disDefault, twoBytes, oneBytes, 6, modeAny, costly(1218)},
+	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, asmDefault, disDefault, twoBytes, oneBytes, 6, modeAny, costly(970)},
 	{0x9b, "bn256_pairing", opBn256Pairing, asmDefault, disDefault, twoBytes, oneInt, 6, modeAny, costly(8700)},
 
 	/* Will end up following keccak256 -

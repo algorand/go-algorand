@@ -776,7 +776,6 @@ int 1`
 
 type benchmarkBn256Data struct {
 	a        []byte
-	b        []byte
 	k        []byte
 	g1       []byte
 	g2       []byte
@@ -793,35 +792,17 @@ func benchmarkBn256DataGenData(b *testing.B) (data []benchmarkBn256Data) {
 	g1GenAff.FromJacobian(&g1Gen)
 	var a bn254.G1Affine
 	a.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
-	var g2Gen bn254.G2Jac
-	var g2GenAff bn254.G2Affine
-	g2Gen.X.SetString("10857046999023057135944570762232829481370756359578518086990519993285655852781",
-		"11559732032986387107991004021392285783925812861821192530917403151452391805634")
-	g2Gen.Y.SetString("8495653923123431417604973247489272438418190587263600148770280649306958101930",
-		"4082367875863433681332203403145435568316851327593401208105741076214120093531")
-	g2Gen.Z.SetString("1",
-		"0")
-	g2GenAff.FromJacobian(&g2Gen)
 
 	for i := 0; i < b.N; i++ {
 		var a bn254.G1Affine
 		a.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
 
-		var b bn254.G1Affine
-		b.ScalarMultiplication(&g1GenAff, new(big.Int).SetUint64(mrand.Uint64()))
-
-		var g2 bn254.G2Affine
-		g2.ScalarMultiplication(&g2GenAff, new(big.Int).SetUint64(mrand.Uint64()))
-
 		data[i].a = bN254G1ToBytes(&a)
-		data[i].b = bN254G1ToBytes(&b)
 		data[i].k = new(big.Int).SetUint64(mrand.Uint64()).Bytes()
 
 		// Pair one g1 and one g2
 		data[i].g1, _ = hex.DecodeString("0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e32")
 		data[i].g2, _ = hex.DecodeString("217fbd9a9db5719cfbe3580e3d8750cada058fdfffe95c440a0528ffc608f36e05d6a67604658d40b3e4cac3c46150f2702d87739b7774d79a8147f7271773b420f9429ee13c1843404bfd70e75efa886c173e57dde32970274d8bc53dfd562403f6276318990d053785b4ca342ebc4581a23a39285804bb74e079aa2ef3ba66")
-		// data[i].g1, _ = hex.DecodeString("0ebc9fc712b13340c800793386a88385e40912a21bacad2cc7db17d36e54c802238449426931975cced7200f08681ab9a86a2e5c2336cf625451cf2413318e3226a30a875a3f67768a5fa6967e27e301e0a417b21bb9cace9f68a3ab83178e2e07060c2efe16605495a4fd9396819c53cccf1ea48012c0481d3abe65470f1d4f2af861d56dda2857f11e4b4c840e69964b4b7c4a8dec61cca3603dd5f88060fb2e1721a874180b5ab5da85a13529d17b515c65d6fdb17ed4bf9a2cc5e3cb25ce17ea15dc9e34f6e0205d9df2ec3c327884d305f728e8f6871dd89d6ec13becb701cee1732410ec49c4131536e285b78d168cc3793d2925aa24816bb50d0ff7bc")
-		// data[i].g2, _ = hex.DecodeString("217fbd9a9db5719cfbe3580e3d8750cada058fdfffe95c440a0528ffc608f36e05d6a67604658d40b3e4cac3c46150f2702d87739b7774d79a8147f7271773b420f9429ee13c1843404bfd70e75efa886c173e57dde32970274d8bc53dfd562403f6276318990d053785b4ca342ebc4581a23a39285804bb74e079aa2ef3ba6622353c72d8deafcb8c0b476af1663f8894ffd4fd96816af6b613157bbf67be1f022d6794717df20cc81df29eeee786eca637a61b264b20cf92bb37118171e0e92b7f0626c0e3b73f2bb0c38dc931b05c201057a4ec85d28125420f84893b53730a2a623cbfb4a79cd8f9be423c4342f94cca7f97717655dbd336b9e6cae4d4311ee5c8c3872c52db7a4230148cedd4ce01a6cca63722846ad56ec2b8b8b81e501148da1936439b8332cac57ee3be2bc9146d1f4199927587f3e530bbff9de4401477eb610803e71eaea5ddcad3af373a0457a558acfa05528cea67768f09121714e07b9b9b56cf41872ec591ea643fd7979271bb96db5f27762e2266a124daa32ac533798860191e4a0b0463979e2ed3d99c959ca37ee5c2f656afbc91da9fa111c0f90c82cfd06752cd3cbfd558058bc9500f91fa16b8063977dfe01c53585f26bc1ad7d1d454dd8156f3f702c8661d3833cd8e4283b5bdc88e86dbc56dd0e618e71891cb02e3a06a6aa04b5dd1436a52826e5b0c569c297c73a0c785e950d9")
 	}
 	return data
 }
@@ -838,7 +819,7 @@ func benchmarkBn256(b *testing.B, source string) {
 	for i := 0; i < b.N; i++ {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
-		txn.Lsig.Args = [][]byte{data[i].a, data[i].b, data[i].k, data[i].g1, data[i].g2}
+		txn.Lsig.Args = [][]byte{data[i].a, data[i].k, data[i].g1, data[i].g2}
 		ep := defaultEvalParams(&txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
@@ -898,8 +879,8 @@ func BenchmarkBn256(b *testing.B) {
 
 	b.Run("bn256 scalar mul", func(b *testing.B) {
 		source := `#pragma version 6
-arg 3
-arg 4
+arg 0
+arg 1
 bn256_scalar_mul
 pop
 int 1
@@ -909,8 +890,8 @@ int 1
 
 	b.Run("bn256 pairing", func(b *testing.B) {
 		source := `#pragma version 6
+arg 2
 arg 3
-arg 4
 bn256_pairing
 pop
 int 1
