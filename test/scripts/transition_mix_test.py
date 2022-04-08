@@ -185,7 +185,7 @@ def get_block_proposers(algod, lastRound):
     #assert(len(oprops) == 3)
     logger.debug('oprops %r', oprops)
     mean = statistics.mean(oprops.values())
-    var_limit = mean / 20
+    var_limit = mean / 3
     ok = []
     bad = []
     for op,count in oprops.items():
@@ -360,6 +360,8 @@ def main():
         print(st['last-round'])
     get_block_proposers(ralgod, st['last-round'])
 
+    print("OK")
+    return 0
 
 if __name__ == '__main__':
     sys.exit(main())
