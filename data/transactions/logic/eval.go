@@ -1281,9 +1281,6 @@ func opDivw(cx *EvalContext) error {
 }
 
 func bytesToBN254Field(b []byte) (ret fp.Element) {
-	// var x big.Int
-	// x.SetBytes(b[:32])
-	// ret.SetBigInt(&x)
 	ret.SetBytes(b)
 	return
 }
@@ -1328,11 +1325,9 @@ func bN254G2ToBytes(g2 *bn254.G2Affine) (ret []byte) {
 	retXA1 := g2.X.A1.Bytes()
 	retYA0 := g2.Y.A0.Bytes()
 	retYA1 := g2.Y.A1.Bytes()
-
 	ret = append(retXA0[:], retXA1[:]...)
 	ret = append(ret[:], retYA0[:]...)
 	ret = append(ret[:], retYA1[:]...)
-
 	return
 }
 
@@ -1344,7 +1339,7 @@ func opBn256Add(cx *EvalContext) error {
 	a := bytesToBN254G1(aBytes)
 	b := bytesToBN254G1(bBytes)
 	res := new(bn254.G1Affine).Add(&a, &b)
-	resBytes := res.Marshal()
+	resBytes := bN254G1ToBytes(res)
 	cx.stack = cx.stack[:last]
 	cx.stack[prev].Bytes = resBytes
 	return nil
