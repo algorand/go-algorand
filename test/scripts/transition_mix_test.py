@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 #
 
@@ -58,7 +59,7 @@ def openalgod(algodata):
     algodnet = open(algodnetpath, 'rt').read().strip()
     algodtokenpath = os.path.join(algodata,'algod.token')
     algodtoken = open(algodtokenpath, 'rt').read().strip()
-    algod = algosdk.algod.AlgodClient(algodtoken, 'http://' + algodnet)
+    algod = algosdk.v2client.algod.AlgodClient(algodtoken, 'http://' + algodnet)
     return algod
 
 def xrun(cmd, *args, **kwargs):
@@ -103,19 +104,19 @@ def startdaemon(cmd):
 def wait_for_transaction(algod, txid, round, timeout=15):
     start = time.time()
     ti = algod.pending_transaction_info(txid)
-    #print(json.dumps(ti, indent=2))
+    logger.debug('ti %s %r', txid, ti)
     while True:
-        if ti and ti.get('round') != 0:
+        if ti and ti.get('confirmed-round'):
             # txn was committed
             return True
         if timeout and ((time.time() - start) > timeout):
             return False
         time.sleep(1)
         st = algod.status_after_block(round)
-        #print(json.dumps(st, indent=2))
-        round = st['lastRound']
+        logger.debug('st %r', st)
+        round = st['last-round']
         ti = algod.pending_transaction_info(txid)
-        #print(json.dumps(ti, indent=2))
+        logger.debug('ti %r', ti)
 
 class NodeContext:
     def __init__(self, bindir, env=None, algodata=None):
@@ -182,14 +183,14 @@ def get_block_proposers(algod, lastRound):
             print(e)
             break
     #assert(len(oprops) == 3)
-    print(json.dumps(oprops))
+    logger.debug('oprops %r', oprops)
     mean = statistics.mean(oprops.values())
-    mean_10pct = mean / 10
+    var_limit = mean / 20
     ok = []
     bad = []
     for op,count in oprops.items():
         line = '{}\t{}'.format(algosdk.encoding.encode_address(op), count)
-        if abs(count-mean) > mean_10pct:
+        if abs(count-mean) > var_limit:
             bad.append(line)
         else:
             ok.append(line)
@@ -303,7 +304,7 @@ def main():
     status = n1algod.status()
     # TODO: timeout?
     #print('status {!r}'.format(status))
-    n1algod.status_after_block(status['lastRound'])
+    n1algod.status_after_block(status['last-round'])
 
     tryi = 0
     while True:
@@ -324,16 +325,16 @@ def main():
     # test txn on n1 account submitted through n1, seen at n2
     tx1amt = 999000
     params = n1algod.suggested_params()
-    round = params['lastRound']
+    round = params.first
     max_init_wait_rounds = 5
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=maxpubaddr2, amt=tx1amt, flat_fee=True)
+    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params.min_fee, first=round, last=round+max_init_wait_rounds, gh=params.gh, receiver=maxpubaddr2, amt=tx1amt, flat_fee=True)
     stxn = n1kmd.sign_transaction(pubw, '', txn)
     txid = n1algod.send_transaction(stxn)
     wait_for_transaction(n1algod, txid, round)
 
     a2i2 = n2algod.account_info(maxpubaddr2)
-    #print(json.dumps(a2i, indent=2))
-    #print(json.dumps(a2i2, indent=2))
+    logger.debug('a2i %r', a2i)
+    logger.debug('a2i2 %r', a2i2)
     # check that recipient got it
     assert(a2i2['amount'] - a2i['amount'] == tx1amt)
 
@@ -341,8 +342,8 @@ def main():
     a1i = n1algod.account_info(maxpubaddr)
     tx2amt = 3000000
     params = n2algod.suggested_params()
-    round = params['lastRound']
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr2, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=maxpubaddr, amt=tx2amt, flat_fee=True)
+    round = params.first
+    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr2, fee=params.min_fee, first=round, last=round+max_init_wait_rounds, gh=params.gh, receiver=maxpubaddr, amt=tx2amt, flat_fee=True)
     stxn = n2kmd.sign_transaction(pubw2, '', txn)
     txid = n2algod.send_transaction(stxn)
     wait_for_transaction(n2algod, txid, round)
@@ -354,10 +355,10 @@ def main():
     # run for a bunch of rounds and ensure that block proposers are well distributed
     ralgod = openalgod(relaydir)
     st = ralgod.status()
-    while st['lastRound'] < 100:
-        st = ralgod.status_after_block(st['lastRound'])
-        print(st['lastRound'])
-    get_block_proposers(ralgod, st['lastRound'])
+    while st['last-round'] < 100:
+        st = ralgod.status_after_block(st['last-round'])
+        print(st['last-round'])
+    get_block_proposers(ralgod, st['last-round'])
 
 
 if __name__ == '__main__':
