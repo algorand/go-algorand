@@ -285,8 +285,12 @@ func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
 
 func argEnums(name string) ([]string, string) {
 	switch name {
-	case "txn", "gtxn", "gtxns", "itxn", "gitxn", "itxn_field":
+	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
 		return fieldsAndTypes(logic.TxnFields)
+	case "itxn_field":
+		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
+		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
+		return fieldsAndTypes(logic.ItxnSettableFields)
 	case "global":
 		return fieldsAndTypes(logic.GlobalFields)
 	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":

@@ -388,6 +388,29 @@ func txnaFieldNames() []string {
 	return names
 }
 
+// ItxnSettableFields collects info for itxn_field opcode
+var ItxnSettableFields = FieldGroup{
+	"itxn_field", "",
+	itxnSettableFieldNames(),
+	txnFieldSpecByName,
+}
+
+// itxnSettableFieldNames are txn field names that can be set by
+// itxn_field. Return value is a "sparse" slice, the names appear at their usual
+// index, unsettable slots are set to "".  They are laid out this way so that it is
+// possible to get the name from the index value.
+func itxnSettableFieldNames() []string {
+	names := make([]string, len(txnFieldSpecs))
+	for i, fs := range txnFieldSpecs {
+		if fs.itxVersion == 0 {
+			names[i] = ""
+		} else {
+			names[i] = fs.field.String()
+		}
+	}
+	return names
+}
+
 var innerTxnTypes = map[string]uint64{
 	string(protocol.PaymentTx):         5,
 	string(protocol.KeyRegistrationTx): 6,
