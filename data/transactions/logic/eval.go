@@ -1284,7 +1284,7 @@ func bytesToBN254Field(b []byte) (ret fp.Element) {
 	// var x big.Int
 	// x.SetBytes(b[:32])
 	// ret.SetBigInt(&x)
-	ret.SetBytesRaw(b)
+	ret.SetBytes(b)
 	return
 }
 
@@ -1336,67 +1336,49 @@ func bN254G2ToBytes(g2 *bn254.G2Affine) (ret []byte) {
 	return
 }
 
-func opBn256Add(cx *EvalContext) {
+func opBn256Add(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
-
 	aBytes := cx.stack[prev].Bytes
 	bBytes := cx.stack[last].Bytes
-
 	a := bytesToBN254G1(aBytes)
 	b := bytesToBN254G1(bBytes)
-
-	_ = new(bn254.G1Affine).Add(&a, &b)
-
-	resBytes := a.Marshal()
-	resBytes = b.Marshal()
-
+	res := new(bn254.G1Affine).Add(&a, &b)
+	resBytes := res.Marshal()
 	cx.stack = cx.stack[:last]
-	cx.stack[prev].Bytes = bBytes
 	cx.stack[prev].Bytes = resBytes
-
+	return nil
 }
 
-func opBn256ScalarMul(cx *EvalContext) {
+func opBn256ScalarMul(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
-
 	aBytes := cx.stack[prev].Bytes
 	a := bytesToBN254G1(aBytes)
-
 	kBytes := cx.stack[last].Bytes
 	k := new(big.Int).SetBytes(kBytes[:])
-
 	res := new(bn254.G1Affine).ScalarMultiplication(&a, k)
-
 	resBytes := bN254G1ToBytes(res)
-
 	cx.stack = cx.stack[:last]
 	cx.stack[prev].Bytes = resBytes
+	return nil
 }
 
-func opBn256Pairing(cx *EvalContext) {
+func opBn256Pairing(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
-
 	g1Bytes := cx.stack[prev].Bytes
 	g2Bytes := cx.stack[last].Bytes
-
 	g1 := bytesToBN254G1s(g1Bytes)
 	g2 := bytesToBN254G2s(g2Bytes)
-
 	ok, err := bn254.PairingCheck(g1, g2)
 	if err != nil {
-		cx.err = errors.New("pairing failed")
-		return
+		return errors.New("pairing failed")
 	}
-
 	cx.stack = cx.stack[:last]
-	if ok {
-		cx.stack[prev].Bytes = []byte{1}
-	} else {
-		cx.stack[prev].Bytes = []byte{0}
-	}
+	cx.stack[prev].Uint = boolToUint(ok)
+	cx.stack[prev].Bytes = nil
+	return nil
 }
 
 func opLt(cx *EvalContext) error {

@@ -13,7 +13,7 @@ require (
 	github.com/algorand/websocket v1.4.5
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e
-	github.com/consensys/gnark-crypto v0.6.1 // indirect
+	github.com/consensys/gnark-crypto v0.7.0
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
@@ -43,12 +43,11 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.7.1
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654
+	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
+	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8
 	golang.org/x/text v0.3.7
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
