@@ -1869,7 +1869,11 @@ func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
 				if int(b) >= len(imm.Group.Names) {
 					return "", fmt.Errorf("invalid immediate %s for %s: %d", imm.Name, spec.Name, b)
 				}
-				out += imm.Group.Names[b]
+				name := imm.Group.Names[b]
+				if name == "" {
+					return "", fmt.Errorf("invalid immediate %s for %s: %d", imm.Name, spec.Name, b)
+				}
+				out += name
 			} else {
 				out += fmt.Sprintf("%d", b)
 			}

@@ -136,9 +136,18 @@ func buildSyntaxHighlight() *tmLanguage {
 		}
 	}
 
+	var seen = make(map[string]bool, len(allNamedFields))
+	var dedupe = make([]string, 0, len(allNamedFields))
+	for _, name := range allNamedFields {
+		if name != "" && !seen[name] {
+			dedupe = append(dedupe, name)
+		}
+		seen[name] = true
+	}
+
 	literals.Patterns = append(literals.Patterns, pattern{
 		Name:  "variable.parameter.teal",
-		Match: fmt.Sprintf("\\b(%s)\\b", strings.Join(allNamedFields, "|")),
+		Match: fmt.Sprintf("\\b(%s)\\b", strings.Join(dedupe, "|")),
 	})
 	tm.Repository["literals"] = literals
 
