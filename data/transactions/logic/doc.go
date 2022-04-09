@@ -32,6 +32,9 @@ var opDocByName = map[string]string{
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y",
 	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key",
+	"bn256_add":           "for (curve point A, B) return the curve point A + B",
+	"bn256_scalar_mul":    "for (curve point A, scalar K) return the curve point KA",
+	"bn256_pairing":       "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}",
 
 	"+":       "A plus B. Fail on overflow.",
 	"-":       "A minus B. Fail if B > A.",
