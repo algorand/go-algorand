@@ -2388,6 +2388,10 @@ func TestReturnTypes(t *testing.T) {
 		"ecdsa_verify":        true,
 		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,
+
+		"bn256_add":        true,
+		"bn256_scalar_mul": true,
+		"bn256_pairing":    true,
 	}
 
 	byName := OpsByName[LogicVersion]

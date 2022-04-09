@@ -1336,6 +1336,9 @@ func opBn256Add(cx *EvalContext) error {
 	prev := last - 1
 	aBytes := cx.stack[prev].Bytes
 	bBytes := cx.stack[last].Bytes
+	if len(aBytes) != 64 || len(bBytes) != 64 {
+		return errors.New("expect G1 in 64 bytes")
+	}
 	a := bytesToBN254G1(aBytes)
 	b := bytesToBN254G1(bBytes)
 	res := new(bn254.G1Affine).Add(&a, &b)
@@ -1349,6 +1352,9 @@ func opBn256ScalarMul(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	aBytes := cx.stack[prev].Bytes
+	if len(aBytes) != 64 {
+		return errors.New("expect G1 in 64 bytes")
+	}
 	a := bytesToBN254G1(aBytes)
 	kBytes := cx.stack[last].Bytes
 	k := new(big.Int).SetBytes(kBytes[:])
