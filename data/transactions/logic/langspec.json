@@ -1638,6 +1638,39 @@
       ]
     },
     {
+      "Opcode": 153,
+      "Name": "bn256_add",
+      "Args": "BB",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "for (curve point A, B) return the curve point A + B",
+      "Groups": [
+        "Arithmetic"
+      ]
+    },
+    {
+      "Opcode": 154,
+      "Name": "bn256_scalar_mul",
+      "Args": "BB",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "for (curve point A, scalar K) return the curve point KA",
+      "Groups": [
+        "Arithmetic"
+      ]
+    },
+    {
+      "Opcode": 155,
+      "Name": "bn256_pairing",
+      "Args": "BB",
+      "Returns": "U",
+      "Size": 1,
+      "Doc": "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired =\u003e {0 or 1}",
+      "Groups": [
+        "Arithmetic"
+      ]
+    },
+    {
       "Opcode": 160,
       "Name": "b+",
       "Args": "BB",
