@@ -51,6 +51,7 @@ func TestValidateCompactCert(t *testing.T) {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 	proto.CompactCertRounds = 2
 	proto.CompactCertSecKQ = 128
+	proto.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	config.Consensus[certHdr.CurrentProtocol] = proto
 
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
@@ -79,9 +80,9 @@ func TestValidateCompactCert(t *testing.T) {
 
 	votersHdr.CurrentProtocol = certHdr.CurrentProtocol
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
-	// still err, but a different err case to cover
 	t.Log(err)
-	require.ErrorIs(t, err, errCompCertCrypto)
+	// since proven weight is zero, we cann't create the verifier
+	require.ErrorIs(t, err, compactcert.ErrIllegalInputForLnApprox)
 
 	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
 	cc := votersHdr.CompactCert[protocol.CompactCertBasic]

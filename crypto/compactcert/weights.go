@@ -18,7 +18,6 @@ package compactcert
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"math/bits"
@@ -194,43 +193,4 @@ func getSubExpressions(signedWeight uint64) (y *big.Int, x *big.Int, w *big.Int)
 	w.Mul(w, bigInt(ln2IntApproximation-1))
 
 	return
-}
-
-func old(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
-	n := uint64(0)
-
-	sw := &bigFloatDn{}
-	err := sw.setu64(signedWeight)
-	if err != nil {
-		return 0, err
-	}
-
-	pw := &bigFloatUp{}
-	err = pw.setu64(provenWeight)
-	if err != nil {
-		return 0, err
-	}
-
-	lhs := &bigFloatDn{}
-	err = lhs.setu64(1)
-	if err != nil {
-		return 0, err
-	}
-
-	rhs := &bigFloatUp{}
-	rhs.setpow2(int32(secKQ))
-
-	for {
-		if lhs.ge(rhs) {
-			return n, nil
-		}
-
-		if n >= bound {
-			return 0, fmt.Errorf("numReveals(%d, %d, %d) > %d", signedWeight, provenWeight, secKQ, bound)
-		}
-
-		lhs.mul(sw)
-		rhs.mul(pw)
-		n++
-	}
 }

@@ -147,7 +147,6 @@ func TestNumReveals(t *testing.T) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 2 * billion * microalgo
 	secKQ := uint64(compactCertSecKQForTests)
-	bound := uint64(1000)
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	a.NoError(err)
 
@@ -155,10 +154,6 @@ func TestNumReveals(t *testing.T) {
 		signedWeight := i * billion * microalgo
 		n, err := numReveals(signedWeight, lnProvenWt, secKQ)
 		a.NoError(err)
-		n2, err := old(signedWeight, provenWeight, secKQ, bound)
-		t.Logf("%f", float64(n2)/float64(n))
-		t.Logf("old %d", n2)
-		t.Logf("new %d ", n)
 		if n < 50 || n > 300 {
 			t.Errorf("numReveals(%d, %d, %d) = %d looks suspect",
 				signedWeight, provenWeight, secKQ, n)
