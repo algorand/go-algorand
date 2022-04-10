@@ -28,19 +28,32 @@ import (
 // The coinChoiceSeed defines the randomness seed that will be given to an XOF function. This will be used  for choosing
 // the index of the coin to reveal as part of the compact certificate.
 type coinChoiceSeed struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	MsgHash                 StateProofMessageHash `codec:"msghash"`
-	SignedWeight            uint64                `codec:"sigweight"`
-	LnProvenWeightThreshold uint64                `codec:"lnweight"`
-	Sigcom                  crypto.GenericDigest  `codec:"sigcom"`
-	Partcom                 crypto.GenericDigest  `codec:"partcom"`
+	msgHash                 StateProofMessageHash
+	signedWeight            uint64
+	lnProvenWeightThreshold uint64
+	sigCommitment           crypto.GenericDigest
+	partCommitment          crypto.GenericDigest
 }
 
-// ToBeHashed implements the crypto.Hashable interface.
-func (cc coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
-	// TODO should create a fixed length representation
-	return protocol.CompactCertCoin, protocol.Encode(&cc)
+// ToBeHashed returns a binary representation of the coinChoiceSeed structure.
+// Since this code is also implemented as a circuit in the stateproof SNARK prover we can't use
+// msgpack encoding since it may result in a variable length byte slice.
+// Alternatively, we serialize the fields in the structure in a specific format.
+func (cc *coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
+	signedWtAsBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(signedWtAsBytes, cc.signedWeight)
+
+	lnProvenWtAsBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(lnProvenWtAsBytes, cc.lnProvenWeightThreshold)
+
+	coinChoiceBytes := make([]byte, 0, len(cc.msgHash)+len(signedWtAsBytes)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(cc.partCommitment))
+	coinChoiceBytes = append(coinChoiceBytes, cc.msgHash[:]...)
+	coinChoiceBytes = append(coinChoiceBytes, signedWtAsBytes...)
+	coinChoiceBytes = append(coinChoiceBytes, lnProvenWtAsBytes...)
+	coinChoiceBytes = append(coinChoiceBytes, cc.sigCommitment...)
+	coinChoiceBytes = append(coinChoiceBytes, cc.partCommitment...)
+
+	return protocol.CompactCertCoin, coinChoiceBytes
 }
 
 // coinGenerator is used for extracting "randomized" 64 bits for coin flips
@@ -54,15 +67,15 @@ type coinGenerator struct {
 // it is used for squeezing 64 bits for coin flips.
 // the function inits the XOF function in the following manner
 // Shake(sumhash(coinChoiceSeed))
-//we extract 64 bits from shake for each coin flip and divide it by SignedWeight
-func makeCoinGenerator(choice coinChoiceSeed) coinGenerator {
+// we extract 64 bits from shake for each coin flip and divide it by signedWeight
+func makeCoinGenerator(choice *coinChoiceSeed) coinGenerator {
 	hash := crypto.HashFactory{HashType: CoinHashType}.NewHash()
 	hashedCoin := crypto.GenericHashObj(hash, choice)
 
 	shk := sha3.NewShake256()
 	shk.Write(hashedCoin)
 
-	threshold, singedWt := prepareRejectionSamplingValues(choice.SignedWeight)
+	threshold, singedWt := prepareRejectionSamplingValues(choice.signedWeight)
 	return coinGenerator{shkContext: shk, signedWeight: singedWt, threshold: threshold}
 
 }
@@ -84,23 +97,23 @@ func prepareRejectionSamplingValues(signedWeight uint64) (*big.Int, *big.Int) {
 	return threshold, singedWt
 }
 
-// getNextCoin returns the next 64bits integer which represents a number between [0,SignedWeight)
-func (ch *coinGenerator) getNextCoin() uint64 {
+// getNextCoin returns the next 64bits integer which represents a number between [0,signedWeight)
+func (cg *coinGenerator) getNextCoin() uint64 {
 	// take b bits from the XOF and generate an integer z.
 	// we accept the sample if z < threshold
 	// else, we reject the sample and repeat the process.
 	z := &big.Int{}
 	for true {
 		var shakeDigest [8]byte
-		ch.shkContext.Read(shakeDigest[:])
+		cg.shkContext.Read(shakeDigest[:])
 		randNumFromXof := binary.LittleEndian.Uint64(shakeDigest[:])
 
 		z.SetUint64(randNumFromXof)
-		if comp := z.Cmp(ch.threshold); comp == -1 {
+		if comp := z.Cmp(cg.threshold); comp == -1 {
 			break
 		}
 	}
 
-	z.Mod(z, ch.signedWeight)
+	z.Mod(z, cg.signedWeight)
 	return z.Uint64()
 }

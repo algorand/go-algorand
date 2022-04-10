@@ -101,14 +101,14 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 
 	choice := coinChoiceSeed{
-		MsgHash:                 v.StateProofMessageHash,
-		LnProvenWeightThreshold: v.lnProvenWeightThreshold,
-		SignedWeight:            c.SignedWeight,
-		Sigcom:                  c.SigCommit,
-		Partcom:                 v.partcom,
+		msgHash:                 v.StateProofMessageHash,
+		lnProvenWeightThreshold: v.lnProvenWeightThreshold,
+		signedWeight:            c.SignedWeight,
+		sigCommitment:           c.SigCommit,
+		partCommitment:          v.partcom,
 	}
 
-	coinHash := makeCoinGenerator(choice)
+	coinHash := makeCoinGenerator(&choice)
 	for j := uint64(0); j < nr; j++ {
 		pos := c.PositionsToReveal[j]
 		reveal, exists := c.Reveals[pos]

@@ -36,12 +36,12 @@ func TestHashCoin(t *testing.T) {
 	crypto.RandBytes(msgHash[:])
 
 	choice := coinChoiceSeed{
-		SignedWeight: uint64(len(slots)),
-		Sigcom:       sigcom,
-		Partcom:      partcom,
-		MsgHash:      msgHash,
+		signedWeight:   uint64(len(slots)),
+		sigCommitment:  sigcom,
+		partCommitment: partcom,
+		msgHash:        msgHash,
 	}
-	coinHash := makeCoinGenerator(choice)
+	coinHash := makeCoinGenerator(&choice)
 
 	for j := uint64(0); j < 1000; j++ {
 		coin := coinHash.getNextCoin()
@@ -72,12 +72,12 @@ func BenchmarkHashCoin(b *testing.B) {
 	crypto.RandBytes(msgHash[:])
 
 	choice := coinChoiceSeed{
-		SignedWeight: 1025,
-		Sigcom:       sigcom,
-		Partcom:      partcom,
-		MsgHash:      msgHash,
+		signedWeight:   1025,
+		sigCommitment:  sigcom,
+		partCommitment: partcom,
+		msgHash:        msgHash,
 	}
-	coinHash := makeCoinGenerator(choice)
+	coinHash := makeCoinGenerator(&choice)
 
 	for i := 0; i < b.N; i++ {
 		coinHash.getNextCoin()
@@ -94,13 +94,13 @@ func BenchmarkHashCoinGenerate(b *testing.B) {
 	crypto.RandBytes(msgHash[:])
 
 	choice := coinChoiceSeed{
-		SignedWeight: 1025,
-		Sigcom:       sigcom,
-		Partcom:      partcom,
-		MsgHash:      msgHash,
+		signedWeight:   1025,
+		sigCommitment:  sigcom,
+		partCommitment: partcom,
+		msgHash:        msgHash,
 	}
 
 	for i := 0; i < b.N; i++ {
-		makeCoinGenerator(choice)
+		makeCoinGenerator(&choice)
 	}
 }

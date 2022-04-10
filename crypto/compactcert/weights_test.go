@@ -173,7 +173,7 @@ func TestNumReveals(t *testing.T) {
 	}
 }
 
-func BenchmarkWeight(b *testing.B) {
+func BenchmarkVerifyWeights(b *testing.B) {
 	billion := uint64(1000 * 1000 * 1000)
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
@@ -184,14 +184,13 @@ func BenchmarkWeight(b *testing.B) {
 	if nr < 900 {
 		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, secKQ, nr)
 	}
+	require.NoError(b, err)
+
 	param := Params{SecKQ: secKQ, ProvenWeightThreshold: provenWeight}
 	verifier := MkVerifier(param, crypto.GenericDigest{})
 
 	for i := 0; i < b.N; i++ {
-		err = verifier.verifyWeights(signedWeight, nr)
-		if err != nil {
-			b.Error(err)
-		}
+		verifier.verifyWeights(signedWeight, nr)
 	}
 }
 
@@ -206,11 +205,17 @@ func BenchmarkNumReveals(b *testing.B) {
 	if nr < 900 {
 		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, secKQ, nr)
 	}
+	require.NoError(b, err)
+
+	p := Params{SecKQ: secKQ, ProvenWeightThreshold: provenWeight}
+	lnProvenWt := lnIntApproximation(provenWeight, precisionBits)
+	builder := &Builder{
+		Params:                  p,
+		signedWeight:            signedWeight,
+		lnProvenWeightThreshold: lnProvenWt,
+	}
 
 	for i := 0; i < b.N; i++ {
-		_, err = numRevealsForTests(signedWeight, provenWeight, secKQ)
-		if err != nil {
-			b.Error(err)
-		}
+		builder.numReveals()
 	}
 }
