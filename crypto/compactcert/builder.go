@@ -41,11 +41,12 @@ type sigslot struct {
 // a compact certificate for that message.
 type Builder struct {
 	Params
-	sigs          []sigslot // Indexed by pos in participants
-	sigsHasValidL bool      // The L values in sigs are consistent with weights
-	signedWeight  uint64    // Total weight of signatures so far
-	participants  []basics.Participant
-	parttree      *merklearray.Tree
+	sigs                    []sigslot // Indexed by pos in participants
+	sigsHasValidL           bool      // The L values in sigs are consistent with weights
+	signedWeight            uint64    // Total weight of signatures so far
+	lnProvenWeightThreshold uint64    // ln(provenWeightThreshold) as integer with 16 bits of precision
+	participants            []basics.Participant
+	parttree                *merklearray.Tree
 
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
@@ -58,15 +59,17 @@ type Builder struct {
 // parttree.
 func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
+	lnProvenWt := lnIntApproximation(param.ProvenWeightThreshold, precisionBits)
 
 	b := &Builder{
 		Params: param,
 
-		sigs:          make([]sigslot, npart),
-		sigsHasValidL: false,
-		signedWeight:  0,
-		participants:  part,
-		parttree:      parttree,
+		sigs:                    make([]sigslot, npart),
+		sigsHasValidL:           false,
+		signedWeight:            0,
+		participants:            part,
+		parttree:                parttree,
+		lnProvenWeightThreshold: lnProvenWt,
 	}
 
 	return b, nil
@@ -193,7 +196,7 @@ func (b *Builder) Build() (*Cert, error) {
 		MerkleSignatureVersion: merklesignature.SchemeVersion,
 	}
 
-	nr, err := b.numReveals(b.signedWeight)
+	nr, err := b.numReveals()
 	if err != nil {
 		return nil, err
 	}
@@ -201,12 +204,15 @@ func (b *Builder) Build() (*Cert, error) {
 	var proofPositions []uint64
 
 	revealsSequence := make([]uint64, nr)
+
 	choice := coinChoiceSeed{
-		SignedWeight: c.SignedWeight,
-		Sigcom:       c.SigCommit,
-		Partcom:      b.parttree.Root(),
-		MsgHash:      b.StateProofMessageHash,
+		MsgHash:                 b.StateProofMessageHash,
+		LnProvenWeightThreshold: b.lnProvenWeightThreshold,
+		SignedWeight:            c.SignedWeight,
+		Sigcom:                  c.SigCommit,
+		Partcom:                 b.parttree.Root(),
 	}
+
 	coinHash := makeCoinGenerator(choice)
 
 	for j := uint64(0); j < nr; j++ {

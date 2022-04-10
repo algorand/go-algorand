@@ -101,10 +101,11 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 
 	choice := coinChoiceSeed{
-		SignedWeight: c.SignedWeight,
-		Sigcom:       c.SigCommit,
-		Partcom:      v.partcom,
-		MsgHash:      v.StateProofMessageHash,
+		MsgHash:                 v.StateProofMessageHash,
+		LnProvenWeightThreshold: v.lnProvenWeightThreshold,
+		SignedWeight:            c.SignedWeight,
+		Sigcom:                  c.SigCommit,
+		Partcom:                 v.partcom,
 	}
 
 	coinHash := makeCoinGenerator(choice)

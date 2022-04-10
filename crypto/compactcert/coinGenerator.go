@@ -30,10 +30,11 @@ import (
 type coinChoiceSeed struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SignedWeight uint64                `codec:"sigweight"`
-	Sigcom       crypto.GenericDigest  `codec:"sigcom"`
-	Partcom      crypto.GenericDigest  `codec:"partcom"`
-	MsgHash      StateProofMessageHash `codec:"msghash"`
+	MsgHash                 StateProofMessageHash `codec:"msghash"`
+	SignedWeight            uint64                `codec:"sigweight"`
+	LnProvenWeightThreshold uint64                `codec:"lnweight"`
+	Sigcom                  crypto.GenericDigest  `codec:"sigcom"`
+	Partcom                 crypto.GenericDigest  `codec:"partcom"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

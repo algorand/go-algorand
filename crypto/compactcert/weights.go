@@ -100,15 +100,15 @@ func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error
 	// in order to make the code more readable and reusable we will define the following expressions:
 	// y = signedWeight^2 + 2^(d + 2) * signedWeight + 2^2d
 	// a = 3 * 2^b * (signedWeight^2 - 2^2d)
-	// b = d * (T - 1)
+	// w = d * (T - 1)
 	//
 	//  numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((k+q) * T + numReveals * P) * Y
 	//        ||
 	//        \/
 	// numReveals * (a + b * Y) >= ((k+q) * T + numReveals * P) * Y
-	y, a, b := getSubExpressions(signedWeight)
+	y, a, w := getSubExpressions(signedWeight)
 	lhs := &big.Int{}
-	lhs.Set(b).
+	lhs.Set(w).
 		Mul(lhs, y).
 		Add(a, lhs).
 		Mul(bigInt(numOfReveals), lhs)
@@ -129,39 +129,33 @@ func (v *Verifier) verifyWeights(signedWeight uint64, numOfReveals uint64) error
 	return nil
 }
 
-func (p *Builder) numReveals(signedWeight uint64) (uint64, error) {
-	return numReveals(signedWeight, p.ProvenWeightThreshold, p.SecKQ, MaxReveals)
-}
-
 // numReveals computes the number of reveals necessary to achieve the desired
 // security parameters. we use value which satisfies the following equation:
 //
 // numReveals > = ((k+q) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
-func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
-	if provenWeight == 0 {
+func (b *Builder) numReveals() (uint64, error) {
+	if b.ProvenWeightThreshold == 0 {
 		return 0, ErrZeroProvenWeightThreshold
 	}
-
-	lnProvenWe := lnIntApproximation(provenWeight, precisionBits)
 
 	// in order to make the code more readable and reusable we will define the following expressions:
 	// y = signedWeight^2 + 2^(d + 2) * signedWeight + 2^2d
 	// a = 3 * 2^b * (signedWeight^2 - 2^2d)
-	// b = d * (T - 1)
+	// w = d * (T - 1)
 	//
 	// numReveals > = ((k+q) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
 	// 						||
 	//						\/
 	// numReveals >= ((k+q) * T * Y / (a + (b - P) * Y)
-	y, a, b := getSubExpressions(signedWeight)
+	y, a, w := getSubExpressions(b.signedWeight)
 
-	numerator := bigInt(secKQ)
+	numerator := bigInt(b.SecKQ)
 	numerator.Mul(numerator, bigInt(ln2IntApproximation)).
 		Mul(numerator, y)
 
 	denom := &big.Int{}
-	denom.Set(b).
-		Sub(denom, bigInt(lnProvenWe)).
+	denom.Set(w).
+		Sub(denom, bigInt(b.lnProvenWeightThreshold)).
 		Mul(denom, y).
 		Add(a, denom)
 
@@ -179,7 +173,7 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 // getSubExpressions calculate the following expression to make the code more readable and reusable
 // y = signedWeight^2 + 2^(d + 2) * signedWeight + 2^2d
 // a = 3 * 2^b * (signedWeight^2 - 2^2d)
-// b = d * (T - 1)
+// w = d * (T - 1)
 func getSubExpressions(signedWeight uint64) (y *big.Int, a *big.Int, b *big.Int) {
 	// find d s.t 2^(d+1) >= signedWeight >= 2^(d)
 	d := uint64(bits.Len64(signedWeight)) - 1
@@ -207,7 +201,7 @@ func getSubExpressions(signedWeight uint64) (y *big.Int, a *big.Int, b *big.Int)
 		Mul(a, bigInt(3)).
 		Mul(a, bigInt(precisionBits))
 
-	// b = d*(T-1)
+	// w = d*(T-1)
 	b = bigInt(d)
 	b.Mul(b, bigInt(ln2IntApproximation-1))
 
