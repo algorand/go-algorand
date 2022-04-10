@@ -488,7 +488,7 @@ func TestCoinIndex(t *testing.T) {
 
 func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
-	npart := 10000
+	npart := 1000
 
 	currentRound := basics.Round(compactCertRoundsForTests)
 	a := require.New(b)
@@ -504,7 +504,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	var partkeys []*merklesignature.Secrets
 	var sigs []merklesignature.Signature
 	for i := 0; i < npart; i++ {
-		signer := generateTestSigner(0, compactCertRoundsForTests, compactCertRoundsForTests+1, a)
+		signer := generateTestSigner(0, compactCertRoundsForTests+1, compactCertRoundsForTests, a)
 		part := basics.Participant{
 			PK:     *signer.GetVerifier(),
 			Weight: uint64(totalWeight / npart),
