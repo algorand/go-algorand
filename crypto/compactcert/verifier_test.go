@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -31,8 +32,10 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 
 	cert, param, partCom, numPart := generateCertForTesting(a)
 
-	verifier := MkVerifier(param, partCom)
-	err := verifier.Verify(cert)
+	verifier, err := MkVerifier(param, partCom)
+	a.NoError(err)
+
+	err = verifier.Verify(cert)
 	a.NoError(err)
 
 	for i := uint64(0); i < numPart; i++ {
@@ -43,7 +46,9 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 		}
 	}
 
-	verifier = MkVerifier(param, partCom)
+	verifier, err = MkVerifier(param, partCom)
+	a.NoError(err)
+
 	err = verifier.Verify(cert)
 	a.ErrorIs(err, ErrNoRevealInPos)
 
@@ -55,15 +60,19 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 
 	cert, param, partCom, _ := generateCertForTesting(a)
 
-	verifier := MkVerifier(param, partCom)
-	err := verifier.Verify(cert)
+	verifier, err := MkVerifier(param, partCom)
+	a.NoError(err)
+
+	err = verifier.Verify(cert)
 	a.NoError(err)
 
 	swap := cert.PositionsToReveal[1]
 	cert.PositionsToReveal[1] = cert.PositionsToReveal[0]
 	cert.PositionsToReveal[0] = swap
 
-	verifier = MkVerifier(param, partCom)
+	verifier, err = MkVerifier(param, partCom)
+	a.NoError(err)
+
 	err = verifier.Verify(cert)
 	a.ErrorIs(err, ErrCoinNotInRange)
 }
@@ -74,14 +83,27 @@ func TestVerifyBadSignature(t *testing.T) {
 
 	cert, param, partCom, _ := generateCertForTesting(a)
 
-	verifier := MkVerifier(param, partCom)
-	err := verifier.Verify(cert)
+	verifier, err := MkVerifier(param, partCom)
+	a.NoError(err)
+	err = verifier.Verify(cert)
 	a.NoError(err)
 
 	rev := cert.Reveals[cert.PositionsToReveal[0]]
 	rev.SigSlot.Sig.Signature[10]++
 
-	verifier = MkVerifier(param, partCom)
+	verifier, err = MkVerifier(param, partCom)
+	a.NoError(err)
 	err = verifier.Verify(cert)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
+}
+
+func TestVerifyZeroProvenWeight(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	p := Params{ProvenWeightThreshold: 0}
+	partcommit := crypto.GenericDigest{}
+
+	_, err := MkVerifier(p, partcommit)
+	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 }

@@ -125,7 +125,7 @@ func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader
 	}
 
 	res = compactcert.Params{
-		StateProofMessageHash: msg.IntoStateProofMessageHash(),
+		MessageHash:           msg.IntoStateProofMessageHash(),
 		ProvenWeightThreshold: provenWeight,
 		SigRound:              hdr.Round,
 		SecKQ:                 proto.CompactCertSecKQ,
@@ -177,7 +177,12 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 		return fmt.Errorf("%v: %w", err, errCompactCertParamCreation)
 	}
 
-	err = compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters).Verify(&cert)
+	verifier, err := compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters)
+	if err != nil {
+		return err
+	}
+
+	err = verifier.Verify(&cert)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errCompCertCrypto)
 	}

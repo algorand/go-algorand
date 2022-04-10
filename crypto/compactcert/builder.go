@@ -44,9 +44,9 @@ type Builder struct {
 	sigs                    []sigslot // Indexed by pos in participants
 	sigsHasValidL           bool      // The L values in sigs are consistent with weights
 	signedWeight            uint64    // Total weight of signatures so far
-	lnProvenWeightThreshold uint64    // ln(provenWeightThreshold) as integer with 16 bits of precision
 	participants            []basics.Participant
 	parttree                *merklearray.Tree
+	lnProvenWeightThreshold uint64
 
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
@@ -59,7 +59,10 @@ type Builder struct {
 // parttree.
 func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
-	lnProvenWt := lnIntApproximation(param.ProvenWeightThreshold, precisionBits)
+	lnProvenWt, err := lnIntApproximation(param.ProvenWeightThreshold, precisionBits)
+	if err != nil {
+		return nil, err
+	}
 
 	b := &Builder{
 		Params: param,
@@ -101,8 +104,8 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 			return err
 		}
 
-		cpy := make([]byte, len(b.Params.StateProofMessageHash))
-		copy(cpy, b.Params.StateProofMessageHash[:]) // TODO: onmce cfalcon is fixed can remove this copy.
+		cpy := make([]byte, len(b.Params.MessageHash))
+		copy(cpy, b.Params.MessageHash[:]) // TODO: onmce cfalcon is fixed can remove this copy.
 		if err := p.PK.VerifyBytes(uint64(b.SigRound), cpy, sig); err != nil {
 			return err
 		}
@@ -196,7 +199,7 @@ func (b *Builder) Build() (*Cert, error) {
 		MerkleSignatureVersion: merklesignature.SchemeVersion,
 	}
 
-	nr, err := b.numReveals()
+	nr, err := numReveals(b.signedWeight, b.lnProvenWeightThreshold, b.SecKQ)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +209,7 @@ func (b *Builder) Build() (*Cert, error) {
 	revealsSequence := make([]uint64, nr)
 
 	choice := coinChoiceSeed{
-		msgHash:                 b.StateProofMessageHash,
+		msgHash:                 b.Params.MessageHash,
 		lnProvenWeightThreshold: b.lnProvenWeightThreshold,
 		signedWeight:            c.SignedWeight,
 		sigCommitment:           c.SigCommit,

@@ -92,8 +92,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	npart := npartHi + npartLo
 
 	param := Params{
-		StateProofMessageHash: testMessage("hello world").IntoStateProofMessageHash(),
-
+		MessageHash:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeightThreshold: uint64(totalWeight / 2),
 		SigRound:              currentRound,
 		SecKQ:                 compactCertSecKQForTests,
@@ -107,7 +106,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.StateProofMessageHash[:])
+	sig, err := signerInRound.SignBytes(param.MessageHash[:])
 	a.NoError(err, "failed to create keys")
 
 	for i := 0; i < npart; i++ {
@@ -157,8 +156,10 @@ func TestBuildVerify(t *testing.T) {
 	fmt.Printf("    %6d bytes reveals[*] total\n", len(protocol.Encode(&someReveal)))
 	fmt.Printf("  %6d bytes total\n", len(certenc))
 
-	verif := MkVerifier(param, partCom)
-	err := verif.Verify(cert)
+	verif, err := MkVerifier(param, partCom)
+	a.NoError(err)
+
+	err = verif.Verify(cert)
 	a.NoError(err, "failed to verify the compact cert")
 }
 
@@ -238,7 +239,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	numPart := 4
 
 	param := Params{
-		StateProofMessageHash: testMessage("test!").IntoStateProofMessageHash(),
+		MessageHash:           testMessage("test!").IntoStateProofMessageHash(),
 		ProvenWeightThreshold: uint64(totalWeight / (2 * numPart)),
 		SigRound:              currentRound,
 		SecKQ:                 compactCertSecKQForTests,
@@ -256,7 +257,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(param.StateProofMessageHash[:])
+		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(param.MessageHash[:])
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
 
@@ -438,7 +439,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	npartLo := 9
 
 	param := Params{
-		StateProofMessageHash: testMessage("hello world").IntoStateProofMessageHash(),
+		MessageHash:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeightThreshold: uint64(totalWeight / 2),
 		SigRound:              currentRound,
 		SecKQ:                 compactCertSecKQForTests,
@@ -457,7 +458,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 
 	// actual test:
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.StateProofMessageHash[:])
+	sig, err := signerInRound.SignBytes(param.MessageHash[:])
 	require.NoError(t, err, "failed to create keys")
 	// Corrupting the version of the signature:
 	sig.Signature[1]++
@@ -486,6 +487,17 @@ func TestCoinIndex(t *testing.T) {
 	}
 }
 
+func TestBuilderWithZeroProvenWeight(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	p := Params{ProvenWeightThreshold: 0}
+
+	_, err := MkBuilder(p, nil, nil)
+	a.ErrorIs(err, ErrIllegalInputForLnApprox)
+
+}
+
 func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 1000
@@ -494,7 +506,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	a := require.New(b)
 
 	param := Params{
-		StateProofMessageHash: testMessage("hello world").IntoStateProofMessageHash(),
+		MessageHash:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeightThreshold: uint64(totalWeight / 2),
 		SigRound:              compactCertRoundsForTests,
 		SecKQ:                 compactCertSecKQForTests,
@@ -511,7 +523,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		}
 
 		signerInRound := signer.GetSigner(uint64(currentRound))
-		sig, err := signerInRound.SignBytes(param.StateProofMessageHash[:])
+		sig, err := signerInRound.SignBytes(param.MessageHash[:])
 		require.NoError(b, err, "failed to create keys")
 
 		partkeys = append(partkeys, signer)
@@ -547,7 +559,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("Verify", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			verif := MkVerifier(param, partcom.Root())
+			verif, _ := MkVerifier(param, partcom.Root())
 			if err = verif.Verify(cert); err != nil {
 				b.Error(err)
 			}
