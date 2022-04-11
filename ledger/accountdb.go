@@ -2053,7 +2053,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	return nil
 }
 
-func performTxtailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
+func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
 	if tx == nil {
 		return nil
 	}
@@ -4534,14 +4534,14 @@ func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, rou
 	return err
 }
 
-func loadTxTail(ctx context.Context, tx *sql.Tx, trackerRound basics.Round) (roundData []*txTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
+func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundData []*txTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	rows, err := tx.QueryContext(ctx, "SELECT round, data FROM txtail ORDER BY round DESC")
 	if err != nil {
 		return nil, nil, 0, err
 	}
 	defer rows.Close()
 
-	expectedRound := trackerRound
+	expectedRound := dbRound
 	for rows.Next() {
 		var round basics.Round
 		var data []byte
