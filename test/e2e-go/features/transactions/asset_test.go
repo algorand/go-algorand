@@ -1001,17 +1001,13 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 
 	consensusVersion := protocol.ConsensusVersion("test-shorter-lookback")
 
-	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
-	// Will result in MaxBalLookback = 32
 	// Used to run tests faster where past MaxBalLookback values are checked
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	consensusParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 8
-	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
+	consensusParams.MaxBalLookback = 16
 
 	configurableConsensus[consensusVersion] = consensusParams
 

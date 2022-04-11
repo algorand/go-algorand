@@ -1126,6 +1126,9 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 
+	// Decrease ledger's max balance lookback. TODO: revisit the value in the future.
+	vFuture.MaxBalLookback = 16;
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 

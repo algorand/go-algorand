@@ -395,14 +395,14 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
-	// accts takes up 232 bytes per entry, and is saved for 320 rounds
+	// accts takes up 232 bytes per entry, and is saved for MaxBalLookback rounds
 	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
 		accts := make([]NewBalanceRecord, len(sd.Accts.acctsCache))
 		copy(accts, sd.Accts.accts)
 		sd.Accts.accts = accts
 	}
 
-	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
+	// acctsCache takes up 64 bytes per entry, and is saved for MaxBalLookback rounds
 	// realloc if original allocation capacity greater than length of data, and space difference is significant
 	if 2*sd.initialTransactionsCount > len(sd.Accts.acctsCache) &&
 		uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
@@ -423,7 +423,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 		sd.Txleases = txLeases
 	}
 
-	// Creatables takes up 100 bytes per entry, and is saved for 320 rounds
+	// Creatables takes up 100 bytes per entry, and is saved for MaxBalLookback rounds
 	if uint64(len(sd.Creatables))*creatablesEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
 		creatableDeltas := make(map[basics.CreatableIndex]ModifiedCreatable, len(sd.Creatables))
 		for k, v := range sd.Creatables {

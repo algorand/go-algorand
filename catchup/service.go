@@ -331,7 +331,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 				ledgerBacklogRound := r.SubSaturate(basics.Round(proto.MaxBalLookback))
 				select {
 				case <-s.ledger.Wait(ledgerBacklogRound):
-					// i.e. round r-320 is no longer in the blockqueue, so it's account data is either being currently written, or it was already written.
+					// i.e. round r-MaxBalLookback is no longer in the blockqueue, so it's account data is either being currently written, or it was already written.
 				case <-s.ctx.Done():
 					s.log.Debugf("fetchAndWrite(%d): Aborted while waiting for ledger to complete writing up to round %d", r, ledgerBacklogRound)
 					return false
