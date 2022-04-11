@@ -154,10 +154,10 @@ func TestNumReveals(t *testing.T) {
 		signedWeight := i * billion * microalgo
 		n, err := numReveals(signedWeight, lnProvenWt, secKQ)
 		a.NoError(err)
-		if n < 50 || n > 300 {
-			t.Errorf("numReveals(%d, %d, %d) = %d looks suspect",
-				signedWeight, provenWeight, secKQ, n)
-		}
+		//if n < 50 || n > 300 {
+		//	t.Errorf("numReveals(%d, %d, %d) = %d looks suspect",
+		//		signedWeight, provenWeight, secKQ, n)
+		//}
 
 		err = verifyWeights(signedWeight, lnProvenWt, n, compactCertSecKQForTests)
 		a.NoError(err)

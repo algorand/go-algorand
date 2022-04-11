@@ -31,5 +31,5 @@ const (
 
 const (
 	// MaxReveals is a bound on allocation and on numReveals to limit log computation
-	MaxReveals = 1024
+	MaxReveals = 2048
 )

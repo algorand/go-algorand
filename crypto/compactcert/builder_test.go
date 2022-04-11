@@ -45,7 +45,7 @@ func (m testMessage) IntoStateProofMessageHash() StateProofMessageHash {
 }
 
 const compactCertRoundsForTests = 256
-const compactCertSecKQForTests = 128
+const compactCertSecKQForTests = 256
 
 func hashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Reset()
@@ -80,7 +80,8 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
-	totalWeight := 10000000
+	totalWeight := 10
+	000
 	npartHi := 10
 	npartLo := 9990
 

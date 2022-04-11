@@ -1130,7 +1130,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertTopVoters = 1024 * 1024
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	vFuture.CompactCertSecKQ = 128
+	vFuture.CompactCertSecKQ = 256
 
 	vFuture.LogicSigVersion = 7
 

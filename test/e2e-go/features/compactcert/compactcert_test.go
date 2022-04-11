@@ -52,7 +52,7 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertTopVoters = 1024
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	consensusParams.CompactCertSecKQ = 128
+	consensusParams.CompactCertSecKQ = 256
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
