@@ -389,6 +389,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// TODO: FIX but adding voting data into catchpoint
 	withoutVotingData := func(ad basics.AccountData) basics.AccountData {
 		ad.VoteID = crypto.OneTimeSignatureVerifier{}
 		ad.SelectionID = crypto.VRFVerifier{}
