@@ -102,14 +102,14 @@ func (l *prefetcherTestLedger) LookupAsset(rnd basics.Round, addr basics.Address
 	}
 	return ledgercore.AssetResource{}, nil
 }
-func (l *prefetcherTestLedger) GetCreator(cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, error) {
+func (l *prefetcherTestLedger) GetCreator(cidx basics.CreatableIndex, _ basics.CreatableType) (basics.Address, bool, basics.Round, error) {
 	if cidx == errorTriggerCreatableIndex {
-		return basics.Address{}, false, getCreatorError{}
+		return basics.Address{}, false, 0, getCreatorError{}
 	}
 	if addr, has := l.creators[cidx]; has {
-		return addr, true, nil
+		return addr, true, l.round, nil
 	}
-	return basics.Address{}, false, nil
+	return basics.Address{}, false, l.round, nil
 }
 func (l *prefetcherTestLedger) GenesisHash() crypto.Digest {
 	return crypto.Digest{}

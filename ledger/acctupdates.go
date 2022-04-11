@@ -529,8 +529,8 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 
 // GetCreator returns the creator for a given asset/app index at a given round
 func (au *accountUpdates) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, rnd basics.Round, err error) {
-	creator, ok, err = au.getCreatorForRound(au.latest(), cidx, ctype, true /* take the lock */)
 	rnd = au.latest()
+	creator, ok, err = au.getCreatorForRound(rnd, cidx, ctype, true /* take the lock */)
 	return
 }
 
@@ -727,8 +727,8 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 
 // GetCreator returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, rnd basics.Round, err error) {
-	creator, ok, err = aul.au.getCreatorForRound(aul.au.latest(), cidx, ctype, false /* don't sync */)
 	rnd = aul.au.latest()
+	creator, ok, err = aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 	return
 }
 

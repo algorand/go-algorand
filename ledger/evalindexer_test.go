@@ -350,7 +350,8 @@ func TestResourceCaching(t *testing.T) {
 	}
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	ilc := makeIndexerLedgerConnector(indexerLedgerForEvalImpl{l: l, latestRound: basics.Round(0)}, block.GenesisHash(), proto, block.Round()-1, resources)
+	randomRound := basics.Round(99)
+	ilc := makeIndexerLedgerConnector(indexerLedgerForEvalImpl{l: l, latestRound: basics.Round(0)}, block.GenesisHash(), proto, randomRound, resources)
 
 	{
 		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)
@@ -375,14 +376,14 @@ func TestResourceCaching(t *testing.T) {
 	{
 		address, found, rnd, err := ilc.GetCreator(basics.CreatableIndex(6), basics.AssetCreatable)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), rnd)
+		require.Equal(t, randomRound, rnd)
 		require.True(t, found)
 		assert.Equal(t, address, address)
 	}
 	{
 		_, found, rnd, err := ilc.GetCreator(basics.CreatableIndex(6), basics.AppCreatable)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), rnd)
+		require.Equal(t, randomRound, rnd)
 		require.False(t, found)
 	}
 }

@@ -457,28 +457,32 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, maxBlocks, int(rnd))
 			existing++
 		case AppCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, maxBlocks, int(rnd))
 			existing++
 		case AssetDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, maxBlocks, int(rnd))
 			deleted++
 		case AppDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, maxBlocks, int(rnd))
 			deleted++
 		default:
 			panic("unknown action")
@@ -501,28 +505,32 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, maxBlocks, int(rnd))
 			existing++
 		case AppCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, maxBlocks, int(rnd))
 			existing++
 		case AssetDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, maxBlocks, int(rnd))
 			deleted++
 		case AppDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, maxBlocks, int(rnd))
 			deleted++
 		default:
 			panic("unknown action")
@@ -582,7 +590,8 @@ func TestArchivalCreatables(t *testing.T) {
 	// add the block
 	err = l.AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
-	l.WaitForCommit(blk.Round())
+	currentRound := blk.Round()
+	l.WaitForCommit(currentRound)
 
 	// check that we can fetch creator for all created assets and can't for
 	// deleted assets
@@ -591,28 +600,32 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, currentRound, rnd)
 			existing++
 		case AppCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, maxBlocks+1, int(rnd))
 			existing++
 		case AssetDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, maxBlocks+1, int(rnd))
 			deleted++
 		case AppDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, maxBlocks+1, int(rnd))
 			deleted++
 		default:
 			panic("unknown action")
@@ -630,7 +643,8 @@ func TestArchivalCreatables(t *testing.T) {
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
-	l.WaitForCommit(blk.Round())
+	currentRound = blk.Round()
+	l.WaitForCommit(currentRound)
 
 	// close and reopen the same DB
 	l.Close()
@@ -645,28 +659,32 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, currentRound, rnd)
 			existing++
 		case AppCreated:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
+			require.Equal(t, currentRound, rnd)
 			existing++
 		case AssetDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AssetCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, currentRound, rnd)
 			deleted++
 		case AppDeleted:
-			c, ok, _, err := l.GetCreator(aidx, basics.AppCreatable)
+			c, ok, rnd, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
+			require.Equal(t, currentRound, rnd)
 			deleted++
 		default:
 			panic("unknown action")

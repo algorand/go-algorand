@@ -148,7 +148,7 @@ func (l indexerLedgerConnector) GetCreator(cindex basics.CreatableIndex, ctype b
 	var has bool
 	// check to see if the account data in the cache.
 	if foundAddress, has = l.roundResources.Creators[Creatable{Index: cindex, Type: ctype}]; has {
-		return foundAddress.Address, foundAddress.Exists, 0, nil
+		return foundAddress.Address, foundAddress.Exists, l.latestRound, nil
 	}
 
 	switch ctype {
@@ -170,7 +170,7 @@ func (l indexerLedgerConnector) GetCreator(cindex basics.CreatableIndex, ctype b
 		return basics.Address{}, false, 0, fmt.Errorf("unknown creatable type %v", ctype)
 	}
 
-	return foundAddress.Address, foundAddress.Exists, 0, nil
+	return foundAddress.Address, foundAddress.Exists, l.latestRound, nil
 }
 
 // GenesisHash is part of LedgerForEvaluator interface.
