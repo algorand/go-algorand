@@ -83,8 +83,8 @@ func TestTxTailCheckdup(t *testing.T) {
 		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, Txn.ID(), ledgercore.Txlease{})
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-txvalidity-1 {
-			var missingRoundErr *errTxtailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxtailMissingRound(%d) : %v ", rnd, err)
+			var missingRoundErr *errTxTailMissingRound
+			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxTailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var txInLedgerErr *ledgercore.TransactionInLedgerError
 			require.Truef(t, errors.As(err, &txInLedgerErr), "error a TransactionInLedgerError(%d) : %v ", rnd, err)
@@ -97,8 +97,8 @@ func TestTxTailCheckdup(t *testing.T) {
 		err := tail.checkDup(proto, rnd, basics.Round(0), rnd, transactions.Txid{}, lease)
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-1 {
-			var missingRoundErr *errTxtailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxtailMissingRound(%d) : %v ", rnd, err)
+			var missingRoundErr *errTxTailMissingRound
+			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxTailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var leaseInLedgerErr *ledgercore.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)
@@ -142,7 +142,7 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	return blk, nil
 }
 
-func (t *txTailTestLedger) Initialize(ts *testing.T) error {
+func (t *txTailTestLedger) initialize(ts *testing.T) error {
 	// create a corresponding blockdb.
 	inMemory := true
 	t.blockDBs, _ = dbOpenTest(ts, inMemory)
@@ -192,7 +192,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var ledger txTailTestLedger
 	txtail := txTail{}
-	require.NoError(t, ledger.Initialize(t))
+	require.NoError(t, ledger.initialize(t))
 
 	err := txtail.loadFromDisk(&ledger, ledger.Latest())
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 			if r >= ledger.Latest()-testTxTailValidityRange {
 				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
 			} else {
-				require.Equal(t, &errTxtailMissingRound{round: txn.Txn.LastValid}, dupResult)
+				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
 		} else {
 			// transaction has no lease
@@ -230,7 +230,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 					require.Nil(t, dupResult)
 				}
 			} else {
-				require.Equal(t, &errTxtailMissingRound{round: txn.Txn.LastValid}, dupResult)
+				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
 		}
 	}
@@ -240,7 +240,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var ledger txTailTestLedger
 	txtail := txTail{}
-	require.NoError(t, ledger.Initialize(t))
+	require.NoError(t, ledger.initialize(t))
 
 	err := txtail.loadFromDisk(&ledger, ledger.Latest())
 	require.NoError(t, err)

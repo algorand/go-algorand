@@ -455,7 +455,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 	}
 
 	if !tu.newDatabase {
-		err = performTxtailTableMigration(context.Background(), tx, tu.blockDb.Rdb)
+		err = performTxTailTableMigration(context.Background(), tx, tu.blockDb.Rdb)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete transaction tail data migration : %w", err)
 		}

@@ -66,15 +66,15 @@ type txTail struct {
 	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
-func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) error {
+func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	rdb := l.trackerDB().Rdb
 
 	var roundData []*txTailRound
 	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
-	if trackerRound > 0 {
+	if dbRound > 0 {
 		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			roundData, roundTailHashes, baseRound, err = loadTxTail(context.Background(), tx, trackerRound)
+			roundData, roundTailHashes, baseRound, err = loadTxTail(context.Background(), tx, dbRound)
 			return err
 		})
 		if err != nil {
@@ -82,7 +82,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 		}
 	}
 
-	t.lowWaterMark = trackerRound
+	t.lowWaterMark = dbRound
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 
 	t.recent = make(map[basics.Round]roundLeases)
@@ -99,7 +99,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) err
 	consensusVersions := make([]protocol.ConsensusVersion, 1)
 	roundTailSerializedData := make([][]byte, 0)
 
-	for old := baseRound; old <= trackerRound && trackerRound > baseRound; old++ {
+	for old := baseRound; old <= dbRound && dbRound > baseRound; old++ {
 		txTailRound := roundData[0]
 		consensusParams := config.Consensus[txTailRound.ConsensusVersion]
 
@@ -264,13 +264,13 @@ func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basi
 	return dcr
 }
 
-// errTxtailMissingRound is returned by checkDup when requested for a round number below the low watermark
-type errTxtailMissingRound struct {
+// errTxTailMissingRound is returned by checkDup when requested for a round number below the low watermark
+type errTxTailMissingRound struct {
 	round basics.Round
 }
 
 // Error satisfies builtin interface `error`
-func (t errTxtailMissingRound) Error() string {
+func (t errTxTailMissingRound) Error() string {
 	return fmt.Sprintf("txTail: tried to check for dup in missing round %d", t.round)
 }
 
@@ -278,7 +278,7 @@ func (t errTxtailMissingRound) Error() string {
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	if lastValid < t.lowWaterMark {
-		return &errTxtailMissingRound{round: lastValid}
+		return &errTxTailMissingRound{round: lastValid}
 	}
 
 	if proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {

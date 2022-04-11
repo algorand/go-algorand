@@ -71,7 +71,7 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	// since this is a test that starts from genesis, there is no tail that needs to be migrated.
 	// we'll pass a nil here in order to ensure we still call this method, although it would
 	// be a noop.
-	err = performTxtailTableMigration(context.Background(), nil, db.Accessor{})
+	err = performTxTailTableMigration(context.Background(), nil, db.Accessor{})
 	require.NoError(tb, err)
 
 	return newDB
