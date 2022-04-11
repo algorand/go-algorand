@@ -1644,6 +1644,7 @@
       "Returns": "B",
       "Size": 1,
       "Doc": "for (curve point A, B) return the curve point A + B",
+      "DocExtra": "A, B is curve point in G1 group. Each point is consists of (X, Y). X and Y are both 256 bit integer, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.",
       "Groups": [
         "Arithmetic"
       ]
@@ -1655,6 +1656,7 @@
       "Returns": "B",
       "Size": 1,
       "Doc": "for (curve point A, scalar K) return the curve point KA",
+      "DocExtra": "A is curve point in G1 Group and encoding described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.",
       "Groups": [
         "Arithmetic"
       ]
@@ -1666,6 +1668,7 @@
       "Returns": "U",
       "Size": 1,
       "Doc": "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired =\u003e {0 or 1}",
+      "DocExtra": "G1s are encoded by concat each encoded G1, which described in `bn256_add`. G2s are encoded by concat encoded G2. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.",
       "Groups": [
         "Arithmetic"
       ]

@@ -1105,6 +1105,8 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - **Cost**: 70
 - Availability: v7
 
+A, B is curve point in G1 group. Each point is consists of (X, Y). X and Y are both 256 bit integer, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.
+
 ## bn256_scalar_mul
 
 - Opcode: 0x9a
@@ -1113,6 +1115,8 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - **Cost**: 970
 - Availability: v7
 
+A is curve point in G1 Group and encoding described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.
+
 ## bn256_pairing
 
 - Opcode: 0x9b
@@ -1120,6 +1124,8 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}
 - **Cost**: 8700
 - Availability: v7
+
+G1s are encoded by concat each encoded G1, which described in `bn256_add`. G2s are encoded by concat encoded G2. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.
 
 ## b+
 
