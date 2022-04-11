@@ -158,7 +158,7 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
-    if [ $KEEP_TEMPS ]; then
+    if [ $E2E_PLATFORM == "arm64" ]; then
 	echo "Keeping temporary running"
 	"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py --keep-temps ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
 

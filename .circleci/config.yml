@@ -644,7 +644,7 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
-      KEEP_TEMPS: "True"
+      E2E_PLATFORM: << parameters.platform >>
     steps:
       - prepare_build_dir
       - prepare_go
@@ -661,7 +661,7 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
-      KEEP_TEMPS: "True"
+      E2E_PLATFORM: << parameters.platform >>
     steps:
       - prepare_build_dir
       - prepare_go
