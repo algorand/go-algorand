@@ -1320,17 +1320,6 @@ func bN254G1ToBytes(g1 *bn254.G1Affine) (ret []byte) {
 	return
 }
 
-func bN254G2ToBytes(g2 *bn254.G2Affine) (ret []byte) {
-	retXA0 := g2.X.A0.Bytes()
-	retXA1 := g2.X.A1.Bytes()
-	retYA0 := g2.Y.A0.Bytes()
-	retYA1 := g2.Y.A1.Bytes()
-	ret = append(retXA0[:], retXA1[:]...)
-	ret = append(ret[:], retYA0[:]...)
-	ret = append(ret[:], retYA1[:]...)
-	return
-}
-
 func opBn256Add(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
