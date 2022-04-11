@@ -90,6 +90,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	for addr, data := range accts {
 		expected := ledgercore.ToAccountData(data)
+		expected.VotingData = ledgercore.VotingData{}
 		pad, err := aq.lookup(addr)
 		require.NoError(t, err)
 		d := pad.accountData.GetLedgerCoreAccountData()
@@ -134,28 +135,28 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		}
 	}
 
+	// Compute the top-N accounts ourselves
+	var testtop []ledgercore.OnlineAccount
+	for _, data := range onlineAccounts {
+		testtop = append(testtop, *data)
+	}
+
+	sort.Slice(testtop, func(i, j int) bool {
+		ibal := testtop[i].NormalizedOnlineBalance
+		jbal := testtop[j].NormalizedOnlineBalance
+		if ibal > jbal {
+			return true
+		}
+		if ibal < jbal {
+			return false
+		}
+		return bytes.Compare(testtop[i].Address[:], testtop[j].Address[:]) > 0
+	})
+
 	for i := 0; i < len(onlineAccounts); i++ {
-		dbtop, err := accountsOnlineTop(tx, 0, uint64(i), proto)
+		dbtop, err := accountsOnlineTop(tx, rnd, 0, uint64(i), proto)
 		require.NoError(t, err)
 		require.Equal(t, i, len(dbtop))
-
-		// Compute the top-N accounts ourselves
-		var testtop []ledgercore.OnlineAccount
-		for _, data := range onlineAccounts {
-			testtop = append(testtop, *data)
-		}
-
-		sort.Slice(testtop, func(i, j int) bool {
-			ibal := testtop[i].NormalizedOnlineBalance
-			jbal := testtop[j].NormalizedOnlineBalance
-			if ibal > jbal {
-				return true
-			}
-			if ibal < jbal {
-				return false
-			}
-			return bytes.Compare(testtop[i].Address[:], testtop[j].Address[:]) > 0
-		})
 
 		for j := 0; j < i; j++ {
 			_, ok := dbtop[testtop[j].Address]
@@ -163,7 +164,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		}
 	}
 
-	top, err := accountsOnlineTop(tx, 0, uint64(len(onlineAccounts)+1), proto)
+	top, err := accountsOnlineTop(tx, rnd, 0, uint64(len(onlineAccounts)+1), proto)
 	require.NoError(t, err)
 	require.Equal(t, len(top), len(onlineAccounts))
 }
@@ -268,10 +269,15 @@ func TestAccountDBRound(t *testing.T) {
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegment)
 
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(i), true, baseAccounts, baseResources)
+		oldBase := i - 1
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), true, baseAccounts)
+		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), true, baseAccounts, baseResources)
+		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), baseAccounts)
 
-		err = updatesCnt.accountsLoadOld(tx, "accountbase")
+		err = updatesCnt.accountsLoadOld(tx)
+		require.NoError(t, err)
+
+		err = updatesOnlineCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
 
 		knownAddresses := make(map[basics.Address]int64)
@@ -292,12 +298,17 @@ func TestAccountDBRound(t *testing.T) {
 			numResUpdates += len(rs)
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
+
+		// TODO: check expirations?
+		updatedOnlineAccts, _, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
+		require.NoError(t, err)
+
 		err = updateAccountsRound(tx, basics.Round(i))
 		require.NoError(t, err)
 
-		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesCnt, proto, basics.Round(i))
-		require.NoError(t, err)
-		require.Equal(t, updatedAccts, updatedOnlineAccts)
+		// TODO: calculate exact number of updates?
+		// newly created online accounts + accounts went offline + voting data/stake modifed accounts
+		require.NotEmpty(t, updatedOnlineAccts)
 
 		checkAccounts(t, tx, basics.Round(i), accts)
 		checkCreatables(t, tx, i, expectedDbImage)
@@ -401,7 +412,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			)
 			require.Equal(t, 1, len(outAccountDeltas.misses))
 
-			err = outAccountDeltas.accountsLoadOld(tx, "accountbase")
+			err = outAccountDeltas.accountsLoadOld(tx)
 			require.NoError(t, err)
 
 			knownAddresses := make(map[basics.Address]int64)
@@ -450,7 +461,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 
 func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
 	for _, data := range accts {
-		if data.StateProofID.IsEmpty() {
+		if data.Status == basics.Online && data.StateProofID.IsEmpty() {
 			return false
 		}
 	}
@@ -2127,7 +2138,53 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	}
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"UpdateRound":0}`
+		require.NoError(t, err)
+		require.Equal(t, expectedEncoding, string(encoding))
+	}
+	t.Run("Positive", positiveTesting)
+	t.Run("Negative", negativeTesting)
+	t.Run("Structure", structureTesting)
+
+}
+
+func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	positiveTesting := func(t *testing.T) {
+		var ba baseOnlineAccountData
+		require.True(t, ba.IsEmpty())
+		require.True(t, ba.IsVotingEmpty())
+		ba.MicroAlgos.Raw = 100
+		require.True(t, ba.IsVotingEmpty())
+		ba.RewardsBase = 200
+		require.True(t, ba.IsVotingEmpty())
+	}
+	var empty baseOnlineAccountData
+	negativeTesting := func(t *testing.T) {
+		for i := 0; i < 10; i++ {
+			randObj, _ := protocol.RandomizeObjectField(&baseOnlineAccountData{})
+			ba := randObj.(*baseOnlineAccountData)
+			if *ba == empty {
+				continue
+			}
+			require.False(t, ba.IsEmpty(), "base account : %v", ba)
+			break
+		}
+		{
+			var ba baseOnlineAccountData
+			ba.MicroAlgos.Raw = 100
+			require.False(t, ba.IsEmpty())
+		}
+		{
+			var ba baseOnlineAccountData
+			ba.RewardsBase = 200
+			require.False(t, ba.IsEmpty())
+		}
+	}
+	structureTesting := func(t *testing.T) {
+		encoding, err := json.Marshal(&empty)
+		expectedEncoding := `{"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"MicroAlgos":{"Raw":0},"RewardsBase":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -2315,7 +2372,7 @@ func (m *mockAccountWriter) lookupResource(addr basics.Address, cidx basics.Crea
 	return
 }
 
-func (m *mockAccountWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
+func (m *mockAccountWriter) insertAccount(addr basics.Address, data baseAccountData) (rowid int64, err error) {
 	rowid, ok := m.addresses[addr]
 	if ok {
 		err = fmt.Errorf("insertAccount: addr %s, rowid %d: UNIQUE constraint failed", addr.String(), rowid)
@@ -2342,7 +2399,7 @@ func (m *mockAccountWriter) deleteAccount(rowid int64) (rowsAffected int64, err 
 	return 1, nil
 }
 
-func (m *mockAccountWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
+func (m *mockAccountWriter) updateAccount(rowid int64, data baseAccountData) (rowsAffected int64, err error) {
 	if _, ok := m.rowids[rowid]; !ok {
 		return 0, fmt.Errorf("updateAccount: not found rowid %d", rowid)
 	}
@@ -2746,4 +2803,509 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 		a.Equal(basics.CreatableIndex(aidx), upd[0].aidx)
 		a.Equal(makeResourcesData(uint64(0)), upd[0].data)
 	}
+}
+
+// TestAccountTopOnline ensures accountsOnlineTop return a right subset of accounts
+// from the history table.
+// Start with two online accounts A, B at round 1
+// At round 2 make A offline.
+// At round 3 make B offline and add a new online account C.
+// Ensure
+// - for round 1 A and B returned
+// - for round 2 only B returned
+// - for round 3 only C returned
+// The test also checks accountsDbQueries.lookupOnline
+func TestAccountOnlineQueries(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	var accts map[basics.Address]basics.AccountData
+	accountsInitTest(t, tx, accts, proto)
+	totals, err := accountsTotals(tx, false)
+	require.NoError(t, err)
+
+	var baseAccounts lruAccounts
+	var baseResources lruResources
+	baseAccounts.init(nil, 100, 80)
+	baseResources.init(nil, 100, 80)
+
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+
+	var voteIDA crypto.OneTimeSignatureVerifier
+	crypto.RandBytes(voteIDA[:])
+	var voteIDB crypto.OneTimeSignatureVerifier
+	crypto.RandBytes(voteIDB[:])
+	var voteIDC crypto.OneTimeSignatureVerifier
+	crypto.RandBytes(voteIDC[:])
+
+	dataA1 := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			Status:     basics.Online,
+		},
+		VotingData: ledgercore.VotingData{
+			VoteID: voteIDA,
+		},
+	}
+
+	dataB1 := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+			Status:     basics.Online,
+		},
+		VotingData: ledgercore.VotingData{
+			VoteID: voteIDB,
+		},
+	}
+
+	dataC3 := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
+			Status:     basics.Online,
+		},
+		VotingData: ledgercore.VotingData{
+			VoteID: voteIDC,
+		},
+	}
+
+	dataA2 := dataA1
+	dataA2.Status = basics.Offline
+	dataA2.VoteID = crypto.OneTimeSignatureVerifier{}
+
+	dataB2 := dataB1
+	dataB2.Status = basics.Offline
+	dataB2.VoteID = crypto.OneTimeSignatureVerifier{}
+
+	delta1 := ledgercore.AccountDeltas{}
+	delta1.Upsert(addrA, dataA1)
+	delta1.Upsert(addrB, dataB1)
+
+	delta2 := ledgercore.AccountDeltas{}
+	delta2.Upsert(addrA, dataA2)
+
+	delta3 := ledgercore.AccountDeltas{}
+	delta3.Upsert(addrB, dataB2)
+	delta3.Upsert(addrC, dataC3)
+
+	addRound := func(rnd basics.Round, updates ledgercore.AccountDeltas) {
+		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
+		accts = applyPartialDeltas(accts, updates)
+
+		oldBase := rnd - 1
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, oldBase, true, baseAccounts)
+		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, oldBase, baseAccounts)
+
+		err = updatesCnt.accountsLoadOld(tx)
+		require.NoError(t, err)
+
+		err = updatesOnlineCnt.accountsLoadOld(tx)
+		require.NoError(t, err)
+
+		err = accountsPutTotals(tx, totals, false)
+		require.NoError(t, err)
+		updatedAccts, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, map[basics.CreatableIndex]ledgercore.ModifiedCreatable{}, proto, rnd)
+		require.NoError(t, err)
+		require.Equal(t, updatesCnt.len(), len(updatedAccts))
+
+		updatedOnlineAccts, _, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+		require.NoError(t, err)
+		require.NotEmpty(t, updatedOnlineAccts)
+
+		err = updateAccountsRound(tx, rnd)
+		require.NoError(t, err)
+	}
+
+	addRound(1, delta1)
+	addRound(2, delta2)
+	addRound(3, delta3)
+
+	queries, err := accountsInitDbQueries(tx, tx)
+	require.NoError(t, err)
+
+	// check round 1
+	rnd := basics.Round(1)
+	online, err := accountsOnlineTop(tx, rnd, 0, 10, proto)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(online))
+	require.NotContains(t, online, addrC)
+
+	onlineAcctA, ok := online[addrA]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctA)
+	require.Equal(t, addrA, onlineAcctA.Address)
+	require.Equal(t, dataA1.AccountBaseData.MicroAlgos, onlineAcctA.MicroAlgos)
+
+	onlineAcctB, ok := online[addrB]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctB)
+	require.Equal(t, addrB, onlineAcctB.Address)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
+
+	paod, err := queries.lookupOnline(addrA, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrA, paod.addr)
+	require.Equal(t, dataA1.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDA, paod.accountData.VoteID)
+
+	paod, err = queries.lookupOnline(addrB, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrB, paod.addr)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDB, paod.accountData.VoteID)
+
+	paod, err = queries.lookupOnline(addrC, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrC, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	// check round 2
+	rnd = basics.Round(2)
+	online, err = accountsOnlineTop(tx, rnd, 0, 10, proto)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(online))
+	require.NotContains(t, online, addrA)
+	require.NotContains(t, online, addrC)
+
+	onlineAcctB, ok = online[addrB]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctB)
+	require.Equal(t, addrB, onlineAcctB.Address)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
+
+	paod, err = queries.lookupOnline(addrA, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrA, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	paod, err = queries.lookupOnline(addrB, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrB, paod.addr)
+	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDB, paod.accountData.VoteID)
+
+	paod, err = queries.lookupOnline(addrC, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrC, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	// check round 3
+	rnd = basics.Round(3)
+	online, err = accountsOnlineTop(tx, rnd, 0, 10, proto)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(online))
+	require.NotContains(t, online, addrA)
+	require.NotContains(t, online, addrB)
+
+	onlineAcctC, ok := online[addrC]
+	require.True(t, ok)
+	require.NotNil(t, onlineAcctC)
+	require.Equal(t, addrC, onlineAcctC.Address)
+	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, onlineAcctC.MicroAlgos)
+
+	paod, err = queries.lookupOnline(addrA, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrA, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	paod, err = queries.lookupOnline(addrB, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrB, paod.addr)
+	require.Empty(t, paod.accountData)
+
+	paod, err = queries.lookupOnline(addrC, rnd)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(3), paod.round)
+	require.Equal(t, addrC, paod.addr)
+	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
+	require.Equal(t, voteIDC, paod.accountData.VoteID)
+}
+
+func TestAccountOnlineAccountsExpirations(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+	getAccounts := func(status basics.Status) map[basics.Address]basics.AccountData {
+		result := make(map[basics.Address]basics.AccountData, 3)
+		var voteID crypto.OneTimeSignatureVerifier
+		if status == basics.Online {
+			crypto.RandBytes(voteID[:])
+		}
+		for i, addr := range []basics.Address{addrA, addrB, addrC} {
+			result[addr] = basics.AccountData{Status: status, MicroAlgos: basics.MicroAlgos{Raw: uint64(i+1) * 100_000_000}, VoteID: voteID}
+		}
+
+		return result
+	}
+
+	// not great but looks like the only way to test the onlineAccountsExpirations query on precrafted data
+	addAccounts := func(t *testing.T, tx *sql.Tx, accts map[basics.Address]basics.AccountData, updRound int64) {
+		insertStmt, err := tx.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
+		require.NoError(t, err)
+		for addr, ad := range accts {
+			if ad.Status == basics.Offline {
+				_, err = insertStmt.Exec(addr[:], 0, []byte{}, updRound, 0)
+				require.NoError(t, err)
+			} else if ad.Status == basics.Online {
+				_, err = insertStmt.Exec(addr[:], ad.MicroAlgos.Raw, []byte{}, updRound, 0)
+				require.NoError(t, err)
+			}
+		}
+	}
+
+	t.Run("online-at-zero", func(t *testing.T) {
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+		defer tx.Rollback()
+
+		accts := getAccounts(basics.Online)
+		accountsInitTest(t, tx, accts, proto)
+
+		result, err := onlineAccountsExpirations(tx, proto.MaxBalLookback)
+		require.NoError(t, err)
+		require.Empty(t, result)
+
+		top, err := accountsOnlineTop(tx, 0, 0, 10, proto)
+		require.NoError(t, err)
+		require.Len(t, top, 3)
+	})
+
+	t.Run("offline-at-zero", func(t *testing.T) {
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+		defer tx.Rollback()
+
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		accts := getAccounts(basics.Offline)
+		addAccounts(t, tx, accts, 0)
+
+		result, err := onlineAccountsExpirations(tx, proto.MaxBalLookback)
+		require.NoError(t, err)
+		require.Len(t, result, 1)
+		require.Equal(t, proto.MaxBalLookback, uint64(result[0].rnd))
+		require.Len(t, result[0].rowids, 3)
+	})
+
+	t.Run("offline-online-offline-single", func(t *testing.T) {
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+		defer tx.Rollback()
+
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		accts := getAccounts(basics.Offline)
+		addAccounts(t, tx, accts, 0)
+		accts = getAccounts(basics.Online)
+		addAccounts(t, tx, accts, 1)
+
+		// offline entries expire at round they become offline
+		result, err := onlineAccountsExpirations(tx, proto.MaxBalLookback)
+		require.NoError(t, err)
+		require.Len(t, result, 1)
+		require.Equal(t, proto.MaxBalLookback, uint64(result[0].rnd))
+		require.Len(t, result[0].rowids, 3)
+
+		// make account A offline
+		ad := accts[addrA]
+		ad.Status = basics.Offline
+		addAccounts(t, tx, map[basics.Address]basics.AccountData{addrA: ad}, 2)
+
+		// expect 3 expirations for the first offline -> online switch
+		// and two offline expirations for A (online -> offline)
+		result, err = onlineAccountsExpirations(tx, proto.MaxBalLookback)
+		require.NoError(t, err)
+		require.Len(t, result, 2)
+		require.Equal(t, proto.MaxBalLookback, uint64(result[0].rnd))
+		require.Len(t, result[0].rowids, 3)
+		require.Equal(t, proto.MaxBalLookback+2, uint64(result[1].rnd))
+		require.Len(t, result[1].rowids, 2)
+	})
+
+	t.Run("online-online-online", func(t *testing.T) {
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+		defer tx.Rollback()
+
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		for updRound := int64(0); updRound < 3; updRound++ {
+			accts := getAccounts(basics.Online)
+			addAccounts(t, tx, accts, updRound)
+		}
+
+		// expect 2 expirations per each of two accounts
+		// expiration round is the round of the latest online (2+lookback)
+		result, err := onlineAccountsExpirations(tx, proto.MaxBalLookback)
+		require.NoError(t, err)
+		require.Len(t, result, 1)
+		require.Equal(t, proto.MaxBalLookback+2, uint64(result[0].rnd))
+		require.Len(t, result[0].rowids, 6)
+	})
+
+	t.Run("online-offline-online", func(t *testing.T) {
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(t, err)
+		defer tx.Rollback()
+
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		accts := getAccounts(basics.Online)
+		addAccounts(t, tx, accts, 0)
+		accts = getAccounts(basics.Offline)
+		addAccounts(t, tx, accts, 1)
+		accts = getAccounts(basics.Online)
+		addAccounts(t, tx, accts, 2)
+
+		// expect 2 expirations per account at offline round
+		// and two offline expirations for A (online -> offline)
+		result, err := onlineAccountsExpirations(tx, proto.MaxBalLookback)
+		require.NoError(t, err)
+		require.Len(t, result, 1)
+		require.Equal(t, proto.MaxBalLookback+1, uint64(result[0].rnd))
+		require.Len(t, result[0].rowids, 6)
+	})
+}
+
+type mockOnlineAccountsWriter struct {
+	rowid int64
+}
+
+func (w *mockOnlineAccountsWriter) insertOnlineAccount(addr basics.Address, normBalance uint64, data baseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
+	w.rowid++
+	return w.rowid, nil
+}
+
+func (w *mockOnlineAccountsWriter) close() {}
+
+func TestAccountOnlineAccountsNewRound(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	writer := &mockOnlineAccountsWriter{rowid: 100}
+
+	updates := compactOnlineAccountDeltas{}
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+	addrD := ledgertesting.RandomAddress()
+	addrE := ledgertesting.RandomAddress()
+
+	// acct A is empty
+	deltaA := onlineAccountDelta{
+		address: addrA,
+	}
+	// acct B is new and offline
+	deltaB := onlineAccountDelta{
+		address: addrB,
+		newAcct: baseOnlineAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+		},
+		updRound:  1,
+		newStatus: basics.Offline,
+	}
+	// acct C is new and online
+	deltaC := onlineAccountDelta{
+		address: addrC,
+		newAcct: baseOnlineAccountData{
+			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+			VoteFirstValid: 500,
+		},
+		newStatus: basics.Online,
+		updRound:  2,
+	}
+	// acct D is old and went offline
+	deltaD := onlineAccountDelta{
+		address: addrD,
+		oldAcct: persistedOnlineAccountData{
+			addr: addrD,
+			accountData: baseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 400_000_000},
+				VoteFirstValid: 500,
+			},
+			rowid: 1,
+		},
+		newAcct: baseOnlineAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 400_000_000},
+		},
+		newStatus: basics.Offline,
+		updRound:  3,
+	}
+
+	// acct E is old online
+	deltaE := onlineAccountDelta{
+		address: addrE,
+		oldAcct: persistedOnlineAccountData{
+			addr: addrE,
+			accountData: baseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
+				VoteFirstValid: 500,
+			},
+			rowid: 2,
+		},
+		newAcct: baseOnlineAccountData{
+			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
+			VoteFirstValid: 600,
+		},
+		newStatus: basics.Online,
+		updRound:  4,
+	}
+
+	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC, deltaD, deltaE)
+	lastUpdateRound := basics.Round(1)
+	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+
+	require.Len(t, updated, 3)
+	require.Equal(t, updated[0].addr, addrC)
+	require.Equal(t, updated[1].addr, addrD)
+	require.Equal(t, updated[2].addr, addrE)
+
+	require.Len(t, expired, 2)
+	// deltaD old and new
+	require.Equal(t, proto.MaxBalLookback+3, uint64(expired[0].rnd))
+	require.Equal(t, []int64{1, 102}, expired[0].rowids)
+	// deltaE old
+	require.Equal(t, proto.MaxBalLookback+4, uint64(expired[1].rnd))
+	require.Equal(t, []int64{2}, expired[1].rowids)
+
+	// check errors: new online with empty voting data
+	deltaC.newStatus = basics.Online
+	deltaC.newAcct.VoteFirstValid = 0
+	updates.deltas = []onlineAccountDelta{deltaC}
+	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+
+	// check errors: new non-online with non-empty voting data
+	deltaB.newStatus = basics.Offline
+	deltaB.newAcct.VoteFirstValid = 1
+	updates.deltas = []onlineAccountDelta{deltaB}
+	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+
+	// check errors: new online with empty voting data
+	deltaD.newStatus = basics.Online
+	updates.deltas = []onlineAccountDelta{deltaD}
+	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
 }

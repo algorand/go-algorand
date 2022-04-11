@@ -65,7 +65,10 @@ func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoP
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
-		initAccounts[genaddrs[i]] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + baseAlgoPerAccount) * 100000)})
+		ad := basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + baseAlgoPerAccount) * 100000)})
+		ad.VoteFirstValid = 1
+		ad.VoteLastValid = 100_000
+		initAccounts[genaddrs[i]] = ad
 	}
 	initKeys[poolAddr] = poolSecret
 	initAccounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})

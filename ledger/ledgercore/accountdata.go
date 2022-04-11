@@ -59,8 +59,12 @@ type VotingData struct {
 	VoteFirstValid  basics.Round
 	VoteLastValid   basics.Round
 	VoteKeyDilution uint64
+}
 
-	// MicroAlgosWithReward basics.MicroAlgos
+// OnlineAccountData holds MicroAlgosWithRewards and VotingData as needed for agreement
+type OnlineAccountData struct {
+	MicroAlgosWithRewards basics.MicroAlgos
+	VotingData
 }
 
 // ToAccountData returns ledgercore.AccountData from basics.AccountData
@@ -151,22 +155,25 @@ func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (m
 }
 
 // OnlineAccountData calculates the online account data given an AccountData, by adding the rewards.
-func (u *AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
+func (u *AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) OnlineAccountData {
 	if u.Status != basics.Online {
 		// if the account is not Online and agreement requests it for some reason, clear it out
-		return basics.OnlineAccountData{}
+		return OnlineAccountData{}
 	}
 
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
-	return basics.OnlineAccountData{
+	return OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
-		VoteID:                u.VoteID,
-		SelectionID:           u.SelectionID,
-		VoteFirstValid:        u.VoteFirstValid,
-		VoteLastValid:         u.VoteLastValid,
-		VoteKeyDilution:       u.VoteKeyDilution,
+		VotingData: VotingData{
+			VoteID:          u.VoteID,
+			SelectionID:     u.SelectionID,
+			StateProofID:    u.StateProofID,
+			VoteFirstValid:  u.VoteFirstValid,
+			VoteLastValid:   u.VoteLastValid,
+			VoteKeyDilution: u.VoteKeyDilution,
+		},
 	}
 }
 

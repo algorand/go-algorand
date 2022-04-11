@@ -170,9 +170,6 @@ type trackerRegistry struct {
 	// cached to avoid SQL queries.
 	dbRound basics.Round
 
-	// TODO: remove after synching online accounts with acct updates
-	dbRoundOnline basics.Round
-
 	dbs db.Pair
 	log logging.Logger
 
@@ -197,10 +194,6 @@ type deferredCommitRange struct {
 	oldBase  basics.Round
 	lookback basics.Round
 
-	// TODO: remove
-	offsetOnline  uint64
-	oldBaseOnline basics.Round
-
 	// pendingDeltas is the number of accounts that were modified within this commit context.
 	// note that in this number we might have the same account being modified several times.
 	pendingDeltas int
@@ -221,9 +214,8 @@ type deferredCommitRange struct {
 type deferredCommitContext struct {
 	deferredCommitRange
 
-	newBase       basics.Round
-	newBaseOnline basics.Round
-	flushTime     time.Time
+	newBase   basics.Round
+	flushTime time.Time
 
 	genesisProto config.ConsensusParams
 
@@ -236,8 +228,11 @@ type deferredCommitContext struct {
 	updatedPersistedAccounts  []persistedAccountData
 	updatedPersistedResources map[basics.Address][]persistedResourcesData
 
-	compactAccountDeltasOnline     compactAccountDeltas
-	updatedPersistedAccountsOnline []persistedAccountData
+	compactOnlineAccountDeltas     compactOnlineAccountDeltas
+	updatedPersistedOnlineAccounts []persistedOnlineAccountData
+	onlineAccountExpirations       []onlineAccountExpiration
+	onlineAccountExpiredRowids     []int64
+	expirationOffset               uint64
 
 	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest
@@ -260,9 +255,6 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 
 	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		tr.dbRound, err = accountsRound(tx)
-		if err == nil {
-			tr.dbRoundOnline, err = onlineAccountsRound(tx)
-		}
 		return err
 	})
 
@@ -294,17 +286,10 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	tr.mu.RLock()
 	dbRound := tr.dbRound
-	dbRoundOnline := tr.dbRoundOnline
 	tr.mu.RUnlock()
 
 	for _, lt := range tr.trackers {
-		var err error
-		if _, ok := lt.(*onlineAccounts); ok {
-			// TODO: remove
-			err = lt.loadFromDisk(l, dbRoundOnline)
-		} else {
-			err = lt.loadFromDisk(l, dbRound)
-		}
+		err := lt.loadFromDisk(l, dbRound)
 		if err != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
@@ -317,7 +302,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
 
-	// the votes have a special dependency on the account updates, so we need to initialize these separetly.
+	// the votes have a special dependency on the account updates, so we need to initialize these separately.
 	tr.acctsOnline.voters = &votersTracker{}
 	err = tr.acctsOnline.voters.loadFromDisk(l, tr.acctsOnline)
 	if err != nil {
@@ -353,7 +338,6 @@ func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
 	tr.mu.RLock()
 	dbRound := tr.dbRound
-	dbRoundOnline := tr.dbRoundOnline
 	tr.mu.RUnlock()
 
 	dcc := &deferredCommitContext{
@@ -365,12 +349,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	for _, lt := range tr.trackers {
 		base := cdr.oldBase
 		offset := cdr.offset
-		if _, ok := lt.(*onlineAccounts); ok {
-			// TODO: remove
-			cdr = lt.produceCommittingTask(blockqRound, dbRoundOnline, cdr)
-		} else {
-			cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
-		}
+		cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
 		if cdr == nil {
 			break
 		}
@@ -460,9 +439,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	tr.mu.RLock()
 
 	offset := dcc.offset
-	offsetOnline := dcc.offsetOnline
 	dbRound := dcc.oldBase
-	dbRoundOnline := dcc.oldBaseOnline
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
@@ -477,9 +454,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	// adjust the offset according to what happened meanwhile..
 	offset -= uint64(tr.dbRound - dbRound)
 
-	// adjust the offset according to what happened meanwhile..
-	offsetOnline -= uint64(tr.dbRoundOnline - dbRoundOnline)
-
 	// if this iteration need to flush out zero rounds, just return right away.
 	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
 	// flush, without the commitRound have a chance of committing these rounds.
@@ -489,16 +463,11 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	}
 
 	dbRound = tr.dbRound
-	dbRoundOnline = tr.dbRoundOnline
 	newBase := basics.Round(offset) + dbRound
-	newBaseOnline := basics.Round(offsetOnline) + dbRoundOnline
 
 	dcc.offset = offset
-	dcc.offsetOnline = offsetOnline
 	dcc.oldBase = dbRound
-	dcc.oldBaseOnline = dbRoundOnline
 	dcc.newBase = newBase
-	dcc.newBaseOnline = newBaseOnline
 	dcc.flushTime = time.Now()
 
 	for _, lt := range tr.trackers {
@@ -521,17 +490,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 			}
 		}
 
-		err = updateAccountsRound(tx, dbRound+basics.Round(offset))
-		if err != nil {
-			return err
-		}
-
-		err = updateOnlineAccountsRound(tx, dbRoundOnline+basics.Round(offsetOnline))
-		if err != nil {
-			return err
-		}
-
-		return nil
+		return updateAccountsRound(tx, dbRound+basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
@@ -542,7 +501,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 
 	tr.mu.Lock()
 	tr.dbRound = newBase
-	tr.dbRoundOnline = newBaseOnline
 	for _, lt := range tr.trackers {
 		lt.postCommit(tr.ctx, dcc)
 	}

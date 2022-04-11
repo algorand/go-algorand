@@ -97,17 +97,22 @@ func UnmarshalStatus(value string) (s Status, err error) {
 	return
 }
 
-// OnlineAccountData contains the voting information for a single account.
-//msgp:ignore OnlineAccountData
-type OnlineAccountData struct {
-	MicroAlgosWithRewards MicroAlgos
-
-	VoteID      crypto.OneTimeSignatureVerifier
-	SelectionID crypto.VRFVerifier
+// VotingData holds voting-related data
+type VotingData struct {
+	VoteID       crypto.OneTimeSignatureVerifier
+	SelectionID  crypto.VRFVerifier
+	StateProofID merklesignature.Verifier
 
 	VoteFirstValid  Round
 	VoteLastValid   Round
 	VoteKeyDilution uint64
+}
+
+// OnlineAccountData contains the voting information for a single account.
+//msgp:ignore OnlineAccountData
+type OnlineAccountData struct {
+	MicroAlgosWithRewards MicroAlgos
+	VotingData
 }
 
 // AccountData contains the data associated with a given address.
@@ -522,12 +527,14 @@ func (u AccountData) OnlineAccountData() OnlineAccountData {
 
 	return OnlineAccountData{
 		MicroAlgosWithRewards: u.MicroAlgos,
-
-		VoteID:          u.VoteID,
-		SelectionID:     u.SelectionID,
-		VoteFirstValid:  u.VoteFirstValid,
-		VoteLastValid:   u.VoteLastValid,
-		VoteKeyDilution: u.VoteKeyDilution,
+		VotingData: VotingData{
+			VoteID:          u.VoteID,
+			SelectionID:     u.SelectionID,
+			StateProofID:    u.StateProofID,
+			VoteFirstValid:  u.VoteFirstValid,
+			VoteLastValid:   u.VoteLastValid,
+			VoteKeyDilution: u.VoteKeyDilution,
+		},
 	}
 }
 

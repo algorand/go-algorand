@@ -118,12 +118,11 @@ func TestTrackerScheduleCommit(t *testing.T) {
 
 	cdr = ao.produceCommittingTask(blockqRound, dbRound, cdr)
 	a.NotNil(cdr)
-	a.Equal(expectedOffset, cdr.offsetOnline)
+	a.Equal(expectedOffset, cdr.offset)
 
 	// schedule the commit. au is expected to return offset 100 and
 	ml.trackers.mu.Lock()
 	ml.trackers.dbRound = dbRound
-	ml.trackers.dbRoundOnline = dbRound
 	ml.trackers.mu.Unlock()
 	ml.trackers.scheduleCommit(blockqRound, lookback)
 

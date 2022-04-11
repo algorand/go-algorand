@@ -473,6 +473,19 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
 
+	// mixin online data
+	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+	}
+
+	data.VoteID = onlineData.VoteID
+	data.SelectionID = onlineData.SelectionID
+	data.StateProofID = onlineData.StateProofID
+	data.VoteKeyDilution = onlineData.VoteKeyDilution
+	data.VoteFirstValid = onlineData.VoteFirstValid
+	data.VoteLastValid = onlineData.VoteLastValid
+
 	return data, rnd, withoutRewards, nil
 }
 
@@ -486,13 +499,22 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, rnd, rewardsVersion, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
+	baseData, rnd, rewardsVersion, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards = data.MicroAlgos
+
+	// mixin online data
+	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+	}
+	data.AccountBaseData = baseData
+	data.VotingData = onlineData.VotingData
+
 	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
 
 	return data, rnd, withoutRewards, nil
@@ -544,12 +566,23 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
+	var result ledgercore.AccountData
+
+	baseData, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), err
 	}
 
-	return data, validThrough, nil
+	// mixin online data
+	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return ledgercore.AccountData{}, basics.Round(0), err
+	}
+
+	result.AccountBaseData = baseData
+	result.VotingData = onlineData.VotingData
+
+	return result, validThrough, nil
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
