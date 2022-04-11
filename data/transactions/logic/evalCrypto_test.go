@@ -809,7 +809,7 @@ func benchmarkBn256DataGenData(b *testing.B) (data []benchmarkBn256Data) {
 
 func benchmarkBn256(b *testing.B, source string) {
 	data := benchmarkBn256DataGenData(b)
-	ops, err := AssembleStringWithVersion(source, 6)
+	ops, err := AssembleStringWithVersion(source, 7)
 	require.NoError(b, err)
 	for i := 0; i < b.N; i++ {
 		data[i].programs = ops.Program
@@ -878,7 +878,7 @@ func BenchmarkBn256(b *testing.B) {
 	})
 
 	b.Run("bn256 scalar mul", func(b *testing.B) {
-		source := `#pragma version 6
+		source := `#pragma version 7
 arg 0
 arg 1
 bn256_scalar_mul
@@ -889,7 +889,7 @@ int 1
 	})
 
 	b.Run("bn256 pairing", func(b *testing.B) {
-		source := `#pragma version 6
+		source := `#pragma version 7
 arg 2
 arg 3
 bn256_pairing
