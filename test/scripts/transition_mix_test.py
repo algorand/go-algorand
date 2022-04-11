@@ -119,7 +119,8 @@ def wait_for_transaction(algod, txid, round, timeout=15):
         logger.debug('ti %r', ti)
 
 class NodeContext:
-    def __init__(self, bindir, env=None, algodata=None):
+    def __init__(self, bindir, env=None, algodata=None, proc=None):
+        self.proc = proc
         self.bindir = bindir
         self.algodata = algodata
         self.env = env
@@ -203,6 +204,27 @@ def get_block_proposers(algod, lastRound):
         raise Exception("too much variance in block proposers")
     return
 
+def start_algod(algodata, bindir, relay_addr=None):
+    #n1dir = os.path.join(netdir, 'Node1')
+    algod_path = os.path.join(bindir, 'algod')
+    cmd = [algod_path, '-d', algodata]
+    if relay_addr:
+        cmd += ['-p', relay_addr]
+    proc = startdaemon(cmd)
+    atexit.register(proc.terminate)
+    return NodeContext(bindir, algodata=algodata, proc=proc)
+
+
+def bindir_missing(bindir):
+    out = []
+    for p in ('algod', 'goal', 'kmd'):
+        path = os.path.join(bindir)
+        if not os.path.exists(path):
+            out.append(p)
+    if not out:
+        return None
+    return out
+
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
 _logging_datefmt = '%Y%m%d_%H%M%S'
 
@@ -252,9 +274,10 @@ def main():
     os.makedirs(newbin, exist_ok=True)
     os.makedirs(oldbin, exist_ok=True)
     changeBack = False
-    if not os.path.exists(newalgod):
+    newbin_missing = bindir_missing(newbin)
+    if newbin_missing:
         if args.no_build:
-            raise Exception('{} missing but --no-build set'.format(newalgod))
+            raise Exception('new bin dir {} missing {} but --no-build set'.format(newbin, newbin_missing))
         xrun(['git', 'checkout', args.new_branch], cwd=repodir)
         if curbranch and not changeBack:
             changeBack = True
@@ -262,9 +285,10 @@ def main():
         xrun(['make'], cwd=repodir)
         for bn in ('algod', 'goal', 'kmd'):
             shutil.copy(os.path.join(gopath, 'bin', bn), os.path.join(newbin, bn))
-    if not os.path.exists(oldalgod):
+    oldbin_missing = bindir_missing(oldbin)
+    if oldbin_missing:
         if args.no_build:
-            raise Exception('{} missing but --no-build set'.format(oldalgod))
+            raise Exception('old bin dir {} missing {} but --no-build set'.format(oldbin, oldbin_missing))
         xrun(['git', 'checkout', args.old_branch], cwd=repodir)
         if curbranch and not changeBack:
             changeBack = True
@@ -279,24 +303,14 @@ def main():
     shutil.rmtree(netdir, ignore_errors=True)
     xrun([os.path.join(oldbin, 'goal'), 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/ThreeNodesEvenDist.json')], timeout=90)
 
-    relaydir = os.path.join(netdir, 'Primary')
-    relay = startdaemon([oldalgod, '-d', relaydir])
+    relay = start_algod(os.path.join(netdir, 'Primary'), oldbin)
     time.sleep(0.5)
-    with open(os.path.join(relaydir, 'algod-listen.net')) as fin:
+    with open(os.path.join(relay.algodata, 'algod-listen.net')) as fin:
         relay_addr = fin.read().strip()
-    atexit.register(relay.terminate)
 
-    n1dir = os.path.join(netdir, 'Node1')
-    node1 = startdaemon([oldalgod, '-d', n1dir, '-p', relay_addr])
-    atexit.register(node1.terminate)
-    n1 = NodeContext(oldbin, algodata=n1dir)
-    #~/Algorand/masterbin/algod -d ~/Algorand/tn3/Node1 -p $(cat ~/Algorand/tn3/Primary/algod-listen.net) > ~/Algorand/tn3/Primary/algod.out 2>&1 &
+    n1 = start_algod(os.path.join(netdir, 'Node1'), oldbin, relay_addr=relay_addr)
 
-    n2dir = os.path.join(netdir, 'Node2')
-    node2 = startdaemon([newalgod, '-d', n2dir, '-p', relay_addr])
-    atexit.register(node2.terminate)
-    n2 = NodeContext(newbin, algodata=n2dir)
-    #~/Algorand/txnsyncbin/algod -d ~/Algorand/tn3/Node2 -p $(cat ~/Algorand/tn3/Primary/algod-listen.net) > ~/Algorand/tn3/Primary/algod.out 2>&1 &
+    n2 = start_algod(os.path.join(netdir, 'Node2'), newbin, relay_addr=relay_addr)
 
     n1algod, n1kmd = n1.connect()
     n2algod, n2kmd = n2.connect()
@@ -353,7 +367,7 @@ def main():
     assert(a1i2['amount'] - a1i['amount'] == tx2amt)
 
     # run for a bunch of rounds and ensure that block proposers are well distributed
-    ralgod = openalgod(relaydir)
+    ralgod, _ = relay.connect()
     st = ralgod.status()
     while st['last-round'] < 100:
         st = ralgod.status_after_block(st['last-round'])
