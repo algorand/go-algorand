@@ -225,6 +225,39 @@ def bindir_missing(bindir):
         return None
     return out
 
+def build(args, repodir, newbin, oldbin):
+    curbranch = getbranch(repodir)
+    goenv = get_go_env()
+    gopath = goenv['GOPATH']
+    newalgod = os.path.join(newbin , 'algod')
+    oldalgod = os.path.join(oldbin, 'algod')
+    os.makedirs(newbin, exist_ok=True)
+    os.makedirs(oldbin, exist_ok=True)
+    changeBack = False
+    try:
+        newbin_missing = bindir_missing(newbin)
+        if newbin_missing:
+            if args.no_build:
+                raise Exception('new bin dir {} missing {} but --no-build set'.format(newbin, newbin_missing))
+            xrun(['git', 'checkout', args.new_branch], cwd=repodir)
+            changeBack = True
+            xrun(['make'], cwd=repodir)
+            for bn in ('algod', 'goal', 'kmd'):
+                shutil.copy(os.path.join(gopath, 'bin', bn), os.path.join(newbin, bn))
+        oldbin_missing = bindir_missing(oldbin)
+        if oldbin_missing:
+            if args.no_build:
+                raise Exception('old bin dir {} missing {} but --no-build set'.format(oldbin, oldbin_missing))
+            xrun(['git', 'checkout', args.old_branch], cwd=repodir)
+            changeBack = True
+            xrun(['make'], cwd=repodir)
+            for bn in ('algod', 'goal', 'kmd'):
+                shutil.copy(os.path.join(gopath, 'bin', bn), os.path.join(oldbin, bn))
+    finally:
+        if changeBack:
+            xrun(['git', 'checkout', curbranch])
+
+
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
 _logging_datefmt = '%Y%m%d_%H%M%S'
 
@@ -264,38 +297,9 @@ def main():
         else:
             atexit.register(print, 'keeping temps. to clean up:\nrm -rf {}'.format(tempdir))
 
-    curbranch = getbranch(repodir)
-    goenv = get_go_env()
-    gopath = goenv['GOPATH']
     newbin = os.path.join(tempdir, 'newbin')
-    newalgod = os.path.join(newbin , 'algod')
     oldbin = os.path.join(tempdir, 'oldbin')
-    oldalgod = os.path.join(oldbin, 'algod')
-    os.makedirs(newbin, exist_ok=True)
-    os.makedirs(oldbin, exist_ok=True)
-    changeBack = False
-    newbin_missing = bindir_missing(newbin)
-    if newbin_missing:
-        if args.no_build:
-            raise Exception('new bin dir {} missing {} but --no-build set'.format(newbin, newbin_missing))
-        xrun(['git', 'checkout', args.new_branch], cwd=repodir)
-        if curbranch and not changeBack:
-            changeBack = True
-            atexit.register(xrun, ['git', 'checkout', curbranch])
-        xrun(['make'], cwd=repodir)
-        for bn in ('algod', 'goal', 'kmd'):
-            shutil.copy(os.path.join(gopath, 'bin', bn), os.path.join(newbin, bn))
-    oldbin_missing = bindir_missing(oldbin)
-    if oldbin_missing:
-        if args.no_build:
-            raise Exception('old bin dir {} missing {} but --no-build set'.format(oldbin, oldbin_missing))
-        xrun(['git', 'checkout', args.old_branch], cwd=repodir)
-        if curbranch and not changeBack:
-            changeBack = True
-            atexit.register(xrun, ['git', 'checkout', curbranch])
-        xrun(['make'], cwd=repodir)
-        for bn in ('algod', 'goal', 'kmd'):
-            shutil.copy(os.path.join(gopath, 'bin', bn), os.path.join(oldbin, bn))
+    build(args, repodir, newbin, oldbin)
 
     netdir = os.path.join(tempdir, 'net')
     env['NETDIR'] = netdir
