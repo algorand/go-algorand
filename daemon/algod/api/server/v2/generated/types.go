@@ -710,12 +710,6 @@ type PostTransactionsResponse struct {
 // ProofResponse defines model for ProofResponse.
 type ProofResponse struct {
 
-	// The type of hash function used to create the proof, must be one of:
-	// * sumhash
-	// * sha512_256
-	// * sha256
-	Hashtype string `json:"hashtype"`
-
 	// Index of the transaction in the block's payset.
 	Idx uint64 `json:"idx"`
 
@@ -816,7 +810,9 @@ type GetBlockParams struct {
 // GetProofParams defines parameters for GetProof.
 type GetProofParams struct {
 
-	// The hash function to use for the proof.
+	// The type of hash function used to create the proof, must be one of:
+	// * sha512_256
+	// * sha256
 	Hashtype *string `json:"hashtype,omitempty"`
 
 	// Configures whether the response object is JSON or MessagePack encoded.

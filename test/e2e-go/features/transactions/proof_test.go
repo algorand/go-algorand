@@ -104,14 +104,6 @@ func TestTxnMerkleProof(t *testing.T) {
 	proofrespSHA256, err := client.TxnProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
 	a.NoError(err)
 
-	hashtype, err := crypto.UnmarshalHashType(proofresp.Hashtype)
-	a.NoError(err)
-	a.Equal(crypto.Sha512_256, hashtype)
-
-	hashtypeSHA256, err := crypto.UnmarshalHashType(proofrespSHA256.Hashtype)
-	a.NoError(err)
-	a.Equal(crypto.Sha256, hashtypeSHA256)
-
 	generateProof := func(h crypto.HashType, prfRsp generated.ProofResponse) (p merklearray.Proof) {
 		p.HashFactory = crypto.HashFactory{HashType: h}
 		p.TreeDepth = uint8(prfRsp.Treedepth)
