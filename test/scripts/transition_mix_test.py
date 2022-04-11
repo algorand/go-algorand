@@ -172,6 +172,9 @@ class NodeContext:
                 self.maxpubaddr = maxpubaddr
             return self.pubw, self.maxpubaddr
 
+    def terminate(self):
+        self.proc.terminate()
+
 def get_block_proposers(algod, lastRound):
     oprops = {}
     for i in range(1,lastRound+1):
@@ -210,7 +213,7 @@ def start_algod(algodata, bindir, relay_addr=None):
     if relay_addr:
         cmd += ['-p', relay_addr]
     proc = startdaemon(cmd)
-    atexit.register(proc.terminate)
+    #atexit.register(proc.terminate)
     return NodeContext(bindir, algodata=algodata, proc=proc)
 
 
@@ -319,18 +322,63 @@ def main():
         'Node2': newbin,
     }
     run_test(netdir, oldbin, newbin, algod_bins)
+    algod_bins = {
+        'Primary': newbin,
+        'Node1': oldbin,
+        'Node2': newbin,
+    }
+    run_test(netdir, oldbin, newbin, algod_bins)
     return 0
 
-def run_test(netdir, oldbin, newbin, algod_bins):
+def nop(*args, **kwargs):
+    pass
+
+def run_defers(defers, reraise=True, keep_going=False):
+    if defers is None:
+        return
+    for di in defers:
+        try:
+            di()
+        except Exception as ie:
+            if reraise:
+                raise
+            logger.error('exception in defer:', exc_info=True)
+            if not keep_going:
+                break
+
+def defer_wrap(fn):
+    def _wrapped(*args, **kwargs):
+        out = None
+        try:
+            defers = None
+            if '_defer' not in kwargs:
+                defers = []
+                kwargs['_defer'] = lambda x: defers.append(x)
+            out = fn(*args, **kwargs)
+        except:
+            run_defers(defers, reraise=False)
+            raise
+        run_defers(defers, reraise=True)
+        return out
+    return _wrapped
+
+# Test topology: 1 relay, to leaf nodes.
+# one leaf node each for oldbin, newbin
+# relay as either oldbin or newbin
+@defer_wrap
+def run_test(netdir, oldbin, newbin, algod_bins, _defer=nop):
     shutil.rmtree(netdir, ignore_errors=True)
     xrun([os.path.join(oldbin, 'goal'), 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/ThreeNodesEvenDist.json')], timeout=90)
 
     relay = start_algod(os.path.join(netdir, 'Primary'), algod_bins['Primary'])
+    _defer(relay.terminate)
     relay_addr = wait_relay_addr(relay.algodata)
 
     n1 = start_algod(os.path.join(netdir, 'Node1'), algod_bins['Node1'], relay_addr=relay_addr)
+    _defer(n1.terminate)
 
     n2 = start_algod(os.path.join(netdir, 'Node2'), algod_bins['Node2'], relay_addr=relay_addr)
+    _defer(n2.terminate)
 
     n1algod, n1kmd = n1.connect()
     n2algod, n2kmd = n2.connect()
@@ -396,6 +444,14 @@ def run_test(netdir, oldbin, newbin, algod_bins):
 
     print("OK")
     return 0
+
+# test topology: 2 relays, 4 leafs
+# (leaf old 1, leaf new 1) <-> (relay old) <-> (relay new) <-> (leaf old 2, leaf new 2)
+@defer_wrap
+def run_test6(netdir, oldbin, newbin, algod_bins, _defer=nop):
+    print("OK")
+    return 0
+
 
 if __name__ == '__main__':
     sys.exit(main())
