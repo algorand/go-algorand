@@ -1071,7 +1071,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
-			"CREATE TABLE IF NOT EXISTS catchpointonlineaccounts (address blob PRIMARY KEY NOT NULL, normalizedonlinebalance INTEGER, data blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointonlineaccounts (address blob NOT NULL, updround INTEGER, normalizedonlinebalance INTEGER NOT NULL, votelastvalid INTEGER NOT NULL, data blob NOT NULL, PRIMARY KEY (address, updround) )",
 			"CREATE TABLE IF NOT EXISTS catchpointtxtail (round INTEGER PRIMARY KEY NOT NULL, data blob)",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
