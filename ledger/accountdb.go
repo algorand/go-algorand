@@ -32,6 +32,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -129,6 +131,12 @@ var createOnlineAccountsTable = []string{
 	createNormalizedOnlineBalanceIndex("onlineaccountnorm", "onlineaccounts"),
 }
 
+var createTxTailTable = []string{
+	`CREATE TABLE IF NOT EXISTS txtail (
+		round INTEGER PRIMARY KEY NOT NULL,
+		data blob)`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -139,6 +147,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS accounthashes`,
 	`DROP TABLE IF EXISTS resources`,
 	`DROP TABLE IF EXISTS onlineaccounts`,
+	`DROP TABLE IF EXISTS txtail`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -867,6 +876,8 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
+		"DROP TABLE IF EXISTS catchpointtxtail",
+		"DROP TABLE IF EXISTS catchpointonlineaccounts",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -880,6 +891,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		now := time.Now().UnixNano()
 		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
 		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
+		idxnameOnlineBalances := fmt.Sprintf("onlineaccountnorm_idx_%d", now)
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
@@ -887,8 +899,11 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
-			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
+			"CREATE TABLE IF NOT EXISTS catchpointonlineaccounts (address blob PRIMARY KEY NOT NULL, normalizedonlinebalance INTEGER, data blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointtxtail (round INTEGER PRIMARY KEY NOT NULL, data blob)",
+			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
+			createNormalizedOnlineBalanceIndex(idxnameOnlineBalances, "catchpointonlineaccounts"),
 		)
 	}
 
@@ -910,16 +925,22 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
 		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
 		"ALTER TABLE resources RENAME TO resources_old",
+		"ALTER TABLE onlineaccounts RENAME TO onlineaccounts_old",
+		"ALTER TABLE txtail RENAME TO txtail_old",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
+		"ALTER TABLE catchpointonlineaccounts RENAME TO onlineaccounts",
+		"ALTER TABLE catchpointtxtail RENAME TO txtail",
 
 		"DROP TABLE IF EXISTS accountbase_old",
 		"DROP TABLE IF EXISTS assetcreators_old",
 		"DROP TABLE IF EXISTS accounthashes_old",
 		"DROP TABLE IF EXISTS resources_old",
+		"DROP TABLE IF EXISTS onlineaccounts_old",
+		"DROP TABLE IF EXISTS txtail_old",
 	}
 
 	for _, stmt := range stmts {
@@ -1099,6 +1120,16 @@ func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 		_, err = tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
+	for _, stmt := range createTxTailTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return
 		}
 	}
 	return nil
@@ -1778,6 +1809,49 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		}
 	}
 	return nil
+}
+
+func performTxtailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
+	if tx == nil {
+		return nil
+	}
+
+	// load the latest 1001 rounds in the txtail and store these in the txtail.
+	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
+		latest, err := blockLatest(blockTx)
+		if err != nil {
+			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
+		}
+		latestHdr, err := blockGetHdr(blockTx, latest)
+		if err != nil {
+			return fmt.Errorf("latest block header %d cannot be retrieved : %w", latest, err)
+		}
+		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife - 1)
+		firstRound := latest.SubSaturate(maxTxnLife)
+		// we don't need to have the txtail for round 0.
+		if firstRound == basics.Round(0) {
+			firstRound++
+		}
+		tailRounds := make([][]byte, 0, maxTxnLife)
+		for rnd := firstRound; rnd <= latest; rnd++ {
+			blk, err := blockGet(blockTx, rnd)
+			if err != nil {
+				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, latest, err)
+			}
+
+			tail, err := txTailRoundFromBlock(blk)
+			if err != nil {
+				return err
+			}
+
+			encodedTail, _ := tail.encode()
+			tailRounds = append(tailRounds, encodedTail)
+		}
+
+		return txtailNewRound(ctx, tx, firstRound, tailRounds, firstRound-1)
+	})
+
+	return err
 }
 
 func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
@@ -3780,4 +3854,117 @@ func (pac *persistedAccountData) before(other *persistedAccountData) bool {
 // happened before the other.
 func (prd *persistedResourcesData) before(other *persistedResourcesData) bool {
 	return prd.round < other.round
+}
+
+// txTailRoundLease is used as part of txTailRound for storing
+// a single lease.
+type txTailRoundLease struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Sender basics.Address `codec:"s"`
+	Lease  [32]byte       `codec:"l,allocbound=-"`
+	TxnIdx uint64         `code:"i"` //!-- index of the entry in TxnIDs/LastValid
+}
+
+// TxTailRound contains the information about a single round of transactions.
+// The TxnIDs and LastValid would both be of the same length, and are stored
+// in that way for efficient message=pack encoding. The Leases would point to the
+// respective transaction index. Note that this isn’t optimized for storing
+// leases, as leases are extremely rare.
+type txTailRound struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	TxnIDs           []transactions.Txid       `codec:"t,allocbound=-"`
+	LastValid        []basics.Round            `codec:"v,allocbound=-"`
+	Leases           []txTailRoundLease        `codec:"l,allocbound=-"`
+	TimeStamp        int64                     `codec:"a"` //!-- timestamp from block header
+	ConsensusVersion protocol.ConsensusVersion `codec:"b"` //!-- protocol version from block header
+}
+
+// encode the transaction tail data into a serialized form, and return the serialized data
+// as well as the hash of the data.
+func (t *txTailRound) encode() ([]byte, crypto.Digest) {
+	tailData := protocol.Encode(t)
+	hash := crypto.Hash(tailData)
+	return tailData, hash
+}
+
+func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return nil, err
+	}
+
+	tail := &txTailRound{}
+
+	tail.TxnIDs = make([]transactions.Txid, len(payset))
+	tail.LastValid = make([]basics.Round, len(payset))
+	tail.TimeStamp = blk.TimeStamp
+	tail.ConsensusVersion = blk.CurrentProtocol
+
+	for txIdxtxid, txn := range payset {
+		tail.TxnIDs[txIdxtxid] = txn.ID()
+		tail.LastValid[txIdxtxid] = txn.Txn.LastValid
+		if txn.Txn.Lease != [32]byte{} {
+			tail.Leases = append(tail.Leases, txTailRoundLease{
+				Sender: txn.Txn.Sender,
+				Lease:  txn.Txn.Lease,
+				TxnIdx: uint64(txIdxtxid),
+			})
+		}
+	}
+	return tail, nil
+}
+
+func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetRound basics.Round) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO txtail(round, data) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertStmt.Close()
+
+	for i, data := range roundData {
+		_, err = insertStmt.ExecContext(ctx, int(baseRound)+i, data[:])
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.ExecContext(ctx, "DELETE FROM txtail WHERE round <= ?", forgetRound)
+	return err
+}
+
+func loadTxTail(ctx context.Context, tx *sql.Tx, trackerRound basics.Round) (roundData []*txTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
+	rows, err := tx.QueryContext(ctx, "SELECT round, data FROM txtail ORDER BY round DESC")
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	defer rows.Close()
+
+	expectedRound := trackerRound
+	for rows.Next() {
+		var round basics.Round
+		var data []byte
+		err = rows.Scan(&round, &data)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if round != expectedRound {
+			return nil, nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)
+		}
+		tail := &txTailRound{}
+		err = protocol.Decode(data, tail)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		roundData = append(roundData, tail)
+		roundHash = append(roundHash, crypto.Hash(data))
+		expectedRound--
+	}
+	// reverse the array ordering in-place so that it would be incremental order.
+	for i := 0; i < len(roundData)/2; i++ {
+		roundData[i], roundData[len(roundData)-i-1] = roundData[len(roundData)-i-1], roundData[i]
+		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
+	}
+	return roundData, roundHash, expectedRound + 1, nil
 }

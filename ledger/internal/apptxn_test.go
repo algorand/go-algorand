@@ -1863,6 +1863,7 @@ func TestMaxInnerTxFanOut(t *testing.T) {
 			Sender:        addrs[0],
 			ApplicationID: index0,
 			ForeignApps:   []basics.AppIndex{index1},
+			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
 		}
 	}
 	eval = nextBlock(t, l, true, nil)
@@ -1931,6 +1932,7 @@ func TestExceedMaxInnerTxFanOut(t *testing.T) {
 			Sender:        addrs[0],
 			ApplicationID: index0,
 			ForeignApps:   []basics.AppIndex{index1},
+			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
 		}
 	}
 	eval = nextBlock(t, l, true, nil)
@@ -2013,6 +2015,7 @@ assert
 			Sender:        addrs[0],
 			ApplicationID: index1,
 			ForeignApps:   []basics.AppIndex{},
+			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
 		}
 	}
 	eval = nextBlock(t, l, true, nil)
@@ -2095,6 +2098,7 @@ assert
 			Sender:        addrs[0],
 			ApplicationID: index1,
 			ForeignApps:   []basics.AppIndex{},
+			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
 		}
 	}
 	eval = nextBlock(t, l, true, nil)

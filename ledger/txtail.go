@@ -21,22 +21,43 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 const initialLastValidArrayLen = 256
 
-type roundTxMembers struct {
+type roundLeases struct {
 	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
 	proto    config.ConsensusParams
 }
 
 type txTail struct {
-	recent map[basics.Round]roundTxMembers
+	recent map[basics.Round]roundLeases
+
+	// roundTailSerializedData contains the rounds that need to be flushed to disk.
+	// It contain the serialized(encoded) form of the txTailRound. This field would remain
+	// maintained in this data structure up until being cleared out by postCommit
+	roundTailSerializedData [][]byte
+
+	// roundTailHashes contains the recent 1001 hashes. The first entry matches that current tracker database round - 1001,
+	// the second to tracker database round - 1000, and so forth. The roundTailHashes always has it's first array element
+	// not being used.
+	roundTailHashes []crypto.Digest
+
+	// consensusVersions contains the recent 1001 consensus versions. The first entry matches that current tracker database round - 1001,
+	// the second to tracker database round - 1000, and so forth.
+	consensusVersions []protocol.ConsensusVersion
+
+	// tailMu is the synchronization mutex for accessing roundTailHashes, roundTailSerializedData and consensusVersions.
+	tailMu deadlock.RWMutex
 
 	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
 
@@ -45,24 +66,26 @@ type txTail struct {
 	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
-func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	latest := l.Latest()
-	hdr, err := l.BlockHdr(latest)
-	if err != nil {
-		return fmt.Errorf("txTail: could not get latest block header: %v", err)
+func (t *txTail) loadFromDisk(l ledgerForTracker, trackerRound basics.Round) error {
+	rdb := l.trackerDB().Rdb
+
+	var roundData []*txTailRound
+	var roundTailHashes []crypto.Digest
+	var baseRound basics.Round
+	if trackerRound > 0 {
+		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			roundData, roundTailHashes, baseRound, err = loadTxTail(context.Background(), tx, trackerRound)
+			return err
+		})
+		if err != nil {
+			return err
+		}
 	}
-	proto := config.Consensus[hdr.CurrentProtocol]
 
-	// If the latest round is R, then any transactions from blocks strictly older than
-	// R + 1 - proto.MaxTxnLife
-	// could not be valid in the next round (R+1), and so are irrelevant.
-	// Thus we load the txids from blocks R+1-maxTxnLife to R, inclusive
-	old := (latest + 1).SubSaturate(basics.Round(proto.MaxTxnLife))
-
-	t.lowWaterMark = latest
+	t.lowWaterMark = trackerRound
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 
-	t.recent = make(map[basics.Round]roundTxMembers)
+	t.recent = make(map[basics.Round]roundLeases)
 
 	// the roundsLastValids is a temporary map used during the execution of
 	// loadFromDisk, allowing us to construct the lastValid maps in their
@@ -70,30 +93,30 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	// more memory than we truly need.
 	roundsLastValids := make(map[basics.Round][]transactions.Txid)
 
-	for ; old <= latest; old++ {
-		blk, err := l.Block(old)
-		if err != nil {
-			return err
-		}
+	// allocate with size 0, just so that we can start from fresh.
+	// the roundTailHashes and consensusVersions always has 1 extra element being unused, so preallocate that.
+	roundTailHashes = append([]crypto.Digest{{}}, roundTailHashes...)
+	consensusVersions := make([]protocol.ConsensusVersion, 1)
+	roundTailSerializedData := make([][]byte, 0)
 
-		payset, err := blk.DecodePaysetFlat()
-		if err != nil {
-			return err
-		}
+	for old := baseRound; old <= trackerRound && trackerRound > baseRound; old++ {
+		txTailRound := roundData[0]
+		consensusParams := config.Consensus[txTailRound.ConsensusVersion]
 
-		consensusParams := config.Consensus[blk.CurrentProtocol]
-		t.recent[old] = roundTxMembers{
-			txleases: make(map[ledgercore.Txlease]basics.Round, len(payset)),
+		t.recent[old] = roundLeases{
+			txleases: make(map[ledgercore.Txlease]basics.Round, len(txTailRound.TxnIDs)),
 			proto:    consensusParams,
 		}
 
-		for _, txad := range payset {
-			tx := txad.SignedTxn
-			if consensusParams.SupportTransactionLeases && (tx.Txn.Lease != [32]byte{}) {
-				t.recent[old].txleases[ledgercore.Txlease{Sender: tx.Txn.Sender, Lease: tx.Txn.Lease}] = tx.Txn.LastValid
+		for i := 0; i < len(txTailRound.Leases); i++ {
+			if consensusParams.SupportTransactionLeases && (txTailRound.Leases[i].Lease != [32]byte{}) {
+				t.recent[old].txleases[ledgercore.Txlease{Sender: txTailRound.Leases[i].Sender, Lease: txTailRound.Leases[i].Lease}] = txTailRound.LastValid[txTailRound.Leases[i].TxnIdx]
 			}
-			if tx.Txn.LastValid > t.lowWaterMark {
-				list := roundsLastValids[tx.Txn.LastValid]
+		}
+
+		for i := 0; i < len(txTailRound.LastValid); i++ {
+			if txTailRound.LastValid[i] > t.lowWaterMark {
+				list := roundsLastValids[txTailRound.LastValid[i]]
 				// if the list reached capacity, resize.
 				if len(list) == cap(list) {
 					var newList []transactions.Txid
@@ -105,10 +128,13 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 					copy(newList[:], list[:])
 					list = newList
 				}
-				list = append(list, tx.ID())
-				roundsLastValids[tx.Txn.LastValid] = list
+				list = append(list, txTailRound.TxnIDs[i])
+				roundsLastValids[txTailRound.LastValid[i]] = list
 			}
 		}
+
+		consensusVersions = append(consensusVersions, txTailRound.ConsensusVersion)
+		roundData = roundData[1:]
 	}
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
@@ -119,6 +145,12 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 		}
 		t.lastValid[lastValid] = lastValueMap
 	}
+	t.tailMu.Lock()
+	t.roundTailHashes = roundTailHashes
+	t.consensusVersions = consensusVersions
+	t.roundTailSerializedData = roundTailSerializedData
+	t.tailMu.Unlock()
+
 	return nil
 }
 
@@ -133,14 +165,35 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		return
 	}
 
-	t.recent[rnd] = roundTxMembers{
+	var tail txTailRound
+	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
+	tail.LastValid = make([]basics.Round, len(delta.Txids))
+	tail.TimeStamp = blk.TimeStamp
+	tail.ConsensusVersion = blk.BlockHeader.CurrentProtocol
+
+	for txid, txnInc := range delta.Txids {
+		t.putLV(txnInc.LastValid, txid)
+		tail.TxnIDs[txnInc.TransactionIndex] = txid
+		tail.LastValid[txnInc.TransactionIndex] = txnInc.LastValid
+		if blk.Payset[txnInc.TransactionIndex].Txn.Lease != [32]byte{} {
+			tail.Leases = append(tail.Leases, txTailRoundLease{
+				Sender: blk.Payset[txnInc.TransactionIndex].Txn.Sender,
+				Lease:  blk.Payset[txnInc.TransactionIndex].Txn.Lease,
+				TxnIdx: txnInc.TransactionIndex,
+			})
+		}
+	}
+	encodedTail, tailHash := tail.encode()
+
+	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}
-
-	for txid, lv := range delta.Txids {
-		t.putLV(lv, txid)
-	}
+	t.tailMu.Lock()
+	t.roundTailSerializedData = append(t.roundTailSerializedData, encodedTail)
+	t.roundTailHashes = append(t.roundTailHashes, tailHash)
+	t.consensusVersions = append(t.consensusVersions, blk.CurrentProtocol)
+	t.tailMu.Unlock()
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
@@ -157,15 +210,48 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 	return (rnd + 1).SubSaturate(maxlife), basics.Round(0)
 }
 
-func (t *txTail) prepareCommit(*deferredCommitContext) error {
-	return nil
+func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
+	if !dcc.isCatchpointRound {
+		return nil
+	}
+
+	maxTxnLife := config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife
+	// update the dcc with the hash we'll need.
+	dcc.txTailHash, err = t.recentTailHash(dcc.offset, maxTxnLife)
+	return
 }
 
-func (t *txTail) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
+	baseRound := dcc.oldBase + 1
+	roundsData := make([][]byte, 0, dcc.offset)
+
+	t.tailMu.RLock()
+	for i := uint64(0); i < dcc.offset; i++ {
+		roundsData = append(roundsData, t.roundTailSerializedData[i])
+	}
+	// get the MaxTxnLife from the consensus params of the latest round in this commit range
+	maxTxnLifeRound := basics.Round(config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife) + 1
+	t.tailMu.RUnlock()
+
+	forgetRound := (baseRound + basics.Round(dcc.offset)).SubSaturate(maxTxnLifeRound)
+	if err := txtailNewRound(ctx, tx, baseRound, roundsData, forgetRound); err != nil {
+		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
+	}
 	return nil
 }
 
 func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+	t.tailMu.Lock()
+	t.roundTailSerializedData = t.roundTailSerializedData[dcc.offset:]
+	// get the MaxTxnLife from the consensus params of the latest round in this commit range
+	maxTxnLife := config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife
+	// keep the latest 1001 entries on the hash, before roundTailSerializedData
+	firstTailIdx := len(t.roundTailHashes) - len(t.roundTailSerializedData) - int(maxTxnLife)
+	if firstTailIdx > 0 {
+		t.roundTailHashes = t.roundTailHashes[firstTailIdx:]
+		t.consensusVersions = t.consensusVersions[firstTailIdx:]
+	}
+	t.tailMu.Unlock()
 }
 
 func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
@@ -178,13 +264,13 @@ func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basi
 	return dcr
 }
 
-// txtailMissingRound is returned by checkDup when requested for a round number below the low watermark
-type txtailMissingRound struct {
+// errTxtailMissingRound is returned by checkDup when requested for a round number below the low watermark
+type errTxtailMissingRound struct {
 	round basics.Round
 }
 
 // Error satisfies builtin interface `error`
-func (t txtailMissingRound) Error() string {
+func (t errTxtailMissingRound) Error() string {
 	return fmt.Sprintf("txTail: tried to check for dup in missing round %d", t.round)
 }
 
@@ -192,7 +278,7 @@ func (t txtailMissingRound) Error() string {
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	if lastValid < t.lowWaterMark {
-		return &txtailMissingRound{round: lastValid}
+		return &errTxtailMissingRound{round: lastValid}
 	}
 
 	if proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
@@ -222,4 +308,21 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
 	}
 	t.lastValid[lastValid][id] = struct{}{}
+}
+
+func (t *txTail) recentTailHash(offset uint64, maxTxnLife uint64) (crypto.Digest, error) {
+	// preapare a buffer to hash.
+	buffer := make([]byte, (maxTxnLife+1)*crypto.DigestSize)
+	bufIdx := 0
+	t.tailMu.RLock()
+	lastOffset := offset + maxTxnLife
+	if lastOffset > uint64(len(t.roundTailHashes)) {
+		lastOffset = uint64(len(t.roundTailHashes))
+	}
+	for i := offset; i < lastOffset; i++ {
+		copy(buffer[bufIdx:], t.roundTailHashes[i][:])
+		bufIdx += crypto.DigestSize
+	}
+	t.tailMu.RUnlock()
+	return crypto.Hash(buffer), nil
 }

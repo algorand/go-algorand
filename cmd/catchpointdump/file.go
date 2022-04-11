@@ -297,9 +297,11 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 		balancesTable := "accountbase"
 		resourcesTable := "resources"
+		//txtailTable := "txtail"
 		if fileHeader.Version != 0 {
 			balancesTable = "catchpointbalances"
 			resourcesTable = "catchpointresources"
+			//txtailTable = "catchpointtxtail"
 		}
 
 		var rowsCount int64
