@@ -205,7 +205,6 @@ def get_block_proposers(algod, lastRound):
     return
 
 def start_algod(algodata, bindir, relay_addr=None):
-    #n1dir = os.path.join(netdir, 'Node1')
     algod_path = os.path.join(bindir, 'algod')
     cmd = [algod_path, '-d', algodata]
     if relay_addr:
@@ -257,6 +256,18 @@ def build(args, repodir, newbin, oldbin):
         if changeBack:
             xrun(['git', 'checkout', curbranch])
 
+# return algod relay host:port or raise Exception
+def wait_relay_addr(algodata, timeout=10):
+    relay_addr_path = os.path.join(algodata, 'algod-listen.net')
+    timeout = time.time() + timeout
+    while True:
+        if os.path.exists(relay_addr_path):
+            with open(relay_addr_path) as fin:
+                relay_addr = fin.read().strip()
+            return relay_addr
+        if time.time() > timeout:
+            raise Exception('never found relay_addr at {}'.format(relay_addr_path))
+        time.sleep(0.1)
 
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
 _logging_datefmt = '%Y%m%d_%H%M%S'
@@ -278,7 +289,7 @@ def main():
         logging.basicConfig(format=_logging_format, datefmt=_logging_datefmt, level=logging.INFO)
 
     # TODO: default old_branch to the highest git tag like 'v3.5.1-stable'
-    # TODO: default new_branch to `master`
+    # TODO: default new_branch to whatever is currently checked out
 
     # start with a copy when making env for child processes
     env = dict(os.environ)
@@ -302,19 +313,24 @@ def main():
     build(args, repodir, newbin, oldbin)
 
     netdir = os.path.join(tempdir, 'net')
-    env['NETDIR'] = netdir
+    algod_bins = {
+        'Primary': oldbin,
+        'Node1': oldbin,
+        'Node2': newbin,
+    }
+    run_test(netdir, oldbin, newbin, algod_bins)
+    return 0
 
+def run_test(netdir, oldbin, newbin, algod_bins):
     shutil.rmtree(netdir, ignore_errors=True)
     xrun([os.path.join(oldbin, 'goal'), 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/ThreeNodesEvenDist.json')], timeout=90)
 
-    relay = start_algod(os.path.join(netdir, 'Primary'), oldbin)
-    time.sleep(0.5)
-    with open(os.path.join(relay.algodata, 'algod-listen.net')) as fin:
-        relay_addr = fin.read().strip()
+    relay = start_algod(os.path.join(netdir, 'Primary'), algod_bins['Primary'])
+    relay_addr = wait_relay_addr(relay.algodata)
 
-    n1 = start_algod(os.path.join(netdir, 'Node1'), oldbin, relay_addr=relay_addr)
+    n1 = start_algod(os.path.join(netdir, 'Node1'), algod_bins['Node1'], relay_addr=relay_addr)
 
-    n2 = start_algod(os.path.join(netdir, 'Node2'), newbin, relay_addr=relay_addr)
+    n2 = start_algod(os.path.join(netdir, 'Node2'), algod_bins['Node2'], relay_addr=relay_addr)
 
     n1algod, n1kmd = n1.connect()
     n2algod, n2kmd = n2.connect()
