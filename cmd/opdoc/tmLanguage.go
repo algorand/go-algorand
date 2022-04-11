@@ -130,15 +130,24 @@ func buildSyntaxHighlight() *tmLanguage {
 	for _, spec := range opSpecs {
 		for _, imm := range spec.Details.Immediates {
 			if imm.Group != nil && !accumulated[imm.Group.Name] {
-				allNamedFields = append(allNamedFields, imm.Group.Names[:]...)
+				allNamedFields = append(allNamedFields, imm.Group.Names...)
 				accumulated[imm.Group.Name] = true
 			}
 		}
 	}
 
+	var seen = make(map[string]bool, len(allNamedFields))
+	var dedupe = make([]string, 0, len(allNamedFields))
+	for _, name := range allNamedFields {
+		if name != "" && !seen[name] {
+			dedupe = append(dedupe, name)
+		}
+		seen[name] = true
+	}
+
 	literals.Patterns = append(literals.Patterns, pattern{
 		Name:  "variable.parameter.teal",
-		Match: fmt.Sprintf("\\b(%s)\\b", strings.Join(allNamedFields, "|")),
+		Match: fmt.Sprintf("\\b(%s)\\b", strings.Join(dedupe, "|")),
 	})
 	tm.Repository["literals"] = literals
 
