@@ -175,7 +175,7 @@ class NodeContext:
     def terminate(self):
         self.proc.terminate()
 
-def get_block_proposers(algod, lastRound):
+def get_block_proposers(algod, lastRound, expected_proposers):
     oprops = {}
     for i in range(1,lastRound+1):
         try:
@@ -186,8 +186,8 @@ def get_block_proposers(algod, lastRound):
         except Exception as e:
             print(e)
             break
-    #assert(len(oprops) == 3)
     logger.debug('oprops %r', oprops)
+    assert(len(oprops) == expected_proposers)
     mean = statistics.mean(oprops.values())
     var_limit = mean / 3
     ok = []
@@ -316,18 +316,21 @@ def main():
     build(args, repodir, newbin, oldbin)
 
     netdir = os.path.join(tempdir, 'net')
-    algod_bins = {
-        'Primary': oldbin,
-        'Node1': oldbin,
-        'Node2': newbin,
-    }
-    run_test(netdir, oldbin, newbin, algod_bins)
-    algod_bins = {
-        'Primary': newbin,
-        'Node1': oldbin,
-        'Node2': newbin,
-    }
-    run_test(netdir, oldbin, newbin, algod_bins)
+    run_test6(netdir, oldbin, newbin)
+    # algod_bins = {
+    #     'Primary': oldbin,
+    #     'Node1': oldbin,
+    #     'Node2': newbin,
+    # }
+    # run_test(netdir, oldbin, newbin, algod_bins)
+    # algod_bins = {
+    #     'Primary': newbin,
+    #     'Node1': oldbin,
+    #     'Node2': newbin,
+    # }
+    # run_test(netdir, oldbin, newbin, algod_bins)
+    dt = time.time() - start
+    print('DONE OK {:.1f} seconds'.format(dt))
     return 0
 
 def nop(*args, **kwargs):
@@ -440,15 +443,93 @@ def run_test(netdir, oldbin, newbin, algod_bins, _defer=nop):
     while st['last-round'] < 100:
         st = ralgod.status_after_block(st['last-round'])
         print(st['last-round'])
-    get_block_proposers(ralgod, st['last-round'])
+    get_block_proposers(ralgod, st['last-round'], 3)
 
     print("OK")
     return 0
 
+class testaddrs:
+    def __init__(self):
+        self.i = 1
+        self.sent = {}
+        self.buf = [0] * 32
+    def get(self):
+        self.buf[31] = self.i
+        addr = algosdk.encoding.encode_address(bytes(self.buf))
+        amt = 1000000 + self.i
+        self.sent[addr] = amt
+        self.i += 1
+        return addr,amt
+
+
 # test topology: 2 relays, 4 leafs
 # (leaf old 1, leaf new 1) <-> (relay old) <-> (relay new) <-> (leaf old 2, leaf new 2)
 @defer_wrap
-def run_test6(netdir, oldbin, newbin, algod_bins, _defer=nop):
+def run_test6(netdir, oldbin, newbin, _defer=nop):
+    test_addr = testaddrs()
+
+    shutil.rmtree(netdir, ignore_errors=True)
+    xrun([os.path.join(oldbin, 'goal'), 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/TransitionSix.json')], timeout=90)
+
+    relay_old = start_algod(os.path.join(netdir, 'RelayOld'), oldbin)
+    _defer(relay_old.terminate)
+    relay_old_addr = wait_relay_addr(relay_old.algodata)
+
+    relay_new = start_algod(os.path.join(netdir, 'RelayNew'), newbin, relay_addr=relay_old_addr)
+    _defer(relay_new.terminate)
+    relay_new_addr = wait_relay_addr(relay_new.algodata)
+
+    new1 = start_algod(os.path.join(netdir, 'New1'), newbin, relay_addr=relay_old_addr)
+    _defer(new1.terminate)
+    old1 = start_algod(os.path.join(netdir, 'Old1'), oldbin, relay_addr=relay_old_addr)
+    _defer(old1.terminate)
+
+    new2 = start_algod(os.path.join(netdir, 'New2'), newbin, relay_addr=relay_new_addr)
+    _defer(new2.terminate)
+    old2 = start_algod(os.path.join(netdir, 'Old2'), oldbin, relay_addr=relay_new_addr)
+    _defer(old2.terminate)
+
+    time.sleep(1)
+
+    leafs = [new1, old1, new2, old2]
+
+    n1algod, n1kmd = new1.connect()
+
+    status = n1algod.status()
+    logger.debug('waiting for round after %s', status['last-round'])
+    status = n1algod.status_after_block(status['last-round'])
+    logger.debug('status %r', status)
+
+    sent_txid = []
+
+    # send a txn from each leaf
+    for leaf in leafs:
+        algod, kmd = leaf.connect()
+        pubw, maxpubaddr = leaf.get_pub_wallet()
+        params = algod.suggested_params()
+        receiver, amt = test_addr.get()
+        txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params.min_fee, first=params.first, last=params.first+10, gh=params.gh, receiver=receiver, amt=amt, flat_fee=True)
+        stxn = kmd.sign_transaction(pubw, '', txn)
+        txid = algod.send_transaction(stxn)
+        sent_txid.append(txid)
+
+    ralgod, _ = relay_old.connect()
+    waitround = status['last-round'] + 12
+    st = ralgod.status()
+    while st['last-round'] < waitround:
+        st = ralgod.status_after_block(st['last-round'])
+
+    for leaf in leafs:
+        for addr, amt in test_addr.sent.items():
+            algod, _ = leaf.connect()
+            ast = algod.account_info(addr)
+            assert(ast['amount'] == amt)
+
+    while st['last-round'] < 100:
+        st = ralgod.status_after_block(st['last-round'])
+        print(st['last-round'])
+    get_block_proposers(ralgod, st['last-round'], 4)
+
     print("OK")
     return 0
 
