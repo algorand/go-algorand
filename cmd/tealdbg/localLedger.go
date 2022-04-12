@@ -330,7 +330,7 @@ func (l *localLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.Creata
 		assetIdx := basics.AssetIndex(cidx)
 		for addr, br := range l.balances {
 			if _, ok := br.AssetParams[assetIdx]; ok {
-				return addr, true, l.round, nil
+				return addr, true, basics.Round(l.round), nil
 			}
 		}
 		return basics.Address{}, false, 0, nil
@@ -338,7 +338,7 @@ func (l *localLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.Creata
 		appIdx := basics.AppIndex(cidx)
 		for addr, br := range l.balances {
 			if _, ok := br.AppParams[appIdx]; ok {
-				return addr, true, l.round, nil
+				return addr, true, basics.Round(l.round), nil
 			}
 		}
 		return basics.Address{}, false, 0, nil
