@@ -102,7 +102,7 @@ func (l *mockLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, er
 func (l *mockLedger) Wait(r basics.Round) chan struct{} {
 	panic("not implemented")
 }
-func (l *mockLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, err error) {
+func (l *mockLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, rnd basics.Round, err error) {
 	panic("not implemented")
 }
 func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error) {
