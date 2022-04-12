@@ -175,26 +175,61 @@ func TestValueDeltaToValueDelta(t *testing.T) {
 	require.Equal(t, vDelta.Uint, ans.Uint)
 }
 
+var testCallStackProgram string = `intcblock 1
+callsub label1
+intc_0
+label1:
+callsub label2
+label2:
+intc_0
+`
+
 func TestParseCallstack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	expectedCallFrames := []CallFrame{
 		{
-			FrameLine: 0,
-			LabelName: "abc",
+			FrameLine: 1,
+			LabelName: "label1",
 		},
 		{
-			FrameLine: 2,
-			LabelName: "ghi",
+			FrameLine: 4,
+			LabelName: "label2",
 		},
 	}
 
 	dState := DebugState{
-		Disassembly: "callsub abc\ndef\ncallsub ghi\njkl",
-		PCOffset:    []PCOffset{{PC: 1, Offset: 11}, {PC: 4, Offset: 15}, {PC: 5, Offset: 27}, {PC: 8, Offset: 31}},
+		Disassembly: testCallStackProgram,
+		PCOffset:    []PCOffset{{PC: 1, Offset: 18}, {PC: 4, Offset: 30}, {PC: 7, Offset: 45}, {PC: 8, Offset: 65}, {PC: 11, Offset: 88}},
 	}
 	callstack := []int{4, 8}
 
 	cfs := dState.parseCallstack(callstack)
 	require.Equal(t, expectedCallFrames, cfs)
+}
+
+func TestCallStackUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	expectedCallFrames := []CallFrame{
+		{
+			FrameLine: 2,
+			LabelName: "label1",
+		},
+		{
+			FrameLine: 5,
+			LabelName: "label2",
+		},
+	}
+
+	testDbg := testDbgHook{}
+	ep := defaultEvalParams(nil)
+	ep.Debugger = &testDbg
+	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
+
+	require.Equal(t, 1, testDbg.register)
+	require.Equal(t, 1, testDbg.complete)
+	require.Greater(t, testDbg.update, 1)
+	require.Len(t, testDbg.state.Stack, 1)
+	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
 }
