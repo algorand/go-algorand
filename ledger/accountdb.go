@@ -141,6 +141,12 @@ var createTxTailTable = []string{
 		data blob)`,
 }
 
+var createOnlineRoundParamsTable = []string{
+	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
+        round INTEGER NOT NULL PRIMARY KEY,
+        data blob)`, // contains a msgp encoded OnlineRoundParamsData
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -1307,6 +1313,16 @@ func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	return nil
 }
 
+func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err error) {
+	for _, stmt := range createOnlineRoundParamsTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return
+		}
+	}
+	return nil
+}
+
 type baseOnlineAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -2096,7 +2112,38 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	return err
 }
 
-func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, proto protocol.ConsensusVersion, log func(processed, total uint64)) (err error) {
+func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
+	if tx == nil {
+		return nil
+	}
+	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
+		var data ledgercore.OnlineRoundParamsData
+		err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
+		if err != nil {
+			return err
+		}
+
+		rnd, err := accountsRound(tx)
+		if err != nil {
+			return nil
+		}
+
+		hdr, err := blockGetHdr(blockTx, rnd)
+
+		data.CurrentProtocol = hdr.CurrentProtocol
+
+		_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
+			rnd,
+			protocol.Encode(&data),
+		)
+
+		return err
+	})
+
+	return err
+}
+
+func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 
 	now := time.Now().UnixNano()
 	idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
@@ -2233,37 +2280,6 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, proto 
 			return err
 		}
 	}
-
-	createOnlineRoundParams := []string{
-		`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
-        round INTEGER NOT NULL PRIMARY KEY,
-        data blob)`, // contains a msgp encoded OnlineRoundParamsData
-	}
-
-	for _, stmt := range createOnlineRoundParams {
-		_, err = tx.ExecContext(ctx, stmt)
-		if err != nil {
-			return err
-		}
-	}
-
-	var data ledgercore.OnlineRoundParamsData
-	err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
-	if err != nil {
-		return err
-	}
-
-	data.CurrentProtocol = proto
-
-	rnd, err := accountsRound(tx)
-	if err != nil {
-		return
-	}
-
-	_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
-		rnd,
-		protocol.Encode(&data),
-	)
 
 	return err
 }
