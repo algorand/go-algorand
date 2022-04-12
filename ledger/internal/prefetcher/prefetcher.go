@@ -538,7 +538,8 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 				continue
 			}
 			if rnd != p.rnd {
-				// XXX TODO
+				err = ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: p.rnd, LatestRound: rnd}
+				break
 			}
 			task.address = &creator
 		}

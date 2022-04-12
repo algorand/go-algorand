@@ -149,7 +149,7 @@ func (l *prefetcherAlignmentTestLedger) GetCreator(cidx basics.CreatableIndex, c
 	l.mu.Unlock()
 
 	if addr, has := l.creators[cidx]; has {
-		return addr, true, 0, nil
+		return addr, true, 55, nil
 	}
 	return basics.Address{}, false, 0, nil
 }
@@ -253,7 +253,7 @@ func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) l
 	group := makeGroupFromTxn(txn)
 
 	ch := prefetcher.PrefetchAccounts(
-		context.Background(), l, 1,
+		context.Background(), l, 55,
 		[][]transactions.SignedTxnWithAD{group},
 		feeSink(), config.Consensus[proto])
 	loaded, ok := <-ch
