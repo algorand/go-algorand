@@ -186,7 +186,7 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 }
 
 // AddMetric adds the metric into the map
-func (counter *Counter) AddMetric(values map[string]string) {
+func (counter *Counter) AddMetric(values map[string]float64) {
 	counter.Lock()
 	defer counter.Unlock()
 
@@ -199,7 +199,10 @@ func (counter *Counter) AddMetric(values map[string]string) {
 		if len(l.labels) == 0 {
 			sum += float64(atomic.LoadUint64(&counter.intValue))
 		}
-
-		values[counter.name] = strconv.FormatFloat(sum, 'f', -1, 32)
+		var suffix string
+		if len(l.formattedLabels) > 0 {
+			suffix = ":" + l.formattedLabels
+		}
+		values[sanitizeTelemetryName(counter.name+suffix)] = sum
 	}
 }

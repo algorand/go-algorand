@@ -43,7 +43,14 @@ const HeartbeatEvent Event = "Heartbeat"
 
 // HeartbeatEventDetails contains details for the StartupEvent
 type HeartbeatEventDetails struct {
-	Metrics map[string]string
+	Info struct {
+		Version    string `json:"version"`
+		VersionNum string `json:"version-num"`
+		Channel    string `json:"channel"`
+		Branch     string `json:"branch"`
+		CommitHash string `json:"commit-hash"`
+	} `json:"Metrics"` // backwards compatible name
+	Metrics map[string]float64 `json:"m"`
 }
 
 // CatchupStartEvent event
