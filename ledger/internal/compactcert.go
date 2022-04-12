@@ -125,10 +125,10 @@ func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader
 	}
 
 	res = compactcert.Params{
-		MessageHash:           msg.IntoStateProofMessageHash(),
-		ProvenWeightThreshold: provenWeight,
-		SigRound:              hdr.Round,
-		SecKQ:                 proto.CompactCertSecKQ,
+		Data:         msg.IntoStateProofMessageHash(),
+		ProvenWeight: provenWeight,
+		Round:        hdr.Round,
+		SecKQ:        proto.CompactCertSecKQ,
 	}
 	return
 }

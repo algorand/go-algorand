@@ -101,7 +101,7 @@ func TestVerifyZeroProvenWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := Params{ProvenWeightThreshold: 0}
+	p := Params{ProvenWeight: 0}
 	partcommit := crypto.GenericDigest{}
 
 	_, err := MkVerifier(p, partcommit)

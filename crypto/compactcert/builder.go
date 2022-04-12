@@ -41,12 +41,12 @@ type sigslot struct {
 // a compact certificate for that message.
 type Builder struct {
 	Params
-	sigs                    []sigslot // Indexed by pos in participants
-	sigsHasValidL           bool      // The L values in sigs are consistent with weights
-	signedWeight            uint64    // Total weight of signatures so far
-	participants            []basics.Participant
-	parttree                *merklearray.Tree
-	lnProvenWeightThreshold uint64
+	sigs           []sigslot // Indexed by pos in participants
+	sigsHasValidL  bool      // The L values in sigs are consistent with weights
+	signedWeight   uint64    // Total weight of signatures so far
+	participants   []basics.Participant
+	parttree       *merklearray.Tree
+	lnProvenWeight uint64
 
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
@@ -59,7 +59,7 @@ type Builder struct {
 // parttree.
 func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
-	lnProvenWt, err := lnIntApproximation(param.ProvenWeightThreshold, precisionBits)
+	lnProvenWt, err := lnIntApproximation(param.ProvenWeight, precisionBits)
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +67,12 @@ func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tr
 	b := &Builder{
 		Params: param,
 
-		sigs:                    make([]sigslot, npart),
-		sigsHasValidL:           false,
-		signedWeight:            0,
-		participants:            part,
-		parttree:                parttree,
-		lnProvenWeightThreshold: lnProvenWt,
+		sigs:           make([]sigslot, npart),
+		sigsHasValidL:  false,
+		signedWeight:   0,
+		participants:   part,
+		parttree:       parttree,
+		lnProvenWeight: lnProvenWt,
 	}
 
 	return b, nil
@@ -104,9 +104,9 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 			return err
 		}
 
-		cpy := make([]byte, len(b.Params.MessageHash))
-		copy(cpy, b.Params.MessageHash[:]) // TODO: onmce cfalcon is fixed can remove this copy.
-		if err := p.PK.VerifyBytes(uint64(b.SigRound), cpy, sig); err != nil {
+		cpy := make([]byte, len(b.Params.Data))
+		copy(cpy, b.Params.Data[:]) // TODO: onmce cfalcon is fixed can remove this copy.
+		if err := p.PK.VerifyBytes(uint64(b.Round), cpy, sig); err != nil {
 			return err
 		}
 	}
@@ -127,7 +127,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) {
 
 // Ready returns whether the certificate is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.signedWeight > b.Params.ProvenWeightThreshold
+	return b.signedWeight > b.Params.ProvenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -175,8 +175,8 @@ func (b *Builder) Build() (*Cert, error) {
 		return b.cert, nil
 	}
 
-	if b.signedWeight <= b.Params.ProvenWeightThreshold {
-		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.Params.ProvenWeightThreshold)
+	if b.signedWeight <= b.Params.ProvenWeight {
+		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.Params.ProvenWeight)
 	}
 
 	// Commit to the sigs array
@@ -199,7 +199,7 @@ func (b *Builder) Build() (*Cert, error) {
 		MerkleSignatureVersion: merklesignature.SchemeVersion,
 	}
 
-	nr, err := numReveals(b.signedWeight, b.lnProvenWeightThreshold, b.SecKQ)
+	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.SecKQ)
 	if err != nil {
 		return nil, err
 	}
@@ -209,11 +209,11 @@ func (b *Builder) Build() (*Cert, error) {
 	revealsSequence := make([]uint64, nr)
 
 	choice := coinChoiceSeed{
-		msgHash:                 b.Params.MessageHash,
-		lnProvenWeightThreshold: b.lnProvenWeightThreshold,
-		signedWeight:            c.SignedWeight,
-		sigCommitment:           c.SigCommit,
-		partCommitment:          b.parttree.Root(),
+		data:           b.Params.Data,
+		lnProvenWeight: b.lnProvenWeight,
+		signedWeight:   c.SignedWeight,
+		sigCommitment:  c.SigCommit,
+		partCommitment: b.parttree.Root(),
 	}
 
 	coinHash := makeCoinGenerator(&choice)

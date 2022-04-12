@@ -28,11 +28,11 @@ import (
 // The coinChoiceSeed defines the randomness seed that will be given to an XOF function. This will be used  for choosing
 // the index of the coin to reveal as part of the compact certificate.
 type coinChoiceSeed struct {
-	msgHash                 StateProofMessageHash
-	signedWeight            uint64
-	lnProvenWeightThreshold uint64
-	sigCommitment           crypto.GenericDigest
-	partCommitment          crypto.GenericDigest
+	data           StateProofMessageHash
+	signedWeight   uint64
+	lnProvenWeight uint64
+	sigCommitment  crypto.GenericDigest
+	partCommitment crypto.GenericDigest
 }
 
 // ToBeHashed returns a binary representation of the coinChoiceSeed structure.
@@ -44,10 +44,10 @@ func (cc *coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
 	binary.LittleEndian.PutUint64(signedWtAsBytes, cc.signedWeight)
 
 	lnProvenWtAsBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(lnProvenWtAsBytes, cc.lnProvenWeightThreshold)
+	binary.LittleEndian.PutUint64(lnProvenWtAsBytes, cc.lnProvenWeight)
 
-	coinChoiceBytes := make([]byte, 0, len(cc.msgHash)+len(signedWtAsBytes)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(cc.partCommitment))
-	coinChoiceBytes = append(coinChoiceBytes, cc.msgHash[:]...)
+	coinChoiceBytes := make([]byte, 0, len(cc.data)+len(signedWtAsBytes)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(cc.partCommitment))
+	coinChoiceBytes = append(coinChoiceBytes, cc.data[:]...)
 	coinChoiceBytes = append(coinChoiceBytes, signedWtAsBytes...)
 	coinChoiceBytes = append(coinChoiceBytes, lnProvenWtAsBytes...)
 	coinChoiceBytes = append(coinChoiceBytes, cc.sigCommitment...)
@@ -66,14 +66,12 @@ type coinGenerator struct {
 // makeCoinGenerator creates a new CoinHash context.
 // it is used for squeezing 64 bits for coin flips.
 // the function inits the XOF function in the following manner
-// Shake(sumhash(coinChoiceSeed))
+// Shake(coinChoiceSeed)
 // we extract 64 bits from shake for each coin flip and divide it by signedWeight
 func makeCoinGenerator(choice *coinChoiceSeed) coinGenerator {
-	hash := crypto.HashFactory{HashType: CoinHashType}.NewHash()
-	hashedCoin := crypto.GenericHashObj(hash, choice)
-
+	rep := crypto.HashRep(choice)
 	shk := sha3.NewShake256()
-	shk.Write(hashedCoin)
+	shk.Write(rep)
 
 	threshold, singedWt := prepareRejectionSamplingValues(choice.signedWeight)
 	return coinGenerator{shkContext: shk, signedWeight: singedWt, threshold: threshold}

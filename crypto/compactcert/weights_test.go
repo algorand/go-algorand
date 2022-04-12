@@ -50,7 +50,7 @@ func TestMaxNumberOfReveals(t *testing.T) {
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
-func TestVerifyImpliedProvenWeightThreshold(t *testing.T) {
+func TestVerifyImpliedProvenWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -66,7 +66,7 @@ func TestVerifyImpliedProvenWeightThreshold(t *testing.T) {
 	a.NoError(err)
 
 	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, compactCertSecKQForTests)
-	a.ErrorIs(err, ErrInsufficientImpliedProvenWeight)
+	a.ErrorIs(err, ErrInsufficientSingedWeight)
 }
 
 func TestVerifyZeroNumberOfRevealsEquation(t *testing.T) {
@@ -86,11 +86,11 @@ func TestLnWithPrecision(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	for i := 1; i < 32; i++ {
-		exp := 1 << i
-		val, err := lnIntApproximation(2, uint64(exp))
+	for i := uint8(1); i < 32; i++ {
+		val, err := lnIntApproximation(2, i)
 		a.NoError(err)
 
+		exp := 1 << i
 		a.GreaterOrEqual(float64(val)/float64(exp), math.Log(2))
 		a.Greater(math.Log(2), float64(val-1)/float64(exp))
 	}

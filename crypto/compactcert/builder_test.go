@@ -80,8 +80,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
-	totalWeight := 10
-	000
+	totalWeight := 10000000
 	npartHi := 10
 	npartLo := 9990
 
@@ -93,10 +92,10 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	npart := npartHi + npartLo
 
 	param := Params{
-		MessageHash:           testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeightThreshold: uint64(totalWeight / 2),
-		SigRound:              currentRound,
-		SecKQ:                 compactCertSecKQForTests,
+		Data:         testMessage("hello world").IntoStateProofMessageHash(),
+		ProvenWeight: uint64(totalWeight / 2),
+		Round:        currentRound,
+		SecKQ:        compactCertSecKQForTests,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
@@ -107,7 +106,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.MessageHash[:])
+	sig, err := signerInRound.SignBytes(param.Data[:])
 	a.NoError(err, "failed to create keys")
 
 	for i := 0; i < npart; i++ {
@@ -240,10 +239,10 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	numPart := 4
 
 	param := Params{
-		MessageHash:           testMessage("test!").IntoStateProofMessageHash(),
-		ProvenWeightThreshold: uint64(totalWeight / (2 * numPart)),
-		SigRound:              currentRound,
-		SecKQ:                 compactCertSecKQForTests,
+		Data:         testMessage("test!").IntoStateProofMessageHash(),
+		ProvenWeight: uint64(totalWeight / (2 * numPart)),
+		Round:        currentRound,
+		SecKQ:        compactCertSecKQForTests,
 	}
 
 	var parts []basics.Participant
@@ -258,7 +257,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(param.MessageHash[:])
+		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(param.Data[:])
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
 
@@ -440,10 +439,10 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	npartLo := 9
 
 	param := Params{
-		MessageHash:           testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeightThreshold: uint64(totalWeight / 2),
-		SigRound:              currentRound,
-		SecKQ:                 compactCertSecKQForTests,
+		Data:         testMessage("hello world").IntoStateProofMessageHash(),
+		ProvenWeight: uint64(totalWeight / 2),
+		Round:        currentRound,
+		SecKQ:        compactCertSecKQForTests,
 	}
 
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
@@ -459,7 +458,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 
 	// actual test:
 	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.MessageHash[:])
+	sig, err := signerInRound.SignBytes(param.Data[:])
 	require.NoError(t, err, "failed to create keys")
 	// Corrupting the version of the signature:
 	sig.Signature[1]++
@@ -492,7 +491,7 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := Params{ProvenWeightThreshold: 0}
+	p := Params{ProvenWeight: 0}
 
 	_, err := MkBuilder(p, nil, nil)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
@@ -507,10 +506,10 @@ func BenchmarkBuildVerify(b *testing.B) {
 	a := require.New(b)
 
 	param := Params{
-		MessageHash:           testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeightThreshold: uint64(totalWeight / 2),
-		SigRound:              compactCertRoundsForTests,
-		SecKQ:                 compactCertSecKQForTests,
+		Data:         testMessage("hello world").IntoStateProofMessageHash(),
+		ProvenWeight: uint64(totalWeight / 2),
+		Round:        compactCertRoundsForTests,
+		SecKQ:        compactCertSecKQForTests,
 	}
 
 	var parts []basics.Participant
@@ -524,7 +523,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		}
 
 		signerInRound := signer.GetSigner(uint64(currentRound))
-		sig, err := signerInRound.SignBytes(param.MessageHash[:])
+		sig, err := signerInRound.SignBytes(param.Data[:])
 		require.NoError(b, err, "failed to create keys")
 
 		partkeys = append(partkeys, signer)

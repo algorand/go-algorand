@@ -31,10 +31,10 @@ const StateProofMessageHashType = crypto.Sha256
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	MessageHash           StateProofMessageHash
-	ProvenWeightThreshold uint64       // Weight threshold proven by the certificate
-	SigRound              basics.Round // The round for which the ephemeral key is committed to
-	SecKQ                 uint64       // Security parameter (k+q) from analysis document
+	Data         StateProofMessageHash
+	ProvenWeight uint64       // Weight proven by the certificate
+	Round        basics.Round // The round for which the ephemeral key is committed to
+	SecKQ        uint64       // Security parameter (k+q) from analysis document
 }
 
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.
@@ -69,6 +69,7 @@ type Cert struct {
 	SigProofs    merklearray.Proof    `codec:"S"`
 	PartProofs   merklearray.Proof    `codec:"P"`
 
+	// CR salt version - chagne the falcon to uint8 or change this to int
 	MerkleSignatureVersion int32 `codec:"v"`
 
 	// Reveals is a sparse map from the position being revealed

@@ -33,28 +33,29 @@ var (
 
 // Verifier is used to verify a compact certificate.
 type Verifier struct {
-	MessageHash             StateProofMessageHash
-	SigRound                basics.Round // The round for which the ephemeral key is committed to
-	SecKQ                   uint64       // Security parameter (k+q) from analysis document
-	lnProvenWeightThreshold uint64       // ln(provenWeightThreshold) as integer with 16 bits of precision
-	participantsCommitment  crypto.GenericDigest
+	data  StateProofMessageHash
+	round basics.Round // The round for which the ephemeral key is committed to
+	// CR securityTarget
+	SecKQ                  uint64 // Security parameter (k+q) from analysis document
+	lnProvenWeight         uint64 // ln(provenWeightThreshold) as integer with 16 bits of precision
+	participantsCommitment crypto.GenericDigest
 }
 
 // MkVerifier constructs a verifier to check the compact certificate
 // on the message specified in p, with participantsCommitment specifying the Merkle
 // root of the participants that must sign the message.
 func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
-	lnProvenWt, err := lnIntApproximation(p.ProvenWeightThreshold, precisionBits)
+	lnProvenWt, err := lnIntApproximation(p.ProvenWeight, precisionBits)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Verifier{
-		MessageHash:             p.MessageHash,
-		SigRound:                p.SigRound,
-		SecKQ:                   p.SecKQ,
-		lnProvenWeightThreshold: lnProvenWt,
-		participantsCommitment:  partcom,
+		data:                   p.Data,
+		round:                  p.Round,
+		SecKQ:                  p.SecKQ,
+		lnProvenWeight:         lnProvenWt,
+		participantsCommitment: partcom,
 	}, nil
 }
 
@@ -62,7 +63,7 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
 // and participants that were used to construct the Verifier.
 func (v *Verifier) Verify(c *Cert) error {
 	nr := uint64(len(c.PositionsToReveal))
-	if err := verifyWeights(c.SignedWeight, v.lnProvenWeightThreshold, nr, v.SecKQ); err != nil {
+	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.SecKQ); err != nil {
 		return err
 	}
 
@@ -76,7 +77,7 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 
-	msghash := v.MessageHash
+	msghash := v.data
 	for pos, r := range c.Reveals {
 		sig, err := buildCommittableSignature(r.SigSlot)
 		if err != nil {
@@ -88,7 +89,7 @@ func (v *Verifier) Verify(c *Cert) error {
 
 		// verify that the msg and the signature is valid under the given participant's Pk
 		err = r.Part.PK.VerifyBytes(
-			uint64(v.SigRound),
+			uint64(v.round),
 			msghash[:],
 			r.SigSlot.Sig,
 		)
@@ -109,11 +110,11 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 
 	choice := coinChoiceSeed{
-		msgHash:                 v.MessageHash,
-		lnProvenWeightThreshold: v.lnProvenWeightThreshold,
-		signedWeight:            c.SignedWeight,
-		sigCommitment:           c.SigCommit,
-		partCommitment:          v.participantsCommitment,
+		data:           v.data,
+		lnProvenWeight: v.lnProvenWeight,
+		signedWeight:   c.SignedWeight,
+		sigCommitment:  c.SigCommit,
+		partCommitment: v.participantsCommitment,
 	}
 
 	coinHash := makeCoinGenerator(&choice)

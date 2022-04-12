@@ -39,7 +39,7 @@ func TestHashCoin(t *testing.T) {
 		signedWeight:   uint64(len(slots)),
 		sigCommitment:  sigcom,
 		partCommitment: partcom,
-		msgHash:        msgHash,
+		data:           msgHash,
 	}
 	coinHash := makeCoinGenerator(&choice)
 
@@ -75,7 +75,7 @@ func BenchmarkHashCoin(b *testing.B) {
 		signedWeight:   1025,
 		sigCommitment:  sigcom,
 		partCommitment: partcom,
-		msgHash:        msgHash,
+		data:           msgHash,
 	}
 	coinHash := makeCoinGenerator(&choice)
 
@@ -97,7 +97,7 @@ func BenchmarkHashCoinGenerate(b *testing.B) {
 		signedWeight:   1025,
 		sigCommitment:  sigcom,
 		partCommitment: partcom,
-		msgHash:        msgHash,
+		data:           msgHash,
 	}
 
 	for i := 0; i < b.N; i++ {
