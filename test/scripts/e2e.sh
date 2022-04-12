@@ -158,7 +158,30 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
 
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+    echo "Current platform: ${E2E_PLATFORM}"
+
+    KEEP_TEMPS_CMD_STR=""
+
+    # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py
+    # so that we can keep the temporary test artifact for use in the indexer e2e tests.
+    # The file is located at ${TEMPDIR}/net_done.tar.bz2
+    if [ $E2E_PLATFORM == "arm64" ]; then
+      KEEP_TEMPS_CMD_STR="--keep-temps"
+    fi
+
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${KEEP_TEMPS_CMD_STR} ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+
+    # If the temporary artifact directory exists, then the test artifact needs to be created
+    if [ -d "${TEMPDIR}/net" ]; then
+        pushd "${TEMPDIR}" || exit 1
+        tar -j -c -f net_done.tar.bz2 --exclude node.log --exclude agreement.cdv net
+        rm -rf "${TEMPDIR}/net"
+        RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
+        echo aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
+        aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
+        popd
+    fi
+
     duration "parallel client runner"
 
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do

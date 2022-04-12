@@ -70,7 +70,7 @@ func (r *Registry) WriteMetrics(buf *strings.Builder, parentLabels string) {
 }
 
 // AddMetrics will add all the metrics that were registered to this registry
-func (r *Registry) AddMetrics(values map[string]string) {
+func (r *Registry) AddMetrics(values map[string]float64) {
 	r.metricsMu.Lock()
 	defer r.metricsMu.Unlock()
 	for _, m := range r.metrics {
