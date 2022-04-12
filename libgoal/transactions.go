@@ -685,6 +685,27 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 	return tx, nil
 }
 
+// MakeUnsignedAssetOptinTx creates a tx template for opting in to assets.
+// Does so by sending a zero amount to self.
+//
+// Call FillUnsignedTxTemplate afterwards to fill out common fields in
+// the resulting transaction template.
+func (c *Client) MakeUnsignedAssetOptinTx(index uint64, account string) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+	var err error
+
+	tx.Type = protocol.AssetTransferTx
+	// Optin txns are fixed at 0
+	tx.AssetAmount = 0
+	tx.XferAsset = basics.AssetIndex(index)
+	tx.AssetReceiver, err = basics.UnmarshalChecksumAddress(account)
+	if err != nil {
+		return tx, err
+	}
+
+	return tx, nil
+}
+
 // MakeUnsignedAssetSendTx creates a tx template for sending assets.
 // To allocate a slot for a particular asset, send a zero amount to self.
 //
