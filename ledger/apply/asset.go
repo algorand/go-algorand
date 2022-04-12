@@ -231,7 +231,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("asset %v missing from %v", asset, addr)
+		return fmt.Errorf("receiver error: must optin, asset %v missing from %v", asset, addr)
 	}
 
 	if rcvHolding.Frozen && !bypassFreeze {
