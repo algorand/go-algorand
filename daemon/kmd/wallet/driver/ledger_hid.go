@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/karalabe/hid"
+	"github.com/karalabe/usb"
 )
 
 const ledgerVendorID = 0x2c97
@@ -31,7 +31,8 @@ const ledgerUsagePage = 0xffa0
 // the protocol used for sending messages to the application running on the
 // Ledger hardware wallet.
 type LedgerUSB struct {
-	hiddev *hid.Device
+	hiddev usb.Device
+	info   usb.DeviceInfo
 }
 
 // LedgerUSBError is a wrapper around the two-byte error code that the Ledger
@@ -196,21 +197,25 @@ func (l *LedgerUSB) Exchange(msg []byte) ([]byte, error) {
 }
 
 // USBInfo returns information about the underlying USB device.
-func (l *LedgerUSB) USBInfo() hid.DeviceInfo {
-	return l.hiddev.DeviceInfo
+func (l *LedgerUSB) USBInfo() usb.DeviceInfo {
+	return l.info
 }
 
 // LedgerEnumerate returns all of the Ledger devices connected to this machine.
-func LedgerEnumerate() ([]hid.DeviceInfo, error) {
-	if !hid.Supported() || os.Getenv("KMD_NOUSB") != "" {
+func LedgerEnumerate() ([]usb.DeviceInfo, error) {
+	if !usb.Supported() || os.Getenv("KMD_NOUSB") != "" {
 		return nil, fmt.Errorf("HID not supported")
 	}
 
-	var infos []hid.DeviceInfo
+	var infos []usb.DeviceInfo
 	// The enumeration process is based on:
 	//  https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py#L212
-	//  we search for the Ledger Vendor id and igonre devices that don't have specific usagepage or interface
-	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
+	//  we search for the Ledger Vendor id and ignore devices that don't have specific usagepage or interface
+	hids, err := usb.EnumerateHid(ledgerVendorID, 0)
+	if err != nil {
+		return []usb.DeviceInfo{}, err
+	}
+	for _, info := range hids {
 		if info.UsagePage != ledgerUsagePage && info.Interface != 0 {
 			continue
 		}
