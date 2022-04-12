@@ -189,7 +189,7 @@ def get_block_proposers(algod, lastRound, expected_proposers):
     logger.debug('oprops %r', oprops)
     assert(len(oprops) == expected_proposers)
     mean = statistics.mean(oprops.values())
-    var_limit = mean / 3
+    var_limit = mean / 2
     ok = []
     bad = []
     for op,count in oprops.items():
@@ -204,7 +204,7 @@ def get_block_proposers(algod, lastRound, expected_proposers):
         print("ERROR:")
         for line in bad:
             print(line)
-        raise Exception("too much variance in block proposers")
+        raise Exception("too much variance in block proposers, wanted [{} - {}]".format(mean-var_limit, mean+var_limit))
     return
 
 def start_algod(algodata, bindir, relay_addr=None):
