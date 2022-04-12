@@ -4679,6 +4679,12 @@ func opJSONRef(cx *EvalContext) error {
 	key := string(cx.stack[last].Bytes)
 	cx.stack = cx.stack[:last] // pop
 
+	expectedType := JSONRefType(cx.program[cx.pc+1])
+	fs, ok := jsonRefSpecByField(expectedType)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid json_ref type %s", expectedType)
+	}
+
 	// parse json text
 	last = len(cx.stack) - 1
 	parsed, err := parseJSON(cx.stack[last].Bytes)
@@ -4688,14 +4694,9 @@ func opJSONRef(cx *EvalContext) error {
 
 	// get value from json
 	var stval stackValue
-	_, ok := parsed[key]
+	_, ok = parsed[key]
 	if !ok {
 		return fmt.Errorf("key %s not found in JSON text", key)
-	}
-	expectedType := JSONRefType(cx.program[cx.pc+1])
-	fs, ok := jsonRefSpecByField(expectedType)
-	if !ok || fs.version > cx.version {
-		return fmt.Errorf("invalid json_ref type %s", expectedType)
 	}
 
 	switch expectedType {

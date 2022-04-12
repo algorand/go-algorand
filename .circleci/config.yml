@@ -138,7 +138,9 @@ workflows:
             - << matrix.platform >>_build
           filters:
             <<: *filters-nightly
-          context: slack-secrets
+          context:
+            - slack-secrets
+            - aws-secrets
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -432,6 +434,7 @@ commands:
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
             export PARALLEL_FLAG="-p 1"
             test/scripts/run_integration_tests.sh
+
       - store_artifacts:
           path: << parameters.result_path >>
           destination: test-results
@@ -651,6 +654,7 @@ jobs:
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
       E2E_TEST_FILTER: "SCRIPTS"
+      E2E_PLATFORM: << parameters.platform >>
     steps:
       - prepare_build_dir
       - prepare_go
