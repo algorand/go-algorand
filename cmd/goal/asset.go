@@ -680,7 +680,7 @@ var optinAssetCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 		// Opt in txns are always 0
-		xferAmount := 0
+		const xferAmount uint64 = 0
 
 		creatorResolved := accountList.getAddressByName(assetCreator)
 
