@@ -2513,4 +2513,14 @@ done:
 #pragma typetrack true
  concat
 `, LogicVersion)
+
+	// Declaring type tracking on consecutively does _not_ reset type tracking state.
+	testProg(t, `
+ int 1
+ int 2
+#pragma typetrack true
+ concat
+#pragma typetrack true
+ concat
+`, LogicVersion, Expect{5, "concat arg 1 wanted type []byte..."})
 }
