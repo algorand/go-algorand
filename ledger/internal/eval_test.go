@@ -778,6 +778,48 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 	}
 }
 
+func TestGetCreatorsRoundMismatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	addresses := make([]basics.Address, 3)
+	for i := 0; i < len(addresses); i++ {
+		_, err := rand.Read(addresses[i][:])
+		require.NoError(t, err)
+	}
+
+	creators := []getCreatorForRoundResult{
+		{address: addresses[0], exists: true},
+		{address: basics.Address{}, exists: false},
+		{address: addresses[1], exists: true},
+		{address: basics.Address{}, exists: false},
+	}
+	l := testCowBaseLedger{
+		creators: creators,
+	}
+
+	base := roundCowBase{
+		l:        &l,
+		creators: map[creatable]foundAddress{},
+	}
+
+	cindex := []basics.CreatableIndex{9, 10, 9, 10}
+	ctype := []basics.CreatableType{
+		basics.AssetCreatable,
+		basics.AssetCreatable,
+		basics.AppCreatable,
+		basics.AppCreatable,
+	}
+	for i := 0; i < 2; i++ {
+		for j, expected := range creators {
+			address, exists, err := base.getCreator(cindex[j], ctype[j])
+			require.NoError(t, err)
+
+			assert.Equal(t, expected.address, address)
+			assert.Equal(t, expected.exists, exists)
+		}
+	}
+}
+
 // TestEvalFunctionForExpiredAccounts tests that the eval function will correctly mark accounts as offline
 func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
