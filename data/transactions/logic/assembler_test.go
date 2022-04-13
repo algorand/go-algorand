@@ -2443,10 +2443,17 @@ func TestTypeTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "+", LogicVersion, Expect{1, "+ expects 2 stack arguments..."})
+
 	// hitting a label in deadcode starts analyzing again, with unknown stack
 	testProg(t, "b end; label: +; end: b label", LogicVersion)
+
 	// callsub also wipes our stack knowledge, this tests shows why: it's properly typed
 	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub", LogicVersion)
+
+	// but we do want to ensure we're not just treating the code after callsub as dead
+	testProg(t, "callsub A; int 1; concat; return; A: int 1; int 2; retsub", LogicVersion,
+		Expect{3, "concat arg 1 wanted..."})
+
 	// retsub deadens code, like any unconditional branch
 	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub; concat", LogicVersion)
 
