@@ -1,6 +1,25 @@
-
 #!/usr/bin/env python3
 #
+# Test for a network in transition.
+# Runs a 6 node network with the following topology:
+#
+# New Leaf 1                           New Leaf 2
+#            > New Relay - Old Relay <
+# Old Leaf 1                           Old Leaf 2
+#
+# "New" and "Old" can mean different algod/goal/kmd binary versions.
+# It can also or separately mean config.json updates. (set --old-bin
+# and --new-bin to the same dir, set --new-config or --old-config to
+# overlay json onto the net temlplate generated config.json of new or
+# old nodes.
+#
+# In the test each leaf submits a simple payment transaction from its
+# unlocked wallet to a dummy account '\x00...\x0N'. A few rounds are
+# waited then each leaf verifies that it can see all the expected
+# account values.
+#
+# The test then waits 100 rounds and checks that the 4 leaves are each
+# a block proposer a reasonable fraction of the 100 rounds.
 
 import argparse
 import atexit
