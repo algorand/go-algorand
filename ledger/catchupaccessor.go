@@ -338,7 +338,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 		}
 
-		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
+		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, config.Consensus[c.ledger.GenesisProto()])
 
 	case CatchpointFileVersionV6:
 		var balances catchpointFileBalancesChunkV6
@@ -351,7 +351,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 		}
 
-		normalizedAccountBalances, err = prepareNormalizedBalancesV6(balances.Balances, c.ledger.GenesisProto())
+		normalizedAccountBalances, err = prepareNormalizedBalancesV6(balances.Balances, config.Consensus[c.ledger.GenesisProto()])
 	}
 
 	if err != nil {

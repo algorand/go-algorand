@@ -382,7 +382,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	dcc.onlineAccountExpiredRowids = expirations
 	dcc.expirationOffset = expirationOffset
 
-	dcc.genesisProto = ao.ledger.GenesisProto()
+	dcc.genesisProto = config.Consensus[ao.ledger.GenesisProto()]
 
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[offset]
 
@@ -652,7 +652,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 					continue
 				}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
+				modifiedAccounts[addr] = accountDataToOnline(addr, &d, config.Consensus[genesisProto])
 			}
 		}
 
@@ -675,7 +675,7 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
 			err = ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				accts, err = accountsOnlineTop(tx, rnd, batchOffset, batchSize, genesisProto)
+				accts, err = accountsOnlineTop(tx, rnd, batchOffset, batchSize, config.Consensus[genesisProto])
 				if err != nil {
 					return
 				}

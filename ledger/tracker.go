@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
 )
@@ -141,7 +142,7 @@ type ledgerForTracker interface {
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	GenesisHash() crypto.Digest
-	GenesisProto() config.ConsensusParams
+	GenesisProto() protocol.ConsensusVersion
 	GenesisAccounts() map[basics.Address]basics.AccountData
 }
 

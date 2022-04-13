@@ -56,7 +56,7 @@ type mockLedgerForTracker struct {
 	log             logging.Logger
 	filename        string
 	inMemory        bool
-	consensusParams config.ConsensusParams
+	consensusVersion protocol.ConsensusVersion
 	accts           map[basics.Address]basics.AccountData
 
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
@@ -99,8 +99,7 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 			Totals: totals,
 		}
 	}
-	consensusParams := config.Consensus[consensusVersion]
-	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams, accts: accts[0]}
+	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusVersion: consensusVersion, accts: accts[0]}
 
 }
 
@@ -221,8 +220,8 @@ func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
 
-func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
-	return ml.consensusParams
+func (ml *mockLedgerForTracker) GenesisProto() protocol.ConsensusVersion {
+	return ml.consensusVersion
 }
 
 func (ml *mockLedgerForTracker) GenesisAccounts() map[basics.Address]basics.AccountData {

@@ -1151,7 +1151,7 @@ func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint 
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
-func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool, err error) {
 	for _, tableCreate := range accountsSchema {
 		_, err = tx.Exec(tableCreate)
 		if err != nil {
@@ -1187,7 +1187,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			}
 
 			ad := ledgercore.ToAccountData(data)
-			totals.AddAccount(proto, ad, &ot)
+			totals.AddAccount(config.Consensus[proto], ad, &ot)
 		}
 
 		if ot.Overflowed {

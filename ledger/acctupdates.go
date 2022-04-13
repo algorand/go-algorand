@@ -538,7 +538,7 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
 }
 
 // GenesisProto returns the genesis consensus params
-func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams {
+func (aul *accountUpdatesLedgerEvaluator) GenesisProto() protocol.ConsensusVersion {
 	return aul.au.ledger.GenesisProto()
 }
 
@@ -1297,7 +1297,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	au.accountsMu.RUnlock()
 
-	dcc.genesisProto = au.ledger.GenesisProto()
+	dcc.genesisProto = config.Consensus[au.ledger.GenesisProto()]
 
 	if dcc.updateStats {
 		dcc.stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())

@@ -21,21 +21,22 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 type trackerDBParams struct {
 	initAccounts      map[basics.Address]basics.AccountData
-	initProto         config.ConsensusParams
+	initProto         protocol.ConsensusVersion
 	catchpointEnabled bool
 	dbPathPrefix      string
 	blockDb           db.Pair
@@ -322,7 +323,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsAddNormalizedBalance(tx, tu.initProto)
+	err = accountsAddNormalizedBalance(tx, config.Consensus[tu.initProto])
 	if err != nil {
 		return err
 	}
