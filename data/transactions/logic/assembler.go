@@ -287,13 +287,18 @@ func (pgm *ProgramKnowledge) deaden() {
 // label resets knowledge to reflect that control may enter from elsewhere.
 func (pgm *ProgramKnowledge) label() {
 	if pgm.isDead() {
-		pgm.stack = nil
-		pgm.bottom = StackAny
+		pgm.reset()
 	}
 }
 
 func (pgm ProgramKnowledge) isDead() bool {
 	return len(pgm.stack) > 0 && pgm.stack[len(pgm.stack)-1] == StackNone
+}
+
+// reset clears existing knowledge and permissively allows any stack value.  It's intended to be invoked after encountering a label or pragma type tracking change.
+func (pgm *ProgramKnowledge) reset() {
+	pgm.stack = nil
+	pgm.bottom = StackAny
 }
 
 // createLabel inserts a label to point to the next instruction, reporting an
@@ -1393,7 +1398,6 @@ func (ops *OpStream) assemble(text string) error {
 		ops.optimizeBytecBlock()
 	}
 
-	// TODO: warn if expected resulting stack is not len==1 ?
 	ops.resolveLabels()
 	program := ops.prependCBlocks()
 	if ops.Errors != nil {
@@ -1454,11 +1458,12 @@ func (ops *OpStream) pragma(line string) error {
 		if err != nil {
 			return ops.errorf("bad #pragma typetrack: %#v", value)
 		}
-		ops.typeTracking = on
-		if on {
-			ops.known.stack = nil
-			ops.known.bottom = StackAny
+		prev := ops.typeTracking
+		if !prev && on {
+			ops.known.reset()
 		}
+		ops.typeTracking = on
+
 		return nil
 	default:
 		return ops.errorf("unsupported pragma directive: %#v", key)
