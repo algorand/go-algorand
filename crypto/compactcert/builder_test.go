@@ -45,7 +45,7 @@ func (m testMessage) IntoStateProofMessageHash() StateProofMessageHash {
 }
 
 const compactCertRoundsForTests = 256
-const compactCertSecKQForTests = 256
+const compactCertSecurityTarget = 256
 
 func hashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Reset()
@@ -92,10 +92,10 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	npart := npartHi + npartLo
 
 	param := Params{
-		Data:         testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeight: uint64(totalWeight / 2),
-		Round:        currentRound,
-		SecKQ:        compactCertSecKQForTests,
+		Data:           testMessage("hello world").IntoStateProofMessageHash(),
+		ProvenWeight:   uint64(totalWeight / 2),
+		Round:          currentRound,
+		SecurityTarget: compactCertSecurityTarget,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
@@ -239,10 +239,10 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	numPart := 4
 
 	param := Params{
-		Data:         testMessage("test!").IntoStateProofMessageHash(),
-		ProvenWeight: uint64(totalWeight / (2 * numPart)),
-		Round:        currentRound,
-		SecKQ:        compactCertSecKQForTests,
+		Data:           testMessage("test!").IntoStateProofMessageHash(),
+		ProvenWeight:   uint64(totalWeight / (2 * numPart)),
+		Round:          currentRound,
+		SecurityTarget: compactCertSecurityTarget,
 	}
 
 	var parts []basics.Participant
@@ -439,10 +439,10 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	npartLo := 9
 
 	param := Params{
-		Data:         testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeight: uint64(totalWeight / 2),
-		Round:        currentRound,
-		SecKQ:        compactCertSecKQForTests,
+		Data:           testMessage("hello world").IntoStateProofMessageHash(),
+		ProvenWeight:   uint64(totalWeight / 2),
+		Round:          currentRound,
+		SecurityTarget: compactCertSecurityTarget,
 	}
 
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
@@ -506,10 +506,10 @@ func BenchmarkBuildVerify(b *testing.B) {
 	a := require.New(b)
 
 	param := Params{
-		Data:         testMessage("hello world").IntoStateProofMessageHash(),
-		ProvenWeight: uint64(totalWeight / 2),
-		Round:        compactCertRoundsForTests,
-		SecKQ:        compactCertSecKQForTests,
+		Data:           testMessage("hello world").IntoStateProofMessageHash(),
+		ProvenWeight:   uint64(totalWeight / 2),
+		Round:          compactCertRoundsForTests,
+		SecurityTarget: compactCertSecurityTarget,
 	}
 
 	var parts []basics.Participant

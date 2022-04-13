@@ -199,7 +199,7 @@ func (b *Builder) Build() (*Cert, error) {
 		MerkleSignatureVersion: merklesignature.SchemeVersion,
 	}
 
-	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.SecKQ)
+	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.SecurityTarget)
 	if err != nil {
 		return nil, err
 	}

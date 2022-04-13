@@ -33,7 +33,7 @@ func TestMaxNumberOfRevealsInVerify(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals+1, compactCertSecKQForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals+1, compactCertSecurityTarget)
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
@@ -46,7 +46,7 @@ func TestMaxNumberOfReveals(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	a.NoError(err)
 
-	_, err = numReveals(signedWeight, lnProvenWt, compactCertSecKQForTests)
+	_, err = numReveals(signedWeight, lnProvenWt, compactCertSecurityTarget)
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
@@ -59,13 +59,13 @@ func TestVerifyImpliedProvenWeight(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	a.NoError(err)
 
-	numOfReveals, err := numReveals(signedWeight, lnProvenWt, compactCertSecKQForTests)
+	numOfReveals, err := numReveals(signedWeight, lnProvenWt, compactCertSecurityTarget)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals, compactCertSecKQForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals, compactCertSecurityTarget)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, compactCertSecKQForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, compactCertSecurityTarget)
 	a.ErrorIs(err, ErrInsufficientSingedWeight)
 }
 
@@ -78,7 +78,7 @@ func TestVerifyZeroNumberOfRevealsEquation(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	a.NoError(err)
 
-	_, err = numReveals(signedWeight, lnProvenWt, compactCertSecKQForTests)
+	_, err = numReveals(signedWeight, lnProvenWt, compactCertSecurityTarget)
 	a.ErrorIs(err, ErrNegativeNumOfRevealsEquation)
 }
 
@@ -109,7 +109,7 @@ func TestVerifyLimits(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals-1, compactCertSecKQForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals-1, compactCertSecurityTarget)
 	a.ErrorIs(err, ErrZeroSignedWeight)
 }
 
@@ -124,12 +124,12 @@ func TestNumRevealsApproxBound(t *testing.T) {
 			lnProvenWt, err := lnIntApproximation(provenWt, precisionBits)
 			a.NoError(err)
 
-			numOfReveals, err := numReveals(sigWt, lnProvenWt, compactCertSecKQForTests)
+			numOfReveals, err := numReveals(sigWt, lnProvenWt, compactCertSecurityTarget)
 			a.NoError(err)
 
 			log2Sig := math.Log(float64(sigWt)) / math.Log(2)
 			log2Prov := math.Log(float64(provenWt)) / math.Log(2)
-			nr := float64(compactCertSecKQForTests) / (log2Sig - log2Prov)
+			nr := float64(compactCertSecurityTarget) / (log2Sig - log2Prov)
 			a.Greater(1.01, float64(numOfReveals)/nr,
 				"Approximated number of reveals exceeds limit. "+
 					"limit %v, signedWeight: %v provenWeight %v, "+
@@ -146,20 +146,20 @@ func TestNumReveals(t *testing.T) {
 	billion := uint64(1000 * 1000 * 1000)
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 2 * billion * microalgo
-	secKQ := uint64(compactCertSecKQForTests)
+	securityTarget := uint64(compactCertSecurityTarget)
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	a.NoError(err)
 
 	for i := uint64(3); i < 10; i++ {
 		signedWeight := i * billion * microalgo
-		n, err := numReveals(signedWeight, lnProvenWt, secKQ)
+		n, err := numReveals(signedWeight, lnProvenWt, securityTarget)
 		a.NoError(err)
-		//if n < 50 || n > 300 {
-		//	t.Errorf("numReveals(%d, %d, %d) = %d looks suspect",
-		//		signedWeight, provenWeight, secKQ, n)
-		//}
+		if n < 50 || n > 300 {
+			t.Errorf("numReveals(%d, %d, %d) = %d looks suspect",
+				signedWeight, provenWeight, securityTarget, n)
+		}
 
-		err = verifyWeights(signedWeight, lnProvenWt, n, compactCertSecKQForTests)
+		err = verifyWeights(signedWeight, lnProvenWt, n, compactCertSecurityTarget)
 		a.NoError(err)
 	}
 }
@@ -169,19 +169,19 @@ func BenchmarkVerifyWeights(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	secKQ := uint64(compactCertSecKQForTests)
+	securityTarget := uint64(compactCertSecurityTarget)
 
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	require.NoError(b, err)
 
-	nr, err := numReveals(signedWeight, lnProvenWt, secKQ)
+	nr, err := numReveals(signedWeight, lnProvenWt, securityTarget)
 	if nr < 900 {
-		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, secKQ, nr)
+		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, securityTarget, nr)
 	}
 	require.NoError(b, err)
 
 	for i := 0; i < b.N; i++ {
-		verifyWeights(signedWeight, lnProvenWt, nr, secKQ)
+		verifyWeights(signedWeight, lnProvenWt, nr, securityTarget)
 	}
 }
 
@@ -190,17 +190,17 @@ func BenchmarkNumReveals(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	secKQ := uint64(compactCertSecKQForTests)
+	securityTarget := uint64(compactCertSecurityTarget)
 	lnProvenWt, err := lnIntApproximation(provenWeight, precisionBits)
 	require.NoError(b, err)
 
-	nr, err := numReveals(signedWeight, lnProvenWt, secKQ)
+	nr, err := numReveals(signedWeight, lnProvenWt, securityTarget)
 	if nr < 900 {
-		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, secKQ, nr)
+		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, securityTarget, nr)
 	}
 	require.NoError(b, err)
 
 	for i := 0; i < b.N; i++ {
-		numReveals(signedWeight, lnProvenWt, secKQ)
+		numReveals(signedWeight, lnProvenWt, securityTarget)
 	}
 }

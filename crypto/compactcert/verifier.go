@@ -33,11 +33,10 @@ var (
 
 // Verifier is used to verify a compact certificate.
 type Verifier struct {
-	data  StateProofMessageHash
-	round basics.Round // The round for which the ephemeral key is committed to
-	// CR securityTarget
-	SecKQ                  uint64 // Security parameter (k+q) from analysis document
-	lnProvenWeight         uint64 // ln(provenWeightThreshold) as integer with 16 bits of precision
+	data                   StateProofMessageHash
+	round                  basics.Round // The round for which the ephemeral key is committed to
+	SecurityTarget         uint64
+	lnProvenWeight         uint64 // ln(provenWeight) as integer with 16 bits of precision
 	participantsCommitment crypto.GenericDigest
 }
 
@@ -53,7 +52,7 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
 	return &Verifier{
 		data:                   p.Data,
 		round:                  p.Round,
-		SecKQ:                  p.SecKQ,
+		SecurityTarget:         p.SecurityTarget,
 		lnProvenWeight:         lnProvenWt,
 		participantsCommitment: partcom,
 	}, nil
@@ -63,7 +62,7 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
 // and participants that were used to construct the Verifier.
 func (v *Verifier) Verify(c *Cert) error {
 	nr := uint64(len(c.PositionsToReveal))
-	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.SecKQ); err != nil {
+	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.SecurityTarget); err != nil {
 		return err
 	}
 

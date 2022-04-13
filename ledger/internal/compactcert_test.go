@@ -50,7 +50,7 @@ func TestValidateCompactCert(t *testing.T) {
 	certHdr.Round = 1
 	proto := config.Consensus[certHdr.CurrentProtocol]
 	proto.CompactCertRounds = 2
-	proto.CompactCertSecKQ = 256
+	proto.CompactCertSecurityTarget = 256
 	proto.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	config.Consensus[certHdr.CurrentProtocol] = proto
 
