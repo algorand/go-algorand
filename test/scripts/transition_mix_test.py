@@ -81,6 +81,14 @@ def openalgod(algodata):
     algod = algosdk.v2client.algod.AlgodClient(algodtoken, 'http://' + algodnet)
     return algod
 
+
+def maybedecode(x):
+    if not x:
+        return x
+    if hasattr(x, 'decode'):
+        return x.decode()
+    return x
+
 def reportcomms(p, stdout, stderr):
     cmdr = repr(p.args)
     if not stdout and p.stdout:
@@ -88,9 +96,9 @@ def reportcomms(p, stdout, stderr):
     if not stderr and p.stderr:
         stderr = p.stderr.read()
     if stdout:
-        sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, str(stdout)))
+        sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, maybedecode(stdout)))
     if stderr:
-        sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, str(stderr)))
+        sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, maybedecode(stderr)))
 
 def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
