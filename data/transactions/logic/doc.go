@@ -26,7 +26,9 @@ var opDocByName = map[string]string{
 	"sha256":              "SHA256 hash of value A, yields [32]byte",
 	"keccak256":           "Keccak256 hash of value A, yields [32]byte",
 	"sha512_256":          "SHA512_256 hash of value A, yields [32]byte",
+	"sha3_256":            "SHA3_256 hash of value A, yields [32]byte",
 	"ed25519verify":       "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
+	"ed25519verify_bare":  "for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y",
 	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key",
@@ -45,8 +47,8 @@ var opDocByName = map[string]string{
 	"!=":      "A is not equal to B => {0 or 1}",
 	"!":       "A == 0 yields 1; else 0",
 	"len":     "yields length of byte value A",
-	"itob":    "converts uint64 A to big endian bytes",
-	"btoi":    "converts bytes A as big endian to uint64",
+	"itob":    "converts uint64 A to big-endian byte array, always of length 8",
+	"btoi":    "converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.",
 	"%":       "A modulo B. Fail if B == 0.",
 	"|":       "A bitwise-or B",
 	"&":       "A bitwise-and B",
@@ -112,6 +114,8 @@ var opDocByName = map[string]string{
 	"gaid":    "ID of the asset or application created in the Tth transaction of the current group",
 	"gaids":   "ID of the asset or application created in the Ath transaction of the current group",
 
+	"json_ref": "return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A",
+
 	"bnz":     "branch to TARGET if value A is not zero",
 	"bz":      "branch to TARGET if value A is zero",
 	"b":       "branch unconditionally to TARGET",
@@ -128,10 +132,10 @@ var opDocByName = map[string]string{
 	"concat":         "join A and B",
 	"substring":      "A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails",
 	"substring3":     "A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails",
-	"getbit":         "Bth bit of (byte-array or integer) A.",
-	"setbit":         "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C",
-	"getbyte":        "Bth byte of A, as an integer",
-	"setbyte":        "Copy of A with the Bth byte set to small integer (between 0..255) C",
+	"getbit":         "Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"setbit":         "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"getbyte":        "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
+	"setbyte":        "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
 	"extract":        "A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
 	"extract3":       "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
 	"extract_uint16": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
@@ -209,10 +213,10 @@ var opcodeImmediateNotes = map[string]string{
 	"gtxnas":  "{uint8 transaction group index} {uint8 transaction field index}",
 	"gtxnsas": "{uint8 transaction field index}",
 
-	"bnz":     "{int16 branch offset, big endian}",
-	"bz":      "{int16 branch offset, big endian}",
-	"b":       "{int16 branch offset, big endian}",
-	"callsub": "{int16 branch offset, big endian}",
+	"bnz":     "{int16 branch offset, big-endian}",
+	"bz":      "{int16 branch offset, big-endian}",
+	"b":       "{int16 branch offset, big-endian}",
+	"callsub": "{int16 branch offset, big-endian}",
 
 	"load":   "{uint8 position in scratch space to load from}",
 	"store":  "{uint8 position in scratch space to store to}",
@@ -244,6 +248,7 @@ var opcodeImmediateNotes = map[string]string{
 	"ecdsa_pk_recover":    "{uint8 curve index}",
 
 	"base64_decode": "{uint8 encoding index}",
+	"json_ref":      "{string return type}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -317,6 +322,7 @@ var opDocExtras = map[string]string{
 	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 	"base64_decode":       "Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See <a href=\"https://rfc-editor.org/rfc/rfc4648.html#section-4\">RFC 4648</a> (sections 4 and 5). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
+	"json_ref":            "specify the return type with an immediate arg either as JSONUint64 or JSONString or JSONObject.",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -328,8 +334,8 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "ed25519verify", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
-	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
@@ -338,28 +344,30 @@ var OpGroups = map[string][]string{
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 
-// OpCost indicates the cost of an operation over the range of
+// VerCost indicates the cost of an operation over the range of
 // LogicVersions from From to To.
-type OpCost struct {
+type VerCost struct {
 	From int
 	To   int
-	Cost int
+	// Cost is a human readable string to describe costs. Simple opcodes are
+	// just an integer, but some opcodes have field or stack dependencies.
+	Cost string
 }
 
-// OpAllCosts returns an array of the cost score for an op by version.
-// Each entry indicates the cost over a range of versions, so if the
-// cost has remained constant, there is only one result, otherwise
-// each entry shows the cost for a consecutive range of versions,
-// inclusive.
-func OpAllCosts(opName string) []OpCost {
-	var costs []OpCost
+// OpAllCosts returns an array of the cost of an op by version.  Each entry
+// indicates the cost over a range of versions, so if the cost has remained
+// constant, there is only one result, otherwise each entry shows the cost for a
+// consecutive range of versions, inclusive.
+func OpAllCosts(opName string) []VerCost {
+	var costs []VerCost
 	for v := 1; v <= LogicVersion; v++ {
-		cost := OpsByName[v][opName].Details.Cost
-		if cost == 0 {
+		spec, ok := OpsByName[v][opName]
+		if !ok {
 			continue
 		}
+		cost := spec.Details.docCost()
 		if costs == nil || cost != costs[len(costs)-1].Cost {
-			costs = append(costs, OpCost{v, v, cost})
+			costs = append(costs, VerCost{v, v, cost})
 		} else {
 			costs[len(costs)-1].To = v
 		}
@@ -402,99 +410,6 @@ func OnCompletionDescription(value uint64) string {
 // OnCompletionPreamble describes what the OnCompletion constants represent.
 const OnCompletionPreamble = "An application transaction must indicate the action to be taken following the execution of its approvalProgram or clearStateProgram. The constants below describe the available actions."
 
-var txnFieldDocs = map[string]string{
-	"Type":           "Transaction type as bytes",
-	"TypeEnum":       "See table below",
-	"Sender":         "32 byte address",
-	"Fee":            "microalgos",
-	"FirstValid":     "round number",
-	"FirstValidTime": "Causes program to fail; reserved for future use",
-	"LastValid":      "round number",
-	"Note":           "Any data up to 1024 bytes",
-	"Lease":          "32 byte lease value",
-	"RekeyTo":        "32 byte Sender's new AuthAddr",
-
-	"GroupIndex": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
-	"TxID":       "The computed ID for this transaction. 32 bytes.",
-
-	"Receiver":         "32 byte address",
-	"Amount":           "microalgos",
-	"CloseRemainderTo": "32 byte address",
-
-	"VotePK":           "32 byte address",
-	"SelectionPK":      "32 byte address",
-	"StateProofPK":     "64 byte state proof public key commitment",
-	"VoteFirst":        "The first round that the participation key is valid.",
-	"VoteLast":         "The last round that the participation key is valid.",
-	"VoteKeyDilution":  "Dilution for the 2-level participation key",
-	"Nonparticipation": "Marks an account nonparticipating for rewards",
-
-	"XferAsset":     "Asset ID",
-	"AssetAmount":   "value in Asset's units",
-	"AssetSender":   "32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset.",
-	"AssetReceiver": "32 byte address",
-	"AssetCloseTo":  "32 byte address",
-
-	"ApplicationID":      "ApplicationID from ApplicationCall transaction",
-	"OnCompletion":       "ApplicationCall transaction on completion action",
-	"ApplicationArgs":    "Arguments passed to the application in the ApplicationCall transaction",
-	"NumAppArgs":         "Number of ApplicationArgs",
-	"Accounts":           "Accounts listed in the ApplicationCall transaction",
-	"NumAccounts":        "Number of Accounts",
-	"Assets":             "Foreign Assets listed in the ApplicationCall transaction",
-	"NumAssets":          "Number of Assets",
-	"Applications":       "Foreign Apps listed in the ApplicationCall transaction",
-	"NumApplications":    "Number of Applications",
-	"GlobalNumUint":      "Number of global state integers in ApplicationCall",
-	"GlobalNumByteSlice": "Number of global state byteslices in ApplicationCall",
-	"LocalNumUint":       "Number of local state integers in ApplicationCall",
-	"LocalNumByteSlice":  "Number of local state byteslices in ApplicationCall",
-	"ApprovalProgram":    "Approval program",
-	"ClearStateProgram":  "Clear state program",
-	"ExtraProgramPages":  "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
-
-	"ConfigAsset":              "Asset ID in asset config transaction",
-	"ConfigAssetTotal":         "Total number of units of this asset created",
-	"ConfigAssetDecimals":      "Number of digits to display after the decimal place when displaying the asset",
-	"ConfigAssetDefaultFrozen": "Whether the asset's slots are frozen by default or not, 0 or 1",
-	"ConfigAssetUnitName":      "Unit name of the asset",
-	"ConfigAssetName":          "The asset name",
-	"ConfigAssetURL":           "URL",
-	"ConfigAssetMetadataHash":  "32 byte commitment to some unspecified asset metadata",
-	"ConfigAssetManager":       "32 byte address",
-	"ConfigAssetReserve":       "32 byte address",
-	"ConfigAssetFreeze":        "32 byte address",
-	"ConfigAssetClawback":      "32 byte address",
-
-	"FreezeAsset":        "Asset ID being frozen or un-frozen",
-	"FreezeAssetAccount": "32 byte address of the account whose asset slot is being frozen or un-frozen",
-	"FreezeAssetFrozen":  "The new frozen value, 0 or 1",
-
-	"Logs":                 "Log messages emitted by an application call (only with `itxn` in v5)",
-	"NumLogs":              "Number of Logs (only with `itxn` in v5)",
-	"LastLog":              "The last message emitted. Empty bytes if none were emitted",
-	"CreatedAssetID":       "Asset ID allocated by the creation of an ASA (only with `itxn` in v5)",
-	"CreatedApplicationID": "ApplicationID allocated by the creation of an application (only with `itxn` in v5)",
-}
-
-var globalFieldDocs = map[string]string{
-	"MinTxnFee":                 "microalgos",
-	"MinBalance":                "microalgos",
-	"MaxTxnLife":                "rounds",
-	"ZeroAddress":               "32 byte address of all zero bytes",
-	"GroupSize":                 "Number of transactions in this atomic transaction group. At least 1",
-	"LogicSigVersion":           "Maximum supported version",
-	"Round":                     "Current round number",
-	"LatestTimestamp":           "Last confirmed block UNIX timestamp. Fails if negative",
-	"CurrentApplicationID":      "ID of current application executing",
-	"CreatorAddress":            "Address of the creator of the current application",
-	"CurrentApplicationAddress": "Address that the current application controls",
-	"GroupID":                   "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
-	"OpcodeBudget":              "The remaining cost that can be spent by opcodes in this program.",
-	"CallerApplicationID":       "The application ID of the application that called this application. 0 if this application is at the top-level.",
-	"CallerApplicationAddress":  "The application address of the application that called this application. ZeroAddress if this application is at the top-level.",
-}
-
 func addExtra(original string, extra string) string {
 	if len(original) == 0 {
 		return extra
@@ -507,51 +422,4 @@ func addExtra(original string, extra string) string {
 		sep = " "
 	}
 	return original + sep + extra
-}
-
-// AssetHoldingFieldDocs are notes on fields available in `asset_holding_get`
-var assetHoldingFieldDocs = map[string]string{
-	"AssetBalance": "Amount of the asset unit held by this account",
-	"AssetFrozen":  "Is the asset frozen or not",
-}
-
-// assetParamsFieldDocs are notes on fields available in `asset_params_get`
-var assetParamsFieldDocs = map[string]string{
-	"AssetTotal":         "Total number of units of this asset",
-	"AssetDecimals":      "See AssetParams.Decimals",
-	"AssetDefaultFrozen": "Frozen by default or not",
-	"AssetUnitName":      "Asset unit name",
-	"AssetName":          "Asset name",
-	"AssetURL":           "URL with additional info about the asset",
-	"AssetMetadataHash":  "Arbitrary commitment",
-	"AssetManager":       "Manager commitment",
-	"AssetReserve":       "Reserve address",
-	"AssetFreeze":        "Freeze address",
-	"AssetClawback":      "Clawback address",
-	"AssetCreator":       "Creator address",
-}
-
-// appParamsFieldDocs are notes on fields available in `app_params_get`
-var appParamsFieldDocs = map[string]string{
-	"AppApprovalProgram":    "Bytecode of Approval Program",
-	"AppClearStateProgram":  "Bytecode of Clear State Program",
-	"AppGlobalNumUint":      "Number of uint64 values allowed in Global State",
-	"AppGlobalNumByteSlice": "Number of byte array values allowed in Global State",
-	"AppLocalNumUint":       "Number of uint64 values allowed in Local State",
-	"AppLocalNumByteSlice":  "Number of byte array values allowed in Local State",
-	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
-	"AppCreator":            "Creator address",
-	"AppAddress":            "Address for which this application has authority",
-}
-
-// acctParamsFieldDocs are notes on fields available in `app_params_get`
-var acctParamsFieldDocs = map[string]string{
-	"AcctBalance":    "Account balance in microalgos",
-	"AcctMinBalance": "Minimum required blance for account, in microalgos",
-	"AcctAuthAddr":   "Address the account is rekeyed to.",
-}
-
-// EcdsaCurveDocs are notes on curves available in `ecdsa_` opcodes
-var EcdsaCurveDocs = map[string]string{
-	"Secp256k1": "secp256k1 curve",
 }

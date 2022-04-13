@@ -84,12 +84,12 @@ func run() int {
 	}
 
 	version := config.GetCurrentVersion()
-	heartbeatGauge := metrics.MakeStringGauge()
-	heartbeatGauge.Set("version", version.String())
-	heartbeatGauge.Set("version-num", strconv.FormatUint(version.AsUInt64(), 10))
-	heartbeatGauge.Set("channel", version.Channel)
-	heartbeatGauge.Set("branch", version.Branch)
-	heartbeatGauge.Set("commit-hash", version.GetCommitHash())
+	var baseHeartbeatEvent telemetryspec.HeartbeatEventDetails
+	baseHeartbeatEvent.Info.Version = version.String()
+	baseHeartbeatEvent.Info.VersionNum = strconv.FormatUint(version.AsUInt64(), 10)
+	baseHeartbeatEvent.Info.Channel = version.Channel
+	baseHeartbeatEvent.Info.Branch = version.Branch
+	baseHeartbeatEvent.Info.CommitHash = version.GetCommitHash()
 
 	if *branchCheck {
 		fmt.Println(config.Branch)
@@ -339,12 +339,11 @@ func run() int {
 			defer ticker.Stop()
 
 			sendHeartbeat := func() {
-				values := make(map[string]string)
+				values := make(map[string]float64)
 				metrics.DefaultRegistry().AddMetrics(values)
 
-				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
-					Metrics: values,
-				}
+				heartbeatDetails := baseHeartbeatEvent
+				heartbeatDetails.Metrics = values
 
 				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
 			}

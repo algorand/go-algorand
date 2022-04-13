@@ -436,7 +436,7 @@ func TestCdtSessionStateToEvent(t *testing.T) {
 
 	// if completed and pause on competed then pause
 	state.completed.SetTo(true)
-	state.pauseOnCompeted.SetTo(true)
+	state.pauseOnCompleted.SetTo(true)
 	e = s.computeEvent(&state)
 	_, ok = (e).(cdt.DebuggerPausedEvent)
 	require.True(t, ok)

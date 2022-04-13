@@ -129,7 +129,7 @@ func (tc *TagCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
 
 // AddMetric is part of the Metric interface
 // Copy the values in this TagCounter out into the string-string map.
-func (tc *TagCounter) AddMetric(values map[string]string) {
+func (tc *TagCounter) AddMetric(values map[string]float64) {
 	tagp := tc.tagptr.Load()
 	if tagp == nil {
 		return
@@ -146,6 +146,6 @@ func (tc *TagCounter) AddMetric(values map[string]string) {
 		} else {
 			name = tc.Name + "_" + tag
 		}
-		values[name] = strconv.FormatUint(*tagcount, 10)
+		values[sanitizeTelemetryName(name)] = float64(*tagcount)
 	}
 }

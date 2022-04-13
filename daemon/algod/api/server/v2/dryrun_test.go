@@ -393,6 +393,26 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
+type expectedSlotType struct {
+	slot int
+	tt   basics.TealType
+}
+
+func checkAppCallScratchType(t *testing.T, response *generated.DryrunResponse, txnIdx int, expected []expectedSlotType) {
+	txn := response.Txns[txnIdx]
+	// We should have a trace
+	assert.NotNil(t, txn.AppCallTrace)
+	// The first stack entry should be nil since we haven't stored anything in scratch yet
+	assert.Nil(t, (*txn.AppCallTrace)[0].Scratch)
+	// Last one should be not nil, we should have some number of scratch vars
+	traceLine := (*txn.AppCallTrace)[len(*txn.AppCallTrace)-1]
+	assert.NotNil(t, traceLine.Scratch)
+	for _, exp := range expected {
+		// The TealType at the given slot index should match what we expect
+		assert.Equal(t, exp.tt, basics.TealType((*traceLine.Scratch)[exp.slot].Type))
+	}
+}
+
 func TestDryrunGlobal1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
@@ -543,27 +563,27 @@ func TestDryrunLocal1(t *testing.T) {
 	if response.Txns[0].LocalDeltas == nil {
 		t.Fatal("empty local delta")
 	}
-	addrFound := false
-	valueFound := false
-	for _, lds := range *response.Txns[0].LocalDeltas {
-		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
-			addrFound = true
-			for _, ld := range lds.Delta {
-				if ld.Key == b64("foo") {
-					valueFound = true
-					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, b64("bar"))
 
-				}
-			}
+	// Should be a single account
+	assert.Len(t, *response.Txns[0].LocalDeltas, 1)
+
+	lds := (*response.Txns[0].LocalDeltas)[0]
+	assert.Equal(t, lds.Address, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+
+	valueFound := false
+	for _, ld := range lds.Delta {
+		if ld.Key == b64("foo") {
+			valueFound = true
+			assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
+			assert.Equal(t, *ld.Value.Bytes, b64("bar"))
+
 		}
 	}
-	if !addrFound {
-		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
-	}
+
 	if !valueFound {
 		t.Error("no local delta for value foo")
 	}
+
 	if t.Failed() {
 		logResponse(t, &response)
 	}
@@ -624,24 +644,22 @@ func TestDryrunLocal1A(t *testing.T) {
 	if response.Txns[0].LocalDeltas == nil {
 		t.Fatal("empty local delta")
 	}
-	addrFound := false
-	valueFound := false
-	for _, lds := range *response.Txns[0].LocalDeltas {
-		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
-			addrFound = true
-			for _, ld := range lds.Delta {
-				if ld.Key == b64("foo") {
-					valueFound = true
-					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, b64("bar"))
 
-				}
-			}
+	assert.Len(t, *response.Txns[0].LocalDeltas, 1)
+
+	lds := (*response.Txns[0].LocalDeltas)[0]
+	assert.Equal(t, lds.Address, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+
+	valueFound := false
+	for _, ld := range lds.Delta {
+		if ld.Key == b64("foo") {
+			valueFound = true
+			assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
+			assert.Equal(t, *ld.Value.Bytes, b64("bar"))
+
 		}
 	}
-	if !addrFound {
-		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
-	}
+
 	if !valueFound {
 		t.Error("no local delta for value foo")
 	}
@@ -1538,6 +1556,14 @@ txn GroupIndex
 int 3
 ==
 bnz checkgload
+pushint 123
+store 0
+pushbytes "def"
+store 251
+pushint 123
+store 252
+pushbytes "abc"
+store 253
 txn GroupIndex
 store 254
 b exit
@@ -1593,6 +1619,16 @@ int 1`)
 	}
 	var response generated.DryrunResponse
 	doDryrunRequest(&dr, &response)
+
+	checkAppCallScratchType(t, &response, 1, []expectedSlotType{
+		{0, basics.TealUintType},
+		{1, basics.TealType(0)},
+		{251, basics.TealBytesType},
+		{252, basics.TealUintType},
+		{253, basics.TealBytesType},
+		{254, basics.TealUintType},
+	})
+
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)

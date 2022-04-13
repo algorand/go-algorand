@@ -1,0 +1,136 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Algorand TEAL",
+  "patterns": [
+    {
+      "include": "#invalid"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#literals"
+    },
+    {
+      "include": "#labels"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#pragmas"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.double-slash.teal",
+      "begin": "//",
+      "end": "$"
+    },
+    "invalid": {
+      "patterns": [
+        {
+          "name": "invalid.illegal.teal",
+          "match": "^\\s+.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(base64|b64|base32|b32)(?:\\(|\\s+)([a-zA-Z0-9\\+\\/\\=]+)(?:\\)|\\s?|$)",
+          "captures": {
+            "1": {
+              "name": "support.class.teal"
+            },
+            "2": {
+              "name": "string.quoted.triple.teal"
+            }
+          }
+        },
+        {
+          "match": "^(addr)\\s+([A-Z2-7\\=]+)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.teal"
+            },
+            "2": {
+              "name": "string.unquoted.teal"
+            }
+          }
+        },
+        {
+          "name": "keyword.control.teal",
+          "match": "^(assert|b|bnz|bz|callsub|cover|dig|dup|dup2|err|pop|retsub|return|select|swap|uncover)\\b"
+        },
+        {
+          "name": "keyword.other.teal",
+          "match": "^(int|byte|addr|arg|arg_0|arg_1|arg_2|arg_3|args|bytec|bytec_0|bytec_1|bytec_2|bytec_3|bytecblock|bzero|gaid|gaids|gload|gloads|gloadss|global|gtxn|gtxna|gtxnas|gtxns|gtxnsa|gtxnsas|intc|intc_0|intc_1|intc_2|intc_3|intcblock|load|loads|pushbytes|pushint|store|stores|txn|txna|txnas)\\b"
+        },
+        {
+          "name": "keyword.other.unit.teal",
+          "match": "^(acct_params_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|asset_holding_get|asset_params_get|balance|log|min_balance)\\b"
+        },
+        {
+          "name": "keyword.operator.teal",
+          "match": "^(\\!|\\!\\=|%|\u0026|\u0026\u0026|\\*|\\+|\\-|/|\\\u003c|\\\u003c\\=|\\=\\=|\\\u003e|\\\u003e\\=|\\^|addw|bitlen|btoi|concat|divmodw|divw|ecdsa_pk_decompress|ecdsa_pk_recover|ecdsa_verify|ed25519verify|ed25519verify_bare|exp|expw|getbit|getbyte|itob|keccak256|len|mulw|setbit|setbyte|sha256|sha3_256|sha512_256|shl|shr|sqrt|\\||\\|\\||\\~|b\\!\\=|b%|b\\*|b\\+|b\\-|b/|b\\\u003c|b\\\u003c\\=|b\\=\\=|b\\\u003e|b\\\u003e\\=|bsqrt|b\u0026|b\\^|b\\||b\\~|base64_decode|extract|extract3|extract_uint16|extract_uint32|extract_uint64|json_ref|substring|substring3|gitxn|gitxna|gitxnas|itxn|itxn_begin|itxn_field|itxn_next|itxn_submit|itxna|itxnas)\\b"
+        }
+      ]
+    },
+    "labels": {
+      "patterns": [
+        {
+          "name": "support.variable.teal",
+          "match": "^\\w+:.*$"
+        },
+        {
+          "match": "\\b(?\u003c=b|bz|bnz)\\s+(\\w+)\\b",
+          "captures": {
+            "1": {
+              "name": "support.variable.teal"
+            }
+          }
+        }
+      ]
+    },
+    "literals": {
+      "patterns": [
+        {
+          "name": "constant.numeric.teal",
+          "match": "\\b([0-9]+)\\b"
+        },
+        {
+          "name": "constant.numeric.teal",
+          "match": "\\b(?\u003c=int\\s+)(0x[0-9]+)\\b"
+        },
+        {
+          "name": "string.quoted.double.teal",
+          "match": "\\b(?\u003c=byte\\s+)(0x[0-9]+)\\b"
+        },
+        {
+          "name": "variable.parameter.teal",
+          "match": "\\b(unknown|pay|keyreg|acfg|axfer|afrz|appl|NoOp|OptIn|CloseOut|ClearState|UpdateApplication|DeleteApplication|Secp256k1|Secp256r1|Sender|Fee|FirstValid|FirstValidTime|LastValid|Note|Lease|Receiver|Amount|CloseRemainderTo|VotePK|SelectionPK|VoteFirst|VoteLast|VoteKeyDilution|Type|TypeEnum|XferAsset|AssetAmount|AssetSender|AssetReceiver|AssetCloseTo|GroupIndex|TxID|ApplicationID|OnCompletion|ApplicationArgs|NumAppArgs|Accounts|NumAccounts|ApprovalProgram|ClearStateProgram|RekeyTo|ConfigAsset|ConfigAssetTotal|ConfigAssetDecimals|ConfigAssetDefaultFrozen|ConfigAssetUnitName|ConfigAssetName|ConfigAssetURL|ConfigAssetMetadataHash|ConfigAssetManager|ConfigAssetReserve|ConfigAssetFreeze|ConfigAssetClawback|FreezeAsset|FreezeAssetAccount|FreezeAssetFrozen|Assets|NumAssets|Applications|NumApplications|GlobalNumUint|GlobalNumByteSlice|LocalNumUint|LocalNumByteSlice|ExtraProgramPages|Nonparticipation|Logs|NumLogs|CreatedAssetID|CreatedApplicationID|LastLog|StateProofPK|MinTxnFee|MinBalance|MaxTxnLife|ZeroAddress|GroupSize|LogicSigVersion|Round|LatestTimestamp|CurrentApplicationID|CreatorAddress|CurrentApplicationAddress|GroupID|OpcodeBudget|CallerApplicationID|CallerApplicationAddress|URLEncoding|StdEncoding|JSONString|JSONUint64|JSONObject|AssetBalance|AssetFrozen|AssetTotal|AssetDecimals|AssetDefaultFrozen|AssetUnitName|AssetName|AssetURL|AssetMetadataHash|AssetManager|AssetReserve|AssetFreeze|AssetClawback|AssetCreator|AppApprovalProgram|AppClearStateProgram|AppGlobalNumUint|AppGlobalNumByteSlice|AppLocalNumUint|AppLocalNumByteSlice|AppExtraProgramPages|AppCreator|AppAddress|AcctBalance|AcctMinBalance|AcctAuthAddr)\\b"
+        }
+      ]
+    },
+    "pragmas": {
+      "name": "support.function.teal",
+      "match": "^#pragma\\b.*$"
+    },
+    "strings": {
+      "name": "string.quoted.double.teal",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.teal",
+          "match": "\\\\(x[0-9A-Fa-f]{2}|.|$)"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.teal"
+}
