@@ -2112,33 +2112,24 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	return err
 }
 
-func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
-	if tx == nil {
+func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, version protocol.ConsensusVersion) (err error) {
+	var data ledgercore.OnlineRoundParamsData
+	err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
+	if err != nil {
+		return err
+	}
+
+	rnd, err := accountsRound(tx)
+	if err != nil {
 		return nil
 	}
-	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		var data ledgercore.OnlineRoundParamsData
-		err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
-		if err != nil {
-			return err
-		}
 
-		rnd, err := accountsRound(tx)
-		if err != nil {
-			return nil
-		}
+	data.CurrentProtocol = version
 
-		hdr, err := blockGetHdr(blockTx, rnd)
-
-		data.CurrentProtocol = hdr.CurrentProtocol
-
-		_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
-			rnd,
-			protocol.Encode(&data),
-		)
-
-		return err
-	})
+	_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
+		rnd,
+		protocol.Encode(&data),
+	)
 
 	return err
 }
@@ -2989,14 +2980,28 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 	return err
 }
 
-func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error) {
-	row := tx.QueryRow("SELECT data FROM onlineroundparamstail")
-	var encodedOnlineRoundParamsData []byte
-	err = row.Scan(&encodedOnlineRoundParamsData)
+func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, err error) {
+	rows, err := tx.Query("SELECT data FROM onlineroundparamstail")
 	if err != nil {
-		return
+		return nil, err
 	}
-	err = protocol.Decode(encodedOnlineRoundParamsData, &onlineRoundParamsData)
+	defer rows.Close()
+
+	for rows.Next() {
+		var buf []byte
+		err = rows.Scan(&buf)
+		if err != nil {
+			return nil, err
+		}
+
+		var data ledgercore.OnlineRoundParamsData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return nil, err
+		}
+
+		onlineRoundParamsData = append(onlineRoundParamsData, data)
+	}
 	return
 }
 

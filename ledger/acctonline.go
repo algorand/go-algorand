@@ -153,12 +153,10 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return err0
 		}
 
-		onlineRoundParams, err0 := accountsOnlineRoundParams(tx)
+		ao.onlineRoundParamsData, err0 = accountsOnlineRoundParams(tx)
 		if err0 != nil {
 			return err0
 		}
-
-		ao.onlineRoundParamsData = []ledgercore.OnlineRoundParamsData{onlineRoundParams}
 
 		return nil
 	})
