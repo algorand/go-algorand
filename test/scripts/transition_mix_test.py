@@ -378,7 +378,7 @@ def main():
         if not args.keep_temps:
             # If we created a tmpdir and we're not keeping it, clean it up.
             # If an outer process specified $TEMPDIR, let them clean it up.
-            atexit.register(shutil.rmtree, tempdir, onerror=logger.error)
+            atexit.register(shutil.rmtree, tempdir, onerror=lambda efn, epath, excinfo: logger.error('rmtree error %r %r %s', efn, epath, excinfo))
         else:
             atexit.register(print, 'keeping temps. to clean up:\nrm -rf {}'.format(tempdir))
 
@@ -402,6 +402,8 @@ def main():
     # run_test(netdir, oldbin, newbin, algod_bins)
     dt = time.time() - start
     print('DONE OK {:.1f} seconds'.format(dt))
+    # wait a moment for terminated algod to clean up their files
+    time.sleep(1)
     return 0
 
 def nop(*args, **kwargs):
