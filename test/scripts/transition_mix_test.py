@@ -272,6 +272,33 @@ def wait_relay_addr(algodata, timeout=10):
             raise Exception('never found relay_addr at {}'.format(relay_addr_path))
         time.sleep(0.1)
 
+# accept literal or filename
+def json_arg(arg):
+    if not arg:
+        return None
+    if arg[0] == '{':
+        return json.loads(arg)
+    if arg[0] == '@':
+        with open(arg[1:]) as fin:
+            return json.load(fin)
+    if os.path.exists(arg):
+        with open(arg) as fin:
+            return json.load(fin)
+    raise Exception("don't know how to get json from {!r}".format(arg))
+
+def json_overlay(arg, netdir, subdirs):
+    if not arg:
+        return
+    nc = json_arg(arg)
+    if not nc:
+        return
+    for subdir in subdirs:
+        with open(os.path.join(netdir, subdir, 'config.json')) as fin:
+            config = json.load(fin)
+        config.update(nc)
+        with open(os.path.join(netdir, subdir, 'config.json'), 'w') as fout:
+            json.dump(config, fout)
+
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
 _logging_datefmt = '%Y%m%d_%H%M%S'
 
@@ -280,6 +307,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--new-branch', default=None, help='`git checkout {new-branch}` and build')
     ap.add_argument('--old-branch', default=None, help='`git checkout {new-branch}` and build')
+    ap.add_argument('--new-config', help='json to overlay on config.json, json literal or filename')
+    ap.add_argument('--old-config', help='json to overlay on config.json, json literal or filename')
+    ap.add_argument('--new-bin', help='path to directory holding new version of algod,kmd,goal')
+    ap.add_argument('--old-bin', help='path to directory holding old version of algod,kmd,goal')
     ap.add_argument('--no-build', default=False, action='store_true')
     ap.add_argument('--work-dir')
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
@@ -311,12 +342,12 @@ def main():
         else:
             atexit.register(print, 'keeping temps. to clean up:\nrm -rf {}'.format(tempdir))
 
-    newbin = os.path.join(tempdir, 'newbin')
-    oldbin = os.path.join(tempdir, 'oldbin')
+    newbin = args.new_bin or os.path.join(tempdir, 'newbin')
+    oldbin = args.old_bin or os.path.join(tempdir, 'oldbin')
     build(args, repodir, newbin, oldbin)
 
     netdir = os.path.join(tempdir, 'net')
-    run_test6(netdir, oldbin, newbin)
+    run_test6(args, netdir, oldbin, newbin)
     # algod_bins = {
     #     'Primary': oldbin,
     #     'Node1': oldbin,
@@ -462,14 +493,34 @@ class testaddrs:
         return addr,amt
 
 
+def wait_round(algod, waitround, st=None, printround=False):
+    if st is None:
+        st = algod.status()
+    lr = st['last-round']
+    if lr >= waitround:
+        return
+    nrounds = waitround - lr
+    timeout = time.time() + (nrounds * 22)
+    while st['last-round'] < waitround:
+        if time.time() > timeout:
+            raise Exception("too long waiting for round {}, last-round={}".format(waitround, st['last-round']))
+        st = algod.status_after_block(st['last-round'])
+        if printround:
+            print(st['last-round'])
+    return
+
+
 # test topology: 2 relays, 4 leafs
 # (leaf old 1, leaf new 1) <-> (relay old) <-> (relay new) <-> (leaf old 2, leaf new 2)
 @defer_wrap
-def run_test6(netdir, oldbin, newbin, _defer=nop):
+def run_test6(args, netdir, oldbin, newbin, _defer=nop):
     test_addr = testaddrs()
 
     shutil.rmtree(netdir, ignore_errors=True)
     xrun([os.path.join(oldbin, 'goal'), 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/TransitionSix.json')], timeout=90)
+
+    json_overlay(args.new_config, netdir, ('RelayNew', 'New1', 'New2'))
+    json_overlay(args.old_config, netdir, ('RelayOld', 'Old1', 'Old2'))
 
     relay_old = start_algod(os.path.join(netdir, 'RelayOld'), oldbin)
     _defer(relay_old.terminate)
@@ -514,10 +565,7 @@ def run_test6(netdir, oldbin, newbin, _defer=nop):
         sent_txid.append(txid)
 
     ralgod, _ = relay_old.connect()
-    waitround = status['last-round'] + 12
-    st = ralgod.status()
-    while st['last-round'] < waitround:
-        st = ralgod.status_after_block(st['last-round'])
+    wait_round(ralgod, status['last-round'] + 12)
 
     for leaf in leafs:
         for addr, amt in test_addr.sent.items():
@@ -525,9 +573,7 @@ def run_test6(netdir, oldbin, newbin, _defer=nop):
             ast = algod.account_info(addr)
             assert(ast['amount'] == amt)
 
-    while st['last-round'] < 100:
-        st = ralgod.status_after_block(st['last-round'])
-        print(st['last-round'])
+    wait_round(ralgod, 100, printround=True)
     get_block_proposers(ralgod, st['last-round'], 4)
 
     print("OK")
