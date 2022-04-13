@@ -558,6 +558,7 @@ func TestDryrunLocal1(t *testing.T) {
 			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
 		},
 	}
+	dr.Round = 1
 	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if response.Txns[0].LocalDeltas == nil {
@@ -639,6 +640,7 @@ func TestDryrunLocal1A(t *testing.T) {
 			AppIndex:  1,
 		},
 	}
+	dr.Round = 1
 	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if response.Txns[0].LocalDeltas == nil {

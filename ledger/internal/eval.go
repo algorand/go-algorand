@@ -163,7 +163,7 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
 	}
 	if exists && rnd != x.rnd {
-		return basics.Address{}, false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd, LatestRound: rnd-1}
+		return basics.Address{}, false, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: x.rnd, LatestRound: rnd}
 	}
 	x.creators[creatable] = foundAddress{address: address, exists: exists}
 	return address, exists, nil
