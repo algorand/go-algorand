@@ -1,7 +1,10 @@
 node_types = {"R":4, "N":5, "NPN":1}
 node_size = {"R":"-Large", "N":"-Large", "NPN":"-Large"}
 regions = [
-    "AWS-US-EAST-2"
+    "AWS-US-EAST-2",
+    "AWS-US-WEST-1",
+    "AWS-EU-WEST-2",
+    "AWS-EU-CENTRAL-1"
 ]
 
 f = open("topology.json", "w")
