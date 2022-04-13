@@ -407,7 +407,7 @@ const (
 	// modeSig is LogicSig execution
 	modeSig runMode = 1 << iota
 
-	// modeApp is application/contract exection
+	// modeApp is application/contract execution
 	modeApp
 
 	// local constant, run in any mode

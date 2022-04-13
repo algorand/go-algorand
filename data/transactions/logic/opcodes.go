@@ -287,7 +287,7 @@ func imm(name string, kind immKind) immediate {
 }
 
 type typedList struct {
-	Types   StackTypes // what gets popped from the stack
+	Types   StackTypes
 	Effects string
 }
 

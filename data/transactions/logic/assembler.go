@@ -251,13 +251,18 @@ type OpStream struct {
 
 // ProgramKnowledge tracks statically known information as we assemble
 type ProgramKnowledge struct {
-	// known is the stack of known stack types, based on specs of opcodes seen.
-	// if the top entry is StackNone, we're in dead code, and no checking is done
+	// list of the types known to be on the value stack, based on specs of
+	// opcodes seen while assembling. In normal code, the tip of the stack must
+	// match the next opcode's Arg.Types, and is then replaced with its
+	// Return.Types. If the top entry is StackNone, we're in dead code, and no
+	// checking is done, nor are return types appended.
 	stack StackTypes
 	// bottom is the type given out when known is empty. It is StackNone at
-	// program start, but when a label or callsub is encountered, `known` is
-	// truncated and bottom becomes StackAny, because we don't track program
-	// state coming in from elsewhere.
+	// program start, so, for example, a `+` opcode at the start of a program
+	// fails. But when a label or callsub is encountered, `stack` is truncated
+	// and `bottom` becomes StackAny, because we don't track program state
+	// coming in from elsewhere. A `+` after a label succeeds, because the stack
+	// "vitually" contains an infinite list of StackAny.
 	bottom StackType
 }
 
