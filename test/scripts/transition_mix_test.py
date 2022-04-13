@@ -88,9 +88,9 @@ def reportcomms(p, stdout, stderr):
     if not stderr and p.stderr:
         stderr = p.stderr.read()
     if stdout:
-        sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, stdout))
+        sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, str(stdout)))
     if stderr:
-        sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, stderr))
+        sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, str(stderr)))
 
 def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
