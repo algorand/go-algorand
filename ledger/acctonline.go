@@ -242,7 +242,7 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	ao.onlineRoundParamsData = append(ao.onlineRoundParamsData, ledgercore.OnlineRoundParamsData{
 		OnlineSupply:    delta.Totals.Online.Money.Raw,
 		RewardsLevel:    delta.Totals.RewardsLevel,
-		CurrentProtocol: delta.Hdr.CurrentProtocol,
+		CurrentProtocol: blk.CurrentProtocol,
 	})
 
 	// calling prune would drop old entries from the base accounts.

@@ -92,6 +92,9 @@ var accountsSchema = []string{
 		id string primary key,
 		intval integer,
 		strval text)`,
+	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
+        round INTEGER NOT NULL PRIMARY KEY,
+        data blob)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
 // TODO: Post applications, rename assetcreators -> creatables and rename
@@ -139,12 +142,6 @@ var createTxTailTable = []string{
 	`CREATE TABLE IF NOT EXISTS txtail (
 		round INTEGER PRIMARY KEY NOT NULL,
 		data blob)`,
-}
-
-var createOnlineRoundParamsTable = []string{
-	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
-        round INTEGER NOT NULL PRIMARY KEY,
-        data blob)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
 var accountsResetExprs = []string{
@@ -1198,6 +1195,18 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		if err != nil {
 			return true, err
 		}
+
+		onlineRoundParams := ledgercore.OnlineRoundParamsData{
+			OnlineSupply: totals.Online.Money.Raw,
+			RewardsLevel: totals.RewardsLevel,
+			CurrentProtocol: proto,
+		}
+
+		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 0)
+		if err != nil {
+			return true, err
+		}
+
 		newDatabase = true
 	} else {
 		serr, ok := err.(sqlite3.Error)
@@ -1305,16 +1314,6 @@ func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 
 func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createTxTailTable {
-		_, err = tx.ExecContext(ctx, stmt)
-		if err != nil {
-			return
-		}
-	}
-	return nil
-}
-
-func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err error) {
-	for _, stmt := range createOnlineRoundParamsTable {
 		_, err = tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return
@@ -2112,24 +2111,36 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	return err
 }
 
-func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, version protocol.ConsensusVersion) (err error) {
-	var data ledgercore.OnlineRoundParamsData
-	err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
-	if err != nil {
-		return err
-	}
-
-	rnd, err := accountsRound(tx)
-	if err != nil {
+func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
+	if tx == nil {
 		return nil
 	}
 
-	data.CurrentProtocol = version
+	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
+		rnd, err := accountsRound(tx)
+		if err != nil {
+			return nil
+		}
 
-	_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
-		rnd,
-		protocol.Encode(&data),
-	)
+		hdr, err := blockGetHdr(blockTx, rnd)
+		if err != nil {
+			return nil
+		}
+
+		var data ledgercore.OnlineRoundParamsData
+		err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
+		if err != nil {
+			return err
+		}
+
+		data.CurrentProtocol = hdr.CurrentProtocol
+
+		_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
+			rnd,
+			protocol.Encode(&data),
+		)
+		return err
+	})
 
 	return err
 }

@@ -65,9 +65,6 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = accountsCreateTxTailTable(context.Background(), tx)
 	require.NoError(tb, err)
 
-	err = accountsCreateOnlineRoundParamsTable(context.Background(), tx)
-	require.NoError(tb, err)
-
 	err = performOnlineAccountsTableMigration(context.Background(), tx, nil)
 	require.NoError(tb, err)
 
@@ -77,7 +74,7 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = performTxTailTableMigration(context.Background(), nil, db.Accessor{})
 	require.NoError(tb, err)
 
-	err = performOnlineRoundParamsTailMigration(context.Background(), tx, proto)
+	err = performOnlineRoundParamsTailMigration(context.Background(), nil, db.Accessor{})
 	require.NoError(tb, err)
 
 	return newDB
