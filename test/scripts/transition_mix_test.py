@@ -538,7 +538,7 @@ def wait_round(algod, waitround, st=None, printround=False):
         st = algod.status()
     lr = st['last-round']
     if lr >= waitround:
-        return
+        return st
     nrounds = waitround - lr
     timeout = time.time() + (nrounds * 22)
     while st['last-round'] < waitround:
@@ -547,7 +547,7 @@ def wait_round(algod, waitround, st=None, printround=False):
         st = algod.status_after_block(st['last-round'])
         if printround:
             print(st['last-round'])
-    return
+    return st
 
 
 # test topology: 2 relays, 4 leafs
@@ -605,7 +605,7 @@ def run_test6(args, netdir, oldbin, newbin, _defer=nop):
         sent_txid.append(txid)
 
     ralgod, _ = relay_old.connect()
-    wait_round(ralgod, status['last-round'] + 12)
+    st = wait_round(ralgod, status['last-round'] + 12, st=status)
 
     for leaf in leafs:
         for addr, amt in test_addr.sent.items():
@@ -613,7 +613,7 @@ def run_test6(args, netdir, oldbin, newbin, _defer=nop):
             ast = algod.account_info(addr)
             assert(ast['amount'] == amt)
 
-    wait_round(ralgod, 100, printround=True)
+    st = wait_round(ralgod, 100, printround=True, st=st)
     get_block_proposers(ralgod, st['last-round'], 4)
 
     print("OK")
