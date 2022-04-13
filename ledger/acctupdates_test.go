@@ -34,7 +34,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/internal"
@@ -319,7 +318,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			for addr, data := range accts[rnd] {
 				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, d, ledgercore.ToAccountData(data).AccountBaseData)
+				require.Equal(t, d, ledgercore.ToAccountData(data))
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 				// TODO: make lookupOnlineAccountData returning extended version of ledgercore.VotingData ?
 				od, err := ao.lookupOnlineAccountData(rnd, addr)
@@ -357,7 +356,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			d, validThrough, err := au.LookupWithoutRewards(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
-			require.Equal(t, d, ledgercore.AccountBaseData{})
+			require.Equal(t, d, ledgercore.AccountData{})
 			od, err := ao.lookupOnlineAccountData(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
 			require.Equal(t, od, ledgercore.OnlineAccountData{})
@@ -375,7 +374,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 		for i := 0; i < rdelta.Len(); i++ {
 			addr, adelta := rdelta.GetByIdx(i)
 			macct := accounts[addr]
-			macct.data = adelta.AccountBaseData
+			macct.data = adelta
 			macct.ndeltas++
 			accounts[addr] = macct
 		}
@@ -925,7 +924,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		}
 
 		conf := config.GetDefaultLocal()
-		au, ao := newAcctUpdates(t, ml, conf, ".")
+		au, _ := newAcctUpdates(t, ml, conf, ".")
+		// au, ao := newAcctUpdates(t, ml, conf, ".")
 		defer au.close()
 
 		// cover 10 genesis blocks
@@ -964,14 +964,14 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 				fromAccountDataNew.MicroAlgos.Raw -= uint64(i - 10)
 				toAccountDataNew.MicroAlgos.Raw += uint64(i - 10)
-				data := ledgercore.AccountData{AccountBaseData: fromAccountDataNew}
-				if data.Status == basics.Online {
-					// pull voting data to make a consistent update
-					onlineData, err := ao.lookupOnlineAccountData(i-1, fromAccount)
-					require.NoError(t, err)
-					data.VotingData = onlineData.VotingData
-				}
-				updates[fromAccount] = data
+				// data := ledgercore.AccountData{AccountBaseData: fromAccountDataNew}
+				// if data.Status == basics.Online {
+				// 	// pull voting data to make a consistent update
+				// 	onlineData, err := ao.lookupOnlineAccountData(i-1, fromAccount)
+				// 	require.NoError(t, err)
+				// 	data.VotingData = onlineData.VotingData
+				// }
+				updates[fromAccount] = fromAccountDataNew
 
 				moneyAccountsExpectedAmounts[i][j] = fromAccountDataNew.MicroAlgos.Raw
 			}
@@ -1010,14 +1010,14 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				}
 			}
 
-			data := ledgercore.AccountData{AccountBaseData: toAccountDataNew}
-			if data.Status == basics.Online {
-				// pull voting data to make a consistent update
-				onlineData, err := ao.lookupOnlineAccountData(i-1, toAccount)
-				require.NoError(t, err)
-				data.VotingData = onlineData.VotingData
-			}
-			updates[toAccount] = data
+			// data := ledgercore.AccountData{AccountBaseData: toAccountDataNew}
+			// if data.Status == basics.Online {
+			// 	// pull voting data to make a consistent update
+			// 	onlineData, err := ao.lookupOnlineAccountData(i-1, toAccount)
+			// 	require.NoError(t, err)
+			// 	data.VotingData = onlineData.VotingData
+			// }
+			updates[toAccount] = toAccountDataNew
 
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
@@ -2221,19 +2221,20 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	err := au.loadFromDisk(ml, 0)
 	defer au.close()
 	require.NoError(t, err)
-	withoutVotingData := func(ad basics.AccountData) basics.AccountData {
-		ad.VoteID = crypto.OneTimeSignatureVerifier{}
-		ad.SelectionID = crypto.VRFVerifier{}
-		ad.StateProofID = merklesignature.Verifier{}
-		ad.VoteKeyDilution = 0
-		ad.VoteFirstValid = 0
-		ad.VoteLastValid = 0
-		return ad
-	}
+	// withoutVotingData := func(ad basics.AccountData) basics.AccountData {
+	// 	ad.VoteID = crypto.OneTimeSignatureVerifier{}
+	// 	ad.SelectionID = crypto.VRFVerifier{}
+	// 	ad.StateProofID = merklesignature.Verifier{}
+	// 	ad.VoteKeyDilution = 0
+	// 	ad.VoteFirstValid = 0
+	// 	ad.VoteLastValid = 0
+	// 	return ad
+	// }
 	for addr, acct := range accts {
 		acctData, validThrough, withoutRewards, err := au.lookupLatest(addr)
 		require.NoError(t, err)
-		require.Equal(t, withoutVotingData(acct), acctData)
+		require.Equal(t, acct, acctData)
+		// require.Equal(t, withoutVotingData(acct), acctData)
 
 		// check "withoutRewards" matches result of LookupWithoutRewards
 		d, r, err := au.LookupWithoutRewards(validThrough, addr)
@@ -2397,20 +2398,21 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 				break
 			}
 
-			withoutVotingData := func(ad basics.AccountData) basics.AccountData {
-				ad.VoteID = crypto.OneTimeSignatureVerifier{}
-				ad.SelectionID = crypto.VRFVerifier{}
-				ad.StateProofID = merklesignature.Verifier{}
-				ad.VoteKeyDilution = 0
-				ad.VoteFirstValid = 0
-				ad.VoteLastValid = 0
-				return ad
-			}
+			// withoutVotingData := func(ad basics.AccountData) basics.AccountData {
+			// 	ad.VoteID = crypto.OneTimeSignatureVerifier{}
+			// 	ad.SelectionID = crypto.VRFVerifier{}
+			// 	ad.StateProofID = merklesignature.Verifier{}
+			// 	ad.VoteKeyDilution = 0
+			// 	ad.VoteFirstValid = 0
+			// 	ad.VoteLastValid = 0
+			// 	return ad
+			// }
 
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
 			require.NoError(t, err)
-			require.Equal(t, withoutVotingData(accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough])), d)
+			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			// require.Equal(t, withoutVotingData(accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough])), d)
 			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
@@ -2433,7 +2435,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, _, _, err := au.lookupWithoutRewards(rnd, addr, true)
 			require.NoError(t, err)
-			require.Equal(t, d, ledgercore.ToAccountData(data).AccountBaseData)
+			require.Equal(t, d, ledgercore.ToAccountData(data))
 			// TODO: add online account data check
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})

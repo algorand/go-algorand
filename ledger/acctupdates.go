@@ -97,7 +97,9 @@ const forceCatchpointFileGenerationTrackingMode = 99
 type modifiedAccount struct {
 	// data stores the most recent ledgercore.AccountData for this modified
 	// account.
-	data ledgercore.AccountBaseData
+	// TODO: remove after catchpoint implementation
+	// data ledgercore.AccountBaseData
+	data ledgercore.AccountData
 
 	// ndelta keeps track of how many times this account appears in
 	// accountUpdates.deltas.  This is used to evict modifiedAccount
@@ -290,7 +292,7 @@ func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, 
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
-func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountBaseData, validThrough basics.Round, err error) {
+func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, err error) {
 	data, validThrough, _, _, err = au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
 	return
 }
@@ -569,18 +571,18 @@ func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basic
 
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	baseData, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+	data, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
 	if err != nil {
 		return ledgercore.AccountData{}, 0, err
 	}
-	onlineData, err := aul.ao.lookupOnlineAccountData(rnd, addr)
-	if err != nil {
-		return ledgercore.AccountData{}, 0, err
-	}
-	data := ledgercore.AccountData{
-		AccountBaseData: baseData,
-		VotingData:      onlineData.VotingData,
-	}
+	// onlineData, err := aul.ao.lookupOnlineAccountData(rnd, addr)
+	// if err != nil {
+	// 	return ledgercore.AccountData{}, 0, err
+	// }
+	// data := ledgercore.AccountData{
+	// 	AccountBaseData: baseData,
+	// 	VotingData:      onlineData.VotingData,
+	// }
 
 	return data, validThrough, err
 }
@@ -690,7 +692,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		addr, data := delta.Accts.GetByIdx(i)
 		macct := au.accounts[addr]
 		macct.ndeltas++
-		macct.data = data.AccountBaseData
+		macct.data = data
 		au.accounts[addr] = macct
 	}
 	for _, res := range delta.Accts.GetAllAssetResources() {
@@ -852,7 +854,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if macct, has := au.accounts[addr]; has {
 			// This is the most recent round, so we can
 			// use a cache of the most recent account state.
-			ad.AccountBaseData = macct.data
+			ad = macct.data
 			foundAccount = true
 		} else if pad, has := au.baseAccounts.read(addr); has && pad.round == currentDbRound {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
@@ -1057,7 +1059,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 }
 
 // lookupWithoutRewards returns the account data for a given address at a given round.
-func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data ledgercore.AccountBaseData, validThrough basics.Round, rewardsVersion protocol.ConsensusVersion, rewardsLevel uint64, err error) {
+func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data ledgercore.AccountData, validThrough basics.Round, rewardsVersion protocol.ConsensusVersion, rewardsLevel uint64, err error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -1099,7 +1101,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
-					return d.AccountBaseData, rnd, rewardsVersion, rewardsLevel, nil
+					return d, rnd, rewardsVersion, rewardsLevel, nil
 				}
 			}
 		} else {
@@ -1115,7 +1117,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData.GetLedgerCoreAccountBaseData(), rnd, rewardsVersion, rewardsLevel, nil
+			return macct.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 		}
 
 		if synchronized {
@@ -1132,15 +1134,16 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
 				au.baseAccounts.writePending(persistedData)
-				return persistedData.accountData.GetLedgerCoreAccountBaseData(), rnd, rewardsVersion, rewardsLevel, err
+				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, err
+				// return persistedData.accountData.GetLedgerCoreAccountBaseData(), rnd, rewardsVersion, rewardsLevel, err
 			}
 			// otherwise return empty
-			return ledgercore.AccountBaseData{}, rnd, rewardsVersion, rewardsLevel, err
+			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, err
 		}
 		if synchronized {
 			if persistedData.round < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-				return ledgercore.AccountBaseData{}, basics.Round(0), rewardsVersion, rewardsLevel, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+				return ledgercore.AccountData{}, basics.Round(0), rewardsVersion, rewardsLevel, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1150,7 +1153,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
 			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
-			return ledgercore.AccountBaseData{}, basics.Round(0), rewardsVersion, rewardsLevel, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			return ledgercore.AccountData{}, basics.Round(0), rewardsVersion, rewardsLevel, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 	}
 }
