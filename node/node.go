@@ -654,6 +654,10 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	maxRound := latest
 	minRound := maxRound.SubSaturate(maxLife)
 
+    // Iterate from newest to oldest round up to the max life of a transaction. 
+    // Since this is a uint64, if the minRound is 0, we need to check that we haven't 
+    // overflowed past 0 to MaxUint64, we just use a comparison to maxRound to make sure 
+    // we've not rolled past 0
 	for r := maxRound; r >= minRound && r <= maxRound; r-- {
 		tx, found, err := node.ledger.LookupTxid(txID, r)
 		if err != nil || !found {
