@@ -1,0 +1,44 @@
+{ "Hosts":
+  [
+    {
+      "Name": "R1",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "R2",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "R3",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "R4",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "N1",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "N2",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "N3",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "N4",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "N5",
+      "Template": "AWS-US-EAST-2-Large"
+    },
+    {
+      "Name": "NPN1",
+      "Template": "AWS-US-EAST-2-Large"
+    }
+  ]
+}
