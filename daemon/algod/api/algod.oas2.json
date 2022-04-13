@@ -2223,6 +2223,14 @@
         "cost": {
           "description": "Execution cost of app call transaction",
           "type": "integer"
+        },
+        "asset-index":{
+          "description":"index of asset created",
+          "type":"integer"
+        },
+        "application-index":{
+          "description":"index of application created",
+          "type":"integer"
         }
       }
     },

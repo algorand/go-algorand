@@ -202,13 +202,10 @@ func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
 }
 
 type dryrunLedger struct {
-	// inputs:
-
-	dr  *DryrunRequest
-	hdr *bookkeeping.BlockHeader
+	// input:
+	dr *DryrunRequest
 
 	// intermediate state:
-
 	// index into dr.Accounts[]
 	accountsIn map[basics.Address]int
 	// index into dr.Apps[]
@@ -360,9 +357,8 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
-func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (ba apply.Balances, err error) {
+func makeBalancesAdapter(dl *dryrunLedger) (ba apply.Balances, err error) {
 	ba = ledger.MakeDebugBalances(dl, basics.Round(dl.dr.Round), protocol.ConsensusVersion(dl.dr.ProtocolVersion), dl.dr.LatestTimestamp)
-
 	return ba, nil
 }
 
@@ -386,6 +382,13 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		response.Error = err.Error()
 		return
 	}
+
+	ba, err := makeBalancesAdapter(&dl)
+	if err != nil {
+		response.Error = err.Error()
+		return
+	}
+
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
 	specials := transactions.SpecialAddresses{}
@@ -411,6 +414,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		var result generated.DryrunTxnResult
+
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
@@ -429,137 +433,166 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			}
 			result.LogicSigMessages = &messages
 		}
-		if stxn.Txn.Type == protocol.ApplicationCallTx {
-			appIdx := stxn.Txn.ApplicationID
-			if appIdx == 0 {
-				creator := stxn.Txn.Sender.String()
-				// check and use the first entry in dr.Apps
-				if len(dr.Apps) > 0 && dr.Apps[0].Params.Creator == creator {
-					appIdx = basics.AppIndex(dr.Apps[0].Id)
-				}
+
+		if stxn.Txn.Type != protocol.ApplicationCallTx {
+			// TODO: create a Perform to update the balance adapter?
+			response.Txns[ti] = result
+			continue
+		}
+
+		var (
+			appIdx = stxn.Txn.ApplicationID
+			drApp  generated.Application
+		)
+
+		if appIdx == 0 {
+			creator := stxn.Txn.Sender.String()
+			// check and use the first entry in dr.Apps
+			if len(dr.Apps) > 0 && dr.Apps[0].Params.Creator == creator {
+				appIdx = basics.AppIndex(dr.Apps[0].Id)
 			}
-			if stxn.Txn.OnCompletion == transactions.OptInOC {
-				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
-					acct := dl.dr.Accounts[idx]
-					ls := generated.ApplicationLocalState{
-						Id:       uint64(appIdx),
-						KeyValue: new(generated.TealKeyValueStore),
-					}
-					for _, app := range dr.Apps {
-						if basics.AppIndex(app.Id) == appIdx {
-							if app.Params.LocalStateSchema != nil {
-								ls.Schema = *app.Params.LocalStateSchema
-							}
-							break
-						}
-					}
-					if acct.AppsLocalState == nil {
-						lss := []generated.ApplicationLocalState{ls}
-						acct.AppsLocalState = &lss
-					} else {
-						found := false
-						for _, apls := range *acct.AppsLocalState {
-							if apls.Id == uint64(appIdx) {
-								// already opted in
-								found = true
-							}
-						}
-						if !found {
-							(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
-						}
-					}
-					dl.dr.Accounts[idx] = acct
-				}
+		}
+
+		for _, app := range dr.Apps {
+			if basics.AppIndex(app.Id) == appIdx {
+				drApp = app
+			}
+		}
+
+		// We didnt find the app in the dryrun request, bail
+		if drApp.Id == 0 {
+			messages := []string{fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)}
+			result.AppCallMessages = &messages
+			response.Txns[ti] = result
+			continue
+		}
+
+		if stxn.Txn.OnCompletion == transactions.OptInOC {
+			var (
+				acctIdx int
+				ok      bool
+			)
+
+			if acctIdx, ok = dl.accountsIn[stxn.Txn.Sender]; !ok {
+				// TODO: Error out?
+				continue
 			}
 
-			ba, err := makeBalancesAdapter(&dl, &stxn.Txn, appIdx)
-			if err != nil {
-				response.Error = err.Error()
-				return
+			acct := dl.dr.Accounts[acctIdx]
+
+			ls := generated.ApplicationLocalState{
+				Id:       uint64(appIdx),
+				KeyValue: new(generated.TealKeyValueStore),
 			}
-			var app basics.AppParams
-			ok := false
-			for _, appt := range dr.Apps {
-				if appt.Id == uint64(appIdx) {
-					app, err = ApplicationParamsToAppParams(&appt.Params)
-					if err != nil {
-						response.Error = err.Error()
-						return
-					}
-					ok = true
-					break
-				}
+
+			// TODO: shouldnt we error out here because theres no local state schema?
+			if drApp.Params.LocalStateSchema != nil {
+				ls.Schema = *drApp.Params.LocalStateSchema
 			}
-			var messages []string
-			if !ok {
-				messages = make([]string, 1)
-				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
+
+			if acct.AppsLocalState == nil {
+				lss := []generated.ApplicationLocalState{ls}
+				acct.AppsLocalState = &lss
 			} else {
-				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
-				var program []byte
-				messages = make([]string, 1)
-				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
-					program = app.ClearStateProgram
-					messages[0] = "ClearStateProgram"
-				} else {
-					program = app.ApprovalProgram
-					messages[0] = "ApprovalProgram"
-				}
-				pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
-				result.Disassembly = debug.lines
-				result.AppCallTrace = &debug.history
-				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
-				if len(delta.LocalDeltas) > 0 {
-					localDeltas := make([]generated.AccountStateDelta, 0, len(delta.LocalDeltas))
-					for k, v := range delta.LocalDeltas {
-						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
-						if err2 != nil {
-							messages = append(messages, err2.Error())
-						}
-						localDeltas = append(localDeltas, generated.AccountStateDelta{
-							Address: ldaddr.String(),
-							Delta:   *StateDeltaToStateDelta(v),
-						})
-					}
-					result.LocalDeltas = &localDeltas
-				}
-
-				// ensure the program has not exceeded execution budget
-				cost := maxCurrentBudget - pooledAppBudget
-				if pass {
-					if !origEnableAppCostPooling {
-						if cost > proto.MaxAppProgramCost {
-							pass = false
-							err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
-						}
-					} else if cumulativeCost+cost > allowedBudget {
-						pass = false
-						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
+				var found bool
+				for _, apls := range *acct.AppsLocalState {
+					if apls.Id == uint64(appIdx) {
+						// already opted in
+						found = true
 					}
 				}
-				cost64 := uint64(cost)
-				result.Cost = &cost64
-				maxCurrentBudget = pooledAppBudget
-				cumulativeCost += cost
-
-				var err3 error
-				result.Logs, err3 = DeltaLogToLog(delta.Logs)
-				if err3 != nil {
-					messages = append(messages, err3.Error())
+				if !found {
+					(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
 				}
+			}
+			dl.dr.Accounts[acctIdx] = acct
+		}
 
-				if pass {
-					messages = append(messages, "PASS")
-				} else {
-					messages = append(messages, "REJECT")
-				}
+		app, err := ApplicationParamsToAppParams(&drApp.Params)
+		if err != nil {
+			response.Error = err.Error()
+			return
+		}
+
+		var (
+			debug    dryrunDebugReceiver
+			program  []byte
+			messages []string
+		)
+
+		ep.Debugger = &debug
+
+		if stxn.Txn.OnCompletion == transactions.ClearStateOC {
+			program = app.ClearStateProgram
+			messages = append(messages, "ClearStateProgram")
+		} else {
+			program = app.ApprovalProgram
+			messages = append(messages, "ApprovalProgram")
+		}
+
+		pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
+		if err != nil {
+			messages = append(messages, err.Error())
+		}
+
+		result.ApplicationIndex = (*uint64)(&ep.TxnGroup[ti].ApplyData.ApplicationID)
+		result.AssetIndex = (*uint64)(&ep.TxnGroup[ti].ApplyData.ConfigAsset)
+		result.Disassembly = debug.lines
+		result.AppCallTrace = &debug.history
+		result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
+
+		if len(delta.LocalDeltas) > 0 {
+			localDeltas := make([]generated.AccountStateDelta, 0, len(delta.LocalDeltas))
+			for k, v := range delta.LocalDeltas {
+				ldaddr, err := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
 				if err != nil {
 					messages = append(messages, err.Error())
 				}
+				localDeltas = append(localDeltas, generated.AccountStateDelta{
+					Address: ldaddr.String(),
+					Delta:   *StateDeltaToStateDelta(v),
+				})
 			}
-			result.AppCallMessages = &messages
+			result.LocalDeltas = &localDeltas
 		}
+
+		result.Logs, err = DeltaLogToLog(delta.Logs)
+		if err != nil {
+			messages = append(messages, err.Error())
+		}
+
+		// ensure the program has not exceeded execution budget
+		cost := maxCurrentBudget - pooledAppBudget
+
+		if pass {
+			if !origEnableAppCostPooling {
+				if cost > proto.MaxAppProgramCost {
+					pass = false
+					err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
+				}
+			} else if cumulativeCost+cost > allowedBudget {
+				pass = false
+				err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
+			}
+		}
+
+		cost64 := uint64(cost)
+		result.Cost = &cost64
+
+		maxCurrentBudget = pooledAppBudget
+		cumulativeCost += cost
+
+		if pass {
+			messages = append(messages, "PASS")
+		} else {
+			messages = append(messages, "REJECT")
+		}
+
+		if err != nil {
+			messages = append(messages, err.Error())
+		}
+
+		result.AppCallMessages = &messages
 		response.Txns[ti] = result
 	}
 }

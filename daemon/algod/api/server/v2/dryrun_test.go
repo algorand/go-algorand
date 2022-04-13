@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"io/ioutil"
 	"strconv"
 	"strings"
 	"testing"
@@ -918,7 +919,7 @@ func TestDryrunMakeLedger(t *testing.T) {
 	dl := dryrunLedger{dr: &dr}
 	err = dl.init()
 	require.NoError(t, err)
-	_, err = makeBalancesAdapter(&dl, &dr.Txns[0].Txn, 1)
+	_, err = makeBalancesAdapter(&dl)
 	require.NoError(t, err)
 }
 
@@ -1632,5 +1633,110 @@ int 1`)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
+	}
+}
+
+func TestDryrunSideEffects(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	approvalOps, err := logic.AssembleString(`
+#pragma version 6
+txn GroupIndex
+int 0
+==
+bnz create_asset 
+
+int 1
+return
+
+create_asset:
+itxn_begin
+int acfg
+itxn_field TypeEnum
+int 1000000
+itxn_field ConfigAssetTotal
+int 3
+itxn_field ConfigAssetDecimals
+byte "oz"
+itxn_field ConfigAssetUnitName
+byte "Gold"
+itxn_field ConfigAssetName
+byte "https://gold.rush/"
+itxn_field ConfigAssetURL
+itxn_submit
+int 1
+
+`)
+
+	require.NoError(t, err)
+
+	clearOps, err := logic.AssembleString("int 1")
+	clst := clearOps.Program
+	require.NoError(t, err)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	txns := make([]transactions.SignedTxn, 0, 4)
+	apps := make([]generated.Application, 0, 4)
+
+	for appIdx := basics.AppIndex(1); appIdx <= basics.AppIndex(4); appIdx++ {
+		txns = append(txns, txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender,
+			ApplicationID: appIdx}.SignedTxn())
+		apps = append(apps, generated.Application{
+			Id: uint64(appIdx),
+			Params: generated.ApplicationParams{
+				ApprovalProgram:   approvalOps.Program,
+				ClearStateProgram: clst,
+				GlobalStateSchema: &generated.ApplicationStateSchema{
+					NumUint: 1,
+				},
+			},
+		})
+	}
+
+	dr := DryrunRequest{
+		ProtocolVersion: string(dryrunProtoVersion),
+		Txns:            txns,
+		Apps:            apps,
+		Accounts: []generated.Account{
+			{Address: sender.String(), Status: "Offline", Amount: 100_000_000}, // sender
+		},
+	}
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+
+}
+
+func TestDryrunSideEffects2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	data, err := ioutil.ReadFile("offer.msgp")
+	a.NoError(err)
+
+	var dr DryrunRequest
+	var gdr generated.DryrunRequest
+
+	err = decode(protocol.JSONStrictHandle, data, &gdr)
+	if err == nil {
+		dr, err = DryrunRequestFromGenerated(&gdr)
+		a.NoError(err)
+	} else {
+		err = decode(protocol.CodecHandle, data, &dr)
+		a.NoError(err)
+	}
+
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+
+	for _, txn := range response.Txns {
+		t.Logf("%+v", txn.AppCallMessages)
 	}
 }

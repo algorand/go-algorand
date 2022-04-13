@@ -316,6 +316,12 @@ type DryrunTxnResult struct {
 	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
+	// index of application created
+	ApplicationIndex *uint64 `json:"application-index,omitempty"`
+
+	// index of asset created
+	AssetIndex *uint64 `json:"asset-index,omitempty"`
+
 	// Execution cost of app call transaction
 	Cost *uint64 `json:"cost,omitempty"`
 
