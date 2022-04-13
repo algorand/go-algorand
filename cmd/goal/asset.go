@@ -671,7 +671,7 @@ func assetDecimalsFmt(amount uint64, decimals uint32) string {
 var optinAssetCmd = &cobra.Command{
 	Use:   "optin",
 	Short: "Optin to assets",
-	Long:  "Opt an acocunt in to asset use. An account will begin accepting an asset by issuing a zero-amount asset transfer to itself.",
+	Long:  "Opt in to receive a new asset. An account will begin accepting an asset by issuing a zero-amount asset transfer to itself.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
@@ -679,6 +679,8 @@ var optinAssetCmd = &cobra.Command{
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
+		// Opt in txns are always 0
+		xferAmount := 0
 
 		creatorResolved := accountList.getAddressByName(assetCreator)
 
@@ -688,7 +690,7 @@ var optinAssetCmd = &cobra.Command{
 		if account == "" {
 			account = accountList.getDefaultAccount()
 		}
-		tx, err := client.MakeUnsignedAssetOptinTx(assetID, account)
+		tx, err := client.MakeUnsignedAssetSendTx(assetID, xferAmount, account, "", "")
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
