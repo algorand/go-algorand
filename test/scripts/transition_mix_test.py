@@ -81,6 +81,17 @@ def openalgod(algodata):
     algod = algosdk.v2client.algod.AlgodClient(algodtoken, 'http://' + algodnet)
     return algod
 
+def reportcomms(p, stdout, stderr):
+    cmdr = repr(p.args)
+    if not stdout and p.stdout:
+        stdout = p.stdout.read()
+    if not stderr and p.stderr:
+        stderr = p.stderr.read()
+    if stdout:
+        sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, stdout))
+    if stderr:
+        sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, stderr))
+
 def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
     kwargs['stdout'] = subprocess.PIPE
@@ -239,7 +250,7 @@ def start_algod(algodata, bindir, relay_addr=None):
 def bindir_missing(bindir):
     out = []
     for p in ('algod', 'goal', 'kmd'):
-        path = os.path.join(bindir)
+        path = os.path.join(bindir, p)
         if not os.path.exists(path):
             out.append(p)
     if not out:
@@ -257,6 +268,7 @@ def build(args, repodir, newbin, oldbin):
     changeBack = False
     try:
         newbin_missing = bindir_missing(newbin)
+        logger.debug('%s missing %r', newbin, newbin_missing)
         if newbin_missing:
             if args.no_build:
                 raise Exception('new bin dir {} missing {} but --no-build set'.format(newbin, newbin_missing))
@@ -266,6 +278,7 @@ def build(args, repodir, newbin, oldbin):
             for bn in ('algod', 'goal', 'kmd'):
                 shutil.copy(os.path.join(gopath, 'bin', bn), os.path.join(newbin, bn))
         oldbin_missing = bindir_missing(oldbin)
+        logger.debug('%s missing %r', oldbin, oldbin_missing)
         if oldbin_missing:
             if args.no_build:
                 raise Exception('old bin dir {} missing {} but --no-build set'.format(oldbin, oldbin_missing))
