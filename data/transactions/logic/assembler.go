@@ -249,6 +249,16 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
+// NewOpStream constructs OpStream instances ready to invoke assemble.
+func NewOpStream(version uint64) OpStream {
+	return OpStream{
+		labels:       make(map[string]int),
+		OffsetToLine: make(map[int]int),
+		typeTracking: true,
+		Version:      version,
+	}
+}
+
 // ProgramKnowledge tracks statically known information as we assemble
 type ProgramKnowledge struct {
 	// list of the types known to be on the value stack, based on specs of
@@ -304,9 +314,6 @@ func (pgm *ProgramKnowledge) reset() {
 // createLabel inserts a label to point to the next instruction, reporting an
 // error for a duplicate.
 func (ops *OpStream) createLabel(label string) {
-	if ops.labels == nil {
-		ops.labels = make(map[string]int)
-	}
 	if _, ok := ops.labels[label]; ok {
 		ops.errorf("duplicate label %#v", label)
 	}
@@ -316,9 +323,6 @@ func (ops *OpStream) createLabel(label string) {
 
 // recordSourceLine adds an entry to pc to line mapping
 func (ops *OpStream) recordSourceLine() {
-	if ops.OffsetToLine == nil {
-		ops.OffsetToLine = make(map[int]int)
-	}
 	ops.OffsetToLine[ops.pending.Len()] = ops.sourceLine - 1
 }
 
@@ -1293,7 +1297,6 @@ func (ops *OpStream) assemble(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
-	ops.typeTracking = true
 	scanner := bufio.NewScanner(fin)
 	ops.sourceLine = 0
 	for scanner.Scan() {
@@ -1888,7 +1891,7 @@ func AssembleString(text string) (*OpStream, error) {
 // Note that AssemblerDefaultVersion is not the latest supported version,
 // and therefore we might need to pass in explicitly a higher version.
 func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
-	ops := OpStream{Version: version}
+	ops := NewOpStream(version)
 	err := ops.assemble(text)
 	return &ops, err
 }

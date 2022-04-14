@@ -482,7 +482,8 @@ func testMatch(t testing.TB, actual, expected string) bool {
 }
 
 func assemblyTrace(text string, ver uint64) string {
-	ops := OpStream{Version: ver, Trace: &strings.Builder{}}
+	ops := NewOpStream(ver)
+	ops.Trace = &strings.Builder{}
 	ops.assemble(text)
 	return ops.Trace.String()
 }
@@ -2301,7 +2302,7 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 	btoi              // [n]
 `
 
-	ops := OpStream{Version: AssemblerMaxVersion}
+	ops := NewOpStream(AssemblerMaxVersion)
 	err := ops.assemble(text)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
@@ -2316,7 +2317,7 @@ flip:                 // [x]
 	btoi              // [n]
 `
 
-	ops = OpStream{Version: AssemblerMaxVersion}
+	ops = NewOpStream(AssemblerMaxVersion)
 	err = ops.assemble(text)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
