@@ -1298,7 +1298,6 @@ func (ops *OpStream) assemble(text string) error {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
 	scanner := bufio.NewScanner(fin)
-	ops.sourceLine = 0
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
