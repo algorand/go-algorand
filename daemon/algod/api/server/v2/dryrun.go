@@ -204,7 +204,7 @@ func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
 type dryrunLedger struct {
 	// inputs:
 
-	dr  *DryrunRequest
+	dr *DryrunRequest
 
 	// intermediate state:
 
