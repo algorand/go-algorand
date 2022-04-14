@@ -390,7 +390,7 @@ func TestDebugEnvironment(t *testing.T) {
 	// transaction fields, global properties,
 	source := `#pragma version 2
 global Round
-int 222
+int 223
 ==
 global LatestTimestamp
 int 333
