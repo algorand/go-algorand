@@ -455,6 +455,7 @@ func TestDryrunGlobal1(t *testing.T) {
 			},
 		},
 	}
+	dr.Round = 1
 	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
@@ -501,6 +502,7 @@ func TestDryrunGlobal2(t *testing.T) {
 			},
 		},
 	}
+	dr.Round = 1
 	doDryrunRequest(&dr, &response)
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
@@ -766,6 +768,7 @@ func TestDryrunMultipleTxns(t *testing.T) {
 			},
 		},
 	}
+	dr.Round = 1
 	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
@@ -1121,6 +1124,7 @@ int 1`)
 				Amount:  10000000,
 			},
 		},
+		Round: 1,
 	}
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
