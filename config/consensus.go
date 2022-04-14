@@ -382,8 +382,7 @@ type ConsensusParams struct {
 	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
 	CompactCertWeightThreshold uint32
 
-	// CompactCertStrengthTarget is the security parameter for the compact
-	// certificate scheme.
+	// CompactCertStrengthTarget represents either k+q (for pre-quantum security) or k+2q (for post-quantum security)
 	CompactCertStrengthTarget uint64
 
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining

@@ -41,6 +41,8 @@ type sigslot struct {
 // a compact certificate for that message.
 type Builder struct {
 	Params
+	data           StateProofMessageHash
+	round          uint64
 	sigs           []sigslot // Indexed by pos in participants
 	sigsHasValidL  bool      // The L values in sigs are consistent with weights
 	signedWeight   uint64    // Total weight of signatures so far
@@ -57,7 +59,7 @@ type Builder struct {
 // to be signed, as well as other security parameters, are specified in
 // param.  The participants that will sign the message are in part and
 // parttree.
-func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
+func MkBuilder(param Params, data StateProofMessageHash, round uint64, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
 	lnProvenWt, err := lnIntApproximation(param.ProvenWeight)
 	if err != nil {
@@ -65,8 +67,9 @@ func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tr
 	}
 
 	b := &Builder{
-		Params: param,
-
+		Params:         param,
+		data:           data,
+		round:          round,
 		sigs:           make([]sigslot, npart),
 		sigsHasValidL:  false,
 		signedWeight:   0,
@@ -104,9 +107,9 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 			return err
 		}
 
-		cpy := make([]byte, len(b.Params.Data))
-		copy(cpy, b.Params.Data[:]) // TODO: onmce cfalcon is fixed can remove this copy.
-		if err := p.PK.VerifyBytes(uint64(b.Round), cpy, sig); err != nil {
+		cpy := make([]byte, len(b.data))
+		copy(cpy, b.data[:]) // TODO: onmce cfalcon is fixed can remove this copy.
+		if err := p.PK.VerifyBytes(b.round, cpy, sig); err != nil {
 			return err
 		}
 	}
@@ -213,7 +216,7 @@ func (b *Builder) Build() (*Cert, error) {
 		lnProvenWeight: b.lnProvenWeight,
 		sigCommitment:  c.SigCommit,
 		signedWeight:   c.SignedWeight,
-		data:           b.Params.Data,
+		data:           b.data,
 	}
 
 	coinHash := makeCoinGenerator(&choice)

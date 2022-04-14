@@ -31,9 +31,7 @@ const StateProofMessageHashType = crypto.Sha256
 
 // Params defines common parameters for the verifier and builder.
 type Params struct {
-	Data           StateProofMessageHash
-	ProvenWeight   uint64       // Weight proven by the certificate
-	Round          basics.Round // The round for which the ephemeral key is committed to
+	ProvenWeight   uint64 // Weight proven by the certificate
 	StrengthTarget uint64
 }
 
@@ -64,12 +62,11 @@ type Reveal struct {
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.GenericDigest `codec:"c"`
-	SignedWeight uint64               `codec:"w"`
-	SigProofs    merklearray.Proof    `codec:"S"`
-	PartProofs   merklearray.Proof    `codec:"P"`
-	// CR salt version - chagne the falcon to byte or change this to int
-	MerkleSignatureSaltVersion int32 `codec:"v"`
+	SigCommit                  crypto.GenericDigest `codec:"c"`
+	SignedWeight               uint64               `codec:"w"`
+	SigProofs                  merklearray.Proof    `codec:"S"`
+	PartProofs                 merklearray.Proof    `codec:"P"`
+	MerkleSignatureSaltVersion int32                `codec:"v"`
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
 	// arrays.

@@ -75,8 +75,7 @@ func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a 
 	return signer
 }
 
-func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.GenericDigest, uint64) {
-	currentRound := basics.Round(compactCertRoundsForTests)
+func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.GenericDigest, uint64, StateProofMessageHash) {
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
@@ -91,10 +90,9 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 
 	npart := npartHi + npartLo
 
+	data := testMessage("hello world").IntoStateProofMessageHash()
 	param := Params{
-		Data:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / 2),
-		Round:          currentRound,
 		StrengthTarget: compactCertStrengthTarget,
 	}
 
@@ -105,8 +103,8 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
-	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.Data[:])
+	signerInRound := key.GetSigner(compactCertRoundsForTests)
+	sig, err := signerInRound.SignBytes(data[:])
 	a.NoError(err, "failed to create keys")
 
 	for i := 0; i < npart; i++ {
@@ -116,7 +114,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(param, parts, partcom)
+	b, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
 	a.NoError(err)
 
 	for i := 0; i < npart; i++ {
@@ -128,7 +126,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	cert, err := b.Build()
 	a.NoError(err)
 
-	return cert, param, partcom.Root(), uint64(npart)
+	return cert, param, partcom.Root(), uint64(npart), data
 }
 
 func TestBuildVerify(t *testing.T) {
@@ -136,7 +134,7 @@ func TestBuildVerify(t *testing.T) {
 
 	a := require.New(t)
 
-	cert, param, partCom, _ := generateCertForTesting(a)
+	cert, param, partCom, _, data := generateCertForTesting(a)
 
 	var someReveal Reveal
 	for _, rev := range cert.Reveals {
@@ -159,11 +157,11 @@ func TestBuildVerify(t *testing.T) {
 	verif, err := MkVerifier(param, partCom)
 	a.NoError(err)
 
-	err = verif.Verify(cert)
+	err = verif.Verify(compactCertRoundsForTests, data, cert)
 	a.NoError(err, "failed to verify the compact cert")
 }
 
-func generateRandomParticipant(a *require.Assertions, testname string) basics.Participant {
+func generateRandomParticipant(a *require.Assertions) basics.Participant {
 	key := generateTestSigner(0, 8, 1, a)
 
 	p := basics.Participant{
@@ -205,10 +203,10 @@ func TestParticipationCommitmentBinaryFormat(t *testing.T) {
 	a := require.New(t)
 
 	var parts []basics.Participant
-	parts = append(parts, generateRandomParticipant(a, t.Name()))
-	parts = append(parts, generateRandomParticipant(a, t.Name()))
-	parts = append(parts, generateRandomParticipant(a, t.Name()))
-	parts = append(parts, generateRandomParticipant(a, t.Name()))
+	parts = append(parts, generateRandomParticipant(a))
+	parts = append(parts, generateRandomParticipant(a))
+	parts = append(parts, generateRandomParticipant(a))
+	parts = append(parts, generateRandomParticipant(a))
 
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
@@ -234,14 +232,12 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 
 	a := require.New(t)
 
-	currentRound := basics.Round(compactCertRoundsForTests)
 	totalWeight := 10000000
 	numPart := 4
 
+	data := testMessage("test!").IntoStateProofMessageHash()
 	param := Params{
-		Data:           testMessage("test!").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / (2 * numPart)),
-		Round:          currentRound,
 		StrengthTarget: compactCertStrengthTarget,
 	}
 
@@ -257,7 +253,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		sig, err := key.GetSigner(uint64(currentRound)).SignBytes(param.Data[:])
+		sig, err := key.GetSigner(compactCertRoundsForTests).SignBytes(data[:])
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
 
@@ -266,7 +262,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(param, parts, partcom)
+	b, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
 	a.NoError(err)
 
 	for i := 0; i < numPart; i++ {
@@ -432,16 +428,14 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 
 	// setting up a builder
 	a := require.New(t)
-	currentRound := basics.Round(compactCertRoundsForTests)
 
 	totalWeight := 10000000
 	npartHi := 1
 	npartLo := 9
 
+	data := testMessage("hello world").IntoStateProofMessageHash()
 	param := Params{
-		Data:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / 2),
-		Round:          currentRound,
 		StrengthTarget: compactCertStrengthTarget,
 	}
 
@@ -453,12 +447,12 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MkBuilder(param, parts, partcom)
+	builder, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
 	a.NoError(err)
 
 	// actual test:
-	signerInRound := key.GetSigner(uint64(currentRound))
-	sig, err := signerInRound.SignBytes(param.Data[:])
+	signerInRound := key.GetSigner(compactCertRoundsForTests)
+	sig, err := signerInRound.SignBytes(data[:])
 	require.NoError(t, err, "failed to create keys")
 	// Corrupting the version of the signature:
 	sig.Signature[1]++
@@ -492,8 +486,9 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 	a := require.New(t)
 
 	p := Params{ProvenWeight: 0}
+	data := testMessage("hello world").IntoStateProofMessageHash()
 
-	_, err := MkBuilder(p, nil, nil)
+	_, err := MkBuilder(p, data, compactCertRoundsForTests, nil, nil)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 
 }
@@ -502,13 +497,11 @@ func BenchmarkBuildVerify(b *testing.B) {
 	totalWeight := 1000000
 	npart := 1000
 
-	currentRound := basics.Round(compactCertRoundsForTests)
 	a := require.New(b)
 
+	data := testMessage("hello world").IntoStateProofMessageHash()
 	param := Params{
-		Data:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / 2),
-		Round:          compactCertRoundsForTests,
 		StrengthTarget: compactCertStrengthTarget,
 	}
 
@@ -522,8 +515,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 			Weight: uint64(totalWeight / npart),
 		}
 
-		signerInRound := signer.GetSigner(uint64(currentRound))
-		sig, err := signerInRound.SignBytes(param.Data[:])
+		signerInRound := signer.GetSigner(compactCertRoundsForTests)
+		sig, err := signerInRound.SignBytes(data[:])
 		require.NoError(b, err, "failed to create keys")
 
 		partkeys = append(partkeys, signer)
@@ -539,7 +532,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("AddBuild", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			builder, err := MkBuilder(param, parts, partcom)
+			builder, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
 			if err != nil {
 				b.Error(err)
 			}
@@ -560,7 +553,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	b.Run("Verify", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			verif, _ := MkVerifier(param, partcom.Root())
-			if err = verif.Verify(cert); err != nil {
+			if err = verif.Verify(compactCertRoundsForTests, data, cert); err != nil {
 				b.Error(err)
 			}
 		}

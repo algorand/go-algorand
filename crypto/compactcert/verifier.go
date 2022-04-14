@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // Errors for the CompactCert verifier
@@ -33,8 +32,6 @@ var (
 
 // Verifier is used to verify a compact certificate.
 type Verifier struct {
-	data                   StateProofMessageHash
-	round                  basics.Round // The round for which the ephemeral key is committed to
 	strengthTarget         uint64
 	lnProvenWeight         uint64 // ln(provenWeight) as integer with 16 bits of precision
 	participantsCommitment crypto.GenericDigest
@@ -50,17 +47,15 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
 	}
 
 	return &Verifier{
-		data:                   p.Data,
-		round:                  p.Round,
 		strengthTarget:         p.StrengthTarget,
 		lnProvenWeight:         lnProvenWt,
 		participantsCommitment: partcom,
 	}, nil
 }
 
-// Verify checks if c is a valid compact certificate for the message
-// and participants that were used to construct the Verifier.
-func (v *Verifier) Verify(c *Cert) error {
+// Verify checks if c is a valid compact certificate for the data on a round.
+// it uses the trusted data from the Verifier struct
+func (v *Verifier) Verify(round uint64, data StateProofMessageHash, c *Cert) error {
 	nr := uint64(len(c.PositionsToReveal))
 	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.strengthTarget); err != nil {
 		return err
@@ -76,7 +71,6 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 
-	data := v.data
 	for pos, r := range c.Reveals {
 		sig, err := buildCommittableSignature(r.SigSlot)
 		if err != nil {
@@ -88,7 +82,7 @@ func (v *Verifier) Verify(c *Cert) error {
 
 		// verify that the msg and the signature is valid under the given participant's Pk
 		err = r.Part.PK.VerifyBytes(
-			uint64(v.round),
+			round,
 			data[:],
 			r.SigSlot.Sig,
 		)
@@ -98,12 +92,12 @@ func (v *Verifier) Verify(c *Cert) error {
 		}
 	}
 
-	// verify all the reveals proofs on the signature tree.
+	// verify all the reveals proofs on the signature commitment.
 	if err := merklearray.VerifyVectorCommitment(c.SigCommit[:], sigs, &c.SigProofs); err != nil {
 		return err
 	}
 
-	// verify all the reveals proofs on the participant tree.
+	// verify all the reveals proofs on the participant commitment.
 	if err := merklearray.VerifyVectorCommitment(v.participantsCommitment[:], parts, &c.PartProofs); err != nil {
 		return err
 	}
@@ -113,7 +107,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		lnProvenWeight: v.lnProvenWeight,
 		sigCommitment:  c.SigCommit,
 		signedWeight:   c.SignedWeight,
-		data:           v.data,
+		data:           data,
 	}
 
 	coinHash := makeCoinGenerator(&choice)

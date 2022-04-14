@@ -72,7 +72,7 @@ func makeCoinGenerator(choice *coinChoiceSeed) coinGenerator {
 	rep := crypto.HashRep(choice)
 	shk := sha3.NewShake256()
 	shk.Write(rep)
-	
+
 	threshold, signedWt := prepareRejectionSamplingValues(choice.signedWeight)
 	return coinGenerator{shkContext: shk, signedWeight: signedWt, threshold: threshold}
 

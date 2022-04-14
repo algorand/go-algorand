@@ -30,12 +30,12 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	cert, param, partCom, numPart := generateCertForTesting(a)
+	cert, param, partCom, numPart, msg := generateCertForTesting(a)
 
 	verifier, err := MkVerifier(param, partCom)
 	a.NoError(err)
 
-	err = verifier.Verify(cert)
+	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.NoError(err)
 
 	for i := uint64(0); i < numPart; i++ {
@@ -49,7 +49,7 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 	verifier, err = MkVerifier(param, partCom)
 	a.NoError(err)
 
-	err = verifier.Verify(cert)
+	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.ErrorIs(err, ErrNoRevealInPos)
 
 }
@@ -58,12 +58,12 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	cert, param, partCom, _ := generateCertForTesting(a)
+	cert, param, partCom, _, msg := generateCertForTesting(a)
 
 	verifier, err := MkVerifier(param, partCom)
 	a.NoError(err)
 
-	err = verifier.Verify(cert)
+	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.NoError(err)
 
 	swap := cert.PositionsToReveal[1]
@@ -73,7 +73,7 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	verifier, err = MkVerifier(param, partCom)
 	a.NoError(err)
 
-	err = verifier.Verify(cert)
+	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.ErrorIs(err, ErrCoinNotInRange)
 }
 
@@ -81,11 +81,11 @@ func TestVerifyBadSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	cert, param, partCom, _ := generateCertForTesting(a)
+	cert, param, partCom, _, msg := generateCertForTesting(a)
 
 	verifier, err := MkVerifier(param, partCom)
 	a.NoError(err)
-	err = verifier.Verify(cert)
+	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.NoError(err)
 
 	rev := cert.Reveals[cert.PositionsToReveal[0]]
@@ -93,7 +93,7 @@ func TestVerifyBadSignature(t *testing.T) {
 
 	verifier, err = MkVerifier(param, partCom)
 	a.NoError(err)
-	err = verifier.Verify(cert)
+	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
 }
 

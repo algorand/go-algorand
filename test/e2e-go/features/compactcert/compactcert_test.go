@@ -157,15 +157,13 @@ func TestCompactCerts(t *testing.T) {
 			r.False(overflowed)
 
 			ccparams := cc.Params{
-				Data:           certMessage.IntoStateProofMessageHash(),
 				ProvenWeight:   provenWeight,
-				Round:          basics.Round(nextCertBlock.Round),
 				StrengthTarget: consensusParams.CompactCertStrengthTarget,
 			}
 			verif, err := cc.MkVerifier(ccparams, votersRoot)
 			r.NoError(err)
 
-			err = verif.Verify(&compactCert)
+			err = verif.Verify(nextCertBlock.Round, certMessage.IntoStateProofMessageHash(), &compactCert)
 			r.NoError(err)
 
 			lastCertBlock = nextCertBlock

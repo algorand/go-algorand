@@ -96,7 +96,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 
 // CompactCertParams computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
@@ -125,9 +125,7 @@ func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader
 	}
 
 	res = compactcert.Params{
-		Data:           msg.IntoStateProofMessageHash(),
 		ProvenWeight:   provenWeight,
-		Round:          hdr.Round,
 		StrengthTarget: proto.CompactCertStrengthTarget,
 	}
 	return
@@ -172,7 +170,7 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 			atRound, cert.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
 
-	ccParams, err := CompactCertParams(msg, votersHdr, certHdr)
+	ccParams, err := CompactCertParams(votersHdr, certHdr)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errCompactCertParamCreation)
 	}
@@ -182,7 +180,7 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 		return err
 	}
 
-	err = verifier.Verify(&cert)
+	err = verifier.Verify(uint64(certHdr.Round), msg.IntoStateProofMessageHash(), &cert)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errCompCertCrypto)
 	}
