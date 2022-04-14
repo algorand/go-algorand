@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -838,20 +838,7 @@ func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
 	return blk
 }
 
-func TestStateProofOutOfBoundsRound(t *testing.T) {
-	// TODO:find a way to create enough blocks to generate comp-cert.
-	a := require.New(t)
-
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
-	defer releasefunc()
-
-	// we only have block for round 0:
-	a.NoError(handler.StateProof(ctx, 1))
-	a.Equal(404, responseRecorder.Code)
-}
-
-func TestStateProof404(t *testing.T) {
-	// TODO: we have an overflow in the test.
+func TestStateProofNotFound(t *testing.T) {
 	a := require.New(t)
 
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
@@ -859,39 +846,70 @@ func TestStateProof404(t *testing.T) {
 
 	ldger := handler.Node.LedgerForAPI()
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 5; i++ {
 		blk := newEmptyBlock(a, ldger)
 		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
 		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 	}
+
+	handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = []node.TxnWithStatus{}
 
 	// we didn't add any certificate
 	a.NoError(handler.StateProof(ctx, 2))
 	a.Equal(404, responseRecorder.Code)
 }
 
-func TestRangeFinder(t *testing.T) {
-	consensusCopy := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusCopy.CompactCertRounds = 128
-	// middle of the range
-	rng := v2.PossibleRoundsContainingStateProofs(312, consensusCopy)
+func TestStateProofNoConsensusVersion(t *testing.T) {
 	a := require.New(t)
-	a.True(inrange(312, 384, rng))
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
 
-	// beginning of the range.
-	rng = v2.PossibleRoundsContainingStateProofs(256, consensusCopy)
-	a.True(inrange(256, 384, rng))
-
-	// end of the range.
-	rng = v2.PossibleRoundsContainingStateProofs(383, consensusCopy)
-	a.True(inrange(383, 512, rng))
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(404, responseRecorder.Code)
 }
 
-func inrange(min, max basics.Round, arr []basics.Round) bool {
-	for _, round := range arr {
-		if round < min || round > max {
-			return false
-		}
+func TestStateProof200(t *testing.T) {
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	ldger := handler.Node.LedgerForAPI()
+
+	for i := 0; i < 5; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 	}
-	return true
+	//setting
+	for i := 0; i < 300; i += 128 {
+		tx := node.TxnWithStatus{
+			Txn: transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.CompactCertTx,
+					CompactCertTxnFields: transactions.CompactCertTxnFields{
+						CertIntervalLatestRound: basics.Round(i + 1),
+						CertType:                0,
+						CertMsg: stateproof.Message{
+							BlockHeadersCommitment: []byte("blockheaderscommitment"),
+						},
+					},
+				},
+			},
+			ConfirmedRound: basics.Round(i + 1),
+		}
+		handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = append(handler.Node.(*mockNode).usertxns[transactions.CompactCertSender], tx)
+	}
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(200, responseRecorder.Code)
+
+	stprfResp := generated.StateProofResponse{}
+	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
+
+	msg := stateproof.Message{}
+	a.NoError(protocol.Decode(stprfResp.StateProofMessage, &msg))
+	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
 }

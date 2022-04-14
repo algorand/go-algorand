@@ -96,6 +96,7 @@ type NodeInterface interface {
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
+	ListTxns(addr basics.Address, minRound, maxRound basics.Round) ([]node.TxnWithStatus, error)
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -1167,59 +1168,40 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
 	}
 
+	if basics.Round(round) > ledger.Latest() {
+		return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("round does not exist"), v2.Log)
+	}
 	consensus, err := ledger.ConsensusParams(basics.Round(round))
 	if err != nil {
-		return notFound(ctx, err, fmt.Sprintf("could not retrieve consensus information for round (%d)", round), v2.Log)
+		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for round (%d)", round), v2.Log)
 	}
 
-	rounds := PossibleRoundsContainingStateProofs(basics.Round(round), consensus)
+	lastCompCertLocation := round - (round % consensus.CompactCertRounds) + consensus.CompactCertRounds
 
-	// cutting rounds that are above the latest round from our search.
-	latest := ledger.Latest()
-	if latest-rounds[0]+1 < basics.Round(len(rounds)) {
-		rounds = rounds[:latest-rounds[0]+1]
+	txns, err := v2.Node.ListTxns(transactions.CompactCertSender, basics.Round(round), basics.Round(lastCompCertLocation))
+	if err != nil {
+		return internalError(ctx, err, errNilLedger.Error(), v2.Log)
 	}
 
-	// TODO: what happens if we are stuck in creating a state-proof? are the rounds im looking through enough?.
-	for _, rnd := range rounds {
-		block, err := ledger.Block(rnd)
-		if err != nil {
-			return internalError(ctx, err, "couldn't retrieve block, and locate state-proof", v2.Log)
+	for _, txn := range txns {
+		if txn.ConfirmedRound < basics.Round(round) {
+			continue
 		}
 
-		txn := searchForCompactCert(block)
-		if txn == nil {
+		tx := txn.Txn.Txn
+		if tx.Type != protocol.CompactCertTx {
+			continue
+		}
+
+		if basics.Round(round) > tx.CompactCertTxnFields.CertIntervalLatestRound {
 			continue
 		}
 
 		response := generated.StateProofResponse{
-			StateProofMessage: protocol.Encode(&txn.CertMsg),
-			StateProof:        protocol.Encode(&txn.Cert),
+			StateProofMessage: protocol.Encode(&tx.CertMsg),
+			StateProof:        protocol.Encode(&tx.Cert),
 		}
 		return ctx.JSON(http.StatusOK, response)
 	}
 	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
-}
-
-// PossibleRoundsContainingStateProofs returns a sorted array representing the rounds that should contain the wanted state proof.
-func PossibleRoundsContainingStateProofs(wantedRound basics.Round, consensus config.ConsensusParams) []basics.Round {
-	rnd := uint64(wantedRound)
-	// where does the range sit?
-	//N+R
-	// find the first N that im above of.
-	compcertLocation := rnd - (rnd % consensus.CompactCertRounds) + consensus.CompactCertRounds
-	roundRange := make([]basics.Round, 0, consensus.CompactCertRounds)
-	for i := wantedRound; i <= basics.Round(compcertLocation); i++ {
-		roundRange = append(roundRange, i)
-	}
-	return roundRange
-}
-
-func searchForCompactCert(block bookkeeping.Block) *transactions.Transaction {
-	for _, txn := range block.Payset {
-		if txn.Txn.Sender == transactions.CompactCertSender {
-			return &txn.Txn
-		}
-	}
-	return nil
 }
