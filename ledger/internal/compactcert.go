@@ -128,7 +128,7 @@ func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader
 		Data:           msg.IntoStateProofMessageHash(),
 		ProvenWeight:   provenWeight,
 		Round:          hdr.Round,
-		SecurityTarget: proto.CompactCertSecurityTarget,
+		StrengthTarget: proto.CompactCertStrengthTarget,
 	}
 	return
 }

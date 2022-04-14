@@ -59,7 +59,7 @@ type Builder struct {
 // parttree.
 func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
-	lnProvenWt, err := lnIntApproximation(param.ProvenWeight, precisionBits)
+	lnProvenWt, err := lnIntApproximation(param.ProvenWeight)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 
 	// Check signature
 	if verifySig {
-		if err := sig.ValidateSigVersion(merklesignature.SchemeVersion); err != nil {
+		if err := sig.IsSaltVersionEqual(merklesignature.SchemeSaltVersion); err != nil {
 			return err
 		}
 
@@ -193,13 +193,13 @@ func (b *Builder) Build() (*Cert, error) {
 
 	// Reveal sufficient number of signatures
 	c := &Cert{
-		SigCommit:              sigtree.Root(),
-		SignedWeight:           b.signedWeight,
-		Reveals:                make(map[uint64]Reveal),
-		MerkleSignatureVersion: merklesignature.SchemeVersion,
+		SigCommit:                  sigtree.Root(),
+		SignedWeight:               b.signedWeight,
+		Reveals:                    make(map[uint64]Reveal),
+		MerkleSignatureSaltVersion: merklesignature.SchemeSaltVersion,
 	}
 
-	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.SecurityTarget)
+	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.StrengthTarget)
 	if err != nil {
 		return nil, err
 	}
@@ -209,11 +209,11 @@ func (b *Builder) Build() (*Cert, error) {
 	revealsSequence := make([]uint64, nr)
 
 	choice := coinChoiceSeed{
-		data:           b.Params.Data,
-		lnProvenWeight: b.lnProvenWeight,
-		signedWeight:   c.SignedWeight,
-		sigCommitment:  c.SigCommit,
 		partCommitment: b.parttree.Root(),
+		lnProvenWeight: b.lnProvenWeight,
+		sigCommitment:  c.SigCommit,
+		signedWeight:   c.SignedWeight,
+		data:           b.Params.Data,
 	}
 
 	coinHash := makeCoinGenerator(&choice)

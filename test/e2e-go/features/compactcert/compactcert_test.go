@@ -52,7 +52,7 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertTopVoters = 1024
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	consensusParams.CompactCertSecurityTarget = 256
+	consensusParams.CompactCertStrengthTarget = 256
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
@@ -160,7 +160,7 @@ func TestCompactCerts(t *testing.T) {
 				Data:           certMessage.IntoStateProofMessageHash(),
 				ProvenWeight:   provenWeight,
 				Round:          basics.Round(nextCertBlock.Round),
-				SecurityTarget: consensusParams.CompactCertSecurityTarget,
+				StrengthTarget: consensusParams.CompactCertStrengthTarget,
 			}
 			verif, err := cc.MkVerifier(ccparams, votersRoot)
 			r.NoError(err)

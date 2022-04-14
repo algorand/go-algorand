@@ -45,7 +45,7 @@ func (m testMessage) IntoStateProofMessageHash() StateProofMessageHash {
 }
 
 const compactCertRoundsForTests = 256
-const compactCertSecurityTarget = 256
+const compactCertStrengthTarget = 256
 
 func hashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Reset()
@@ -95,7 +95,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 		Data:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / 2),
 		Round:          currentRound,
-		SecurityTarget: compactCertSecurityTarget,
+		StrengthTarget: compactCertStrengthTarget,
 	}
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
@@ -242,7 +242,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		Data:           testMessage("test!").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / (2 * numPart)),
 		Round:          currentRound,
-		SecurityTarget: compactCertSecurityTarget,
+		StrengthTarget: compactCertStrengthTarget,
 	}
 
 	var parts []basics.Participant
@@ -442,7 +442,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 		Data:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / 2),
 		Round:          currentRound,
-		SecurityTarget: compactCertSecurityTarget,
+		StrengthTarget: compactCertStrengthTarget,
 	}
 
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
@@ -463,7 +463,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	// Corrupting the version of the signature:
 	sig.Signature[1]++
 
-	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrInvalidSignatureVersion)
+	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrSignatureSaltVersionMismatch)
 }
 
 func TestCoinIndex(t *testing.T) {
@@ -509,7 +509,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		Data:           testMessage("hello world").IntoStateProofMessageHash(),
 		ProvenWeight:   uint64(totalWeight / 2),
 		Round:          compactCertRoundsForTests,
-		SecurityTarget: compactCertSecurityTarget,
+		StrengthTarget: compactCertStrengthTarget,
 	}
 
 	var parts []basics.Participant

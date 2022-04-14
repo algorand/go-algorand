@@ -298,7 +298,7 @@ func TestWorkerAllSigs(t *testing.T) {
 				Data:           tx.Txn.CertMsg.IntoStateProofMessageHash(),
 				ProvenWeight:   provenWeight,
 				Round:          tx.Txn.CertIntervalLatestRound,
-				SecurityTarget: proto.CompactCertSecurityTarget,
+				StrengthTarget: proto.CompactCertStrengthTarget,
 			}
 
 			voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
@@ -364,7 +364,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 		Data:           msg.IntoStateProofMessageHash(),
 		ProvenWeight:   provenWeight,
 		Round:          tx.Txn.CertIntervalLatestRound,
-		SecurityTarget: proto.CompactCertSecurityTarget,
+		StrengthTarget: proto.CompactCertStrengthTarget,
 	}
 
 	voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))

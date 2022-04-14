@@ -34,7 +34,7 @@ type Params struct {
 	Data           StateProofMessageHash
 	ProvenWeight   uint64       // Weight proven by the certificate
 	Round          basics.Round // The round for which the ephemeral key is committed to
-	SecurityTarget uint64
+	StrengthTarget uint64
 }
 
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.
@@ -68,10 +68,8 @@ type Cert struct {
 	SignedWeight uint64               `codec:"w"`
 	SigProofs    merklearray.Proof    `codec:"S"`
 	PartProofs   merklearray.Proof    `codec:"P"`
-
-	// CR salt version - chagne the falcon to uint8 or change this to int
-	MerkleSignatureVersion int32 `codec:"v"`
-
+	// CR salt version - chagne the falcon to byte or change this to int
+	MerkleSignatureSaltVersion int32 `codec:"v"`
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
 	// arrays.

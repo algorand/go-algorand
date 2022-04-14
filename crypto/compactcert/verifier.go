@@ -35,7 +35,7 @@ var (
 type Verifier struct {
 	data                   StateProofMessageHash
 	round                  basics.Round // The round for which the ephemeral key is committed to
-	SecurityTarget         uint64
+	strengthTarget         uint64
 	lnProvenWeight         uint64 // ln(provenWeight) as integer with 16 bits of precision
 	participantsCommitment crypto.GenericDigest
 }
@@ -44,7 +44,7 @@ type Verifier struct {
 // on the message specified in p, with participantsCommitment specifying the Merkle
 // root of the participants that must sign the message.
 func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
-	lnProvenWt, err := lnIntApproximation(p.ProvenWeight, precisionBits)
+	lnProvenWt, err := lnIntApproximation(p.ProvenWeight)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
 	return &Verifier{
 		data:                   p.Data,
 		round:                  p.Round,
-		SecurityTarget:         p.SecurityTarget,
+		strengthTarget:         p.StrengthTarget,
 		lnProvenWeight:         lnProvenWt,
 		participantsCommitment: partcom,
 	}, nil
@@ -62,13 +62,13 @@ func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
 // and participants that were used to construct the Verifier.
 func (v *Verifier) Verify(c *Cert) error {
 	nr := uint64(len(c.PositionsToReveal))
-	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.SecurityTarget); err != nil {
+	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.strengthTarget); err != nil {
 		return err
 	}
 
-	version := int(c.MerkleSignatureVersion)
+	version := int(c.MerkleSignatureSaltVersion)
 	for _, reveal := range c.Reveals {
-		if err := reveal.SigSlot.Sig.ValidateSigVersion(version); err != nil {
+		if err := reveal.SigSlot.Sig.IsSaltVersionEqual(version); err != nil {
 			return err
 		}
 	}
@@ -76,7 +76,7 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 
-	msghash := v.data
+	data := v.data
 	for pos, r := range c.Reveals {
 		sig, err := buildCommittableSignature(r.SigSlot)
 		if err != nil {
@@ -89,7 +89,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		// verify that the msg and the signature is valid under the given participant's Pk
 		err = r.Part.PK.VerifyBytes(
 			uint64(v.round),
-			msghash[:],
+			data[:],
 			r.SigSlot.Sig,
 		)
 
@@ -109,11 +109,11 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 
 	choice := coinChoiceSeed{
-		data:           v.data,
-		lnProvenWeight: v.lnProvenWeight,
-		signedWeight:   c.SignedWeight,
-		sigCommitment:  c.SigCommit,
 		partCommitment: v.participantsCommitment,
+		lnProvenWeight: v.lnProvenWeight,
+		sigCommitment:  c.SigCommit,
+		signedWeight:   c.SignedWeight,
+		data:           v.data,
 	}
 
 	coinHash := makeCoinGenerator(&choice)

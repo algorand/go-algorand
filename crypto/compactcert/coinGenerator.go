@@ -28,11 +28,11 @@ import (
 // The coinChoiceSeed defines the randomness seed that will be given to an XOF function. This will be used  for choosing
 // the index of the coin to reveal as part of the compact certificate.
 type coinChoiceSeed struct {
-	data           StateProofMessageHash
-	signedWeight   uint64
+	partCommitment crypto.GenericDigest
 	lnProvenWeight uint64
 	sigCommitment  crypto.GenericDigest
-	partCommitment crypto.GenericDigest
+	signedWeight   uint64
+	data           StateProofMessageHash
 }
 
 // ToBeHashed returns a binary representation of the coinChoiceSeed structure.
@@ -46,12 +46,12 @@ func (cc *coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
 	lnProvenWtAsBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(lnProvenWtAsBytes, cc.lnProvenWeight)
 
-	coinChoiceBytes := make([]byte, 0, len(cc.data)+len(signedWtAsBytes)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(cc.partCommitment))
-	coinChoiceBytes = append(coinChoiceBytes, cc.data[:]...)
-	coinChoiceBytes = append(coinChoiceBytes, signedWtAsBytes...)
+	coinChoiceBytes := make([]byte, 0, len(cc.partCommitment)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(signedWtAsBytes)+len(cc.data))
+	coinChoiceBytes = append(coinChoiceBytes, cc.partCommitment...)
 	coinChoiceBytes = append(coinChoiceBytes, lnProvenWtAsBytes...)
 	coinChoiceBytes = append(coinChoiceBytes, cc.sigCommitment...)
-	coinChoiceBytes = append(coinChoiceBytes, cc.partCommitment...)
+	coinChoiceBytes = append(coinChoiceBytes, signedWtAsBytes...)
+	coinChoiceBytes = append(coinChoiceBytes, cc.data[:]...)
 
 	return protocol.CompactCertCoin, coinChoiceBytes
 }
@@ -72,9 +72,9 @@ func makeCoinGenerator(choice *coinChoiceSeed) coinGenerator {
 	rep := crypto.HashRep(choice)
 	shk := sha3.NewShake256()
 	shk.Write(rep)
-
-	threshold, singedWt := prepareRejectionSamplingValues(choice.signedWeight)
-	return coinGenerator{shkContext: shk, signedWeight: singedWt, threshold: threshold}
+	
+	threshold, signedWt := prepareRejectionSamplingValues(choice.signedWeight)
+	return coinGenerator{shkContext: shk, signedWeight: signedWt, threshold: threshold}
 
 }
 
@@ -85,14 +85,17 @@ func prepareRejectionSamplingValues(signedWeight uint64) (*big.Int, *big.Int) {
 	// and threshold = k*signedWeight
 	threshold := &big.Int{}
 	threshold.SetUint64(1)
-	threshold.Lsh(threshold, 64)
 
-	singedWt := &big.Int{}
-	singedWt.SetUint64(signedWeight)
-	threshold.Div(threshold, singedWt)
+	const numberOfBitsPerAttempt = 64
+	threshold.Lsh(threshold, numberOfBitsPerAttempt)
 
-	threshold.Mul(threshold, singedWt)
-	return threshold, singedWt
+	signedWt := &big.Int{}
+	signedWt.SetUint64(signedWeight)
+
+	threshold.Div(threshold, signedWt)
+
+	threshold.Mul(threshold, signedWt)
+	return threshold, signedWt
 }
 
 // getNextCoin returns the next 64bits integer which represents a number between [0,signedWeight)

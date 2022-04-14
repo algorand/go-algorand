@@ -382,9 +382,9 @@ type ConsensusParams struct {
 	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
 	CompactCertWeightThreshold uint32
 
-	// CompactCertSecurityTarget is the security parameter for the compact
+	// CompactCertStrengthTarget is the security parameter for the compact
 	// certificate scheme.
-	CompactCertSecurityTarget uint64
+	CompactCertStrengthTarget uint64
 
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
@@ -1130,7 +1130,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertTopVoters = 1024 * 1024
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
-	vFuture.CompactCertSecurityTarget = 256
+	vFuture.CompactCertStrengthTarget = 256
 
 	vFuture.LogicSigVersion = 7
 
