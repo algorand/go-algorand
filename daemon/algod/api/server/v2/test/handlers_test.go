@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/algorand/go-algorand/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -867,4 +868,30 @@ func TestStateProof404(t *testing.T) {
 	// we didn't add any certificate
 	a.NoError(handler.StateProof(ctx, 2))
 	a.Equal(404, responseRecorder.Code)
+}
+
+func TestRangeFinder(t *testing.T) {
+	consensusCopy := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusCopy.CompactCertRounds = 128
+	// middle of the range
+	rng := v2.PossibleRoundsContainingStateProofs(312, consensusCopy)
+	a := require.New(t)
+	a.True(inrange(312, 384, rng))
+
+	// beginning of the range.
+	rng = v2.PossibleRoundsContainingStateProofs(256, consensusCopy)
+	a.True(inrange(256, 384, rng))
+
+	// end of the range.
+	rng = v2.PossibleRoundsContainingStateProofs(383, consensusCopy)
+	a.True(inrange(383, 512, rng))
+}
+
+func inrange(min, max basics.Round, arr []basics.Round) bool {
+	for _, round := range arr {
+		if round < min || round > max {
+			return false
+		}
+	}
+	return true
 }

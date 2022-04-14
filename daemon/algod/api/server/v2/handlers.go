@@ -1172,10 +1172,17 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 		return notFound(ctx, err, fmt.Sprintf("could not retrieve consensus information for round (%d)", round), v2.Log)
 	}
 
-	// as a start we presume the rounds given are only from current rounds
-	// assuming i'm starting from rounds where a compcert are valid.
-	for current := round; current > round-consensus.CompactCertRounds && current > 0; current-- {
-		block, err := ledger.Block(basics.Round(current))
+	rounds := PossibleRoundsContainingStateProofs(basics.Round(round), consensus)
+
+	// cutting rounds that are above the latest round from our search.
+	latest := ledger.Latest()
+	if latest-rounds[0]+1 < basics.Round(len(rounds)) {
+		rounds = rounds[:latest-rounds[0]+1]
+	}
+
+	// TODO: what happens if we are stuck in creating a state-proof? are the rounds im looking through enough?.
+	for _, rnd := range rounds {
+		block, err := ledger.Block(rnd)
 		if err != nil {
 			return internalError(ctx, err, "couldn't retrieve block, and locate state-proof", v2.Log)
 		}
@@ -1191,7 +1198,21 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 		}
 		return ctx.JSON(http.StatusOK, response)
 	}
-	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d)", round), v2.Log)
+	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
+}
+
+// PossibleRoundsContainingStateProofs returns a sorted array representing the rounds that should contain the wanted state proof.
+func PossibleRoundsContainingStateProofs(wantedRound basics.Round, consensus config.ConsensusParams) []basics.Round {
+	rnd := uint64(wantedRound)
+	// where does the range sit?
+	//N+R
+	// find the first N that im above of.
+	compcertLocation := rnd - (rnd % consensus.CompactCertRounds) + consensus.CompactCertRounds
+	roundRange := make([]basics.Round, 0, consensus.CompactCertRounds)
+	for i := wantedRound; i <= basics.Round(compcertLocation); i++ {
+		roundRange = append(roundRange, i)
+	}
+	return roundRange
 }
 
 func searchForCompactCert(block bookkeeping.Block) *transactions.Transaction {
