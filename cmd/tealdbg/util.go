@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"strconv"
 	"sync/atomic"
+
+	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
 type atomicString struct {
@@ -101,28 +103,12 @@ func IsTextFile(data []byte) bool {
 	return printable
 }
 
-const b64table string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-// IntToVLQ writes out value to bytes.Buffer
-func IntToVLQ(v int, buf *bytes.Buffer) {
-	v <<= 1
-	if v < 0 {
-		v = -v
-		v |= 1
-	}
-	for v >= 32 {
-		buf.WriteByte(b64table[32|(v&31)])
-		v >>= 5
-	}
-	buf.WriteByte(b64table[v])
-}
-
 // MakeSourceMapLine creates source map mapping's line entry
 func MakeSourceMapLine(tcol, sindex, sline, scol int) string {
 	buf := bytes.NewBuffer(nil)
-	IntToVLQ(tcol, buf)
-	IntToVLQ(sindex, buf)
-	IntToVLQ(sline, buf)
-	IntToVLQ(scol, buf)
+	logic.IntToVLQ(tcol, buf)
+	logic.IntToVLQ(sindex, buf)
+	logic.IntToVLQ(sline, buf)
+	logic.IntToVLQ(scol, buf)
 	return buf.String()
 }
