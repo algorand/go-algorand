@@ -69,8 +69,8 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 	}
 }
 
-// IntToVLQ writes out value to bytes.Buffer
-func IntToVLQ(v int, buf *bytes.Buffer) {
+// intToVLQ writes out value to bytes.Buffer
+func intToVLQ(v int, buf *bytes.Buffer) {
 	v <<= 1
 	if v < 0 {
 		v = -v
@@ -86,9 +86,9 @@ func IntToVLQ(v int, buf *bytes.Buffer) {
 // MakeSourceMapLine creates source map mapping's line entry
 func MakeSourceMapLine(tcol, sindex, sline, scol int) string {
 	buf := bytes.NewBuffer(nil)
-	IntToVLQ(tcol, buf)
-	IntToVLQ(sindex, buf)
-	IntToVLQ(sline, buf)
-	IntToVLQ(scol, buf)
+	intToVLQ(tcol, buf)
+	intToVLQ(sindex, buf)
+	intToVLQ(sline, buf)
+	intToVLQ(scol, buf)
 	return buf.String()
 }

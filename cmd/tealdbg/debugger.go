@@ -368,14 +368,14 @@ func (s *session) GetSourceMap() ([]byte, error) {
 	prevSourceLine := 0
 
 	// the very first entry is needed by CDT
-	lines[0] = MakeSourceMapLine(targetCol, sourceIdx, 0, sourceCol)
+	lines[0] = logic.MakeSourceMapLine(targetCol, sourceIdx, 0, sourceCol)
 	for targetLine := 1; targetLine < len(s.lines); targetLine++ {
 		if pc, ok := s.pcOffset[targetLine]; ok && pc != 0 {
 			sourceLine, ok = s.offsetToLine[pc]
 			if !ok {
 				lines[targetLine] = ""
 			} else {
-				lines[targetLine] = MakeSourceMapLine(targetCol, sourceIdx, sourceLine-prevSourceLine, sourceCol)
+				lines[targetLine] = logic.MakeSourceMapLine(targetCol, sourceIdx, sourceLine-prevSourceLine, sourceCol)
 				prevSourceLine = sourceLine
 			}
 		} else {
@@ -384,7 +384,7 @@ func (s *session) GetSourceMap() ([]byte, error) {
 			if targetLine == len(s.lines)-1 {
 				delta = 1
 			}
-			lines[targetLine] = MakeSourceMapLine(targetCol, sourceIdx, delta, sourceCol)
+			lines[targetLine] = logic.MakeSourceMapLine(targetCol, sourceIdx, delta, sourceCol)
 		}
 	}
 
