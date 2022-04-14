@@ -335,7 +335,7 @@ func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.Crea
 			for _, asset := range *acct.CreatedAssets {
 				if asset.Index == uint64(cidx) {
 					addr, err := basics.UnmarshalChecksumAddress(acct.Address)
-					return addr, true, 0, err
+					return addr, true, basics.Round(dl.dr.Round), err
 				}
 			}
 		}
@@ -351,7 +351,7 @@ func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.Crea
 						return basics.Address{}, false, 0, err
 					}
 				}
-				return addr, true, 0, nil
+				return addr, true, basics.Round(dl.dr.Round), nil
 			}
 		}
 		return basics.Address{}, false, 0, fmt.Errorf("no app %d", cidx)
