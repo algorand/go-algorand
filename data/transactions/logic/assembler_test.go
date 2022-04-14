@@ -638,7 +638,7 @@ func TestOpUint(t *testing.T) {
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := OpStream{Version: v}
+			ops := NewOpStream(v)
 			ops.Uint(0xcafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -656,7 +656,7 @@ func TestOpUint64(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
-			ops := OpStream{Version: v}
+			ops := NewOpStream(v)
 			ops.Uint(0xcafebabecafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -672,7 +672,7 @@ func TestOpBytes(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := OpStream{Version: v}
+			ops := NewOpStream(v)
 			ops.ByteLiteral([]byte("abcdef"))
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
