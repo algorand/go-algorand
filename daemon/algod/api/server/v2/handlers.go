@@ -58,9 +58,6 @@ type Handlers struct {
 	Shutdown <-chan struct{}
 }
 
-// StateProof returns a wanted Algorand state proof.
-// (GET /v2/transactions/state-proof)
-
 // LedgerForAPI describes the Ledger methods used by the v2 API.
 type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
