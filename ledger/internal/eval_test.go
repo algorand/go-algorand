@@ -731,6 +731,9 @@ func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, a
 }
 
 func (l *testCowBaseLedger) GetCreator(cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
+	if len(l.creators) == 0 {
+		return basics.Address{}, false, 0, errors.New("GetCreator Error")
+	}
 	res := l.creators[0]
 	l.creators = l.creators[1:]
 	return res.address, res.exists, 0, nil
@@ -778,10 +781,10 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 	}
 }
 
-func TestGetCreatorsRoundMismatch(t *testing.T) {
+func TestGetCreatorsErrorRoundMismatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	addresses := make([]basics.Address, 3)
+	addresses := make([]basics.Address, 1)
 	for i := 0; i < len(addresses); i++ {
 		_, err := rand.Read(addresses[i][:])
 		require.NoError(t, err)
@@ -789,9 +792,6 @@ func TestGetCreatorsRoundMismatch(t *testing.T) {
 
 	creators := []getCreatorForRoundResult{
 		{address: addresses[0], exists: true},
-		{address: basics.Address{}, exists: false},
-		{address: addresses[1], exists: true},
-		{address: basics.Address{}, exists: false},
 	}
 	l := testCowBaseLedger{
 		creators: creators,
@@ -800,24 +800,22 @@ func TestGetCreatorsRoundMismatch(t *testing.T) {
 	base := roundCowBase{
 		l:        &l,
 		creators: map[creatable]foundAddress{},
+		rnd:      1,
 	}
 
-	cindex := []basics.CreatableIndex{9, 10, 9, 10}
+	cindex := []basics.CreatableIndex{9}
 	ctype := []basics.CreatableType{
 		basics.AssetCreatable,
-		basics.AssetCreatable,
-		basics.AppCreatable,
-		basics.AppCreatable,
 	}
-	for i := 0; i < 2; i++ {
-		for j, expected := range creators {
-			address, exists, err := base.getCreator(cindex[j], ctype[j])
-			require.NoError(t, err)
+	address, exists, err := base.getCreator(cindex[0], ctype[0])
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ledgercore.ErrNonSequentialBlockEval{1,0}))
 
-			assert.Equal(t, expected.address, address)
-			assert.Equal(t, expected.exists, exists)
-		}
-	}
+	address, exists, err = base.getCreator(cindex[0], ctype[0])
+	require.Error(t, err)
+	require.Equal(t, errors.Unwrap(err).Error(), "GetCreator Error")
+	assert.Equal(t, basics.Address{}, address)
+	assert.False(t, exists)
 }
 
 // TestEvalFunctionForExpiredAccounts tests that the eval function will correctly mark accounts as offline
