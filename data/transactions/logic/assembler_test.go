@@ -482,7 +482,7 @@ func testMatch(t testing.TB, actual, expected string) bool {
 }
 
 func assemblyTrace(text string, ver uint64) string {
-	ops := NewOpStream(ver)
+	ops := newOpStream(ver)
 	ops.Trace = &strings.Builder{}
 	ops.assemble(text)
 	return ops.Trace.String()
@@ -638,7 +638,7 @@ func TestOpUint(t *testing.T) {
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := NewOpStream(v)
+			ops := newOpStream(v)
 			ops.Uint(0xcafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -656,7 +656,7 @@ func TestOpUint64(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
-			ops := NewOpStream(v)
+			ops := newOpStream(v)
 			ops.Uint(0xcafebabecafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -672,7 +672,7 @@ func TestOpBytes(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := NewOpStream(v)
+			ops := newOpStream(v)
 			ops.ByteLiteral([]byte("abcdef"))
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -2302,7 +2302,7 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 	btoi              // [n]
 `
 
-	ops := NewOpStream(AssemblerMaxVersion)
+	ops := newOpStream(AssemblerMaxVersion)
 	err := ops.assemble(text)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
@@ -2317,7 +2317,7 @@ flip:                 // [x]
 	btoi              // [n]
 `
 
-	ops = NewOpStream(AssemblerMaxVersion)
+	ops = newOpStream(AssemblerMaxVersion)
 	err = ops.assemble(text)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)

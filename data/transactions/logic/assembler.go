@@ -249,8 +249,9 @@ type OpStream struct {
 	HasStatefulOps bool
 }
 
-// NewOpStream constructs OpStream instances ready to invoke assemble.
-func NewOpStream(version uint64) OpStream {
+// newOpStream constructs OpStream instances ready to invoke assemble. A new
+// OpStream must be used for each call to assemble().
+func newOpStream(version uint64) OpStream {
 	return OpStream{
 		labels:       make(map[string]int),
 		OffsetToLine: make(map[int]int),
@@ -1070,9 +1071,10 @@ func typeCover(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 		returns[i] = StackAny
 	}
 	idx := len(pgm.stack) - depth
-	// This rotates all the types if idx is >= 0. But when stk.bottom is
-	// StackAny, and the cover is going "under" the known stack, the returns
-	// slice could still be partially populated bask on sth.know.
+	// This rotates all the types if idx is >= 0. But there's a potential
+	// improvement: when pgm.bottom is StackAny, and the cover is going "under"
+	// the known stack, the returns slice could still be partially populated
+	// based on pgm.stack.
 	if idx >= 0 {
 		returns[0] = pgm.stack[len(pgm.stack)-1]
 		for i := idx; i < len(pgm.stack)-1; i++ {
@@ -1890,7 +1892,7 @@ func AssembleString(text string) (*OpStream, error) {
 // Note that AssemblerDefaultVersion is not the latest supported version,
 // and therefore we might need to pass in explicitly a higher version.
 func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
-	ops := NewOpStream(version)
+	ops := newOpStream(version)
 	err := ops.assemble(text)
 	return &ops, err
 }

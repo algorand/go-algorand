@@ -305,11 +305,15 @@ func proto(signature string, effects ...string) Proto {
 	}
 	var argEffect, retEffect string
 	switch len(effects) {
+	case 0:
+		// will be generated
 	case 1:
 		retEffect = effects[0]
 	case 2:
 		argEffect = effects[0]
 		retEffect = effects[1]
+	default:
+		panic(effects)
 	}
 	return Proto{
 		Arg:    typedList{parseStackTypes(parts[0]), argEffect},
