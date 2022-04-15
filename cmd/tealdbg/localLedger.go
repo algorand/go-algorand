@@ -179,7 +179,7 @@ func makeBalancesAdapter(
 		}
 	}
 
-	ba := ledger.MakeDebugBalances(ll, basics.Round(round+1), protocol.ConsensusVersion(proto), latestTimestamp)
+	ba := ledger.MakeDebugBalances(ll, basics.Round(round), protocol.ConsensusVersion(proto), latestTimestamp)
 	ll.aidx = appIdx
 	return ba, states, nil
 }
