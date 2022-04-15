@@ -32,12 +32,11 @@ func TestGetSourceMap(t *testing.T) {
 	offsetToLine := map[int]int{
 		1: 1,
 		2: 2,
-		3: 5,
+		5: 3,
 	}
 	actualSourceMap := GetSourceMap(sourceNames, offsetToLine)
 
 	a.Equal(sourceMapVersion, actualSourceMap.Version)
-	a.Equal("", actualSourceMap.File)
 	a.Equal(sourceNames, actualSourceMap.Sources)
 	a.Equal([]string{}, actualSourceMap.Names)
 
@@ -46,6 +45,8 @@ func TestGetSourceMap(t *testing.T) {
 	for pc := range splitMapping {
 		if line, ok := offsetToLine[pc]; ok {
 			a.Equal(MakeSourceMapLine(0, 0, line, 0), splitMapping[pc])
+		} else {
+			a.Equal("", splitMapping[pc])
 		}
 	}
 }

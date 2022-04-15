@@ -125,7 +125,7 @@ func init() {
 
 	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
-	compileCmd.Flags().BoolVarP(&writeSourceMap, "map", "m", false, "write out assembly map")
+	compileCmd.Flags().BoolVarP(&writeSourceMap, "map", "m", false, "write out source map")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")

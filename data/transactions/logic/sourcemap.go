@@ -21,17 +21,19 @@ import (
 	"strings"
 )
 
-// sourceMapVersion is currently 3: https://sourcemaps.info/spec.html
+// sourceMapVersion is currently 3.
+// Refer to the full specs of sourcemap here: https://sourcemaps.info/spec.html
 const sourceMapVersion = 3
 const b64table string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
-// SourceMap contains details from the source to assembly process
-// currently contains map of TEAL source line to assembled bytecode position
-// and details about the template variables contained in the source file
+// SourceMap contains details from the source to assembly process.
+// Currently contains the map between TEAL source line to
+// the assembled bytecode position and details about
+// the template variables contained in the source file.
 type SourceMap struct {
 	Version    int      `json:"version"`
-	File       string   `json:"file"`
-	SourceRoot string   `json:"sourceRoot"`
+	File       string   `json:"file,omitempty"`
+	SourceRoot string   `json:"sourceRoot,omitempty"`
 	Sources    []string `json:"sources"`
 	Names      []string `json:"names"`
 	Mapping    string   `json:"mapping"`
@@ -62,7 +64,6 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 
 	return SourceMap{
 		Version: sourceMapVersion,
-		File:    "", // Assembled file does not have a name.
 		Sources: sourceNames,
 		Names:   []string{}, // TEAL code does not generate any names.
 		Mapping: encodedMapping,
