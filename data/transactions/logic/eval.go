@@ -176,10 +176,8 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of TEAL. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
-// anywhere in the transaction group, or the group will be rejected. In
-// addition, inner app calls must not call teal from before inner app calls were
-// introduced.
-func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uint64 {
+// anywhere in the transaction group, or the group will be rejected.
+func ComputeMinTealVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -190,11 +188,6 @@ func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uin
 		if txn.Txn.Type == protocol.ApplicationCallTx {
 			if minVersion < appsEnabledVersion {
 				minVersion = appsEnabledVersion
-			}
-		}
-		if inner {
-			if minVersion < innerAppsEnabledVersion {
-				minVersion = innerAppsEnabledVersion
 			}
 		}
 	}
@@ -311,7 +304,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
-	minTealVersion := ComputeMinTealVersion(txgroup, false)
+	minTealVersion := ComputeMinTealVersion(txgroup)
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
@@ -363,7 +356,7 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txg, true)
+	minTealVersion := ComputeMinTealVersion(txg)
 	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
 	// imposed otherwise.  But is correct to check, in case of future restriction.
 	if minTealVersion < *caller.MinTealVersion {
@@ -835,7 +828,7 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 	}
 
 	if params.MinTealVersion == nil {
-		minVersion := ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
+		minVersion := ComputeMinTealVersion(params.TxnGroup)
 		params.MinTealVersion = &minVersion
 	}
 	if version < *params.MinTealVersion {
@@ -4520,7 +4513,7 @@ func opItxnSubmit(cx *EvalContext) error {
 			return err
 		}
 
-		// Disallow reentrancy and limit inner app call depth
+		// Disallow reentrancy, limit inner app call depth, and do version checks
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
 			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
 				return fmt.Errorf("attempt to self-call")
@@ -4536,9 +4529,7 @@ func opItxnSubmit(cx *EvalContext) error {
 				return fmt.Errorf("appl depth (%d) exceeded", depth)
 			}
 
-			// Can't call version < innerAppsEnabledVersion, and apps with such
-			// versions will always match, so just check approval program
-			// version.
+			// Can't call old versions in inner apps.
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
 				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
@@ -4546,13 +4537,33 @@ func opItxnSubmit(cx *EvalContext) error {
 					return err
 				}
 				program = app.ApprovalProgram
+				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
+					program = app.ClearStateProgram
+				}
+				// Don't allow opt-in if the CSP is not runnable as an inner.
+				// This test can only fail after proto.AllowV4InnerAppls starts
+				// allowing calls of pre-6 programs, which might, in turn, have
+				// even older CSPs. Post-5, programs are version synchronized.
+				if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
+					v, _, err := transactions.ProgramVersion(app.ClearStateProgram)
+					if err != nil {
+						return err
+					}
+					if v < 4 {
+						return fmt.Errorf("inner app call opt-in with CSP v %d < 4", v)
+					}
+				}
 			}
 			v, _, err := transactions.ProgramVersion(program)
 			if err != nil {
 				return err
 			}
-			if v < innerAppsEnabledVersion {
-				return fmt.Errorf("inner app call with version %d < %d", v, innerAppsEnabledVersion)
+			allowableVersion := uint64(innerAppsEnabledVersion)
+			if cx.Proto.AllowV4InnerAppls {
+				allowableVersion = 4
+			}
+			if v < allowableVersion {
+				return fmt.Errorf("inner app call with version %d < %d", v, allowableVersion)
 			}
 		}
 

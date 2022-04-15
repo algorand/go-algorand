@@ -493,6 +493,7 @@ func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn
 }
 
 func stxn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, stxn transactions.SignedTxn, problem ...string) {
+	t.Helper()
 	err := eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
 	if err != nil {
 		if len(problem) == 1 {

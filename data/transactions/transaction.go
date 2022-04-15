@@ -380,7 +380,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		} else {
 			// This will check version matching, but not downgrading. That
 			// depends on chain state (so we pass an empty AppParams)
-			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{})
+			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{}, &proto)
 			if err != nil {
 				return err
 			}
@@ -719,8 +719,9 @@ func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
 const ExtraProgramChecksVersion = 6
 
 // CheckContractVersions ensures that for v6 and higher two programs are version
-// matched, and that they are not a downgrade.
-func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams) error {
+// matched, and that they are not a downgrade.  If proto.AllowV4InnerAppls, then
+// no downgrades are allowed, regardless of version.
+func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParams) error {
 	av, _, err := ProgramVersion(approval)
 	if err != nil {
 		return fmt.Errorf("bad ApprovalProgram: %v", err)
@@ -734,13 +735,27 @@ func CheckContractVersions(approval []byte, clear []byte, previous basics.AppPar
 			return fmt.Errorf("program version mismatch: %d != %d", av, cv)
 		}
 	}
+	// ALL downgrades are disallowed by proto.AllowV4InnerAppls.  This is
+	// stronger than needed, but is easier to describe (and thus specify). The
+	// real goal is to ensure that if app A opts its account into app B (which
+	// requires B's CSP to be >= 4), the CSP will STAY above 4. That way, the
+	// A can certainly ClearState its acount out of B.
 	if len(previous.ApprovalProgram) != 0 { // if creation or in call from WellFormed() previous is empty
-		pv, _, err := ProgramVersion(previous.ApprovalProgram)
+		pav, _, err := ProgramVersion(previous.ApprovalProgram)
 		if err != nil {
 			return err
 		}
-		if pv >= ExtraProgramChecksVersion && av < pv {
-			return fmt.Errorf("program version downgrade: %d < %d", av, pv)
+		if (pav >= ExtraProgramChecksVersion || proto.AllowV4InnerAppls) && av < pav {
+			return fmt.Errorf("approval program version downgrade: %d < %d", av, pav)
+		}
+	}
+	if len(previous.ClearStateProgram) != 0 {
+		pcv, _, err := ProgramVersion(previous.ApprovalProgram)
+		if err != nil {
+			return err
+		}
+		if (pcv >= ExtraProgramChecksVersion || proto.AllowV4InnerAppls) && cv < pcv {
+			return fmt.Errorf("clearstate program version downgrade: %d < %d", cv, pcv)
 		}
 	}
 	return nil

@@ -3749,7 +3749,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(cse.group)
 
 			// Computed MinTealVersion should be == validFromVersion
-			calc := ComputeMinTealVersion(ep.TxnGroup, false)
+			calc := ComputeMinTealVersion(ep.TxnGroup)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion
