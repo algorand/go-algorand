@@ -231,13 +231,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 		return nil
 	}
 
-	blk, err := l.Block(dbRound)
-	if err != nil {
-		return err
-	}
-	blockHeaderDigest := blk.Digest()
-
-	ct.generateCatchpoint(context.Background(), basics.Round(writingCatchpointRound), ct.lastCatchpointLabel, blockHeaderDigest, time.Duration(0))
+	ct.generateCatchpoint(context.Background(), basics.Round(writingCatchpointRound), time.Duration(0))
 	return nil
 }
 
@@ -433,7 +427,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	if dcc.isCatchpointRound && ct.enableGeneratingCatchpointFiles && dcc.catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
-		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.catchpointLabel, dcc.committedRoundDigest, dcc.updatingBalancesDuration)
+		ct.generateCatchpoint(ctx, basics.Round(dcc.offset)+dcc.oldBase+dcc.lookback, dcc.updatingBalancesDuration)
 	}
 
 	// in scheduleCommit, we expect that this function to update the catchpointWriting when
@@ -594,7 +588,7 @@ func (ct *catchpointTracker) accountsCreateCatchpointLabel(committedRound basics
 }
 
 // generateCatchpoint generates a single catchpoint file
-func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
+func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRound basics.Round, updatingBalancesDuration time.Duration) {
 	beforeGeneratingCatchpointTime := time.Now()
 	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
 		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
@@ -638,7 +632,10 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err = ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
-		catchpointWriter = makeCatchpointWriter(ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
+		catchpointWriter, err = makeCatchpointWriter(ctx, absCatchpointFileName, tx)
+		if err != nil {
+			return
+		}
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(ctx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
@@ -695,7 +692,7 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 		return
 	}
 
-	err = ct.saveCatchpointFile(committedRound, relCatchpointFileName, catchpointWriter.GetSize(), catchpointWriter.GetCatchpoint())
+	err = ct.saveCatchpointFile(committedRound, relCatchpointFileName, catchpointWriter.GetSize())
 	if err != nil {
 		ct.log.Warnf("accountUpdates: generateCatchpoint: unable to save catchpoint: %v", err)
 		return
@@ -703,7 +700,7 @@ func (ct *catchpointTracker) generateCatchpoint(ctx context.Context, committedRo
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(beforeGeneratingCatchpointTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
-	catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
+	//catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
 	ct.log.With("writingDuration", catchpointGenerationStats.WritingDuration).
 		With("CPUTime", catchpointGenerationStats.CPUTime).
@@ -730,9 +727,9 @@ func catchpointRoundToPath(rnd basics.Round) string {
 // after a successful insert operation to the database, it would delete up to 2 old entries, as needed.
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
 // database and storage realign.
-func (ct *catchpointTracker) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
+func (ct *catchpointTracker) saveCatchpointFile(round basics.Round, fileName string, fileSize int64) (err error) {
 	if ct.catchpointFileHistoryLength != 0 {
-		err = ct.accountsq.storeCatchpoint(context.Background(), round, fileName, catchpoint, fileSize)
+		err = ct.accountsq.storeCatchpoint(context.Background(), round, fileName, "", fileSize)
 		if err != nil {
 			ct.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
 			return
@@ -790,7 +787,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 		if os.IsNotExist(err) {
 			// the database told us that we have this file.. but we couldn't find it.
 			// delete it from the database.
-			err := ct.saveCatchpointFile(round, "", 0, "")
+			err := ct.saveCatchpointFile(round, "", 0)
 			if err != nil {
 				ct.log.Warnf("accountUpdates: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
 				return nil, err
@@ -814,7 +811,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 			return &readCloseSizer{ReadCloser: file, size: -1}, nil
 		}
 
-		err = ct.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
+		err = ct.saveCatchpointFile(round, fileName, fileInfo.Size())
 		if err != nil {
 			ct.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
 		}
