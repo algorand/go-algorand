@@ -74,7 +74,10 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = performTxTailTableMigration(context.Background(), nil, db.Accessor{})
 	require.NoError(tb, err)
 
-	err = performOnlineRoundParamsTailMigration(context.Background(), nil, db.Accessor{})
+	err = accountsCreateOnlineRoundParamsTable(context.Background(), tx)
+	require.NoError(tb, err)
+
+	err = performOnlineRoundParamsTailMigration(context.Background(), tx, db.Accessor{}, true, proto)
 	require.NoError(tb, err)
 
 	return newDB
@@ -291,7 +294,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		err = accountsPutOnlineRoundParams(tx, ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw}, basics.Round(i))
+		err = accountsPutOnlineRoundParams(tx, []ledgercore.OnlineRoundParamsData{{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}}, basics.Round(i))
 		require.NoError(t, err)
 
 		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))

@@ -92,9 +92,6 @@ var accountsSchema = []string{
 		id string primary key,
 		intval integer,
 		strval text)`,
-	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
-        round INTEGER NOT NULL PRIMARY KEY,
-        data blob)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
 // TODO: Post applications, rename assetcreators -> creatables and rename
@@ -142,6 +139,12 @@ var createTxTailTable = []string{
 	`CREATE TABLE IF NOT EXISTS txtail (
 		round INTEGER PRIMARY KEY NOT NULL,
 		data blob)`,
+}
+
+var createOnlineRoundParamsTable = []string{
+	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
+        round INTEGER NOT NULL PRIMARY KEY,
+        data blob)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
 var accountsResetExprs = []string{
@@ -1196,17 +1199,6 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			return true, err
 		}
 
-		onlineRoundParams := ledgercore.OnlineRoundParamsData{
-			OnlineSupply: totals.Online.Money.Raw,
-			RewardsLevel: totals.RewardsLevel,
-			CurrentProtocol: proto,
-		}
-
-		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 0)
-		if err != nil {
-			return true, err
-		}
-
 		newDatabase = true
 	} else {
 		serr, ok := err.(sqlite3.Error)
@@ -1314,6 +1306,16 @@ func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 
 func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createTxTailTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return
+		}
+	}
+	return nil
+}
+
+func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err error) {
+	for _, stmt := range createOnlineRoundParamsTable {
 		_, err = tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return
@@ -2111,9 +2113,19 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	return err
 }
 
-func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
-	if tx == nil {
-		return nil
+func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
+	totals, err := accountsTotals(tx, false)
+	if newDatabase {
+		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
+			{
+				OnlineSupply: totals.Online.Money.Raw,
+				RewardsLevel: totals.RewardsLevel,
+				CurrentProtocol: initProto,
+			},
+		}
+
+		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 0)
+		return err
 	}
 
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
@@ -2133,12 +2145,15 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 			return err
 		}
 
-		data.CurrentProtocol = hdr.CurrentProtocol
+		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
+			{
+				OnlineSupply: totals.Online.Money.Raw,
+				RewardsLevel: totals.RewardsLevel,
+				CurrentProtocol: hdr.CurrentProtocol,
+			},
+		}
 
-		_, err = tx.ExecContext(ctx, "REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
-			rnd,
-			protocol.Encode(&data),
-		)
+		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
 		return err
 	})
 
@@ -3016,10 +3031,24 @@ func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.O
 	return
 }
 
-func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData ledgercore.OnlineRoundParamsData, round basics.Round) error {
-	_, err := tx.Exec("REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)",
+func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, round basics.Round) error {
+	insertStmt, err := tx.Prepare("REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+
+	for _, onlineRoundParams := range onlineRoundParamsData {
+		_, err = insertStmt.Exec(round, protocol.Encode(&onlineRoundParams))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func accountsPruneOnlineRoundParams(tx *sql.Tx, round basics.Round) error {
+	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE round<?",
 		round,
-		protocol.Encode(&onlineRoundParamsData),
 	)
 	return err
 }

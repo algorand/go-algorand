@@ -133,6 +133,7 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 
 	const assetid basics.AssetIndex = 1
 	proto := config.Consensus[protocol.ConsensusV24]
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
 
 	block = bookkeeping.MakeBlock(block.BlockHeader)
 
@@ -203,7 +204,12 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 		latestRound: 0,
 	}
 	proto.EnableAssetCloseAmount = true
-	_, modifiedTxns, err := EvalForIndexer(il, &block, protocol.ConsensusV24, EvalForIndexerResources{})
+	proto.MaxBalLookback = 10
+	config.Consensus[testProtocolVersion] = proto
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+	_, modifiedTxns, err := EvalForIndexer(il, &block, testProtocolVersion, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	require.Equal(t, 4, len(modifiedTxns))

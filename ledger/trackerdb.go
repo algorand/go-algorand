@@ -441,6 +441,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return err
 	}
 
+	err = accountsCreateOnlineRoundParamsTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+
 	var lastProgressInfoMsg time.Time
 	const progressLoggingInterval = 5 * time.Second
 	migrationProcessLog := func(processed, total uint64) {
@@ -460,10 +465,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete transaction tail data migration : %w", err)
 		}
-		err = performOnlineRoundParamsTailMigration(context.Background(), tx, tu.blockDb.Rdb)
-		if err != nil {
-			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
-		}
+	}
+
+	err = performOnlineRoundParamsTailMigration(context.Background(), tx, tu.blockDb.Rdb, tu.newDatabase, tu.initProto)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}
 
 	// TODO: remove normalized balance from accountbase

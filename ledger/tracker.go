@@ -222,7 +222,7 @@ type deferredCommitContext struct {
 
 	deltas                 []ledgercore.AccountDeltas
 	roundTotals            ledgercore.AccountTotals
-	onlineRoundParams      ledgercore.OnlineRoundParamsData
+	onlineRoundParams      []ledgercore.OnlineRoundParamsData
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
