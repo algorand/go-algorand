@@ -344,6 +344,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	offset := dcc.offset
 
 	ao.accountsMu.RLock()
+	defer ao.accountsMu.RUnlock()
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset)
@@ -377,8 +378,6 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, lruAccounts{})
 
-	ao.accountsMu.RUnlock()
-
 	dcc.onlineAccountExpiredRowids = expirations
 	dcc.expirationOffset = expirationOffset
 
@@ -390,6 +389,11 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 		return err
 	}
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[start:end]
+	maxLookback := basics.Round(int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback) + len(ao.deltas))
+	dcc.maxLookbackRound = basics.Round(0)
+	if ao.latest() > maxLookback {
+		dcc.maxLookbackRound = ao.latest()-maxLookback
+	}
 
 	return nil
 }
@@ -423,8 +427,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 	}
 
 	// delete all entries all older than maxBalLookback rounds ago
-	maxBalLookback := basics.Round(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback)
-	err = accountsPruneOnlineRoundParams(tx, ao.latest()-maxBalLookback)
+	err = accountsPruneOnlineRoundParams(tx, dcc.maxLookbackRound)
 
 	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound)
 	if err != nil {
@@ -476,7 +479,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
 	maxBalLookback := int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback) + len(ao.deltas)
-	if len(ao.onlineRoundParamsData) > int(maxBalLookback) {
+	if len(ao.onlineRoundParamsData) > maxBalLookback {
 		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxBalLookback:]
 	}
 

@@ -223,6 +223,8 @@ type deferredCommitContext struct {
 	deltas                 []ledgercore.AccountDeltas
 	roundTotals            ledgercore.AccountTotals
 	onlineRoundParams      []ledgercore.OnlineRoundParamsData
+	maxLookbackRound       basics.Round
+
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
