@@ -265,9 +265,9 @@ type ProgramKnowledge struct {
 	// list of the types known to be on the value stack, based on specs of
 	// opcodes seen while assembling. In normal code, the tip of the stack must
 	// match the next opcode's Arg.Types, and is then replaced with its
-	// Return.Types. If the top entry is StackNone, we're in dead code, and no
-	// checking is done, nor are return types appended.
+	// Return.Types. If `deadcode` is true, `stack` should be empty.
 	stack StackTypes
+
 	// bottom is the type given out when known is empty. It is StackNone at
 	// program start, so, for example, a `+` opcode at the start of a program
 	// fails. But when a label or callsub is encountered, `stack` is truncated
@@ -275,6 +275,10 @@ type ProgramKnowledge struct {
 	// coming in from elsewhere. A `+` after a label succeeds, because the stack
 	// "vitually" contains an infinite list of StackAny.
 	bottom StackType
+
+	// deadcode indicates that the program is in deadcode, so no type checking
+	// errrors should be reported.
+	deadcode bool
 }
 
 func (pgm *ProgramKnowledge) pop() StackType {
@@ -292,24 +296,22 @@ func (pgm *ProgramKnowledge) push(types ...StackType) {
 }
 
 func (pgm *ProgramKnowledge) deaden() {
-	pgm.stack = append(pgm.stack, StackNone)
+	pgm.stack = pgm.stack[:0]
+	pgm.deadcode = true
 }
 
 // label resets knowledge to reflect that control may enter from elsewhere.
 func (pgm *ProgramKnowledge) label() {
-	if pgm.isDead() {
+	if pgm.deadcode {
 		pgm.reset()
 	}
-}
-
-func (pgm ProgramKnowledge) isDead() bool {
-	return len(pgm.stack) > 0 && pgm.stack[len(pgm.stack)-1] == StackNone
 }
 
 // reset clears existing knowledge and permissively allows any stack value.  It's intended to be invoked after encountering a label or pragma type tracking change.
 func (pgm *ProgramKnowledge) reset() {
 	pgm.stack = nil
 	pgm.bottom = StackAny
+	pgm.deadcode = false
 }
 
 // createLabel inserts a label to point to the next instruction, reporting an
@@ -338,7 +340,7 @@ type refineFunc func(pgm ProgramKnowledge, immediates []string) (StackTypes, Sta
 // types, based on the field requested, rather than use Any as specified by
 // opSpec. It replaces StackAny in the top `count` elements of the typestack.
 func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
-	if ops.known.isDead() {
+	if ops.known.deadcode {
 		return
 	}
 	end := len(ops.known.stack)
@@ -1251,7 +1253,7 @@ func (ops *OpStream) typeError(err error) {
 // trackStack checks that the typeStack has `args` on it, then pushes `returns` to it.
 func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction []string) {
 	// If in deadcode, allow anything. Maybe it's some sort of onchain data.
-	if ops.known.isDead() {
+	if ops.known.deadcode {
 		return
 	}
 	argcount := len(args)
@@ -1374,7 +1376,7 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			ops.trackStack(args, returns, fields)
 			spec.asm(ops, &spec, fields[1:])
-			if spec.alwaysJumps() { // An unconditional branch deadens the following code
+			if spec.deadens() { // An unconditional branch deadens the following code
 				ops.known.deaden()
 			}
 			if spec.Name == "callsub" {
