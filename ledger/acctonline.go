@@ -424,7 +424,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// delete all entries all older than maxBalLookback rounds ago
 	maxBalLookback := basics.Round(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback)
-	err = accountsPruneOnlineRoundParams(tx, ao.latest() - maxBalLookback)
+	err = accountsPruneOnlineRoundParams(tx, ao.latest()-maxBalLookback)
 
 	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound)
 	if err != nil {
@@ -475,9 +475,9 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// simply contatenate since both sequences are sorted
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
-	maxBalLookback := int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData) - 1].CurrentProtocol].MaxBalLookback) + len(ao.deltas)
+	maxBalLookback := int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback) + len(ao.deltas)
 	if len(ao.onlineRoundParamsData) > int(maxBalLookback) {
-		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData) - maxBalLookback:]
+		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxBalLookback:]
 	}
 
 	ao.accountsMu.Unlock()

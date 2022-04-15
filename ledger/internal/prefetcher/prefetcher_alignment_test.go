@@ -156,8 +156,8 @@ func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx 
 func (l *prefetcherAlignmentTestLedger) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
-func (l *prefetcherAlignmentTestLedger) GenesisProto() config.ConsensusParams {
-	return config.Consensus[proto]
+func (l *prefetcherAlignmentTestLedger) GenesisProto() protocol.ConsensusVersion {
+	return proto
 }
 func (l *prefetcherAlignmentTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	return 0, ledgercore.AccountTotals{}, nil

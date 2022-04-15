@@ -53,11 +53,12 @@ type AccountTotals struct {
 	RewardsLevel uint64 `codec:"rwdlvl"`
 }
 
+// OnlineRoundParamsData keeps track of parameters needed for agreement from maxBalLookback ago
 type OnlineRoundParamsData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	OnlineSupply uint64 `codec:"a"`
-	RewardsLevel uint64 `codec:"b"`
+	OnlineSupply    uint64                    `codec:"a"`
+	RewardsLevel    uint64                    `codec:"b"`
 	CurrentProtocol protocol.ConsensusVersion `codec:"c"`
 }
 

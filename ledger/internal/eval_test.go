@@ -434,7 +434,7 @@ type evalTestLedger struct {
 	blocks        map[basics.Round]bookkeeping.Block
 	roundBalances map[basics.Round]map[basics.Address]basics.AccountData
 	genesisHash   crypto.Digest
-	genesisProto  config.ConsensusParams
+	genesisProto  protocol.ConsensusVersion
 	feeSink       basics.Address
 	rewardsPool   basics.Address
 	latestTotals  ledgercore.AccountTotals
@@ -463,7 +463,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 	for _, acctData := range balances.Balances {
 		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
-	l.genesisProto = proto
+	l.genesisProto = protocol.ConsensusCurrentVersion
 
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
@@ -564,7 +564,7 @@ func (ledger *evalTestLedger) GenesisHash() crypto.Digest {
 }
 
 // GenesisProto returns the genesis hash for this ledger.
-func (ledger *evalTestLedger) GenesisProto() config.ConsensusParams {
+func (ledger *evalTestLedger) GenesisProto() protocol.ConsensusVersion {
 	return ledger.genesisProto
 }
 

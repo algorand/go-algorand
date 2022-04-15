@@ -50,14 +50,14 @@ var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
 type mockLedgerForTracker struct {
-	dbs             db.Pair
-	blocks          []blockEntry
-	deltas          []ledgercore.StateDelta
-	log             logging.Logger
-	filename        string
-	inMemory        bool
+	dbs              db.Pair
+	blocks           []blockEntry
+	deltas           []ledgercore.StateDelta
+	log              logging.Logger
+	filename         string
+	inMemory         bool
 	consensusVersion protocol.ConsensusVersion
-	accts           map[basics.Address]basics.AccountData
+	accts            map[basics.Address]basics.AccountData
 
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
 	trackers trackerRegistry

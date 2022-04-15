@@ -2118,8 +2118,8 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 	if newDatabase {
 		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
 			{
-				OnlineSupply: totals.Online.Money.Raw,
-				RewardsLevel: totals.RewardsLevel,
+				OnlineSupply:    totals.Online.Money.Raw,
+				RewardsLevel:    totals.RewardsLevel,
 				CurrentProtocol: initProto,
 			},
 		}
@@ -2147,8 +2147,8 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 
 		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
 			{
-				OnlineSupply: totals.Online.Money.Raw,
-				RewardsLevel: totals.RewardsLevel,
+				OnlineSupply:    totals.Online.Money.Raw,
+				RewardsLevel:    totals.RewardsLevel,
 				CurrentProtocol: hdr.CurrentProtocol,
 			},
 		}
@@ -2300,8 +2300,6 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 
 	return err
 }
-
-
 
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
 // and optionally returns list of addresses that were eliminated

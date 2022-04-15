@@ -430,7 +430,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
 // adding a new onlineaccounts table
 // TODO: onlineaccounts: upgrade as needed after switching to the final table version
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, tx *sql.Tx,) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, tx *sql.Tx) (err error) {
 	err = accountsCreateOnlineAccountsTable(ctx, tx)
 	if err != nil {
 		return err
