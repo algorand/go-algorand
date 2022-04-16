@@ -258,9 +258,11 @@ func TestAccountDBRound(t *testing.T) {
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
 	var baseResources lruResources
+	var baseOnlineAccounts lruOnlineAccounts
 	var newacctsTotals map[basics.Address]ledgercore.AccountData
 	baseAccounts.init(nil, 100, 80)
 	baseResources.init(nil, 100, 80)
+	baseOnlineAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
 		updates, newacctsTotals, _, lastCreatableID = ledgertesting.RandomDeltasFull(20, accts, 0, lastCreatableID)
@@ -272,7 +274,7 @@ func TestAccountDBRound(t *testing.T) {
 		oldBase := i - 1
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), true, baseAccounts)
 		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), true, baseAccounts, baseResources)
-		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), baseAccounts)
+		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), baseOnlineAccounts)
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
@@ -2835,8 +2837,10 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	var baseAccounts lruAccounts
 	var baseResources lruResources
+	var baseOnlineAccounts lruOnlineAccounts
 	baseAccounts.init(nil, 100, 80)
 	baseResources.init(nil, 100, 80)
+	baseOnlineAccounts.init(nil, 100, 80)
 
 	addrA := ledgertesting.RandomAddress()
 	addrB := ledgertesting.RandomAddress()
@@ -2904,7 +2908,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		oldBase := rnd - 1
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, oldBase, true, baseAccounts)
-		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, oldBase, baseAccounts)
+		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, oldBase, baseOnlineAccounts)
 
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
