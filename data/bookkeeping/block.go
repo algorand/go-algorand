@@ -131,7 +131,7 @@ type (
 		ParticipationUpdates
 	}
 
-	// TxnRoot represents the root of the merkle tree generated from the transaction in this block.
+	// TxnRoot represents the root of the merkle tree generated from the transactions in this block.
 	TxnRoot struct {
 		_struct          struct{}      `codec:",omitempty,omitemptyarray"`
 		DigestSha256     crypto.Digest `codec:"txn256"` // root of transaction vector commitment merkle tree using SHA256 hash function

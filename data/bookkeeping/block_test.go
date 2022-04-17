@@ -776,7 +776,7 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 
 	// Create a block without SHA256 TxnRoot
 	var block Block
-	block.CurrentProtocol = protocol.ConsensusCurrentVersion // TODO Stateproof: when SHA256 is enabled in current protocol, change to previous version
+	block.CurrentProtocol = protocol.ConsensusV31
 	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
 
 	for i := 0; i < 1024; i++ {
@@ -810,7 +810,7 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 
 	// Create a block with SHA256 TxnRoot
 	block.CurrentProtocol = protocol.ConsensusFuture
-	a.False(block.ContentsMatchHeader()) // ??????????????????
+	a.False(block.ContentsMatchHeader())
 
 	// Now update the SHA256 header to its correct value
 	tree, err = block.TxnMerkleTreeSHA256()
