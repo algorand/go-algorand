@@ -274,16 +274,16 @@ func (s *Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 
 	verifierBytes := s.VerifyingKey.GetFixedLengthHashableRepresentation()
 
-	binaryMerkleIndex := make([]byte, 8)
-	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.VectorCommitmentIndex)
+	binaryVectorCommitmentIndex := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryVectorCommitmentIndex, s.VectorCommitmentIndex)
 
 	proofBytes := s.Proof.GetFixedLengthHashableRepresentation()
 
-	merkleSignatureBytes := make([]byte, 0, len(schemeType)+len(sigBytes)+len(verifierBytes)+len(binaryMerkleIndex)+len(proofBytes))
+	merkleSignatureBytes := make([]byte, 0, len(schemeType)+len(sigBytes)+len(verifierBytes)+len(binaryVectorCommitmentIndex)+len(proofBytes))
 	merkleSignatureBytes = append(merkleSignatureBytes, schemeType...)
 	merkleSignatureBytes = append(merkleSignatureBytes, sigBytes...)
 	merkleSignatureBytes = append(merkleSignatureBytes, verifierBytes...)
-	merkleSignatureBytes = append(merkleSignatureBytes, binaryMerkleIndex...)
+	merkleSignatureBytes = append(merkleSignatureBytes, binaryVectorCommitmentIndex...)
 	merkleSignatureBytes = append(merkleSignatureBytes, proofBytes...)
 	return merkleSignatureBytes, nil
 }

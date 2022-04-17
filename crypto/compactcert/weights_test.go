@@ -50,7 +50,7 @@ func TestMaxNumberOfReveals(t *testing.T) {
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
-func TestVerifyImpliedProvenWeight(t *testing.T) {
+func TestVerifyProvenWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -89,8 +89,9 @@ func TestLnWithPrecision(t *testing.T) {
 	val, err := lnIntApproximation(2)
 	a.NoError(err)
 
+	// check that precisionBits will not overflow
 	exp := 1 << precisionBits
-	a.NotEqual(1, exp)
+	a.Less(precisionBits, uint8(64))
 
 	a.GreaterOrEqual(float64(val)/float64(exp), math.Log(2))
 	a.Greater(math.Log(2), float64(val-1)/float64(exp))
@@ -119,9 +120,9 @@ func TestNumRevealsApproxBound(t *testing.T) {
 
 	for j := 0; j < 10; j++ {
 		sigWt := uint64(1<<(40-j) - 1)
-		// we check the signedWt/provenWt {3, 2.9, 2.8...1}
-		// ratio 1.1 (i==19) will the max number of reveals (signed and proven wt are too close) -
-		// so we lower the sec param for testing
+		// we check the ratios = signedWt/provenWt {3, 2.9, 2.8...1}
+		// ratio 1.1 (i==19) will exceed the max number of reveals (signed and proven wt are too close) -
+		// so we lower the Strength param for testing
 		for i := 0; i < 19; i++ {
 			checkRatio(i, sigWt, compactCertStrengthTargetForTests, a)
 		}

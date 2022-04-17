@@ -24,7 +24,7 @@ import (
 const (
 	HashType            = crypto.Sumhash
 	HashSize            = crypto.SumhashDigestSize
-	precisionBits       = uint8(16)     // number of bits used for log approximation
+	precisionBits       = uint8(16)     // number of bits used for log approximation. This should not exceed 63
 	ln2IntApproximation = uint64(45427) // the value of the ln(2) with 16 bits of precision
 )
 

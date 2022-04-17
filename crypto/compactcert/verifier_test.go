@@ -101,13 +101,20 @@ func TestVerifyBadSignature(t *testing.T) {
 	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.NoError(err)
 
-	rev := cert.Reveals[cert.PositionsToReveal[0]]
-	rev.SigSlot.Sig.Signature[10]++
+	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
+	signerInRound := key.GetSigner(compactCertRoundsForTests)
+	newSig, err := signerInRound.SignBytes([]byte{0x1, 0x2})
+	a.NoError(err)
+
+	rev := cert.Reveals[0]
+	rev.SigSlot.Sig = newSig
+	cert.Reveals[0] = rev
 
 	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
 	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
+
 }
 
 func TestVerifyZeroProvenWeight(t *testing.T) {

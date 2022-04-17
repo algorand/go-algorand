@@ -503,6 +503,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	a := require.New(b)
 
+	provenWeight := uint64(totalWeight / 2)
 	data := testMessage("hello world").IntoStateProofMessageHash()
 
 	var parts []basics.Participant
@@ -532,7 +533,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("AddBuild", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			builder, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
+			builder, err := MkBuilder(data, compactCertRoundsForTests, provenWeight, parts, partcom, compactCertStrengthTargetForTests)
 			if err != nil {
 				b.Error(err)
 			}
@@ -552,7 +553,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("Verify", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			verif, _ := MkVerifier(partcom.Root(), uint64(totalWeight/2), compactCertStrengthTargetForTests)
+			verif, _ := MkVerifier(partcom.Root(), provenWeight, compactCertStrengthTargetForTests)
 			if err = verif.Verify(compactCertRoundsForTests, data, cert); err != nil {
 				b.Error(err)
 			}

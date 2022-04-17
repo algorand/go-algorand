@@ -209,10 +209,6 @@ func (b *Builder) Build() (*Cert, error) {
 		return nil, err
 	}
 
-	var proofPositions []uint64
-
-	revealsSequence := make([]uint64, nr)
-
 	choice := coinChoiceSeed{
 		partCommitment: b.parttree.Root(),
 		lnProvenWeight: b.lnProvenWeight,
@@ -223,6 +219,8 @@ func (b *Builder) Build() (*Cert, error) {
 
 	coinHash := makeCoinGenerator(&choice)
 
+	var proofPositions []uint64
+	revealsSequence := make([]uint64, nr)
 	for j := uint64(0); j < nr; j++ {
 		coin := coinHash.getNextCoin()
 		pos, err := b.coinIndex(coin)

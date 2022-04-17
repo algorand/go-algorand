@@ -30,16 +30,15 @@ var (
 	ErrNoRevealInPos  = errors.New("no reveal for position")
 )
 
-// Verifier is used to verify a compact certificate.
+// Verifier is used to verify a compact certificate. those fields represent all the verifier's trusted data
 type Verifier struct {
 	strengthTarget         uint64
 	lnProvenWeight         uint64 // ln(provenWeight) as integer with 16 bits of precision
 	participantsCommitment crypto.GenericDigest
 }
 
-// MkVerifier constructs a verifier to check the compact certificate
-// on the message specified in p, with participantsCommitment specifying the Merkle
-// root of the participants that must sign the message.
+// MkVerifier constructs a verifier to check the compact certificate. the arguments for this function
+// represent all the verifier's trusted data
 func MkVerifier(partcom crypto.GenericDigest, provenWeight uint64, strengthTarget uint64) (*Verifier, error) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	if err != nil {

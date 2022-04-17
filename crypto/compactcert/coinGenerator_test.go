@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// make sure that all the fields in the coinChoiceSeed are being part of the hash.
+// make sure that ToBeHashed function returns a specific length
 // If this test breaks we need to make sure to update the SNARK prover and verifier as well.
 func TestCoinFixedLengthHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
