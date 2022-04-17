@@ -27,6 +27,8 @@ import (
 
 // The coinChoiceSeed defines the randomness seed that will be given to an XOF function. This will be used  for choosing
 // the index of the coin to reveal as part of the compact certificate.
+//
+// ToBeHashed should be updated when fields are added to this structure
 type coinChoiceSeed struct {
 	partCommitment crypto.GenericDigest
 	lnProvenWeight uint64

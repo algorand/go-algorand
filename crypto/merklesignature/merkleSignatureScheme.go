@@ -267,7 +267,7 @@ func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
 func (s *Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 	schemeType := make([]byte, 2)
 	binary.LittleEndian.PutUint16(schemeType, CryptoPrimitivesID)
-	sigBytes, err := s.VerifyingKey.GetSignatureFixedLengthHashableRepresentation(s.Signature)
+	sigBytes, err := s.Signature.GetFixedLengthHashableRepresentation()
 	if err != nil {
 		return nil, err
 	}

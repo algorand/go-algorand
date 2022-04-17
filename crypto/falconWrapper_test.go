@@ -102,7 +102,7 @@ func TestFalconsFormatConversion(t *testing.T) {
 	falconSig := falcon.CompressedSignature(sig)
 	ctFormat, err := falconSig.ConvertToCT()
 
-	rawFormat, err := key.GetVerifyingKey().GetSignatureFixedLengthHashableRepresentation(sig)
+	rawFormat, err := sig.GetFixedLengthHashableRepresentation()
 	a.NoError(err)
 	a.NotEqual([]byte(sig), rawFormat)
 

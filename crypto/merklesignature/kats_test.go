@@ -41,7 +41,7 @@ type mssKat struct {
 }
 
 func extractMssSignatureParts(signature Signature) ([]byte, []byte, []byte, uint8, error) {
-	ctSignature, err := signature.VerifyingKey.GetSignatureFixedLengthHashableRepresentation(signature.Signature)
+	ctSignature, err := signature.Signature.GetFixedLengthHashableRepresentation()
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}

@@ -19,9 +19,37 @@ package compactcert
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// make sure that all the fields in the coinChoiceSeed are being part of the hash.
+// If this test breaks we need to make sure to update the SNARK prover and verifier as well.
+func TestCoinFixedLengthHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var sigcom = make(crypto.GenericDigest, HashSize)
+	var partcom = make(crypto.GenericDigest, HashSize)
+	var data StateProofMessageHash
+
+	crypto.RandBytes(sigcom[:])
+	crypto.RandBytes(partcom[:])
+	crypto.RandBytes(data[:])
+
+	choice := coinChoiceSeed{
+		partCommitment: partcom,
+		lnProvenWeight: 454197,
+		sigCommitment:  sigcom,
+		signedWeight:   1 << 10,
+		data:           data,
+	}
+
+	rep := crypto.HashRep(&choice)
+	a.Equal(275, len(rep))
+}
 
 func TestHashCoin(t *testing.T) {
 	partitiontest.PartitionTest(t)
