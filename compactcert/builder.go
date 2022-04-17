@@ -64,7 +64,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	}
 	ccw.Message = msg
 
-	p, err := ledger.CompactCertParams(votersHdr, hdr)
+	provenWeight, err := ledger.GetProvenWeight(votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -72,7 +72,12 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	var res builder
 	res.votersHdr = votersHdr
 	res.voters = voters
-	res.Builder, err = compactcert.MkBuilder(p, msg.IntoStateProofMessageHash(), uint64(hdr.Round), voters.Participants, voters.Tree)
+	res.Builder, err = compactcert.MkBuilder(msg.IntoStateProofMessageHash(),
+		uint64(hdr.Round),
+		provenWeight,
+		voters.Participants,
+		voters.Tree,
+		config.Consensus[votersHdr.CurrentProtocol].CompactCertStrengthTarget)
 	if err != nil {
 		return builder{}, err
 	}

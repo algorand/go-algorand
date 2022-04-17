@@ -30,15 +30,16 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	cert, param, partCom, numPart, msg := generateCertForTesting(a)
+	p := generateCertForTesting(a)
+	cert := p.cc
 
-	verifier, err := MkVerifier(param, partCom)
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
+	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.NoError(err)
 
-	for i := uint64(0); i < numPart; i++ {
+	for i := uint64(0); i < p.numberOfParticipnets; i++ {
 		_, ok := cert.Reveals[i]
 		if !ok {
 			cert.PositionsToReveal[0] = i
@@ -46,10 +47,10 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 		}
 	}
 
-	verifier, err = MkVerifier(param, partCom)
+	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
+	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.ErrorIs(err, ErrNoRevealInPos)
 
 }
@@ -58,12 +59,12 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	cert, param, partCom, _, msg := generateCertForTesting(a)
-
-	verifier, err := MkVerifier(param, partCom)
+	p := generateCertForTesting(a)
+	cert := p.cc
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
+	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.NoError(err)
 
 	// find position to swap with 0.
@@ -80,10 +81,10 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	cert.PositionsToReveal[0] = cert.PositionsToReveal[j]
 	cert.PositionsToReveal[j] = coinAt0
 
-	verifier, err = MkVerifier(param, partCom)
+	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
+	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.ErrorIs(err, ErrCoinNotInRange)
 
 }
@@ -92,19 +93,20 @@ func TestVerifyBadSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	cert, param, partCom, _, msg := generateCertForTesting(a)
+	p := generateCertForTesting(a)
+	cert := p.cc
 
-	verifier, err := MkVerifier(param, partCom)
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
-	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
+	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.NoError(err)
 
 	rev := cert.Reveals[cert.PositionsToReveal[0]]
 	rev.SigSlot.Sig.Signature[10]++
 
-	verifier, err = MkVerifier(param, partCom)
+	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
-	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
+	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
 }
 
@@ -112,9 +114,7 @@ func TestVerifyZeroProvenWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := Params{ProvenWeight: 0}
 	partcommit := crypto.GenericDigest{}
-
-	_, err := MkVerifier(p, partcommit)
+	_, err := MkVerifier(partcommit, 0, compactCertStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 }

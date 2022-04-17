@@ -40,14 +40,14 @@ type Verifier struct {
 // MkVerifier constructs a verifier to check the compact certificate
 // on the message specified in p, with participantsCommitment specifying the Merkle
 // root of the participants that must sign the message.
-func MkVerifier(p Params, partcom crypto.GenericDigest) (*Verifier, error) {
-	lnProvenWt, err := lnIntApproximation(p.ProvenWeight)
+func MkVerifier(partcom crypto.GenericDigest, provenWeight uint64, strengthTarget uint64) (*Verifier, error) {
+	lnProvenWt, err := lnIntApproximation(provenWeight)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Verifier{
-		strengthTarget:         p.StrengthTarget,
+		strengthTarget:         strengthTarget,
 		lnProvenWeight:         lnProvenWt,
 		participantsCommitment: partcom,
 	}, nil

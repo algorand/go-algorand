@@ -44,8 +44,16 @@ func (m testMessage) IntoStateProofMessageHash() StateProofMessageHash {
 	return hsh
 }
 
+type paramsForTest struct {
+	cc                   Cert
+	provenWeight         uint64
+	partCommitment       crypto.GenericDigest
+	numberOfParticipnets uint64
+	data                 StateProofMessageHash
+}
+
 const compactCertRoundsForTests = 256
-const compactCertStrengthTarget = 256
+const compactCertStrengthTargetForTests = 256
 
 func hashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Reset()
@@ -75,7 +83,7 @@ func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a 
 	return signer
 }
 
-func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.GenericDigest, uint64, StateProofMessageHash) {
+func generateCertForTesting(a *require.Assertions) paramsForTest {
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
@@ -91,10 +99,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	npart := npartHi + npartLo
 
 	data := testMessage("hello world").IntoStateProofMessageHash()
-	param := Params{
-		ProvenWeight:   uint64(totalWeight / 2),
-		StrengthTarget: compactCertStrengthTarget,
-	}
+	provenWt := uint64(totalWeight / 2)
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
@@ -114,7 +119,7 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
+	b, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := 0; i < npart; i++ {
@@ -126,7 +131,14 @@ func generateCertForTesting(a *require.Assertions) (*Cert, Params, crypto.Generi
 	cert, err := b.Build()
 	a.NoError(err)
 
-	return cert, param, partcom.Root(), uint64(npart), data
+	p := paramsForTest{
+		cc:                   *cert,
+		provenWeight:         provenWt,
+		partCommitment:       partcom.Root(),
+		numberOfParticipnets: uint64(npart),
+		data:                 data,
+	}
+	return p
 }
 
 func TestBuildVerify(t *testing.T) {
@@ -134,7 +146,8 @@ func TestBuildVerify(t *testing.T) {
 
 	a := require.New(t)
 
-	cert, param, partCom, _, data := generateCertForTesting(a)
+	p := generateCertForTesting(a)
+	cert := p.cc
 
 	var someReveal Reveal
 	for _, rev := range cert.Reveals {
@@ -142,7 +155,7 @@ func TestBuildVerify(t *testing.T) {
 		break
 	}
 
-	certenc := protocol.Encode(cert)
+	certenc := protocol.Encode(&cert)
 	fmt.Printf("Cert size:\n")
 	fmt.Printf("  %6d elems sigproofs\n", len(cert.SigProofs.Path))
 	fmt.Printf("  %6d bytes sigproofs\n", len(protocol.EncodeReflect(cert.SigProofs)))
@@ -154,10 +167,10 @@ func TestBuildVerify(t *testing.T) {
 	fmt.Printf("    %6d bytes reveals[*] total\n", len(protocol.Encode(&someReveal)))
 	fmt.Printf("  %6d bytes total\n", len(certenc))
 
-	verif, err := MkVerifier(param, partCom)
+	verif, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verif.Verify(compactCertRoundsForTests, data, cert)
+	err = verif.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.NoError(err, "failed to verify the compact cert")
 }
 
@@ -236,10 +249,6 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	numPart := 4
 
 	data := testMessage("test!").IntoStateProofMessageHash()
-	param := Params{
-		ProvenWeight:   uint64(totalWeight / (2 * numPart)),
-		StrengthTarget: compactCertStrengthTarget,
-	}
 
 	var parts []basics.Participant
 	var sigs []merklesignature.Signature
@@ -262,7 +271,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
+	b, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/(2*numPart)), parts, partcom, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := 0; i < numPart; i++ {
@@ -434,10 +443,6 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	npartLo := 9
 
 	data := testMessage("hello world").IntoStateProofMessageHash()
-	param := Params{
-		ProvenWeight:   uint64(totalWeight / 2),
-		StrengthTarget: compactCertStrengthTarget,
-	}
 
 	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
 	var parts []basics.Participant
@@ -447,7 +452,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
+	builder, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
 	// actual test:
@@ -485,10 +490,9 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := Params{ProvenWeight: 0}
 	data := testMessage("hello world").IntoStateProofMessageHash()
 
-	_, err := MkBuilder(p, data, compactCertRoundsForTests, nil, nil)
+	_, err := MkBuilder(data, compactCertRoundsForTests, 0, nil, nil, compactCertStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 
 }
@@ -500,10 +504,6 @@ func BenchmarkBuildVerify(b *testing.B) {
 	a := require.New(b)
 
 	data := testMessage("hello world").IntoStateProofMessageHash()
-	param := Params{
-		ProvenWeight:   uint64(totalWeight / 2),
-		StrengthTarget: compactCertStrengthTarget,
-	}
 
 	var parts []basics.Participant
 	var partkeys []*merklesignature.Secrets
@@ -532,7 +532,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("AddBuild", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			builder, err := MkBuilder(param, data, compactCertRoundsForTests, parts, partcom)
+			builder, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
 			if err != nil {
 				b.Error(err)
 			}
@@ -552,7 +552,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("Verify", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			verif, _ := MkVerifier(param, partcom.Root())
+			verif, _ := MkVerifier(partcom.Root(), uint64(totalWeight/2), compactCertStrengthTargetForTests)
 			if err = verif.Verify(compactCertRoundsForTests, data, cert); err != nil {
 				b.Error(err)
 			}

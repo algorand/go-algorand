@@ -33,7 +33,7 @@ func TestMaxNumberOfRevealsInVerify(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals+1, compactCertStrengthTarget)
+	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals+1, compactCertStrengthTargetForTests)
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
@@ -46,7 +46,7 @@ func TestMaxNumberOfReveals(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	_, err = numReveals(signedWeight, lnProvenWt, compactCertStrengthTarget)
+	_, err = numReveals(signedWeight, lnProvenWt, compactCertStrengthTargetForTests)
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
@@ -59,13 +59,13 @@ func TestVerifyImpliedProvenWeight(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	numOfReveals, err := numReveals(signedWeight, lnProvenWt, compactCertStrengthTarget)
+	numOfReveals, err := numReveals(signedWeight, lnProvenWt, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals, compactCertStrengthTarget)
+	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, compactCertStrengthTarget)
+	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, compactCertStrengthTargetForTests)
 	a.ErrorIs(err, ErrInsufficientSingedWeight)
 }
 
@@ -78,7 +78,7 @@ func TestVerifyZeroNumberOfRevealsEquation(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	_, err = numReveals(signedWeight, lnProvenWt, compactCertStrengthTarget)
+	_, err = numReveals(signedWeight, lnProvenWt, compactCertStrengthTargetForTests)
 	a.ErrorIs(err, ErrNegativeNumOfRevealsEquation)
 }
 
@@ -109,7 +109,7 @@ func TestVerifyLimits(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals-1, compactCertStrengthTarget)
+	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals-1, compactCertStrengthTargetForTests)
 	a.ErrorIs(err, ErrZeroSignedWeight)
 }
 
@@ -123,10 +123,10 @@ func TestNumRevealsApproxBound(t *testing.T) {
 		// ratio 1.1 (i==19) will the max number of reveals (signed and proven wt are too close) -
 		// so we lower the sec param for testing
 		for i := 0; i < 19; i++ {
-			checkRatio(i, sigWt, compactCertStrengthTarget, a)
+			checkRatio(i, sigWt, compactCertStrengthTargetForTests, a)
 		}
 
-		checkRatio(19, sigWt, compactCertStrengthTarget/2, a)
+		checkRatio(19, sigWt, compactCertStrengthTargetForTests/2, a)
 
 	}
 }
@@ -157,7 +157,7 @@ func TestNumReveals(t *testing.T) {
 	billion := uint64(1000 * 1000 * 1000)
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 2 * billion * microalgo
-	strengthTarget := uint64(compactCertStrengthTarget)
+	strengthTarget := uint64(compactCertStrengthTargetForTests)
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
@@ -170,7 +170,7 @@ func TestNumReveals(t *testing.T) {
 				signedWeight, provenWeight, strengthTarget, n)
 		}
 
-		err = verifyWeights(signedWeight, lnProvenWt, n, compactCertStrengthTarget)
+		err = verifyWeights(signedWeight, lnProvenWt, n, compactCertStrengthTargetForTests)
 		a.NoError(err)
 	}
 }
@@ -180,7 +180,7 @@ func BenchmarkVerifyWeights(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	strengthTarget := uint64(compactCertStrengthTarget)
+	strengthTarget := uint64(compactCertStrengthTargetForTests)
 
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	require.NoError(b, err)
@@ -201,7 +201,7 @@ func BenchmarkNumReveals(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	strengthTarget := uint64(compactCertStrengthTarget)
+	strengthTarget := uint64(compactCertStrengthTargetForTests)
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	require.NoError(b, err)
 

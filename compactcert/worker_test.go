@@ -294,15 +294,10 @@ func TestWorkerAllSigs(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
-			ccparams := compactcert.Params{
-				ProvenWeight:   provenWeight,
-				StrengthTarget: proto.CompactCertStrengthTarget,
-			}
-
 			voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 			require.NoError(t, err)
 
-			verif, err := compactcert.MkVerifier(ccparams, voters.Tree.Root())
+			verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.CompactCertStrengthTarget)
 			require.NoError(t, err)
 
 			err = verif.Verify(uint64(tx.Txn.CertIntervalLatestRound), tx.Txn.CertMsg.IntoStateProofMessageHash(), &tx.Txn.Cert)
@@ -358,15 +353,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
-	ccparams := compactcert.Params{
-		ProvenWeight:   provenWeight,
-		StrengthTarget: proto.CompactCertStrengthTarget,
-	}
-
 	voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 	require.NoError(t, err)
 
-	verif, err := compactcert.MkVerifier(ccparams, voters.Tree.Root())
+	verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.CompactCertStrengthTarget)
 	require.NoError(t, err)
 	err = verif.Verify(uint64(tx.Txn.CertIntervalLatestRound), msg.IntoStateProofMessageHash(), &tx.Txn.Cert)
 	require.NoError(t, err)

@@ -156,14 +156,10 @@ func TestCompactCerts(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(lastCertBlock.CompactCertVotersTotal, uint64(consensusParams.CompactCertWeightThreshold), 1<<32)
 			r.False(overflowed)
 
-			ccparams := cc.Params{
-				ProvenWeight:   provenWeight,
-				StrengthTarget: consensusParams.CompactCertStrengthTarget,
-			}
-			verif, err := cc.MkVerifier(ccparams, votersRoot)
+			verifier, err := cc.MkVerifier(votersRoot, provenWeight, consensusParams.CompactCertStrengthTarget)
 			r.NoError(err)
 
-			err = verif.Verify(nextCertBlock.Round, certMessage.IntoStateProofMessageHash(), &compactCert)
+			err = verifier.Verify(nextCertBlock.Round, certMessage.IntoStateProofMessageHash(), &compactCert)
 			r.NoError(err)
 
 			lastCertBlock = nextCertBlock

@@ -155,7 +155,7 @@ func TestCompactCertParams(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var hdr bookkeeping.BlockHeader
 
-	_, err := CompactCertParams(votersHdr, hdr)
+	_, err := GetProvenWeight(votersHdr, hdr)
 	require.Error(t, err) // not enabled
 
 	votersHdr.CurrentProtocol = "TestCompactCertParams"
@@ -163,12 +163,12 @@ func TestCompactCertParams(t *testing.T) {
 	proto.CompactCertRounds = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
-	_, err = CompactCertParams(votersHdr, hdr)
+	_, err = GetProvenWeight(votersHdr, hdr)
 	require.Error(t, err) // wrong round
 
 	votersHdr.Round = 2
 	hdr.Round = 3
-	_, err = CompactCertParams(votersHdr, hdr)
+	_, err = GetProvenWeight(votersHdr, hdr)
 	require.Error(t, err) // wrong round
 
 	// Covers all cases except overflow

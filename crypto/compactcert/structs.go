@@ -29,12 +29,6 @@ type StateProofMessageHash [128]byte
 // StateProofMessageHashType is the type of hash used to generate StateProofMessageHash
 const StateProofMessageHashType = crypto.Sha256
 
-// Params defines common parameters for the verifier and builder.
-type Params struct {
-	ProvenWeight   uint64 // Weight proven by the certificate
-	StrengthTarget uint64
-}
-
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.
 type sigslotCommit struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

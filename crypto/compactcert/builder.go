@@ -40,7 +40,6 @@ type sigslot struct {
 // Builder keeps track of signatures on a message and eventually produces
 // a compact certificate for that message.
 type Builder struct {
-	Params
 	data           StateProofMessageHash
 	round          uint64
 	sigs           []sigslot // Indexed by pos in participants
@@ -49,6 +48,8 @@ type Builder struct {
 	participants   []basics.Participant
 	parttree       *merklearray.Tree
 	lnProvenWeight uint64
+	provenWeight   uint64
+	strengthTarget uint64
 
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
@@ -59,15 +60,14 @@ type Builder struct {
 // to be signed, as well as other security parameters, are specified in
 // param.  The participants that will sign the message are in part and
 // parttree.
-func MkBuilder(param Params, data StateProofMessageHash, round uint64, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
+func MkBuilder(data StateProofMessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {
 	npart := len(part)
-	lnProvenWt, err := lnIntApproximation(param.ProvenWeight)
+	lnProvenWt, err := lnIntApproximation(provenWeight)
 	if err != nil {
 		return nil, err
 	}
 
 	b := &Builder{
-		Params:         param,
 		data:           data,
 		round:          round,
 		sigs:           make([]sigslot, npart),
@@ -76,6 +76,8 @@ func MkBuilder(param Params, data StateProofMessageHash, round uint64, part []ba
 		participants:   part,
 		parttree:       parttree,
 		lnProvenWeight: lnProvenWt,
+		provenWeight:   provenWeight,
+		strengthTarget: strengthTarget,
 	}
 
 	return b, nil
@@ -130,7 +132,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) {
 
 // Ready returns whether the certificate is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.signedWeight > b.Params.ProvenWeight
+	return b.signedWeight > b.provenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -178,8 +180,8 @@ func (b *Builder) Build() (*Cert, error) {
 		return b.cert, nil
 	}
 
-	if b.signedWeight <= b.Params.ProvenWeight {
-		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.Params.ProvenWeight)
+	if b.signedWeight <= b.provenWeight {
+		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
 	}
 
 	// Commit to the sigs array
@@ -202,7 +204,7 @@ func (b *Builder) Build() (*Cert, error) {
 		MerkleSignatureSaltVersion: merklesignature.SchemeSaltVersion,
 	}
 
-	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.StrengthTarget)
+	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.strengthTarget)
 	if err != nil {
 		return nil, err
 	}
