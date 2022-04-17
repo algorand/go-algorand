@@ -776,7 +776,7 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 
 	// Create a block without SHA256 TxnRoot
 	var block Block
-	block.CurrentProtocol = protocol.ConsensusV31
+	block.CurrentProtocol = protocol.ConsensusV32
 	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
 
 	for i := 0; i < 1024; i++ {

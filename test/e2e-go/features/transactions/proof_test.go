@@ -155,8 +155,7 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
-	// TODO Stateproof: when adding SHA256 header to the current consensus version, use the template of last version not supporting it instead of this one.
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV32.json"))
 	defer fixture.Shutdown()
 	client := fixture.LibGoalClient
 
