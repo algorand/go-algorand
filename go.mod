@@ -4,7 +4,6 @@ go 1.16
 
 require (
 	github.com/algorand/falcon v0.0.0-20220130164023-c9e1d466f123
-	github.com/algorand/go-codec v1.1.8 // indirect
 	github.com/algorand/go-codec/codec v1.1.8
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/algorand/go-sumhash v0.1.0
@@ -30,8 +29,7 @@ require (
 	github.com/gorilla/mux v1.6.2
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/karalabe/hid v1.0.0
-	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
+	github.com/karalabe/usb v0.0.2
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0

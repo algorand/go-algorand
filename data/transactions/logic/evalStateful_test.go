@@ -237,9 +237,8 @@ log
 
 	// check err opcode work in both modes
 	source := "err"
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "encountered err")
-	testApp(t, source, defaultEvalParams(nil), "encountered err")
-	// require.NotContains(t, err.Error(), "not allowed in current mode")
+	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "err opcode executed")
+	testApp(t, source, defaultEvalParams(nil), "err opcode executed")
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
 	disallowedV4 := []string{
@@ -905,14 +904,14 @@ func TestAssets(t *testing.T) {
 }
 
 func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
-	for _, field := range AssetHoldingFieldNames {
-		fs := AssetHoldingFieldSpecByName[field]
+	for _, field := range assetHoldingFieldNames {
+		fs := assetHoldingFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
-	for _, field := range AssetParamsFieldNames {
-		fs := AssetParamsFieldSpecByName[field]
+	for _, field := range assetParamsFieldNames {
+		fs := assetParamsFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
@@ -2197,12 +2196,12 @@ func TestEnumFieldErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	source := `txn Amount`
-	origSpec := txnFieldSpecByField[Amount]
+	origSpec := txnFieldSpecs[Amount]
 	changed := origSpec
 	changed.ftype = StackBytes
-	txnFieldSpecByField[Amount] = changed
+	txnFieldSpecs[Amount] = changed
 	defer func() {
-		txnFieldSpecByField[Amount] = origSpec
+		txnFieldSpecs[Amount] = origSpec
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "Amount expected field type is []byte but got uint64")
@@ -2210,12 +2209,12 @@ func TestEnumFieldErrors(t *testing.T) {
 
 	source = `global MinTxnFee`
 
-	origMinTxnFs := globalFieldSpecByField[MinTxnFee]
+	origMinTxnFs := globalFieldSpecs[MinTxnFee]
 	badMinTxnFs := origMinTxnFs
 	badMinTxnFs.ftype = StackBytes
-	globalFieldSpecByField[MinTxnFee] = badMinTxnFs
+	globalFieldSpecs[MinTxnFee] = badMinTxnFs
 	defer func() {
-		globalFieldSpecByField[MinTxnFee] = origMinTxnFs
+		globalFieldSpecs[MinTxnFee] = origMinTxnFs
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "MinTxnFee expected field type is []byte but got uint64")
@@ -2242,12 +2241,12 @@ int 55
 asset_holding_get AssetBalance
 assert
 `
-	origBalanceFs := assetHoldingFieldSpecByField[AssetBalance]
+	origBalanceFs := assetHoldingFieldSpecs[AssetBalance]
 	badBalanceFs := origBalanceFs
 	badBalanceFs.ftype = StackBytes
-	assetHoldingFieldSpecByField[AssetBalance] = badBalanceFs
+	assetHoldingFieldSpecs[AssetBalance] = badBalanceFs
 	defer func() {
-		assetHoldingFieldSpecByField[AssetBalance] = origBalanceFs
+		assetHoldingFieldSpecs[AssetBalance] = origBalanceFs
 	}()
 
 	testApp(t, source, ep, "AssetBalance expected field type is []byte but got uint64")
@@ -2256,12 +2255,12 @@ assert
 asset_params_get AssetTotal
 assert
 `
-	origTotalFs := assetParamsFieldSpecByField[AssetTotal]
+	origTotalFs := assetParamsFieldSpecs[AssetTotal]
 	badTotalFs := origTotalFs
 	badTotalFs.ftype = StackBytes
-	assetParamsFieldSpecByField[AssetTotal] = badTotalFs
+	assetParamsFieldSpecs[AssetTotal] = badTotalFs
 	defer func() {
-		assetParamsFieldSpecByField[AssetTotal] = origTotalFs
+		assetParamsFieldSpecs[AssetTotal] = origTotalFs
 	}()
 
 	testApp(t, source, ep, "AssetTotal expected field type is []byte but got uint64")
@@ -2577,6 +2576,8 @@ func appAddr(id int) basics.Address {
 }
 
 func TestAppInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := makeSampleEnv()
 	require.Equal(t, 888, int(tx.ApplicationID))
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2595,6 +2596,8 @@ func TestAppInfo(t *testing.T) {
 }
 
 func TestBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep := defaultEvalParams(nil)
 	source := `
 global OpcodeBudget
@@ -2609,6 +2612,8 @@ int 695
 }
 
 func TestSelfMutate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, _, ledger := makeSampleEnv()
 
 	/* In order to test the added protection of mutableAccountReference, we're
