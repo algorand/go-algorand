@@ -66,15 +66,26 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.NoError(err)
 
-	swap := cert.PositionsToReveal[1]
-	cert.PositionsToReveal[1] = cert.PositionsToReveal[0]
-	cert.PositionsToReveal[0] = swap
+	// find position to swap with 0.
+	coinAt0 := cert.PositionsToReveal[0]
+	sigAt0 := cert.Reveals[coinAt0]
+	j := 1
+	for j = 1; j < len(cert.PositionsToReveal); j++ {
+		element := cert.Reveals[cert.PositionsToReveal[j]]
+		if element.SigSlot.L != sigAt0.SigSlot.L {
+			break
+		}
+	}
+
+	cert.PositionsToReveal[0] = cert.PositionsToReveal[j]
+	cert.PositionsToReveal[j] = coinAt0
 
 	verifier, err = MkVerifier(param, partCom)
 	a.NoError(err)
 
 	err = verifier.Verify(compactCertRoundsForTests, msg, cert)
 	a.ErrorIs(err, ErrCoinNotInRange)
+
 }
 
 func TestVerifyBadSignature(t *testing.T) {
