@@ -750,7 +750,7 @@ func CheckContractVersions(approval []byte, clear []byte, previous basics.AppPar
 		}
 	}
 	if len(previous.ClearStateProgram) != 0 {
-		pcv, _, err := ProgramVersion(previous.ApprovalProgram)
+		pcv, _, err := ProgramVersion(previous.ClearStateProgram)
 		if err != nil {
 			return err
 		}
