@@ -601,39 +601,45 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 	}
 
 	for idx := range txns {
-		if txns[idx].Txn.ID() == txID {
-			var tree *merklearray.Tree
-			switch hashtype {
-			case "sha256":
-				tree, err = block.TxnMerkleTreeSHA256()
-				if err != nil {
-					return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
-				}
-			case "sha512_256":
-				tree, err = block.TxnMerkleTree()
-				if err != nil {
-					return internalError(ctx, err, "building Merkle tree", v2.Log)
-				}
-			default:
-				return notFound(ctx, err, "unsupported hash type", v2.Log)
-			}
+		var tree *merklearray.Tree
+		var stibhash crypto.Digest
 
-			proof, err := tree.ProveSingleLeaf(uint64(idx))
+		switch hashtype {
+		case "sha256":
+			if txns[idx].Txn.IDSha256() != txID {
+				continue
+			}
+			tree, err = block.TxnMerkleTreeSHA256()
 			if err != nil {
-				return internalError(ctx, err, "generating proof", v2.Log)
+				return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
 			}
-
-			stibhash := block.Payset[idx].Hash()
-
-			response := generated.ProofResponse{
-				Proof:     proof.GetConcatenatedProof(),
-				Stibhash:  stibhash[:],
-				Idx:       uint64(idx),
-				Treedepth: uint64(proof.TreeDepth),
+			stibhash = block.Payset[idx].Hash(crypto.Sha256)
+		case "sha512_256":
+			if txns[idx].Txn.ID() != txID {
+				continue
 			}
-
-			return ctx.JSON(http.StatusOK, response)
+			tree, err = block.TxnMerkleTree()
+			if err != nil {
+				return internalError(ctx, err, "building Merkle tree", v2.Log)
+			}
+			stibhash = block.Payset[idx].Hash(crypto.Sha512_256)
+		default:
+			return notFound(ctx, err, "unsupported hash type", v2.Log)
 		}
+
+		proof, err := tree.ProveSingleLeaf(uint64(idx))
+		if err != nil {
+			return internalError(ctx, err, "generating proof", v2.Log)
+		}
+
+		response := generated.ProofResponse{
+			Proof:     proof.GetConcatenatedProof(),
+			Stibhash:  stibhash[:],
+			Idx:       uint64(idx),
+			Treedepth: uint64(proof.TreeDepth),
+		}
+
+		return ctx.JSON(http.StatusOK, response)
 	}
 
 	err = errors.New(errTransactionNotFound)

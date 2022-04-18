@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -179,6 +180,13 @@ func (tx Transaction) ID() Txid {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
+}
+
+// IDSha256 returns the Txid (i.e., hash) of the transaction.
+func (tx Transaction) IDSha256() Txid {
+	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
+	defer protocol.PutEncodingBuf(enc)
+	return sha256.Sum256(enc)
 }
 
 // InnerID returns something akin to Txid, but folds in the parent Txid and the

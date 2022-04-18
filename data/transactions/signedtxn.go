@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"crypto/sha256"
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -114,9 +115,13 @@ func (s *SignedTxnInBlock) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // Hash implements an optimized version of crypto.HashObj(s).
-func (s *SignedTxnInBlock) Hash() crypto.Digest {
+func (s *SignedTxnInBlock) Hash(hashType crypto.HashType) crypto.Digest {
 	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
 	defer protocol.PutEncodingBuf(enc)
+	if hashType == crypto.Sha256 {
+		return sha256.Sum256(enc)
+	}
+	// else: SHA512_256
 	return crypto.Hash(enc)
 }
 
