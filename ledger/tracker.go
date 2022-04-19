@@ -230,9 +230,11 @@ type deferredCommitContext struct {
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
 	updatedPersistedOnlineAccounts []persistedOnlineAccountData
-	onlineAccountExpirations       []onlineAccountExpiration
-	onlineAccountExpiredRowids     []int64
-	expirationOffset               uint64
+	// expirations data after committing a round
+	onlineAccountExpirations []onlineAccountExpiration
+	// expired data that needs to be removed while committing a round
+	onlineAccountExpiredData onlineAccountExpRoundData
+	expirationOffset         uint64
 
 	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest

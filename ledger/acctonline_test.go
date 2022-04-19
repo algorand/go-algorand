@@ -212,7 +212,7 @@ func TestAcctOnline(t *testing.T) {
 
 			data, has := oa.baseOnlineAccounts.read(bal.Addr)
 			require.True(t, has)
-			require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
+			require.Empty(t, data.rowid)
 			require.Empty(t, data.accountData)
 
 			// TODO: restore after introducing lookback

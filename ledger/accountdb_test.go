@@ -3114,6 +3114,10 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.Len(t, result, 1)
 		require.Equal(t, proto.MaxBalLookback, uint64(result[0].rnd))
 		require.Len(t, result[0].rowids, 3)
+		require.Len(t, result[0].addresses, 3)
+		for addr := range accts {
+			require.Contains(t, result[0].addresses, addr)
+		}
 	})
 
 	t.Run("offline-online-offline-single", func(t *testing.T) {
@@ -3133,6 +3137,10 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.Len(t, result, 1)
 		require.Equal(t, proto.MaxBalLookback, uint64(result[0].rnd))
 		require.Len(t, result[0].rowids, 3)
+		require.Len(t, result[0].addresses, 3)
+		for addr := range accts {
+			require.Contains(t, result[0].addresses, addr)
+		}
 
 		// make account A offline
 		ad := accts[addrA]
@@ -3146,8 +3154,14 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.Len(t, result, 2)
 		require.Equal(t, proto.MaxBalLookback, uint64(result[0].rnd))
 		require.Len(t, result[0].rowids, 3)
+		require.Len(t, result[0].addresses, 3)
+		for addr := range accts {
+			require.Contains(t, result[0].addresses, addr)
+		}
 		require.Equal(t, proto.MaxBalLookback+2, uint64(result[1].rnd))
 		require.Len(t, result[1].rowids, 2)
+		require.Len(t, result[1].addresses, 1)
+		require.Contains(t, result[0].addresses, addrA)
 	})
 
 	t.Run("online-online-online", func(t *testing.T) {
@@ -3168,6 +3182,10 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.Len(t, result, 1)
 		require.Equal(t, proto.MaxBalLookback+2, uint64(result[0].rnd))
 		require.Len(t, result[0].rowids, 6)
+		require.Len(t, result[0].addresses, 3)
+		require.Contains(t, result[0].addresses, addrA)
+		require.Contains(t, result[0].addresses, addrB)
+		require.Contains(t, result[0].addresses, addrC)
 	})
 
 	t.Run("online-offline-online", func(t *testing.T) {
@@ -3190,6 +3208,10 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.Len(t, result, 1)
 		require.Equal(t, proto.MaxBalLookback+1, uint64(result[0].rnd))
 		require.Len(t, result[0].rowids, 6)
+		require.Len(t, result[0].addresses, 3)
+		for addr := range accts {
+			require.Contains(t, result[0].addresses, addr)
+		}
 	})
 }
 

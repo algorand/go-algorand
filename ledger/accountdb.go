@@ -2798,9 +2798,14 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 	return res, rows.Err()
 }
 
+type onlineAccountExpRoundData struct {
+	rowids    []int64
+	addresses map[basics.Address]struct{}
+}
+
 type onlineAccountExpiration struct {
-	rnd    basics.Round
-	rowids []int64
+	rnd basics.Round
+	onlineAccountExpRoundData
 }
 
 // onlineAccountsExpirations scans onlineaccounts table and builds expirations map using the following algorithm
@@ -2816,24 +2821,29 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 	}
 	defer rows.Close()
 
-	expirations := make(map[basics.Round][]int64)
+	expirations := make(map[basics.Round]onlineAccountExpRoundData)
 
-	addToExpiration := func(targetRound basics.Round, rowids []int64) {
+	addToExpiration := func(targetRound basics.Round, rowids []int64, addresses []basics.Address) {
 		if len(rowids) > 0 {
-			var entries []int64
+			var entry onlineAccountExpRoundData
 			var ok bool
-			if entries, ok = expirations[targetRound]; ok {
-				entries = append(entries, rowids...)
+			if entry, ok = expirations[targetRound]; ok {
+				entry.rowids = append(entry.rowids, rowids...)
 			} else {
-				entries = make([]int64, len(rowids))
-				copy(entries, rowids)
+				entry.rowids = make([]int64, len(rowids))
+				entry.addresses = make(map[basics.Address]struct{}, len(addresses))
+				copy(entry.rowids, rowids)
 			}
-			expirations[targetRound] = entries
+			for _, addr := range addresses {
+				entry.addresses[addr] = struct{}{}
+			}
+			expirations[targetRound] = entry
 		}
 	}
 
 	var lastAddr basics.Address
 	var rowids []int64
+	var addresses []basics.Address
 	var rounds []int64
 
 	for rows.Next() {
@@ -2863,12 +2873,14 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 				}
 				targetRound := uint64(rounds[len(rounds)-1]) + maxBalLookback
 				prevRowids := rowids[:len(rowids)-1]
-				addToExpiration(basics.Round(targetRound), prevRowids)
+				prevAddresses := addresses[:len(addresses)-1]
+				addToExpiration(basics.Round(targetRound), prevRowids, prevAddresses)
 			}
 
 			// reset the state
 			rowids = rowids[:0]
 			rounds = rounds[:0]
+			addresses = addresses[:0]
 			copy(lastAddr[:], addr[:])
 		}
 
@@ -2876,14 +2888,17 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 			// online account, save rowids and rounds
 			rowids = append(rowids, rowid.Int64)
 			rounds = append(rounds, updround.Int64)
+			addresses = append(addresses, addr)
 		} else {
 			// became offline: expire all previous online rowids and this row id
 			rowids = append(rowids, rowid.Int64)
+			addresses = append(addresses, addr)
 			targetRound := uint64(updround.Int64) + maxBalLookback
-			addToExpiration(basics.Round(targetRound), rowids)
+			addToExpiration(basics.Round(targetRound), rowids, addresses)
 
 			rowids = rowids[:0]
 			rounds = rounds[:0]
+			addresses = addresses[:0]
 		}
 	}
 
@@ -2894,15 +2909,22 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 		}
 		targetRound := uint64(rounds[len(rounds)-1]) + maxBalLookback
 		rowids = rowids[:len(rowids)-1]
-		addToExpiration(basics.Round(targetRound), rowids)
+		addresses = addresses[:len(rowids)-1]
+		addToExpiration(basics.Round(targetRound), rowids, addresses)
 	}
 
 	// convert map to a sorted array
 	if len(expirations) > 0 {
 		result = make([]onlineAccountExpiration, len(expirations))
 		i := 0
-		for rnd, rowids := range expirations {
-			result[i] = onlineAccountExpiration{rnd: rnd, rowids: rowids}
+		for rnd, entry := range expirations {
+			result[i] = onlineAccountExpiration{
+				rnd: rnd,
+				onlineAccountExpRoundData: onlineAccountExpRoundData{
+					rowids:    entry.rowids,
+					addresses: entry.addresses,
+				},
+			}
 			i++
 		}
 		sort.SliceStable(result, func(i, j int) bool {
@@ -3424,7 +3446,7 @@ func onlineAccountsNewRoundImpl(
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
 
-	expirationMap := make(map[basics.Round][]int64)
+	expirationMap := make(map[basics.Round]onlineAccountExpRoundData)
 
 	for i := 0; i < updates.len(); i++ {
 		data := updates.getByIdx(i)
@@ -3473,13 +3495,20 @@ func onlineAccountsNewRoundImpl(
 							rowid:       rowid,
 						}
 						updatedAccounts = append(updatedAccounts, updated)
+
 						targetRound := basics.Round(data.updRound + proto.MaxBalLookback)
-						if entries, ok := expirationMap[targetRound]; ok {
-							entries = append(entries, data.oldAcct.rowid, rowid)
-							expirationMap[targetRound] = entries
+						var entry onlineAccountExpRoundData
+						var ok bool
+						if entry, ok = expirationMap[targetRound]; ok {
+							entry.rowids = append(entry.rowids, data.oldAcct.rowid, rowid)
+							entry.addresses[data.oldAcct.addr] = struct{}{}
 						} else {
-							expirationMap[targetRound] = []int64{data.oldAcct.rowid, rowid}
+							entry = onlineAccountExpRoundData{
+								rowids:    []int64{data.oldAcct.rowid, rowid},
+								addresses: map[basics.Address]struct{}{data.oldAcct.addr: {}},
+							}
 						}
+						expirationMap[targetRound] = entry
 					}
 				}
 			} else {
@@ -3497,12 +3526,18 @@ func onlineAccountsNewRoundImpl(
 						updatedAccounts = append(updatedAccounts, updated)
 
 						targetRound := basics.Round(data.updRound + proto.MaxBalLookback)
-						if entries, ok := expirationMap[targetRound]; ok {
-							entries = append(entries, data.oldAcct.rowid)
-							expirationMap[targetRound] = entries
+						var entry onlineAccountExpRoundData
+						var ok bool
+						if entry, ok = expirationMap[targetRound]; ok {
+							entry.rowids = append(entry.rowids, data.oldAcct.rowid)
+							entry.addresses[data.oldAcct.addr] = struct{}{}
 						} else {
-							expirationMap[targetRound] = []int64{data.oldAcct.rowid}
+							entry = onlineAccountExpRoundData{
+								rowids:    []int64{data.oldAcct.rowid},
+								addresses: map[basics.Address]struct{}{data.oldAcct.addr: {}},
+							}
 						}
+						expirationMap[targetRound] = entry
 					}
 				}
 			}
@@ -3515,8 +3550,8 @@ func onlineAccountsNewRoundImpl(
 
 	expirations = make([]onlineAccountExpiration, len(expirationMap))
 	i := 0
-	for rnd, rowids := range expirationMap {
-		expirations[i] = onlineAccountExpiration{rnd: rnd, rowids: rowids}
+	for rnd, entry := range expirationMap {
+		expirations[i] = onlineAccountExpiration{rnd, entry}
 		i++
 	}
 	sort.SliceStable(expirations, func(i, j int) bool {

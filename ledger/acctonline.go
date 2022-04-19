@@ -335,11 +335,15 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset)
 	copy(deltas, ao.deltas[:offset])
-	var expirations []int64
+	var expirations onlineAccountExpRoundData
 	var expirationOffset uint64
 	for i := 0; i < len(ao.expirations); i++ {
 		if ao.expirations[i].rnd <= dcc.oldBase+basics.Round(offset) {
-			expirations = append(expirations, ao.expirations[i].rowids...)
+			expirations.rowids = append(expirations.rowids, ao.expirations[i].rowids...)
+			expirations.addresses = make(map[basics.Address]struct{}, len(ao.expirations[i].addresses))
+			for addr := range ao.expirations[i].addresses {
+				expirations.addresses[addr] = struct{}{}
+			}
 			expirationOffset++
 		} else {
 			break
@@ -366,7 +370,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 	ao.accountsMu.RUnlock()
 
-	dcc.onlineAccountExpiredRowids = expirations
+	dcc.onlineAccountExpiredData = expirations
 	dcc.expirationOffset = expirationOffset
 
 	dcc.genesisProto = ao.ledger.GenesisProto()
@@ -397,7 +401,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = onlineAccountsDeleteExpired(tx, dcc.onlineAccountExpiredRowids)
+	err = onlineAccountsDeleteExpired(tx, dcc.onlineAccountExpiredData.rowids)
 	if err != nil {
 		return err
 	}
@@ -431,8 +435,17 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
+	// store most recent data into the base data cache
 	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
 		ao.baseOnlineAccounts.write(persistedAcct)
+	}
+
+	// mark deleted entries as fully deleted at newBase round
+	for addr := range dcc.onlineAccountExpiredData.addresses {
+		ao.baseOnlineAccounts.write(persistedOnlineAccountData{
+			addr:  addr,
+			round: newBase,
+		})
 	}
 
 	ao.deltas = ao.deltas[offset:]
