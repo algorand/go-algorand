@@ -220,10 +220,10 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	deltas                 []ledgercore.AccountDeltas
-	roundTotals            ledgercore.AccountTotals
-	onlineRoundParams      []ledgercore.OnlineRoundParamsData
-	maxLookbackRound       basics.Round
+	deltas            []ledgercore.AccountDeltas
+	roundTotals       ledgercore.AccountTotals
+	onlineRoundParams []ledgercore.OnlineRoundParamsData
+	maxLookbackRound  basics.Round
 
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas

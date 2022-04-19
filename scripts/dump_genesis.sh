@@ -39,6 +39,9 @@ for LEDGER in $LEDGERS; do
       acctrounds)
         SORT=id
         ;;
+      onlineroundparamstail)
+        SORT=rnd
+        ;;
       participationperiods)
         SORT=period
         ;;

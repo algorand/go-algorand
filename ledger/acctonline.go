@@ -392,7 +392,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	maxLookback := basics.Round(int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback) + len(ao.deltas))
 	dcc.maxLookbackRound = basics.Round(0)
 	if ao.latest() > maxLookback {
-		dcc.maxLookbackRound = ao.latest()-maxLookback
+		dcc.maxLookbackRound = ao.latest() - maxLookback
 	}
 
 	return nil
