@@ -4640,12 +4640,16 @@ func opVrfVerify(cx *EvalContext) error {
 
 func opBlockSeed(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // round
-	round := cx.stack[last].Uint
-	current := cx.Ledger.Round()
-	if basics.Round(round+1000) < current || basics.Round(round) > current {
-		return fmt.Errorf("%d's seed is not available for round %d", round, current)
+	round := basics.Round(cx.stack[last].Uint)
+	first := cx.txn.Txn.LastValid - basics.Round(cx.Proto.MaxTxnLife) - 1
+	if first > cx.txn.Txn.LastValid { // wraparound
+		first = 1
 	}
-	seed, err := cx.Ledger.BlockSeed(basics.Round(round))
+	current := cx.Ledger.Round()
+	if round < first || round >= current {
+		return fmt.Errorf("%d's seed is not available. It's outside [%d-%d)", round, first, current)
+	}
+	seed, err := cx.Ledger.BlockSeed(round)
 	if err != nil {
 		return err
 	}

@@ -2529,14 +2529,29 @@ func TestLatestTimestamp(t *testing.T) {
 }
 
 func TestBlockSeed(t *testing.T) {
-	ep, _, _ := makeSampleEnv()
+	ep, txn, l := makeSampleEnv()
 
-	// needs to be close to l.rnd, which is 0xffffffff+5 in test ledger
-	testApp(t, "int 0xfffffff0; block_seed; len; int 32; ==", ep)
-	testApp(t, "int 0xfffefff0; block_seed; len; int 32; ==", ep, "not available")
-	testApp(t, "int 5; int 0xffffffff; +; block_seed; len; int 32; ==", ep)
-	testApp(t, "int 6; int 0xffffffff; +; block_seed; len; int 32; ==", ep, "not available")
+	// makeSampleENv creates txns with fv, lv that don't actually fit the round
+	// in l.  Nothing in most tests cares. But the rule for block_seed is
+	// related to lv and the current round, so we set the fv,lv more
+	// realistically.
+	txn.FirstValid = l.round() - 10
+	txn.LastValid = l.round() + 10
 
+	// l.round() is 0xffffffff+5 = 4294967300 in test ledger
+	testApp(t, "int 4294967299; block_seed; len; int 32; ==", ep) // current - 1
+	testApp(t, "int 4294967300; block_seed; len; int 32; ==", ep,
+		"not available") // can't get current round's blockseed
+
+	// proto.MaxTxnLife is 1500 in test.
+	testApp(t, "int 4294967300; int 1500; -; block_seed; len; int 32; ==", ep,
+		"not available") // 1500 back from current is more than 1500 back from lv
+	testApp(t, "int 4294967310; int 1500; -; block_seed; len; int 32; ==", ep) // 1500 back from lv is legal
+	testApp(t, "int 4294967310; int 1501; -; block_seed; len; int 32; ==", ep) // 1501 back from lv is legal
+	testApp(t, "int 4294967310; int 1502; -; block_seed; len; int 32; ==", ep,
+		"not available") // 1501 back from lv is not
+
+	// A little silly, as it only tests the test ledger: ensure samenes and differentness
 	testApp(t, "int 0xfffffff0; block_seed; int 0xfffffff0; block_seed; ==", ep)
 	testApp(t, "int 0xfffffff0; block_seed; int 0xfffffff1; block_seed; !=", ep)
 }
