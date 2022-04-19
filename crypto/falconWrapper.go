@@ -121,6 +121,6 @@ func (s FalconSignature) GetFixedLengthHashableRepresentation() ([]byte, error) 
 }
 
 // IsSaltVersionEqual of the signature matches the given version
-func (s FalconSignature) IsSaltVersionEqual(version int) bool {
+func (s FalconSignature) IsSaltVersionEqual(version byte) bool {
 	return (*cfalcon.CompressedSignature)(&s).SaltVersion() == version
 }

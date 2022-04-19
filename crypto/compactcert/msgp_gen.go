@@ -129,7 +129,7 @@ func (z *Cert) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x40) == 0 { // if not empty
 			// string "v"
 			o = append(o, 0xa1, 0x76)
-			o = msgp.AppendInt32(o, (*z).MerkleSignatureSaltVersion)
+			o = msgp.AppendByte(o, (*z).MerkleSignatureSaltVersion)
 		}
 		if (zb0004Mask & 0x80) == 0 { // if not empty
 			// string "w"
@@ -192,7 +192,7 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			(*z).MerkleSignatureSaltVersion, bts, err = msgp.ReadInt32Bytes(bts)
+			(*z).MerkleSignatureSaltVersion, bts, err = msgp.ReadByteBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "MerkleSignatureSaltVersion")
 				return
@@ -311,7 +311,7 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "v":
-				(*z).MerkleSignatureSaltVersion, bts, err = msgp.ReadInt32Bytes(bts)
+				(*z).MerkleSignatureSaltVersion, bts, err = msgp.ReadByteBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "MerkleSignatureSaltVersion")
 					return
@@ -397,7 +397,7 @@ func (_ *Cert) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Cert) Msgsize() (s int) {
-	s = 1 + 2 + (*z).SigCommit.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).SigProofs.Msgsize() + 2 + (*z).PartProofs.Msgsize() + 2 + msgp.Int32Size + 2 + msgp.MapHeaderSize
+	s = 1 + 2 + (*z).SigCommit.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).SigProofs.Msgsize() + 2 + (*z).PartProofs.Msgsize() + 2 + msgp.ByteSize + 2 + msgp.MapHeaderSize
 	if (*z).Reveals != nil {
 		for zb0001, zb0002 := range (*z).Reveals {
 			_ = zb0001

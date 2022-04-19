@@ -60,7 +60,7 @@ func (v *Verifier) Verify(round uint64, data StateProofMessageHash, c *Cert) err
 		return err
 	}
 
-	version := int(c.MerkleSignatureSaltVersion)
+	version := c.MerkleSignatureSaltVersion
 	for _, reveal := range c.Reveals {
 		if err := reveal.SigSlot.Sig.IsSaltVersionEqual(version); err != nil {
 			return err

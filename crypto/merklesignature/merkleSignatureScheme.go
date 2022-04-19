@@ -86,7 +86,7 @@ type (
 )
 
 // SchemeSaltVersion is the current salt version of merkleSignature
-const SchemeSaltVersion = 0
+const SchemeSaltVersion = byte(0)
 
 // CryptoPrimitivesID is an identification that the Merkle Signature Scheme uses a subset sum hash function
 // and a falcon signature scheme.
@@ -229,7 +229,7 @@ func (v *Verifier) IsEmpty() bool {
 }
 
 // IsSaltVersionEqual validates that the version of the signature is matching the expected version
-func (s *Signature) IsSaltVersionEqual(version int) error {
+func (s *Signature) IsSaltVersionEqual(version byte) error {
 	if !s.Signature.IsSaltVersionEqual(version) {
 		return ErrSignatureSaltVersionMismatch
 	}

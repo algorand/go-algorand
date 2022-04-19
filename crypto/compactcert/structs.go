@@ -56,12 +56,11 @@ type Reveal struct {
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.GenericDigest `codec:"c"`
-	SignedWeight uint64               `codec:"w"`
-	SigProofs    merklearray.Proof    `codec:"S"`
-	PartProofs   merklearray.Proof    `codec:"P"`
-	// TODO change to byte
-	MerkleSignatureSaltVersion int32 `codec:"v"`
+	SigCommit                  crypto.GenericDigest `codec:"c"`
+	SignedWeight               uint64               `codec:"w"`
+	SigProofs                  merklearray.Proof    `codec:"S"`
+	PartProofs                 merklearray.Proof    `codec:"P"`
+	MerkleSignatureSaltVersion byte                 `codec:"v"`
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
 	// arrays.
