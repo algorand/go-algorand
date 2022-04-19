@@ -277,7 +277,7 @@ type ProgramKnowledge struct {
 	bottom StackType
 
 	// deadcode indicates that the program is in deadcode, so no type checking
-	// errrors should be reported.
+	// errors should be reported.
 	deadcode bool
 }
 
