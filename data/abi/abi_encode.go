@@ -25,23 +25,6 @@ import (
 	"strings"
 )
 
-// bigIntToBytes casts non-negative big integer to byte slice with specific byte length
-// DEPRECATED: THIS IS A WORKAROUND FOR `fillBytes` METHOD BEFORE GOLANG 1.15+
-//       SHOULD BE REMOVED AFTER WE MOVE TO HIGHER VERSION
-func bigIntToBytes(x *big.Int, byteLen uint) ([]byte, error) {
-	if x.Cmp(big.NewInt(0)) < 0 {
-		return nil, fmt.Errorf("ABI: big Int To Bytes error: should pass in non-negative integer")
-	}
-	if uint(x.BitLen()) > byteLen*8 {
-		return nil, fmt.Errorf("ABI: big Int To Bytes error: integer byte length > given byte length")
-	}
-
-	buffer := make([]byte, byteLen)
-	intBytes := x.Bytes()
-	copy(buffer[int(byteLen)-len(intBytes):], intBytes)
-	return buffer, nil
-}
-
 // typeCastToTuple cast an array-like ABI type into an ABI tuple type.
 func (t Type) typeCastToTuple(tupLen ...int) (Type, error) {
 	var childT []Type
@@ -187,14 +170,13 @@ func encodeInt(intValue interface{}, bitSize uint16) ([]byte, error) {
 		return nil, fmt.Errorf("passed in numeric value should be non negative")
 	}
 
+	castedBytes := make([]byte, bitSize/8)
+
 	if bigInt.Cmp(new(big.Int).Lsh(big.NewInt(1), uint(bitSize))) >= 0 {
 		return nil, fmt.Errorf("input value bit size %d > abi type bit size %d", bigInt.BitLen(), bitSize)
 	}
 
-	castedBytes, err := bigIntToBytes(bigInt, uint(bitSize/8))
-	if err != nil {
-		return nil, err
-	}
+	bigInt.FillBytes(castedBytes)
 	return castedBytes, nil
 }
 
@@ -204,12 +186,8 @@ func inferToSlice(value interface{}) ([]interface{}, error) {
 	if reflectVal.Kind() != reflect.Slice && reflectVal.Kind() != reflect.Array {
 		return nil, fmt.Errorf("cannot infer an interface value as a slice of interface element")
 	}
-	if reflectVal.IsNil() {
-		if reflectVal.Kind() == reflect.Slice {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("cannot infer nil value for array kind interface")
-	}
+	// * if input is a slice, with nil, then reflectVal.Len() == 0
+	// * if input is an array, it is not possible it is nil
 	values := make([]interface{}, reflectVal.Len())
 	for i := 0; i < reflectVal.Len(); i++ {
 		values[i] = reflectVal.Index(i).Interface()

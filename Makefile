@@ -8,7 +8,6 @@ else
 export GOPATH := $(shell go env GOPATH)
 GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
 endif
-export GO111MODULE	:= on
 export GOPROXY := direct
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)

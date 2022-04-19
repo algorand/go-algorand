@@ -77,13 +77,15 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 	OpSpecs[1] = OpSpecs[4]
 	OpSpecs[4] = tmp
 
-	t.Run("TestOpcodesByVersion", TestOpcodesByVersion)
+	t.Run("TestOpcodesByVersion", testOpcodesByVersion)
 }
 
 func TestOpcodesByVersion(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// has partitioning in the TestOpcodesByVersionReordered()
+	partitiontest.PartitionTest(t)
+	testOpcodesByVersion(t)
+}
 
+func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := make([]OpSpec, len(OpSpecs))
 	for idx, opspec := range OpSpecs {
@@ -168,7 +170,7 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			reflect.ValueOf(a.dis).Pointer() == reflect.ValueOf(b.dis).Pointer() &&
 			reflect.DeepEqual(a.Args, b.Args) && reflect.DeepEqual(a.Returns, b.Returns) &&
 			a.Modes == b.Modes &&
-			a.Details.Cost == b.Details.Cost && a.Details.Size == b.Details.Size &&
+			a.Details.FullCost == b.Details.FullCost && a.Details.Size == b.Details.Size &&
 			reflect.ValueOf(a.Details.checkFunc).Pointer() == reflect.ValueOf(b.Details.checkFunc).Pointer()
 		return
 	}

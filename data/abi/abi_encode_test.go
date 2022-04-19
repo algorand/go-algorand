@@ -83,8 +83,8 @@ func TestEncodeValid(t *testing.T) {
 			randomInt, err := rand.Int(rand.Reader, upperLimit)
 			require.NoError(t, err, "cryptographic random int init fail")
 
-			expected, err := bigIntToBytes(randomInt, uint(intSize/8))
-			require.NoError(t, err, "big int to byte conversion error")
+			expected := make([]byte, intSize/8)
+			randomInt.FillBytes(expected)
 
 			uintEncode, err := uintType.Encode(randomInt)
 			require.NoError(t, err, "encoding from uint type fail")
@@ -122,9 +122,8 @@ func TestEncodeValid(t *testing.T) {
 				encodedUfixed, err := typeUfixed.Encode(randomInt)
 				require.NoError(t, err, "ufixed encode fail")
 
-				expected, err := bigIntToBytes(randomInt, uint(size/8))
-				require.NoError(t, err, "big int to byte conversion error")
-
+				expected := make([]byte, size/8)
+				randomInt.FillBytes(expected)
 				require.Equal(t, expected, encodedUfixed, "encode ufixed not match with expected")
 			}
 			// (2^[bitSize] - 1) / (10^[precision]) test
@@ -142,8 +141,8 @@ func TestEncodeValid(t *testing.T) {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
-		addrBytesExpected, err := bigIntToBytes(randomAddrInt, uint(addressByteSize))
-		require.NoError(t, err, "big int to byte conversion error")
+		addrBytesExpected := make([]byte, addressByteSize)
+		randomAddrInt.FillBytes(addrBytesExpected)
 
 		addrBytesActual, err := addressType.Encode(addrBytesExpected)
 		require.NoError(t, err, "address encode fail")
@@ -422,8 +421,8 @@ func TestDecodeValid(t *testing.T) {
 		randomAddrInt, err := rand.Int(rand.Reader, upperLimit)
 		require.NoError(t, err, "cryptographic random int init fail")
 
-		expected, err := bigIntToBytes(randomAddrInt, uint(addressByteSize))
-		require.NoError(t, err, "big int to byte conversion error")
+		expected := make([]byte, addressByteSize)
+		randomAddrInt.FillBytes(expected)
 
 		actual, err := addressType.Decode(expected)
 		require.NoError(t, err, "decoding address should not return error")
@@ -952,10 +951,8 @@ func addPrimitiveRandomValues(t *testing.T, pool *map[BaseType][]testUnit) {
 	for i := 0; i < addressTestCaseCount; i++ {
 		randAddrVal, err := rand.Int(rand.Reader, maxAddress)
 		require.NoError(t, err, "generate random value for address, should be no error")
-
-		addrBytes, err := bigIntToBytes(randAddrVal, uint(addressByteSize))
-		require.NoError(t, err, "big int to byte conversion error")
-
+		addrBytes := make([]byte, addressByteSize)
+		randAddrVal.FillBytes(addrBytes)
 		(*pool)[Address][i] = testUnit{serializedType: addressType.String(), value: addrBytes}
 	}
 	categorySelfRoundTripTest(t, (*pool)[Address])
@@ -1165,7 +1162,7 @@ func TestParseArgJSONtoByteSlice(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
-			applicationArgs := make([][]byte, 0)
+			applicationArgs := [][]byte{}
 			err := ParseArgJSONtoByteSlice(test.argTypes, test.jsonArgs, &applicationArgs)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedAppArgs, applicationArgs)
@@ -1223,4 +1220,60 @@ func TestParseMethodSignature(t *testing.T) {
 			require.Equal(t, test.returnType, returnType)
 		})
 	}
+}
+
+func TestInferToSlice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var emptySlice []int
+	tests := []struct {
+		toBeInferred interface{}
+		length       int
+	}{
+		{
+			toBeInferred: []int{},
+			length:       0,
+		},
+		{
+			toBeInferred: make([]int, 0),
+			length:       0,
+		},
+		{
+			toBeInferred: emptySlice,
+			length:       0,
+		},
+		{
+			toBeInferred: [0]int{},
+			length:       0,
+		},
+		{
+			toBeInferred: [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			length:       32,
+		},
+		{
+			toBeInferred: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			length:       32,
+		},
+	}
+
+	for i, test := range tests {
+		inferredSlice, err := inferToSlice(test.toBeInferred)
+		require.NoError(t, err, "inferToSlice on testcase %d failed to successfully infer %v", i, test.toBeInferred)
+		require.Equal(t, test.length, len(inferredSlice), "inferToSlice on testcase %d inferred different length, expected %d", i, test.length)
+	}
+
+	// one more testcase for totally nil (with no type information) is bad, should not pass the test
+	_, err := inferToSlice(nil)
+	require.EqualError(
+		t, err,
+		"cannot infer an interface value as a slice of interface element",
+		"inferToSlice should return type inference error when passed in nil with unexpected Kind")
+
+	// one moar testcase for wrong typed nil is bad, should not pass the test
+	var nilPt *uint64 = nil
+	_, err = inferToSlice(nilPt)
+	require.EqualError(
+		t, err,
+		"cannot infer an interface value as a slice of interface element",
+		"inferToSlice should return type inference error when passing argument type other than slice or array")
 }

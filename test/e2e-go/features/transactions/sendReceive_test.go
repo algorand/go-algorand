@@ -57,6 +57,7 @@ func TestAccountsCanSendMoney(t *testing.T) {
 // this test checks that two accounts' balances stay up to date
 // as they send each other money many times
 func TestDevModeAccountsCanSendMoney(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	numberOfSends := 25
