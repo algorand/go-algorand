@@ -101,7 +101,7 @@ type onlineAccounts struct {
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	// TODO: restore the cache
-	// baseAccounts lruAccounts
+	baseOnlineAccounts lruOnlineAccounts
 }
 
 // initialize initializes the accountUpdates structure
@@ -171,7 +171,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.accounts = make(map[basics.Address]modifiedOnlineAccount)
 	ao.deltasAccum = []int{0}
 
-	// ao.baseAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+	ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	return
 }
 
@@ -191,7 +191,7 @@ func (ao *onlineAccounts) close() {
 		ao.voters = nil
 	}
 
-	// ao.baseAccounts.prune(0)
+	ao.baseOnlineAccounts.prune(0)
 }
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
@@ -220,7 +220,7 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	ao.versions = append(ao.versions, blk.CurrentProtocol)
 	ao.deltasAccum = append(ao.deltasAccum, delta.Accts.Len()+ao.deltasAccum[len(ao.deltasAccum)-1])
 
-	// ao.baseAccounts.flushPendingWrites()
+	ao.baseOnlineAccounts.flushPendingWrites()
 
 	for i := 0; i < delta.Accts.Len(); i++ {
 		addr, data := delta.Accts.GetByIdx(i)
@@ -233,8 +233,8 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	ao.roundTotals = append(ao.roundTotals, delta.Totals)
 
 	// calling prune would drop old entries from the base accounts.
-	// newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
-	// ao.baseAccounts.prune(newBaseAccountSize)
+	newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
+	ao.baseOnlineAccounts.prune(newBaseAccountSize)
 
 	if ao.voters != nil {
 		ao.voters.newBlock(blk.BlockHeader)
@@ -362,7 +362,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, lruAccounts{})
+	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, ao.baseOnlineAccounts)
 
 	ao.accountsMu.RUnlock()
 
@@ -431,10 +431,9 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	// TODO: restore the cache
-	// for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
-	// 	ao.baseAccounts.write(persistedAcct)
-	// }
+	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
+		ao.baseOnlineAccounts.write(persistedAcct)
+	}
 
 	ao.deltas = ao.deltas[offset:]
 	ao.deltasAccum = ao.deltasAccum[offset:]
@@ -537,13 +536,12 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			}
 		}
 
-		// // check the baseAccounts -
-		// if macct, has := ao.baseAccounts.read(addr); has && macct.round == currentDbRound {
+		// TODO: baseOnlineAccounts is not good for round-based lookup since it always contains the latest updated value
+		// if macct, has := ao.baseOnlineAccounts.read(addr); has && macct.round == currentDbRound {
 		// 	// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 		// 	// would ensure that we promote this field.
-		// 	ao.baseAccounts.writePending(macct)
-		// 	u := macct.accountData.GetLedgerCoreAccountData()
-		// 	return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
+		// 	ao.baseOnlineAccounts.writePending(macct)
+		// 	return macct.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		// }
 
 		ao.accountsMu.RUnlock()
@@ -558,7 +556,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if persistedData.round == currentDbRound {
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
-				// ao.baseAccounts.writePending(persistedData)
+				// TODO: add another cache
+				// ao.baseOnlineAccounts.writePending(persistedData)
 				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
 			}
 			// otherwise return empty

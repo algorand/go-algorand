@@ -48,7 +48,7 @@ func RandomNote() []byte {
 }
 
 // RandomAccountData generates a random AccountData
-func RandomAccountData(rewardsLevel uint64) basics.AccountData {
+func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	var data basics.AccountData
 
 	// Avoid overflowing totals
@@ -66,7 +66,18 @@ func RandomAccountData(rewardsLevel uint64) basics.AccountData {
 	}
 
 	data.VoteFirstValid = 0
-	data.RewardsBase = rewardsLevel
+	data.RewardsBase = rewardsBase
+	return data
+}
+
+// RandomOnlineAccountData is similar to RandomAccountData but always creates online account
+func RandomOnlineAccountData(rewardsBase uint64) basics.AccountData {
+	var data basics.AccountData
+	data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
+	data.Status = basics.Online
+	data.VoteLastValid = 1000
+	data.VoteFirstValid = 0
+	data.RewardsBase = rewardsBase
 	return data
 }
 
