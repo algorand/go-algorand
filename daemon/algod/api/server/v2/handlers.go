@@ -601,23 +601,21 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 	}
 
 	for idx := range txns {
+		if txns[idx].ID() != txID {
+			continue // skip
+		}
+
 		var tree *merklearray.Tree
 		var stibhash crypto.Digest
 
 		switch hashtype {
 		case "sha256":
-			if txns[idx].Txn.IDSha256() != txID {
-				continue
-			}
 			tree, err = block.TxnMerkleTreeSHA256()
 			if err != nil {
 				return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
 			}
 			stibhash = block.Payset[idx].Hash(crypto.Sha256)
 		case "sha512_256":
-			if txns[idx].Txn.ID() != txID {
-				continue
-			}
 			tree, err = block.TxnMerkleTree()
 			if err != nil {
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
