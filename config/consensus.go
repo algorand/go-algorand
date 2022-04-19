@@ -421,6 +421,10 @@ type ConsensusParams struct {
 	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
+
+	// CatchpointLookback specified a round lookback to take catchpoints at.
+	// Accounts snapshot for round X will be taken at X-CatchpointLookback
+	CatchpointLookback uint64
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -436,7 +440,7 @@ const (
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
 
-	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	// PaysetCommitMerkle uses merkle array to commit to the payset.
 	PaysetCommitMerkle
 )
 
@@ -577,7 +581,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	return staticConsensus
 }
 
-// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// Merge merges a configurable consensus on top of the existing consensus protocol and return
 // a new consensus protocol without modify any of the incoming structures.
 func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
 	staticConsensus := cp.DeepCopy()
@@ -1116,6 +1120,9 @@ func initConsensusProtocols() {
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
+
+	// Make the accounts snapshot for round X at X-CatchpointLookback
+	vFuture.CatchpointLookback = 320
 
 	// Enable compact certificates.
 	vFuture.CompactCertRounds = 256

@@ -55,7 +55,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	ao := &onlineAccounts{}
 	au.initialize(conf)
 	ct.initialize(conf, ".")
-	ao.initialize()
+	ao.initialize(conf)
 
 	_, err := trackerDBInitialize(ml, false, ".")
 	a.NoError(err)

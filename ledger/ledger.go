@@ -156,7 +156,7 @@ func OpenLedger(
 	}
 
 	l.accts.initialize(cfg)
-	l.acctsOnline.initialize()
+	l.acctsOnline.initialize(cfg)
 	l.catchpoint.initialize(cfg, dbPathPrefix)
 
 	err = l.reloadLedger()

@@ -109,7 +109,7 @@ const (
 	CatchpointCatchupStateLedgerDownload
 	// CatchpointCatchupStateLastestBlockDownload indicates that we're download the latest block
 	CatchpointCatchupStateLastestBlockDownload
-	// CatchpointCatchupStateBlocksDownload indicates that we're downloading the blocks prior to the latest one ( total of MaxBalLookback blocks )
+	// CatchpointCatchupStateBlocksDownload indicates that we're downloading the blocks prior to the latest one ( total of CatchpointLookback blocks )
 	CatchpointCatchupStateBlocksDownload
 	// CatchpointCatchupStateSwitch indicates that we're switching to use the downloaded ledger/blocks content
 	CatchpointCatchupStateSwitch
@@ -712,7 +712,11 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	// calculate the balances round and store it. It *should* be identical to the one in the catchpoint file header, but we don't want to
 	// trust the one in the catchpoint file header, so we'll calculate it ourselves.
-	balancesRound := blk.Round() - basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
+	catchpointLookback := config.Consensus[blk.CurrentProtocol].CatchpointLookback
+	if catchpointLookback == 0 {
+		catchpointLookback = config.Consensus[blk.CurrentProtocol].MaxBalLookback
+	}
+	balancesRound := blk.Round() - basics.Round(catchpointLookback)
 	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerStorebalancesroundCount.Inc(nil)

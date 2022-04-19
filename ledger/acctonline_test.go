@@ -40,7 +40,6 @@ func TestAcctOnline(t *testing.T) {
 	const seedLookback = 1
 	const seedInteval = 1
 	const maxBalLookback = 2 * seedLookback * seedInteval
-	const maxDeltaLookback = maxBalLookback // TODO: change
 
 	const numAccts = maxBalLookback * 10
 	allAccts := make([]basics.BalanceRecord, numAccts)
@@ -78,6 +77,8 @@ func TestAcctOnline(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
+	maxDeltaLookback := conf.MaxAcctLookback
+
 	au, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
 
@@ -166,8 +167,8 @@ func TestAcctOnline(t *testing.T) {
 
 		// check the table data and the cache
 		// data gets committed after maxDeltaLookback
-		if i > maxDeltaLookback {
-			rnd := i - maxDeltaLookback
+		if i > basics.Round(maxDeltaLookback) {
+			rnd := i - basics.Round(maxDeltaLookback)
 			acctIdx := int(rnd) - 1
 			bal := allAccts[acctIdx]
 			data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
@@ -199,8 +200,8 @@ func TestAcctOnline(t *testing.T) {
 		// account 0 is set to Offline at round 1
 		// and set expired at X = 1 + MaxBalLookback (= 3)
 		// actual removal happens when X is committed i.e. at round X + maxDeltaLookback (= 5)
-		if i > maxDeltaLookback+maxDeltaLookback {
-			rnd := i - (maxDeltaLookback + maxDeltaLookback)
+		if i > basics.Round(maxBalLookback+maxDeltaLookback) {
+			rnd := i - basics.Round(maxBalLookback+maxDeltaLookback)
 			acctIdx := int(rnd) - 1
 			bal := allAccts[acctIdx]
 			data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
@@ -215,7 +216,7 @@ func TestAcctOnline(t *testing.T) {
 			require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.accountData)
 
-			// TODO: restore after introducing lookback
+			// TODO: restore after introducing lookback and supply history
 			// roundOffset fails with round 1 before dbRound 3
 			// oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
 			// require.NoError(t, err)
@@ -244,7 +245,7 @@ func TestAcctOnline(t *testing.T) {
 		require.NotEmpty(t, data.rowid)
 		require.Empty(t, data.accountData)
 
-		// TODO: restore after introducing lookback
+		// TODO: restore after introducing lookback and supply history
 		// oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
 		// require.NoError(t, err)
 		// require.Empty(t, oad)
@@ -259,7 +260,7 @@ func TestAcctOnline(t *testing.T) {
 	}
 
 	// check maxDeltaLookback accounts in in-memory deltas, check it
-	for i := numAcctsStage1; i < numAcctsStage1+maxDeltaLookback; i++ {
+	for i := numAcctsStage1; i < numAcctsStage1+int(maxDeltaLookback); i++ {
 		bal := allAccts[i]
 		oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
 		require.NoError(t, err)

@@ -192,6 +192,9 @@ type accountUpdates struct {
 
 	// lastMetricsLogTime is the time when the previous metrics logging occurred
 	lastMetricsLogTime time.Time
+
+	// maxAcctLookback sets the minimim deltas size to keep in memory
+	acctLookback uint64
 }
 
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
@@ -255,6 +258,8 @@ func (r resourcesUpdates) getForAddress(addr basics.Address) map[basics.Creatabl
 // initialize initializes the accountUpdates structure
 func (au *accountUpdates) initialize(cfg config.Local) {
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
+
+	au.acctLookback = cfg.MaxAcctLookback
 
 	// log metrics
 	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
@@ -404,7 +409,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, 
 	defer au.accountsMu.RUnlock()
 
 	retRound = basics.Round(0)
-	lookback = basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
+	// lookback = basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
+	lookback = basics.Round(au.acctLookback)
 	if committedRound < lookback {
 		return
 	}

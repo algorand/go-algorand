@@ -64,7 +64,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	ao := &onlineAccounts{}
 	au.initialize(conf)
 	ct.initialize(conf, dbPathPrefix)
-	ao.initialize()
+	ao.initialize(conf)
 	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 

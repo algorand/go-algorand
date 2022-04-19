@@ -100,13 +100,16 @@ type onlineAccounts struct {
 	expirations []onlineAccountExpiration
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
-	// TODO: restore the cache
 	baseOnlineAccounts lruOnlineAccounts
+
+	// maxAcctLookback sets the minimim deltas size to keep in memory
+	acctLookback uint64
 }
 
 // initialize initializes the accountUpdates structure
-func (ao *onlineAccounts) initialize() {
+func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.accountsReadCond = sync.NewCond(ao.accountsMu.RLocker())
+	ao.acctLookback = cfg.MaxAcctLookback
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -251,7 +254,7 @@ func (ao *onlineAccounts) committedUpTo(committedRound basics.Round) (retRound, 
 	defer ao.accountsMu.RUnlock()
 
 	retRound = basics.Round(0)
-	lookback = basics.Round(config.Consensus[ao.versions[len(ao.versions)-1]].MaxBalLookback)
+	lookback = basics.Round(ao.acctLookback)
 	if committedRound < lookback {
 		return
 	}
