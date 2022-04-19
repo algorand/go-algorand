@@ -1456,8 +1456,10 @@ func TestCreateAndUse(t *testing.T) {
 		dl.txn(&fund)
 		if ver == 30 {
 			dl.txgroup("invalid Asset reference", &createasa, &use)
+			dl.endBlock()
 			return
 		}
+		// v31 onward, create & use works
 		dl.txgroup("", &createasa, &use)
 		vb := dl.endBlock()
 
