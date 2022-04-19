@@ -4550,7 +4550,7 @@ func opItxnSubmit(cx *EvalContext) error {
 						return err
 					}
 					if v < 4 {
-						return fmt.Errorf("inner app call opt-in with CSP v %d < 4", v)
+						return fmt.Errorf("inner app call opt-in with CSP v%d < v4", v)
 					}
 				}
 			}

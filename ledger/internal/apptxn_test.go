@@ -1398,18 +1398,20 @@ next2:
 
 // TestCreateAndUse checks that an ASA can be created in an early tx, and then
 // used in a later app call tx (in the same group).  This was not allowed until
-// v6, because of the strict adherence to the foreign-arrays rules.
+// teal 6 (v31), because of the strict adherence to the foreign-arrays rules.
 func TestCreateAndUse(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
-	defer l.Close()
+	// At 30 the asset reference is illegal, then from v31 it works.
+	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	createapp := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
+		createapp := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
          itxn_begin
          int axfer; itxn_field TypeEnum
          int 0;     itxn_field Amount
@@ -1418,46 +1420,50 @@ func TestCreateAndUse(t *testing.T) {
          global CurrentApplicationAddress;  itxn_field AssetReceiver
          itxn_submit
 `),
-	}
-	appIndex := basics.AppIndex(1)
+		}
+		appIndex := basics.AppIndex(1)
 
-	fund := txntest.Txn{
-		Type:     "pay",
-		Sender:   addrs[0],
-		Receiver: appIndex.Address(),
-		Amount:   1_000_000,
-	}
+		fund := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: appIndex.Address(),
+			Amount:   1_000_000,
+		}
 
-	createasa := txntest.Txn{
-		Type:   "acfg",
-		Sender: addrs[0],
-		AssetParams: basics.AssetParams{
-			Total:     1000000,
-			Decimals:  3,
-			UnitName:  "oz",
-			AssetName: "Gold",
-			URL:       "https://gold.rush/",
-		},
-	}
-	asaIndex := basics.AssetIndex(3)
+		createasa := txntest.Txn{
+			Type:   "acfg",
+			Sender: addrs[0],
+			AssetParams: basics.AssetParams{
+				Total:     1000000,
+				Decimals:  3,
+				UnitName:  "oz",
+				AssetName: "Gold",
+				URL:       "https://gold.rush/",
+			},
+		}
+		asaIndex := basics.AssetIndex(3)
 
-	use := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[0],
-		ApplicationID: basics.AppIndex(1),
-		// The point of this test is to show the following (psychic) setting is unnecessary.
-		//ForeignAssets: []basics.AssetIndex{asaIndex},
-	}
+		use := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: basics.AppIndex(1),
+			// The point of this test is to show the following (psychic) setting is unnecessary.
+			//ForeignAssets: []basics.AssetIndex{asaIndex},
+		}
 
-	eval := nextBlock(t, l)
-	txn(t, l, eval, &createapp)
-	txn(t, l, eval, &fund)
-	err := txgroup(t, l, eval, &createasa, &use)
-	require.NoError(t, err)
-	vb := endBlock(t, l, eval)
+		dl.beginBlock()
+		dl.txn(&createapp)
+		dl.txn(&fund)
+		if ver == 30 {
+			dl.txgroup("invalid Asset reference", &createasa, &use)
+			return
+		}
+		dl.txgroup("", &createasa, &use)
+		vb := dl.endBlock()
 
-	require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
-	require.Equal(t, asaIndex, vb.Block().Payset[2].ApplyData.ConfigAsset)
+		require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
+		require.Equal(t, asaIndex, vb.Block().Payset[2].ApplyData.ConfigAsset)
+	})
 }
 
 func TestGtxnEffects(t *testing.T) {
@@ -1612,7 +1618,7 @@ func TestIndirectReentry(t *testing.T) {
 	endBlock(t, l, eval)
 }
 
-// This tests a valid form of reentry (which may not be the correct word here).
+// TestValidAppReentry tests a valid form of reentry (which may not be the correct word here).
 // When A calls B then returns to A then A calls C which calls B, the execution
 // should not produce an error because B doesn't occur in the call stack twice.
 func TestValidAppReentry(t *testing.T) {
@@ -1876,6 +1882,8 @@ func TestInnerAppVersionCalling(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 
+		three, err := logic.AssembleStringWithVersion("int 1", 3)
+		require.NoError(t, err)
 		five, err := logic.AssembleStringWithVersion("int 1", 5)
 		require.NoError(t, err)
 		six, err := logic.AssembleStringWithVersion("int 1", 6)
@@ -1895,9 +1903,17 @@ func TestInnerAppVersionCalling(t *testing.T) {
 			ClearStateProgram: six.Program,
 		}
 
-		vb := dl.fullBlock(&create5, &create6)
+		create5with3 := txntest.Txn{
+			Type:              "appl",
+			Sender:            addrs[0],
+			ApprovalProgram:   five.Program,
+			ClearStateProgram: three.Program,
+		}
+
+		vb := dl.fullBlock(&create5, &create6, &create5with3)
 		v5id := vb.Block().Payset[0].ApplicationID
 		v6id := vb.Block().Payset[1].ApplicationID
+		v5withv3csp := vb.Block().Payset[2].ApplicationID
 
 		call := txntest.Txn{
 			Type:   "appl",
@@ -1913,13 +1929,33 @@ itxn_submit`,
 			ForeignApps: []basics.AppIndex{v5id},
 		}
 
+		// optin is the same as call, except also sets OnCompletion to optin
+		optin := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			// don't use main. do the test at creation time
+			ApprovalProgram: `
+itxn_begin
+	int appl
+	itxn_field TypeEnum
+	txn Applications 1
+	itxn_field ApplicationID
+    int OptIn
+    itxn_field OnCompletion
+itxn_submit`,
+			ForeignApps: []basics.AppIndex{v5id},
+		}
+
 		if ver <= 32 {
 			dl.txn(&call, "inner app call with version 5")
 			call.ForeignApps[0] = v6id
 			dl.txn(&call, "overspend") // it tried to execute, but test doesn't bother funding
 		} else {
-			// after 32 proto.AllowV4InnerAppls should be in effect
-			dl.txn(&call, "overspend") // it tried to execute, but test doesn't bother funding
+			// after 32 proto.AllowV4InnerAppls should be in effect, so calls and optins to v5 are ok
+			dl.txn(&call, "overspend")         // it tried to execute, but test doesn't bother funding
+			dl.txn(&optin, "overspend")        // it tried to execute, but test doesn't bother funding
+			optin.ForeignApps[0] = v5withv3csp // but we can't optin to a v5 if it has an old csp
+			dl.txn(&optin, "CSP v3 < v4")      // it tried to execute, but test doesn't bother funding
 		}
 	})
 
