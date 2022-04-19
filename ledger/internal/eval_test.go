@@ -809,7 +809,7 @@ func TestGetCreatorsErrorRoundMismatch(t *testing.T) {
 	}
 	address, exists, err := base.getCreator(cindex[0], ctype[0])
 	require.Error(t, err)
-	require.True(t, errors.Is(err, ledgercore.ErrNonSequentialBlockEval{1,0}))
+	require.True(t, errors.Is(err, ledgercore.ErrNonSequentialBlockEval{EvaluatorRound: 1, LatestRound: 0}))
 
 	address, exists, err = base.getCreator(cindex[0], ctype[0])
 	require.Error(t, err)
