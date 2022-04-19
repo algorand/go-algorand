@@ -92,6 +92,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	a.NoError(err)
 
 	txid := tx.ID()
+	txidSHA256 := tx.IDSha256() // only used for verification
 	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
 	a.NoError(err)
 
@@ -133,7 +134,7 @@ func TestTxnMerkleProof(t *testing.T) {
 		a.NoError(err)
 	}
 
-	element = TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
+	element = TxnMerkleElemRaw{Txn: crypto.Digest(txidSHA256)}
 	copy(element.Stib[:], proofrespSHA256.Stibhash[:])
 
 	elems = make(map[uint64]crypto.Hashable)
