@@ -539,17 +539,9 @@ func TestAcctUpdates(t *testing.T) {
 		checkAcctUpdates(t, au, ao, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
 
-	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
-	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, err = accountsOnlineRoundParams(tx)
-		return err
-	})
-	require.NoError(t, err)
-	require.Equal(t, dbOnlineRoundParams, ao.onlineRoundParamsData)
-
 	// check the account totals.
 	var dbRound basics.Round
-	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbRound, err = accountsRound(tx)
 		return
 	})
@@ -2733,5 +2725,5 @@ func TestAcctOnlineRoundParamCache(t *testing.T) {
 		return err
 	})
 	require.NoError(t, err)
-	require.Equal(t, dbOnlineRoundParams[0:5], ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)][0:5])
+	require.Equal(t, dbOnlineRoundParams, ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)])
 }
