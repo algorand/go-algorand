@@ -117,8 +117,8 @@ func init() {
 	freezeAssetCmd.MarkFlagRequired("account")
 	freezeAssetCmd.MarkFlagRequired("freeze")
 
-	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being transferred")
-	optinAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being transferred")
+	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being accepted")
+	optinAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being accepted")
 	optinAssetCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to opt in to using the asset (if not specified, uses default account)")
 	optinAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
 
