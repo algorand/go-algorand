@@ -308,12 +308,12 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
 	// consensus version.
-	if ao.onlineRoundParamsData[startIndex + 1].CurrentProtocol != ao.onlineRoundParamsData[uint64(startIndex) + offset].CurrentProtocol {
+	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[uint64(startIndex)+offset].CurrentProtocol {
 		// find the tip point.
 		tipPoint := sort.Search(int(offset), func(i int) bool {
 			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
 			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
-			return ao.onlineRoundParamsData[startIndex + 1].CurrentProtocol != ao.onlineRoundParamsData[startIndex + 1+i].CurrentProtocol
+			return ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+1+i].CurrentProtocol
 		})
 		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
 		offset = uint64(tipPoint)
@@ -374,11 +374,10 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	dcc.genesisProto = config.Consensus[ao.ledger.GenesisProto()]
 
 	start, err := ao.roundParamsOffset(dcc.oldBase)
-	end, err := ao.roundParamsOffset(dcc.newBase)
 	if err != nil {
 		return err
 	}
-	dcc.onlineRoundParams = ao.onlineRoundParamsData[start:end]
+	dcc.onlineRoundParams = ao.onlineRoundParamsData[start:]
 	maxOnlineLookback := basics.Round(ao.maxOnlineLookback())
 	dcc.maxLookbackRound = basics.Round(0)
 	if ao.latest() > maxOnlineLookback {

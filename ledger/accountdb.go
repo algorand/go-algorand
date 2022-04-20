@@ -3040,6 +3040,7 @@ func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore
 		if err != nil {
 			return err
 		}
+		round++
 	}
 	return nil
 }
