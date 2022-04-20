@@ -184,6 +184,8 @@ type trackerRegistry struct {
 	// lastFlushTime is the time we last flushed updates to
 	// the accounts DB (bumping dbRound).
 	lastFlushTime time.Time
+
+	cfg config.Local
 }
 
 // deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
@@ -267,6 +269,7 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.commitSyncerClosed = make(chan struct{})
 	tr.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	tr.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
+	tr.cfg = cfg
 	go tr.commitSyncer(tr.deferredCommits)
 
 	tr.trackers = append([]ledgerTracker{}, trackers...)
@@ -297,7 +300,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		}
 	}
 
-	err := tr.initializeTrackerCaches(l)
+	err := tr.initializeTrackerCaches(l, tr.cfg)
 	if err != nil {
 		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
@@ -521,7 +524,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 // initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
 // the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
 // is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
-func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err error) {
+func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg config.Local) (err error) {
 	lastestBlockRound := l.Latest()
 	lastBalancesRound := tr.dbRound
 
@@ -627,7 +630,8 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
 		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
+		// loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
+		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(cfg.MaxAcctLookback) < lastestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			tr.lastFlushTime = time.Now().Add(-balancesFlushInterval)
@@ -646,7 +650,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 			var roundsBehind basics.Round
 
 			// flush the account data
-			tr.scheduleCommit(blk.Round(), basics.Round(config.Consensus[blk.BlockHeader.CurrentProtocol].MaxBalLookback))
+			tr.scheduleCommit(blk.Round(), basics.Round(cfg.MaxAcctLookback))
 			// wait for the writing to complete.
 			tr.waitAccountsWriting()
 

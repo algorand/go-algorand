@@ -19,6 +19,7 @@ package ledger
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -110,19 +111,20 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	a.NotNil(cdr)
 	a.Equal(expectedOffset, cdr.offset)
 
+	cdr = ao.produceCommittingTask(blockqRound, dbRound, cdr)
+	a.NotNil(cdr)
+	a.Equal(expectedOffset, cdr.offset)
+
 	cdr = ct.produceCommittingTask(blockqRound, dbRound, cdr)
 	a.NotNil(cdr)
 	// before the fix
 	// expectedOffset = uint64(blockqRound - lookback - dbRound) // 983
 	a.Equal(expectedOffset, cdr.offset)
 
-	cdr = ao.produceCommittingTask(blockqRound, dbRound, cdr)
-	a.NotNil(cdr)
-	a.Equal(expectedOffset, cdr.offset)
-
 	// schedule the commit. au is expected to return offset 100 and
 	ml.trackers.mu.Lock()
 	ml.trackers.dbRound = dbRound
+	ml.trackers.lastFlushTime = time.Time{}
 	ml.trackers.mu.Unlock()
 	ml.trackers.scheduleCommit(blockqRound, lookback)
 
