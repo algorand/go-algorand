@@ -308,7 +308,7 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
 	// consensus version.
-	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[uint64(startIndex)+offset].CurrentProtocol {
+	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		// find the tip point.
 		tipPoint := sort.Search(int(offset), func(i int) bool {
 			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
@@ -351,7 +351,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
-	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[uint64(startIndex)+offset].CurrentProtocol {
+	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		ao.accountsMu.RUnlock()
 
 		// in scheduleCommit, we expect that this function to update the catchpointWriting when
@@ -377,8 +377,12 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	if err != nil {
 		return err
 	}
-	dcc.onlineRoundParams = ao.onlineRoundParamsData[start:]
-	maxOnlineLookback := basics.Round(ao.maxOnlineLookback())
+	end, err := ao.roundParamsOffset(dcc.newBase)
+	if err != nil {
+		return err
+	}
+	dcc.onlineRoundParams = ao.onlineRoundParamsData[start:end]
+	maxOnlineLookback := basics.Round(ao.maxOnlineLookback() - int(offset))
 	dcc.maxLookbackRound = basics.Round(0)
 	if ao.latest() > maxOnlineLookback {
 		dcc.maxLookbackRound = ao.latest() - maxOnlineLookback
@@ -415,13 +419,13 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	// delete all entries all older than maxBalLookback rounds ago
-	err = accountsPruneOnlineRoundParams(tx, dcc.maxLookbackRound)
-
 	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound)
 	if err != nil {
 		return err
 	}
+
+	// delete all entries all older than maxBalLookback rounds ago
+	err = accountsPruneOnlineRoundParams(tx, dcc.maxLookbackRound)
 
 	return
 }
@@ -466,8 +470,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
 	maxOnlineLookback := ao.maxOnlineLookback()
-	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
-		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
+	if len(ao.onlineRoundParamsData) > maxOnlineLookback + 1 {
+		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback-1:]
 	}
 
 	ao.accountsMu.Unlock()
