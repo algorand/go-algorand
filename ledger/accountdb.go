@@ -2115,6 +2115,9 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 
 func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
 	totals, err := accountsTotals(tx, false)
+	if err != nil {
+		return err
+	}
 	if newDatabase {
 		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
 			{

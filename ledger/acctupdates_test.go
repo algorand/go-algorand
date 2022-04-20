@@ -2678,9 +2678,15 @@ func TestAcctOnlineRoundParamCache(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
+	allTotals := make(map[basics.Round]ledgercore.AccountTotals)
+
 	start := basics.Round(10)
 	end := basics.Round(2*proto.MaxBalLookback + 15)
 	for i := start; i < end; i++ {
+		consensusVersion := protocol.ConsensusCurrentVersion
+		if i > basics.Round(proto.MaxBalLookback) {
+			consensusVersion = protocol.ConsensusFuture
+		}
 		rewardLevelDelta := crypto.RandUint64() % 3
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
@@ -2703,13 +2709,14 @@ func TestAcctOnlineRoundParamCache(t *testing.T) {
 			},
 		}
 		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+		blk.CurrentProtocol = consensusVersion
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, consensusVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
+		allTotals[i] = delta.Totals
 		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 	}
@@ -2725,5 +2732,11 @@ func TestAcctOnlineRoundParamCache(t *testing.T) {
 		return err
 	})
 	require.NoError(t, err)
-	require.Equal(t, dbOnlineRoundParams, ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)])
+	require.Equal(t, ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)], dbOnlineRoundParams)
+
+	for i := ml.Latest() - basics.Round(proto.MaxBalLookback); i < ml.Latest(); i++ {
+		onlineTotal, err := ao.OnlineTotals(i)
+		require.NoError(t, err)
+		require.Equal(t, allTotals[i].Online.Money, onlineTotal)
+	}
 }
