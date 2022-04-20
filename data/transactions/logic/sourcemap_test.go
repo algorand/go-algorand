@@ -14,14 +14,42 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package logic
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGetSourceMap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	sourceNames := []string{"test.teal"}
+	offsetToLine := map[int]int{
+		1: 1,
+		2: 2,
+		5: 3,
+	}
+	actualSourceMap := GetSourceMap(sourceNames, offsetToLine)
+
+	a.Equal(sourceMapVersion, actualSourceMap.Version)
+	a.Equal(sourceNames, actualSourceMap.Sources)
+	a.Equal([]string{}, actualSourceMap.Names)
+
+	// Check encoding for each line.
+	splitMapping := strings.Split(actualSourceMap.Mapping, ";")
+	for pc := range splitMapping {
+		if line, ok := offsetToLine[pc]; ok {
+			a.Equal(MakeSourceMapLine(0, 0, line, 0), splitMapping[pc])
+		} else {
+			a.Equal("", splitMapping[pc])
+		}
+	}
+}
 
 func TestVLQ(t *testing.T) {
 	partitiontest.PartitionTest(t)

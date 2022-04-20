@@ -11,6 +11,8 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
+TEAL=test/scripts/e2e_subs/tealprogs
+
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 # prints:
@@ -147,6 +149,16 @@ ${gcmd} clerk send --amount 10 --from-program ${TEMPDIR}/true3.teal --to ${ACCOU
 ${gcmd} clerk compile ${TEMPDIR}/true3.teal -o ${TEMPDIR}/true3.lsig
 cp ${TEMPDIR}/true3.lsig ${TEMPDIR}/true2.lsig
 printf '\x02' | dd of=${TEMPDIR}/true2.lsig bs=1 seek=0 count=1 conv=notrunc
+
+# Try to compile with source map, and check that map is correct.
+# Since the source map contains info about the file path,
+# we do this in place and clean up the file later.
+${gcmd} clerk compile ${TEAL}/quine.teal -m
+trap 'rm ${TEAL}/quine.teal.*' EXIT
+if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.map; then
+    echo "produced source maps do not match"
+    exit 1
+fi
 
 # compute the escrow account for the frankenstein program
 ACCOUNT_TRUE=$(python -c 'import algosdk, sys; print(algosdk.logic.address(sys.stdin.buffer.read()))' < ${TEMPDIR}/true2.lsig)
