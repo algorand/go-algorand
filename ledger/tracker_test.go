@@ -87,14 +87,14 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	au.deltasAccum = make([]int, int(blockqRound))
 	au.versions = make([]protocol.ConsensusVersion, int(blockqRound))
 	ao.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))
-	ao.versions = make([]protocol.ConsensusVersion, int(blockqRound))
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, int(blockqRound))
 	for i := 0; i <= int(expectedOffset); i++ {
 		au.versions[i] = protocol.ConsensusCurrentVersion
-		ao.versions[i] = protocol.ConsensusCurrentVersion
+		ao.onlineRoundParamsData[i] = ledgercore.OnlineRoundParamsData{CurrentProtocol: protocol.ConsensusCurrentVersion}
 	}
 	for i := int(expectedOffset) + 1; i < len(au.versions); i++ {
 		au.versions[i] = protocol.ConsensusFuture
-		ao.versions[i] = protocol.ConsensusFuture
+		ao.onlineRoundParamsData[i] = ledgercore.OnlineRoundParamsData{CurrentProtocol: protocol.ConsensusFuture}
 	}
 	au.accountsMu.Unlock()
 

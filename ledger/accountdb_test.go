@@ -252,6 +252,8 @@ func TestAccountDBRound(t *testing.T) {
 	checkAccounts(t, tx, 0, accts)
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
+	expectedOnlineRoundParams, err := accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
 
 	// used to determine how many creatables element will be in the test per iteration
 	numElementsPerSegment := 10
@@ -294,8 +296,10 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		err = accountsPutOnlineRoundParams(tx, []ledgercore.OnlineRoundParamsData{{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}}, basics.Round(i))
+		onlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}
+		err = accountsPutOnlineRoundParams(tx, []ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
 		require.NoError(t, err)
+		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
 		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -332,10 +336,9 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
 
-	//expectedOnlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw}
-	//actualOnlineRoundParams, err := accountsOnlineRoundParams(tx)
-	//require.NoError(t, err)
-	//require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
+	actualOnlineRoundParams, err := accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
+	require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
 
 	// check LoadAllFullAccounts
 	loaded := make(map[basics.Address]basics.AccountData, len(accts))

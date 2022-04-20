@@ -530,7 +530,7 @@ func TestAcctUpdates(t *testing.T) {
 			checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
 		}
 	}
-
+	fmt.Println("help")
 	for i := basics.Round(0); i < 15; i++ {
 		// Clear the timer to ensure a flush
 		ml.trackers.lastFlushTime = time.Time{}
@@ -539,10 +539,19 @@ func TestAcctUpdates(t *testing.T) {
 		ml.trackers.waitAccountsWriting()
 		checkAcctUpdates(t, au, ao, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
+	fmt.Println("asdf")
+
+	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
+	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		dbOnlineRoundParams, err = accountsOnlineRoundParams(tx)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, len(dbOnlineRoundParams), len(ao.onlineRoundParamsData))
 
 	// check the account totals.
 	var dbRound basics.Round
-	err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbRound, err = accountsRound(tx)
 		return
 	})
