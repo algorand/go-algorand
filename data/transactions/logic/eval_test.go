@@ -455,7 +455,11 @@ int 1
 +
 `, 1)
 
-	testAccepts(t, `
+	// This code accepts if run, but the assembler will complain because the
+	// "straightline" path has a typing error.  That path is not taken because
+	// of the specific values used, so there is no runtime error. You could
+	// assemble this with "#pragma typetrack false", and it would accept.
+	code := `
 int 1
 int 2
 int 1
@@ -470,7 +474,9 @@ planb:
 after:
 dup
 pop
-`, 1)
+`
+	testProg(t, code, LogicVersion, Expect{12, "+ expects 2 stack arguments..."})
+	testAccepts(t, notrack(code), 1)
 }
 
 func TestV2Branches(t *testing.T) {
@@ -2482,7 +2488,7 @@ int 1`,
 				Type: protocol.PaymentTx,
 			},
 		},
-		runMode:     runModeApplication,
+		runMode:     modeApp,
 		errContains: "can't use gload on non-app call txn with index 0",
 	}
 
@@ -2492,7 +2498,7 @@ int 1`,
 				Type: protocol.ApplicationCallTx,
 			},
 		},
-		runMode:     runModeSignature,
+		runMode:     modeSig,
 		errContains: "gload not allowed in current mode",
 	}
 
@@ -2513,7 +2519,7 @@ int 1`,
 			}
 
 			switch failCase.runMode {
-			case runModeApplication:
+			case modeApp:
 				testAppBytes(t, program, ep, failCase.errContains)
 			default:
 				testLogicBytes(t, program, ep, failCase.errContains, failCase.errContains)
@@ -2868,8 +2874,8 @@ func TestPanic(t *testing.T) {
 					oldSpec = spec
 					opsByOpcode[v][opcode].op = opPanic
 					opsByOpcode[v][opcode].Modes = modeAny
-					opsByOpcode[v][opcode].Details.FullCost.baseCost = 1
-					opsByOpcode[v][opcode].Details.checkFunc = checkPanic
+					opsByOpcode[v][opcode].OpDetails.FullCost.baseCost = 1
+					opsByOpcode[v][opcode].OpDetails.check = checkPanic
 					ops.Program = append(ops.Program, byte(opcode))
 					break
 				}
@@ -3554,24 +3560,6 @@ func BenchmarkCheckx5(b *testing.B) {
 	}
 }
 
-func TestStackValues(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-
-	actual := oneInt.plus(oneInt)
-	require.Equal(t, twoInts, actual)
-
-	actual = oneInt.plus(oneAny)
-	require.Equal(t, StackTypes{StackUint64, StackAny}, actual)
-
-	actual = twoInts.plus(oneBytes)
-	require.Equal(t, StackTypes{StackUint64, StackUint64, StackBytes}, actual)
-
-	actual = oneInt.plus(oneBytes).plus(oneAny)
-	require.Equal(t, StackTypes{StackUint64, StackBytes, StackAny}, actual)
-}
-
 func TestEvalVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -3903,10 +3891,9 @@ func TestAllowedOpcodesV3(t *testing.T) {
 func TestLinearOpcodes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
 	for _, spec := range OpSpecs {
 		if spec.Version < backBranchEnabledVersion {
-			require.Zero(t, spec.Details.FullCost.chunkCost, spec)
+			require.Zero(t, spec.OpDetails.FullCost.chunkCost, spec)
 		}
 	}
 }
@@ -3927,15 +3914,16 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 	}
 }
 
-func obfuscate(program string) string {
+func notrack(program string) string {
 	// Put a prefix on the program that does nothing interesting,
 	// but prevents assembly from detecting type errors.  Allows
 	// evaluation testing of a program that would be rejected by
 	// assembler.
-	if strings.Contains(program, "obfuscate") {
+	pragma := "#pragma typetrack false\n"
+	if strings.Contains(program, pragma) {
 		return program // Already done.  Tests sometimes use at multiple levels
 	}
-	return "int 0;bnz obfuscate;obfuscate:;" + program
+	return pragma + program
 }
 
 type evalTester func(pass bool, err error) bool
@@ -3948,7 +3936,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Helper()
 			if v < introduced {
-				testProg(t, obfuscate(program), v, Expect{0, "...was introduced..."})
+				testProg(t, notrack(program), v, Expect{0, "...was introduced..."})
 				return
 			}
 			ops := testProg(t, program, v)
@@ -4014,8 +4002,8 @@ func TestAssert(t *testing.T) {
 	testAccepts(t, "int 1;assert;int 1", 3)
 	testRejects(t, "int 1;assert;int 0", 3)
 	testPanics(t, "int 0;assert;int 1", 3)
-	testPanics(t, obfuscate("assert;int 1"), 3)
-	testPanics(t, obfuscate(`byte "john";assert;int 1`), 3)
+	testPanics(t, notrack("assert;int 1"), 3)
+	testPanics(t, notrack(`byte "john";assert;int 1`), 3)
 }
 
 func TestBits(t *testing.T) {
@@ -4100,7 +4088,7 @@ func TestSwap(t *testing.T) {
 
 	t.Parallel()
 	testAccepts(t, "int 1; byte 0x1234; swap; int 1; ==; assert; byte 0x1234; ==", 3)
-	testPanics(t, obfuscate("int 1; swap; int 1; return"), 3)
+	testPanics(t, notrack("int 1; swap; int 1; return"), 3)
 }
 
 func TestSelect(t *testing.T) {
@@ -4120,7 +4108,7 @@ func TestDig(t *testing.T) {
 
 	t.Parallel()
 	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
-	testPanics(t, obfuscate("int 3; int 2; int 1; dig 11; int 2; ==; return"), 3)
+	testPanics(t, notrack("int 3; int 2; int 1; dig 11; int 2; ==; return"), 3)
 }
 
 func TestCover(t *testing.T) {
@@ -4130,8 +4118,8 @@ func TestCover(t *testing.T) {
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 1; int 2; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; int 2; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 5)
-	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 11; int 2; ==; return"), 5)
-	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 4; int 2; ==; return"), 5)
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; cover 11; int 2; ==; return"), 5)
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; cover 4; int 2; ==; return"), 5)
 }
 
 func TestUncover(t *testing.T) {
@@ -4143,8 +4131,8 @@ func TestUncover(t *testing.T) {
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; pop; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
 	testAccepts(t, "int 1; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
-	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; uncover 11; int 3; ==; return"), 5)
-	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; uncover 4; int 2; ==; return"), 5)
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; uncover 11; int 3; ==; return"), 5)
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; uncover 4; int 2; ==; return"), 5)
 }
 
 func TestPush(t *testing.T) {
@@ -4446,7 +4434,7 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
-	testPanics(t, obfuscate("byte 0x11; int 17; b!="), 4)
+	testPanics(t, notrack("byte 0x11; int 17; b!="), 4)
 }
 
 func TestBytesBits(t *testing.T) {
@@ -4546,43 +4534,43 @@ func TestLog(t *testing.T) {
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     runModeApplication,
+			runMode:     modeApp,
 		},
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     runModeApplication,
+			runMode:     modeApp,
 		},
 		{
 			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, maxLogCalls+1)),
 			errContains: "too many log calls",
-			runMode:     runModeApplication,
+			runMode:     modeApp,
 		},
 		{
 			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
 			errContains: "too many log calls",
-			runMode:     runModeApplication,
+			runMode:     modeApp,
 		},
 		{
 			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     runModeApplication,
+			runMode:     modeApp,
 		},
 		{
 			source:      `load 0; log`,
 			errContains: "log arg 0 wanted []byte but got uint64",
-			runMode:     runModeApplication,
+			runMode:     modeApp,
 		},
 		{
 			source:      `byte  "a logging message"; log; int 1`,
 			errContains: "log not allowed in current mode",
-			runMode:     runModeSignature,
+			runMode:     modeSig,
 		},
 	}
 
 	for _, c := range failCases {
 		switch c.runMode {
-		case runModeApplication:
+		case modeApp:
 			testApp(t, c.source, ep, c.errContains)
 		default:
 			testLogic(t, c.source, AssemblerMaxVersion, ep, c.errContains, c.errContains)
@@ -4858,7 +4846,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64;
 			int 0;
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "== arg 0 wanted type uint64 got []byte"}},
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }";
@@ -4866,7 +4854,7 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64;
 			int 18446744073709551615; //max uint64 value
 			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "== arg 0 wanted type uint64 got []byte"}},
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": 3}, \"key5\": 18446744073709551615 }";
@@ -5193,6 +5181,6 @@ func TestOpJSONRef(t *testing.T) {
 }
 
 func TestTypeComplaints(t *testing.T) {
-	t.Skip("Issue #3837")
+	testProg(t, "err; store 0", AssemblerMaxVersion)
 	testProg(t, "int 1; return; store 0", AssemblerMaxVersion)
 }
