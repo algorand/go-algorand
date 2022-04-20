@@ -1352,3 +1352,27 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
+
+## vrf_verify s
+
+- Opcode: 0xd0 {uint8 parameters index}
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: uint64
+- Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
+- **Cost**: 5700
+- Availability: v7
+
+`vrf_verify` Standards:
+
+| Index | Name | Notes |
+| - | ------ | --------- |
+| 0 | VrfAlgorand |  |
+| 1 | VrfChainlink |  |
+
+
+## block_seed
+
+- Opcode: 0xd1
+- Stack: ..., A: uint64 &rarr; ..., []byte
+- The sortition seed of round A. Fail if A is greater than the current round or more than 1000 rounds in the past.
+- Availability: v7
+- Mode: Application

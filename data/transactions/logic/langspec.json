@@ -2217,6 +2217,29 @@
       "Groups": [
         "Inner Transactions"
       ]
+    },
+    {
+      "Opcode": 208,
+      "Name": "vrf_verify",
+      "Args": "BBB",
+      "Returns": "BU",
+      "Size": 2,
+      "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
+      "ImmediateNote": "{uint8 parameters index}",
+      "Groups": [
+        "Arithmetic"
+      ]
+    },
+    {
+      "Opcode": 209,
+      "Name": "block_seed",
+      "Args": "U",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "The sortition seed of round A. Fail if A is greater than the current round or more than 1000 rounds in the past.",
+      "Groups": [
+        "State Access"
+      ]
     }
   ]
 }

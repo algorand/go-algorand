@@ -273,6 +273,7 @@ return stack matches the name of the input value.
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
+| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -603,6 +604,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
+| `block_seed` | The sortition seed of round A. Fail if A is greater than the current round or more than 1000 rounds in the past. |
 
 ### Inner Transactions
 

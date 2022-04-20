@@ -2369,6 +2369,8 @@ func TestReturnTypes(t *testing.T) {
 
 		"base64_decode": `: byte "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding`,
 		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
+
+		"block_seed": ": int 4294967200; block_seed",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -2388,6 +2390,8 @@ func TestReturnTypes(t *testing.T) {
 		"ecdsa_verify":        true,
 		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,
+
+		"vrf_verify": true,
 	}
 
 	byName := OpsByName[LogicVersion]
@@ -2522,6 +2526,19 @@ func TestLatestTimestamp(t *testing.T) {
 	ep, _, _ := makeSampleEnv()
 	source := "global LatestTimestamp; int 1; >="
 	testApp(t, source, ep)
+}
+
+func TestBlockSeed(t *testing.T) {
+	ep, _, _ := makeSampleEnv()
+
+	// needs to be close to l.rnd, which is 0xffffffff+5 in test ledger
+	testApp(t, "int 0xfffffff0; block_seed; len; int 32; ==", ep)
+	testApp(t, "int 0xfffefff0; block_seed; len; int 32; ==", ep, "not available")
+	testApp(t, "int 5; int 0xffffffff; +; block_seed; len; int 32; ==", ep)
+	testApp(t, "int 6; int 0xffffffff; +; block_seed; len; int 32; ==", ep, "not available")
+
+	testApp(t, "int 0xfffffff0; block_seed; int 0xfffffff0; block_seed; ==", ep)
+	testApp(t, "int 0xfffffff0; block_seed; int 0xfffffff1; block_seed; !=", ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {

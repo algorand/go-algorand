@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -207,6 +208,7 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
+	BlockSeed(basics.Round) (committee.Seed, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -4588,6 +4590,66 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
+	return nil
+}
+
+type RawMessage []byte
+
+func (rm RawMessage) ToBeHashed() (protocol.HashID, []byte) {
+	return "", []byte(rm)
+}
+
+func opVrfVerify(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // data
+	prev := last - 1          // proof
+	pprev := prev - 1         // pubkey
+
+	data := RawMessage(cx.stack[last].Bytes)
+	proofbytes := cx.stack[prev].Bytes
+	var proof crypto.VrfProof
+	if len(proofbytes) != len(proof) {
+		return fmt.Errorf("vrf proof wrong size %d != %d", len(proofbytes), len(proof))
+	}
+	copy(proof[:], proofbytes[:])
+
+	pubkeybytes := cx.stack[pprev].Bytes
+	var pubkey crypto.VrfPubkey
+	if len(pubkeybytes) != len(pubkey) {
+		return fmt.Errorf("vrf pubkey wrong size %d != %d", len(pubkeybytes), len(pubkey))
+	}
+	copy(pubkey[:], pubkeybytes[:])
+
+	var verified bool
+	var output []byte
+	std := VrfStandard(cx.program[cx.pc+1])
+	switch std {
+	case VrfAlgorand:
+		var out crypto.VrfOutput
+		verified, out = pubkey.Verify(proof, data)
+		output = out[:]
+	default:
+		return fmt.Errorf("unsupported vrf_verify standard %s", std)
+	}
+
+	cx.stack[pprev].Bytes = output[:]
+	cx.stack[prev].Bytes = nil
+	cx.stack[prev].Uint = boolToUint(verified)
+	cx.stack = cx.stack[:last] // pop 1 because we take 3 args and return 2
+	return nil
+}
+
+func opBlockSeed(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // round
+	round := cx.stack[last].Uint
+	current := cx.Ledger.Round()
+	if basics.Round(round+1000) < current || basics.Round(round) > current {
+		return fmt.Errorf("%d's seed is not available for round %d", round, current)
+	}
+	seed, err := cx.Ledger.BlockSeed(basics.Round(round))
+	if err != nil {
+		return err
+	}
+	cx.stack[last].Bytes = seed[:]
 	return nil
 }
 

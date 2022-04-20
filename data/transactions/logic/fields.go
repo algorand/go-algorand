@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -787,6 +787,77 @@ var JSONRefTypes = FieldGroup{
 	jsonRefSpecByName,
 }
 
+// VrfStandard is an enum for the `vrf_verify` opcode
+type VrfStandard int
+
+const (
+	// VrfAlgorand
+	VrfAlgorand VrfStandard = iota
+	// VrfChainlink
+	VrfChainlink
+	invalidVrfStandard // compile-time constant for number of fields
+)
+
+var vrfStandardNames [invalidVrfStandard]string
+
+type vrfStandardSpec struct {
+	field   VrfStandard
+	version uint64
+}
+
+var vrfStandardSpecs = [...]vrfStandardSpec{
+	{VrfAlgorand, randomnessVersion},
+	{VrfChainlink, randomnessVersion},
+}
+
+func vrfStandardSpecByField(r VrfStandard) (vrfStandardSpec, bool) {
+	if int(r) >= len(vrfStandardSpecs) {
+		return vrfStandardSpec{}, false
+	}
+	return vrfStandardSpecs[r], true
+}
+
+var vrfStandardSpecByName = make(vrfStandardSpecMap, len(vrfStandardNames))
+
+type vrfStandardSpecMap map[string]vrfStandardSpec
+
+func (s vrfStandardSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+func (fs vrfStandardSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs vrfStandardSpec) Type() StackType {
+	return StackNone // Will not show, since all are the same
+}
+
+func (fs vrfStandardSpec) OpVersion() uint64 {
+	return randomnessVersion
+}
+
+func (fs vrfStandardSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs vrfStandardSpec) Note() string {
+	note := "" // no doc list?
+	return note
+}
+
+func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
+	return s[name]
+}
+
+// VrfStandards describes the json_ref immediate
+var VrfStandards = FieldGroup{
+	"vrf_verify", "Standards",
+	vrfStandardNames[:],
+	vrfStandardSpecByName,
+}
+
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
@@ -1144,6 +1215,13 @@ func init() {
 		equal(int(s.field), i)
 		jsonRefTypeNames[i] = s.field.String()
 		jsonRefSpecByName[s.field.String()] = s
+	}
+
+	equal(len(vrfStandardSpecs), len(vrfStandardNames))
+	for i, s := range vrfStandardSpecs {
+		equal(int(s.field), i)
+		vrfStandardNames[i] = s.field.String()
+		vrfStandardSpecByName[s.field.String()] = s
 	}
 
 	equal(len(assetHoldingFieldSpecs), len(assetHoldingFieldNames))
