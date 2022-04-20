@@ -187,7 +187,7 @@ var opDocByName = map[string]string{
 	"itxn_submit": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
 
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
-	"block_seed": "The sortition seed of round A. Fail if A is greater than the current round or more than 1000 rounds in the past.",
+	"block_seed": "The sortition seed of round A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
 }
 
 // OpDoc returns a description of the op

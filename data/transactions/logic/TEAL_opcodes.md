@@ -1373,6 +1373,5 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Opcode: 0xd1
 - Stack: ..., A: uint64 &rarr; ..., []byte
-- The sortition seed of round A. Fail if A is greater than the current round or more than 1000 rounds in the past.
+- The sortition seed of round A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.
 - Availability: v7
-- Mode: Application
