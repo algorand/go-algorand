@@ -145,7 +145,22 @@ func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.Validat
 	cb := endBlock(t, checkLedger, check)
 	check.SetGenerate(false)
 	require.Equal(t, vb.Block(), cb.Block())
-	require.Equal(t, vb.Delta(), cb.Delta())
+
+	// vb.Delta() need not actually be Equal, in the sense of require.Equal
+	// because the order of the records in Acct is determined by the way a map
+	// is iterated.  They should be semantically equivalent, but those fields
+	// are not exported, so checking is hard.  The other fields can be tested
+	// though.
+
+	// require.Equal(t, vb.Delta().Accts, cb.Delta().Accts)
+	require.Equal(t, vb.Delta().Accts.ModifiedAccounts(), cb.Delta().Accts.ModifiedAccounts())
+	require.Equal(t, vb.Delta().Txids, cb.Delta().Txids)
+	require.Equal(t, vb.Delta().Txleases, cb.Delta().Txleases)
+	require.Equal(t, vb.Delta().Creatables, cb.Delta().Creatables)
+	require.Equal(t, vb.Delta().Hdr, cb.Delta().Hdr)
+	require.Equal(t, vb.Delta().CompactCertNext, cb.Delta().CompactCertNext)
+	require.Equal(t, vb.Delta().PrevTimestamp, cb.Delta().PrevTimestamp)
+	require.Equal(t, vb.Delta().Totals, cb.Delta().Totals)
 }
 
 func nextCheckBlock(t testing.TB, ledger *ledger.Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
