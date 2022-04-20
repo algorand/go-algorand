@@ -470,7 +470,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
 	maxOnlineLookback := ao.maxOnlineLookback()
-	if len(ao.onlineRoundParamsData) > maxOnlineLookback + 1 {
+	if len(ao.onlineRoundParamsData) > maxOnlineLookback+1 {
 		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback-1:]
 	}
 

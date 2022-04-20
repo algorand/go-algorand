@@ -2679,7 +2679,7 @@ func TestAcctOnlineRoundParamCache(t *testing.T) {
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
 	start := basics.Round(10)
-	end := basics.Round(2 * proto.MaxBalLookback + 15)
+	end := basics.Round(2*proto.MaxBalLookback + 15)
 	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 3
 		rewardLevel += rewardLevelDelta
@@ -2716,7 +2716,7 @@ func TestAcctOnlineRoundParamCache(t *testing.T) {
 
 	ml.trackers.lastFlushTime = time.Time{}
 
-	ml.trackers.committedUpTo(2 * basics.Round(proto.MaxBalLookback) + 14)
+	ml.trackers.committedUpTo(2*basics.Round(proto.MaxBalLookback) + 14)
 	ml.trackers.waitAccountsWriting()
 
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
