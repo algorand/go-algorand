@@ -4593,9 +4593,9 @@ func opItxnSubmit(cx *EvalContext) error {
 	return nil
 }
 
-type RawMessage []byte
+type rawMessage []byte
 
-func (rm RawMessage) ToBeHashed() (protocol.HashID, []byte) {
+func (rm rawMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return "", []byte(rm)
 }
 
@@ -4604,7 +4604,7 @@ func opVrfVerify(cx *EvalContext) error {
 	prev := last - 1          // proof
 	pprev := prev - 1         // pubkey
 
-	data := RawMessage(cx.stack[last].Bytes)
+	data := rawMessage(cx.stack[last].Bytes)
 	proofbytes := cx.stack[prev].Bytes
 	var proof crypto.VrfProof
 	if len(proofbytes) != len(proof) {

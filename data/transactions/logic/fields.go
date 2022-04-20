@@ -791,9 +791,9 @@ var JSONRefTypes = FieldGroup{
 type VrfStandard int
 
 const (
-	// VrfAlgorand
+	// VrfAlgorand is the built-in VRF of the Algorand chain
 	VrfAlgorand VrfStandard = iota
-	// VrfChainlink
+	// VrfChainlink is the (as yet unsupported) Chainlink standard VRF
 	VrfChainlink
 	invalidVrfStandard // compile-time constant for number of fields
 )
