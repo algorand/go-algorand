@@ -588,11 +588,13 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
 			blk, blockRetrievalError = l.Block(roundNumber)
 			if blockRetrievalError != nil {
+				fmt.Printf("block retrieve failed %v\n", blockRetrievalError)
 				return
 			}
 			select {
 			case blocksStream <- blk:
 			case <-blockEvalFailed:
+				fmt.Printf("block eval failed\n")
 				return
 			}
 		}
@@ -630,7 +632,6 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
 		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		// loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
 		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(cfg.MaxAcctLookback) < lastestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"

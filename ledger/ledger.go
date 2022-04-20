@@ -92,6 +92,8 @@ type Ledger struct {
 	verifiedTxnCache verify.VerifiedTransactionCache
 
 	cfg config.Local
+
+	dbPathPrefix string
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
@@ -118,6 +120,7 @@ func OpenLedger(
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
+		dbPathPrefix:                   dbPathPrefix,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -155,10 +158,6 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.accts.initialize(cfg)
-	l.acctsOnline.initialize(cfg)
-	l.catchpoint.initialize(cfg, dbPathPrefix)
-
 	err = l.reloadLedger()
 	if err != nil {
 		return nil, err
@@ -190,6 +189,10 @@ func (l *Ledger) reloadLedger() error {
 		err = fmt.Errorf("reloadLedger.bqInit %v", err)
 		return err
 	}
+
+	l.accts.initialize(l.cfg)
+	l.acctsOnline.initialize(l.cfg)
+	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
 
 	// init tracker db
 	trackerDBInitParams, err := trackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
