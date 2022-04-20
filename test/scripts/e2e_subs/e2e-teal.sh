@@ -152,15 +152,13 @@ printf '\x02' | dd of=${TEMPDIR}/true2.lsig bs=1 seek=0 count=1 conv=notrunc
 
 # Try to compile with source map, and check that map is correct.
 # Since the source map contains info about the file path,
-# we need to do this in place and clean up the file later.
+# we do this in place and clean up the file later.
 ${gcmd} clerk compile ${TEAL}/quine.teal -m
-if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.map > /dev/null; then
-    rm ${TEAL}/quine.teal.*
+trap 'rm ${TEAL}/quine.teal.*' EXIT
+if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.map; then
     echo "produced source maps do not match"
     exit 1
 fi
-# Clean up generated source map
-rm ${TEAL}/quine.teal.*
 
 # compute the escrow account for the frankenstein program
 ACCOUNT_TRUE=$(python -c 'import algosdk, sys; print(algosdk.logic.address(sys.stdin.buffer.read()))' < ${TEMPDIR}/true2.lsig)
