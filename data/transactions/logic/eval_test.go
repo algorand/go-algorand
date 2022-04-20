@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -111,7 +110,7 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 	ep := defaultEvalParamsWithVersion(txn, LogicVersion)
 	ep.Trace = nil // Tracing would slow down benchmarks
 	clone := *ep.Proto
-	bigBudget := math.MaxInt
+	bigBudget := 1<<(31) - 1 // use math.MaxInt starting in go 1.17
 	clone.LogicSigMaxCost = uint64(bigBudget)
 	clone.MaxAppProgramCost = bigBudget
 	ep.Proto = &clone
