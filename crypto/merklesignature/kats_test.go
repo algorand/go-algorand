@@ -96,9 +96,9 @@ func TestGenerateKat(t *testing.T) {
 	// This test produces MSS samples for the SNARK verifier.
 	// it will only run explicitly by:
 	//
-	//   GEN_MSS_KATS=x go test -v . -run=GenerateKat -count=1
-	if os.Getenv("GEN_MSS_KATS") == "" {
-		t.Skip("Skipping; GEN_MSS_KATS not set")
+	//   GEN_KATS=x go test -v . -run=GenerateKat -count=1
+	if os.Getenv("GEN_KATS") == "" {
+		t.Skip("Skipping; GEN_KATS not set")
 	}
 
 	kat, err := generateMssKat(256, 512, 9, []byte("test"))

@@ -17,6 +17,9 @@
 package compactcert
 
 import (
+	"fmt"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -131,4 +134,50 @@ func BenchmarkHashCoinGenerate(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		makeCoinGenerator(&choice)
 	}
+}
+
+func TestGenerateCoinHashKATs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// This test produces MSS samples for the SNARK verifier.
+	// it will only run explicitly by:
+	//
+	//   GEN_KATS=x go test -v . -run=GenerateKat -count=1
+	if os.Getenv("GEN_KATS") == "" {
+		t.Skip("Skipping; GEN_KATS not set")
+	}
+
+	const numReveals = 1000
+	const signedWt = 1 << 10
+	var coinslots [numReveals]uint64
+	var sigcom = make(crypto.GenericDigest, HashSize)
+	var partcom = make(crypto.GenericDigest, HashSize)
+	var data StateProofMessageHash
+
+	crypto.RandBytes(sigcom[:])
+	crypto.RandBytes(partcom[:])
+	crypto.RandBytes(data[:])
+
+	choice := coinChoiceSeed{
+		partCommitment: partcom,
+		lnProvenWeight: 454197,
+		sigCommitment:  sigcom,
+		signedWeight:   signedWt,
+		data:           data,
+	}
+
+	coinHash := makeCoinGenerator(&choice)
+
+	for j := uint64(0); j < numReveals; j++ {
+		coinslots[j] = coinHash.getNextCoin()
+
+	}
+	fmt.Printf("signedWeight: %v \n", signedWt)
+	fmt.Printf("number of reveals: %v \n", numReveals)
+	concatString := fmt.Sprint(coinslots)
+	toPrint := strings.Join(strings.Split(concatString, " "), ", ")
+	fmt.Printf("coinvalues: %v \n", toPrint)
+	concatString = fmt.Sprint(crypto.HashRep(&choice))
+	toPrint = strings.Join(strings.Split(concatString, " "), ", ")
+	fmt.Printf("seed: %v \n", toPrint)
 }
