@@ -399,9 +399,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
+	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -630,6 +628,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.EnableAccountDataResourceSeparation = true
+	protoParams.CatchpointLookback = protoParams.MaxBalLookback
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -658,10 +657,8 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	ledger.trackers.mu.Unlock()
 	ledger.trackerMu.Unlock()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	// create the first MaxBalLookback blocks
-	for rnd := ledger.Latest() + 1; rnd <= basics.Round(proto.MaxBalLookback); rnd++ {
+	// create the first CatchpointLookback blocks
+	for rnd := ledger.Latest() + 1; rnd <= basics.Round(protoParams.CatchpointLookback); rnd++ {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
 	}
@@ -712,7 +709,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	// release the exit lock for postCommit
 	writeStallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
 
-	// test false positive : we want to ensure that without releasing the postCommit lock, the LookupAgreemnt would not be able to return within 1 second.
+	// test false positive : we want to ensure that without releasing the postCommit lock, the LookupAgreement would not be able to return within 1 second.
 
 	// make sure to get to a catchpoint round, and block the writing there.
 	for {
