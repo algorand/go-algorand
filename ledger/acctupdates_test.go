@@ -835,7 +835,9 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	for i := basics.Round(initialBlocksCount); i < basics.Round(protoParams.MaxBalLookback+5); i++ {
+	start := basics.Round(initialBlocksCount)
+	end := basics.Round(protoParams.MaxBalLookback + 5)
+	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
@@ -865,7 +867,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
 		ml.trackers.committedUpTo(i)
-		if i%2 == 1 {
+		if i%2 == 1 || i == end-1 {
 			ml.trackers.waitAccountsWriting()
 		}
 	}
