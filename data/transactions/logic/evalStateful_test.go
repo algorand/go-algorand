@@ -191,8 +191,8 @@ bytec_0
 log
 `
 	tests := map[runMode]string{
-		runModeSignature:   opcodesRunModeAny + opcodesRunModeSignature,
-		runModeApplication: opcodesRunModeAny + opcodesRunModeApplication,
+		modeSig: opcodesRunModeAny + opcodesRunModeSignature,
+		modeApp: opcodesRunModeAny + opcodesRunModeApplication,
 	}
 
 	ep, tx, ledger := makeSampleEnv()
@@ -227,7 +227,7 @@ log
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
 			ep.TxnGroup[0].Txn.ApplicationID = 100
 			ep.TxnGroup[0].Txn.ForeignAssets = []basics.AssetIndex{5} // needed since v4
-			if mode == runModeSignature {
+			if mode == modeSig {
 				testLogic(t, test, AssemblerMaxVersion, ep)
 			} else {
 				testApp(t, test, ep)
@@ -292,9 +292,9 @@ log
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
-	require.Equal(t, runMode(1), runModeSignature)
-	require.Equal(t, runMode(2), runModeApplication)
-	require.True(t, modeAny == runModeSignature|runModeApplication)
+	require.Equal(t, runMode(1), modeSig)
+	require.Equal(t, runMode(2), modeApp)
+	require.True(t, modeAny == modeSig|modeApp)
 	require.True(t, modeAny.Any())
 }
 
@@ -1092,7 +1092,7 @@ intc_1
 `
 	params.URL = ""
 	ledger.NewAsset(txn.Txn.Sender, 55, params)
-	testApp(t, source, now, "cannot compare ([]byte to uint64)")
+	testApp(t, notrack(source), now, "cannot compare ([]byte to uint64)")
 }
 
 func TestAppParams(t *testing.T) {
@@ -2391,7 +2391,7 @@ func TestReturnTypes(t *testing.T) {
 	}
 
 	byName := OpsByName[LogicVersion]
-	for _, m := range []runMode{runModeSignature, runModeApplication} {
+	for _, m := range []runMode{modeSig, modeApp} {
 		for name, spec := range byName {
 			// Only try an opcode in its modes
 			if (m & spec.Modes) == 0 {
@@ -2411,7 +2411,7 @@ func TestReturnTypes(t *testing.T) {
 						cmd = special
 					}
 				} else {
-					for _, imm := range spec.Details.Immediates {
+					for _, imm := range spec.OpDetails.Immediates {
 						switch imm.kind {
 						case immByte:
 							cmd += " 0"
@@ -2432,7 +2432,7 @@ func TestReturnTypes(t *testing.T) {
 				}
 				var sb strings.Builder
 				if provideStackInput {
-					for _, t := range spec.Args {
+					for _, t := range spec.Arg.Types {
 						sb.WriteString(typeToArg[t])
 					}
 				}
@@ -2468,10 +2468,10 @@ func TestReturnTypes(t *testing.T) {
 						require.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
 					}
 				}
-				require.Len(t, cx.stack, len(spec.Returns), "%s", ep.Trace)
-				for i := 0; i < len(spec.Returns); i++ {
+				require.Len(t, cx.stack, len(spec.Return.Types), "%s", ep.Trace)
+				for i := 0; i < len(spec.Return.Types); i++ {
 					stackType := cx.stack[i].argType()
-					retType := spec.Returns[i]
+					retType := spec.Return.Types[i]
 					require.True(
 						t, typecheck(retType, stackType),
 						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,

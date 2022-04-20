@@ -399,19 +399,19 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 }
 
 type evalFunc func(cx *EvalContext) error
-type opCheckFunc func(cx *EvalContext) error
+type checkFunc func(cx *EvalContext) error
 
 type runMode uint64
 
 const (
-	// runModeSignature is TEAL in LogicSig execution
-	runModeSignature runMode = 1 << iota
+	// modeSig is LogicSig execution
+	modeSig runMode = 1 << iota
 
-	// runModeApplication is TEAL in application/stateful mode
-	runModeApplication
+	// modeApp is application/contract execution
+	modeApp
 
 	// local constant, run in any mode
-	modeAny = runModeSignature | runModeApplication
+	modeAny = modeSig | modeApp
 )
 
 func (r runMode) Any() bool {
@@ -420,9 +420,9 @@ func (r runMode) Any() bool {
 
 func (r runMode) String() string {
 	switch r {
-	case runModeSignature:
+	case modeSig:
 		return "Signature"
-	case runModeApplication:
+	case modeApp:
 		return "Application"
 	case modeAny:
 		return "Any"
@@ -431,7 +431,7 @@ func (r runMode) String() string {
 	return "Unknown"
 }
 
-func (ep EvalParams) log() logging.Logger {
+func (ep *EvalParams) log() logging.Logger {
 	if ep.logger != nil {
 		return ep.logger
 	}
@@ -469,7 +469,7 @@ type EvalContext struct {
 
 	// the index of the transaction being evaluated
 	groupIndex int
-	// the transaction being evaluated (initialized from GroupIndex + ep.TxnGroup)
+	// the transaction being evaluated (initialized from groupIndex + ep.TxnGroup)
 	txn *transactions.SignedTxnWithAD
 
 	// Txn.EvalDelta maintains a summary of changes as we go.  We used to
@@ -532,6 +532,28 @@ const (
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
+
+func parseStackTypes(spec string) StackTypes {
+	if spec == "" {
+		return nil
+	}
+	types := make(StackTypes, len(spec))
+	for i, letter := range spec {
+		switch letter {
+		case 'a':
+			types[i] = StackAny
+		case 'b':
+			types[i] = StackBytes
+		case 'i':
+			types[i] = StackUint64
+		case 'x':
+			types[i] = StackNone
+		default:
+			panic(spec)
+		}
+	}
+	return types
+}
 
 func (st StackType) String() string {
 	switch st {
@@ -596,7 +618,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	}
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: runModeApplication,
+		runModeFlags: modeApp,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 		appID:        aid,
@@ -635,7 +657,7 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: runModeSignature,
+		runModeFlags: modeSig,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
@@ -736,14 +758,14 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
 func CheckContract(program []byte, params *EvalParams) error {
-	return check(program, params, runModeApplication)
+	return check(program, params, modeApp)
 }
 
 // CheckSignature should be faster than EvalSignature.  It can perform static
 // checks and reject programs that are invalid. Prior to v4, these static checks
 // include a cost estimate that must be low enough (controlled by params.Proto).
 func CheckSignature(gi int, params *EvalParams) error {
-	return check(params.TxnGroup[gi].Lsig.Logic, params, runModeSignature)
+	return check(params.TxnGroup[gi].Lsig.Logic, params, modeSig)
 }
 
 func check(program []byte, params *EvalParams, mode runMode) (err error) {
@@ -844,7 +866,7 @@ func boolToUint(x bool) uint64 {
 }
 
 func (cx *EvalContext) remainingBudget() int {
-	if cx.runModeFlags == runModeSignature {
+	if cx.runModeFlags == modeSig {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 
@@ -887,17 +909,17 @@ func (cx *EvalContext) step() error {
 	}
 
 	// check args for stack underflow and types
-	if len(cx.stack) < len(spec.Args) {
+	if len(cx.stack) < len(spec.Arg.Types) {
 		return fmt.Errorf("stack underflow in %s", spec.Name)
 	}
-	first := len(cx.stack) - len(spec.Args)
-	for i, argType := range spec.Args {
+	first := len(cx.stack) - len(spec.Arg.Types)
+	for i, argType := range spec.Arg.Types {
 		if !opCompat(argType, cx.stack[first+i].argType()) {
 			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
 		}
 	}
 
-	deets := &spec.Details
+	deets := &spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
@@ -934,14 +956,17 @@ func (cx *EvalContext) step() error {
 
 	if err == nil {
 		postheight := len(cx.stack)
-		if postheight-preheight != len(spec.Returns)-len(spec.Args) && spec.Name != "return" {
+		if postheight-preheight != len(spec.Return.Types)-len(spec.Arg.Types) && !spec.AlwaysExits() {
 			return fmt.Errorf("%s changed stack height improperly %d != %d",
-				spec.Name, postheight-preheight, len(spec.Returns)-len(spec.Args))
+				spec.Name, postheight-preheight, len(spec.Return.Types)-len(spec.Arg.Types))
 		}
-		first = postheight - len(spec.Returns)
-		for i, argType := range spec.Returns {
+		first = postheight - len(spec.Return.Types)
+		for i, argType := range spec.Return.Types {
 			stackType := cx.stack[first+i].argType()
 			if !opCompat(argType, stackType) {
+				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
+					break
+				}
 				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
 			}
 			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
@@ -968,7 +993,7 @@ func (cx *EvalContext) step() error {
 		// (changing the pc, for example) and this gives a big
 		// improvement of dryrun readability
 		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
-		sourceLine, inner := spec.dis(dstate, spec)
+		sourceLine, inner := disassemble(dstate, spec)
 		if inner != nil {
 			if err != nil { // don't override an error from evaluation
 				return err
@@ -980,8 +1005,8 @@ func (cx *EvalContext) step() error {
 			stackString = "<empty stack>"
 		} else {
 			num := 1
-			if len(spec.Returns) > 1 {
-				num = len(spec.Returns)
+			if len(spec.Return.Types) > 1 {
+				num = len(spec.Return.Types)
 			}
 			// check for nil error here, because we might not return
 			// values if we encounter an error in the opcode
@@ -1031,7 +1056,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
-	deets := spec.Details
+	deets := spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
 	}
@@ -1040,8 +1065,8 @@ func (cx *EvalContext) checkStep() (int, error) {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}
 	prevpc := cx.pc
-	if deets.checkFunc != nil {
-		err := deets.checkFunc(cx)
+	if deets.check != nil {
+		err := deets.check(cx)
 		if err != nil {
 			return 0, err
 		}
@@ -2193,7 +2218,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 
 func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
-		if cx.runModeFlags == runModeSignature {
+		if cx.runModeFlags == modeSig {
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
 		if cx.version < txnEffectsVersion && !inner {
@@ -2422,7 +2447,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	case srcGroup:
 		if fs.effects && gi >= uint64(cx.groupIndex) {
 			// Test mode so that error is clearer
-			if cx.runModeFlags == runModeSignature {
+			if cx.runModeFlags == modeSig {
 				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 			}
 			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.groupIndex)

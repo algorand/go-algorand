@@ -115,7 +115,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	globals := make([]basics.TealValue, len(globalFieldSpecs))
 	for _, fs := range globalFieldSpecs {
 		// Don't try to grab app only fields when evaluating a signature
-		if (cx.runModeFlags&runModeSignature) != 0 && fs.mode == runModeApplication {
+		if (cx.runModeFlags&modeSig) != 0 && fs.mode == modeApp {
 			continue
 		}
 		sv, err := cx.globalFieldToValue(fs)
@@ -126,7 +126,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	}
 	ds.Globals = globals
 
-	if (cx.runModeFlags & runModeApplication) != 0 {
+	if (cx.runModeFlags & modeApp) != 0 {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
@@ -247,7 +247,7 @@ func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
 	ds.OpcodeBudget = cx.remainingBudget()
 	ds.CallStack = ds.parseCallstack(cx.callstack)
 
-	if (cx.runModeFlags & runModeApplication) != 0 {
+	if (cx.runModeFlags & modeApp) != 0 {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
