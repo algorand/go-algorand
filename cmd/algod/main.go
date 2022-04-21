@@ -17,7 +17,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/gofrs/flock"
+	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -43,34 +43,67 @@ import (
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
-var dataDirectory = flag.String("d", "", "Root Algorand daemon data path")
-var genesisFile = flag.String("g", "", "Genesis configuration file")
-var genesisPrint = flag.Bool("G", false, "Print genesis ID")
-var versionCheck = flag.Bool("v", false, "Display and write current build version and exit")
-var branchCheck = flag.Bool("b", false, "Display the git branch behind the build")
-var channelCheck = flag.Bool("c", false, "Display and release channel behind the build")
-var initAndExit = flag.Bool("x", false, "Initialize the ledger and exit")
-var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
-var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
-var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
-var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
-var seed = flag.String("seed", "", "input to math/rand.Seed()")
-
-func main() {
-	flag.Parse()
-	exitCode := run()
-	os.Exit(exitCode)
+type algodArgs struct {
+	dataDirectory     string
+	genesisFile       string
+	genesisPrint      bool
+	versionCheck      bool
+	branchCheck       bool
+	channelCheck      bool
+	initAndExit       bool
+	writeToStdout     bool
+	peerOverride      string
+	listenIP          string
+	sessionGUID       string
+	telemetryOverride string
+	seed              string
 }
 
-func run() int {
-	dataDir := resolveDataDir()
+var command *cobra.Command
+
+func init() {
+	var args algodArgs
+
+	command = &cobra.Command{
+		Use:   "algod",
+		Short: "Algorand daemon",
+		Long:  `algod allows a node to participate in the agreement protocol, submit and confirm transactions, and view the state of the Algorand Ledger.`,
+		Run: func(_ *cobra.Command, _ []string) {
+			run(args)
+		},
+	}
+	command.Flags().StringVar(&args.dataDirectory, "d", "", "Root Algorand daemon data path")
+	command.Flags().StringVar(&args.genesisFile, "g", "", "Genesis configuration file")
+	command.Flags().BoolVar(&args.genesisPrint, "G", false, "Print genesis ID")
+	command.Flags().BoolVar(&args.versionCheck, "v", false, "Display and write current build version and exit")
+	command.Flags().BoolVar(&args.branchCheck, "b", false, "Display the git branch behind the build")
+	command.Flags().BoolVar(&args.channelCheck, "c", false, "Display and release channel behind the build")
+	command.Flags().BoolVar(&args.initAndExit, "x", false, "Initialize the ledger and exit")
+	command.Flags().BoolVarP(&args.initAndExit, "logToStdout", "o", false, "Write to stdout instead of node.log by overriding config.LogSizeLimit to 0")
+	command.Flags().StringVar(&args.peerOverride, "p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
+	command.Flags().StringVar(&args.listenIP, "l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
+	command.Flags().StringVar(&args.sessionGUID, "s", "", "Telemetry Session GUID to use")
+	command.Flags().StringVar(&args.telemetryOverride, "t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
+	command.Flags().StringVar(&args.seed, "seed", "", "input to math/rand.Seed()")
+}
+
+func main() {
+	if err := command.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "algod process exiting with error: %s", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func run(args algodArgs) int {
+	dataDir := resolveDataDir(args.dataDirectory)
 	absolutePath, absPathErr := filepath.Abs(dataDir)
 	config.UpdateVersionDataDir(absolutePath)
 
-	if *seed != "" {
-		seedVal, err := strconv.ParseInt(*seed, 10, 64)
+	if args.seed != "" {
+		seedVal, err := strconv.ParseInt(args.seed, 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "bad seed %#v: %s\n", *seed, err)
+			fmt.Fprintf(os.Stderr, "bad seed %#v: %s\n", args.seed, err)
 			return 1
 		}
 		rand.Seed(seedVal)
@@ -78,7 +111,7 @@ func run() int {
 		rand.Seed(time.Now().UnixNano())
 	}
 
-	if *versionCheck {
+	if args.versionCheck {
 		fmt.Println(config.FormatVersionAndLicense())
 		return 0
 	}
@@ -91,12 +124,12 @@ func run() int {
 	baseHeartbeatEvent.Info.Branch = version.Branch
 	baseHeartbeatEvent.Info.CommitHash = version.GetCommitHash()
 
-	if *branchCheck {
+	if args.branchCheck {
 		fmt.Println(config.Branch)
 		return 0
 	}
 
-	if *channelCheck {
+	if args.channelCheck {
 		fmt.Println(config.Channel)
 		return 0
 	}
@@ -112,7 +145,7 @@ func run() int {
 		return 1
 	}
 
-	genesisPath := *genesisFile
+	genesisPath := args.genesisFile
 	if genesisPath == "" {
 		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
 	}
@@ -131,7 +164,7 @@ func run() int {
 		return 1
 	}
 
-	if *genesisPrint {
+	if args.genesisPrint {
 		fmt.Println(genesis.ID())
 		return 0
 	}
@@ -188,14 +221,14 @@ func run() int {
 		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
 
 		// Apply telemetry override.
-		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride, &telemetryConfig)
+		telemetryConfig.Enable = logging.TelemetryOverride(args.telemetryOverride, &telemetryConfig)
 		remoteTelemetryEnabled = telemetryConfig.Enable
 
 		if telemetryConfig.Enable || telemetryConfig.SendToLog {
 			// If session GUID specified, use it.
-			if *sessionGUID != "" {
-				if len(*sessionGUID) == 36 {
-					telemetryConfig.SessionGUID = *sessionGUID
+			if args.sessionGUID != "" {
+				if len(args.sessionGUID) == 36 {
+					telemetryConfig.SessionGUID = args.sessionGUID
 				}
 			}
 			err = log.EnableTelemetry(telemetryConfig)
@@ -233,15 +266,15 @@ func run() int {
 	}
 
 	// Allow overriding default listening address
-	if *listenIP != "" {
-		cfg.EndpointAddress = *listenIP
+	if args.listenIP != "" {
+		cfg.EndpointAddress = args.listenIP
 	}
 
 	// If overriding peers, disable SRV lookup
 	telemetryDNSBootstrapID := cfg.DNSBootstrapID
 	var peerOverrideArray []string
-	if *peerOverride != "" {
-		peerOverrideArray = strings.Split(*peerOverride, ";")
+	if args.peerOverride != "" {
+		peerOverrideArray = strings.Split(args.peerOverride, ";")
 		cfg.DNSBootstrapID = ""
 
 		// The networking code waits until we have GossipFanout
@@ -299,7 +332,7 @@ func run() int {
 		return 1
 	}
 
-	if *initAndExit {
+	if args.initAndExit {
 		return 0
 	}
 
@@ -365,14 +398,14 @@ func run() int {
 	return 0
 }
 
-func resolveDataDir() string {
+func resolveDataDir(dataDirectory string) string {
 	// Figure out what data directory to tell algod to use.
 	// If not specified on cmdline with '-d', look for default in environment.
 	var dir string
-	if dataDirectory == nil || *dataDirectory == "" {
+	if dataDirectory == "" {
 		dir = os.Getenv("ALGORAND_DATA")
 	} else {
-		dir = *dataDirectory
+		dir = dataDirectory
 	}
 	return dir
 }
