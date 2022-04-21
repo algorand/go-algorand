@@ -385,15 +385,15 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 
-		if i > basics.Round(proto.MaxBalLookback) && i % 10 == 0 {
-			onlineTotal, err := ao.OnlineTotals(i-basics.Round(proto.MaxBalLookback))
+		if i > basics.Round(proto.MaxBalLookback) && i%10 == 0 {
+			onlineTotal, err := ao.OnlineTotals(i - basics.Round(proto.MaxBalLookback))
 			require.NoError(t, err)
 			require.Equal(t, allTotals[i-basics.Round(proto.MaxBalLookback)].Online.Money, onlineTotal)
 			expectedConsensusVersion := protocol.ConsensusCurrentVersion
-			if i > 2 * basics.Round(proto.MaxBalLookback) {
+			if i > 2*basics.Round(proto.MaxBalLookback) {
 				expectedConsensusVersion = protocol.ConsensusFuture
 			}
-			roundParamsOffset, err := ao.roundParamsOffset(i-basics.Round(proto.MaxBalLookback))
+			roundParamsOffset, err := ao.roundParamsOffset(i - basics.Round(proto.MaxBalLookback))
 			require.NoError(t, err)
 			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset])
 		}

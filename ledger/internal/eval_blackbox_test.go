@@ -476,7 +476,7 @@ func fillDefaults(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvalu
 		txn.FirstValid = eval.Round()
 	}
 
-	txn.FillDefaults(config.Consensus[ledger.GenesisProto()])
+	txn.FillDefaults(ledger.GenesisProto())
 }
 
 func txns(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) {
@@ -763,7 +763,7 @@ func TestMinBalanceChanges(t *testing.T) {
 	ad5new, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
-	proto := config.Consensus[l.GenesisProto()]
+	proto := l.GenesisProto()
 	// Check balance and min balance requirement changes
 	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                   // fee
 	require.Equal(t, ad0init.MinBalance(&proto).Raw, ad0new.MinBalance(&proto).Raw-100000) // create

@@ -382,10 +382,10 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	if err != nil {
 		return err
 	}
-	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1:end+1]
+	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1 : end+1]
 	maxOnlineLookback := basics.Round(ao.maxOnlineLookback())
 	dcc.maxLookbackRound = basics.Round(0)
-	if dcc.newBase > maxOnlineLookback - 1 {
+	if dcc.newBase > maxOnlineLookback-1 {
 		dcc.maxLookbackRound = dcc.newBase + 1 - maxOnlineLookback
 	}
 

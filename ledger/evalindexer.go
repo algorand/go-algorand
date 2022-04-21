@@ -70,11 +70,11 @@ type Creatable struct {
 
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
 type indexerLedgerConnector struct {
-	il             indexerLedgerForEval
-	genesisHash    crypto.Digest
-	genesisProtoVersion   protocol.ConsensusVersion
-	latestRound    basics.Round
-	roundResources EvalForIndexerResources
+	il                  indexerLedgerForEval
+	genesisHash         crypto.Digest
+	genesisProtoVersion protocol.ConsensusVersion
+	latestRound         basics.Round
+	roundResources      EvalForIndexerResources
 }
 
 // BlockHdr is part of LedgerForEvaluator interface.
@@ -204,11 +204,11 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.V
 
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto protocol.ConsensusVersion, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
-		il:             il,
-		genesisHash:    genesisHash,
-		genesisProtoVersion:   genesisProto,
-		latestRound:    latestRound,
-		roundResources: roundResources,
+		il:                  il,
+		genesisHash:         genesisHash,
+		genesisProtoVersion: genesisProto,
+		latestRound:         latestRound,
+		roundResources:      roundResources,
 	}
 }
 

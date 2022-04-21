@@ -3340,7 +3340,7 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	var accts map[basics.Address]basics.AccountData
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
-	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, 80 + proto.MaxBalLookback)
+	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, 80+proto.MaxBalLookback)
 	for i := range onlineRoundParams {
 		onlineRoundParams[i].OnlineSupply = uint64(i)
 	}

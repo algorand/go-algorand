@@ -113,7 +113,7 @@ func OpenLedger(
 		archival:                       cfg.Archival,
 		genesisHash:                    genesisInitState.GenesisHash,
 		genesisAccounts:                genesisInitState.Accounts,
-		genesisProtoVersion:                   genesisInitState.Block.CurrentProtocol,
+		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
@@ -718,7 +718,7 @@ func (l *Ledger) GenesisProto() config.ConsensusParams {
 	return config.Consensus[l.genesisProtoVersion]
 }
 
-// GenesisProto returns the initial protocol for this ledger.
+// GenesisProtoVersion returns the initial protocol version for this ledger.
 func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
 	return l.genesisProtoVersion
 }
