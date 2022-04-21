@@ -278,7 +278,8 @@ type EvalParams struct {
 
 	// Cache the txid hashing, but do *not* share this into inner EvalParams, as
 	// the key is just the index in the txgroup.
-	txidCache map[int]transactions.Txid
+	txidCache      map[int]transactions.Txid
+	innerTxidCache map[int]transactions.Txid
 
 	// The calling context, if this is an inner app call
 	caller *EvalContext
@@ -2191,9 +2192,36 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	return sv.toTealValue(), err
 }
 
+// currentTxID is a convenience method to get the Txid for the txn being evaluated
+func (cx *EvalContext) currentTxID() transactions.Txid {
+	// can't just return cx.txn.ID() because I might be an inner txn
+	return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
+}
+
 func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
+	// inner indicates that groupIndex is an index into the most recent inner txn group
+
 	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
 		return txn.ID()
+	}
+
+	if inner {
+		// Initialize innerTxidCache if necessary
+		if cx.EvalParams.innerTxidCache == nil {
+			// TODO: find length of most recent inner txn group and use that instead
+			cx.EvalParams.innerTxidCache = make(map[int]transactions.Txid, len(cx.txn.EvalDelta.InnerTxns))
+		}
+
+		txid, ok := cx.EvalParams.innerTxidCache[groupIndex]
+		if !ok {
+			// We're referencing an inner, use my txid and the the inner txn index
+			myTxid := cx.currentTxID()
+			innerIndex := len(cx.txn.EvalDelta.InnerTxns) + groupIndex // TODO: need to subtract length of the group to get actual inner index
+			txid = txn.InnerID(myTxid, innerIndex)
+			cx.EvalParams.innerTxidCache[groupIndex] = txid
+		}
+
+		return txid
 	}
 
 	// Initialize txidCache if necessary
@@ -2205,14 +2233,12 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 	txid, ok := cx.EvalParams.txidCache[groupIndex]
 	if !ok {
 		if cx.caller != nil {
-			// We're being called, get the caller id and the index
-			idx := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
-			txid = txn.InnerID(cx.caller.txn.ID(), idx)
-		} else if inner {
-			// We're referencing an inner, use the inner group idx and my id
-			txid = txn.InnerID(cx.txn.ID(), groupIndex)
+			parentTxid := cx.caller.currentTxID()
+			// We're referencing a peer txn, not an inner, but I am an inner
+			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
+			txid = txn.InnerID(parentTxid, innerOffset)
 		} else {
-			// Just my id
+			// We're referencing a peer txn and I am not an inner
 			txid = txn.ID()
 		}
 		cx.EvalParams.txidCache[groupIndex] = txid
@@ -4509,7 +4535,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	var parent transactions.Txid
 	isGroup := len(cx.subtxns) > 1
 	if isGroup {
-		parent = cx.txn.ID()
+		parent = cx.currentTxID()
 	}
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the
@@ -4596,6 +4622,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
+	cx.innerTxidCache = nil
 	return nil
 }
 
