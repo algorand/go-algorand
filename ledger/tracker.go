@@ -340,17 +340,7 @@ func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 	return minBlock
 }
 
-func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
-	tr.mu.RLock()
-	dbRound := tr.dbRound
-	tr.mu.RUnlock()
-
-	dcc := &deferredCommitContext{
-		deferredCommitRange: deferredCommitRange{
-			lookback: maxLookback,
-		},
-	}
-	cdr := &dcc.deferredCommitRange
+func (tr *trackerRegistry) produceCommittingTask(blockqRound basics.Round, dbRound basics.Round, cdr *deferredCommitRange) *deferredCommitRange {
 	for _, lt := range tr.trackers {
 		base := cdr.oldBase
 		offset := cdr.offset
@@ -365,6 +355,20 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
 		}
 	}
+	return cdr
+}
+
+func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+
+	dcc := &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
+	}
+	cdr := tr.produceCommittingTask(blockqRound, dbRound, &dcc.deferredCommitRange)
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
 	} else {
@@ -439,7 +443,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 }
 
 // commitRound commits the given deferredCommitContext via the trackers.
-func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
+func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 	defer tr.accountsWriting.Done()
 	tr.mu.RLock()
 
@@ -476,7 +480,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 	dcc.flushTime = time.Now()
 
 	for _, lt := range tr.trackers {
-		err := lt.prepareCommit(dcc)
+		err = lt.prepareCommit(dcc)
 		if err != nil {
 			tr.log.Errorf(err.Error())
 			tr.mu.RUnlock()
@@ -487,7 +491,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {
@@ -516,6 +520,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) {
 		lt.postCommitUnlocked(tr.ctx, dcc)
 	}
 
+	return nil
 }
 
 // initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
