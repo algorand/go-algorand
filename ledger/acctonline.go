@@ -301,6 +301,7 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	if offset < dcr.offset {
 		dcr.offset = offset
 	}
+	dcr.oldBase = dbRound
 	return dcr
 }
 
@@ -325,7 +326,7 @@ func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
 }
 
 func (ao *onlineAccounts) maxOnlineLookback() int {
-	return int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback) + len(ao.deltas)
+	return int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback)
 }
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
@@ -381,12 +382,11 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(dcc.oldBase, dcc.newBase)
-	dcc.onlineRoundParams = ao.onlineRoundParamsData[start:end]
-	maxOnlineLookback := basics.Round(ao.maxOnlineLookback() - int(offset))
+	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1:end+1]
+	maxOnlineLookback := basics.Round(ao.maxOnlineLookback())
 	dcc.maxLookbackRound = basics.Round(0)
-	if ao.latest() > maxOnlineLookback {
-		dcc.maxLookbackRound = ao.latest() - maxOnlineLookback
+	if dcc.newBase > maxOnlineLookback - 1 {
+		dcc.maxLookbackRound = dcc.newBase + 1 - maxOnlineLookback
 	}
 
 	return nil
@@ -420,7 +420,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound)
+	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound+1)
 	if err != nil {
 		return err
 	}
@@ -470,9 +470,9 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// simply contatenate since both sequences are sorted
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
-	maxOnlineLookback := ao.maxOnlineLookback()
-	if len(ao.onlineRoundParamsData) > maxOnlineLookback+1 {
-		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback-1:]
+	maxOnlineLookback := ao.maxOnlineLookback() + len(ao.deltas)
+	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
+		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
 	}
 
 	ao.accountsMu.Unlock()

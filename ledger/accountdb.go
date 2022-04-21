@@ -158,6 +158,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS resources`,
 	`DROP TABLE IF EXISTS onlineaccounts`,
 	`DROP TABLE IF EXISTS txtail`,
+	`DROP TABLE IF EXISTS onlineroundparamstail`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
