@@ -72,19 +72,19 @@ func init() {
 			run(args)
 		},
 	}
-	command.Flags().StringVar(&args.dataDirectory, "d", "", "Root Algorand daemon data path")
-	command.Flags().StringVar(&args.genesisFile, "g", "", "Genesis configuration file")
-	command.Flags().BoolVar(&args.genesisPrint, "G", false, "Print genesis ID")
-	command.Flags().BoolVar(&args.versionCheck, "v", false, "Display and write current build version and exit")
-	command.Flags().BoolVar(&args.branchCheck, "b", false, "Display the git branch behind the build")
-	command.Flags().BoolVar(&args.channelCheck, "c", false, "Display and release channel behind the build")
-	command.Flags().BoolVar(&args.initAndExit, "x", false, "Initialize the ledger and exit")
+	command.Flags().StringVarP(&args.dataDirectory, "dataDir", "d", "", "Root Algorand daemon data path")
+	command.Flags().StringVarP(&args.genesisFile, "genesisFile", "g", "", "Genesis configuration file")
+	command.Flags().BoolVarP(&args.genesisPrint, "printGenesis", "G", false, "Print genesis ID")
+	command.Flags().BoolVarP(&args.versionCheck, "version", "v", false, "Display and write current build version and exit")
+	command.Flags().BoolVarP(&args.branchCheck, "branchCheck", "b", false, "Display the git branch behind the build")
+	command.Flags().BoolVarP(&args.channelCheck, "channelCheck", "c", false, "Display and release channel behind the build")
+	command.Flags().BoolVarP(&args.initAndExit, "initAndExit", "x", false, "Initialize the ledger and exit")
 	command.Flags().BoolVarP(&args.logToStdout, "logToStdout", "o", false, "Write to stdout instead of node.log by overriding config.LogSizeLimit to 0")
-	command.Flags().StringVar(&args.peerOverride, "p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
-	command.Flags().StringVar(&args.listenIP, "l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
-	command.Flags().StringVar(&args.sessionGUID, "s", "", "Telemetry Session GUID to use")
-	command.Flags().StringVar(&args.telemetryOverride, "t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
-	command.Flags().StringVar(&args.seed, "seed", "", "input to math/rand.Seed()")
+	command.Flags().StringVarP(&args.peerOverride, "peerOverride", "p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
+	command.Flags().StringVarP(&args.listenIP, "listenIP", "l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
+	command.Flags().StringVarP(&args.sessionGUID, "sessionGUID", "s", "", "Telemetry Session GUID to use")
+	command.Flags().StringVarP(&args.telemetryOverride, "telemetryOverride", "t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
+	command.Flags().StringVarP(&args.seed, "seed", "", "", "input to math/rand.Seed()")
 }
 
 func main() {
