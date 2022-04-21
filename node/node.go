@@ -175,7 +175,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -1378,4 +1378,9 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 // Record forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
 	node.accountManager.Record(account, round, participationType)
+}
+
+func (node *AlgorandFullNode) IsParticipating() bool {
+	round := node.ledger.Latest() + 1
+	return node.accountManager.HasLiveKeys(round, round)
 }
