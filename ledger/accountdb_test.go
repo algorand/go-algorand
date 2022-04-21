@@ -3323,3 +3323,39 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 }
+
+func TestAccountOnlineRoundParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	var accts map[basics.Address]basics.AccountData
+	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+
+	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, 80 + proto.MaxBalLookback)
+	for i := range onlineRoundParams {
+		onlineRoundParams[i].OnlineSupply = uint64(i)
+	}
+
+	err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 1)
+	require.NoError(t, err)
+
+	dbOnlineRoundParams, err := accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
+	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
+
+	err = accountsPruneOnlineRoundParams(tx, 10)
+	require.NoError(t, err)
+
+	dbOnlineRoundParams, err = accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
+	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
+}

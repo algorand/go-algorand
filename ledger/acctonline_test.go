@@ -17,9 +17,13 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -277,5 +281,140 @@ func TestAcctOnline(t *testing.T) {
 		data, has := oa.baseOnlineAccounts.read(bal.Addr)
 		require.False(t, has)
 		require.Empty(t, data)
+	}
+}
+
+func TestAcctOnlineRoundParamsOffset(t *testing.T) {
+	ao := onlineAccounts{}
+
+	ao.cachedDBRoundOnline = 0
+	ao.deltas = make([]ledgercore.AccountDeltas, 10)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 11)
+	offset, err := ao.roundParamsOffset(basics.Round(6))
+	require.NoError(t, err)
+	require.Equal(t, uint64(6), offset)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = make([]ledgercore.AccountDeltas, 10)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
+	offset, err = ao.roundParamsOffset(basics.Round(100))
+	require.NoError(t, err)
+	require.Equal(t, uint64(20), offset)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = make([]ledgercore.AccountDeltas, 10)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
+	offset, err = ao.roundParamsOffset(basics.Round(6))
+	require.Error(t, err)
+}
+
+func TestAcctOnlineRoundParamsCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, ao := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+	defer ao.close()
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < 10; i++ {
+		accts = append(accts, accts[0])
+	}
+
+	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	lastCreatableID := crypto.RandUint64() % 512
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	allTotals := make(map[basics.Round]ledgercore.AccountTotals)
+
+	start := basics.Round(10)
+	end := basics.Round(2*proto.MaxBalLookback + 15)
+	for i := start; i < end; i++ {
+		consensusVersion := protocol.ConsensusCurrentVersion
+		if i > basics.Round(proto.MaxBalLookback) {
+			consensusVersion = protocol.ConsensusFuture
+		}
+		rewardLevelDelta := crypto.RandUint64() % 3
+		rewardLevel += rewardLevelDelta
+		var updates ledgercore.AccountDeltas
+		var totals map[basics.Address]ledgercore.AccountData
+		base := accts[i-1]
+		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(base, updates)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = consensusVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+
+		delta.Totals = accumulateTotals(t, consensusVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
+		allTotals[i] = delta.Totals
+		ml.trackers.newBlock(blk, delta)
+		accts = append(accts, newAccts)
+
+		if i > basics.Round(proto.MaxBalLookback) && i % 10 == 0 {
+			onlineTotal, err := ao.OnlineTotals(i-basics.Round(proto.MaxBalLookback))
+			require.NoError(t, err)
+			require.Equal(t, allTotals[i-basics.Round(proto.MaxBalLookback)].Online.Money, onlineTotal)
+			expectedConsensusVersion := protocol.ConsensusCurrentVersion
+			if i > 2 * basics.Round(proto.MaxBalLookback) {
+				expectedConsensusVersion = protocol.ConsensusFuture
+			}
+			roundParamsOffset, err := ao.roundParamsOffset(i-basics.Round(proto.MaxBalLookback))
+			require.NoError(t, err)
+			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset])
+		}
+	}
+
+	ml.trackers.lastFlushTime = time.Time{}
+
+	ml.trackers.committedUpTo(2*basics.Round(proto.MaxBalLookback) + 14)
+	ml.trackers.waitAccountsWriting()
+
+	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
+	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		dbOnlineRoundParams, err = accountsOnlineRoundParams(tx)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)], dbOnlineRoundParams)
+
+	for i := ml.Latest() - basics.Round(proto.MaxBalLookback); i < ml.Latest(); i++ {
+		onlineTotal, err := ao.OnlineTotals(i)
+		require.NoError(t, err)
+		require.Equal(t, allTotals[i].Online.Money, onlineTotal)
 	}
 }
