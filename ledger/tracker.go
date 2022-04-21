@@ -198,7 +198,7 @@ type deferredCommitRange struct {
 	// note that in this number we might have the same account being modified several times.
 	pendingDeltas int
 
-	isCatchpointRound bool
+	isFirstStageCatchpointRound bool
 
 	// catchpointWriting is a pointer to a variable with the same name in the catchpointTracker.
 	// it's used in order to reset the catchpointWriting flag from the acctupdates's
@@ -234,14 +234,9 @@ type deferredCommitContext struct {
 	onlineAccountExpiredRowids     []int64
 	expirationOffset               uint64
 
-	committedRoundDigest     crypto.Digest
 	trieBalancesHash         crypto.Digest
 	updatingBalancesDuration time.Duration
 	catchpointLabel          string
-
-	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
-	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
-	txTailHash crypto.Digest
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
@@ -375,7 +370,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
-	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.isCatchpointRound && dcc.pendingDeltas < pendingDeltasFlushThreshold {
+	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.isFirstStageCatchpointRound && dcc.pendingDeltas < pendingDeltasFlushThreshold {
 		dcc = nil
 	}
 	tr.mu.RUnlock()

@@ -58,6 +58,7 @@ type accountsDbQueries struct {
 	insertCatchpointStateUint64 *sql.Stmt
 	selectCatchpointStateString *sql.Stmt
 	insertCatchpointStateString *sql.Stmt
+	insertStoredCatchpointDataFile *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -2238,6 +2239,14 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 	return err
 }
 
+func createCatchpointDataFilesTable(ctx context.Context, tx *sql.Tx) error {
+	stmt := `CREATE TABLE IF NOT EXISTS storedcatchpointdatafiles (
+		round integer primary key NOT NULL,
+		info blob NOT NULL)`
+	_, err := tx.ExecContext(ctx, stmt)
+	return err
+}
+
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
 // and optionally returns list of addresses that were eliminated
 func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
@@ -2316,8 +2325,8 @@ func accountsReset(tx *sql.Tx) error {
 }
 
 // accountsRound returns the tracker balances round number
-func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
-	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
+func accountsRound(q db.Queryable) (rnd basics.Round, err error) {
+	err = q.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	if err != nil {
 		return
 	}
@@ -2408,6 +2417,12 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 	if err != nil {
 		return nil, err
 	}
+
+	qs.insertStoredCatchpointDataFile, err = r.Prepare("INSERT INTO storedcatchpointdatafiles(round) VALUES(?)")
+	if err != nil {
+		return nil, err
+	}
+
 	return qs, nil
 }
 
@@ -2709,6 +2724,14 @@ func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, sta
 	return cleared, err
 }
 
+func (qs *accountsDbQueries) storeCatchpointDataFile(ctx context.Context, round basics.Round, info []byte) error {
+	f := func() error {
+		_, err := qs.insertStoredCatchpointDataFile.ExecContext(ctx, round, info)
+		return err
+	}
+	return db.Retry(f)
+}
+
 func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
@@ -2725,6 +2748,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.insertCatchpointStateUint64,
 		&qs.selectCatchpointStateString,
 		&qs.insertCatchpointStateString,
+		&qs.insertStoredCatchpointDataFile,
 	}
 	for _, preparedQuery := range preparedQueries {
 		if (*preparedQuery) != nil {
@@ -2913,12 +2937,12 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 	return result, nil
 }
 
-func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
+func accountsTotals(q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
 	}
-	row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
+	row := q.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
 		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,

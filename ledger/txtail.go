@@ -211,13 +211,15 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 }
 
 func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
-	if !dcc.isCatchpointRound {
+	/*
+	if !dcc.isFirstStageCatchpointGeneration {
 		return nil
 	}
 
 	maxTxnLife := config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife
 	// update the dcc with the hash we'll need.
 	dcc.txTailHash, err = t.recentTailHash(dcc.offset, maxTxnLife)
+	*/
 	return
 }
 

@@ -548,7 +548,7 @@ func TestCatchpointTrackerPrepareCommit(t *testing.T) {
 		for lookback := basics.Round(0); lookback < maxLookback; lookback += 20 {
 			dcc.lookback = lookback
 			for _, isCatchpointRound := range []bool{false, true} {
-				dcc.isCatchpointRound = isCatchpointRound
+				dcc.isFirstStageCatchpointRound = isCatchpointRound
 				require.NoError(t, ct.prepareCommit(dcc))
 				if isCatchpointRound {
 					expectedRound := offset + uint64(lookback) - 1
@@ -602,7 +602,7 @@ func (bt *blockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommit
 
 // postCommit implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || (dcc.isCatchpointRound && dcc.catchpointLabel != "") {
+	if bt.alwaysLock || (dcc.isFirstStageCatchpointRound && dcc.catchpointLabel != "") {
 		bt.postCommitEntryLock <- struct{}{}
 		<-bt.postCommitReleaseLock
 	}
@@ -610,7 +610,7 @@ func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitCo
 
 // postCommitUnlocked implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || (dcc.isCatchpointRound && dcc.catchpointLabel != "") {
+	if bt.alwaysLock || (dcc.isFirstStageCatchpointRound && dcc.catchpointLabel != "") {
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}

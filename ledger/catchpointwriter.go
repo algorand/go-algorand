@@ -257,6 +257,10 @@ func (cw *catchpointWriter) GetTotalAccounts() uint64 {
 	return cw.totalAccounts
 }
 
+func (cw *catchpointWriter) GetTotalChunks() uint64 {
+	return cw.totalChunks
+}
+
 // hasContextDeadlineExceeded examine the given context and see if it was canceled or timed-out.
 // if it has timed out, the function returns contextExceeded=true and contextError = nil.
 // if it's a non-timeout error, the functions returns contextExceeded=false and contextError = error.
