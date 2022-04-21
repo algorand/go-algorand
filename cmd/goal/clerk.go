@@ -1070,7 +1070,7 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			if writeSourceMap {
-				mapname := fname + ".map"
+				mapname := outname + ".map"
 				pcblob, err := json.Marshal(sourceMap)
 				if err != nil {
 					reportErrorf("%s: %s", mapname, err)
