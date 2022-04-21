@@ -51,7 +51,7 @@ type algodArgs struct {
 	branchCheck       bool
 	channelCheck      bool
 	initAndExit       bool
-	writeToStdout     bool
+	logToStdout       bool
 	peerOverride      string
 	listenIP          string
 	sessionGUID       string
@@ -79,7 +79,7 @@ func init() {
 	command.Flags().BoolVar(&args.branchCheck, "b", false, "Display the git branch behind the build")
 	command.Flags().BoolVar(&args.channelCheck, "c", false, "Display and release channel behind the build")
 	command.Flags().BoolVar(&args.initAndExit, "x", false, "Initialize the ledger and exit")
-	command.Flags().BoolVarP(&args.initAndExit, "logToStdout", "o", false, "Write to stdout instead of node.log by overriding config.LogSizeLimit to 0")
+	command.Flags().BoolVarP(&args.logToStdout, "logToStdout", "o", false, "Write to stdout instead of node.log by overriding config.LogSizeLimit to 0")
 	command.Flags().StringVar(&args.peerOverride, "p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
 	command.Flags().StringVar(&args.listenIP, "l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
 	command.Flags().StringVar(&args.sessionGUID, "s", "", "Telemetry Session GUID to use")
@@ -323,6 +323,10 @@ func run(args algodArgs) int {
 				log.Debugf("Cannot load static phonebook: %v", err)
 			}
 		}
+	}
+
+	if args.logToStdout {
+		cfg.LogSizeLimit = 0
 	}
 
 	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
