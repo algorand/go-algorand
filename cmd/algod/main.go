@@ -54,7 +54,7 @@ var logToStdout = flag.Bool("o", false, "Write to stdout instead of node.log by 
 var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
 var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
-var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
+var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
 func main() {
