@@ -196,6 +196,10 @@ type deferredCommitRange struct {
 	oldBase  basics.Round
 	lookback basics.Round
 
+	// catchpointLookback determines the offset from round number to take a snapshot for.
+	// i.e. for round X the DB snapshot is taken at X-catchpointLookback
+	catchpointLookback uint64
+
 	// pendingDeltas is the number of accounts that were modified within this commit context.
 	// note that in this number we might have the same account being modified several times.
 	pendingDeltas int

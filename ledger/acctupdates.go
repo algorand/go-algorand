@@ -451,6 +451,12 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 	// calculate the number of pending deltas
 	dcr.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
 
+	proto := config.Consensus[au.versions[offset]]
+	dcr.catchpointLookback = proto.CatchpointLookback
+	if dcr.catchpointLookback == 0 {
+		dcr.catchpointLookback = proto.MaxBalLookback
+	}
+
 	// submit committing task only if offset is non-zero in addition to
 	// 1) no pending catchpoint writes
 	// 2) batching requirements meet or catchpoint round

@@ -667,7 +667,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if uint64(ledger.Latest())%cfg.CatchpointInterval == 0 {
+		if uint64(ledger.Latest()-basics.Round(protoParams.CatchpointLookback))%cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 
@@ -715,7 +715,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if uint64(ledger.Latest())%cfg.CatchpointInterval == 0 {
+		if uint64(ledger.Latest()-basics.Round(protoParams.CatchpointLookback))%cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 			break

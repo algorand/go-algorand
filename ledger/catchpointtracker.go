@@ -271,19 +271,26 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 
 	newBase := dcr.oldBase + basics.Round(dcr.offset)
 
-	// check if there was a catchpoint between dcc.oldBase+lookback and dcc.oldBase+offset+lookback
+	// catchpoint for round X = oldBase + offset + lookback
+	// is taken at X - CatchpointLookback
+	// check if X - CatchpointLookback is within oldBase...oldBase+offset
 	if ct.catchpointInterval > 0 {
 		nextCatchpointRound := ((uint64(dcr.oldBase+dcr.lookback) + ct.catchpointInterval) / ct.catchpointInterval) * ct.catchpointInterval
-
-		if nextCatchpointRound < uint64(dcr.oldBase+dcr.lookback)+dcr.offset {
-			mostRecentCatchpointRound := (uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
-			newBase = basics.Round(nextCatchpointRound) - dcr.lookback
-			if mostRecentCatchpointRound > nextCatchpointRound {
-				hasMultipleIntermediateCatchpoint = true
-				// skip if there is more than one catchpoint in queue
-				newBase = basics.Round(mostRecentCatchpointRound) - dcr.lookback
+		if nextCatchpointRound > dcr.catchpointLookback {
+			snapshotRound := nextCatchpointRound - dcr.catchpointLookback
+			if snapshotRound < uint64(dcr.oldBase)+dcr.offset {
+				newBase = basics.Round(snapshotRound)
+				mostRecentCatchpointRound := (uint64(committedRound) / ct.catchpointInterval) * ct.catchpointInterval
+				if mostRecentCatchpointRound > dcr.catchpointLookback {
+					mostRecentSnapshotRound := mostRecentCatchpointRound - dcr.catchpointLookback
+					if mostRecentSnapshotRound > snapshotRound {
+						hasMultipleIntermediateCatchpoint = true
+						// skip if there is more than one catchpoint in queue
+						newBase = basics.Round(mostRecentSnapshotRound)
+					}
+					hasIntermediateCatchpoint = true
+				}
 			}
-			hasIntermediateCatchpoint = true
 		}
 	}
 
@@ -311,7 +318,7 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	}
 
 	// check to see if this is a catchpoint round
-	dcr.isCatchpointRound = ct.isCatchpointRound(dcr.offset, dcr.oldBase, dcr.lookback)
+	dcr.isCatchpointRound = ct.isCatchpointRound(dcr.offset, dcr.oldBase, dcr.lookback, dcr.catchpointLookback)
 
 	if dcr.isCatchpointRound && ct.enableGeneratingCatchpointFiles {
 		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
@@ -575,7 +582,7 @@ func (ct *catchpointTracker) IsWritingCatchpointFile() bool {
 }
 
 // isCatchpointRound returns true if the round at the given offset, dbRound with the provided lookback should be a catchpoint round.
-func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round) bool {
+func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Round, lookback basics.Round, catchpointLookback uint64) bool {
 	if !ct.forceCatchpointFileWriting {
 		if ct.accountDataResourceSeparationRound == basics.Round(0) {
 			return false
@@ -585,7 +592,8 @@ func (ct *catchpointTracker) isCatchpointRound(offset uint64, dbRound basics.Rou
 			return false
 		}
 	}
-	return ((offset + uint64(lookback+dbRound)) > 0) && (ct.catchpointInterval != 0) && ((uint64((offset + uint64(lookback+dbRound))) % ct.catchpointInterval) == 0)
+	latest := offset + uint64(lookback+dbRound)
+	return (latest > 0) && (ct.catchpointInterval != 0) && (((latest - catchpointLookback) % ct.catchpointInterval) == 0)
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
