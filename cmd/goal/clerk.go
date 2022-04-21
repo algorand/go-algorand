@@ -1070,6 +1070,9 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			if writeSourceMap {
+				if outname == stdoutFilenameValue {
+					outname = fmt.Sprintf("%s.tok", fname)
+				}
 				mapname := outname + ".map"
 				pcblob, err := json.Marshal(sourceMap)
 				if err != nil {
