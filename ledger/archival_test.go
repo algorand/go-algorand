@@ -93,8 +93,12 @@ func (wl *wrappedLedger) GenesisHash() crypto.Digest {
 	return wl.l.GenesisHash()
 }
 
-func (wl *wrappedLedger) GenesisProto() protocol.ConsensusVersion {
+func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
 	return wl.l.GenesisProto()
+}
+
+func (wl *wrappedLedger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return wl.l.GenesisProtoVersion()
 }
 
 func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {

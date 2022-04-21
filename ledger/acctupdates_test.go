@@ -220,7 +220,11 @@ func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
 
-func (ml *mockLedgerForTracker) GenesisProto() protocol.ConsensusVersion {
+func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
+	return config.Consensus[ml.consensusVersion]
+}
+
+func (ml *mockLedgerForTracker) GenesisProtoVersion() protocol.ConsensusVersion {
 	return ml.consensusVersion
 }
 

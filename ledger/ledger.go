@@ -72,7 +72,7 @@ type Ledger struct {
 
 	genesisAccounts map[basics.Address]basics.AccountData
 
-	genesisProto protocol.ConsensusVersion
+	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
 	accts       accountUpdates
@@ -113,7 +113,7 @@ func OpenLedger(
 		archival:                       cfg.Archival,
 		genesisHash:                    genesisInitState.GenesisHash,
 		genesisAccounts:                genesisInitState.Accounts,
-		genesisProto:                   genesisInitState.Block.CurrentProtocol,
+		genesisProtoVersion:                   genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
@@ -714,8 +714,13 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 }
 
 // GenesisProto returns the initial protocol for this ledger.
-func (l *Ledger) GenesisProto() protocol.ConsensusVersion {
-	return l.genesisProto
+func (l *Ledger) GenesisProto() config.ConsensusParams {
+	return config.Consensus[l.genesisProtoVersion]
+}
+
+// GenesisProto returns the initial protocol for this ledger.
+func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return l.genesisProtoVersion
 }
 
 // GenesisAccounts returns initial accounts for this ledger.

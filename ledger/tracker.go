@@ -142,7 +142,8 @@ type ledgerForTracker interface {
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	GenesisHash() crypto.Digest
-	GenesisProto() protocol.ConsensusVersion
+	GenesisProto() config.ConsensusParams
+	GenesisProtoVersion() protocol.ConsensusVersion
 	GenesisAccounts() map[basics.Address]basics.AccountData
 }
 

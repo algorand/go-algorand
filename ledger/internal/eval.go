@@ -615,7 +615,7 @@ type BlockEvaluator struct {
 type LedgerForEvaluator interface {
 	LedgerForCowBase
 	GenesisHash() crypto.Digest
-	GenesisProto() protocol.ConsensusVersion
+	GenesisProto() config.ConsensusParams
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
 }

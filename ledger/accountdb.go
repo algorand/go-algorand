@@ -3033,7 +3033,7 @@ func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.O
 }
 
 func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, round basics.Round) error {
-	insertStmt, err := tx.Prepare("REPLACE INTO onlineroundparamstail (round, data) VALUES (?, ?)")
+	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (round, data) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}

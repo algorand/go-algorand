@@ -371,7 +371,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	dcc.onlineAccountExpiredRowids = expirations
 	dcc.expirationOffset = expirationOffset
 
-	dcc.genesisProto = config.Consensus[ao.ledger.GenesisProto()]
+	dcc.genesisProto = ao.ledger.GenesisProto()
 
 	start, err := ao.roundParamsOffset(dcc.oldBase)
 	if err != nil {
@@ -381,6 +381,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(dcc.oldBase, dcc.newBase)
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[start:end]
 	maxOnlineLookback := basics.Round(ao.maxOnlineLookback() - int(offset))
 	dcc.maxLookbackRound = basics.Round(0)
@@ -652,7 +653,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 // balance and address, whose voting keys are valid in voteRnd.  See the
 // normalization description in AccountData.NormalizedOnlineBalance().
 func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*ledgercore.OnlineAccount, error) {
-	genesisProto := config.Consensus[ao.ledger.GenesisProto()]
+	genesisProto := ao.ledger.GenesisProto()
 	ao.accountsMu.RLock()
 	for {
 		currentDbRound := ao.cachedDBRoundOnline

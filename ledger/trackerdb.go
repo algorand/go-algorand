@@ -78,7 +78,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
-			initProto:         l.GenesisProto(),
+			initProto:         l.GenesisProtoVersion(),
 			catchpointEnabled: catchpointEnabled,
 			dbPathPrefix:      dbPathPrefix,
 			blockDb:           bdbs,

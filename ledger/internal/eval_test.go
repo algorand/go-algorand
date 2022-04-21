@@ -564,7 +564,7 @@ func (ledger *evalTestLedger) GenesisHash() crypto.Digest {
 }
 
 // GenesisProto returns the genesis hash for this ledger.
-func (ledger *evalTestLedger) GenesisProto() protocol.ConsensusVersion {
+func (ledger *evalTestLedger) GenesisProto() config.ConsensusParams {
 	return ledger.genesisProto
 }
 

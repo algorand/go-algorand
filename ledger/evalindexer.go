@@ -72,7 +72,7 @@ type Creatable struct {
 type indexerLedgerConnector struct {
 	il             indexerLedgerForEval
 	genesisHash    crypto.Digest
-	genesisProto   protocol.ConsensusVersion
+	genesisProtoVersion   protocol.ConsensusVersion
 	latestRound    basics.Round
 	roundResources EvalForIndexerResources
 }
@@ -180,8 +180,13 @@ func (l indexerLedgerConnector) GenesisHash() crypto.Digest {
 }
 
 // GenesisProto is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) GenesisProto() protocol.ConsensusVersion {
-	return l.genesisProto
+func (l indexerLedgerConnector) GenesisProto() config.ConsensusParams {
+	return config.Consensus[l.genesisProtoVersion]
+}
+
+// GenesisProto returns the initial protocol for this ledger.
+func (l *indexerLedgerConnector) GenesisProtoVersion() protocol.ConsensusVersion {
+	return l.genesisProtoVersion
 }
 
 // Totals is part of LedgerForEvaluator interface.
@@ -201,7 +206,7 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 	return indexerLedgerConnector{
 		il:             il,
 		genesisHash:    genesisHash,
-		genesisProto:   genesisProto,
+		genesisProtoVersion:   genesisProto,
 		latestRound:    latestRound,
 		roundResources: roundResources,
 	}
