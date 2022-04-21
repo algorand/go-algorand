@@ -6,7 +6,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## err
 
 - Opcode: 0x00
-- Stack: ... &rarr; ...
+- Stack: ... &rarr; _exits_
 - Fail immediately.
 
 ## sha256
@@ -591,7 +591,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 ## return
 
 - Opcode: 0x43
-- Stack: ..., A: uint64 &rarr; ...
+- Stack: ..., A: uint64 &rarr; _exits_
 - use A as success value; end
 - Availability: v2
 
@@ -638,7 +638,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 ## select
 
 - Opcode: 0x4d
-- Stack: ..., A, B, C &rarr; ..., A or B
+- Stack: ..., A, B, C: uint64 &rarr; ..., A or B
 - selects one of two values based on top-of-stack: B if C != 0, else A
 - Availability: v3
 
