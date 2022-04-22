@@ -1265,15 +1265,16 @@ int 1
 func TestInnerTxIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ep, tx, ledger := MakeSampleEnv()
-	txid := TestProg(t, "txn TxID; log; int 1", AssemblerMaxVersion)
-	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
-		ApprovalProgram: txid.Program,
-	})
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
-	TestApp(t, `
+	t.Run("txn", func(t *testing.T) {
+		ep, tx, ledger := MakeSampleEnv()
+		txid := TestProg(t, "txn TxID; log; int 1", AssemblerMaxVersion)
+		ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+			ApprovalProgram: txid.Program,
+		})
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 50_000)
+		tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+		TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
 int 222;     itxn_field ApplicationID
@@ -1294,6 +1295,51 @@ itxn Logs 0
 &&
 
 `, ep)
+	})
+
+	t.Run("gtxn", func(t *testing.T) {
+		ep, tx, ledger := MakeSampleEnv()
+		txid := TestProg(t, "gtxn 0 TxID; log; gtxn 1 TxID; log; int 1", AssemblerMaxVersion)
+		ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+			ApprovalProgram: txid.Program,
+		})
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 50_000)
+		tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+		TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+
+gitxn 0 Logs 0
+gitxn 0 Logs 1
+!=
+
+gitxn 0 Logs 0
+gitxn 1 Logs 0
+==
+&&
+
+gitxn 0 Logs 0
+gitxn 0 TxID
+==
+&&
+
+gitxn 0 Logs 1
+gitxn 1 Logs 1
+==
+&&
+
+gitxn 0 Logs 1
+gitxn 1 TxID
+==
+&&
+`, ep)
+	})
 }
 
 // TestInnerGroupIDs confirms that GroupIDs are unset on size one inner groups,
