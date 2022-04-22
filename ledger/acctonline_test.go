@@ -395,7 +395,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 			}
 			roundParamsOffset, err := ao.roundParamsOffset(i - basics.Round(proto.MaxBalLookback))
 			require.NoError(t, err)
-			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset])
+			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset].CurrentProtocol)
 		}
 	}
 
