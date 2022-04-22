@@ -739,7 +739,7 @@ func CheckContractVersions(approval []byte, clear []byte, previous basics.AppPar
 	// stronger than needed, but is easier to describe (and thus specify). The
 	// real goal is to ensure that if app A opts its account into app B (which
 	// requires B's CSP to be >= 4), the CSP will STAY above 4. That way, the
-	// A can certainly ClearState its acount out of B.
+	// A can certainly ClearState its account out of B.
 	if len(previous.ApprovalProgram) != 0 { // if creation or in call from WellFormed() previous is empty
 		pav, _, err := ProgramVersion(previous.ApprovalProgram)
 		if err != nil {
