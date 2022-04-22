@@ -392,13 +392,13 @@
         },
         "description": "Teal compile Result"
       },
-      "DisassembleResult": {
+      "DisassembleResponse": {
         "content": {
           "application/json": {
             "schema": {
               "properties": {
                 "result": {
-                  "description": "disassembled Teal code in bytes",
+                  "description": "disassembled Teal code",
                   "type": "string"
                 }
               },
@@ -409,7 +409,7 @@
             }
           }
         },
-        "description": "Teal disassemble Result"
+        "description": "Teal disassembly Result"
       },
       "DryrunResponse": {
         "content": {
@@ -3727,7 +3727,7 @@
               }
             }
           },
-          "description": "TEAL source code to be compiled",
+          "description": "TEAL program binary to be disassembled",
           "required": true
         },
         "responses": {
@@ -3736,24 +3736,19 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "hash": {
-                      "description": "base32 SHA512_256 of program bytes (Address style)",
-                      "type": "string"
-                    },
                     "result": {
-                      "description": "base64 encoded program bytes",
+                      "description": "disassembled Teal code",
                       "type": "string"
                     }
                   },
                   "required": [
-                    "hash",
                     "result"
                   ],
                   "type": "object"
                 }
               }
             },
-            "description": "Teal compile Result"
+            "description": "Teal disassembly Result"
           },
           "400": {
             "content": {

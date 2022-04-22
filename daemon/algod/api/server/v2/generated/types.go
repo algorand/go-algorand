@@ -612,10 +612,10 @@ type CompileResponse struct {
 	Result string `json:"result"`
 }
 
-// DisassembleResult defines model for DisassembleResult.
-type DisassembleResult struct {
+// DisassembleResponse defines model for DisassembleResponse.
+type DisassembleResponse struct {
 
-	// disassembled Teal code in bytes
+	// disassembled Teal code
 	Result string `json:"result"`
 }
 

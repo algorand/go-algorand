@@ -1435,7 +1435,7 @@
         "operationId": "TealDisassemble",
         "parameters": [
           {
-            "description": "TEAL source code to be compiled",
+            "description": "TEAL program binary to be disassembled",
             "name": "source",
             "in": "body",
             "required": true,
@@ -3098,8 +3098,8 @@
         }
       }
     },
-    "DisassembleResult": {
-      "description": "Teal disassemble Result",
+    "DisassembleResponse": {
+      "description": "Teal disassembly Result",
       "schema": {
         "type": "object",
         "required": [
