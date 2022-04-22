@@ -51,14 +51,14 @@ var getCmd = &cobra.Command{
 				return
 			}
 
-			val, err := getObjectProperty(cfg, getParameterArg)
+			val, err := serializeObjectProperty(cfg, getParameterArg)
 			if err != nil {
 				reportWarnf("Error retrieving property '%s' - %s", getParameterArg, err)
 				anyError = true
 				return
 			}
 
-			fmt.Printf("%v", val)
+			fmt.Printf(val)
 		})
 		if anyError {
 			os.Exit(1)
@@ -66,14 +66,14 @@ var getCmd = &cobra.Command{
 	},
 }
 
-func getObjectProperty(object interface{}, property string) (ret interface{}, err error) {
+func serializeObjectProperty(object interface{}, property string) (ret string, err error) {
 	v := reflect.ValueOf(object)
 	val := reflect.Indirect(v)
 	f := val.FieldByName(property)
 
 	if !f.IsValid() {
-		return object, fmt.Errorf("unknown property named '%s'", property)
+		return "", fmt.Errorf("unknown property named '%s'", property)
 	}
 
-	return f.Interface(), nil
+	return fmt.Sprintf("%v", f.Interface()), nil
 }
