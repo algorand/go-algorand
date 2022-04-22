@@ -23,9 +23,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestPrint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testcases := []struct {
 		input    interface{}
 		expected string
