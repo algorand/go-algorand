@@ -21,7 +21,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -536,7 +535,6 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	c := e.NewContext(req, rec)
 	err := handler.TealCompile(c)
 	require.NoError(t, err)
-	fmt.Printf("%+v %v\n", c.Response(), c.Response().Writer)
 	require.Equal(t, expectedCode, rec.Code)
 }
 
