@@ -54,9 +54,9 @@ func TestCurrentInnerTypes(t *testing.T) {
 	// bad type
 	TestApp(t, "itxn_begin; byte \"pya\"; itxn_field Type; itxn_submit; int 1;", ep, "pya is not a valid Type")
 	// mixed up the int form for the byte form
-	TestApp(t, Obfuscate("itxn_begin; int pay; itxn_field Type; itxn_submit; int 1;"), ep, "Type arg not a byte array")
+	TestApp(t, NoTrack("itxn_begin; int pay; itxn_field Type; itxn_submit; int 1;"), ep, "Type arg not a byte array")
 	// or vice versa
-	TestApp(t, Obfuscate("itxn_begin; byte \"pay\"; itxn_field TypeEnum; itxn_submit; int 1;"), ep, "not a uint64")
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field TypeEnum; itxn_submit; int 1;"), ep, "not a uint64")
 
 	// some bad types
 	TestApp(t, "itxn_begin; int 42; itxn_field TypeEnum; itxn_submit; int 1;", ep, "42 is not a valid TypeEnum")
@@ -101,7 +101,7 @@ func TestFieldTypes(t *testing.T) {
 
 	ep, _, _ := MakeSampleEnv()
 	TestApp(t, "itxn_begin; byte \"pay\"; itxn_field Sender;", ep, "not an address")
-	TestApp(t, Obfuscate("itxn_begin; int 7; itxn_field Receiver;"), ep, "not an address")
+	TestApp(t, NoTrack("itxn_begin; int 7; itxn_field Receiver;"), ep, "not an address")
 	TestApp(t, "itxn_begin; byte \"\"; itxn_field CloseRemainderTo;", ep, "not an address")
 	TestApp(t, "itxn_begin; byte \"\"; itxn_field AssetSender;", ep, "not an address")
 	// can't really tell if it's an addres, so 32 bytes gets further
@@ -111,10 +111,10 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, "itxn_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; itxn_field AssetCloseTo;",
 		ep, "not an address")
 
-	TestApp(t, Obfuscate("itxn_begin; byte \"pay\"; itxn_field Fee;"), ep, "not a uint64")
-	TestApp(t, Obfuscate("itxn_begin; byte 0x01; itxn_field Amount;"), ep, "not a uint64")
-	TestApp(t, Obfuscate("itxn_begin; byte 0x01; itxn_field XferAsset;"), ep, "not a uint64")
-	TestApp(t, Obfuscate("itxn_begin; byte 0x01; itxn_field AssetAmount;"), ep, "not a uint64")
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Fee;"), ep, "not a uint64")
+	TestApp(t, NoTrack("itxn_begin; byte 0x01; itxn_field Amount;"), ep, "not a uint64")
+	TestApp(t, NoTrack("itxn_begin; byte 0x01; itxn_field XferAsset;"), ep, "not a uint64")
+	TestApp(t, NoTrack("itxn_begin; byte 0x01; itxn_field AssetAmount;"), ep, "not a uint64")
 
 }
 

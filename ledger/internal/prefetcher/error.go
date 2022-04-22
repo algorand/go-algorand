@@ -14,14 +14,30 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+package prefetcher
 
 import (
-	"github.com/algorand/go-deadlock"
+	"fmt"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
-// StringGauge represents a map of key value pairs available to be written with the AddMetric
-type StringGauge struct {
-	deadlock.Mutex
-	values map[string]string
+// GroupTaskError indicates the group index of the unfulfilled resource
+type GroupTaskError struct {
+	err            error
+	GroupIdx       int64
+	Address        *basics.Address
+	CreatableIndex basics.CreatableIndex
+	CreatableType  basics.CreatableType
+}
+
+// Error satisfies builtin interface `error`
+func (err *GroupTaskError) Error() string {
+	return fmt.Sprintf("prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %v",
+		err.GroupIdx, err.Address, err.CreatableIndex, err.CreatableType, err.err)
+}
+
+// Unwrap provides access to the underlying error
+func (err *GroupTaskError) Unwrap() error {
+	return err.err
 }

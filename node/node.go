@@ -511,7 +511,17 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 			node.mu.Unlock()
 		}()
 	}
+	return node.broadcastSignedTxGroup(txgroup)
+}
 
+// BroadcastInternalSignedTxGroup broadcasts a transaction group that has already been signed.
+// It is originated internally, and in DevMode, it will not advance the round.
+func (node *AlgorandFullNode) BroadcastInternalSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	return node.broadcastSignedTxGroup(txgroup)
+}
+
+// broadcastSignedTxGroup broadcasts a transaction group that has already been signed.
+func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
 	lastRound := node.ledger.Latest()
 	var b bookkeeping.BlockHeader
 	b, err = node.ledger.BlockHdr(lastRound)
@@ -630,7 +640,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		}
 		found = true
 
-		// Keep looking in the ledger..
+		// Keep looking in the ledger.
 	}
 
 	var maxLife basics.Round
@@ -641,10 +651,17 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	} else {
 		node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", latest)
 	}
+
+	// Search from newest to oldest round up to the max life of a transaction.
 	maxRound := latest
 	minRound := maxRound.SubSaturate(maxLife)
 
-	for r := minRound; r <= maxRound; r++ {
+	// Since we're using uint64, if the minRound is 0, we need to check for an underflow.
+	if minRound == 0 {
+		minRound++
+	}
+
+	for r := maxRound; r >= minRound; r-- {
 		tx, found, err := node.ledger.LookupTxid(txID, r)
 		if err != nil || !found {
 			continue
