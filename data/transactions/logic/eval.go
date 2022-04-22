@@ -2194,8 +2194,13 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 
 // currentTxID is a convenience method to get the Txid for the txn being evaluated
 func (cx *EvalContext) currentTxID() transactions.Txid {
-	// can't just return cx.txn.ID() because I might be an inner txn
-	return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
+	if cx.Proto.NewInnerTxnIDs {
+		// can't just return cx.txn.ID() because I might be an inner txn
+		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
+	}
+
+	// original behavior, for backwards comatability
+	return cx.txn.ID()
 }
 
 func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
@@ -2205,18 +2210,21 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 		return txn.ID()
 	}
 
+	// TODO use cx.Proto.NewInnerTxnIDs to determine when the old way should be used
+
 	if inner {
 		// Initialize innerTxidCache if necessary
 		if cx.EvalParams.innerTxidCache == nil {
-			// TODO: find length of most recent inner txn group and use that instead
-			cx.EvalParams.innerTxidCache = make(map[int]transactions.Txid, len(cx.txn.EvalDelta.InnerTxns))
+			lastGroupLen := len(cx.getLastInnerGroup())
+			cx.EvalParams.innerTxidCache = make(map[int]transactions.Txid, lastGroupLen)
 		}
 
 		txid, ok := cx.EvalParams.innerTxidCache[groupIndex]
 		if !ok {
 			// We're referencing an inner, use my txid and the the inner txn index
 			myTxid := cx.currentTxID()
-			innerIndex := len(cx.txn.EvalDelta.InnerTxns) + groupIndex // TODO: need to subtract length of the group to get actual inner index
+			lastGroupLen := len(cx.getLastInnerGroup())
+			innerIndex := len(cx.txn.EvalDelta.InnerTxns) - lastGroupLen + groupIndex
 			txid = txn.InnerID(myTxid, innerIndex)
 			cx.EvalParams.innerTxidCache[groupIndex] = txid
 		}
@@ -2235,8 +2243,8 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 		if cx.caller != nil {
 			parentTxid := cx.caller.currentTxID()
 			// We're referencing a peer txn, not an inner, but I am an inner
-			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
-			txid = txn.InnerID(parentTxid, innerOffset)
+			innerIndex := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
+			txid = txn.InnerID(parentTxid, innerIndex)
 		} else {
 			// We're referencing a peer txn and I am not an inner
 			txid = txn.ID()
@@ -2473,10 +2481,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 		return sv, err
 	}
 
-	var (
-		group    []transactions.SignedTxnWithAD
-		startIdx int
-	)
+	var group []transactions.SignedTxnWithAD
 	switch src {
 	case srcGroup:
 		if fs.effects && gi >= uint64(cx.groupIndex) {
@@ -2488,9 +2493,9 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 		}
 		group = cx.TxnGroup
 	case srcInner:
-		group, startIdx = cx.getLastInner()
+		group = cx.getLastInner()
 	case srcInnerGroup:
-		group, startIdx = cx.getLastInnerGroup()
+		group = cx.getLastInnerGroup()
 	}
 
 	// We cast the length up, rather than gi down, in case gi overflows `int`.
@@ -2500,7 +2505,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	tx := &group[gi]
 
 	// int(gi) is safe because gi < len(group). Slices in Go cannot exceed `int`
-	sv, err = cx.txnFieldToStack(tx, fs, ai, startIdx+int(gi), src != srcGroup)
+	sv, err = cx.txnFieldToStack(tx, fs, ai, int(gi), src != srcGroup)
 	if err != nil {
 		return sv, err
 	}
@@ -2682,34 +2687,34 @@ func opItxnas(cx *EvalContext) error {
 	return nil
 }
 
-func (cx *EvalContext) getLastInner() ([]transactions.SignedTxnWithAD, int) {
+func (cx *EvalContext) getLastInner() []transactions.SignedTxnWithAD {
 	inners := cx.txn.EvalDelta.InnerTxns
 	// If there are no inners yet, return empty slice, which will result in error
 	if len(inners) == 0 {
-		return inners, 0
+		return inners
 	}
-	return inners[len(inners)-1:], len(inners) - 1
+	return inners[len(inners)-1:]
 }
 
-func (cx *EvalContext) getLastInnerGroup() ([]transactions.SignedTxnWithAD, int) {
+func (cx *EvalContext) getLastInnerGroup() []transactions.SignedTxnWithAD {
 	inners := cx.txn.EvalDelta.InnerTxns
 	// If there are no inners yet, return empty slice, which will result in error
 	if len(inners) == 0 {
-		return inners, 0
+		return inners
 	}
 	gid := inners[len(inners)-1].Txn.Group
 	// If last inner was a singleton, return it as a slice.
 	if gid.IsZero() {
-		return inners[len(inners)-1:], len(inners) - 1
+		return inners[len(inners)-1:]
 	}
 	// Look back for the first non-matching inner (by group) to find beginning
 	for i := len(inners) - 2; i >= 0; i-- {
 		if inners[i].Txn.Group != gid {
-			return inners[i+1:], i + 1
+			return inners[i+1:]
 		}
 	}
 	// All have the same (non-zero) group. Return all
-	return inners, 0
+	return inners
 }
 
 func opGitxn(cx *EvalContext) error {
