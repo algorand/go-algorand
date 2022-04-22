@@ -581,10 +581,8 @@ func TestTealDisassemble(t *testing.T) {
 
 	// nil program works, but results in invalid version text.
 	tealDisassembleTest(t, "", 200, true)
-
-	// Round trip test: from source code, compile to a base64 string.
-	// Then check if disassembled base64 string matches the source.
-	ops, _ := logic.AssembleStringWithVersion("int 1", 2)
+	goodProgram := `int 1`
+	ops, _ := logic.AssembleStringWithVersion(goodProgram, 2)
 	testProgram := base64.StdEncoding.EncodeToString(ops.Program)
 	tealDisassembleTest(t, testProgram, 200, true)
 	tealDisassembleTest(t, testProgram, 404, false)
