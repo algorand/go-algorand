@@ -133,7 +133,6 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 
 	const assetid basics.AssetIndex = 1
 	proto := config.Consensus[protocol.ConsensusV24]
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
 
 	block = bookkeeping.MakeBlock(block.BlockHeader)
 
@@ -204,12 +203,7 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 		latestRound: 0,
 	}
 	proto.EnableAssetCloseAmount = true
-	proto.MaxBalLookback = 10
-	config.Consensus[testProtocolVersion] = proto
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
-	_, modifiedTxns, err := EvalForIndexer(il, &block, testProtocolVersion, EvalForIndexerResources{})
+	_, modifiedTxns, err := EvalForIndexer(il, &block, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	require.Equal(t, 4, len(modifiedTxns))
@@ -248,19 +242,19 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 		latestRound: 0,
 	}
 
-	_, _, err = EvalForIndexer(il, &block, protocol.ConsensusFuture, EvalForIndexerResources{})
+	_, _, err = EvalForIndexer(il, &block, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	badBlock := block
 	// First validate that bad block is fine if we dont touch it...
-	_, _, err = EvalForIndexer(il, &badBlock, protocol.ConsensusFuture, EvalForIndexerResources{})
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	// Introduce an unknown address, but this time the Eval function is called with parameters that
 	// don't necessarily mean that this will cause an error.  Just that an empty address will be added
 	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, basics.Address{123})
 
-	_, _, err = EvalForIndexer(il, &badBlock, protocol.ConsensusFuture, EvalForIndexerResources{})
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 
 	badBlock = block
@@ -272,14 +266,14 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 		badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
 	}
 
-	_, _, err = EvalForIndexer(il, &badBlock, protocol.ConsensusFuture, EvalForIndexerResources{})
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.Error(t, err)
 
 	// Sanity Check
 
 	badBlock = block
 
-	_, _, err = EvalForIndexer(il, &badBlock, protocol.ConsensusFuture, EvalForIndexerResources{})
+	_, _, err = EvalForIndexer(il, &badBlock, proto, EvalForIndexerResources{})
 	require.NoError(t, err)
 }
 
@@ -355,7 +349,8 @@ func TestResourceCaching(t *testing.T) {
 		},
 	}
 
-	ilc := makeIndexerLedgerConnector(indexerLedgerForEvalImpl{l: l, latestRound: basics.Round(0)}, block.GenesisHash(), protocol.ConsensusFuture, block.Round()-1, resources)
+	proto := config.Consensus[protocol.ConsensusFuture]
+	ilc := makeIndexerLedgerConnector(indexerLedgerForEvalImpl{l: l, latestRound: basics.Round(0)}, block.GenesisHash(), proto, block.Round()-1, resources)
 
 	{
 		accountData, rnd, err := ilc.LookupWithoutRewards(basics.Round(0), address)

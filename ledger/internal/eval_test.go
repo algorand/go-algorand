@@ -434,6 +434,7 @@ type evalTestLedger struct {
 	blocks              map[basics.Round]bookkeeping.Block
 	roundBalances       map[basics.Round]map[basics.Address]basics.AccountData
 	genesisHash         crypto.Digest
+	genesisProto        config.ConsensusParams
 	genesisProtoVersion protocol.ConsensusVersion
 	feeSink             basics.Address
 	rewardsPool         basics.Address
@@ -463,6 +464,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 	for _, acctData := range balances.Balances {
 		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
+	l.genesisProto = proto
 	l.genesisProtoVersion = protocol.ConsensusCurrentVersion
 
 	require.False(t, genBlock.FeeSink.IsZero())

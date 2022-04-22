@@ -228,7 +228,7 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 //
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
-	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, tu.initProto)
+	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, config.Consensus[tu.initProto])
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema0 unable to initialize schema : %v", err)
 	}

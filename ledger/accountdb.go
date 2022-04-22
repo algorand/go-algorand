@@ -1153,7 +1153,7 @@ func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint 
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
-func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool, err error) {
+func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	for _, tableCreate := range accountsSchema {
 		_, err = tx.Exec(tableCreate)
 		if err != nil {
@@ -1189,7 +1189,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			}
 
 			ad := ledgercore.ToAccountData(data)
-			totals.AddAccount(config.Consensus[proto], ad, &ot)
+			totals.AddAccount(proto, ad, &ot)
 		}
 
 		if ot.Overflowed {
@@ -1200,7 +1200,6 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		if err != nil {
 			return true, err
 		}
-
 		newDatabase = true
 	} else {
 		serr, ok := err.(sqlite3.Error)
@@ -2142,12 +2141,6 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 		hdr, err := blockGetHdr(blockTx, rnd)
 		if err != nil {
 			return nil
-		}
-
-		var data ledgercore.OnlineRoundParamsData
-		err = tx.QueryRowContext(ctx, "SELECT online, rewardslevel FROM accounttotals").Scan(&data.OnlineSupply, &data.RewardsLevel)
-		if err != nil {
-			return err
 		}
 
 		onlineRoundParams := []ledgercore.OnlineRoundParamsData{

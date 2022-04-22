@@ -19,7 +19,6 @@ package ledger
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -70,11 +69,11 @@ type Creatable struct {
 
 // Converter between indexerLedgerForEval and ledgerForEvaluator interfaces.
 type indexerLedgerConnector struct {
-	il                  indexerLedgerForEval
-	genesisHash         crypto.Digest
-	genesisProtoVersion protocol.ConsensusVersion
-	latestRound         basics.Round
-	roundResources      EvalForIndexerResources
+	il             indexerLedgerForEval
+	genesisHash    crypto.Digest
+	genesisProto   config.ConsensusParams
+	latestRound    basics.Round
+	roundResources EvalForIndexerResources
 }
 
 // BlockHdr is part of LedgerForEvaluator interface.
@@ -181,12 +180,7 @@ func (l indexerLedgerConnector) GenesisHash() crypto.Digest {
 
 // GenesisProto is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) GenesisProto() config.ConsensusParams {
-	return config.Consensus[l.genesisProtoVersion]
-}
-
-// GenesisProto returns the initial protocol for this ledger.
-func (l *indexerLedgerConnector) GenesisProtoVersion() protocol.ConsensusVersion {
-	return l.genesisProtoVersion
+	return l.genesisProto
 }
 
 // Totals is part of LedgerForEvaluator interface.
@@ -202,13 +196,13 @@ func (l indexerLedgerConnector) CompactCertVoters(_ basics.Round) (*ledgercore.V
 	return nil, errors.New("CompactCertVoters() not implemented")
 }
 
-func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto protocol.ConsensusVersion, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
+func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
-		il:                  il,
-		genesisHash:         genesisHash,
-		genesisProtoVersion: genesisProto,
-		latestRound:         latestRound,
-		roundResources:      roundResources,
+		il:             il,
+		genesisHash:    genesisHash,
+		genesisProto:   genesisProto,
+		latestRound:    latestRound,
+		roundResources: roundResources,
 	}
 }
 
@@ -217,15 +211,14 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 // This function is used by Indexer which modifies `proto` to retrieve the asset
 // close amount for each transaction even when the real consensus parameters do not
 // support it.
-func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto protocol.ConsensusVersion, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
+func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), proto, block.Round()-1, resources)
-	params := config.Consensus[proto]
 
 	eval, err := internal.StartEvaluator(
 		ilc, block.BlockHeader,
 		internal.EvaluatorOptions{
 			PaysetHint:  len(block.Payset),
-			ProtoParams: &params,
+			ProtoParams: &proto,
 			Generate:    false,
 			Validate:    false,
 		})

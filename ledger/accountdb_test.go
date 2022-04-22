@@ -47,7 +47,7 @@ import (
 )
 
 func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	newDB, err := accountsInit(tx, initAccounts, proto)
+	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
 	require.NoError(tb, err)
 
 	err = accountsAddNormalizedBalance(tx, config.Consensus[proto])
@@ -178,6 +178,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 func TestAccountDBInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
@@ -192,7 +194,7 @@ func TestAccountDBInit(t *testing.T) {
 
 	checkAccounts(t, tx, 0, accts)
 
-	newDB, err = accountsInit(tx, accts, protocol.ConsensusCurrentVersion)
+	newDB, err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	require.False(t, newDB)
 	checkAccounts(t, tx, 0, accts)

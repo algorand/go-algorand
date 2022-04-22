@@ -325,8 +325,9 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
 }
 
-func (ao *onlineAccounts) maxOnlineLookback() int {
-	return int(config.Consensus[ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol].MaxBalLookback)
+func (ao *onlineAccounts) maxOnlineLookback() uint64 {
+	lastProtoVersion := ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol
+	return config.Consensus[lastProtoVersion].MaxBalLookback
 }
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
@@ -469,7 +470,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// simply contatenate since both sequences are sorted
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
-	maxOnlineLookback := ao.maxOnlineLookback() + len(ao.deltas)
+	maxOnlineLookback := int(ao.maxOnlineLookback()) + len(ao.deltas)
 	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
 		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
 	}

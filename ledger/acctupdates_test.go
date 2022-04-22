@@ -56,6 +56,7 @@ type mockLedgerForTracker struct {
 	log              logging.Logger
 	filename         string
 	inMemory         bool
+	consensusParams  config.ConsensusParams
 	consensusVersion protocol.ConsensusVersion
 	accts            map[basics.Address]basics.AccountData
 
@@ -99,7 +100,7 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 			Totals: totals,
 		}
 	}
-	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusVersion: consensusVersion, accts: accts[0]}
+	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: config.Consensus[consensusVersion], consensusVersion: consensusVersion, accts: accts[0]}
 
 }
 
@@ -221,7 +222,7 @@ func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 }
 
 func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
-	return config.Consensus[ml.consensusVersion]
+	return ml.consensusParams
 }
 
 func (ml *mockLedgerForTracker) GenesisProtoVersion() protocol.ConsensusVersion {
@@ -281,7 +282,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
-	_, err := au.OnlineTotals(latest + 1)
+	_, err := ao.OnlineTotals(latest + 1)
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -290,7 +291,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 {
-		_, err := au.OnlineTotals(base - 1)
+		_, err := ao.OnlineTotals(base - basics.Round(ao.maxOnlineLookback()))
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -353,7 +354,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			bll := accts[rnd]
 			require.Equal(t, all, bll)
 
-			totals, err := au.OnlineTotals(rnd)
+			totals, err := ao.OnlineTotals(rnd)
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
