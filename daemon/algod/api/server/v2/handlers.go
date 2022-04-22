@@ -1152,3 +1152,27 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
+
+// TealDisassemble disassembles the program bytecode in base64 into TEAL code.
+// (POST /v2/teal/disassemble)
+func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
+	// return early if teal compile is not allowed in node config
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/teal/disassemble was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
+	buf := new(bytes.Buffer)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	buf.ReadFrom(ctx.Request().Body)
+	source, err := base64.StdEncoding.DecodeString(buf.String())
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	program, err := logic.Disassemble(source)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	response := generated.DisassembleResult{
+		Result: program,
+	}
+	return ctx.JSON(http.StatusOK, response)
+}

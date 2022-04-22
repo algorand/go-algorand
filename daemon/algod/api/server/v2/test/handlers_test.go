@@ -18,8 +18,10 @@ package test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -534,6 +536,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	c := e.NewContext(req, rec)
 	err := handler.TealCompile(c)
 	require.NoError(t, err)
+	fmt.Printf("%+v %v\n", c.Response(), c.Response().Writer)
 	require.Equal(t, expectedCode, rec.Code)
 }
 
@@ -549,6 +552,47 @@ func TestTealCompile(t *testing.T) {
 	badProgram := "bad program"
 	badProgramBytes := []byte(badProgram)
 	tealCompileTest(t, badProgramBytes, 400, true)
+}
+
+func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int, enableDeveloperAPI bool) {
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(stringToUse)))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := handler.TealDisassemble(c)
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+}
+
+func TestTealDisassemble(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// nil program works, but results in invalid version text.
+	tealDisassembleTest(t, "", 200, true)
+
+	// Round trip test: from source code, compile to a base64 string.
+	// Then check if disassembled base64 string matches the source.
+	ops, _ := logic.AssembleStringWithVersion("int 1", 2)
+	testProgram := base64.StdEncoding.EncodeToString(ops.Program)
+	tealDisassembleTest(t, testProgram, 200, true)
+	tealDisassembleTest(t, testProgram, 404, false)
+
+	badProgram := "bad program"
+	tealDisassembleTest(t, badProgram, 400, true)
 }
 
 func tealDryrunTest(

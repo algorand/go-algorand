@@ -392,6 +392,25 @@
         },
         "description": "Teal compile Result"
       },
+      "DisassembleResult": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "result": {
+                  "description": "disassembled Teal code in bytes",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "result"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Teal disassemble Result"
+      },
       "DryrunResponse": {
         "content": {
           "application/json": {
@@ -3692,6 +3711,90 @@
           }
         },
         "summary": "Compile TEAL source code to binary, produce its hash",
+        "x-codegen-request-body-name": "source"
+      }
+    },
+    "/v2/teal/disassemble": {
+      "post": {
+        "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "operationId": "TealDisassemble",
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "format": "byte",
+                "type": "string"
+              }
+            }
+          },
+          "description": "TEAL source code to be compiled",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "hash": {
+                      "description": "base32 SHA512_256 of program bytes (Address style)",
+                      "type": "string"
+                    },
+                    "result": {
+                      "description": "base64 encoded program bytes",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "hash",
+                    "result"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Teal compile Result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Teal Compile Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {},
+            "description": "Developer API not enabled"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Disassemble program bytes into the TEAL source code.",
         "x-codegen-request-body-name": "source"
       }
     },
