@@ -30,29 +30,33 @@ func TestPrint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testcases := []struct {
-		input    interface{}
+		Input    interface{}
 		expected string
 	}{
 		{
-			input:    struct{ Field uint64 }{uint64(1234)},
+			Input:    "string",
+			expected: "string",
+		},
+		{
+			Input:    uint64(1234),
 			expected: "1234",
 		},
 		{
-			input:    struct{ Field int64 }{int64(-1234)},
+			Input:    int64(-1234),
 			expected: "-1234",
 		},
 		{
-			input:    struct{ Field bool }{true},
+			Input:    true,
 			expected: "true",
 		},
 		{
-			input:    struct{ Field time.Duration }{time.Second},
+			Input:    time.Second,
 			expected: "1s",
 		},
 	}
 	for i, tc := range testcases {
 		t.Run(fmt.Sprintf("test %d", i), func(t *testing.T) {
-			ret, err := serializeObjectProperty(tc.input, "Field")
+			ret, err := serializeObjectProperty(tc, "Input")
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, ret)
 		})
