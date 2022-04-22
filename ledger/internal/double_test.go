@@ -30,7 +30,7 @@ import (
 )
 
 // DoubleLedger allows for easy "Double Entry bookkeeping" as a way to write
-// fairly extensive ledger tests. In addition to simplifiying the addition of
+// fairly extensive ledger tests. In addition to simplifying the addition of
 // txns and txgroups to a ledger (and then allowing for inspection of the
 // created blocks), it also does a double check on correctness by marshalling
 // the created blocks, evaluating the transactions in a ledger copy, and
