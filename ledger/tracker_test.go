@@ -213,6 +213,8 @@ func (bt *producePrepareBlockingTracker) reset() {
 func TestTrackerDbRoundDataRace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Skip("For manual run when touching ledger locking")
+
 	a := require.New(t)
 
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1)

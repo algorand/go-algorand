@@ -322,16 +322,14 @@ func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 }
 
 func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
-	tr.mu.RLock()
-	dbRound := tr.dbRound
-	tr.mu.RUnlock()
-
 	dcc := &deferredCommitContext{
 		deferredCommitRange: deferredCommitRange{
 			lookback: maxLookback,
 		},
 	}
 	cdr := &dcc.deferredCommitRange
+	tr.mu.RLock()
+	dbRound := tr.dbRound
 	for _, lt := range tr.trackers {
 		base := cdr.oldBase
 		offset := cdr.offset
@@ -346,6 +344,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
 		}
 	}
+	tr.mu.RUnlock()
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
 	} else {
