@@ -58,7 +58,7 @@ var getCmd = &cobra.Command{
 				return
 			}
 
-			fmt.Printf(val)
+			fmt.Print(val)
 		})
 		if anyError {
 			os.Exit(1)
