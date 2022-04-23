@@ -85,9 +85,8 @@ var networkCreateCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		// Make sure target directory doesn't already exist
-		exists := util.FileExists(networkRootDir)
-		if exists {
+		// Make sure target directory does not exist or is empty
+		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
 			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
 		}
 
