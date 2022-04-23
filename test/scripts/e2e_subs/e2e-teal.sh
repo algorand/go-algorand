@@ -155,7 +155,7 @@ printf '\x02' | dd of=${TEMPDIR}/true2.lsig bs=1 seek=0 count=1 conv=notrunc
 # we do this in place and clean up the file later.
 ${gcmd} clerk compile ${TEAL}/quine.teal -m
 trap 'rm ${TEAL}/quine.teal.*' EXIT
-if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.map; then
+if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.tok.map; then
     echo "produced source maps do not match"
     exit 1
 fi
