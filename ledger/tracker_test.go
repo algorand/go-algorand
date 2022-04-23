@@ -39,7 +39,8 @@ import (
 
 // commitRoundNext schedules a commit with as many rounds as possible
 func commitRoundNext(l *Ledger) {
-	maxAcctLookback := l.trackers.cfg.MaxAcctLookback
+	// maxAcctLookback := l.trackers.cfg.MaxAcctLookback
+	maxAcctLookback := 320
 	commitRoundLookback(basics.Round(maxAcctLookback), l)
 }
 
@@ -238,7 +239,7 @@ func TestTrackerDbRoundDataRace(t *testing.T) {
 	close(stallingTracker.produceReleaseLock)
 	close(stallingTracker.prepareCommitReleaseLock)
 
-	targetRound := basics.Round(128)
+	targetRound := basics.Round(128) * 5
 	blk := genesisInitState.Block
 	for i := basics.Round(0); i < targetRound-1; i++ {
 		blk.BlockHeader.Round++
@@ -252,7 +253,9 @@ func TestTrackerDbRoundDataRace(t *testing.T) {
 	a.NoError(err)
 	commitRoundNext(ledger)
 	ledger.trackers.waitAccountsWriting()
-	a.Equal(targetRound-basics.Round(cfg.MaxAcctLookback), ledger.trackers.dbRound)
+	lookback := 320
+	// lookback := cfg.MaxAcctLookback
+	a.Equal(targetRound-basics.Round(lookback), ledger.trackers.dbRound)
 
 	// build up some non-committed queue
 	stallingTracker.cancelTasks = true
