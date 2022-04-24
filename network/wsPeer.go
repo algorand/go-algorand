@@ -515,6 +515,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 		wp.net.log.Warnf("wsPeer handleMessageOfInterest: could not unmarshall message from: %s %v", wp.conn.RemoteAddr().String(), err)
 		return
 	}
+	wp.net.log.Infof("wsPeer got msgOfInterest %s", string(msg.Data))
 	msgs := make([]sendMessage, 1, 1)
 	msgs[0] = sendMessage{
 		data:         nil,
@@ -884,8 +885,9 @@ func (wp *wsPeer) setPeerData(key string, value interface{}) {
 func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, messagesOfInterestEnc []byte) {
 	err := wp.Unicast(wp.net.ctx, messagesOfInterestEnc, protocol.MsgOfInterestTag)
 	if err != nil {
-		wp.net.log.Infof("ws send msgOfInterest: %v", err)
+		wp.net.log.Errorf("ws send msgOfInterest: %v", err)
 	} else {
+		wp.net.log.Infof("ws send msgOfInterest")
 		wp.messagesOfInterestGeneration = messagesOfInterestGeneration
 	}
 }
