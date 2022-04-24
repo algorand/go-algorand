@@ -886,7 +886,7 @@ func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.Txn, tme.Stib)
 }
 
-func TestGetProof(t *testing.T) {
+func TestGetProofDefault(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := assert.New(t)
 
@@ -905,21 +905,18 @@ func TestGetProof(t *testing.T) {
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	generateProof := func(h crypto.HashType, prfRsp generated.ProofResponse) (p merklearray.Proof) {
-		p.HashFactory = crypto.HashFactory{HashType: h}
-		p.TreeDepth = uint8(prfRsp.Treedepth)
-		a.NotEqual(p.TreeDepth, 0)
-		proofconcat := prfRsp.Proof
-		for len(proofconcat) > 0 {
-			var d crypto.Digest
-			copy(d[:], proofconcat)
-			p.Path = append(p.Path, d[:])
-			proofconcat = proofconcat[len(d):]
-		}
-		return
+	// Build merklearray.Proof from ProofResponse
+	var proof merklearray.Proof
+	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha512_256}
+	proof.TreeDepth = uint8(resp.Treedepth)
+	a.NotEqual(proof.TreeDepth, 0)
+	proofconcat := resp.Proof
+	for len(proofconcat) > 0 {
+		var d crypto.Digest
+		copy(d[:], proofconcat)
+		proof.Path = append(proof.Path, d[:])
+		proofconcat = proofconcat[len(d):]
 	}
-
-	proof := generateProof(crypto.Sha512_256, resp)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], resp.Stibhash[:])

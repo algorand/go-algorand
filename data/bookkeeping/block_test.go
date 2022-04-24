@@ -802,24 +802,60 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 
 		block.Payset = append(block.Payset, stib)
 	}
+
 	tree, err := block.TxnMerkleTree()
 	a.NoError(err)
-	rootSlice := tree.Root()
-	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSlice)
+	rootSliceSHA512_256 := tree.Root()
 
+	tree, err = block.TxnMerkleTreeSHA256()
+	a.NoError(err)
+	rootSliceSHA256 := tree.Root()
+
+	badDigestSlice := []byte("(>^-^)>")
+
+	/* Test V32 */
+	a.False(block.ContentsMatchHeader())
+
+	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
+	block.BlockHeader.TxnRoot.DigestSha256 = crypto.Digest{}
 	a.True(block.ContentsMatchHeader())
 
+	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	a.False(block.ContentsMatchHeader())
+
+	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], badDigestSlice)
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	a.False(block.ContentsMatchHeader())
+
+	block.BlockHeader.TxnRoot.DigestSha512_256 = crypto.Digest{}
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	a.False(block.ContentsMatchHeader())
+
+	/* Test Consensus Future */
 	// Create a block with SHA256 TxnRoot
 	block.CurrentProtocol = protocol.ConsensusFuture
+
+	block.BlockHeader.TxnRoot.DigestSha512_256 = crypto.Digest{}
+	block.BlockHeader.TxnRoot.DigestSha256 = crypto.Digest{}
 	a.False(block.ContentsMatchHeader())
 
 	// Now update the SHA256 header to its correct value
-	tree, err = block.TxnMerkleTreeSHA256()
-	a.NoError(err)
-	rootSlice = tree.Root()
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSlice)
-
+	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
 	a.True(block.ContentsMatchHeader())
+
+	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], badDigestSlice)
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	a.False(block.ContentsMatchHeader())
+
+	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], badDigestSlice)
+	a.False(block.ContentsMatchHeader())
+
+	block.BlockHeader.TxnRoot.DigestSha512_256 = crypto.Digest{}
+	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	a.False(block.ContentsMatchHeader())
 }
 
 func TestBlockHeader_Serialization(t *testing.T) {
