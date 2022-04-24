@@ -109,14 +109,14 @@ func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg Telemet
 
 		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
-			// In this case we don't know what to do since we couldn't
-			// create the directory.  Just create an ephemeral config.
+			// In this case we don't know what to do since we couldn't read
+			// from the global directory. Just create an ephemeral config, if
+			// the data directory was provided it can be persisted there later.
 			cfg = createTelemetryConfig()
-			return
+		} else {
+			// Load the telemetry from the default config path
+			cfg, err = LoadTelemetryConfig(configPath)
 		}
-
-		// Load the telemetry from the default config path
-		cfg, err = LoadTelemetryConfig(configPath)
 	}
 
 	// If there was some error loading the configuration from the config path...
