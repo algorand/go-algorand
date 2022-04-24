@@ -614,13 +614,13 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			if err != nil {
 				return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
 			}
-			stibhash = block.Payset[idx].Hash(crypto.Sha256)
+			stibhash = block.Payset[idx].HashSHA256()
 		case "sha512_256":
 			tree, err = block.TxnMerkleTree()
 			if err != nil {
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
 			}
-			stibhash = block.Payset[idx].Hash(crypto.Sha512_256)
+			stibhash = block.Payset[idx].Hash()
 		default:
 			return notFound(ctx, err, "unsupported hash type", v2.Log)
 		}

@@ -115,14 +115,19 @@ func (s *SignedTxnInBlock) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // Hash implements an optimized version of crypto.HashObj(s).
-func (s *SignedTxnInBlock) Hash(hashType crypto.HashType) crypto.Digest {
+func (s *SignedTxnInBlock) Hash() crypto.Digest {
 	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
 	defer protocol.PutEncodingBuf(enc)
-	if hashType == crypto.Sha256 {
-		return sha256.Sum256(enc)
-	}
-	// else: SHA512_256
+
 	return crypto.Hash(enc)
+}
+
+// HashSHA256 implements an optimized version of crypto.HashObj(s) using SHA256 instead of the default SHA512_256.
+func (s *SignedTxnInBlock) HashSHA256() crypto.Digest {
+	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
+	defer protocol.PutEncodingBuf(enc)
+
+	return sha256.Sum256(enc)
 }
 
 // WrapSignedTxnsWithAD takes an array SignedTxn and returns the same as SignedTxnWithAD

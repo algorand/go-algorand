@@ -93,12 +93,12 @@ func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) 
 func (tme *txnMerkleElem) ToBeHashed() (protocol.HashID, []byte) {
 	// The leaf contains two hashes: the transaction ID (hash of the
 	// transaction itself), and the hash of the entire SignedTxnInBlock.
-	stib := tme.stib.Hash(tme.hashType)
-
 	if tme.hashType == crypto.Sha512_256 {
+		stib := tme.stib.Hash()
 		return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.txn.ID(), stib)
 	}
 	// else: hashType == crypto.Sha256
+	stib := tme.stib.HashSHA256()
 	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.txn.IDSha256(), stib)
 }
 
@@ -109,7 +109,13 @@ func (tme *txnMerkleElem) Hash() crypto.Digest {
 
 func (tme *txnMerkleElem) HashRepresentation() []byte {
 	txid := tme.txn.ID()
-	stib := tme.stib.Hash(tme.hashType)
+
+	var stib crypto.Digest
+	if tme.hashType == crypto.Sha256 {
+		stib = tme.stib.HashSHA256()
+	} else {
+		stib = tme.stib.Hash()
+	}
 
 	var buf [len(protocol.TxnMerkleLeaf) + 2*crypto.DigestSize]byte
 	s := buf[:0]
