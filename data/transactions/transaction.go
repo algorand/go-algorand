@@ -182,8 +182,8 @@ func (tx Transaction) ID() Txid {
 	return Txid(crypto.Hash(enc))
 }
 
-// IDSha256 returns the Txid (i.e., hash) of the transaction.
-func (tx Transaction) IDSha256() Txid {
+// IDSha256 returns the digest (i.e., hash) of the transaction.
+func (tx Transaction) IDSha256() crypto.Digest {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
 	return sha256.Sum256(enc)
