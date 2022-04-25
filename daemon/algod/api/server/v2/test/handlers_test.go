@@ -596,15 +596,17 @@ func TestTealDisassemble(t *testing.T) {
 	t.Parallel()
 
 	// nil program works, but results in invalid version text.
-	tealDisassembleTest(t, "", 200, "// invalid version\n", true)
+	testProgram := ""
+	tealDisassembleTest(t, testProgram, 200, "// invalid version\n", true)
 
 	// Test a valid program.
-	goodProgram := `int 1`
-	ops, _ := logic.AssembleStringWithVersion(goodProgram, 2)
-	testProgram := base64.StdEncoding.EncodeToString(ops.Program)
-	disassembledProgram, _ := logic.Disassemble(ops.Program)
-	tealDisassembleTest(t, testProgram, 200, disassembledProgram, true)
-
+	for ver := 1; ver < logic.AssemblerMaxVersion; ver++ {
+		goodProgram := `int 1`
+		ops, _ := logic.AssembleStringWithVersion(goodProgram, uint64(ver))
+		testProgram := base64.StdEncoding.EncodeToString(ops.Program)
+		disassembledProgram, _ := logic.Disassemble(ops.Program)
+		tealDisassembleTest(t, testProgram, 200, disassembledProgram, true)
+	}
 	// Test a nil program without the developer API flag.
 	tealDisassembleTest(t, testProgram, 404, "", false)
 
