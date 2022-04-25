@@ -887,7 +887,7 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	if err != nil {
 		wp.net.log.Errorf("ws send msgOfInterest: %v", err)
 	} else {
-		wp.net.log.Infof("ws send msgOfInterest")
+		wp.net.log.Infof("ws sent msgOfInterest %s", string(messagesOfInterestEnc))
 		wp.messagesOfInterestGeneration = messagesOfInterestGeneration
 	}
 }

@@ -2370,7 +2370,7 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThraed() {
 	defer wn.messagesOfInterestMu.Unlock()
 	for {
 		wn.messagesOfInterestCond.Wait()
-		wn.log.Infof("msgOfInterest push thread")
+		wn.log.Infof("msgOfInterest push thread, %s", string(wn.messagesOfInterestEnc))
 		peers, _ = wn.peerSnapshot(peers)
 		for _, peer := range peers {
 			wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
