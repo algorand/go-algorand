@@ -3043,9 +3043,9 @@ func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore
 	return nil
 }
 
-func accountsPruneOnlineRoundParams(tx *sql.Tx, round basics.Round) error {
+func accountsPruneOnlineRoundParams(tx *sql.Tx, retainRound basics.Round) error {
 	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE round<?",
-		round,
+		retainRound,
 	)
 	return err
 }

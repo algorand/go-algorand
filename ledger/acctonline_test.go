@@ -284,6 +284,7 @@ func TestAcctOnline(t *testing.T) {
 	}
 }
 
+// TestAcctOnlineRoundParamsOffset checks that roundParamsOffset return the correct indices.
 func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	ao := onlineAccounts{}
 
@@ -308,10 +309,14 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestAcctOnlineRoundParamsCache tests that the ao.onlineRoundParamsData cache and
+// the onlineRoundParamsData db are synced and contain the right data after a series
+// of new blocks are added to the ledger. Also ensure that these data structures are
+// trimmed properly to hold only proto.MaxBalLookback entries.
 func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusV30]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
@@ -325,7 +330,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusV30, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -348,8 +353,11 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	start := basics.Round(10)
 	end := basics.Round(2*proto.MaxBalLookback + 15)
 	for i := start; i < end; i++ {
-		consensusVersion := protocol.ConsensusCurrentVersion
+		consensusVersion := protocol.ConsensusV30
 		if i > basics.Round(proto.MaxBalLookback) {
+			consensusVersion = protocol.ConsensusCurrentVersion
+		}
+		if i > 2*basics.Round(proto.MaxBalLookback) {
 			consensusVersion = protocol.ConsensusFuture
 		}
 		rewardLevelDelta := crypto.RandUint64() % 3
@@ -389,11 +397,18 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 			onlineTotal, err := ao.OnlineTotals(i - basics.Round(proto.MaxBalLookback))
 			require.NoError(t, err)
 			require.Equal(t, allTotals[i-basics.Round(proto.MaxBalLookback)].Online.Money, onlineTotal)
-			expectedConsensusVersion := protocol.ConsensusCurrentVersion
+			expectedConsensusVersion := protocol.ConsensusV30
+			if i > 2*basics.Round(proto.MaxBalLookback) {
+				expectedConsensusVersion = protocol.ConsensusCurrentVersion
+			}
+			roundParamsOffset, err := ao.roundParamsOffset(i - basics.Round(proto.MaxBalLookback))
+			require.NoError(t, err)
+			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset].CurrentProtocol)
+			expectedConsensusVersion = protocol.ConsensusCurrentVersion
 			if i > 2*basics.Round(proto.MaxBalLookback) {
 				expectedConsensusVersion = protocol.ConsensusFuture
 			}
-			roundParamsOffset, err := ao.roundParamsOffset(i - basics.Round(proto.MaxBalLookback))
+			roundParamsOffset, err = ao.roundParamsOffset(i)
 			require.NoError(t, err)
 			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset].CurrentProtocol)
 		}

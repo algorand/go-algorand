@@ -3342,9 +3342,10 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	var accts map[basics.Address]basics.AccountData
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
+	// entry i is for round i+1 since db initialized with entry for round 0
 	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, 80+proto.MaxBalLookback)
 	for i := range onlineRoundParams {
-		onlineRoundParams[i].OnlineSupply = uint64(i)
+		onlineRoundParams[i].OnlineSupply = uint64(i + 1)
 	}
 
 	err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 1)
@@ -3352,6 +3353,7 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 
 	dbOnlineRoundParams, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
+	require.Equal(t, 80+proto.MaxBalLookback+1, len(dbOnlineRoundParams)) // +1 comes from init state
 	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
 
 	err = accountsPruneOnlineRoundParams(tx, 10)
