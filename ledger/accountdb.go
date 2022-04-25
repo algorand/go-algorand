@@ -2239,7 +2239,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 }
 
 func createCatchpointDataFilesTable(ctx context.Context, tx *sql.Tx) error {
-	stmt := `CREATE TABLE IF NOT EXISTS storedcatchpointdatafiles (
+	stmt := `CREATE TABLE IF NOT EXISTS catchpointfirststageinfo (
 		round integer primary key NOT NULL,
 		info blob NOT NULL)`
 	_, err := tx.ExecContext(ctx, stmt)
@@ -4585,29 +4585,33 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 	return roundData, roundHash, expectedRound + 1, nil
 }
 
-// For recording data in `storedcatchpointdatafiles` sqlite table.
+// For the `catchpointfirststageinfo` table.
 type catchpointDataInfo struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
-	TotalAccounts     uint64                   `codec:"accountsCount"`
-	TotalChunks       uint64                   `codec:"chunksCount"`
 	TrieBalancesHash crypto.Digest             `codec:"trieBalancesHash"`
+	// Total number of accounts in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalAccounts     uint64                   `codec:"accountsCount"`
+	// Total number of chunks in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalChunks       uint64                   `codec:"chunksCount"`
 }
 
-func insertCatchpointDataFile(e db.Executable, round basics.Round, info *catchpointDataInfo) error {
+func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointDataInfo) error {
 	f := func() error {
-		query := "INSERT INTO storedcatchpointdatafiles(round) VALUES(?)"
+		query := "INSERT INTO catchpointfirststageinfo(round) VALUES(?)"
 		_, err := e.Exec(query, round, protocol.Encode(info))
 		return err
 	}
 	return db.Retry(f)
 }
 
-func selectCatchpointDataFile(q db.Queryable, round basics.Round) (catchpointDataInfo, bool /*exists*/, error) {
+func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpointDataInfo, bool /*exists*/, error) {
 	var data []byte
 	f := func() error {
-		query := "SELECT info FROM storedcatchpointdatafiles WHERE round=?"
+		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
 		err := q.QueryRow(query, round).Scan(&data)
 		if err == sql.ErrNoRows {
 			data = nil
@@ -4633,9 +4637,9 @@ func selectCatchpointDataFile(q db.Queryable, round basics.Round) (catchpointDat
 	return res, true, nil
 }
 
-func deleteOldCatchpointDataFiles(e db.Executable, maxRoundToDelete basics.Round) error {
+func deleteOldCatchpointFirstStageInfo(e db.Executable, maxRoundToDelete basics.Round) error {
 	f := func() error {
-		query := "DELETE FROM storedcatchpointdatafiles WHERE round <= ?"
+		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
 		_, err := e.Exec(query, maxRoundToDelete)
 		return err
 	}

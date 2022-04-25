@@ -35,12 +35,6 @@ const (
 	// BalancesPerCatchpointFileChunk defines the number of accounts that would be stored in each chunk in the catchpoint file.
 	// note that the last chunk would typically be less than this number.
 	BalancesPerCatchpointFileChunk = 512
-
-	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
-	CatchpointFileVersionV5 = uint64(0200)
-
-	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6
-	CatchpointFileVersionV6 = uint64(0201)
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.

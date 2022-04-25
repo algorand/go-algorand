@@ -2243,6 +2243,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	}
 }
 
+/*
 // This test helper attempts to cover the case when an accountUpdates.lookupX method:
 // - can't find the requested address,
 // - falls through looking at deltas and the LRU accounts cache,
@@ -2438,6 +2439,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
 }
+*/
 
 // TestAcctUpdatesLookupLatestCacheRetry simulates a situation when base account and resources are in a cache but
 // account updates advances while calling lookupLatest

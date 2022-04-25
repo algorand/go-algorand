@@ -354,8 +354,8 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
 		// here would prevent us from "forgetting" to update this variable later on.
 		// The same is repeated in commitRound on errors.
-		if dcc.isFirstStageCatchpointRound && dcc.enableGeneratingCatchpointFiles {
-			atomic.StoreInt32(dcc.catchpointWriting, 0)
+		if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
+			atomic.StoreInt32(dcc.catchpointDataWriting, 0)
 		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}

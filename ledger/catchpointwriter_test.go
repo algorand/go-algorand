@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -219,14 +218,14 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
-	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
-	blocksRound := basics.Round(12345)
-	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
-	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	fileName := filepath.Join(temporaryDirectroy, "15.data")
 
 	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx)
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -245,49 +244,36 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 	tarReader := tar.NewReader(gzipReader)
 	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
+
+	header, err := tarReader.Next()
+	require.NoError(t, err)
+
+	balancesBlockBytes := make([]byte, header.Size)
+	readComplete := int64(0)
+
+	for readComplete < header.Size {
+		bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
+		readComplete += int64(bytesRead)
 		if err != nil {
 			if err == io.EOF {
-				break
+				if readComplete == header.Size {
+					break
+				}
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 			break
 		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-
-		if header.Name == "content.msgpack" {
-			var fileHeader CatchpointFileHeader
-			err = protocol.Decode(balancesBlockBytes, &fileHeader)
-			require.NoError(t, err)
-			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)
-			require.Equal(t, blocksRound, fileHeader.BlocksRound)
-			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
-			require.Equal(t, uint64(len(accts)), fileHeader.TotalAccounts)
-		} else if header.Name == "balances.1.1.msgpack" {
-			var balances catchpointFileBalancesChunkV6
-			err = protocol.Decode(balancesBlockBytes, &balances)
-			require.NoError(t, err)
-			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
-		} else {
-			require.Failf(t, "unexpected tar chunk name", "tar chunk name %s", header.Name)
-		}
 	}
+
+	require.Equal(t, "balances.1.1.msgpack", header.Name)
+
+	var balances catchpointFileBalancesChunkV6
+	err = protocol.Decode(balancesBlockBytes, &balances)
+	require.NoError(t, err)
+	require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
+
+	_, err = tarReader.Next()
+	require.Equal(t, io.EOF, err)
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
@@ -317,13 +303,16 @@ func TestFullCatchpointWriter(t *testing.T) {
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
-	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
-	blocksRound := basics.Round(12345)
-	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
-	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	fileName := filepath.Join(temporaryDirectroy, "15.data")
 	readDb := ml.trackerDB().Rdb
+	var accountsRound basics.Round
+	var totalAccounts uint64
+	var totalChunks uint64
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx)
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -331,9 +320,17 @@ func TestFullCatchpointWriter(t *testing.T) {
 				break
 			}
 		}
+		totalAccounts = writer.GetTotalAccounts()
+		totalChunks = writer.GetTotalChunks()
+		accountsRound = accountsRound(tx)
 		return
 	})
 	require.NoError(t, err)
+	catchpointFileHeader := CatchpointFileHeader{
+		Version: CatchpointFileVersionV6,
+		BalancesRound: accountsRound,
+	}
+	err := repackCatchpoint()
 
 	// create a ledger.
 	var initState ledgercore.InitState
