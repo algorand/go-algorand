@@ -3353,7 +3353,7 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 
 	dbOnlineRoundParams, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
-	require.Equal(t, 80+proto.MaxBalLookback+1, len(dbOnlineRoundParams)) // +1 comes from init state
+	require.Equal(t, 80+int(proto.MaxBalLookback)+1, len(dbOnlineRoundParams)) // +1 comes from init state
 	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
 
 	err = accountsPruneOnlineRoundParams(tx, 10)

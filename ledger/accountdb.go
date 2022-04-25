@@ -3003,7 +3003,7 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 }
 
 func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, err error) {
-	rows, err := tx.Query("SELECT data FROM onlineroundparamstail")
+	rows, err := tx.Query("SELECT data FROM onlineroundparamstail ORDER BY round")
 	if err != nil {
 		return nil, err
 	}
