@@ -74,13 +74,14 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		nodeDir := filepath.Join(targetFolder, cfg.Name)
 		err = os.Mkdir(nodeDir, os.ModePerm)
 		if err != nil {
-			if os.IsExist(err) {
-				// allow some flexibility around pre-existing directories to support docker and pre-mounted volumes.
-				if !util.IsEmpty(nodeDir) {
-					err = fmt.Errorf("duplicate node directory detected: %w", err)
-					return
-				}
-			} else {
+			if !os.IsExist(err) {
+				return
+			}
+
+			// allow some flexibility around pre-existing directories to
+			// support docker and pre-mounted volumes.
+			if !util.IsEmpty(nodeDir) {
+				err = fmt.Errorf("duplicate node directory detected: %w", err)
 				return
 			}
 		}
