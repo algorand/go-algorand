@@ -98,6 +98,8 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		EnableAppCostPooling:          true,
 		EnableInnerTransactionPooling: true,
 
+		MinInnerApplVersion: 4,
+
 		SupportBecomeNonParticipatingTransactions: true,
 	}
 }

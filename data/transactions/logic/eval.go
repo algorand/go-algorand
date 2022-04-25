@@ -357,8 +357,9 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
 	minTealVersion := ComputeMinTealVersion(txg)
-	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
-	// imposed otherwise.  But is correct to check, in case of future restriction.
+	// Can't happen currently, since earliest inner callable version is higher
+	// than any minimum imposed otherwise.  But is correct to inherit a stronger
+	// restriction from above, in case of future restriction.
 	if minTealVersion < *caller.MinTealVersion {
 		minTealVersion = *caller.MinTealVersion
 	}
@@ -4529,7 +4530,7 @@ func opItxnSubmit(cx *EvalContext) error {
 				return fmt.Errorf("appl depth (%d) exceeded", depth)
 			}
 
-			// Can't call old versions in inner apps.
+			// Set program by txn, approval, or clear state
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
 				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
@@ -4540,31 +4541,40 @@ func opItxnSubmit(cx *EvalContext) error {
 				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
 					program = app.ClearStateProgram
 				}
-				// Don't allow opt-in if the CSP is not runnable as an inner.
-				// This test can only fail after proto.AllowV4InnerAppls starts
-				// allowing calls of pre-6 programs, which might, in turn, have
-				// even older CSPs. Post-5, programs are version synchronized.
-				if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
-					v, _, err := transactions.ProgramVersion(app.ClearStateProgram)
-					if err != nil {
-						return err
-					}
-					if v < 4 {
-						return fmt.Errorf("inner app call opt-in with CSP v%d < v4", v)
-					}
-				}
 			}
+
+			// Can't call old versions in inner apps.
 			v, _, err := transactions.ProgramVersion(program)
 			if err != nil {
 				return err
 			}
-			allowableVersion := uint64(innerAppsEnabledVersion)
-			if cx.Proto.AllowV4InnerAppls {
-				allowableVersion = 4
+			if v < cx.Proto.MinInnerApplVersion {
+				return fmt.Errorf("inner app call with version v%d < v%d",
+					v, cx.Proto.MinInnerApplVersion)
 			}
-			if v < allowableVersion {
-				return fmt.Errorf("inner app call with version %d < %d", v, allowableVersion)
+
+			// Don't allow opt-in if the CSP is not runnable as an inner.
+			// This test can only fail for v4 and v5 approval programs,
+			// since v6 requires synchronized versions.
+			if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
+				csp := cx.subtxns[itx].Txn.ClearStateProgram
+				if cx.subtxns[itx].Txn.ApplicationID != 0 {
+					app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+					if err != nil {
+						return err
+					}
+					csp = app.ClearStateProgram
+					csv, _, err := transactions.ProgramVersion(csp)
+					if err != nil {
+						return err
+					}
+					if csv < cx.Proto.MinInnerApplVersion {
+						return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",
+							csv, cx.Proto.MinInnerApplVersion)
+					}
+				}
 			}
+
 		}
 
 		if isGroup {

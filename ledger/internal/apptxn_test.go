@@ -1401,6 +1401,7 @@ next2:
 // teal 6 (v31), because of the strict adherence to the foreign-arrays rules.
 func TestCreateAndUse(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// At 30 the asset reference is illegal, then from v31 it works.
@@ -1470,97 +1471,103 @@ func TestCreateAndUse(t *testing.T) {
 
 func TestGtxnEffects(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
-	defer l.Close()
+	// At 30 `gtxn CreatedAssetId is illegal, then from v31 it works.
+	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	createapp := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
+		createapp := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
          gtxn 0 CreatedAssetID
          int 3
          ==
-         assert
-`),
-	}
-	appIndex := basics.AppIndex(1)
+         assert`),
+		}
+		appIndex := basics.AppIndex(1)
 
-	fund := txntest.Txn{
-		Type:     "pay",
-		Sender:   addrs[0],
-		Receiver: appIndex.Address(),
-		Amount:   1_000_000,
-	}
+		fund := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: appIndex.Address(),
+			Amount:   1_000_000,
+		}
 
-	eval := nextBlock(t, l)
-	txns(t, l, eval, &createapp, &fund)
+		dl.beginBlock()
+		dl.txns(&createapp, &fund)
 
-	createasa := txntest.Txn{
-		Type:   "acfg",
-		Sender: addrs[0],
-		AssetParams: basics.AssetParams{
-			Total:     1000000,
-			Decimals:  3,
-			UnitName:  "oz",
-			AssetName: "Gold",
-			URL:       "https://gold.rush/",
-		},
-	}
-	asaIndex := basics.AssetIndex(3)
+		createasa := txntest.Txn{
+			Type:   "acfg",
+			Sender: addrs[0],
+			AssetParams: basics.AssetParams{
+				Total:     1000000,
+				Decimals:  3,
+				UnitName:  "oz",
+				AssetName: "Gold",
+				URL:       "https://gold.rush/",
+			},
+		}
+		asaIndex := basics.AssetIndex(3)
 
-	see := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[0],
-		ApplicationID: basics.AppIndex(1),
-	}
+		see := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: basics.AppIndex(1),
+		}
 
-	err := txgroup(t, l, eval, &createasa, &see)
-	require.NoError(t, err)
-	vb := endBlock(t, l, eval)
+		if ver == 30 {
+			dl.txgroup("Unable to obtain effects from top-level transactions", &createasa, &see)
+			dl.endBlock()
+			return
+		}
+		dl.txgroup("", &createasa, &see)
+		vb := dl.endBlock()
 
-	require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
-	require.Equal(t, asaIndex, vb.Block().Payset[2].ApplyData.ConfigAsset)
+		require.Equal(t, appIndex, vb.Block().Payset[0].ApplyData.ApplicationID)
+		require.Equal(t, asaIndex, vb.Block().Payset[2].ApplyData.ConfigAsset)
+	})
 }
 
 func TestBasicReentry(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
-	defer l.Close()
+	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	app0 := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
+		app0 := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
   itxn_begin
    int appl
    itxn_field TypeEnum
    txn Applications 1
    itxn_field ApplicationID
-  itxn_submit
-`),
-	}
-	eval := nextBlock(t, l)
-	txn(t, l, eval, &app0)
-	vb := endBlock(t, l, eval)
-	index0 := vb.Block().Payset[0].ApplicationID
+  itxn_submit`),
+		}
+		vb := dl.fullBlock(&app0)
+		index0 := vb.Block().Payset[0].ApplicationID
 
-	call1 := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[2],
-		ApplicationID: index0,
-		ForeignApps:   []basics.AppIndex{index0},
-	}
-	eval = nextBlock(t, l)
-	txn(t, l, eval, &call1, "self-call")
-	endBlock(t, l, eval)
+		call1 := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index0,
+			ForeignApps:   []basics.AppIndex{index0},
+		}
+		dl.txn(&call1, "self-call")
+	})
 }
 
 func TestIndirectReentry(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1625,6 +1632,7 @@ func TestIndirectReentry(t *testing.T) {
 // should not produce an error because B doesn't occur in the call stack twice.
 func TestValidAppReentry(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1719,6 +1727,7 @@ func TestValidAppReentry(t *testing.T) {
 
 func TestMaxInnerTxForSingleAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v31 = inner appl
@@ -1813,6 +1822,7 @@ assert
 
 func TestAbortWhenInnerAppCallFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -1876,6 +1886,7 @@ assert
 // TestInnerAppVersionCalling ensure that inner app calls must be the >=v6 apps
 func TestInnerAppVersionCalling(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
@@ -1949,7 +1960,7 @@ itxn_submit`,
 		}
 
 		if ver <= 32 {
-			dl.txn(&call, "inner app call with version 5")
+			dl.txn(&call, "inner app call with version v5 < v6")
 			call.ForeignApps[0] = v6id
 			dl.txn(&call, "overspend") // it tried to execute, but test doesn't bother funding
 		} else {
@@ -1965,6 +1976,7 @@ itxn_submit`,
 
 func TestAppVersionMatching(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -2016,6 +2028,7 @@ func TestAppVersionMatching(t *testing.T) {
 
 func TestAppDowngrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	four, err := logic.AssembleStringWithVersion("int 1", 4)
 	require.NoError(t, err)
@@ -2026,7 +2039,6 @@ func TestAppDowngrade(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
-
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
 
@@ -2085,6 +2097,7 @@ func TestAppDowngrade(t *testing.T) {
 
 func TestCreatedAppsAreAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -2150,6 +2163,7 @@ func TestCreatedAppsAreAvailable(t *testing.T) {
 
 func TestInvalidAppsNotAccessible(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
@@ -2206,6 +2220,7 @@ assert
 
 func TestInvalidAssetsNotAccessible(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	l := newTestLedger(t, genBalances)
