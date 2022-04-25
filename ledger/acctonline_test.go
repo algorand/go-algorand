@@ -420,11 +420,13 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	ml.trackers.waitAccountsWriting()
 
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
+	var endRound basics.Round
 	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, err = accountsOnlineRoundParams(tx)
+		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
 		return err
 	})
 	require.NoError(t, err)
+	require.Equal(t, ao.cachedDBRoundOnline, endRound)
 	require.Equal(t, ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)], dbOnlineRoundParams)
 
 	for i := ml.Latest() - basics.Round(proto.MaxBalLookback); i < ml.Latest(); i++ {

@@ -3002,24 +3002,24 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 	return err
 }
 
-func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, err error) {
-	rows, err := tx.Query("SELECT data FROM onlineroundparamstail ORDER BY round")
+func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
+	rows, err := tx.Query("SELECT round, data FROM onlineroundparamstail ORDER BY round")
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var buf []byte
-		err = rows.Scan(&buf)
+		err = rows.Scan(&endRound, &buf)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		var data ledgercore.OnlineRoundParamsData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		onlineRoundParamsData = append(onlineRoundParamsData, data)

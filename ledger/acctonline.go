@@ -140,9 +140,13 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return err0
 		}
 
-		ao.onlineRoundParamsData, err0 = accountsOnlineRoundParams(tx)
+		var endRound basics.Round
+		ao.onlineRoundParamsData, endRound, err0 = accountsOnlineRoundParams(tx)
 		if err0 != nil {
 			return err0
+		}
+		if endRound != ao.cachedDBRoundOnline {
+			return fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
 		}
 
 		return nil

@@ -254,8 +254,9 @@ func TestAccountDBRound(t *testing.T) {
 	checkAccounts(t, tx, 0, accts)
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
-	expectedOnlineRoundParams, err := accountsOnlineRoundParams(tx)
+	expectedOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
+	require.Equal(t, 0, int(endRound))
 
 	// used to determine how many creatables element will be in the test per iteration
 	numElementsPerSegment := 10
@@ -340,9 +341,10 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
 
-	actualOnlineRoundParams, err := accountsOnlineRoundParams(tx)
+	actualOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
 	require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
+	require.Equal(t, 9, int(endRound))
 
 	// check LoadAllFullAccounts
 	loaded := make(map[basics.Address]basics.AccountData, len(accts))
@@ -3351,15 +3353,17 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 1)
 	require.NoError(t, err)
 
-	dbOnlineRoundParams, err := accountsOnlineRoundParams(tx)
+	dbOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
 	require.Equal(t, 80+int(proto.MaxBalLookback)+1, len(dbOnlineRoundParams)) // +1 comes from init state
 	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
+	require.Equal(t, 80+proto.MaxBalLookback, uint64(endRound))
 
 	err = accountsPruneOnlineRoundParams(tx, 10)
 	require.NoError(t, err)
 
-	dbOnlineRoundParams, err = accountsOnlineRoundParams(tx)
+	dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
 	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
+	require.Equal(t, 80+proto.MaxBalLookback, uint64(endRound))
 }
