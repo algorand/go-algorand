@@ -22,6 +22,7 @@ package participation
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/data/basics"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -60,8 +61,12 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(sAccount, &part, txParams.LastRound+1, txParams.LastRound+1, txParams.Fee, [32]byte{})
-	require.NoError(t, err)
+	goOnlineTx := part.GenerateRegistrationTransaction(
+		basics.MicroAlgos{Raw: txParams.Fee},
+		basics.Round(txParams.LastRound+1),
+		basics.Round(txParams.LastRound+1),
+		[32]byte{},
+		true)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
 	require.NoError(t, err)

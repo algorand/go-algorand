@@ -927,8 +927,10 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
-	_ = node.accountManager.AddParticipation(partkey)
-
+	added := node.accountManager.AddParticipation(partkey)
+	if !added {
+		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
+	}
 	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 	if err != nil {
 		return account.ParticipationID{}, err
@@ -936,6 +938,10 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
 	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))
+
+	if _, err = os.Stat(newFullyQualifiedFilename); os.IsExist(err) {
+		return account.ParticipationID{}, fmt.Errorf("KeyInstallation: cannot register duplicate participation key")
+	}
 
 	err = os.Rename(fullyQualifiedTempFile, newFullyQualifiedFilename)
 
