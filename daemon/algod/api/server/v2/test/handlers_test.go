@@ -581,6 +581,12 @@ func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int,
 		err = protocol.DecodeJSON(data, &response)
 		require.NoError(t, err, string(data))
 		require.Equal(t, expectedString, response.Result)
+	} else if rec.Code == 400 {
+		var response generatedV2.ErrorResponse
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Equal(t, expectedString, response.Message)
 	}
 	return
 }
@@ -602,8 +608,9 @@ func TestTealDisassemble(t *testing.T) {
 	// Test a nil program without the developer API flag.
 	tealDisassembleTest(t, testProgram, 404, "", false)
 
+	// Test bad programs
 	badProgram := "bad program"
-	tealDisassembleTest(t, badProgram, 400, "", true)
+	tealDisassembleTest(t, badProgram, 400, "illegal base64 data at input byte 3", true)
 }
 
 func tealDryrunTest(
