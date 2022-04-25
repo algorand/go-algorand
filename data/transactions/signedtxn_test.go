@@ -83,7 +83,7 @@ func TestSignedTxnInBlockHash(t *testing.T) {
 
 	var stib SignedTxnInBlock
 	crypto.RandBytes(stib.Txn.Sender[:])
-	require.Equal(t, crypto.HashObj(&stib), stib.Hash(crypto.Sha512_256))
+	require.Equal(t, crypto.HashObj(&stib), stib.Hash())
 }
 
 //TODO: test multisig
