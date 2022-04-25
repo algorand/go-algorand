@@ -552,7 +552,9 @@ func TestTealCompile(t *testing.T) {
 	tealCompileTest(t, badProgramBytes, 400, true)
 }
 
-func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int, enableDeveloperAPI bool) {
+func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int,
+	expectedString string, enableDeveloperAPI bool,
+) (response generatedV2.DisassembleResponse) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -573,6 +575,14 @@ func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int, ena
 	err := handler.TealDisassemble(c)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+
+	if rec.Code == 200 {
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Equal(t, expectedString, response.Result)
+	}
+	return
 }
 
 func TestTealDisassemble(t *testing.T) {
@@ -580,15 +590,20 @@ func TestTealDisassemble(t *testing.T) {
 	t.Parallel()
 
 	// nil program works, but results in invalid version text.
-	tealDisassembleTest(t, "", 200, true)
+	tealDisassembleTest(t, "", 200, "// invalid version\n", true)
+
+	// Test a valid program.
 	goodProgram := `int 1`
 	ops, _ := logic.AssembleStringWithVersion(goodProgram, 2)
 	testProgram := base64.StdEncoding.EncodeToString(ops.Program)
-	tealDisassembleTest(t, testProgram, 200, true)
-	tealDisassembleTest(t, testProgram, 404, false)
+	disassembledProgram, _ := logic.Disassemble(ops.Program)
+	tealDisassembleTest(t, testProgram, 200, disassembledProgram, true)
+
+	// Test a nil program without the developer API flag.
+	tealDisassembleTest(t, testProgram, 404, "", false)
 
 	badProgram := "bad program"
-	tealDisassembleTest(t, badProgram, 400, true)
+	tealDisassembleTest(t, badProgram, 400, "", true)
 }
 
 func tealDryrunTest(
