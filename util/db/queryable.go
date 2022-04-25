@@ -33,3 +33,9 @@ type Queryable interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
+
+// Executable is similar but has write methods as well.
+type Executable interface {
+	Queryable
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}

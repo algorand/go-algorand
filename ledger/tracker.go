@@ -234,9 +234,7 @@ type deferredCommitContext struct {
 	onlineAccountExpiredRowids     []int64
 	expirationOffset               uint64
 
-	trieBalancesHash         crypto.Digest
 	updatingBalancesDuration time.Duration
-	catchpointLabel          string
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool

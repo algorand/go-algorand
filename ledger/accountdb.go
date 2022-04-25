@@ -58,7 +58,6 @@ type accountsDbQueries struct {
 	insertCatchpointStateUint64 *sql.Stmt
 	selectCatchpointStateString *sql.Stmt
 	insertCatchpointStateString *sql.Stmt
-	insertStoredCatchpointDataFile *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -2418,11 +2417,6 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.insertStoredCatchpointDataFile, err = r.Prepare("INSERT INTO storedcatchpointdatafiles(round) VALUES(?)")
-	if err != nil {
-		return nil, err
-	}
-
 	return qs, nil
 }
 
@@ -2724,14 +2718,6 @@ func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, sta
 	return cleared, err
 }
 
-func (qs *accountsDbQueries) storeCatchpointDataFile(ctx context.Context, round basics.Round, info []byte) error {
-	f := func() error {
-		_, err := qs.insertStoredCatchpointDataFile.ExecContext(ctx, round, info)
-		return err
-	}
-	return db.Retry(f)
-}
-
 func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
@@ -2748,7 +2734,6 @@ func (qs *accountsDbQueries) close() {
 		&qs.insertCatchpointStateUint64,
 		&qs.selectCatchpointStateString,
 		&qs.insertCatchpointStateString,
-		&qs.insertStoredCatchpointDataFile,
 	}
 	for _, preparedQuery := range preparedQueries {
 		if (*preparedQuery) != nil {
@@ -4598,4 +4583,61 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
 	}
 	return roundData, roundHash, expectedRound + 1, nil
+}
+
+// For recording data in `storedcatchpointdatafiles` sqlite table.
+type catchpointDataInfo struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
+	TotalAccounts     uint64                   `codec:"accountsCount"`
+	TotalChunks       uint64                   `codec:"chunksCount"`
+	TrieBalancesHash crypto.Digest             `codec:"trieBalancesHash"`
+}
+
+func insertCatchpointDataFile(e db.Executable, round basics.Round, info *catchpointDataInfo) error {
+	f := func() error {
+		query := "INSERT INTO storedcatchpointdatafiles(round) VALUES(?)"
+		_, err := e.Exec(query, round, protocol.Encode(info))
+		return err
+	}
+	return db.Retry(f)
+}
+
+func selectCatchpointDataFile(q db.Queryable, round basics.Round) (catchpointDataInfo, bool /*exists*/, error) {
+	var data []byte
+	f := func() error {
+		query := "SELECT info FROM storedcatchpointdatafiles WHERE round=?"
+		err := q.QueryRow(query, round).Scan(&data)
+		if err == sql.ErrNoRows {
+			data = nil
+			return nil
+		}
+		return err
+	}
+	err := db.Retry(f)
+	if err != nil {
+		return catchpointDataInfo{}, false, err
+	}
+
+	if data == nil {
+		return catchpointDataInfo{}, false, nil
+	}
+
+	var res catchpointDataInfo
+	err = protocol.Decode(data, &res)
+	if err != nil {
+		return catchpointDataInfo{}, false, err
+	}
+
+	return res, true, nil
+}
+
+func deleteOldCatchpointDataFiles(e db.Executable, maxRoundToDelete basics.Round) error {
+	f := func() error {
+		query := "DELETE FROM storedcatchpointdatafiles WHERE round <= ?"
+		_, err := e.Exec(query, maxRoundToDelete)
+		return err
+	}
+	return db.Retry(f)
 }
