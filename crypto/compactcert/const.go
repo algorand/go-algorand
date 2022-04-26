@@ -26,9 +26,5 @@ const (
 	HashSize            = crypto.SumhashDigestSize
 	precisionBits       = uint8(16)     // number of bits used for log approximation. This should not exceed 63
 	ln2IntApproximation = uint64(45427) // the value of the ln(2) with 16 bits of precision
-)
-
-const (
-	// MaxReveals is a bound on allocation and on numReveals to limit log computation
-	MaxReveals = 1024
+	MaxReveals          = 1024          // MaxReveals is a bound on allocation and on numReveals to limit log computation
 )
