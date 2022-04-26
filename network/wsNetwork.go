@@ -2107,6 +2107,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			Endpoint:     peer.GetAddress(),
 		})
 
+	wn.maybeSendMessagesOfInterest(peer, nil)
+
 	peers.Set(float64(wn.NumPeers()), nil)
 	outgoingPeers.Set(float64(wn.numOutgoingPeers()), nil)
 
