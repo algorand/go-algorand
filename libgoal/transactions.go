@@ -19,6 +19,7 @@ package libgoal
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -213,6 +214,17 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 	var selectionPk [32]byte
 	copy(selectionPk[:], part.Key.SelectionParticipationKey[:])
 
+	if part.Key.StateProofKey == nil {
+		return transactions.Transaction{}, fmt.Errorf("state proof key pointer is nil")
+	}
+
+	if len(*part.Key.StateProofKey) != len(merklesignature.Verifier{}){
+		return transactions.Transaction{}, fmt.Errorf("state proof key is the wrong size, should be %d but it is %d", len(merklesignature.Verifier{}), len(*part.Key.StateProofKey))
+	}
+
+	var stateProofPk merklesignature.Verifier
+	copy(stateProofPk[:], (*part.Key.StateProofKey)[:])
+
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -225,11 +237,14 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:      votePk,
 			SelectionPK: selectionPk,
+			StateProofPK: stateProofPk,
 		},
 	}
 	t.KeyregTxnFields.VoteFirst = basics.Round(part.Key.VoteFirstValid)
 	t.KeyregTxnFields.VoteLast = basics.Round(part.Key.VoteLastValid)
 	t.KeyregTxnFields.VoteKeyDilution = part.Key.VoteKeyDilution
+
+
 
 	return t, nil
 }

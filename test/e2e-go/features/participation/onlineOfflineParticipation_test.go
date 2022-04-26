@@ -177,15 +177,33 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partKeyFirstValid := uint64(0)
 	partKeyValidityPeriod := uint64(10000)
 	partKeyLastValid := partKeyFirstValid + partKeyValidityPeriod
+
+	maxTxnLife := consensus[protocol.ConsensusVersion("shortpartkeysprotocol")].MaxTxnLife
+
+	if partKeyLastValid > maxTxnLife {
+		partKeyLastValid = maxTxnLife
+	}
+
 	partkeyResponse, _, err := client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 0)
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
 	goOnlineTx := partkeyResponse.GenerateRegistrationTransaction(
 		basics.MicroAlgos{Raw: transactionFee},
-		basics.Round(0),
-		basics.Round(0),
+		basics.Round(partKeyFirstValid),
+		basics.Round(partKeyLastValid),
 		[32]byte{}, true)
+
+	txnParams, err := client.SuggestedParams()
+	a.NoError(err, "no error grabbing the genesis id")
+
+	goOnlineTx.Header.GenesisID = txnParams.GenesisID
+
+	// Check if the protocol supports genesis hash
+	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
+		copy(goOnlineTx.Header.GenesisHash[:], txnParams.GenesisHash)
+	}
+
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
@@ -296,9 +314,20 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	// account uses part key to go online
 	goOnlineTx := partkeyResponse.GenerateRegistrationTransaction(
 		basics.MicroAlgos{Raw: transactionFee},
-		basics.Round(0),
-		basics.Round(0),
+		basics.Round(partKeyFirstValid),
+		basics.Round(partKeyLastValid),
 		[32]byte{}, true)
+
+	params, err := client.SuggestedParams()
+	a.NoError(err, "no error grabbing the genesis id")
+
+	goOnlineTx.Header.GenesisID = params.GenesisID
+
+	// Check if the protocol supports genesis hash
+	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
+		copy(goOnlineTx.Header.GenesisHash[:], params.GenesisHash)
+	}
+
 	a.Equal(goOnlineTx.KeyregTxnFields.StateProofPK.IsEmpty(), false, "stateproof key should not be zero")
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
