@@ -156,9 +156,10 @@ func TestLedgerCirculation(t *testing.T) {
 	require.False(t, sourceAccount.IsZero())
 	require.False(t, destAccount.IsZero())
 
-	data, err := realLedger.LookupAgreement(basics.Round(0), destAccount)
+	data, validThrough, _, err := realLedger.LookupAccount(basics.Round(0), destAccount)
+	require.Equal(t, basics.Round(0), validThrough)
 	require.NoError(t, err)
-	baseDestValue := data.MicroAlgosWithRewards.Raw
+	baseDestValue := data.MicroAlgos.Raw
 
 	blk := genesisInitState.Block
 	totalsRound, totals, err := realLedger.LatestTotals()
@@ -191,12 +192,14 @@ func TestLedgerCirculation(t *testing.T) {
 
 		// test most recent round
 		if rnd < basics.Round(500) {
-			data, err = realLedger.LookupAgreement(rnd, destAccount)
+			data, validThrough, _, err = realLedger.LookupAccount(rnd, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgosWithRewards.Raw)
-			data, err = l.LookupAgreement(rnd, destAccount)
+			require.Equal(t, rnd, validThrough)
+			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
+			data, validThrough, _, err = realLedger.LookupAccount(rnd, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgosWithRewards.Raw)
+			require.Equal(t, rnd, validThrough)
+			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
 
 			roundCirculation, err := realLedger.OnlineTotals(rnd)
 			require.NoError(t, err)
@@ -207,12 +210,14 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(510) {
 			// test one round ago
-			data, err = realLedger.LookupAgreement(rnd-1, destAccount)
+			data, validThrough, _, err = realLedger.LookupAccount(rnd-1, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgosWithRewards.Raw)
-			data, err = l.LookupAgreement(rnd-1, destAccount)
+			require.Equal(t, rnd-1, validThrough)
+			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
+			data, validThrough, _, err = l.LookupAccount(rnd-1, destAccount)
 			require.NoError(t, err)
-			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgosWithRewards.Raw)
+			require.Equal(t, rnd-1, validThrough)
+			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
 
 			roundCirculation, err := realLedger.OnlineTotals(rnd - 1)
 			require.NoError(t, err)
@@ -223,12 +228,12 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(520) {
 			// test one round in the future ( expected error )
-			data, err = realLedger.LookupAgreement(rnd+1, destAccount)
+			data, _, _, err = realLedger.LookupAccount(rnd+1, destAccount)
 			require.Error(t, err)
-			require.Equal(t, uint64(0), data.MicroAlgosWithRewards.Raw)
-			data, err = l.LookupAgreement(rnd+1, destAccount)
+			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
+			data, _, _, err = l.LookupAccount(rnd+1, destAccount)
 			require.Error(t, err)
-			require.Equal(t, uint64(0), data.MicroAlgosWithRewards.Raw)
+			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 
 			_, err = realLedger.OnlineTotals(rnd + 1)
 			require.Error(t, err)
@@ -244,7 +249,6 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Error(t, err)
 		}
 	}
-	return
 }
 
 func TestLedgerSeed(t *testing.T) {
@@ -318,7 +322,6 @@ func TestLedgerSeed(t *testing.T) {
 			require.Equal(t, seed.elements[1].seed, expectedHdr.Seed)
 		}
 	}
-	return
 }
 
 func TestConsensusVersion(t *testing.T) {
@@ -473,7 +476,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
-	proto, _ := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	origProto := proto
 	defer func() {
 		config.Consensus[protocol.ConsensusCurrentVersion] = origProto
@@ -533,8 +536,8 @@ func TestLedgerErrorValidate(t *testing.T) {
 	// Add blocks to the ledger via EnsureValidatedBlock. This calls AddValidatedBlock, which simply
 	// passes the block to blockQueue. The returned error is handled by EnsureValidatedBlock, which reports
 	// in the form of logged error message.
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		i := 0
 		for blk := range blkChan1 {
 			i++
@@ -554,8 +557,8 @@ func TestLedgerErrorValidate(t *testing.T) {
 
 	// Add blocks to the ledger via EnsureBlock. This basically calls AddBlock, but handles
 	// the errors by logging them. Checking the logged messages to verify its behavior.
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		i := 0
 		for blk := range blkChan2 {
 			i++
@@ -565,8 +568,8 @@ func TestLedgerErrorValidate(t *testing.T) {
 	}()
 
 	// Add blocks directly to the ledger
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		i := 0
 		for blk := range blkChan3 {
 			i++

@@ -63,6 +63,8 @@ func compactSigCheck(t *testing.T, sig []byte) {
 }
 
 func TestSignatureValidity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	pubkey, seckey := generateKeyPair()
 	msg := csprngEntropy(32)
 	sig, err := Sign(msg, seckey)

@@ -14,14 +14,51 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+package main
 
 import (
-	"github.com/algorand/go-deadlock"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// StringGauge represents a map of key value pairs available to be written with the AddMetric
-type StringGauge struct {
-	deadlock.Mutex
-	values map[string]string
+func TestPrint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testcases := []struct {
+		Input    interface{}
+		expected string
+	}{
+		{
+			Input:    "string",
+			expected: "string",
+		},
+		{
+			Input:    uint64(1234),
+			expected: "1234",
+		},
+		{
+			Input:    int64(-1234),
+			expected: "-1234",
+		},
+		{
+			Input:    true,
+			expected: "true",
+		},
+		{
+			Input:    time.Second,
+			expected: "1s",
+		},
+	}
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("test %d", i), func(t *testing.T) {
+			ret, err := serializeObjectProperty(tc, "Input")
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, ret)
+		})
+	}
 }
