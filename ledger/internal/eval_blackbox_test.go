@@ -51,10 +51,11 @@ func init() {
 
 func TestBlockEvaluator(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -221,6 +222,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 func TestRekeying(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// Pretend rekeying is supported
 	actual := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -234,7 +236,7 @@ func TestRekeying(t *testing.T) {
 	// Bring up a ledger
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -331,6 +333,7 @@ func TestRekeying(t *testing.T) {
 // ensures that the updates are correct.
 func TestEvalAppState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v24 = apps
@@ -474,6 +477,7 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 // budgets in a group txn and return an error if the budget is exceeded
 func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	source := func(n int, m int) string {
 		return "#pragma version 4\nbyte 0x1337BEEF\n" + strings.Repeat("keccak256\n", n) +
@@ -568,6 +572,7 @@ func asaParams(t testing.TB, ledger *ledger.Ledger, asset basics.AssetIndex) (ba
 
 func TestGarbageClearState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v24 = apps
@@ -591,6 +596,7 @@ func TestGarbageClearState(t *testing.T) {
 
 func TestRewardsInAD(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v15 put rewards into ApplyData
@@ -620,10 +626,11 @@ func TestRewardsInAD(t *testing.T) {
 
 func TestMinBalanceChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -698,6 +705,7 @@ func TestMinBalanceChanges(t *testing.T) {
 // TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
 func TestDeleteNonExistantKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// teal v2 (apps)
@@ -741,11 +749,12 @@ app_local_del
 // and do not cause any MaximumMinimumBalance problems
 func TestAppInsMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusV30
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -811,6 +820,7 @@ func TestAppInsMinBalance(t *testing.T) {
 
 func TestDuplicates(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	testConsensusRange(t, 11, 0, func(t *testing.T, ver int) {
@@ -873,6 +883,9 @@ var consensusByNumber = []protocol.ConsensusVersion{
 }
 
 func TestContainsLatestVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	// This confirms that the proto before future has no ApprovedUpgrades.  Once
 	// it does, that new version should be added to consensusByNumber.
 	require.Len(t, config.Consensus[consensusByNumber[len(consensusByNumber)-2]].ApprovedUpgrades, 0)
@@ -923,6 +936,7 @@ func benchConsensusRange(b *testing.B, start, stop int, bench func(t *testing.B,
 // TestLogsInBlock ensures that logs appear in the block properly
 func TestLogsInBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// Run tests from v30 onward
@@ -1008,10 +1022,11 @@ func TestGhostTransactions(t *testing.T) {
 	*/
 
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
