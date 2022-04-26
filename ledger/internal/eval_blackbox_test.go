@@ -422,11 +422,11 @@ ok:
 	return eval, addrs[0], err
 }
 
-// TestEvalAppStateCountsWithTxnGroup ensures txns in a group can't violate app state schema limits
+// TestEvalAppStateCountsWithTxnGroupBlackbox ensures txns in a group can't violate app state schema limits
 // the test ensures that
 // commitToParent -> applyChild copies child's cow state usage counts into parent
 // and the usage counts correctly propagated from parent cow to child cow and back
-func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
+func TestEvalAppStateCountsWithTxnGroupBlackbox(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
@@ -434,9 +434,9 @@ func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
 	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
 }
 
-// TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
+// TestEvalAppAllocStateWithTxnGroupBlackbox ensures roundCowState.deltas and applyStorageDelta
 // produce correct results when a txn group has storage allocate and storage update actions
-func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
+func TestEvalAppAllocStateWithTxnGroupBlackbox(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
@@ -489,7 +489,10 @@ func txns(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, tx
 func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
-	stxn := txn.SignedTxn()
+	stxn(t, ledger, eval, txn.SignedTxn(), problem...)
+}
+
+func stxn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, stxn transactions.SignedTxn, problem ...string) {
 	err := eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
 	if err != nil {
 		if len(problem) == 1 {
