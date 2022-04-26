@@ -222,7 +222,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 func TestRekeying(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	// t.Parallel() NO! This test manipulates []protocol.Consensus
 
 	// Pretend rekeying is supported
 	actual := config.Consensus[protocol.ConsensusCurrentVersion]
