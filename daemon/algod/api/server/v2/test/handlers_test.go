@@ -18,7 +18,6 @@ package test
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -552,7 +551,7 @@ func TestTealCompile(t *testing.T) {
 	tealCompileTest(t, badProgramBytes, 400, true)
 }
 
-func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int,
+func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 	expectedString string, enableDeveloperAPI bool,
 ) (response generatedV2.DisassembleResponse) {
 	numAccounts := 1
@@ -569,7 +568,7 @@ func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int,
 		Shutdown: dummyShutdownChan,
 	}
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(stringToUse)))
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(program))
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	err := handler.TealDisassemble(c)
@@ -586,7 +585,7 @@ func tealDisassembleTest(t *testing.T, stringToUse string, expectedCode int,
 		data := rec.Body.Bytes()
 		err = protocol.DecodeJSON(data, &response)
 		require.NoError(t, err, string(data))
-		require.Equal(t, expectedString, response.Message)
+		require.Contains(t, response.Message, expectedString)
 	}
 	return
 }
@@ -596,23 +595,22 @@ func TestTealDisassemble(t *testing.T) {
 	t.Parallel()
 
 	// nil program works, but results in invalid version text.
-	testProgram := ""
+	testProgram := []byte{}
 	tealDisassembleTest(t, testProgram, 200, "// invalid version\n", true)
 
 	// Test a valid program.
 	for ver := 1; ver < logic.AssemblerMaxVersion; ver++ {
 		goodProgram := `int 1`
 		ops, _ := logic.AssembleStringWithVersion(goodProgram, uint64(ver))
-		testProgram := base64.StdEncoding.EncodeToString(ops.Program)
 		disassembledProgram, _ := logic.Disassemble(ops.Program)
-		tealDisassembleTest(t, testProgram, 200, disassembledProgram, true)
+		tealDisassembleTest(t, ops.Program, 200, disassembledProgram, true)
 	}
 	// Test a nil program without the developer API flag.
 	tealDisassembleTest(t, testProgram, 404, "", false)
 
-	// Test bad programs
-	badProgram := "bad program"
-	tealDisassembleTest(t, badProgram, 400, "illegal base64 data at input byte 3", true)
+	// Test bad program
+	badProgram := []byte{1, 99}
+	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
 }
 
 func tealDryrunTest(

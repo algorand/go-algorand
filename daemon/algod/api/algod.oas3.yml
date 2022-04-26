@@ -3720,7 +3720,7 @@
         "operationId": "TealDisassemble",
         "requestBody": {
           "content": {
-            "text/plain": {
+            "application/x-binary": {
               "schema": {
                 "format": "byte",
                 "type": "string"

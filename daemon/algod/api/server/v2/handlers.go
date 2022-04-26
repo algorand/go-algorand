@@ -1163,10 +1163,7 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	buf.ReadFrom(ctx.Request().Body)
-	sourceProgram, err := base64.StdEncoding.DecodeString(buf.String())
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
+	sourceProgram := buf.Bytes()
 	program, err := logic.Disassemble(sourceProgram)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)

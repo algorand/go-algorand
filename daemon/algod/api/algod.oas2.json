@@ -1423,7 +1423,7 @@
       "post": {
         "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "consumes": [
-          "text/plain"
+          "application/x-binary"
         ],
         "produces": [
           "application/json"
