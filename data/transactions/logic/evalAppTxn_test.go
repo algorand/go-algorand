@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	. "github.com/algorand/go-algorand/data/transactions/logic"
@@ -1265,7 +1266,7 @@ int 1
 func TestInnerTxIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Run("txn", func(t *testing.T) {
+	t.Run("Single transaction", func(t *testing.T) {
 		ep, tx, ledger := MakeSampleEnv()
 		txid := TestProg(t, "txn TxID; log; int 1", AssemblerMaxVersion)
 		ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1297,7 +1298,7 @@ itxn Logs 0
 `, ep)
 	})
 
-	t.Run("gtxn", func(t *testing.T) {
+	t.Run("Multiple transactions", func(t *testing.T) {
 		ep, tx, ledger := MakeSampleEnv()
 		txid := TestProg(t, "gtxn 0 TxID; log; gtxn 1 TxID; log; int 1", AssemblerMaxVersion)
 		ledger.NewApp(tx.Receiver, 222, basics.AppParams{
@@ -1403,6 +1404,144 @@ itxn Logs 0
 
 !=
 `, ep)
+}
+
+func TestSpecificInnerTxIDs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	parentAppID := basics.AppIndex(888)
+	childAppID := basics.AppIndex(222)
+	grandchildAppID := basics.AppIndex(333)
+
+	ep, tx, ledger := MakeSampleEnv()
+	ep.Proto.NewInnerTxnIDs = true
+
+	// reset txn group to something with a predetermined hash
+	ep.TxnGroup = []transactions.SignedTxnWithAD{
+		{
+			SignedTxn: transactions.SignedTxn{},
+		},
+	}
+	tx = &ep.TxnGroup[0].Txn
+	tx.Type = protocol.ApplicationCallTx
+	copy(tx.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	tx.FirstValid = 1
+	tx.LastValid = 501
+	tx.Fee.Raw = 10_000 // enough to cover the fee for the whole group
+	tx.ApplicationID = parentAppID
+	tx.ForeignApps = []basics.AppIndex{
+		childAppID,
+		grandchildAppID,
+	}
+
+	// make sure our TxID is stable
+	expectedParentTxid := tx.ID()
+	require.Equal(t, transactions.Txid{0x3, 0xcf, 0xa1, 0x26, 0xfc, 0xbe, 0x2f, 0x4b, 0x10, 0x88, 0x31, 0x8b, 0x9e, 0x66, 0x91, 0xee, 0x5f, 0xb9, 0x28, 0x89, 0x45, 0x9d, 0xd5, 0xcb, 0xb1, 0x7, 0xb4, 0x73, 0xe2, 0x9f, 0x60, 0xb6}, tx.ID())
+
+	expectedChildTxn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:     parentAppID.Address(),
+			FirstValid: tx.FirstValid,
+			LastValid:  tx.LastValid,
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: childAppID,
+			ForeignApps:   []basics.AppIndex{grandchildAppID},
+		},
+	}
+	expectedChildTxid := expectedChildTxn.InnerID(expectedParentTxid, 0)
+
+	require.Equal(t, transactions.Txid{0xdb, 0x9b, 0xdb, 0xdd, 0x14, 0x9d, 0x5c, 0x56, 0x7f, 0x62, 0xfd, 0x99, 0x91, 0x2c, 0xca, 0xb, 0x3a, 0xc5, 0xb2, 0x1, 0x6, 0x8b, 0xe4, 0x80, 0x6e, 0xab, 0x44, 0x91, 0x3c, 0x4d, 0x7d, 0xda}, expectedChildTxid)
+
+	expectedGrandchildTxn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:     childAppID.Address(),
+			FirstValid: tx.FirstValid,
+			LastValid:  tx.LastValid,
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: grandchildAppID,
+		},
+	}
+	expectedGrandchildGroup := crypto.HashObj(transactions.TxGroup{
+		TxGroupHashes: []crypto.Digest{
+			crypto.Digest(expectedGrandchildTxn.InnerID(expectedChildTxid, 0)),
+			crypto.Digest(expectedGrandchildTxn.InnerID(expectedChildTxid, 1)),
+		},
+	})
+	expectedGrandchildTxn.Group = expectedGrandchildGroup
+
+	require.Equal(t, crypto.Digest{0x11, 0x6e, 0x85, 0xfc, 0x63, 0xb1, 0xef, 0x63, 0x5a, 0x48, 0xce, 0xc6, 0xe3, 0x36, 0x74, 0x28, 0xe9, 0xc, 0x23, 0xe2, 0x5, 0xf0, 0x13, 0x6d, 0x9d, 0xcd, 0xaf, 0xaa, 0x94, 0x7f, 0xab, 0x33}, expectedGrandchildGroup)
+
+	expectedGrandchild0Txid := expectedGrandchildTxn.InnerID(expectedChildTxid, 0)
+	expectedGrandchild1Txid := expectedGrandchildTxn.InnerID(expectedChildTxid, 1)
+
+	require.Equal(t, transactions.Txid{0xcc, 0x2d, 0x91, 0x90, 0xc7, 0xed, 0x3c, 0xfe, 0xe1, 0x99, 0x33, 0x22, 0x3, 0xcd, 0xa7, 0xff, 0xaa, 0xf0, 0x56, 0x7d, 0x1d, 0x5, 0xf5, 0x41, 0xc0, 0x77, 0xfd, 0xfc, 0xed, 0x90, 0xd9, 0xd9}, expectedGrandchild0Txid)
+	require.Equal(t, transactions.Txid{0x26, 0x43, 0x77, 0x5b, 0xca, 0xc6, 0xa6, 0x85, 0x4, 0x3b, 0x74, 0x13, 0x82, 0x68, 0xf8, 0x65, 0x11, 0xd, 0x92, 0xd0, 0x6f, 0x25, 0x7f, 0xa9, 0xf, 0xe4, 0x94, 0x86, 0x70, 0xa5, 0x4f, 0x64}, expectedGrandchild1Txid)
+
+	grandchild := TestProg(t, fmt.Sprintf(`
+gtxn 0 TxID
+byte 0x%s
+==
+
+gtxn 1 TxID
+byte 0x%s
+==
+&&
+
+global GroupID
+byte 0x%s
+==
+&&
+`, hex.EncodeToString(expectedGrandchild0Txid[:]), hex.EncodeToString(expectedGrandchild1Txid[:]), hex.EncodeToString(expectedGrandchildGroup[:])), AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, grandchildAppID, basics.AppParams{
+		ApprovalProgram: grandchild.Program,
+	})
+
+	child := TestProg(t, fmt.Sprintf(`
+txn TxID
+byte 0x%s
+==
+
+global GroupID
+global ZeroAddress
+==
+&&
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_submit
+`, hex.EncodeToString(expectedChildTxid[:])), AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, childAppID, basics.AppParams{
+		ApprovalProgram: child.Program,
+	})
+	ledger.NewAccount(childAppID.Address(), 50_000)
+
+	ledger.NewApp(tx.Receiver, parentAppID, basics.AppParams{})
+	ledger.NewAccount(parentAppID.Address(), 50_000)
+
+	TestApp(t, fmt.Sprintf(`
+txn TxID
+byte 0x%s
+==
+
+global GroupID
+global ZeroAddress
+==
+&&
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 333;     itxn_field Applications
+itxn_submit
+`, hex.EncodeToString(expectedParentTxid[:])), ep)
 }
 
 // TestGtixn confirms access to itxn groups
