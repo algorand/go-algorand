@@ -4564,14 +4564,14 @@ func opItxnSubmit(cx *EvalContext) error {
 						return err
 					}
 					csp = app.ClearStateProgram
-					csv, _, err := transactions.ProgramVersion(csp)
-					if err != nil {
-						return err
-					}
-					if csv < cx.Proto.MinInnerApplVersion {
-						return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",
-							csv, cx.Proto.MinInnerApplVersion)
-					}
+				}
+				csv, _, err := transactions.ProgramVersion(csp)
+				if err != nil {
+					return err
+				}
+				if csv < cx.Proto.MinInnerApplVersion {
+					return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",
+						csv, cx.Proto.MinInnerApplVersion)
 				}
 			}
 

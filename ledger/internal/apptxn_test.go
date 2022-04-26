@@ -1959,16 +1959,56 @@ itxn_submit`,
 			ForeignApps: []basics.AppIndex{v5id},
 		}
 
+		// createAndOptin tries to create and optin to args[0], args[1] programs
+		createAndOptin := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			// don't use main. do the test at creation time
+			ApprovalProgram: `
+itxn_begin
+	int appl
+	itxn_field TypeEnum
+	txn ApplicationArgs 0
+    itxn_field ApprovalProgram
+	txn ApplicationArgs 1
+    itxn_field ClearStateProgram
+    int OptIn
+    itxn_field OnCompletion
+itxn_submit`,
+		}
+
 		if ver <= 32 {
 			dl.txn(&call, "inner app call with version v5 < v6")
 			call.ForeignApps[0] = v6id
 			dl.txn(&call, "overspend") // it tried to execute, but test doesn't bother funding
+
+			// Can't create a v3 app from inside an app, because that is calling
+			createAndOptin.ApplicationArgs = [][]byte{three.Program, three.Program}
+			dl.txn(&createAndOptin, "inner app call with version v3 < v6")
+
+			// nor v5 in proto ver 32
+			createAndOptin.ApplicationArgs = [][]byte{five.Program, five.Program}
+			dl.txn(&createAndOptin, "inner app call with version v5 < v6")
+
+			// 6 is good
+			createAndOptin.ApplicationArgs = [][]byte{six.Program, six.Program}
+			dl.txn(&createAndOptin, "overspend") // passed the checks, but is an overspend
 		} else {
 			// after 32 proto.AllowV4InnerAppls should be in effect, so calls and optins to v5 are ok
 			dl.txn(&call, "overspend")         // it tried to execute, but test doesn't bother funding
 			dl.txn(&optin, "overspend")        // it tried to execute, but test doesn't bother funding
 			optin.ForeignApps[0] = v5withv3csp // but we can't optin to a v5 if it has an old csp
 			dl.txn(&optin, "CSP v3 < v4")      // it tried to execute, but test doesn't bother funding
+
+			// Can't create a v3 app from inside an app, because that is calling
+			createAndOptin.ApplicationArgs = [][]byte{three.Program, five.Program}
+			dl.txn(&createAndOptin, "inner app call with version v3 < v4")
+			// Can't create and optin to a v5/v3 app from inside an app
+			createAndOptin.ApplicationArgs = [][]byte{five.Program, three.Program}
+			dl.txn(&createAndOptin, "inner app call opt-in with CSP v3 < v4")
+
+			createAndOptin.ApplicationArgs = [][]byte{five.Program, five.Program}
+			dl.txn(&createAndOptin, "overspend") // passed the checks, but is an overspend
 		}
 	})
 
