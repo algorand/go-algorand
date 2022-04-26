@@ -328,6 +328,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 		},
 	}
 	cdr := &dcc.deferredCommitRange
+
 	tr.mu.RLock()
 	dbRound := tr.dbRound
 	for _, lt := range tr.trackers {
@@ -344,14 +345,11 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
 		}
 	}
-	tr.mu.RUnlock()
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
 	} else {
 		dcc = nil
 	}
-
-	tr.mu.RLock()
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
