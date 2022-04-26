@@ -766,12 +766,15 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	req := ctx.Request()
 	buf := new(bytes.Buffer)
 	req.Body = http.MaxBytesReader(nil, req.Body, maxTealDryrunBytes)
-	buf.ReadFrom(req.Body)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 	data := buf.Bytes()
 
 	var dr DryrunRequest
 	var gdr generated.DryrunRequest
-	err := decode(protocol.JSONStrictHandle, data, &gdr)
+	err = decode(protocol.JSONStrictHandle, data, &gdr)
 	if err == nil {
 		dr, err = DryrunRequestFromGenerated(&gdr)
 		if err != nil {
@@ -1136,7 +1139,10 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	}
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
-	buf.ReadFrom(ctx.Request().Body)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 	source := buf.String()
 	ops, err := logic.AssembleString(source)
 	if err != nil {
@@ -1162,7 +1168,10 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 	}
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
-	buf.ReadFrom(ctx.Request().Body)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 	sourceProgram := buf.Bytes()
 	program, err := logic.Disassemble(sourceProgram)
 	if err != nil {
