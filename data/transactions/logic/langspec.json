@@ -2232,11 +2232,11 @@
     },
     {
       "Opcode": 209,
-      "Name": "block_seed",
+      "Name": "block",
       "Args": "U",
-      "Returns": "B",
-      "Size": 1,
-      "Doc": "The sortition seed of round A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
+      "Returns": ".",
+      "Size": 2,
+      "Doc": "field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
       "Groups": [
         "State Access"
       ]

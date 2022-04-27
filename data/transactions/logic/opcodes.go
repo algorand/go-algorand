@@ -60,7 +60,7 @@ const createdResourcesVersion = 6
 // experimental
 const fidoVersion = 7 // base64, json, secp256r1
 
-const randomnessVersion = 7 // vrf_verify, block_seed
+const randomnessVersion = 7 // vrf_verify, block
 
 type linearCost struct {
 	baseCost  int
@@ -579,7 +579,7 @@ var OpSpecs = []OpSpec{
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
-	{0xd1, "block_seed", opBlockSeed, proto("i:b"), randomnessVersion, opDefault()},
+	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 }
 
 type sortByOpcode []OpSpec

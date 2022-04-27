@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -858,6 +858,77 @@ var VrfStandards = FieldGroup{
 	vrfStandardSpecByName,
 }
 
+// BlockField is an enum for the `block` opcode
+type BlockField int
+
+const (
+	// BlkSeed is the Block's vrf seed
+	BlkSeed BlockField = iota
+	// BlkTimestamp is the Block's timestamp, seconds from epoch
+	BlkTimestamp
+	invalidBlockField // compile-time constant for number of fields
+)
+
+var blockFieldNames [invalidBlockField]string
+
+type blockFieldSpec struct {
+	field   BlockField
+	ftype   StackType
+	version uint64
+}
+
+var blockFieldSpecs = [...]blockFieldSpec{
+	{BlkSeed, StackBytes, randomnessVersion},
+	{BlkTimestamp, StackUint64, randomnessVersion},
+}
+
+func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
+	if int(r) >= len(blockFieldSpecs) {
+		return blockFieldSpec{}, false
+	}
+	return blockFieldSpecs[r], true
+}
+
+var blockFieldSpecByName = make(blockFieldSpecMap, len(blockFieldNames))
+
+type blockFieldSpecMap map[string]blockFieldSpec
+
+func (s blockFieldSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+func (fs blockFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+
+func (fs blockFieldSpec) Type() StackType {
+	return fs.ftype
+}
+
+func (fs blockFieldSpec) OpVersion() uint64 {
+	return randomnessVersion
+}
+
+func (fs blockFieldSpec) Version() uint64 {
+	return fs.version
+}
+
+func (fs blockFieldSpec) Note() string {
+	return ""
+}
+
+func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
+	return s[name]
+}
+
+// BlockFields describes the json_ref immediate
+var BlockFields = FieldGroup{
+	"block", "Fields",
+	blockFieldNames[:],
+	blockFieldSpecByName,
+}
+
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
 
@@ -1222,6 +1293,13 @@ func init() {
 		equal(int(s.field), i)
 		vrfStandardNames[i] = s.field.String()
 		vrfStandardSpecByName[s.field.String()] = s
+	}
+
+	equal(len(blockFieldSpecs), len(blockFieldNames))
+	for i, s := range blockFieldSpecs {
+		equal(int(s.field), i)
+		blockFieldNames[i] = s.field.String()
+		blockFieldSpecByName[s.field.String()] = s
 	}
 
 	equal(len(assetHoldingFieldSpecs), len(assetHoldingFieldNames))

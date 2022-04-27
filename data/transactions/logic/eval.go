@@ -4659,7 +4659,7 @@ func opVrfVerify(cx *EvalContext) error {
 	return nil
 }
 
-func opBlockSeed(cx *EvalContext) error {
+func opBlock(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // round
 	round := basics.Round(cx.stack[last].Uint)
 	first := cx.txn.Txn.LastValid - basics.Round(cx.Proto.MaxTxnLife) - 1
@@ -4668,14 +4668,30 @@ func opBlockSeed(cx *EvalContext) error {
 	}
 	current := cx.Ledger.Round()
 	if round < first || round >= current {
-		return fmt.Errorf("%d's seed is not available. It's outside [%d-%d)", round, first, current)
+		return fmt.Errorf("block %d is not available. It's outside [%d-%d)", round, first, current)
 	}
-	seed, err := cx.Ledger.BlockSeed(round)
-	if err != nil {
-		return err
+
+	f := BlockField(cx.program[cx.pc+1])
+	fs, ok := blockFieldSpecByField(f)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid block field %s", f)
 	}
-	cx.stack[last].Bytes = seed[:]
-	return nil
+
+	switch fs.field {
+	case BlkSeed:
+		seed, err := cx.Ledger.BlockSeed(round)
+		if err != nil {
+			return err
+		}
+		cx.stack[last].Bytes = seed[:]
+		return nil
+	case BlkTimestamp:
+		cx.stack[last].Bytes = nil
+		cx.stack[last].Uint = 1
+		return nil
+	default:
+		return fmt.Errorf("invalid block field %d", fs.field)
+	}
 }
 
 // PcDetails return PC and disassembled instructions at PC up to 2 opcodes back

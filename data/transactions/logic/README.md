@@ -604,7 +604,7 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
-| `block_seed` | The sortition seed of round A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid. |
+| `block f` | field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid. |
 
 ### Inner Transactions
 
