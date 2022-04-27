@@ -329,7 +329,7 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
 }
 
-func (ao *onlineAccounts) maxOnlineLookback() uint64 {
+func (ao *onlineAccounts) maxBalLookback() uint64 {
 	lastProtoVersion := ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol
 	return config.Consensus[lastProtoVersion].MaxBalLookback
 }
@@ -388,11 +388,8 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 		return err
 	}
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1 : end+1]
-	maxOnlineLookback := basics.Round(ao.maxOnlineLookback())
-	dcc.maxLookbackRound = basics.Round(0)
-	if dcc.newBase > maxOnlineLookback-1 {
-		dcc.maxLookbackRound = dcc.newBase + 1 - maxOnlineLookback
-	}
+	maxOnlineLookback := basics.Round(ao.maxBalLookback())
+	dcc.onlineTotalsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
 
 	return nil
 }
@@ -431,7 +428,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 	}
 
 	// delete all entries all older than maxBalLookback rounds ago
-	err = accountsPruneOnlineRoundParams(tx, dcc.maxLookbackRound)
+	err = accountsPruneOnlineRoundParams(tx, dcc.onlineTotalsForgetBefore)
 
 	return
 }
@@ -474,7 +471,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// simply contatenate since both sequences are sorted
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
 
-	maxOnlineLookback := int(ao.maxOnlineLookback()) + len(ao.deltas)
+	maxOnlineLookback := int(ao.maxBalLookback()) + len(ao.deltas)
 	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
 		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
 	}

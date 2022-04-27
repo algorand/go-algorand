@@ -286,6 +286,8 @@ func TestAcctOnline(t *testing.T) {
 
 // TestAcctOnlineRoundParamsOffset checks that roundParamsOffset return the correct indices.
 func TestAcctOnlineRoundParamsOffset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ao := onlineAccounts{}
 
 	ao.cachedDBRoundOnline = 0
@@ -306,6 +308,19 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	ao.deltas = make([]ledgercore.AccountDeltas, 10)
 	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
 	offset, err = ao.roundParamsOffset(basics.Round(6))
+	require.Error(t, err)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = nil
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 1)
+	offset, err = ao.roundParamsOffset(basics.Round(400))
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), offset)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = nil
+	ao.onlineRoundParamsData = nil
+	offset, err = ao.roundParamsOffset(basics.Round(400))
 	require.Error(t, err)
 }
 
@@ -344,10 +359,6 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		accts = append(accts, accts[0])
 	}
 
-	// lastCreatableID stores asset or app max used index to get rid of conflicts
-	lastCreatableID := crypto.RandUint64() % 512
-	knownCreatables := make(map[basics.CreatableIndex]bool)
-
 	allTotals := make(map[basics.Round]ledgercore.AccountTotals)
 
 	start := basics.Round(10)
@@ -365,7 +376,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
-		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
+		updates, totals = ledgertesting.RandomDeltasBalanced(1, base, rewardLevel)
 		prevRound, prevTotals, err := au.LatestTotals()
 		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
@@ -386,7 +397,6 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 
 		delta.Totals = accumulateTotals(t, consensusVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		allTotals[i] = delta.Totals

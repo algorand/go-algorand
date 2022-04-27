@@ -291,7 +291,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 {
-		_, err := ao.OnlineTotals(base - basics.Round(ao.maxOnlineLookback()))
+		_, err := ao.OnlineTotals(base - basics.Round(ao.maxBalLookback()))
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())

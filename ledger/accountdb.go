@@ -143,8 +143,8 @@ var createTxTailTable = []string{
 
 var createOnlineRoundParamsTable = []string{
 	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
-        round INTEGER NOT NULL PRIMARY KEY,
-        data blob)`, // contains a msgp encoded OnlineRoundParamsData
+		round INTEGER NOT NULL PRIMARY KEY,
+		data blob)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
 var accountsResetExprs = []string{
@@ -3003,7 +3003,7 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 }
 
 func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
-	rows, err := tx.Query("SELECT round, data FROM onlineroundparamstail ORDER BY round")
+	rows, err := tx.Query("SELECT round, data FROM onlineroundparamstail ORDER BY round ASC")
 	if err != nil {
 		return nil, 0, err
 	}
