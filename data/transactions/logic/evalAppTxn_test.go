@@ -1428,15 +1428,15 @@ func TestTxIDCalculation(t *testing.T) {
 		return txn
 	}
 
-	stringToTxid := func(t *testing.T, data string) transactions.Txid {
-		var result transactions.Txid
-		require.Len(t, data, len(result))
-		copy(result[:], []byte(data))
-		return result
+	type actualInfo struct {
+		txn          transactions.Transaction
+		claimedTxID  []byte
+		claimedGroup []byte
 	}
 
-	stringToDigest := func(t *testing.T, data string) crypto.Digest {
-		return crypto.Digest(stringToTxid(t, data))
+	type expectedInfo struct {
+		expectedTxID  transactions.Txid
+		expectedGroup crypto.Digest
 	}
 
 	// this test performs a 3-level fanout of transactions:
@@ -1458,9 +1458,12 @@ func TestTxIDCalculation(t *testing.T) {
 	// │  ├─ Grandchild B-D
 	//
 	// When linearized, we use the following breadth-first search ordering:
-	// Parent, Child A, Child B, Grandchild A-A, Grandchild A-B, Grandchild A-C, Grandchild A-D, Grandchild B-A, Grandchild B-B, Grandchild B-C, Grandchild B-D
+	// Parent, Child A, Child B, Grandchild A-A, Grandchild A-B, Grandchild A-C, Grandchild A-D,
+	//   Grandchild B-A, Grandchild B-B, Grandchild B-C, Grandchild B-D
 
-	verifyTxIDs := func(t *testing.T, newMethod bool, txns [11]transactions.Transaction, actualTxIDs [11]transactions.Txid, actualGroupIDs [11]crypto.Digest) {
+	// verifyTxIDs takes the linear ordering of transactions and their claimed TxIDs and GroupIDs in
+	// the txnInfo array and verifies that the claimed IDs are correct
+	verifyTxIDs := func(t *testing.T, newMethod bool, actual [11]actualInfo) {
 		parentIndex := 0
 		childAIndex := 1
 		childBIndex := 2
@@ -1473,95 +1476,110 @@ func TestTxIDCalculation(t *testing.T) {
 		grandchildBCIndex := 9
 		grandchildBDIndex := 10
 
-		parentTxID := txns[parentIndex].ID()
-		require.Equal(t, parentTxID, actualTxIDs[parentIndex])
-		require.Equal(t, crypto.Digest{}, actualGroupIDs[parentIndex])
-		require.Equal(t, crypto.Digest{}, txns[parentIndex].Group)
+		var expected [11]expectedInfo
 
-		cAtxid := txns[childAIndex].InnerID(parentTxID, 0)
-		require.Equal(t, cAtxid, actualTxIDs[childAIndex])
-		require.Equal(t, crypto.Digest{}, actualGroupIDs[childAIndex])
-		require.Equal(t, crypto.Digest{}, txns[childAIndex].Group)
+		parentTxID := actual[parentIndex].txn.ID()
+		expected[parentIndex].expectedTxID = parentTxID
 
-		cBtxid := txns[childBIndex].InnerID(parentTxID, 1)
-		require.Equal(t, cBtxid, actualTxIDs[childBIndex])
-		require.Equal(t, crypto.Digest{}, actualGroupIDs[childBIndex])
-		require.Equal(t, crypto.Digest{}, txns[childBIndex].Group)
+		childAtxid := actual[childAIndex].txn.InnerID(parentTxID, 0)
+		expected[childAIndex].expectedTxID = childAtxid
+
+		childBtxid := actual[childBIndex].txn.InnerID(parentTxID, 1)
+		expected[childBIndex].expectedTxID = childBtxid
 
 		var gcAAtxid, gcABtxid, gcACtxid, gcADtxid, gcBAtxid, gcBBtxid, gcBCtxid, gcBDtxid transactions.Txid
-		var gcAABgroupid, gcACDgroupid, gcBABgroupid, gcBCDgroupid crypto.Digest
+		var gcAABgroup, gcACDgroup, gcBABgroup, gcBCDgroup crypto.Digest
 
 		if newMethod {
-			gcAAtxid = txns[grandchildAAIndex].InnerID(cAtxid, 0)
-			gcABtxid = txns[grandchildABIndex].InnerID(cAtxid, 1)
-			gcAABgroupid = crypto.HashObj(transactions.TxGroup{
+			gcAAtxid = actual[grandchildAAIndex].txn.InnerID(childAtxid, 0)
+			require.Equal(t, transactions.Txid{0x6a, 0xef, 0x5f, 0x69, 0x2b, 0xce, 0xfc, 0x5b, 0x43, 0xa, 0x23, 0x79, 0x52, 0x49, 0xc7, 0x40, 0x66, 0x29, 0xf0, 0xbe, 0x4, 0x48, 0xe4, 0x55, 0x48, 0x8, 0x53, 0xdc, 0xb, 0x8c, 0x22, 0x48}, gcAAtxid)
+			gcABtxid = actual[grandchildABIndex].txn.InnerID(childAtxid, 1)
+			require.Equal(t, transactions.Txid{0xd4, 0x5d, 0xf0, 0xd8, 0x24, 0x15, 0x75, 0xfc, 0xea, 0x1d, 0x5f, 0x60, 0xd4, 0x77, 0x94, 0xe4, 0xb8, 0x48, 0xbd, 0x40, 0x2d, 0xf2, 0x82, 0x8d, 0x88, 0xd5, 0xaf, 0xd0, 0xa3, 0x29, 0x63, 0xd3}, gcABtxid)
+			gcAABgroup = crypto.HashObj(transactions.TxGroup{
 				TxGroupHashes: []crypto.Digest{
-					crypto.Digest(withoutGroupID(txns[grandchildAAIndex]).InnerID(cAtxid, 0)),
-					crypto.Digest(withoutGroupID(txns[grandchildABIndex]).InnerID(cAtxid, 1)),
+					crypto.Digest(withoutGroupID(actual[grandchildAAIndex].txn).InnerID(childAtxid, 0)),
+					crypto.Digest(withoutGroupID(actual[grandchildABIndex].txn).InnerID(childAtxid, 1)),
 				},
 			})
+			require.Equal(t, crypto.Digest{0xb4, 0x0, 0x71, 0x2a, 0xee, 0x7f, 0x4, 0x20, 0x55, 0xf8, 0xf9, 0x8f, 0xaf, 0x12, 0x82, 0x57, 0x2, 0x45, 0xe9, 0x16, 0x45, 0x22, 0xc3, 0x22, 0xfb, 0x1a, 0x23, 0x4d, 0x78, 0xfe, 0xa1, 0x42}, gcAABgroup)
 
-			gcACtxid = txns[grandchildACIndex].InnerID(cAtxid, 2)
-			gcADtxid = txns[grandchildADIndex].InnerID(cAtxid, 3)
-			gcACDgroupid = crypto.HashObj(transactions.TxGroup{
+			gcACtxid = actual[grandchildACIndex].txn.InnerID(childAtxid, 2)
+			require.Equal(t, transactions.Txid{0xb3, 0xb1, 0xac, 0xbe, 0x41, 0x5, 0x32, 0x9f, 0x8d, 0x22, 0x5, 0x5, 0xfe, 0x2d, 0x3, 0xb5, 0x7e, 0xcd, 0x8e, 0xbc, 0x8d, 0xf, 0x63, 0x89, 0xca, 0xa7, 0xe1, 0xdf, 0x82, 0x89, 0xd0, 0x71}, gcACtxid)
+			gcADtxid = actual[grandchildADIndex].txn.InnerID(childAtxid, 3)
+			require.Equal(t, transactions.Txid{0xc6, 0x8, 0x14, 0xd, 0x8f, 0xf0, 0xcf, 0xb1, 0xf4, 0x52, 0xb0, 0x3f, 0xd9, 0x15, 0x28, 0xba, 0x1c, 0xed, 0xb6, 0x8c, 0x62, 0x5e, 0x5e, 0x77, 0xde, 0xd, 0xdc, 0x26, 0xc7, 0x80, 0xbe, 0x82}, gcADtxid)
+			gcACDgroup = crypto.HashObj(transactions.TxGroup{
 				TxGroupHashes: []crypto.Digest{
-					crypto.Digest(withoutGroupID(txns[grandchildACIndex]).InnerID(cAtxid, 2)),
-					crypto.Digest(withoutGroupID(txns[grandchildADIndex]).InnerID(cAtxid, 3)),
+					crypto.Digest(withoutGroupID(actual[grandchildACIndex].txn).InnerID(childAtxid, 2)),
+					crypto.Digest(withoutGroupID(actual[grandchildADIndex].txn).InnerID(childAtxid, 3)),
 				},
 			})
+			require.Equal(t, crypto.Digest{0x45, 0xce, 0x49, 0xe6, 0xa6, 0xbe, 0xa7, 0x4d, 0xb1, 0x66, 0x5d, 0xaa, 0xf6, 0xf0, 0xda, 0x78, 0x77, 0x3d, 0x6f, 0x97, 0x65, 0xd7, 0x27, 0x1, 0x82, 0x6a, 0x2c, 0xe0, 0x4c, 0xd8, 0x3b, 0x2}, gcACDgroup)
 
-			gcBAtxid = txns[grandchildBAIndex].InnerID(cBtxid, 0)
-			gcBBtxid = txns[grandchildBBIndex].InnerID(cBtxid, 1)
-			gcBABgroupid = crypto.HashObj(transactions.TxGroup{
+			gcBAtxid = actual[grandchildBAIndex].txn.InnerID(childBtxid, 0)
+			require.Equal(t, transactions.Txid{0x13, 0x3c, 0x92, 0xab, 0x12, 0xee, 0x1c, 0xf0, 0x24, 0xd1, 0x76, 0x2e, 0x7a, 0x56, 0xcb, 0xef, 0x45, 0x19, 0x42, 0xce, 0xe5, 0x6f, 0xbc, 0xaa, 0xb3, 0x17, 0x5e, 0x59, 0x18, 0x64, 0x9e, 0xe4}, gcBAtxid)
+			gcBBtxid = actual[grandchildBBIndex].txn.InnerID(childBtxid, 1)
+			require.Equal(t, transactions.Txid{0x6c, 0x44, 0x79, 0x59, 0x22, 0x51, 0x5a, 0x79, 0xfe, 0xd3, 0x7c, 0xbc, 0xc4, 0x68, 0xac, 0x32, 0x77, 0x61, 0x89, 0xd0, 0xbb, 0xbd, 0xaa, 0x8d, 0xeb, 0xd4, 0x2, 0xe8, 0xd6, 0x45, 0x50, 0xf6}, gcBBtxid)
+			gcBABgroup = crypto.HashObj(transactions.TxGroup{
 				TxGroupHashes: []crypto.Digest{
-					crypto.Digest(withoutGroupID(txns[grandchildBAIndex]).InnerID(cBtxid, 0)),
-					crypto.Digest(withoutGroupID(txns[grandchildBBIndex]).InnerID(cBtxid, 1)),
+					crypto.Digest(withoutGroupID(actual[grandchildBAIndex].txn).InnerID(childBtxid, 0)),
+					crypto.Digest(withoutGroupID(actual[grandchildBBIndex].txn).InnerID(childBtxid, 1)),
 				},
 			})
+			require.Equal(t, crypto.Digest{0x48, 0x7c, 0x9, 0x76, 0xbc, 0x43, 0x65, 0x7a, 0x1d, 0xdc, 0xfb, 0x68, 0x47, 0x12, 0x8b, 0x80, 0xd2, 0xdd, 0xff, 0x22, 0x1b, 0xe1, 0x89, 0xcc, 0xb5, 0xb3, 0x94, 0xa4, 0x49, 0x63, 0xd8, 0x10}, gcBABgroup)
 
-			gcBCtxid = txns[grandchildBCIndex].InnerID(cBtxid, 2)
-			gcBDtxid = txns[grandchildBDIndex].InnerID(cBtxid, 3)
-			gcBCDgroupid = crypto.HashObj(transactions.TxGroup{
+			gcBCtxid = actual[grandchildBCIndex].txn.InnerID(childBtxid, 2)
+			require.Equal(t, transactions.Txid{0x77, 0x48, 0x58, 0x4d, 0x94, 0x14, 0x7a, 0xf3, 0x75, 0x7f, 0x1e, 0x4d, 0xd5, 0x8, 0x21, 0x55, 0x47, 0x69, 0x67, 0x59, 0xd2, 0x48, 0xe6, 0x92, 0x1b, 0xf5, 0xae, 0x1, 0x10, 0xbe, 0x29, 0x5a}, gcBCtxid)
+			gcBDtxid = actual[grandchildBDIndex].txn.InnerID(childBtxid, 3)
+			require.Equal(t, transactions.Txid{0xcd, 0x15, 0x47, 0x3f, 0x42, 0xf5, 0x9c, 0x4a, 0x11, 0xa4, 0xe3, 0x92, 0x30, 0xf, 0x97, 0x1d, 0x3b, 0x1, 0x7, 0xbc, 0x1f, 0x3f, 0xcc, 0x9d, 0x43, 0x5b, 0xb2, 0xa4, 0x15, 0x8b, 0x89, 0x4e}, gcBDtxid)
+			gcBCDgroup = crypto.HashObj(transactions.TxGroup{
 				TxGroupHashes: []crypto.Digest{
-					crypto.Digest(withoutGroupID(txns[grandchildBCIndex]).InnerID(cBtxid, 2)),
-					crypto.Digest(withoutGroupID(txns[grandchildBDIndex]).InnerID(cBtxid, 3)),
+					crypto.Digest(withoutGroupID(actual[grandchildBCIndex].txn).InnerID(childBtxid, 2)),
+					crypto.Digest(withoutGroupID(actual[grandchildBDIndex].txn).InnerID(childBtxid, 3)),
 				},
 			})
+			require.Equal(t, crypto.Digest{0x96, 0x90, 0x1, 0x64, 0x24, 0xa5, 0xda, 0x4, 0x3d, 0xd, 0x40, 0xc9, 0xf6, 0xfa, 0xc3, 0xa6, 0x26, 0x19, 0xd3, 0xf0, 0xb7, 0x28, 0x87, 0xf8, 0x5a, 0xd1, 0xa7, 0xbc, 0x1d, 0xad, 0x8b, 0xfc}, gcBCDgroup)
 		} else {
 			require.Fail(t, "Not yet implemented")
 		}
 
-		require.Equal(t, gcAAtxid, actualTxIDs[grandchildAAIndex])
-		require.Equal(t, gcAABgroupid, actualGroupIDs[grandchildAAIndex])
-		require.Equal(t, gcAABgroupid, txns[grandchildAAIndex].Group)
+		expected[grandchildAAIndex] = expectedInfo{
+			expectedTxID:  gcAAtxid,
+			expectedGroup: gcAABgroup,
+		}
+		expected[grandchildABIndex] = expectedInfo{
+			expectedTxID:  gcABtxid,
+			expectedGroup: gcAABgroup,
+		}
+		expected[grandchildACIndex] = expectedInfo{
+			expectedTxID:  gcACtxid,
+			expectedGroup: gcACDgroup,
+		}
+		expected[grandchildADIndex] = expectedInfo{
+			expectedTxID:  gcADtxid,
+			expectedGroup: gcACDgroup,
+		}
+		expected[grandchildBAIndex] = expectedInfo{
+			expectedTxID:  gcBAtxid,
+			expectedGroup: gcBABgroup,
+		}
+		expected[grandchildBBIndex] = expectedInfo{
+			expectedTxID:  gcBBtxid,
+			expectedGroup: gcBABgroup,
+		}
+		expected[grandchildBCIndex] = expectedInfo{
+			expectedTxID:  gcBCtxid,
+			expectedGroup: gcBCDgroup,
+		}
+		expected[grandchildBDIndex] = expectedInfo{
+			expectedTxID:  gcBDtxid,
+			expectedGroup: gcBCDgroup,
+		}
 
-		require.Equal(t, gcABtxid, actualTxIDs[grandchildABIndex])
-		require.Equal(t, gcAABgroupid, actualGroupIDs[grandchildABIndex])
-		require.Equal(t, gcAABgroupid, txns[grandchildABIndex].Group)
-
-		require.Equal(t, gcACtxid, actualTxIDs[grandchildACIndex])
-		require.Equal(t, gcACDgroupid, actualGroupIDs[grandchildACIndex])
-		require.Equal(t, gcACDgroupid, txns[grandchildACIndex].Group)
-
-		require.Equal(t, gcADtxid, actualTxIDs[grandchildADIndex])
-		require.Equal(t, gcACDgroupid, actualGroupIDs[grandchildADIndex])
-		require.Equal(t, gcACDgroupid, txns[grandchildADIndex].Group)
-
-		require.Equal(t, gcBAtxid, actualTxIDs[grandchildBAIndex])
-		require.Equal(t, gcBABgroupid, actualGroupIDs[grandchildBAIndex])
-		require.Equal(t, gcBABgroupid, txns[grandchildBAIndex].Group)
-
-		require.Equal(t, gcBBtxid, actualTxIDs[grandchildBBIndex])
-		require.Equal(t, gcBABgroupid, actualGroupIDs[grandchildBBIndex])
-		require.Equal(t, gcBABgroupid, txns[grandchildBBIndex].Group)
-
-		require.Equal(t, gcBCtxid, actualTxIDs[grandchildBCIndex])
-		require.Equal(t, gcBCDgroupid, actualGroupIDs[grandchildBCIndex])
-		require.Equal(t, gcBCDgroupid, txns[grandchildBCIndex].Group)
-
-		require.Equal(t, gcBDtxid, actualTxIDs[grandchildBDIndex])
-		require.Equal(t, gcBCDgroupid, actualGroupIDs[grandchildBDIndex])
-		require.Equal(t, gcBCDgroupid, txns[grandchildBDIndex].Group)
+		for i := range actual {
+			require.Equal(t, expected[i].expectedTxID[:], actual[i].claimedTxID)
+			require.Equal(t, expected[i].expectedGroup[:], actual[i].claimedGroup)
+			require.Equal(t, expected[i].expectedGroup, actual[i].txn.Group)
+		}
 	}
 
 	parentAppID := basics.AppIndex(888)
@@ -1696,49 +1714,65 @@ int 1
 			require.Len(t, gcBD.EvalDelta.Logs, 2)
 			require.Len(t, gcBD.EvalDelta.InnerTxns, 0)
 
-			allTxns := [...]transactions.Transaction{
-				*parentTx,
-				childA.Txn,
-				childB.Txn,
-				gcAA.Txn,
-				gcAB.Txn,
-				gcAC.Txn,
-				gcAD.Txn,
-				gcBA.Txn,
-				gcBB.Txn,
-				gcBC.Txn,
-				gcBD.Txn,
+			toVerify := [...]actualInfo{
+				{
+					txn:          *parentTx,
+					claimedTxID:  []byte(parentEd.Logs[0]),
+					claimedGroup: []byte(parentEd.Logs[1]),
+				},
+				{
+					txn:          childA.Txn,
+					claimedTxID:  []byte(childA.EvalDelta.Logs[0]),
+					claimedGroup: []byte(childA.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          childB.Txn,
+					claimedTxID:  []byte(childB.EvalDelta.Logs[0]),
+					claimedGroup: []byte(childB.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcAA.Txn,
+					claimedTxID:  []byte(gcAA.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcAA.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcAB.Txn,
+					claimedTxID:  []byte(gcAB.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcAB.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcAC.Txn,
+					claimedTxID:  []byte(gcAC.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcAC.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcAD.Txn,
+					claimedTxID:  []byte(gcAD.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcAD.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcBA.Txn,
+					claimedTxID:  []byte(gcBA.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcBA.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcBB.Txn,
+					claimedTxID:  []byte(gcBB.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcBB.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcBC.Txn,
+					claimedTxID:  []byte(gcBC.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcBC.EvalDelta.Logs[1]),
+				},
+				{
+					txn:          gcBD.Txn,
+					claimedTxID:  []byte(gcBD.EvalDelta.Logs[0]),
+					claimedGroup: []byte(gcBD.EvalDelta.Logs[1]),
+				},
 			}
 
-			allTxIDs := [...]transactions.Txid{
-				stringToTxid(t, parentEd.Logs[0]),
-				stringToTxid(t, childA.EvalDelta.Logs[0]),
-				stringToTxid(t, childB.EvalDelta.Logs[0]),
-				stringToTxid(t, gcAA.EvalDelta.Logs[0]),
-				stringToTxid(t, gcAB.EvalDelta.Logs[0]),
-				stringToTxid(t, gcAC.EvalDelta.Logs[0]),
-				stringToTxid(t, gcAD.EvalDelta.Logs[0]),
-				stringToTxid(t, gcBA.EvalDelta.Logs[0]),
-				stringToTxid(t, gcBB.EvalDelta.Logs[0]),
-				stringToTxid(t, gcBC.EvalDelta.Logs[0]),
-				stringToTxid(t, gcBD.EvalDelta.Logs[0]),
-			}
-
-			allGroupIDs := [...]crypto.Digest{
-				stringToDigest(t, parentEd.Logs[1]),
-				stringToDigest(t, childA.EvalDelta.Logs[1]),
-				stringToDigest(t, childB.EvalDelta.Logs[1]),
-				stringToDigest(t, gcAA.EvalDelta.Logs[1]),
-				stringToDigest(t, gcAB.EvalDelta.Logs[1]),
-				stringToDigest(t, gcAC.EvalDelta.Logs[1]),
-				stringToDigest(t, gcAD.EvalDelta.Logs[1]),
-				stringToDigest(t, gcBA.EvalDelta.Logs[1]),
-				stringToDigest(t, gcBB.EvalDelta.Logs[1]),
-				stringToDigest(t, gcBC.EvalDelta.Logs[1]),
-				stringToDigest(t, gcBD.EvalDelta.Logs[1]),
-			}
-
-			verifyTxIDs(t, newMethod, allTxns, allTxIDs, allGroupIDs)
+			verifyTxIDs(t, newMethod, toVerify)
 		})
 	}
 }
