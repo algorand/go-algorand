@@ -1463,7 +1463,7 @@ func TestTxIDCalculation(t *testing.T) {
 
 	// verifyTxIDs takes the linear ordering of transactions and their claimed TxIDs and GroupIDs in
 	// the txnInfo array and verifies that the claimed IDs are correct
-	verifyTxIDs := func(t *testing.T, newMethod bool, actual [11]actualInfo) {
+	verifyTxIDs := func(t *testing.T, unified bool, actual [11]actualInfo) {
 		parentIndex := 0
 		childAIndex := 1
 		childBIndex := 2
@@ -1492,7 +1492,7 @@ func TestTxIDCalculation(t *testing.T) {
 		var gcAAtxid, gcABtxid, gcACtxid, gcADtxid, gcBAtxid, gcBBtxid, gcBCtxid, gcBDtxid transactions.Txid
 		var gcAABgroup, gcACDgroup, gcBABgroup, gcBCDgroup crypto.Digest
 
-		if newMethod {
+		if unified {
 			gcAAtxid = actual[grandchildAAIndex].txn.InnerID(childAtxid, 0)
 			require.Equal(t, transactions.Txid{0x6a, 0xef, 0x5f, 0x69, 0x2b, 0xce, 0xfc, 0x5b, 0x43, 0xa, 0x23, 0x79, 0x52, 0x49, 0xc7, 0x40, 0x66, 0x29, 0xf0, 0xbe, 0x4, 0x48, 0xe4, 0x55, 0x48, 0x8, 0x53, 0xdc, 0xb, 0x8c, 0x22, 0x48}, gcAAtxid)
 			gcABtxid = actual[grandchildABIndex].txn.InnerID(childAtxid, 1)
@@ -1692,10 +1692,10 @@ itxn_submit
 int 1
 `
 
-	for _, newMethod := range []bool{true, false} {
-		t.Run(fmt.Sprintf("newMethod=%t", newMethod), func(t *testing.T) {
+	for _, unified := range []bool{true, false} {
+		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			ep, parentTx, ledger := MakeSampleEnv()
-			ep.Proto.NewInnerTxnIDs = newMethod
+			ep.Proto.UnifyInnerTxIds = unified
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -1820,7 +1820,7 @@ int 1
 				},
 			}
 
-			verifyTxIDs(t, newMethod, toVerify)
+			verifyTxIDs(t, unified, toVerify)
 		})
 	}
 }

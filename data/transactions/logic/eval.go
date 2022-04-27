@@ -2194,7 +2194,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 
 // currentTxID is a convenience method to get the Txid for the txn being evaluated
 func (cx *EvalContext) currentTxID() transactions.Txid {
-	if cx.Proto.NewInnerTxnIDs {
+	if cx.Proto.UnifyInnerTxIds {
 		// can't just return cx.txn.ID() because I might be an inner txn
 		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
 	}
@@ -2209,8 +2209,6 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
 		return txn.ID()
 	}
-
-	// TODO use cx.Proto.NewInnerTxnIDs to determine when the old way should be used
 
 	if inner {
 		// Initialize innerTxidCache if necessary
@@ -4597,7 +4595,7 @@ func opItxnSubmit(cx *EvalContext) error {
 
 		if isGroup {
 			innerOffset := len(cx.txn.EvalDelta.InnerTxns)
-			if cx.Proto.NewInnerTxnIDs {
+			if cx.Proto.UnifyInnerTxIds {
 				innerOffset += itx
 			}
 			group.TxGroupHashes = append(group.TxGroupHashes,

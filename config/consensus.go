@@ -430,8 +430,8 @@ type ConsensusParams struct {
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
 
-	// NewInnerTxnIDs (temp name) enables the new way of computing inner transaction IDs
-	NewInnerTxnIDs bool
+	// UnifyInnerTxIds enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIds bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1137,7 +1137,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 
-	vFuture.NewInnerTxnIDs = true
+	vFuture.UnifyInnerTxIds = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
