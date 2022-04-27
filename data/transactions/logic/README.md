@@ -421,7 +421,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 0 | Sender | []byte |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 | v7  | Timestamp of block before FirstValid |
+| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | []byte |      | 32 byte lease value |

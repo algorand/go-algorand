@@ -4630,11 +4630,11 @@ func (rm rawMessage) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 func opVrfVerify(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // data
+	last := len(cx.stack) - 1 // PK
 	prev := last - 1          // proof
-	pprev := prev - 1         // pubkey
+	pprev := prev - 1         // data
 
-	data := rawMessage(cx.stack[last].Bytes)
+	data := rawMessage(cx.stack[pprev].Bytes)
 	proofbytes := cx.stack[prev].Bytes
 	var proof crypto.VrfProof
 	if len(proofbytes) != len(proof) {
@@ -4642,7 +4642,7 @@ func opVrfVerify(cx *EvalContext) error {
 	}
 	copy(proof[:], proofbytes[:])
 
-	pubkeybytes := cx.stack[pprev].Bytes
+	pubkeybytes := cx.stack[last].Bytes
 	var pubkey crypto.VrfPubkey
 	if len(pubkeybytes) != len(pubkey) {
 		return fmt.Errorf("vrf pubkey wrong size %d != %d", len(pubkeybytes), len(pubkey))

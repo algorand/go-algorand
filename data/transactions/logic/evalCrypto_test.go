@@ -103,7 +103,7 @@ assert
 byte 0x%s
 ==
 `
-	return fmt.Sprintf(source, pubkey, proof, data, output)
+	return fmt.Sprintf(source, data, proof, pubkey, output)
 }
 
 func TestVrfVerify(t *testing.T) {
@@ -115,10 +115,10 @@ func TestVrfVerify(t *testing.T) {
 	// 80 byte proof
 	testLogic(t, "byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf pubkey wrong size")
 	// 32 byte pubkey
-	testLogic(t, "int 32; bzero; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "stack len is 2")
+	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand", LogicVersion, ep, "stack len is 2")
 
 	// working app, but the verify itself fails
-	testLogic(t, "int 32; bzero; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand; !; assert; int 64; bzero; ==", LogicVersion, ep)
+	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand; !; assert; int 64; bzero; ==", LogicVersion, ep)
 
 	source := testVrfApp(
 		"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",                                                                                                 //pubkey
