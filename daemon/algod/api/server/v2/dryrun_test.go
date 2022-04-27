@@ -1654,6 +1654,7 @@ func checkEvalDelta(t *testing.T,
 			for i, vd := range *rt.GlobalDelta {
 				assert.Equal(t, (*expectedGlobalDelta)[i].Key, vd.Key)
 
+				// Pointer checks: make sure we don't try to derefence a nil.
 				if vd.Value.Bytes != nil && (*expectedGlobalDelta)[i].Value.Bytes != nil {
 					assert.Equal(t, *(*expectedGlobalDelta)[i].Value.Bytes, *vd.Value.Bytes)
 				} else {
@@ -1666,6 +1667,9 @@ func checkEvalDelta(t *testing.T,
 					assert.Equal(t, (*expectedGlobalDelta)[i].Value.Uint, vd.Value.Uint)
 				}
 			}
+		} else {
+			assert.Equal(t, expectedGlobalDelta, nil)
+			assert.Equal(t, len(*expectedGlobalDelta), 0)
 		}
 	}
 }

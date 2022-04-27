@@ -478,24 +478,24 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err, Details: details}
 	}
 
-	// Before Contract to Contract calls, use BuildEvalDelta because it has
-	// hairy code to maintain compatibility over some buggy old versions
-	// that created EvalDeltas differently.  But after introducing c2c, it's
-	// "too late" to build the EvalDelta here, since the ledger includes
-	// changes from this app and any inner called apps. Instead, we now keep
-	// the EvalDelta built as we go, in app evaluation.  So just use it.
-	if cb.proto.LogicSigVersion < 6 {
-		evalDelta, err = calf.BuildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
-		if err != nil {
-			return false, transactions.EvalDelta{}, err
-		}
-		evalDelta.Logs = params.TxnGroup[gi].EvalDelta.Logs
-		evalDelta.InnerTxns = params.TxnGroup[gi].EvalDelta.InnerTxns
-	} else {
-		evalDelta = params.TxnGroup[gi].EvalDelta
-	}
-	// If program passed, commit the evaldelta and state changes to parent.
+	// If program passed, build our eval delta, and commit to state changes
 	if pass {
+		// Before Contract to Contract calls, use BuildEvalDelta because it has
+		// hairy code to maintain compatibility over some buggy old versions
+		// that created EvalDeltas differently.  But after introducing c2c, it's
+		// "too late" to build the EvalDelta here, since the ledger includes
+		// changes from this app and any inner called apps. Instead, we now keep
+		// the EvalDelta built as we go, in app evaluation.  So just use it.
+		if cb.proto.LogicSigVersion < 6 {
+			evalDelta, err = calf.BuildEvalDelta(aidx, &params.TxnGroup[gi].Txn)
+			if err != nil {
+				return false, transactions.EvalDelta{}, err
+			}
+			evalDelta.Logs = params.TxnGroup[gi].EvalDelta.Logs
+			evalDelta.InnerTxns = params.TxnGroup[gi].EvalDelta.InnerTxns
+		} else {
+			evalDelta = params.TxnGroup[gi].EvalDelta
+		}
 		calf.commitToParent()
 	}
 
