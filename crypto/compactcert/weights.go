@@ -29,7 +29,7 @@ var (
 	ErrTooManyReveals                   = errors.New("too many reveals in cert")
 	ErrZeroSignedWeight                 = errors.New("signed weight cannot be zero")
 	ErrIllegalInputForLnApprox          = errors.New("cannot calculate a ln integer value for 0")
-	ErrInsufficientSingedWeight         = errors.New("the number of reveals is not large enough to prove that the desired weight signed")
+	ErrInsufficientSingedWeight         = errors.New("the number of reveals is not large enough to prove that the desired weight signed, with the desired security level")
 	ErrNegativeNumOfRevealsEquation     = errors.New("cert creation failed: weights will not be able to satisfy the verification equation")
 )
 
@@ -104,14 +104,18 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 }
 
 // numReveals computes the number of reveals necessary to achieve the desired
-// security parameters. we use value which satisfies the following equation:
+// security target. We search for small integer that will satisfy the verification
+// inequality checked by the verifyWeights function.
+// In order to make sure the number will satisfy the verifier we will use the following inequality
 //
 // numReveals > = ((strengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
 // where signedWeight/(2^d) >=1 for some integer d>=0, p = P/(2^b) >= ln(provenWeight), t = T/(2^b) >= ln(2) >= (T-1)/(2^b)
 // for some integers P,T >= 0 and b=16.
 //
-// T and b are defined in the code as the constants ln2IntApproximation and precisionBits respectively.
-// P is set to lnProvenWeight argument
+// T and b are defined in the code as the constants ln2IntApproximation and precisionBits respectively,
+// and P is set to lnProvenWeight argument.
+//
+//
 // more details can be found on the Algorand's spec
 func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint64) (uint64, error) {
 	// in order to make the code more readable and reusable we will define the following expressions:
@@ -139,6 +143,9 @@ func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint6
 		return 0, ErrNegativeNumOfRevealsEquation
 	}
 
+	// numberReveals = (numerator / denom) + 1
+	// by adding 1 we guarantee that the return value satisfy the inequality and therefore
+	// will satisfy the verifier.
 	res := numerator.Div(numerator, denom).Uint64() + 1
 	if res > MaxReveals {
 		return 0, ErrTooManyReveals
