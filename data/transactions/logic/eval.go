@@ -40,7 +40,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -201,7 +201,7 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	LatestTimestamp() int64
-	BlockSeed(basics.Round) (committee.Seed, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -4677,17 +4677,19 @@ func opBlock(cx *EvalContext) error {
 		return fmt.Errorf("invalid block field %s", f)
 	}
 
+	hdr, err := cx.Ledger.BlockHdr(round)
+	if err != nil {
+		return err
+	}
+
 	switch fs.field {
 	case BlkSeed:
-		seed, err := cx.Ledger.BlockSeed(round)
-		if err != nil {
-			return err
-		}
-		cx.stack[last].Bytes = seed[:]
+		cx.stack[last].Bytes = hdr.Seed[:]
 		return nil
 	case BlkTimestamp:
 		cx.stack[last].Bytes = nil
-		cx.stack[last].Uint = 1
+		// TODO: Should an error be return if hdr.Timestamp is negative?  Why is it an int?
+		cx.stack[last].Uint = uint64(hdr.TimeStamp)
 		return nil
 	default:
 		return fmt.Errorf("invalid block field %d", fs.field)

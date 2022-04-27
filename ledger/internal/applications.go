@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
@@ -51,7 +50,7 @@ type cowForLogicLedger interface {
 	txnCounter() uint64
 	incTxnCount()
 
-	// Probably not correct to expose this. After 320 round work, rework BlockSeed to use TxTail
+	// Not correct to expose this. After 320 round work, rework to use TxTail
 	blockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
@@ -158,12 +157,8 @@ func (al *logicLedger) LatestTimestamp() int64 {
 	return al.cow.prevTimestamp()
 }
 
-func (al *logicLedger) BlockSeed(round basics.Round) (committee.Seed, error) {
-	hdr, err := al.cow.blockHdr(round)
-	if err != nil {
-		return committee.Seed{}, err
-	}
-	return hdr.Seed, nil
+func (al *logicLedger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return al.cow.blockHdr(round)
 }
 
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {

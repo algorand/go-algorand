@@ -23,6 +23,7 @@ import (
 	"math/rand"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -199,8 +200,9 @@ func (l *Ledger) LatestTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
-// BlockSeed returns the block seed for the given round, if it is available
-func (l *Ledger) BlockSeed(round basics.Round) (committee.Seed, error) {
+// BlockHdr returns the block header for the given round, if it is available
+func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+	hdr := bookkeeping.BlockHeader{}
 	// Return a fake seed that is different for each round
 	seed := committee.Seed{}
 	seed[0] = byte(round)
@@ -211,7 +213,8 @@ func (l *Ledger) BlockSeed(round basics.Round) (committee.Seed, error) {
 	seed[5] = byte(round >> 40)
 	seed[6] = byte(round >> 48)
 	seed[7] = byte(round >> 56)
-	return seed, nil
+	hdr.Seed = seed
+	return hdr, nil
 	// perhaps should add an error when requesting old round for better testing
 }
 
