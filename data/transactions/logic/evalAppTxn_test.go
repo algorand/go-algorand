@@ -2167,7 +2167,7 @@ func TestInnerTxIDCaching(t *testing.T) {
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			// does `gtxn 0 TxID` fill the cache for `gitxn 0 TxID`?
+			// does `gitxn 0 TxID` hit the cache for `gtxn 0 TxID`?
 			TestApp(t, `
 gtxn 0 TxID
 txn TxID
@@ -2190,7 +2190,7 @@ btoi
 ==
 `, ep)
 
-			// does `gitxn 0 TxID` fill the cache for `gtxn 0 TxID`?
+			// does `gtxn 0 TxID` hit the cache for `gitxn 0 TxID`?
 			TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
@@ -2208,7 +2208,7 @@ btoi
 ==
 `, ep)
 
-			// does the cahe for `gitxn 0 TxID` reset after another inner executes?
+			// does the cache for `gitxn 0 TxID` reset after another inner executes?
 			TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
