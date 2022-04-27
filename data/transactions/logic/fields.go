@@ -69,7 +69,7 @@ const (
 	Fee
 	// FirstValid Transaction.FirstValid
 	FirstValid
-	// FirstValidTime panic
+	// FirstValidTime timestamp of block(FirstValid-1)
 	FirstValidTime
 	// LastValid Transaction.LastValid
 	LastValid
@@ -258,7 +258,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{Sender, StackBytes, false, 0, 5, false, "32 byte address"},
 	{Fee, StackUint64, false, 0, 5, false, "microalgos"},
 	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
-	{FirstValidTime, StackUint64, false, 0, 0, false, "Causes program to fail; reserved for future use"},
+	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
 	{LastValid, StackUint64, false, 0, 0, false, "round number"},
 	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
 	{Lease, StackBytes, false, 0, 0, false, "32 byte lease value"},

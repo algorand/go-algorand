@@ -2237,6 +2237,15 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Uint = txn.Fee.Raw
 	case FirstValid:
 		sv.Uint = uint64(txn.FirstValid)
+	case FirstValidTime:
+		hdr, err := cx.Ledger.BlockHdr(txn.FirstValid - 1)
+		if err != nil {
+			return sv, err
+		}
+		if hdr.TimeStamp < 0 {
+			return sv, fmt.Errorf("block(%d) timestamp %d < 0", txn.FirstValid-1, hdr.TimeStamp)
+		}
+		sv.Uint = uint64(hdr.TimeStamp)
 	case LastValid:
 		sv.Uint = uint64(txn.LastValid)
 	case Note:
@@ -4688,7 +4697,9 @@ func opBlock(cx *EvalContext) error {
 		return nil
 	case BlkTimestamp:
 		cx.stack[last].Bytes = nil
-		// TODO: Should an error be return if hdr.Timestamp is negative?  Why is it an int?
+		if hdr.TimeStamp < 0 {
+			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
+		}
 		cx.stack[last].Uint = uint64(hdr.TimeStamp)
 		return nil
 	default:
