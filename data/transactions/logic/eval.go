@@ -4596,7 +4596,10 @@ func opItxnSubmit(cx *EvalContext) error {
 		}
 
 		if isGroup {
-			innerOffset := len(cx.txn.EvalDelta.InnerTxns) + itx
+			innerOffset := len(cx.txn.EvalDelta.InnerTxns)
+			if cx.Proto.NewInnerTxnIDs {
+				innerOffset += itx
+			}
 			group.TxGroupHashes = append(group.TxGroupHashes,
 				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
 		}
