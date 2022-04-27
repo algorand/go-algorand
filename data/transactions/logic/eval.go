@@ -2244,7 +2244,6 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 			parentTxid := cx.caller.currentTxID()
 			// We're referencing a peer txn, not an inner, but I am an inner
 			innerIndex := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
-			// TODO: confirm if cx.caller.txn.EvalDelta.InnerTxns contains the "pending" group yet or not?
 			txid = txn.InnerID(parentTxid, innerIndex)
 		} else {
 			// We're referencing a peer txn and I am not an inner
@@ -4597,7 +4596,7 @@ func opItxnSubmit(cx *EvalContext) error {
 		}
 
 		if isGroup {
-			innerOffset := len(cx.txn.EvalDelta.InnerTxns)
+			innerOffset := len(cx.txn.EvalDelta.InnerTxns) + itx
 			group.TxGroupHashes = append(group.TxGroupHashes,
 				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
 		}
