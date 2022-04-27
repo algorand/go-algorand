@@ -1137,7 +1137,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 
-	vFuture.UnifyInnerTxIds = true
+	vFuture.UnifyInnerTxIDs = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
