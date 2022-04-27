@@ -152,7 +152,7 @@ type (
 		FeeSink basics.Address `codec:"fees"`
 
 		// The RewardsPool accepts periodic injections from the
-		// FeeSink and continually redistributes them to adresses as
+		// FeeSink and continually redistributes them to addresses as
 		// rewards.
 		RewardsPool basics.Address `codec:"rwd"`
 

@@ -43,9 +43,9 @@ ${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNTD
 ASSET_ID=$(${gcmd} asset create --creator ${ACCOUNT} --name cdcoin --unitname cdc --total 1337 | grep "Created" | awk '{ sub("\r", "", $NF); print $NF }')
 
 # Asset - optin / optout / optin / optout
-${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB
+${gcmd} asset optin --assetid $ASSET_ID -a $ACCOUNTB
 ${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB -c $ACCOUNT
-${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB
+${gcmd} asset optin --assetid $ASSET_ID -a $ACCOUNTB
 ${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB -c $ACCOUNT
 
 # Destroy the ASA
@@ -57,9 +57,9 @@ ${gcmd} asset destroy --manager ${ACCOUNT} --assetid ${ASSET_ID}
 ASSET_ID=$(${gcmd} asset create --creator ${ACCOUNT} --name cdcoin --unitname cdc --total 1337 | grep "Created" | awk '{ sub("\r", "", $NF); print $NF }')
 
 # Asset - optin / optout / optin
-${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB
+${gcmd} asset optin --assetid $ASSET_ID -a $ACCOUNTB
 ${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB -c $ACCOUNT
-${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB
+${gcmd} asset optin --assetid $ASSET_ID -a $ACCOUNTB
 
 ######################################
 # Create an application, then delete #

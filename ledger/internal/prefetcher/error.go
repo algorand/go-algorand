@@ -14,23 +14,30 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package prefetcher
 
 import (
-	"testing"
+	"fmt"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
-func TestVLQ(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
+// GroupTaskError indicates the group index of the unfulfilled resource
+type GroupTaskError struct {
+	err            error
+	GroupIdx       int64
+	Address        *basics.Address
+	CreatableIndex basics.CreatableIndex
+	CreatableType  basics.CreatableType
+}
 
-	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))
-	a.Equal("AACA", MakeSourceMapLine(0, 0, 1, 0))
-	a.Equal("AAEA", MakeSourceMapLine(0, 0, 2, 0))
-	a.Equal("AAgBA", MakeSourceMapLine(0, 0, 16, 0))
-	a.Equal("AAggBA", MakeSourceMapLine(0, 0, 512, 0))
-	a.Equal("ADggBD", MakeSourceMapLine(0, -1, 512, -1))
+// Error satisfies builtin interface `error`
+func (err *GroupTaskError) Error() string {
+	return fmt.Sprintf("prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %v",
+		err.GroupIdx, err.Address, err.CreatableIndex, err.CreatableType, err.err)
+}
+
+// Unwrap provides access to the underlying error
+func (err *GroupTaskError) Unwrap() error {
+	return err.err
 }
