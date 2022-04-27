@@ -1419,8 +1419,9 @@ itxn Logs 0
 `, ep)
 }
 
-// TestTxIDCalculation tests that the TxIDs reported for top-level and inner transactions are correct
-func TestTxIDCalculation(t *testing.T) {
+// TestTxIDAndGroupIDCalculation tests that the TxIDs reported with `txn TxID` and group IDs
+// reported with `global GroupID` are correct for top-level and inner transactions
+func TestTxIDAndGroupIDCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	withoutGroupID := func(txn transactions.Transaction) transactions.Transaction {
@@ -1821,6 +1822,412 @@ int 1
 			}
 
 			verifyTxIDs(t, unified, toVerify)
+		})
+	}
+}
+
+// TestInnerTxIDCalculation tests that the TxIDs reported with `itxn TxID` and `gitxn X TxID` are
+// correct for inner transactions
+func TestInnerTxIDCalculation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type actualInfo struct {
+		txn         transactions.Transaction
+		claimedTxID []byte
+	}
+
+	// this test performs a 3-level fanout of transactions:
+	//
+	// Parent
+	// ├─ Child A
+	// │  ├── atomic group
+	// │  ├─ Grandchild A-A
+	// │  ├─ Grandchild A-B
+	// │  ├── atomic group
+	// │  ├─ Grandchild A-C
+	// │  ├─ Grandchild A-D
+	// ├─ Child B
+	// │  ├── atomic group
+	// │  ├─ Grandchild B-A
+	// │  ├─ Grandchild B-B
+	// │  ├── atomic group
+	// │  ├─ Grandchild B-C
+	// │  ├─ Grandchild B-D
+	//
+	// When linearized, we use the following breadth-first search ordering:
+	// Parent, Child A, Child B, Grandchild A-A, Grandchild A-B, Grandchild A-C, Grandchild A-D,
+	//   Grandchild B-A, Grandchild B-B, Grandchild B-C, Grandchild B-D
+
+	// verifyTxIDs takes the linear ordering of transactions and their claimed TxIDs in the txnInfo
+	// array and verifies that the claimed IDs are correct
+	verifyTxIDs := func(t *testing.T, unified bool, actual [11]actualInfo) {
+		parentIndex := 0
+		childAIndex := 1
+		childBIndex := 2
+		grandchildAAIndex := 3
+		grandchildABIndex := 4
+		grandchildACIndex := 5
+		grandchildADIndex := 6
+		grandchildBAIndex := 7
+		grandchildBBIndex := 8
+		grandchildBCIndex := 9
+		grandchildBDIndex := 10
+
+		var expected [11]transactions.Txid
+
+		parentTxID := actual[parentIndex].txn.ID()
+		// leave expected[parentIndex] as the zero value since we don't want to test it
+
+		childAtxn := actual[childAIndex].txn
+		childBtxn := actual[childBIndex].txn
+
+		var childAtxid, childBtxid, gcAAtxid, gcABtxid, gcACtxid, gcADtxid, gcBAtxid, gcBBtxid, gcBCtxid, gcBDtxid transactions.Txid
+
+		if unified {
+			childAtxid = childAtxn.InnerID(parentTxID, 0)
+			childBtxid = childBtxn.InnerID(parentTxID, 1)
+
+			gcAAtxid = actual[grandchildAAIndex].txn.InnerID(childAtxid, 0)
+			require.Equal(t, transactions.Txid{0x6a, 0xef, 0x5f, 0x69, 0x2b, 0xce, 0xfc, 0x5b, 0x43, 0xa, 0x23, 0x79, 0x52, 0x49, 0xc7, 0x40, 0x66, 0x29, 0xf0, 0xbe, 0x4, 0x48, 0xe4, 0x55, 0x48, 0x8, 0x53, 0xdc, 0xb, 0x8c, 0x22, 0x48}, gcAAtxid)
+			gcABtxid = actual[grandchildABIndex].txn.InnerID(childAtxid, 1)
+			require.Equal(t, transactions.Txid{0xd4, 0x5d, 0xf0, 0xd8, 0x24, 0x15, 0x75, 0xfc, 0xea, 0x1d, 0x5f, 0x60, 0xd4, 0x77, 0x94, 0xe4, 0xb8, 0x48, 0xbd, 0x40, 0x2d, 0xf2, 0x82, 0x8d, 0x88, 0xd5, 0xaf, 0xd0, 0xa3, 0x29, 0x63, 0xd3}, gcABtxid)
+
+			gcACtxid = actual[grandchildACIndex].txn.InnerID(childAtxid, 2)
+			require.Equal(t, transactions.Txid{0xb3, 0xb1, 0xac, 0xbe, 0x41, 0x5, 0x32, 0x9f, 0x8d, 0x22, 0x5, 0x5, 0xfe, 0x2d, 0x3, 0xb5, 0x7e, 0xcd, 0x8e, 0xbc, 0x8d, 0xf, 0x63, 0x89, 0xca, 0xa7, 0xe1, 0xdf, 0x82, 0x89, 0xd0, 0x71}, gcACtxid)
+			gcADtxid = actual[grandchildADIndex].txn.InnerID(childAtxid, 3)
+			require.Equal(t, transactions.Txid{0xc6, 0x8, 0x14, 0xd, 0x8f, 0xf0, 0xcf, 0xb1, 0xf4, 0x52, 0xb0, 0x3f, 0xd9, 0x15, 0x28, 0xba, 0x1c, 0xed, 0xb6, 0x8c, 0x62, 0x5e, 0x5e, 0x77, 0xde, 0xd, 0xdc, 0x26, 0xc7, 0x80, 0xbe, 0x82}, gcADtxid)
+
+			gcBAtxid = actual[grandchildBAIndex].txn.InnerID(childBtxid, 0)
+			require.Equal(t, transactions.Txid{0x13, 0x3c, 0x92, 0xab, 0x12, 0xee, 0x1c, 0xf0, 0x24, 0xd1, 0x76, 0x2e, 0x7a, 0x56, 0xcb, 0xef, 0x45, 0x19, 0x42, 0xce, 0xe5, 0x6f, 0xbc, 0xaa, 0xb3, 0x17, 0x5e, 0x59, 0x18, 0x64, 0x9e, 0xe4}, gcBAtxid)
+			gcBBtxid = actual[grandchildBBIndex].txn.InnerID(childBtxid, 1)
+			require.Equal(t, transactions.Txid{0x6c, 0x44, 0x79, 0x59, 0x22, 0x51, 0x5a, 0x79, 0xfe, 0xd3, 0x7c, 0xbc, 0xc4, 0x68, 0xac, 0x32, 0x77, 0x61, 0x89, 0xd0, 0xbb, 0xbd, 0xaa, 0x8d, 0xeb, 0xd4, 0x2, 0xe8, 0xd6, 0x45, 0x50, 0xf6}, gcBBtxid)
+
+			gcBCtxid = actual[grandchildBCIndex].txn.InnerID(childBtxid, 2)
+			require.Equal(t, transactions.Txid{0x77, 0x48, 0x58, 0x4d, 0x94, 0x14, 0x7a, 0xf3, 0x75, 0x7f, 0x1e, 0x4d, 0xd5, 0x8, 0x21, 0x55, 0x47, 0x69, 0x67, 0x59, 0xd2, 0x48, 0xe6, 0x92, 0x1b, 0xf5, 0xae, 0x1, 0x10, 0xbe, 0x29, 0x5a}, gcBCtxid)
+			gcBDtxid = actual[grandchildBDIndex].txn.InnerID(childBtxid, 3)
+			require.Equal(t, transactions.Txid{0xcd, 0x15, 0x47, 0x3f, 0x42, 0xf5, 0x9c, 0x4a, 0x11, 0xa4, 0xe3, 0x92, 0x30, 0xf, 0x97, 0x1d, 0x3b, 0x1, 0x7, 0xbc, 0x1f, 0x3f, 0xcc, 0x9d, 0x43, 0x5b, 0xb2, 0xa4, 0x15, 0x8b, 0x89, 0x4e}, gcBDtxid)
+		} else {
+			// these calculations are "wrong," but they're here to maintain backwards compatability with the original implementation
+
+			childAtxid = childAtxn.ID()
+			childBtxid = childBtxn.ID()
+
+			gcAAtxid = actual[grandchildAAIndex].txn.InnerID(parentTxID, 0)
+			// require.Equal(t, transactions.Txid{0xb5, 0xa, 0x16, 0x90, 0x78, 0x21, 0xf6, 0x96, 0x1b, 0x9c, 0x72, 0x5e, 0xf4, 0x8b, 0xe7, 0xb8, 0x2b, 0xd, 0x74, 0xd4, 0x71, 0xa2, 0x43, 0xb0, 0xfc, 0x19, 0xbc, 0x1c, 0xda, 0x95, 0x8f, 0xd0}, gcAAtxid)
+			gcABtxid = actual[grandchildABIndex].txn.InnerID(parentTxID, 1)
+			// require.Equal(t, transactions.Txid{0xb3, 0x9, 0x9e, 0x95, 0x79, 0xe4, 0xe4, 0x58, 0xed, 0xee, 0x1b, 0xdb, 0x21, 0x7, 0x0, 0x7b, 0x35, 0xfc, 0x19, 0xef, 0xd6, 0x61, 0xde, 0x9b, 0xf3, 0x1b, 0x4a, 0x84, 0xa, 0xa, 0x7, 0x42}, gcABtxid)
+
+			// because of caching, these are the same :(
+			gcACtxid = gcAAtxid
+			// require.Equal(t, transactions.Txid{0xf5, 0x62, 0x52, 0xc, 0xe7, 0x4b, 0x49, 0x11, 0xd9, 0x96, 0xdb, 0x7b, 0xdc, 0x43, 0xf0, 0x89, 0x82, 0x65, 0xa9, 0x40, 0xc1, 0x1b, 0x6a, 0x5, 0x50, 0xd6, 0x96, 0x29, 0x6d, 0xe8, 0x23, 0x21}, gcACtxid)
+			gcADtxid = gcABtxid
+			// require.Equal(t, transactions.Txid{0xb2, 0x0, 0x9c, 0xae, 0x29, 0x18, 0x71, 0x19, 0xa1, 0xae, 0x82, 0x4a, 0x1d, 0xb2, 0x75, 0xaa, 0xe7, 0xbc, 0x1f, 0xcd, 0xd3, 0x9e, 0x48, 0xbb, 0x57, 0xc7, 0xbc, 0xf3, 0xab, 0xba, 0xf8, 0x3e}, gcADtxid)
+
+			gcBAtxid = actual[grandchildBAIndex].txn.InnerID(parentTxID, 1)
+			// require.Equal(t, transactions.Txid{0xb5, 0xa, 0x16, 0x90, 0x78, 0x21, 0xf6, 0x96, 0x1b, 0x9c, 0x72, 0x5e, 0xf4, 0x8b, 0xe7, 0xb8, 0x2b, 0xd, 0x74, 0xd4, 0x71, 0xa2, 0x43, 0xb0, 0xfc, 0x19, 0xbc, 0x1c, 0xda, 0x95, 0x8f, 0xd0}, gcBAtxid)
+			gcBBtxid = actual[grandchildBBIndex].txn.InnerID(parentTxID, 2)
+			// require.Equal(t, transactions.Txid{0xb3, 0x9, 0x9e, 0x95, 0x79, 0xe4, 0xe4, 0x58, 0xed, 0xee, 0x1b, 0xdb, 0x21, 0x7, 0x0, 0x7b, 0x35, 0xfc, 0x19, 0xef, 0xd6, 0x61, 0xde, 0x9b, 0xf3, 0x1b, 0x4a, 0x84, 0xa, 0xa, 0x7, 0x42}, gcBBtxid)
+
+			gcBCtxid = gcBAtxid
+			// require.Equal(t, transactions.Txid{0xf5, 0x62, 0x52, 0xc, 0xe7, 0x4b, 0x49, 0x11, 0xd9, 0x96, 0xdb, 0x7b, 0xdc, 0x43, 0xf0, 0x89, 0x82, 0x65, 0xa9, 0x40, 0xc1, 0x1b, 0x6a, 0x5, 0x50, 0xd6, 0x96, 0x29, 0x6d, 0xe8, 0x23, 0x21}, gcBCtxid)
+			gcBDtxid = gcBBtxid
+			// require.Equal(t, transactions.Txid{0xb2, 0x0, 0x9c, 0xae, 0x29, 0x18, 0x71, 0x19, 0xa1, 0xae, 0x82, 0x4a, 0x1d, 0xb2, 0x75, 0xaa, 0xe7, 0xbc, 0x1f, 0xcd, 0xd3, 0x9e, 0x48, 0xbb, 0x57, 0xc7, 0xbc, 0xf3, 0xab, 0xba, 0xf8, 0x3e}, gcBDtxid)
+		}
+
+		expected[childBIndex] = childBtxid
+		expected[childAIndex] = childAtxid
+		expected[grandchildAAIndex] = gcAAtxid
+		expected[grandchildABIndex] = gcABtxid
+		expected[grandchildACIndex] = gcACtxid
+		expected[grandchildADIndex] = gcADtxid
+		expected[grandchildBAIndex] = gcBAtxid
+		expected[grandchildBBIndex] = gcBBtxid
+		expected[grandchildBCIndex] = gcBCtxid
+		expected[grandchildBDIndex] = gcBDtxid
+
+		for i := range actual {
+			if i == 0 {
+				// don't test parent TxID
+				continue
+			}
+			require.Equal(t, expected[i][:], actual[i].claimedTxID, fmt.Sprintf("index=%d", i))
+		}
+	}
+
+	parentAppID := basics.AppIndex(888)
+	childAppID := basics.AppIndex(222)
+	grandchildAppID := basics.AppIndex(333)
+
+	grandchildSource := "int 1"
+	childSource := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_submit
+
+gitxn 0 TxID
+log
+gitxn 1 TxID
+log
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 333;     itxn_field ApplicationID
+itxn_submit
+
+gitxn 0 TxID
+log
+gitxn 1 TxID
+log
+
+int 1
+`
+	parentSource := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 333;     itxn_field Applications
+itxn_submit
+
+itxn TxID
+log
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+int 333;     itxn_field Applications
+itxn_submit
+
+itxn TxID
+log
+
+int 1
+`
+
+	for _, unified := range []bool{true, false} {
+		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			ep, parentTx, ledger := MakeSampleEnv()
+			ep.Proto.UnifyInnerTxIds = unified
+
+			parentTx.ApplicationID = parentAppID
+			parentTx.ForeignApps = []basics.AppIndex{
+				childAppID,
+				grandchildAppID,
+			}
+
+			grandchild := TestProg(t, grandchildSource, AssemblerMaxVersion)
+			ledger.NewApp(parentTx.Receiver, grandchildAppID, basics.AppParams{
+				ApprovalProgram: grandchild.Program,
+			})
+
+			child := TestProg(t, childSource, AssemblerMaxVersion)
+			ledger.NewApp(parentTx.Receiver, childAppID, basics.AppParams{
+				ApprovalProgram: child.Program,
+			})
+			ledger.NewAccount(childAppID.Address(), 50_000)
+
+			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
+			ledger.NewAccount(parentAppID.Address(), 50_000)
+
+			parentEd := TestApp(t, parentSource, ep)
+
+			require.Len(t, parentEd.Logs, 2)
+			require.Len(t, parentEd.InnerTxns, 2)
+
+			childA := parentEd.InnerTxns[0]
+			require.Len(t, childA.EvalDelta.Logs, 4)
+			require.Len(t, childA.EvalDelta.InnerTxns, 4)
+
+			childB := parentEd.InnerTxns[1]
+			require.Len(t, childB.EvalDelta.Logs, 4)
+			require.Len(t, childB.EvalDelta.InnerTxns, 4)
+
+			gcAA := childA.EvalDelta.InnerTxns[0]
+			require.Len(t, gcAA.EvalDelta.Logs, 0)
+			require.Len(t, gcAA.EvalDelta.InnerTxns, 0)
+
+			gcAB := childA.EvalDelta.InnerTxns[1]
+			require.Len(t, gcAB.EvalDelta.Logs, 0)
+			require.Len(t, gcAB.EvalDelta.InnerTxns, 0)
+
+			gcAC := childA.EvalDelta.InnerTxns[2]
+			require.Len(t, gcAC.EvalDelta.Logs, 0)
+			require.Len(t, gcAC.EvalDelta.InnerTxns, 0)
+
+			gcAD := childA.EvalDelta.InnerTxns[3]
+			require.Len(t, gcAD.EvalDelta.Logs, 0)
+			require.Len(t, gcAD.EvalDelta.InnerTxns, 0)
+
+			gcBA := childB.EvalDelta.InnerTxns[0]
+			require.Len(t, gcBA.EvalDelta.Logs, 0)
+			require.Len(t, gcBA.EvalDelta.InnerTxns, 0)
+
+			gcBB := childB.EvalDelta.InnerTxns[1]
+			require.Len(t, gcBB.EvalDelta.Logs, 0)
+			require.Len(t, gcBB.EvalDelta.InnerTxns, 0)
+
+			gcBC := childB.EvalDelta.InnerTxns[2]
+			require.Len(t, gcBC.EvalDelta.Logs, 0)
+			require.Len(t, gcBC.EvalDelta.InnerTxns, 0)
+
+			gcBD := childB.EvalDelta.InnerTxns[3]
+			require.Len(t, gcBD.EvalDelta.Logs, 0)
+			require.Len(t, gcBD.EvalDelta.InnerTxns, 0)
+
+			toVerify := [...]actualInfo{
+				{
+					txn: *parentTx,
+					// leave claimedTxID as the zero value since we don't want to test it
+				},
+				{
+					txn:         childA.Txn,
+					claimedTxID: []byte(parentEd.Logs[0]),
+				},
+				{
+					txn:         childB.Txn,
+					claimedTxID: []byte(parentEd.Logs[1]),
+				},
+				{
+					txn:         gcAA.Txn,
+					claimedTxID: []byte(childA.EvalDelta.Logs[0]),
+				},
+				{
+					txn:         gcAB.Txn,
+					claimedTxID: []byte(childA.EvalDelta.Logs[1]),
+				},
+				{
+					txn:         gcAC.Txn,
+					claimedTxID: []byte(childA.EvalDelta.Logs[2]),
+				},
+				{
+					txn:         gcAD.Txn,
+					claimedTxID: []byte(childA.EvalDelta.Logs[3]),
+				},
+				{
+					txn:         gcBA.Txn,
+					claimedTxID: []byte(childB.EvalDelta.Logs[0]),
+				},
+				{
+					txn:         gcBB.Txn,
+					claimedTxID: []byte(childB.EvalDelta.Logs[1]),
+				},
+				{
+					txn:         gcBC.Txn,
+					claimedTxID: []byte(childB.EvalDelta.Logs[2]),
+				},
+				{
+					txn:         gcBD.Txn,
+					claimedTxID: []byte(childB.EvalDelta.Logs[3]),
+				},
+			}
+
+			verifyTxIDs(t, unified, toVerify)
+		})
+	}
+}
+
+func TestInnerTxIDCaching(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	parentAppID := basics.AppIndex(888)
+	childAppID := basics.AppIndex(222)
+
+	for _, unified := range []bool{true, false} {
+		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			ep, parentTx, ledger := MakeSampleEnv()
+			ep.Proto.UnifyInnerTxIds = unified
+
+			shouldIDsBeEqual := byte(1)
+			if unified {
+				shouldIDsBeEqual = 0
+			}
+
+			parentTx.ApplicationID = parentAppID
+			parentTx.ForeignApps = []basics.AppIndex{childAppID}
+			parentTx.ApplicationArgs = [][]byte{{shouldIDsBeEqual}}
+
+			child := TestProg(t, "int 1", AssemblerMaxVersion)
+			ledger.NewApp(parentTx.Receiver, childAppID, basics.AppParams{
+				ApprovalProgram: child.Program,
+			})
+			ledger.NewAccount(childAppID.Address(), 50_000)
+
+			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
+			ledger.NewAccount(parentAppID.Address(), 50_000)
+
+			// does `gtxn 0 TxID` fill the cache for `gitxn 0 TxID`?
+			TestApp(t, `
+gtxn 0 TxID
+txn TxID
+==
+assert
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+
+gitxn 0 TxID
+gtxn 0 TxID
+==
+txn ApplicationArgs 0
+btoi
+==
+`, ep)
+
+			// does `gitxn 0 TxID` fill the cache for `gtxn 0 TxID`?
+			TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+
+gitxn 0 TxID
+gtxn 0 TxID
+==
+txn ApplicationArgs 0
+btoi
+==
+`, ep)
+
+			// does the cahe for `gitxn 0 TxID` reset after another inner executes?
+			TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+
+gitxn 0 TxID
+
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_next
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+
+gitxn 0 TxID
+==
+txn ApplicationArgs 0
+btoi
+==
+`, ep)
 		})
 	}
 }
