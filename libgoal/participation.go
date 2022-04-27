@@ -139,8 +139,6 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	return part, partKeyPath, err
 }
 
-
-
 // ListParticipationKeys returns the available participation keys,
 // as a response object.
 func (c *Client) ListParticipationKeys() (partKeyFiles generated.ParticipationKeysResponse, err error) {

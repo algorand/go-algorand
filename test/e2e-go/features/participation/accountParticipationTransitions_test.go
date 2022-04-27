@@ -22,7 +22,6 @@ package participation
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -34,6 +33,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
