@@ -430,8 +430,8 @@ type ConsensusParams struct {
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
 
-	// UnifyInnerTxIds enables a consistent, unified way of computing inner transaction IDs
-	UnifyInnerTxIds bool
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to

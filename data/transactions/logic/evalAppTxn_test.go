@@ -1701,7 +1701,7 @@ int 1
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			ep, parentTx, ledger := MakeSampleEnv()
-			ep.Proto.UnifyInnerTxIds = unified
+			ep.Proto.UnifyInnerTxIDs = unified
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -2019,7 +2019,7 @@ int 1
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			ep, parentTx, ledger := MakeSampleEnv()
-			ep.Proto.UnifyInnerTxIds = unified
+			ep.Proto.UnifyInnerTxIDs = unified
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -2147,7 +2147,7 @@ func TestInnerTxIDCaching(t *testing.T) {
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			ep, parentTx, ledger := MakeSampleEnv()
-			ep.Proto.UnifyInnerTxIds = unified
+			ep.Proto.UnifyInnerTxIDs = unified
 
 			shouldIDsBeEqual := byte(1)
 			if unified {

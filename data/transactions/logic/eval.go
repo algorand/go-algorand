@@ -2194,7 +2194,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 
 // currentTxID is a convenience method to get the Txid for the txn being evaluated
 func (cx *EvalContext) currentTxID() transactions.Txid {
-	if cx.Proto.UnifyInnerTxIds {
+	if cx.Proto.UnifyInnerTxIDs {
 		// can't just return cx.txn.ID() because I might be an inner txn
 		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
 	}
@@ -2203,7 +2203,7 @@ func (cx *EvalContext) currentTxID() transactions.Txid {
 	return cx.txn.ID()
 }
 
-// getTxIDNotUnified is a backwards-compatible getTxID used when the consensus param UnifyInnerTxIds
+// getTxIDNotUnified is a backwards-compatible getTxID used when the consensus param UnifyInnerTxIDs
 // is false. DO NOT call directly, and DO NOT change its behavior
 func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupIndex int) transactions.Txid {
 	if cx.EvalParams.txidCache == nil {
@@ -2231,7 +2231,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 		return txn.ID()
 	}
 
-	if !cx.Proto.UnifyInnerTxIds {
+	if !cx.Proto.UnifyInnerTxIDs {
 		// original behavior, for backwards comatability
 		return cx.getTxIDNotUnified(txn, groupIndex)
 	}
@@ -4622,7 +4622,7 @@ func opItxnSubmit(cx *EvalContext) error {
 
 		if isGroup {
 			innerOffset := len(cx.txn.EvalDelta.InnerTxns)
-			if cx.Proto.UnifyInnerTxIds {
+			if cx.Proto.UnifyInnerTxIDs {
 				innerOffset += itx
 			}
 			group.TxGroupHashes = append(group.TxGroupHashes,
