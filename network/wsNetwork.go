@@ -709,7 +709,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
 	wn.relayMessages = wn.config.NetAddress != "" || wn.config.ForceRelayMessages
-	if wn.relayMessages {
+	if wn.relayMessages || wn.config.ForceFetchTransactions {
 		wn.isParticipating = isParticipating_yes
 	}
 	// roughly estimate the number of messages that could be seen at any given moment.
@@ -1721,7 +1721,7 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
 	wn.lastNetworkAdvance = time.Now().UTC()
-	if !wn.relayMessages {
+	if !wn.relayMessages && !wn.config.ForceFetchTransactions {
 		// if we're not a relay, and not participating, we don't need txn pool
 		wasParticipating := atomic.LoadUint32(&wn.isParticipating)
 		isParticipating := wn.node.IsParticipating()
