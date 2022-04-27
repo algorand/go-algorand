@@ -1371,7 +1371,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## block f
 
-- Opcode: 0xd1
+- Opcode: 0xd1 {uint8 block field}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.
 - Availability: v7

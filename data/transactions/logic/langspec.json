@@ -2237,6 +2237,7 @@
       "Returns": ".",
       "Size": 2,
       "Doc": "field F of block A. Fail if A is not less than the current round or more than 1001 rounds before txn.LastValid.",
+      "ImmediateNote": "{uint8 block field}",
       "Groups": [
         "State Access"
       ]
