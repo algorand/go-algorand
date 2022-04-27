@@ -208,7 +208,7 @@ jobs:
   build-linux-arm32:
     tasks:
       - docker.Make.build.arm
-      # - stash.Stash.linux-arm
+      - stash.Stash.linux-arm
   package-linux-amd64:
     tasks:
       - stash.Unstash.linux-amd64
