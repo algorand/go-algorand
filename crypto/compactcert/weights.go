@@ -130,10 +130,12 @@ func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint6
 	// numReveals > = ((strengthTarget) * T * y / (x + (w - P) * y))
 	y, x, w := getSubExpressions(signedWeight)
 
+	// numerator = strengthTarget * ln2IntApproximation * y
 	numerator := bigInt(strengthTarget)
 	numerator.Mul(numerator, bigInt(ln2IntApproximation)).
 		Mul(numerator, y)
 
+	// denom =  x + (w - lnProvenWeight)  * y
 	denom := w
 	denom.Sub(denom, bigInt(lnProvenWeight)).
 		Mul(denom, y).
