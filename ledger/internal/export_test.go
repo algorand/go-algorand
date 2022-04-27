@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package logic
+package internal
 
 // Export for testing only.  See
 // https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
@@ -22,24 +22,7 @@ package logic
 // we export some extra things to make testing easier there. But we do it in a
 // _test.go file, so they are only exported during testing.
 
-func NewExpect(l int, s string) Expect {
-	return Expect{l, s}
+// In order to generate a block
+func (eval *BlockEvaluator) SetGenerate(g bool) {
+	eval.generate = g
 }
-
-func (ep *EvalParams) Reset() {
-	ep.reset()
-}
-
-var MakeSampleEnv = makeSampleEnv
-var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
-var MakeSampleTxn = makeSampleTxn
-var MakeSampleTxnGroup = makeSampleTxnGroup
-var MakeTestProto = makeTestProto
-var MakeTestProtoV = makeTestProtoV
-var NoTrack = notrack
-var TestApp = testApp
-var TestAppBytes = testAppBytes
-var TestApps = testApps
-var TestProg = testProg
-
-const CreatedResourcesVersion = createdResourcesVersion

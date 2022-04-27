@@ -212,6 +212,11 @@ func (t NetworkTemplate) Validate() error {
 	if len(t.Nodes) > 1 && countRelayNodes(t.Nodes) == 0 {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
+
+	if t.Genesis.DevMode && len(t.Nodes) != 1 {
+		return fmt.Errorf("invalid template: DevMode should only have a single node")
+	}
+
 	return nil
 }
 
