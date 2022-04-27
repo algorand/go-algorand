@@ -1419,7 +1419,8 @@ itxn Logs 0
 `, ep)
 }
 
-func TestSpecificInnerTxIDs(t *testing.T) {
+// TestTxIDCalculation tests that the TxIDs reported for top-level and inner transactions are correct
+func TestTxIDCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	withoutGroupID := func(txn transactions.Transaction) transactions.Transaction {
