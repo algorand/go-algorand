@@ -128,6 +128,11 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
 	part = newPart.Participation
 	partdb.Close()
+
+	if err != nil {
+		return part, partKeyPath, err
+	}
+
 	if install {
 		_, err = c.AddParticipationKey(partKeyPath)
 	}
