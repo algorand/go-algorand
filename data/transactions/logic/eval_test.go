@@ -99,6 +99,8 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		EnableInnerTransactionPooling: true,
 
 		SupportBecomeNonParticipatingTransactions: true,
+
+		UnifyInnerTxIDs: true,
 	}
 }
 
