@@ -70,6 +70,14 @@ func testVector(t *testing.T, skHex, pkHex, alphaHex, piHex, betaHex string) {
 	if betaTest != beta {
 		t.Errorf("VRF output does not match test vector")
 	}
+
+	ok, betaTest = pk.verifyVarTimeBytes(pi, alpha)
+	if !ok {
+		t.Errorf("verifyVarTimeBytes() fails on proof from the test vector")
+	}
+	if betaTest != beta {
+		t.Errorf("VRF output does not match test vector")
+	}
 }
 
 // ECVRF-ED25519-SHA512-Elligator2 test vectors from: https://www.ietf.org/id/draft-irtf-cfrg-vrf-03.txt appendix A.4
@@ -92,7 +100,8 @@ func TestVRFTestVectors(t *testing.T) {
 	)
 }
 
-func BenchmarkVrfVerify(b *testing.B) {
+// benchmarkGenericVrfVerify allows to benchmark both the vartime and non-vartime VRF verification function
+func benchmarkGenericVrfVerify(b *testing.B, vartime bool) {
 	pks := make([]VrfPubkey, b.N)
 	strs := make([][]byte, b.N)
 	proofs := make([]VrfProof, b.N)
@@ -113,7 +122,22 @@ func BenchmarkVrfVerify(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		_, _ = pks[i].verifyBytes(proofs[i], strs[i])
+	if vartime {
+		for i := 0; i < b.N; i++ {
+			_, _ = pks[i].verifyVarTimeBytes(proofs[i], strs[i])
+		}
+	} else {
+		for i := 0; i < b.N; i++ {
+			_, _ = pks[i].verifyBytes(proofs[i], strs[i])
+		}
 	}
+
+}
+
+func BenchmarkVrfVerify(b *testing.B) {
+	benchmarkGenericVrfVerify(b, false)
+}
+
+func BenchmarkVrfVerifyVarTime(b *testing.B) {
+	benchmarkGenericVrfVerify(b, true)
 }
