@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -374,7 +375,7 @@ func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
-func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
+func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, responseString string) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
@@ -387,10 +388,18 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 			if response.Txns[idx].AppCallMessages != nil {
 				messages := *response.Txns[idx].AppCallMessages
 				assert.GreaterOrEqual(t, len(messages), 1)
-				assert.Equal(t, "PASS", messages[len(messages)-1])
+				assert.Equal(t, responseString, messages[len(messages)-1])
 			}
 		}
 	}
+}
+
+func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
+	checkAppCallResponse(t, response, "PASS")
+}
+
+func checkAppCallReject(t *testing.T, response *generated.DryrunResponse) {
+	checkAppCallResponse(t, response, "REJECT")
 }
 
 type expectedSlotType struct {
@@ -1633,4 +1642,105 @@ int 1`)
 	if t.Failed() {
 		logResponse(t, &response)
 	}
+}
+
+func checkEvalDelta(t *testing.T,
+	response *generated.DryrunResponse,
+	expectedGlobalDelta *generated.StateDelta,
+) {
+	for _, rt := range response.Txns {
+		if rt.GlobalDelta != nil && len(*rt.GlobalDelta) > 0 {
+			assert.Equal(t, len(*expectedGlobalDelta), len(*rt.GlobalDelta))
+			for i, vd := range *rt.GlobalDelta {
+				assert.Equal(t, (*expectedGlobalDelta)[i].Key, vd.Key)
+
+				if vd.Value.Bytes != nil && (*expectedGlobalDelta)[i].Value.Bytes != nil {
+					assert.Equal(t, *(*expectedGlobalDelta)[i].Value.Bytes, *vd.Value.Bytes)
+				} else {
+					assert.Equal(t, (*expectedGlobalDelta)[i].Value.Bytes, vd.Value.Bytes)
+				}
+
+				if vd.Value.Uint != nil && (*expectedGlobalDelta)[i].Value.Uint != nil {
+					assert.Equal(t, *(*expectedGlobalDelta)[i].Value.Uint, *vd.Value.Uint)
+				} else {
+					assert.Equal(t, (*expectedGlobalDelta)[i].Value.Uint, vd.Value.Uint)
+				}
+			}
+		}
+	}
+}
+
+func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var dr DryrunRequest
+	var response generated.DryrunResponse
+
+	// Test that a PASS and REJECT dryrun both return the dryrun evaldelta.
+	for i := range []int{0, 1} {
+		ops, _ := logic.AssembleString(fmt.Sprintf(`
+#pragma version 6
+txna ApplicationArgs 0
+txna ApplicationArgs 1
+app_global_put
+int %d`, i))
+		dr.ProtocolVersion = string(dryrunProtoVersion)
+
+		dr.Txns = []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: 1,
+						ApplicationArgs: [][]byte{
+							[]byte("key"),
+							[]byte("val"),
+						},
+					},
+				},
+			},
+		}
+		gkv := generated.TealKeyValueStore{
+			generated.TealKeyValue{
+				Key:   b64("key"),
+				Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+			},
+		}
+		dr.Apps = []generated.Application{
+			{
+				Id: 1,
+				Params: generated.ApplicationParams{
+					ApprovalProgram: ops.Program,
+					GlobalState:     &gkv,
+					GlobalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: 1,
+						NumUint:      1,
+					},
+				},
+			},
+		}
+		expectedVal := b64("val")
+		expectedGlobalDelta := generated.StateDelta{
+			{
+				Key: b64("key"),
+				Value: generated.EvalDelta{
+					Action: 1,
+					Bytes:  &expectedVal,
+				},
+			},
+		}
+
+		doDryrunRequest(&dr, &response)
+		if i == 0 {
+			checkAppCallReject(t, &response)
+		} else {
+			checkAppCallPass(t, &response)
+		}
+		checkEvalDelta(t, &response, &expectedGlobalDelta)
+		if t.Failed() {
+			logResponse(t, &response)
+		}
+	}
+
 }
