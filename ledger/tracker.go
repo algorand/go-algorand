@@ -152,6 +152,7 @@ type trackerRegistry struct {
 	// the accts has some exceptional usages in the tracker registry.
 	accts       *accountUpdates
 	acctsOnline *onlineAccounts
+	txtail      *txTail
 
 	// ctx is the context for the committing go-routine.
 	ctx context.Context
@@ -290,6 +291,9 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 		}
 		if online, ok := tracker.(*onlineAccounts); ok {
 			tr.acctsOnline = online
+		}
+		if txtail, ok := tracker.(*txTail); ok {
+			tr.txtail = txtail
 		}
 	}
 	return
@@ -702,5 +706,16 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 		err = blockRetrievalError
 	}
 	return
+}
 
+func (tr *trackerRegistry) blockTimestamp(rnd basics.Round) (int64, error) {
+	tr.mu.RLock()
+	defer tr.mu.RUnlock()
+	return tr.txtail.blockTimestamp(rnd, tr.dbRound)
+}
+
+func (tr *trackerRegistry) blockSeed(rnd basics.Round) ([]byte, error) {
+	tr.mu.RLock()
+	defer tr.mu.RUnlock()
+	return tr.txtail.blockSeed(rnd, tr.dbRound)
 }

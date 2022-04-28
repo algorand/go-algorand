@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -158,8 +159,8 @@ func (t *txTailTestLedger) initialize(ts *testing.T) error {
 	_, err = accountsInit(tx, accts, proto)
 	require.NoError(ts, err)
 
-	roundData := make([][]byte, 0, config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife+1)
-	startRound := t.Latest() - basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife) + 1
+	roundData := make([][]byte, 0, proto.MaxTxnLife+1)
+	startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
 	for i := startRound; i <= t.Latest(); i++ {
 		blk, err := t.Block(i)
 		require.NoError(ts, err)
@@ -291,18 +292,83 @@ func TestTxTailDeltaTracking(t *testing.T) {
 		err = txtail.commitRound(context.Background(), tx, dcc)
 		require.NoError(t, err)
 		tx.Commit()
+		retainSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife + 1
 		if uint64(i) > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife*2 {
 			// validate internal storage length.
-			require.Equal(t, 1, len(txtail.roundTailSerializedData))
-			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife+1), len(txtail.roundTailHashes))
-			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife+1), len(txtail.consensusVersions))
+			require.Equal(t, 1, len(txtail.roundTailSerializedDeltas))
+			require.Equal(t, int(retainSize+1), len(txtail.blockHeaderData)) // retainSize + 1 in-memory delta
+			if enableTxTailHashes {
+				require.Equal(t, int(retainSize+1), len(txtail.roundTailHashes))
+			}
 		}
 		txtail.postCommit(context.Background(), dcc)
 		if uint64(i) > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife*2 {
 			// validate internal storage length.
-			require.Zero(t, len(txtail.roundTailSerializedData))
-			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.roundTailHashes))
-			require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.consensusVersions))
+			require.Zero(t, len(txtail.roundTailSerializedDeltas))
+			require.Equal(t, int(retainSize), len(txtail.blockHeaderData))
+			if enableTxTailHashes {
+				require.Equal(t, int(retainSize), len(txtail.roundTailHashes))
+			}
 		}
 	}
+}
+
+func TestBlockHeaderDataOffset(t *testing.T) {
+	t.Run("dcc-offset", func(t *testing.T) {
+		var tests = []struct {
+			offset    uint64
+			dataLen   int
+			deltasLen int
+			expected  int
+		}{
+			{0, 0, 0, -1}, // -1 is expected but should not happen with non-empty history data slice
+			{0, 1, 0, 0},  // simulate empty DB, no blocks
+			{0, 2, 1, 0},  // one block arrived, zero offset
+			{1, 2, 1, 1},  // one block arrived, non-zero offset
+		}
+
+		for i, test := range tests {
+			t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+				res := blockHeaderDataDeltasOffset(test.offset, test.dataLen, test.deltasLen)
+				require.Equal(t, test.expected, res)
+			})
+		}
+
+	})
+
+	t.Run("round-offset", func(t *testing.T) {
+		var tests = []struct {
+			round     basics.Round
+			dbRound   basics.Round
+			dataLen   int
+			deltasLen int
+			expected  int
+			err       string
+		}{
+			{1, 0, 0, 0, 0, "too new"}, // error
+			{1, 1, 0, 0, 0, "too old"}, // error, no history
+			{0, 1, 1, 0, 0, "too old"}, // error, too old
+			{1, 1, 1, 1, 0, "too old"}, // error, short history
+			{1, 1, 1, 0, 0, ""},        // empty delta ok
+			{1, 1, 2, 1, 0, ""},
+			{0, 1, 3, 1, 0, ""},
+			{5, 6, 7, 3, 2, ""}, // blockHeaderData comment test case
+			{3, 6, 7, 3, 0, ""},
+			{9, 6, 7, 3, 6, ""},
+		}
+
+		for i, test := range tests {
+			t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+				res, err := blockHeaderDataRoundOffset(test.round, test.dbRound, test.dataLen, test.deltasLen)
+				if len(test.err) > 0 {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), test.err)
+				} else {
+					require.NoError(t, err)
+				}
+				require.Equal(t, test.expected, res)
+			})
+		}
+
+	})
 }

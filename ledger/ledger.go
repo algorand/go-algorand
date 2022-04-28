@@ -733,6 +733,24 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
 }
 
+// BlockTimestamp returns the block timestamp if available
+// Expected availability range is [Latest - MaxTxnLife, Latest]
+// allowing (MaxTxnLife + 1 = 1001) rounds back loopback
+func (l *Ledger) BlockTimestamp(rnd basics.Round) (int64, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.trackers.blockTimestamp(rnd)
+}
+
+// BlockSeed returns the block seed if available
+// Expected availability range is [Latest - MaxTxnLife, Latest]
+// allowing (MaxTxnLife + 1 = 1001) rounds back loopback
+func (l *Ledger) BlockSeed(rnd basics.Round) ([]byte, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.trackers.blockSeed(rnd)
+}
+
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)

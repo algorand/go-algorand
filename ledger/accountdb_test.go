@@ -3515,3 +3515,40 @@ func TestRowidsToChunkedArgs(t *testing.T) {
 		j++
 	}
 }
+
+// TestAccountDBTxTailLoad checks txtailNewRound and loadTxTail delete and load right data
+func TestAccountDBTxTailLoad(t *testing.T) {
+	const inMem = true
+	dbs, _ := dbOpenTest(t, inMem)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	err = accountsCreateTxTailTable(context.Background(), tx)
+	require.NoError(t, err)
+
+	// insert 1500 rounds and retain past 1001
+	startRound := basics.Round(1)
+	endRound := basics.Round(1500)
+	roundData := make([][]byte, 1500)
+	const retainSize = 1001
+	for i := startRound; i <= endRound; i++ {
+		data := txTailRound{txTailBlockHeaderData: txTailBlockHeaderData{TimeStamp: int64(i)}}
+		roundData[i-1] = protocol.Encode(&data)
+	}
+	forgetBefore := (endRound + 1).SubSaturate(retainSize)
+	err = txtailNewRound(context.Background(), tx, startRound, roundData, forgetBefore)
+	require.NoError(t, err)
+
+	data, _, baseRound, err := loadTxTail(context.Background(), tx, endRound)
+	require.NoError(t, err)
+	require.Len(t, data, retainSize)
+	require.Equal(t, basics.Round(endRound-retainSize+1), baseRound) // 500...1500
+
+	for i, entry := range data {
+		require.Equal(t, int64(i+int(baseRound)), entry.TimeStamp)
+	}
+}
