@@ -388,7 +388,7 @@ func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
-func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, responseString string) {
+func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, msg string) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
@@ -401,7 +401,7 @@ func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, resp
 			if response.Txns[idx].AppCallMessages != nil {
 				messages := *response.Txns[idx].AppCallMessages
 				assert.GreaterOrEqual(t, len(messages), 1)
-				assert.Equal(t, responseString, messages[len(messages)-1])
+				assert.Equal(t, msg, messages[len(messages)-1])
 			}
 		}
 	}
