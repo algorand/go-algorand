@@ -148,6 +148,7 @@ func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint6
 	// numberReveals = (numerator / denom) + 1
 	// by adding 1 we guarantee that the return value satisfy the inequality and therefore
 	// will satisfy the verifier.
+	// + 1 to account for the decimal point value loss due to integer division
 	res := numerator.Div(numerator, denom).Uint64() + 1
 	if res > MaxReveals {
 		return 0, ErrTooManyReveals

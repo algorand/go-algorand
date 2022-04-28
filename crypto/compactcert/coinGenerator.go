@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// The coinChoiceSeed defines the randomness seed that will be given to an XOF function. This will be used  for choosing
+// The coinChoiceSeed defines the randomness seed that will be given to an XOF function. This will be used for choosing
 // the index of the coin to reveal as part of the compact certificate.
 type coinChoiceSeed struct {
 	// the ToBeHashed function should be updated when fields are added to this structure
@@ -94,6 +94,7 @@ func prepareRejectionSamplingValues(signedWeight uint64) (*big.Int, *big.Int) {
 	signedWt := &big.Int{}
 	signedWt.SetUint64(signedWeight)
 
+	// k = 2^b / signedWeight
 	threshold.Div(threshold, signedWt)
 
 	threshold.Mul(threshold, signedWt)
