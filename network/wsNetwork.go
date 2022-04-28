@@ -428,13 +428,13 @@ type WebsocketNetwork struct {
 	node NetworkNodeInfo
 
 	// atomic {0:unknown, 1:yes, 2:no}
-	isParticipating uint32
+	wantTXGossip uint32
 }
 
 const (
-	isParticipating_unk = 0
-	isParticipating_yes = 1
-	isParticipating_no  = 2
+	wantTXGossip_unk = 0
+	wantTXGossip_yes = 1
+	wantTXGossip_no  = 2
 )
 
 type broadcastRequest struct {
@@ -710,7 +710,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
 	wn.relayMessages = wn.config.NetAddress != "" || wn.config.ForceRelayMessages
 	if wn.relayMessages || wn.config.ForceFetchTransactions {
-		wn.isParticipating = isParticipating_yes
+		wn.wantTXGossip = wantTXGossip_yes
 	}
 	// roughly estimate the number of messages that could be seen at any given moment.
 	// For the late/redo/down committee, which happen in parallel, we need to allocate
@@ -1723,16 +1723,16 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvance = time.Now().UTC()
 	if !wn.relayMessages && !wn.config.ForceFetchTransactions {
 		// if we're not a relay, and not participating, we don't need txn pool
-		wasParticipating := atomic.LoadUint32(&wn.isParticipating)
-		isParticipating := wn.node.IsParticipating()
-		wn.log.Infof("msgOfInterest netadv isP=%v wasP=%v", isParticipating, wasParticipating)
-		if isParticipating && (wasParticipating != isParticipating_yes) {
-			didChange := atomic.CompareAndSwapUint32(&wn.isParticipating, wasParticipating, isParticipating_yes)
+		wantTXGossipPrev := atomic.LoadUint32(&wn.wantTXGossip)
+		wantTXGossip := wn.node.IsParticipating()
+		wn.log.Infof("msgOfInterest netadv isP=%v wasP=%v", wantTXGossip, wantTXGossipPrev)
+		if wantTXGossip && (wantTXGossipPrev != wantTXGossip_yes) {
+			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossip_yes)
 			if didChange {
 				wn.RegisterMessageInterest(protocol.TxnTag)
 			}
-		} else if !isParticipating && (wasParticipating != isParticipating_no) {
-			didChange := atomic.CompareAndSwapUint32(&wn.isParticipating, wasParticipating, isParticipating_no)
+		} else if !wantTXGossip && (wantTXGossipPrev != wantTXGossip_no) {
+			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossip_no)
 			if didChange {
 				wn.DeregisterMessageInterest(protocol.TxnTag)
 			}
@@ -2353,8 +2353,8 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
 
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
-	isParticipating := atomic.LoadUint32(&wn.isParticipating)
-	if isParticipating != isParticipating_no {
+	wantTXGossip := atomic.LoadUint32(&wn.wantTXGossip)
+	if wantTXGossip != wantTXGossip_no {
 		wn.messagesOfInterest[protocol.TxnTag] = true
 	} else {
 		delete(wn.messagesOfInterest, protocol.TxnTag)

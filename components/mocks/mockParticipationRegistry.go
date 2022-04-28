@@ -69,6 +69,10 @@ func (m *MockParticipationRegistry) GetStateProofForRound(id account.Participati
 	return account.StateProofRecordForRound{}, nil
 }
 
+func (m *MockParticipationRegistry) HasLiveKeys(from, to basics.Round) bool {
+	return false
+}
+
 // Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 // then it is possible for multiple records to be updated.
 func (m *MockParticipationRegistry) Register(id account.ParticipationID, on basics.Round) error {
