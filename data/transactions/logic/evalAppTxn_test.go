@@ -1423,6 +1423,7 @@ itxn Logs 0
 // reported with `global GroupID` are correct for top-level and inner transactions
 func TestTxIDAndGroupIDCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	withoutGroupID := func(txn transactions.Transaction) transactions.Transaction {
 		txn.Group = crypto.Digest{}
@@ -1835,6 +1836,7 @@ int 1
 // correct for inner transactions
 func TestInnerTxIDCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type actualInfo struct {
 		txn         transactions.Transaction
@@ -2140,6 +2142,7 @@ int 1
 
 func TestInnerTxIDCaching(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	parentAppID := basics.AppIndex(888)
 	childAppID := basics.AppIndex(222)
