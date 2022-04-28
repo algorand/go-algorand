@@ -897,7 +897,7 @@ var addParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		fmt.Printf("Participation key generation successful. Participation ID: %s\n", part.ID())
+		reportInfof("Participation key generation successful. Participation ID: %s\n", part.ID())
 	},
 }
 
@@ -934,7 +934,7 @@ No --delete-input flag specified, exiting without installing key.`)
 			reportErrorf(errorRequestFail, err)
 		}
 
-		fmt.Printf("Participation key installed successfully, Participation ID: %s\n", addResponse.PartId)
+		reportInfof("Participation key installed successfully, Participation ID: %s\n", addResponse.PartId)
 
 		// Delete partKeyFile
 		if nil != os.Remove(partKeyFile) {

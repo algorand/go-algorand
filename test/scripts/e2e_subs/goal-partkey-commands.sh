@@ -63,7 +63,7 @@ verify_registered_state () {
   fi
 
   # looking for yes/no, and the 8 character head of participation id in this line:
-  # yes         LFMT...RHJQ  4UPT6AQC...               4            0     3000000
+  # yes         LFMT...RHJQ  4UPT6AQC...               4            0     3000
   if ! goal account listpartkeys | grep -q "$1.*$(echo "$2" | cut -c1-8)\.\.\."; then
     fail_test "Unexpected key state: $3"
   fi

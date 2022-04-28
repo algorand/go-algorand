@@ -97,7 +97,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	firstRound, lastRound := basics.Round(firstValid), basics.Round(lastValid)
 
-	// If output directory wasn't specified, store it in the current ledger directory.
+	// If we are installing, generate in the temp dir
 	if install {
 		outDir = os.TempDir()
 	}

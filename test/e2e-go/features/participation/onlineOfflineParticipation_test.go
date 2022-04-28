@@ -188,22 +188,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx := partkeyResponse.GenerateRegistrationTransaction(
-		basics.MicroAlgos{Raw: transactionFee},
-		basics.Round(partKeyFirstValid),
-		basics.Round(partKeyLastValid),
-		[32]byte{}, true)
-
-	txnParams, err := client.SuggestedParams()
-	a.NoError(err, "no error grabbing the genesis id")
-
-	goOnlineTx.Header.GenesisID = txnParams.GenesisID
-
-	// Check if the protocol supports genesis hash
-	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
-		copy(goOnlineTx.Header.GenesisHash[:], txnParams.GenesisHash)
-	}
-
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(partkeyResponse, transactionFee, partKeyFirstValid, partKeyLastValid, [32]byte{}, true)
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
@@ -312,22 +297,8 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx := partkeyResponse.GenerateRegistrationTransaction(
-		basics.MicroAlgos{Raw: transactionFee},
-		basics.Round(partKeyFirstValid),
-		basics.Round(partKeyLastValid),
-		[32]byte{}, true)
-
-	params, err := client.SuggestedParams()
-	a.NoError(err, "no error grabbing the genesis id")
-
-	goOnlineTx.Header.GenesisID = params.GenesisID
-
-	// Check if the protocol supports genesis hash
-	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
-		copy(goOnlineTx.Header.GenesisHash[:], params.GenesisHash)
-	}
-
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(partkeyResponse, transactionFee, partKeyFirstValid, partKeyLastValid, [32]byte{}, true)
+	a.NoError(err)
 	a.Equal(goOnlineTx.KeyregTxnFields.StateProofPK.IsEmpty(), false, "stateproof key should not be zero")
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")

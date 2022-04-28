@@ -19,6 +19,8 @@ package libgoal
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/account"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -245,6 +247,29 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 	t.KeyregTxnFields.VoteKeyDilution = part.Key.VoteKeyDilution
 
 	return t, nil
+}
+
+// MakeRegistrationTransactionWithGenesisID Generates a Registration transaction with the genesis ID set from the suggested parameters of the client
+func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participation, fee, txnFirstValid, txnLastValid uint64, leaseBytes [32]byte, includeStateProofKeys bool) (transactions.Transaction, error) {
+	goOnlineTx := part.GenerateRegistrationTransaction(
+		basics.MicroAlgos{Raw: fee},
+		basics.Round(txnFirstValid),
+		basics.Round(txnLastValid),
+		leaseBytes, includeStateProofKeys)
+
+	params, err := c.SuggestedParams()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	goOnlineTx.Header.GenesisID = params.GenesisID
+
+	// Check if the protocol supports genesis hash
+	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
+		copy(goOnlineTx.Header.GenesisHash[:], params.GenesisHash)
+	}
+
+	return goOnlineTx, nil
 }
 
 // MakeUnsignedGoOnlineTx creates a transaction that will bring an address online using available participation keys
