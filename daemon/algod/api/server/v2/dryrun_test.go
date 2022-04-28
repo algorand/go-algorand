@@ -196,8 +196,12 @@ func TestDryrunLogicSigSource(t *testing.T) {
 }
 
 const globalTestSource = `#pragma version 2
+// This program approves all transactions whose first arg is "hello"
 // Then, accounts can write "foo": "bar" to the GlobalState by
+// sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the
+// key at "foo" is equal to the second argument, xyz
+// If arg 0 is "hello"
 
 txna ApplicationArgs 0
 byte base64 aGVsbG8=
@@ -206,6 +210,7 @@ bnz succeed
 
 // else
 
+// If arg 0 is "write"
 txna ApplicationArgs 0
 byte base64 d3JpdGU=
 ==
@@ -264,8 +269,12 @@ done:
 var globalTestProgram []byte
 
 const localStateCheckSource = `#pragma version 2
+// This program approves all transactions whose first arg is "hello"
 // Then, accounts can write "foo": "bar" to their LocalState by
+// sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the
+// key at "foo" is equal to the second argument, xyz
+// If arg 0 is "hello"
 
 txna ApplicationArgs 0
 byte base64 aGVsbG8=
@@ -274,6 +283,7 @@ bnz succeed
 
 // else
 
+// If arg 0 is "write"
 txna ApplicationArgs 0
 byte base64 d3JpdGU=
 ==
@@ -1047,6 +1057,7 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 	require.Equal(t, 3, len(*gsd))
 
 	var keys []string
+	// test with a loop because sd is a map and iteration order is random
 	for _, item := range *gsd {
 		if item.Key == b64("byteskey") {
 			require.Equal(t, uint64(1), item.Value.Action)
@@ -1542,6 +1553,7 @@ int 1
 				ClearStateProgram: clst,
 			},
 		}},
+		// Sender must exist (though no fee is ever taken)
 		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
 		Accounts: []generated.Account{
 			{Address: sender.String(), Status: "Offline"},                                                // sender
@@ -1699,13 +1711,14 @@ func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
 	var response generated.DryrunResponse
 
 	// Expected responses.
-	expectedVal := b64("val")
+	expectedByte := b64("val")
+	expectedUint := uint64(1)
 	expectedGlobalDelta := generated.StateDelta{
 		{
-			Key: b64("bytekey"),
+			Key: b64("key"),
 			Value: generated.EvalDelta{
-				Action: 1,
-				Bytes:  &expectedVal,
+				Action: uint64(basics.SetBytesAction),
+				Bytes:  &expectedByte,
 			},
 		},
 	}
@@ -1713,10 +1726,10 @@ func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
 		Address: basics.Address{}.String(),
 		Delta: generated.StateDelta{
 			{
-				Key: b64("bytekey"),
+				Key: b64("key"),
 				Value: generated.EvalDelta{
-					Action: 1,
-					Bytes:  &expectedVal,
+					Action: uint64(basics.SetUintAction),
+					Uint:   &expectedUint,
 				},
 			},
 		},
@@ -1731,9 +1744,9 @@ txna ApplicationArgs 1
 app_global_put
 int 0
 txna ApplicationArgs 0
-txna ApplicationArgs 1
+int %d
 app_local_put
-int %d`, i))
+int %d`, expectedUint, i))
 		dr.ProtocolVersion = string(dryrunProtoVersion)
 
 		dr.Txns = []transactions.SignedTxn{
@@ -1743,7 +1756,7 @@ int %d`, i))
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 						ApplicationID: 1,
 						ApplicationArgs: [][]byte{
-							[]byte("bytekey"),
+							[]byte("key"),
 							[]byte("val"),
 						},
 					},
@@ -1756,6 +1769,10 @@ int %d`, i))
 				Params: generated.ApplicationParams{
 					ApprovalProgram: ops.Program,
 					GlobalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: 1,
+						NumUint:      1,
+					},
+					LocalStateSchema: &generated.ApplicationStateSchema{
 						NumByteSlice: 1,
 						NumUint:      1,
 					},
