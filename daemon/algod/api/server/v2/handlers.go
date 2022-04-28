@@ -622,7 +622,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			}
 			stibhash = block.Payset[idx].Hash()
 		default:
-			return notFound(ctx, err, "unsupported hash type", v2.Log)
+			return badRequest(ctx, err, "unsupported hash type", v2.Log)
 		}
 
 		proof, err := tree.ProveSingleLeaf(uint64(idx))
