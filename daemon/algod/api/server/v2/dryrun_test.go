@@ -201,8 +201,8 @@ const globalTestSource = `#pragma version 2
 // sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the
 // key at "foo" is equal to the second argument, xyz
-// If arg 0 is "hello"
 
+// If arg 0 is "hello"
 txna ApplicationArgs 0
 byte base64 aGVsbG8=
 ==
@@ -274,8 +274,8 @@ const localStateCheckSource = `#pragma version 2
 // sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the
 // key at "foo" is equal to the second argument, xyz
-// If arg 0 is "hello"
 
+// If arg 0 is "hello"
 txna ApplicationArgs 0
 byte base64 aGVsbG8=
 ==
@@ -379,6 +379,7 @@ func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
+		t.Error("response txns is nil")
 	} else if response.Txns[0].LogicSigMessages == nil || len(*response.Txns[0].LogicSigMessages) < 1 {
 		t.Error("no response lsig msg")
 	} else {
