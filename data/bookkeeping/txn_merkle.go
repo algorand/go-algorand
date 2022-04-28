@@ -74,6 +74,13 @@ func (tma *txnMerkleArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return &elem, nil
 }
 
+func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
+	buf = make([]byte, 2*crypto.DigestSize)
+	copy(buf[:], txid[:])
+	copy(buf[crypto.DigestSize:], stib[:])
+	return
+}
+
 // txnMerkleElem represents a leaf in the Merkle tree of all transactions
 // in a block.
 type txnMerkleElem struct {
@@ -82,24 +89,19 @@ type txnMerkleElem struct {
 	hashType crypto.HashType
 }
 
-func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
-	buf = make([]byte, 2*crypto.DigestSize)
-	copy(buf[:], txid[:])
-	copy(buf[crypto.DigestSize:], stib[:])
-	return
+func (tme *txnMerkleElem) RawLeaf() []byte {
+	if tme.hashType == crypto.Sha512_256 {
+		return txnMerkleToRaw(tme.txn.ID(), tme.stib.Hash())
+	}
+	// else: hashType == crypto.Sha256
+	return txnMerkleToRaw(tme.txn.IDSha256(), tme.stib.HashSHA256())
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (tme *txnMerkleElem) ToBeHashed() (protocol.HashID, []byte) {
 	// The leaf contains two hashes: the transaction ID (hash of the
 	// transaction itself), and the hash of the entire SignedTxnInBlock.
-	if tme.hashType == crypto.Sha512_256 {
-		stib := tme.stib.Hash()
-		return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.txn.ID(), stib)
-	}
-	// else: hashType == crypto.Sha256
-	stib := tme.stib.HashSHA256()
-	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.txn.IDSha256(), stib)
+	return protocol.TxnMerkleLeaf, tme.RawLeaf()
 }
 
 // Hash implements an optimized version of crypto.HashObj(tme).
@@ -108,18 +110,9 @@ func (tme *txnMerkleElem) Hash() crypto.Digest {
 }
 
 func (tme *txnMerkleElem) HashRepresentation() []byte {
-	txid := tme.txn.ID()
-
-	var stib crypto.Digest
-	if tme.hashType == crypto.Sha256 {
-		stib = tme.stib.HashSHA256()
-	} else {
-		stib = tme.stib.Hash()
-	}
-
 	var buf [len(protocol.TxnMerkleLeaf) + 2*crypto.DigestSize]byte
 	s := buf[:0]
 	s = append(s, protocol.TxnMerkleLeaf...)
-	s = append(s, txnMerkleToRaw(txid, stib)...)
+	s = append(s, tme.RawLeaf()...)
 	return s
 }
