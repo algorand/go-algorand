@@ -1701,6 +1701,8 @@ int 1
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			t.Parallel()
+
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
@@ -2020,6 +2022,8 @@ int 1
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			t.Parallel()
+
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
@@ -2149,6 +2153,8 @@ func TestInnerTxIDCaching(t *testing.T) {
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			t.Parallel()
+
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
