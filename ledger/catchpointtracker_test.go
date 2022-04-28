@@ -18,28 +18,29 @@ package ledger
 
 import (
 	"context"
-	//"database/sql"
+	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
-	//"runtime"
+	"runtime"
+	"strings"
 
-	//"sync/atomic"
+	"sync/atomic"
 	"testing"
-	//"time"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	//"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	//"github.com/algorand/go-algorand/data/bookkeeping"
-	//"github.com/algorand/go-algorand/data/transactions"
-	//"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
-	//"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -75,7 +76,6 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	return ct
 }
 
-/*
 func TestGetCatchpointStream(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -150,7 +150,6 @@ func TestGetCatchpointStream(t *testing.T) {
 	err = deleteStoredCatchpoints(context.Background(), ct.accountsq, ct.dbDirectory)
 	require.NoError(t, err)
 }
-*/
 
 // TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
 // It does so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
@@ -162,11 +161,11 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 
 	require.NoError(t, err)
 	defer func() {
-		os.RemoveAll(temporaryDirectroy)
+		os.RemoveAll(temporaryDirectory)
 	}()
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
@@ -175,7 +174,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	conf.CatchpointInterval = 1
 	ct := newCatchpointTracker(t, ml, conf, ".")
 	defer ct.close()
-	ct.dbDirectory = temporaryDirectroy
+	ct.dbDirectory = temporaryDirectory
 
 	dummyCatchpointFilesToCreate := 42
 
@@ -186,7 +185,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 			i/10, os.PathSeparator,
 			i/2, os.PathSeparator,
 			i)
-		absFile := filepath.Join(temporaryDirectroy, file)
+		absFile := filepath.Join(temporaryDirectory, file)
 		dummyCatchpointFiles[i] = absFile
 		err := os.MkdirAll(path.Dir(absFile), 0755)
 		require.NoError(t, err)
@@ -211,10 +210,9 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.Equal(t, 0, len(fileNames))
 }
 
-/*
 // The test validate that when algod boots up it cleans empty catchpoint directories.
-// it is done be creating empty directories in the catchpoint root directory.
-// When algod boots up it should remove those directories
+// It is done by creating empty directories in the catchpoint root directory.
+// When algod boots up it should remove those directories.
 func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -273,7 +271,7 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	numberOfCatchpointFiles := 0
 	err := filepath.Walk(catchpointDir, func(path string, d os.FileInfo, err error) error {
-		if !d.IsDir() {
+		if !d.IsDir() && strings.HasSuffix(path, ".catchpoint") {
 			numberOfCatchpointFiles++
 		}
 		return nil
@@ -281,15 +279,17 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	return numberOfCatchpointFiles, err
 }
 
-// The goal in this test is to check that we are saving at most X catchpoint files. If algod needs to create a new catchfile it will delete
-// the oldest. In addtion, when deleting old catchpoint files an empty directory should be deleted as well.
-func TestSaveCatchpointFile(t *testing.T) {
+// The goal of this test is to check that we are saving at most X catchpoint files.
+// If algod needs to create a new catchpoint file it will delete the oldest.
+// In addition, when deleting old catchpoint files an empty directory should be deleted
+// as well.
+func TestRecordCatchpointFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	require.NoError(t, err)
 	defer func() {
-		os.RemoveAll(temporaryDirectroy)
+		os.RemoveAll(temporaryDirectory)
 	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -300,9 +300,10 @@ func TestSaveCatchpointFile(t *testing.T) {
 	conf := config.GetDefaultLocal()
 
 	conf.CatchpointFileHistoryLength = 3
+	conf.Archival = true
 	ct.initialize(conf, ".")
 	defer ct.close()
-	ct.dbDirectory = temporaryDirectroy
+	ct.dbDirectory = temporaryDirectory
 
 	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -310,23 +311,29 @@ func TestSaveCatchpointFile(t *testing.T) {
 	err = ct.loadFromDisk(ml, ml.Latest())
 	require.NoError(t, err)
 
-	ct.generateCatchpoint(context.Background(), basics.Round(2000000), "0#ABC1", crypto.Digest{}, time.Second)
-	ct.generateCatchpoint(context.Background(), basics.Round(3000010), "0#ABC2", crypto.Digest{}, time.Second)
-	ct.generateCatchpoint(context.Background(), basics.Round(3000015), "0#ABC3", crypto.Digest{}, time.Second)
-	ct.generateCatchpoint(context.Background(), basics.Round(3000020), "0#ABC4", crypto.Digest{}, time.Second)
+	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
+		accountsRound := round - 1
 
-	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(temporaryDirectroy)
+		_, _, err := ct.generateCatchpointData(
+			context.Background(), accountsRound, time.Second)
+		require.NoError(t, err)
+
+		err = ct.createCatchpoint(accountsRound, round,	catchpointDataInfo{}, crypto.Digest{})
+		require.NoError(t, err)
+	}
+
+	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(temporaryDirectory)
 	require.NoError(t, err)
-	require.Equal(t, numberOfCatchpointFiles, conf.CatchpointFileHistoryLength)
+	require.Equal(t, conf.CatchpointFileHistoryLength, numberOfCatchpointFiles)
 
-	emptyDirs, err := getEmptyDirs(temporaryDirectroy)
+	emptyDirs, err := getEmptyDirs(temporaryDirectory)
 	require.NoError(t, err)
 	onlyCatchpointDirEmpty := len(emptyDirs) == 0 ||
-		(len(emptyDirs) == 1 && emptyDirs[0] == temporaryDirectroy)
+		(len(emptyDirs) == 1 && emptyDirs[0] == temporaryDirectory)
 	require.Equalf(t, onlyCatchpointDirEmpty, true, "Directories: %v", emptyDirs)
 }
 
-func BenchmarkLargeCatchpointWriting(b *testing.B) {
+func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
@@ -388,7 +395,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	require.NoError(b, err)
 
 	b.ResetTimer()
-	ct.generateCatchpoint(context.Background(), basics.Round(0), "0#ABCD", crypto.Digest{}, time.Second)
+	ct.generateCatchpointData(context.Background(), basics.Round(0), time.Second)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
@@ -493,8 +500,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		}
 	}
 
-	// test in revese what happens when we try to repeat the exact same blocks.
-	// start off with the catchpoint before the last one
+	// Test in reverse what happens when we try to repeat the exact same blocks.
+	// Start off with the catchpoint before the last one.
 	startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval)
 	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
 		au.close()
@@ -526,40 +533,12 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	require.NotZero(t, len(ct.roundDigest))
 	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
 	require.Zero(t, len(ct.roundDigest))
-	require.Zero(t, ct.catchpointWriting)
+	require.Zero(t, ct.catchpointDataWriting)
 	select {
-	case _, closed := <-ct.catchpointSlowWriting:
+	case _, closed := <-ct.catchpointDataSlowWriting:
 		require.False(t, closed)
 	default:
-		require.FailNow(t, "The catchpointSlowWriting should have been a closed channel; it seems to be a nil ?!")
-	}
-}
-
-func TestCatchpointTrackerPrepareCommit(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	ct := &catchpointTracker{}
-	const maxOffset = 40
-	const maxLookback = 320
-	ct.roundDigest = make([]crypto.Digest, maxOffset+maxLookback)
-	for i := 0; i < len(ct.roundDigest); i++ {
-		ct.roundDigest[i] = crypto.Hash([]byte{byte(i), byte(i / 256)})
-	}
-	dcc := &deferredCommitContext{}
-	for offset := uint64(1); offset < maxOffset; offset++ {
-		dcc.offset = offset
-		for lookback := basics.Round(0); lookback < maxLookback; lookback += 20 {
-			dcc.lookback = lookback
-			for _, isCatchpointRound := range []bool{false, true} {
-				dcc.isFirstStageCatchpointRound = isCatchpointRound
-				require.NoError(t, ct.prepareCommit(dcc))
-				if isCatchpointRound {
-					expectedRound := offset + uint64(lookback) - 1
-					expectedHash := crypto.Hash([]byte{byte(expectedRound), byte(expectedRound / 256)})
-					require.Equal(t, expectedHash[:], dcc.committedRoundDigest[:])
-				}
-			}
-		}
+		require.FailNow(t, "The catchpointDataSlowWriting should have been a closed channel; it seems to be a nil ?!")
 	}
 }
 
@@ -605,7 +584,7 @@ func (bt *blockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommit
 
 // postCommit implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || (dcc.isFirstStageCatchpointRound && dcc.catchpointLabel != "") {
+	if bt.alwaysLock || dcc.catchpointFirstStage {
 		bt.postCommitEntryLock <- struct{}{}
 		<-bt.postCommitReleaseLock
 	}
@@ -613,7 +592,7 @@ func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitCo
 
 // postCommitUnlocked implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || (dcc.isFirstStageCatchpointRound && dcc.catchpointLabel != "") {
+	if bt.alwaysLock || dcc.catchpointFirstStage {
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
@@ -669,11 +648,11 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// make sure to get to a catchpoint round, and block the writing there.
+	// make sure to get to a first stage catchpoint round, and block the writing there.
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if uint64(ledger.Latest())%cfg.CatchpointInterval == 0 {
+		if uint64(ledger.Latest() + 320)%cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 
@@ -699,7 +678,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	}
 
 	lookupDone := make(chan struct{})
-	// now that we're blocked the tracker, try to call LookupAgreement and confirm it returns almost immediately
+	// now that we've blocked the tracker, try to call LookupAgreement and confirm it returns almost immediately
 	go func() {
 		defer close(lookupDone)
 		ledger.LookupAgreement(ledger.Latest(), genesisInitState.Block.FeeSink)
@@ -717,11 +696,11 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 
 	// test false positive : we want to ensure that without releasing the postCommit lock, the LookupAgreemnt would not be able to return within 1 second.
 
-	// make sure to get to a catchpoint round, and block the writing there.
+	// make sure to get to a first stage catchpoint round, and block the writing there.
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if uint64(ledger.Latest())%cfg.CatchpointInterval == 0 {
+		if uint64(ledger.Latest() + 320)%cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 			break
@@ -740,7 +719,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	}
 
 	lookupDone = make(chan struct{})
-	// now that we're blocked the tracker, try to call LookupAgreement and confirm it's not returning within 1 second.
+	// now that we've blocked the tracker, try to call LookupAgreement and confirm it's not returning within 1 second.
 	go func() {
 		defer close(lookupDone)
 		ledger.LookupAgreement(ledger.Latest(), genesisInitState.Block.FeeSink)
@@ -770,4 +749,3 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 		require.FailNow(t, "The LookupAgreement wasn't getting release as expected by the blocked tracker")
 	}
 }
-*/

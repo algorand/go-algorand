@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -286,10 +287,10 @@ func TestFullCatchpointWriter(t *testing.T) {
 	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectory, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(temporaryDirectroy)
+		os.RemoveAll(temporaryDirectory)
 	}()
 
 	accts := ledgertesting.RandomAccounts(BalancesPerCatchpointFileChunk*3, false)
@@ -303,13 +304,15 @@ func TestFullCatchpointWriter(t *testing.T) {
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
 	au.close()
-	fileName := filepath.Join(temporaryDirectroy, "15.data")
+	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
+	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
 	readDb := ml.trackerDB().Rdb
-	var accountsRound basics.Round
 	var totalAccounts uint64
 	var totalChunks uint64
+	var accountsRnd basics.Round
+	var totals ledgercore.AccountTotals
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), fileName, tx)
+		writer, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx)
 		if err != nil {
 			return err
 		}
@@ -322,15 +325,30 @@ func TestFullCatchpointWriter(t *testing.T) {
 		}
 		totalAccounts = writer.GetTotalAccounts()
 		totalChunks = writer.GetTotalChunks()
-		accountsRound = accountsRound(tx)
+		accountsRnd, err = accountsRound(tx)
+		if err != nil {
+			return
+		}
+		totals, err = accountsTotals(tx, false)
 		return
 	})
 	require.NoError(t, err)
+	blocksRound := accountsRnd + 1
+	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
+	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 	catchpointFileHeader := CatchpointFileHeader{
 		Version: CatchpointFileVersionV6,
-		BalancesRound: accountsRound,
+		BalancesRound: accountsRnd,
+		BlocksRound: blocksRound,
+		Totals: totals,
+		TotalAccounts: totalAccounts,
+		TotalChunks: totalChunks,
+		Catchpoint: catchpointLabel,
+		BlockHeaderDigest: blockHeaderDigest,
 	}
-	err := repackCatchpoint()
+	err = repackCatchpoint(
+		catchpointFileHeader, catchpointDataFilePath, catchpointFilePath)
+	require.NoError(t, err)
 
 	// create a ledger.
 	var initState ledgercore.InitState
@@ -344,7 +362,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// load the file from disk.
-	fileContent, err := ioutil.ReadFile(fileName)
+	fileContent, err := ioutil.ReadFile(catchpointFilePath)
 	require.NoError(t, err)
 	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)

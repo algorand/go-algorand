@@ -47,6 +47,7 @@ type txTail struct {
 	// maintained in this data structure up until being cleared out by postCommit
 	roundTailSerializedData [][]byte
 
+	// TODO: remove
 	// roundTailHashes contains the recent 1001 hashes. The first entry matches that current tracker database round - 1001,
 	// the second to tracker database round - 1000, and so forth. The roundTailHashes always has it's first array element
 	// not being used.
@@ -211,15 +212,6 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 }
 
 func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
-	/*
-	if !dcc.isFirstStageCatchpointGeneration {
-		return nil
-	}
-
-	maxTxnLife := config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife
-	// update the dcc with the hash we'll need.
-	dcc.txTailHash, err = t.recentTailHash(dcc.offset, maxTxnLife)
-	*/
 	return
 }
 

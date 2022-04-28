@@ -4600,9 +4600,10 @@ type catchpointDataInfo struct {
 }
 
 func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointDataInfo) error {
+	infoSerialized := protocol.Encode(info)
 	f := func() error {
-		query := "INSERT INTO catchpointfirststageinfo(round) VALUES(?)"
-		_, err := e.Exec(query, round, protocol.Encode(info))
+		query := "INSERT INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
+		_, err := e.Exec(query, round, infoSerialized)
 		return err
 	}
 	return db.Retry(f)
@@ -4635,6 +4636,37 @@ func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpo
 	}
 
 	return res, true, nil
+}
+
+func selectOldCatchpointFirstStageInfoRounds(q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
+	var res []basics.Round
+
+	f := func() error {
+		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
+		rows, err := q.Query(query, maxRound)
+		if err != nil {
+			return err
+		}
+
+		// Clear `res` in case this function is repeated.
+		res = res[:0]
+		for rows.Next() {
+			var r basics.Round
+			err = rows.Scan(&r)
+			if err != nil {
+				return err
+			}
+			res = append(res, r)
+		}
+
+		return nil
+	}
+	err := db.Retry(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func deleteOldCatchpointFirstStageInfo(e db.Executable, maxRoundToDelete basics.Round) error {

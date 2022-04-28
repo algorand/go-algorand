@@ -463,6 +463,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 
 	// TODO: remove normalized balance from accountbase
 
+	err = createCatchpointDataFilesTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+
 	// update version
 	return tu.setVersion(ctx, tx, 7)
 }
