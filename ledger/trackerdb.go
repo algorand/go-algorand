@@ -21,21 +21,22 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 type trackerDBParams struct {
 	initAccounts      map[basics.Address]basics.AccountData
-	initProto         config.ConsensusParams
+	initProto         protocol.ConsensusVersion
 	catchpointEnabled bool
 	dbPathPrefix      string
 	blockDb           db.Pair
@@ -77,7 +78,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
-			initProto:         l.GenesisProto(),
+			initProto:         l.GenesisProtoVersion(),
 			catchpointEnabled: catchpointEnabled,
 			dbPathPrefix:      dbPathPrefix,
 			blockDb:           bdbs,
@@ -227,7 +228,7 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 //
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
-	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, tu.initProto)
+	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, config.Consensus[tu.initProto])
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema0 unable to initialize schema : %v", err)
 	}
@@ -322,7 +323,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsAddNormalizedBalance(tx, tu.initProto)
+	err = accountsAddNormalizedBalance(tx, config.Consensus[tu.initProto])
 	if err != nil {
 		return err
 	}
@@ -440,6 +441,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return err
 	}
 
+	err = accountsCreateOnlineRoundParamsTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+
 	var lastProgressInfoMsg time.Time
 	const progressLoggingInterval = 5 * time.Second
 	migrationProcessLog := func(processed, total uint64) {
@@ -459,6 +465,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete transaction tail data migration : %w", err)
 		}
+	}
+
+	err = performOnlineRoundParamsTailMigration(context.Background(), tx, tu.blockDb.Rdb, tu.newDatabase, tu.initProto)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}
 
 	// TODO: remove normalized balance from accountbase

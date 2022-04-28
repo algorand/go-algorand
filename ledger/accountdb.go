@@ -141,6 +141,12 @@ var createTxTailTable = []string{
 		data blob)`,
 }
 
+var createOnlineRoundParamsTable = []string{
+	`CREATE TABLE IF NOT EXISTS onlineroundparamstail(
+		round INTEGER NOT NULL PRIMARY KEY,
+		data blob)`, // contains a msgp encoded OnlineRoundParamsData
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -152,6 +158,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS resources`,
 	`DROP TABLE IF EXISTS onlineaccounts`,
 	`DROP TABLE IF EXISTS txtail`,
+	`DROP TABLE IF EXISTS onlineroundparamstail`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -1308,6 +1315,16 @@ func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	return nil
 }
 
+func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err error) {
+	for _, stmt := range createOnlineRoundParamsTable {
+		_, err = tx.ExecContext(ctx, stmt)
+		if err != nil {
+			return
+		}
+	}
+	return nil
+}
+
 type baseOnlineAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -2092,6 +2109,50 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 
 		return txtailNewRound(ctx, tx, firstRound, tailRounds, firstRound-1)
+	})
+
+	return err
+}
+
+func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
+	totals, err := accountsTotals(tx, false)
+	if err != nil {
+		return err
+	}
+	if newDatabase {
+		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
+			{
+				OnlineSupply:    totals.Online.Money.Raw,
+				RewardsLevel:    totals.RewardsLevel,
+				CurrentProtocol: initProto,
+			},
+		}
+
+		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 0)
+		return err
+	}
+
+	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
+		rnd, err := accountsRound(tx)
+		if err != nil {
+			return nil
+		}
+
+		hdr, err := blockGetHdr(blockTx, rnd)
+		if err != nil {
+			return nil
+		}
+
+		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
+			{
+				OnlineSupply:    totals.Online.Money.Raw,
+				RewardsLevel:    totals.RewardsLevel,
+				CurrentProtocol: hdr.CurrentProtocol,
+			},
+		}
+
+		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
+		return err
 	})
 
 	return err
@@ -2938,6 +2999,54 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 		totals.Offline.Money.Raw, totals.Offline.RewardUnits,
 		totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
 		totals.RewardsLevel)
+	return err
+}
+
+func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
+	rows, err := tx.Query("SELECT round, data FROM onlineroundparamstail ORDER BY round ASC")
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var buf []byte
+		err = rows.Scan(&endRound, &buf)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var data ledgercore.OnlineRoundParamsData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		onlineRoundParamsData = append(onlineRoundParamsData, data)
+	}
+	return
+}
+
+func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, round basics.Round) error {
+	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (round, data) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+
+	for _, onlineRoundParams := range onlineRoundParamsData {
+		_, err = insertStmt.Exec(round, protocol.Encode(&onlineRoundParams))
+		if err != nil {
+			return err
+		}
+		round++
+	}
+	return nil
+}
+
+func accountsPruneOnlineRoundParams(tx *sql.Tx, retainRound basics.Round) error {
+	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE round<?",
+		retainRound,
+	)
 	return err
 }
 

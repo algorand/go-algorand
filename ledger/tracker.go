@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
 )
@@ -142,6 +143,7 @@ type ledgerForTracker interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
+	GenesisProtoVersion() protocol.ConsensusVersion
 	GenesisAccounts() map[basics.Address]basics.AccountData
 }
 
@@ -219,8 +221,11 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	deltas                 []ledgercore.AccountDeltas
-	roundTotals            ledgercore.AccountTotals
+	deltas                   []ledgercore.AccountDeltas
+	roundTotals              ledgercore.AccountTotals
+	onlineRoundParams        []ledgercore.OnlineRoundParamsData
+	onlineTotalsForgetBefore basics.Round
+
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable

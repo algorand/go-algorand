@@ -72,7 +72,8 @@ type Ledger struct {
 
 	genesisAccounts map[basics.Address]basics.AccountData
 
-	genesisProto config.ConsensusParams
+	genesisProto        config.ConsensusParams
+	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
 	accts       accountUpdates
@@ -114,6 +115,7 @@ func OpenLedger(
 		genesisHash:                    genesisInitState.GenesisHash,
 		genesisAccounts:                genesisInitState.Accounts,
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
+		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
@@ -596,7 +598,7 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.OnlineTotals(rnd)
+	return l.acctsOnline.OnlineTotals(rnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
@@ -716,6 +718,11 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 // GenesisProto returns the initial protocol for this ledger.
 func (l *Ledger) GenesisProto() config.ConsensusParams {
 	return l.genesisProto
+}
+
+// GenesisProtoVersion returns the initial protocol version for this ledger.
+func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return l.genesisProtoVersion
 }
 
 // GenesisAccounts returns initial accounts for this ledger.
