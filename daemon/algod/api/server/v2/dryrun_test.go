@@ -381,6 +381,7 @@ func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, resp
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
+		t.Error("response txns is nil")
 	} else if response.Txns[0].AppCallMessages == nil || len(*response.Txns[0].AppCallMessages) < 1 {
 		t.Error("no response app msg")
 	} else {
