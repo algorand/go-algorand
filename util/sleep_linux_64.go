@@ -14,26 +14,21 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+//go:build linux && !(arm || 386)
+// +build linux,!arm,!386
+
 package util
 
 import (
+	"syscall"
 	"time"
 )
 
-// NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
-func NanoAfter(d time.Duration) <-chan time.Time {
-	// The following is a workaround for the go 1.16 bug, where timers are rounded up to the next millisecond resolution.
-	// Go implementation for "time.After" avoids creating the go-routine until it's needed for writing the time
-	// to the channel. This is a pretty impressive implementation compared to the one below, since it's much more
-	// resource-efficient. For that reason, we'll keep calling the efficient implementation when timing is not
-	// critical ( i.e. > 10ms ).
-	if d > 10*time.Millisecond {
-		return time.After(d)
+// NanoSleep sleeps for the given d duration.
+func NanoSleep(d time.Duration) {
+	timeSpec := &syscall.Timespec{
+		Nsec: d.Nanoseconds() % time.Second.Nanoseconds(),
+		Sec:  d.Nanoseconds() / time.Second.Nanoseconds(),
 	}
-	c := make(chan time.Time, 1)
-	go func() {
-		NanoSleep(d)
-		c <- time.Now()
-	}()
-	return c
+	syscall.Nanosleep(timeSpec, nil) // nolint:errcheck
 }

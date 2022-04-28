@@ -85,6 +85,8 @@ type BlockAcceptedEventDetails struct {
 	Round        uint64
 	ValidatedAt  time.Duration
 	PreValidated bool
+	PropBufLen   uint64
+	VoteBufLen   uint64
 }
 
 // TopAccountsEvent event
