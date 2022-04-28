@@ -592,7 +592,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 		hashtype = *params.Hashtype
 	}
 	if hashtype == "sha256" && !proto.EnableSHA256TxnRootHeader {
-		return notFound(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
+		return badRequest(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
 	}
 
 	txns, err := block.DecodePaysetFlat()
