@@ -14,6 +14,19 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+// Copyright (C) 2019-2022 Algorand, Inc.
+//
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package v2
 
 import (
@@ -183,13 +196,9 @@ func TestDryrunLogicSigSource(t *testing.T) {
 }
 
 const globalTestSource = `#pragma version 2
-// This program approves all transactions whose first arg is "hello"
 // Then, accounts can write "foo": "bar" to the GlobalState by
-// sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the
-// key at "foo" is equal to the second argument, xyz
 
-// If arg 0 is "hello"
 txna ApplicationArgs 0
 byte base64 aGVsbG8=
 ==
@@ -197,7 +206,6 @@ bnz succeed
 
 // else
 
-// If arg 0 is "write"
 txna ApplicationArgs 0
 byte base64 d3JpdGU=
 ==
@@ -256,13 +264,9 @@ done:
 var globalTestProgram []byte
 
 const localStateCheckSource = `#pragma version 2
-// This program approves all transactions whose first arg is "hello"
 // Then, accounts can write "foo": "bar" to their LocalState by
-// sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the
-// key at "foo" is equal to the second argument, xyz
 
-// If arg 0 is "hello"
 txna ApplicationArgs 0
 byte base64 aGVsbG8=
 ==
@@ -270,7 +274,6 @@ bnz succeed
 
 // else
 
-// If arg 0 is "write"
 txna ApplicationArgs 0
 byte base64 d3JpdGU=
 ==
@@ -366,7 +369,6 @@ func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
-		t.Error("response txns is nil")
 	} else if response.Txns[0].LogicSigMessages == nil || len(*response.Txns[0].LogicSigMessages) < 1 {
 		t.Error("no response lsig msg")
 	} else {
@@ -379,7 +381,6 @@ func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, resp
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
-		t.Error("response txns is nil")
 	} else if response.Txns[0].AppCallMessages == nil || len(*response.Txns[0].AppCallMessages) < 1 {
 		t.Error("no response app msg")
 	} else {
@@ -1045,7 +1046,6 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 	require.Equal(t, 3, len(*gsd))
 
 	var keys []string
-	// test with a loop because sd is a map and iteration order is random
 	for _, item := range *gsd {
 		if item.Key == b64("byteskey") {
 			require.Equal(t, uint64(1), item.Value.Action)
@@ -1541,7 +1541,6 @@ int 1
 				ClearStateProgram: clst,
 			},
 		}},
-		// Sender must exist (though no fee is ever taken)
 		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
 		Accounts: []generated.Account{
 			{Address: sender.String(), Status: "Offline"},                                                // sender
@@ -1644,32 +1643,49 @@ int 1`)
 	}
 }
 
+func checkStateDelta(t *testing.T,
+	response *generated.StateDelta,
+	expectedDelta *generated.StateDelta,
+) {
+	for i, vd := range *response {
+		assert.Equal(t, (*expectedDelta)[i].Key, vd.Key)
+
+		// Pointer checks: make sure we don't try to derefence a nil.
+		if vd.Value.Bytes != nil && (*expectedDelta)[i].Value.Bytes != nil {
+			assert.Equal(t, *(*expectedDelta)[i].Value.Bytes, *vd.Value.Bytes)
+		} else {
+			assert.Equal(t, (*expectedDelta)[i].Value.Bytes, vd.Value.Bytes)
+		}
+
+		if vd.Value.Uint != nil && (*expectedDelta)[i].Value.Uint != nil {
+			assert.Equal(t, *(*expectedDelta)[i].Value.Uint, *vd.Value.Uint)
+		} else {
+			assert.Equal(t, (*expectedDelta)[i].Value.Uint, vd.Value.Uint)
+		}
+	}
+}
+
 func checkEvalDelta(t *testing.T,
 	response *generated.DryrunResponse,
 	expectedGlobalDelta *generated.StateDelta,
+	expectedLocalDelta *generated.AccountStateDelta,
 ) {
 	for _, rt := range response.Txns {
 		if rt.GlobalDelta != nil && len(*rt.GlobalDelta) > 0 {
 			assert.Equal(t, len(*expectedGlobalDelta), len(*rt.GlobalDelta))
-			for i, vd := range *rt.GlobalDelta {
-				assert.Equal(t, (*expectedGlobalDelta)[i].Key, vd.Key)
-
-				// Pointer checks: make sure we don't try to derefence a nil.
-				if vd.Value.Bytes != nil && (*expectedGlobalDelta)[i].Value.Bytes != nil {
-					assert.Equal(t, *(*expectedGlobalDelta)[i].Value.Bytes, *vd.Value.Bytes)
-				} else {
-					assert.Equal(t, (*expectedGlobalDelta)[i].Value.Bytes, vd.Value.Bytes)
-				}
-
-				if vd.Value.Uint != nil && (*expectedGlobalDelta)[i].Value.Uint != nil {
-					assert.Equal(t, *(*expectedGlobalDelta)[i].Value.Uint, *vd.Value.Uint)
-				} else {
-					assert.Equal(t, (*expectedGlobalDelta)[i].Value.Uint, vd.Value.Uint)
-				}
-			}
+			checkStateDelta(t, rt.GlobalDelta, expectedGlobalDelta)
 		} else {
 			assert.Equal(t, expectedGlobalDelta, nil)
 			assert.Equal(t, len(*expectedGlobalDelta), 0)
+		}
+
+		if rt.LocalDeltas != nil {
+			for _, ld := range *rt.LocalDeltas {
+				assert.Equal(t, expectedLocalDelta.Address, ld.Address)
+				checkStateDelta(t, &ld.Delta, &expectedLocalDelta.Delta)
+			}
+		} else {
+			assert.Equal(t, expectedLocalDelta, nil)
 		}
 	}
 }
@@ -1681,6 +1697,30 @@ func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
 	var dr DryrunRequest
 	var response generated.DryrunResponse
 
+	// Expected responses.
+	expectedVal := b64("val")
+	expectedGlobalDelta := generated.StateDelta{
+		{
+			Key: b64("bytekey"),
+			Value: generated.EvalDelta{
+				Action: 1,
+				Bytes:  &expectedVal,
+			},
+		},
+	}
+	expectedLocalDelta := generated.AccountStateDelta{
+		Address: basics.Address{}.String(),
+		Delta: generated.StateDelta{
+			{
+				Key: b64("bytekey"),
+				Value: generated.EvalDelta{
+					Action: 1,
+					Bytes:  &expectedVal,
+				},
+			},
+		},
+	}
+
 	// Test that a PASS and REJECT dryrun both return the dryrun evaldelta.
 	for i := range []int{0, 1} {
 		ops, _ := logic.AssembleString(fmt.Sprintf(`
@@ -1688,6 +1728,10 @@ func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
 txna ApplicationArgs 0
 txna ApplicationArgs 1
 app_global_put
+int 0
+txna ApplicationArgs 0
+txna ApplicationArgs 1
+app_local_put
 int %d`, i))
 		dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -1698,17 +1742,11 @@ int %d`, i))
 					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 						ApplicationID: 1,
 						ApplicationArgs: [][]byte{
-							[]byte("key"),
+							[]byte("bytekey"),
 							[]byte("val"),
 						},
 					},
 				},
-			},
-		}
-		gkv := generated.TealKeyValueStore{
-			generated.TealKeyValue{
-				Key:   b64("key"),
-				Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 			},
 		}
 		dr.Apps = []generated.Application{
@@ -1716,7 +1754,6 @@ int %d`, i))
 				Id: 1,
 				Params: generated.ApplicationParams{
 					ApprovalProgram: ops.Program,
-					GlobalState:     &gkv,
 					GlobalStateSchema: &generated.ApplicationStateSchema{
 						NumByteSlice: 1,
 						NumUint:      1,
@@ -1724,14 +1761,11 @@ int %d`, i))
 				},
 			},
 		}
-		expectedVal := b64("val")
-		expectedGlobalDelta := generated.StateDelta{
+		dr.Accounts = []generated.Account{
 			{
-				Key: b64("key"),
-				Value: generated.EvalDelta{
-					Action: 1,
-					Bytes:  &expectedVal,
-				},
+				Status:         "Online",
+				Address:        basics.Address{}.String(),
+				AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
 			},
 		}
 
@@ -1741,7 +1775,7 @@ int %d`, i))
 		} else {
 			checkAppCallPass(t, &response)
 		}
-		checkEvalDelta(t, &response, &expectedGlobalDelta)
+		checkEvalDelta(t, &response, &expectedGlobalDelta, &expectedLocalDelta)
 		if t.Failed() {
 			logResponse(t, &response)
 		}
