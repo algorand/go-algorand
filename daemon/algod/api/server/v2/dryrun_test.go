@@ -1669,13 +1669,13 @@ func checkStateDelta(t *testing.T,
 			assert.Nil(t, vd.Value.Bytes)
 		} else {
 			assert.NotNil(t, vd.Value.Bytes)
-			assert.Equal(t, (*expectedDelta)[i].Value.Bytes, vd.Value.Bytes)
+			assert.Equal(t, *(*expectedDelta)[i].Value.Bytes, *vd.Value.Bytes)
 		}
 		if (*expectedDelta)[i].Value.Uint == nil {
 			assert.Nil(t, vd.Value.Uint)
 		} else {
 			assert.NotNil(t, vd.Value.Uint)
-			assert.Equal(t, (*expectedDelta)[i].Value.Uint, vd.Value.Uint)
+			assert.Equal(t, *(*expectedDelta)[i].Value.Uint, *vd.Value.Uint)
 		}
 	}
 }
