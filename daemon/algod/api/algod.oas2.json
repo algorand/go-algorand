@@ -3108,8 +3108,7 @@
           },
           "sourcemap": {
             "description": "JSON of the source map",
-            "type": "object",
-            "x-algorand-format": "Sourcemap"
+            "type": "object"
           }
         }
       }

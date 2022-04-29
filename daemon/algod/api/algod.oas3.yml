@@ -384,8 +384,7 @@
                 "sourcemap": {
                   "description": "JSON of the source map",
                   "properties": {},
-                  "type": "object",
-                  "x-algorand-format": "Sourcemap"
+                  "type": "object"
                 }
               },
               "required": [
@@ -3683,8 +3682,7 @@
                     "sourcemap": {
                       "description": "JSON of the source map",
                       "properties": {},
-                      "type": "object",
-                      "x-algorand-format": "Sourcemap"
+                      "type": "object"
                     }
                   },
                   "required": [
