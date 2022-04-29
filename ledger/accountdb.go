@@ -44,6 +44,7 @@ type accountsDbQueries struct {
 	lookupStmt                  *sql.Stmt
 	lookupResourcesStmt         *sql.Stmt
 	lookupAllResourcesStmt      *sql.Stmt
+	lookupKvPairStmt            *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
 	deleteStoredCatchpoint      *sql.Stmt
 	insertStoredCatchpoint      *sql.Stmt
@@ -71,6 +72,9 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS accountbase (
 		address blob primary key,
 		data blob)`,
+	`CREATE TABLE IF NOT EXISTS kvstore (
+		key blob primary key,
+		value blob)`,
 	`CREATE TABLE IF NOT EXISTS assetcreators (
 		asset integer primary key,
 		creator blob)`,
@@ -1872,6 +1876,11 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
+	qs.lookupKvPairStmt, err = r.Prepare("SELECT value FROM kvstore WHERE key = ?")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -1947,6 +1956,22 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 			cl.Type = ctype
 			results = append(results, cl)
 		}
+		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupKvPair(key string) (value string, ok bool, err error) {
+	err = db.Retry(func() error {
+		err := qs.lookupKvPairStmt.QueryRow(key).Scan(&value)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil // value and ok remain zero values
+			}
+			return err
+		}
+		// value has been set by Scan
+		ok = true
 		return nil
 	})
 	return
@@ -2197,6 +2222,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
+		&qs.lookupKvPairStmt,
 		&qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,
@@ -2297,6 +2323,9 @@ type accountsWriter interface {
 	deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
 	updateResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowsAffected int64, err error)
 
+	upsertKvPair(key string, value string) error
+	deleteKvPair(key string) error
+
 	insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error)
 	deleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error)
 
@@ -2307,6 +2336,7 @@ type accountsSQLWriter struct {
 	insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
 	deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
 	deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
+	deleteKvPairStmt, upsertKvPairStmt                         *sql.Stmt
 }
 
 func (w *accountsSQLWriter) close() {
@@ -2334,6 +2364,14 @@ func (w *accountsSQLWriter) close() {
 		w.updateResourceStmt.Close()
 		w.updateResourceStmt = nil
 	}
+	if w.deleteKvPairStmt != nil {
+		w.deleteKvPairStmt.Close()
+		w.deleteKvPairStmt = nil
+	}
+	if w.upsertKvPairStmt != nil {
+		w.upsertKvPairStmt.Close()
+		w.upsertKvPairStmt = nil
+	}
 	if w.insertCreatableIdxStmt != nil {
 		w.insertCreatableIdxStmt.Close()
 		w.insertCreatableIdxStmt = nil
@@ -2344,7 +2382,7 @@ func (w *accountsSQLWriter) close() {
 	}
 }
 
-func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasCreatables bool) (w *accountsSQLWriter, err error) {
+func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (w *accountsSQLWriter, err error) {
 	w = new(accountsSQLWriter)
 
 	if hasAccounts {
@@ -2376,6 +2414,18 @@ func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasC
 		}
 
 		w.updateResourceStmt, err = tx.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
+		if err != nil {
+			return
+		}
+	}
+
+	if hasKvPairs {
+		w.upsertKvPairStmt, err = tx.Prepare("INSERT INTO kvstore (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+		if err != nil {
+			return
+		}
+
+		w.deleteKvPairStmt, err = tx.Prepare("DELETE FROM kvstore WHERE key=?")
 		if err != nil {
 			return
 		}
@@ -2449,6 +2499,24 @@ func (w accountsSQLWriter) updateResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
+func (w accountsSQLWriter) upsertKvPair(key string, value string) error {
+	result, err := w.upsertKvPairStmt.Exec(key, value)
+	if err != nil {
+		return err
+	}
+	_, err = result.LastInsertId()
+	return err
+}
+
+func (w accountsSQLWriter) deleteKvPair(key string) error {
+	result, err := w.deleteKvPairStmt.Exec(key)
+	if err != nil {
+		return err
+	}
+	_, err = result.RowsAffected()
+	return err
+}
+
 func (w accountsSQLWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
 	result, err := w.insertCreatableIdxStmt.Exec(cidx, creator, ctype)
 	if err != nil {
@@ -2470,29 +2538,29 @@ func (w accountsSQLWriter) deleteCreatable(cidx basics.CreatableIndex, ctype bas
 // accountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func accountsNewRound(
 	tx *sql.Tx,
-	updates compactAccountDeltas, resources compactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
 	hasAccounts := updates.len() > 0
 	hasResources := resources.len() > 0
+	hasKvPairs := len(kvPairs) > 0
 	hasCreatables := len(creatables) > 0
-	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasCreatables)
+	writer, err := makeAccountsSQLWriter(tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 	if err != nil {
 		return
 	}
 	defer writer.close()
 
-	return accountsNewRoundImpl(writer, updates, resources, creatables, proto, lastUpdateRound)
+	return accountsNewRoundImpl(writer, updates, resources, kvPairs, creatables, proto, lastUpdateRound)
 }
 
 // accountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
 func accountsNewRoundImpl(
 	writer accountsWriter,
-	updates compactAccountDeltas, resources compactResourcesDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []persistedAccountData, updatedResources map[basics.Address][]persistedResourcesData, err error) {
-
 	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
@@ -2690,16 +2758,25 @@ func accountsNewRoundImpl(
 		}
 	}
 
-	if len(creatables) > 0 {
-		for cidx, cdelta := range creatables {
-			if cdelta.Created {
-				_, err = writer.insertCreatable(cidx, cdelta.Ctype, cdelta.Creator[:])
-			} else {
-				_, err = writer.deleteCreatable(cidx, cdelta.Ctype)
-			}
-			if err != nil {
-				return
-			}
+	for key, value := range kvPairs {
+		if value.data != nil {
+			err = writer.upsertKvPair(key, *value.data)
+		} else {
+			err = writer.deleteKvPair(key)
+		}
+		if err != nil {
+			return
+		}
+	}
+
+	for cidx, cdelta := range creatables {
+		if cdelta.Created {
+			_, err = writer.insertCreatable(cidx, cdelta.Ctype, cdelta.Creator[:])
+		} else {
+			_, err = writer.deleteCreatable(cidx, cdelta.Ctype)
+		}
+		if err != nil {
+			return
 		}
 	}
 

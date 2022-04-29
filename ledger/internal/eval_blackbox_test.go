@@ -914,7 +914,9 @@ func testConsensusRange(t *testing.T, start, stop int, test func(t *testing.T, v
 		} else {
 			version = fmt.Sprintf("v%d", i)
 		}
-		t.Run(fmt.Sprintf("cv=%s", version), func(t *testing.T) { test(t, i) })
+		t.Run(fmt.Sprintf("cv=%s", version), func(t *testing.T) {
+			test(t, i)
+		})
 	}
 }
 

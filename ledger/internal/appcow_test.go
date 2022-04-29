@@ -87,7 +87,11 @@ func (ml *emptyLedger) getKey(addr basics.Address, aidx basics.AppIndex, global 
 	return basics.TealValue{}, false, nil
 }
 
-func (ml *emptyLedger) txnCounter() uint64 {
+func (ml *emptyLedger) kvGet(key string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (ml *emptyLedger) Counter() uint64 {
 	return 0
 }
 
@@ -283,7 +287,7 @@ func TestCowStorage(t *testing.T) {
 			actuallyAllocated := st.allocated(aapp)
 			rkey := allKeys[rand.Intn(len(allKeys))]
 			rval := allValues[rand.Intn(len(allValues))]
-			err := cow.SetKey(addr, sptr.aidx, sptr.global, rkey, rval, 0)
+			err := cow.setKey(addr, sptr.aidx, sptr.global, rkey, rval, 0)
 			if actuallyAllocated {
 				require.NoError(t, err)
 				err = st.set(aapp, rkey, rval)
@@ -298,7 +302,7 @@ func TestCowStorage(t *testing.T) {
 		if rand.Float32() < 0.25 {
 			actuallyAllocated := st.allocated(aapp)
 			rkey := allKeys[rand.Intn(len(allKeys))]
-			err := cow.DelKey(addr, sptr.aidx, sptr.global, rkey, 0)
+			err := cow.delKey(addr, sptr.aidx, sptr.global, rkey, 0)
 			if actuallyAllocated {
 				require.NoError(t, err)
 				err = st.del(aapp, rkey)
@@ -340,7 +344,7 @@ func TestCowStorage(t *testing.T) {
 					tval, tok, err := st.get(aapp, key)
 					require.NoError(t, err)
 
-					cval, cok, err := cow.GetKey(addr, sptr.aidx, sptr.global, key, 0)
+					cval, cok, err := cow.getKey(addr, sptr.aidx, sptr.global, key, 0)
 					require.NoError(t, err)
 					require.Equal(t, tok, cok)
 					require.Equal(t, tval, cval)
@@ -379,29 +383,29 @@ func TestCowBuildDelta(t *testing.T) {
 	cow := roundCowState{}
 	cow.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
 	txn := transactions.Transaction{}
-	ed, err := cow.BuildEvalDelta(aidx, &txn)
+	ed, err := cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Empty(ed)
 
 	cow.sdeltas[creator] = make(map[storagePtr]*storageDelta)
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Empty(ed)
 
 	// check global delta
 	cow.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
-	ed, err = cow.BuildEvalDelta(1, &txn)
+	ed, err = cow.buildEvalDelta(1, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "found storage delta for different app")
 	a.Empty(ed)
 
 	cow.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(transactions.EvalDelta{GlobalDelta: basics.StateDelta{}}, ed)
 
 	cow.sdeltas[creator][storagePtr{aidx + 1, true}] = &storageDelta{}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "found storage delta for different app")
 	a.Empty(ed)
@@ -409,7 +413,7 @@ func TestCowBuildDelta(t *testing.T) {
 	delete(cow.sdeltas[creator], storagePtr{aidx + 1, true})
 	cow.sdeltas[sender] = make(map[storagePtr]*storageDelta)
 	cow.sdeltas[sender][storagePtr{aidx, true}] = &storageDelta{}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "found more than one global delta")
 	a.Empty(ed)
@@ -418,7 +422,7 @@ func TestCowBuildDelta(t *testing.T) {
 	delete(cow.sdeltas[sender], storagePtr{aidx, true})
 	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{}
 
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "invalid Account reference ")
 	a.Empty(ed)
@@ -428,7 +432,7 @@ func TestCowBuildDelta(t *testing.T) {
 	cow.mods.Hdr = &bookkeeping.BlockHeader{
 		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: protocol.ConsensusV25},
 	}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -441,7 +445,7 @@ func TestCowBuildDelta(t *testing.T) {
 	// check v27 behavior for empty deltas
 	cow.mods.Hdr = nil
 	cow.proto = config.Consensus[protocol.ConsensusCurrentVersion]
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -464,7 +468,7 @@ func TestCowBuildDelta(t *testing.T) {
 			},
 		},
 	}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -504,7 +508,7 @@ func TestCowBuildDelta(t *testing.T) {
 		},
 	}
 
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -538,7 +542,7 @@ func TestCowBuildDelta(t *testing.T) {
 			},
 		},
 	}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -569,7 +573,7 @@ func TestCowBuildDelta(t *testing.T) {
 		},
 		accountIdx: 1,
 	}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -597,7 +601,7 @@ func TestCowBuildDelta(t *testing.T) {
 		},
 		accountIdx: 1,
 	}
-	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	ed, err = cow.buildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		transactions.EvalDelta{
@@ -1063,8 +1067,8 @@ func TestCowGetters(t *testing.T) {
 	ts := int64(11223344)
 	c.mods.PrevTimestamp = ts
 
-	a.Equal(round, c.round())
-	a.Equal(ts, c.prevTimestamp())
+	a.Equal(round, c.Round())
+	a.Equal(ts, c.PrevTimestamp())
 }
 
 func TestCowGet(t *testing.T) {
@@ -1104,7 +1108,7 @@ func TestCowGetKey(t *testing.T) {
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
-	_, ok, err := c.GetKey(addr, aidx, true, "gkey", 0)
+	_, ok, err := c.getKey(addr, aidx, true, "gkey", 0)
 	a.Error(err)
 	a.False(ok)
 	a.Contains(err.Error(), "cannot fetch key")
@@ -1112,10 +1116,10 @@ func TestCowGetKey(t *testing.T) {
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: allocAction}},
 	}
-	_, ok, err = c.GetKey(addr, aidx, true, "gkey", 0)
+	_, ok, err = c.getKey(addr, aidx, true, "gkey", 0)
 	a.NoError(err)
 	a.False(ok)
-	_, ok, err = c.GetKey(addr, aidx, true, "gkey", 0)
+	_, ok, err = c.getKey(addr, aidx, true, "gkey", 0)
 	a.NoError(err)
 	a.False(ok)
 
@@ -1128,7 +1132,7 @@ func TestCowGetKey(t *testing.T) {
 			},
 		},
 	}
-	_, ok, err = c.GetKey(addr, aidx, true, "gkey", 0)
+	_, ok, err = c.getKey(addr, aidx, true, "gkey", 0)
 	a.NoError(err)
 	a.False(ok)
 
@@ -1140,7 +1144,7 @@ func TestCowGetKey(t *testing.T) {
 			},
 		},
 	}
-	val, ok, err := c.GetKey(addr, aidx, true, "gkey", 0)
+	val, ok, err := c.getKey(addr, aidx, true, "gkey", 0)
 	a.NoError(err)
 	a.True(ok)
 	a.Equal(tv, val)
@@ -1155,14 +1159,14 @@ func TestCowGetKey(t *testing.T) {
 		},
 	}
 
-	val, ok, err = c.GetKey(addr, aidx, false, "lkey", 0)
+	val, ok, err = c.getKey(addr, aidx, false, "lkey", 0)
 	a.NoError(err)
 	a.True(ok)
 	a.Equal(tv, val)
 
 	// ensure other requests go down to roundCowParent
-	a.Panics(func() { c.GetKey(ledgertesting.RandomAddress(), aidx, false, "lkey", 0) })
-	a.Panics(func() { c.GetKey(addr, aidx+1, false, "lkey", 0) })
+	a.Panics(func() { c.getKey(ledgertesting.RandomAddress(), aidx, false, "lkey", 0) })
+	a.Panics(func() { c.getKey(addr, aidx+1, false, "lkey", 0) })
 }
 
 func TestCowSetKey(t *testing.T) {
@@ -1179,14 +1183,14 @@ func TestCowSetKey(t *testing.T) {
 	key := strings.Repeat("key", 100)
 	val := "val"
 	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err := c.SetKey(addr, aidx, true, key, tv, 0)
+	err := c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "key too long")
 
 	key = "key"
 	val = strings.Repeat("val", 100)
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "value too long")
 
@@ -1195,7 +1199,7 @@ func TestCowSetKey(t *testing.T) {
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot set key")
 
@@ -1211,13 +1215,13 @@ func TestCowSetKey(t *testing.T) {
 			},
 		},
 	}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "exceeds schema bytes")
 
 	counts = basics.StateSchema{NumUint: 1}
 	maxCounts = basics.StateSchema{NumByteSlice: 1}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "exceeds schema integer")
 
@@ -1232,12 +1236,12 @@ func TestCowSetKey(t *testing.T) {
 			},
 		},
 	}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.NoError(err)
 
 	counts = basics.StateSchema{NumUint: 1}
 	maxCounts = basics.StateSchema{NumByteSlice: 1, NumUint: 1}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.NoError(err)
 
 	// check local
@@ -1252,12 +1256,12 @@ func TestCowSetKey(t *testing.T) {
 			},
 		},
 	}
-	err = c.SetKey(addr1, aidx, false, key, tv, 0)
+	err = c.setKey(addr1, aidx, false, key, tv, 0)
 	a.NoError(err)
 
 	// ensure other requests go down to roundCowParent
-	a.Panics(func() { c.SetKey(ledgertesting.RandomAddress(), aidx, false, key, tv, 0) })
-	a.Panics(func() { c.SetKey(addr, aidx+1, false, key, tv, 0) })
+	a.Panics(func() { c.setKey(ledgertesting.RandomAddress(), aidx, false, key, tv, 0) })
+	a.Panics(func() { c.setKey(addr, aidx+1, false, key, tv, 0) })
 }
 
 func TestCowSetKeyVFuture(t *testing.T) {
@@ -1276,21 +1280,21 @@ func TestCowSetKeyVFuture(t *testing.T) {
 	key := strings.Repeat("key", 100)
 	val := "val"
 	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err := c.SetKey(addr, aidx, true, key, tv, 0)
+	err := c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "key too long")
 
 	key = "key"
 	val = strings.Repeat("val", 100)
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "value too long")
 
 	key = strings.Repeat("k", protoF.MaxAppKeyLen)
 	val = strings.Repeat("v", protoF.MaxAppSumKeyValueLens-len(key)+1)
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "key/value total too long")
 }
@@ -1358,7 +1362,7 @@ func TestCowDelKey(t *testing.T) {
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
-	err := c.DelKey(addr, aidx, true, key, 0)
+	err := c.delKey(addr, aidx, true, key, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot del key")
 
@@ -1374,7 +1378,7 @@ func TestCowDelKey(t *testing.T) {
 			},
 		},
 	}
-	err = c.DelKey(addr, aidx, true, key, 0)
+	err = c.delKey(addr, aidx, true, key, 0)
 	a.NoError(err)
 
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
@@ -1387,10 +1391,10 @@ func TestCowDelKey(t *testing.T) {
 			},
 		},
 	}
-	err = c.DelKey(addr, aidx, false, key, 0)
+	err = c.delKey(addr, aidx, false, key, 0)
 	a.NoError(err)
 
 	// ensure other requests go down to roundCowParent
-	a.Panics(func() { c.DelKey(ledgertesting.RandomAddress(), aidx, false, key, 0) })
-	a.Panics(func() { c.DelKey(addr, aidx+1, false, key, 0) })
+	a.Panics(func() { c.delKey(ledgertesting.RandomAddress(), aidx, false, key, 0) })
+	a.Panics(func() { c.delKey(addr, aidx+1, false, key, 0) })
 }

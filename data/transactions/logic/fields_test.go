@@ -41,7 +41,7 @@ func TestGlobalFieldsVersions(t *testing.T) {
 	}
 	require.Greater(t, len(fields), 1)
 
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
@@ -101,7 +101,7 @@ func TestTxnFieldVersions(t *testing.T) {
 	}
 	txnaVersion := uint64(appsEnabledVersion)
 
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 	txn := makeSampleTxn()
 	// We'll reject too early if we have a nonzero RekeyTo, because that
 	// field must be zero for every txn in the group if this is an old
@@ -190,7 +190,7 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			ep.TxnGroup[1].Lsig.Logic = ops.Program
 			_, err := EvalSignature(1, ep)
 			require.Error(t, err)
-			ep.Ledger = MakeLedger(nil)
+			ep.Ledger = NewLedger(nil)
 			_, err = EvalApp(ops.Program, 1, 888, ep)
 			if v < txnEffectsVersion {
 				require.Error(t, err, source)

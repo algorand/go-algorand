@@ -46,6 +46,12 @@ const (
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	encodedMaxForeignAssets = 32
+
+	// encodedMaxBoxes sets the allocation bound for the maximum
+	// number of Boxes that a transaction decoded off of the wire
+	// can contain. Its value is verified against consensus parameters in
+	// TestEncodedAppTxnAllocationBounds
+	encodedMaxBoxes = 32
 )
 
 // OnCompletion is an enum representing some layer 1 side effect that an
@@ -115,6 +121,12 @@ type ApplicationCallTxnFields struct {
 	// by the executing ApprovalProgram or ClearStateProgram.
 	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
 
+	// Boxes are the boxes that can be accessed by this transaction (and others
+	// in the same group). The Index in the boxRef is the slot of ForeignApps
+	// that the name is asscoiated with (shifted by 1, so 0 indicates "current
+	// app")
+	Boxes []BoxRef `codec:"apbx,allocbound=encodedMaxBoxes"`
+
 	// ForeignAssets are asset IDs for assets whose AssetParams
 	// (and since v4, Holdings) may be read by the executing
 	// ApprovalProgram or ClearStateProgram.
@@ -155,6 +167,14 @@ type ApplicationCallTxnFields struct {
 	// method below!
 }
 
+// BoxRef names a box by the slot
+type BoxRef struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Index uint64 `codec:"i"`
+	Name  string `codec:"n"`
+}
+
 // Empty indicates whether or not all the fields in the
 // ApplicationCallTxnFields are zeroed out
 func (ac *ApplicationCallTxnFields) Empty() bool {
@@ -174,6 +194,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.ForeignAssets != nil {
+		return false
+	}
+	if ac.Boxes != nil {
 		return false
 	}
 	if ac.LocalStateSchema != (basics.StateSchema{}) {

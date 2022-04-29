@@ -253,7 +253,7 @@ func TestRekeyPay(t *testing.T) {
 	TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay+"; int 1", ep)
 	// Note that the Sender would fail min balance check if we did it here.
 	// It seems proper to wait until end of txn though.
-	// See explanation in logicLedger's Perform()
+	// See explanation in cowRoundState's Perform()
 }
 
 func TestRekeyBack(t *testing.T) {
@@ -496,7 +496,7 @@ func TestNumInnerPooled(t *testing.T) {
 	tx := txntest.Txn{
 		Type: protocol.ApplicationCallTx,
 	}.SignedTxn()
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
 	short := pay + ";int 1"
@@ -1705,6 +1705,11 @@ int 1
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
+			// Whenever MakeSampleEnv() is changed to create a different
+			// transaction, we must reverse those changes here, so that the
+			// historic test is correct.
+			parentTx.Boxes = nil
+
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
 				childAppID,
@@ -2025,6 +2030,11 @@ int 1
 
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
+
+			// Whenever MakeSampleEnv() is changed to create a different
+			// transaction, we must reverse those changes here, so that the
+			// historic test is correct.
+			parentTx.Boxes = nil
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -2496,7 +2506,7 @@ func TestNumInnerDeep(t *testing.T) {
 		ForeignApps:   []basics.AppIndex{basics.AppIndex(222)},
 	}.SignedTxnWithAD()
 	require.Equal(t, 888, int(tx.Txn.ApplicationID))
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 
 	pay3 := TestProg(t, pay+pay+pay+"int 1;", AssemblerMaxVersion).Program
 	ledger.NewApp(tx.Txn.Receiver, 222, basics.AppParams{

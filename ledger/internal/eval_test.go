@@ -558,6 +558,10 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 	return res, nil
 }
 
+func (ledger *evalTestLedger) LookupKv(rnd basics.Round, key string) (*string, error) {
+	panic("unimplemented")
+}
+
 // GenesisHash returns the genesis hash for this ledger.
 func (ledger *evalTestLedger) GenesisHash() crypto.Digest {
 	return ledger.genesisHash
@@ -734,6 +738,10 @@ func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Addr
 
 func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	return ledgercore.AssetResource{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) (*string, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

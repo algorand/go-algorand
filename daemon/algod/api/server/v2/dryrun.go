@@ -326,6 +326,10 @@ func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx 
 	return result, nil
 }
 
+func (dl *dryrunLedger) LookupKv(rnd basics.Round, key string) (*string, error) {
+	return nil, fmt.Errorf("boxes not implemented in dry run")
+}
+
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:
