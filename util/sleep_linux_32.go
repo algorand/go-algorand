@@ -14,23 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+//go:build linux && (arm || 386)
+// +build linux
+// +build arm 386
+
+package util
 
 import (
-	"testing"
-
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
+	"syscall"
+	"time"
 )
 
-func TestVLQ(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))
-	a.Equal("AACA", MakeSourceMapLine(0, 0, 1, 0))
-	a.Equal("AAEA", MakeSourceMapLine(0, 0, 2, 0))
-	a.Equal("AAgBA", MakeSourceMapLine(0, 0, 16, 0))
-	a.Equal("AAggBA", MakeSourceMapLine(0, 0, 512, 0))
-	a.Equal("ADggBD", MakeSourceMapLine(0, -1, 512, -1))
+// NanoSleep sleeps for the given d duration.
+func NanoSleep(d time.Duration) {
+	timeSpec := &syscall.Timespec{
+		Nsec: int32(d.Nanoseconds() % time.Second.Nanoseconds()),
+		Sec:  int32(d.Nanoseconds() / time.Second.Nanoseconds()),
+	}
+	syscall.Nanosleep(timeSpec, nil) // nolint:errcheck
 }

@@ -17,9 +17,9 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1507,4 +1508,308 @@ func TestGroupTxnIdx(t *testing.T) {
 
 	r := runAllResultFromInvocation(*local)
 	a.Equal(allPassing(len(local.runs)), r)
+}
+
+func TestRunAllGloads(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	sourceA := `#pragma version 6
+
+	txn ApplicationID
+	bz handle_createapp
+	
+	int 99
+	store 1
+	
+	itxn_begin
+		int acfg
+		itxn_field TypeEnum
+		int 1000000
+		itxn_field ConfigAssetTotal
+		int 3
+		itxn_field ConfigAssetDecimals
+		byte base64 AA== 
+		itxn_field ConfigAssetUnitName
+		byte base64(AAAAAAAAAAA=)
+		itxn_field ConfigAssetName
+		pushbytes 0x0000000000000000 
+		itxn_field ConfigAssetURL
+		global CurrentApplicationAddress
+		dup
+		dup2
+		itxn_field ConfigAssetManager
+		itxn_field ConfigAssetReserve
+		itxn_field ConfigAssetFreeze
+		itxn_field ConfigAssetClawback
+	itxn_submit
+	
+	handle_createapp:
+	int 1`
+
+	sourceB := `#pragma version 6
+
+	txn ApplicationID
+	bz handle_createapp
+	
+	gload 2 1
+	itob
+	log
+	
+	handle_createapp:
+	int 1`
+
+	ops, err := logic.AssembleString(sourceA)
+	a.NoError(err)
+	progA := base64.StdEncoding.EncodeToString(ops.Program)
+
+	ops, err = logic.AssembleString(sourceB)
+	a.NoError(err)
+	progB := base64.StdEncoding.EncodeToString(ops.Program)
+
+	// Transaction group with 5 transactions
+	// 1. Payment txn to app A
+	// 2. Payment txn to app B
+	// 3. App call to app A
+	// 4. App call to app B with gload on app A scratch slot
+	ddrBlob := `{
+		"accounts": [
+		  {
+			"address": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+			"amount": 4000001724861773,
+			"amount-without-pending-rewards": 4000001724861773,
+			"min-balance": 100000,
+			"participation": {
+			  "selection-participation-key": "S3YIZ2TNGSl1plq93eXsXsRhJRfCyIMKq0sq12++C8Y=",
+			  "state-proof-key": "4BqeyojB23ZEj7Ddf9MKtIHBKFFYKhIYEwctoSuL9iXXdQ6R5lWzIJ5Sun5wHJhE9Rk5/wjjTeiCFJPEJVafrA==",
+			  "vote-first-valid": 0,
+			  "vote-key-dilution": 10000,
+			  "vote-last-valid": 3000000,
+			  "vote-participation-key": "qmkEl2AbMO/KKK+iOgIhSB3Q/4WXftoucPUvEYFaWbo="
+			},
+			"pending-rewards": 0,
+			"reward-base": 1,
+			"rewards": 3999997773,
+			"round": 41,
+			"status": "Online",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 0,
+			"total-created-apps": 0,
+			"total-created-assets": 0
+		  },
+		  {
+			"address": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+			"amount": 74198032,
+			"amount-without-pending-rewards": 74198032,
+			"assets": [
+			  {
+				"amount": 1000000,
+				"asset-id": 45,
+				"is-frozen": false
+			  },
+			  {
+				"amount": 1000000,
+				"asset-id": 50,
+				"is-frozen": false
+			  }
+			],
+			"created-assets": [
+			  {
+				"index": 45,
+				"params": {
+				  "clawback": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "creator": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "decimals": 3,
+				  "freeze": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "manager": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "name-b64": "AAAAAAAAAAA=",
+				  "reserve": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "total": 1000000,
+				  "unit-name-b64": "AA==",
+				  "url-b64": "AAAAAAAAAAA="
+				}
+			  },
+			  {
+				"index": 50,
+				"params": {
+				  "clawback": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "creator": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "decimals": 3,
+				  "freeze": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "manager": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "name-b64": "AAAAAAAAAAA=",
+				  "reserve": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+				  "total": 1000000,
+				  "unit-name-b64": "AA==",
+				  "url-b64": "AAAAAAAAAAA="
+				}
+			  }
+			],
+			"min-balance": 300000,
+			"pending-rewards": 0,
+			"reward-base": 1,
+			"rewards": 32,
+			"round": 41,
+			"status": "Offline",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 2,
+			"total-created-apps": 0,
+			"total-created-assets": 2
+		  },
+		  {
+			"address": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+			"amount": 4000001724861773,
+			"amount-without-pending-rewards": 4000001724861773,
+			"min-balance": 100000,
+			"participation": {
+			  "selection-participation-key": "S3YIZ2TNGSl1plq93eXsXsRhJRfCyIMKq0sq12++C8Y=",
+			  "state-proof-key": "4BqeyojB23ZEj7Ddf9MKtIHBKFFYKhIYEwctoSuL9iXXdQ6R5lWzIJ5Sun5wHJhE9Rk5/wjjTeiCFJPEJVafrA==",
+			  "vote-first-valid": 0,
+			  "vote-key-dilution": 10000,
+			  "vote-last-valid": 3000000,
+			  "vote-participation-key": "qmkEl2AbMO/KKK+iOgIhSB3Q/4WXftoucPUvEYFaWbo="
+			},
+			"pending-rewards": 0,
+			"reward-base": 1,
+			"rewards": 3999997773,
+			"round": 41,
+			"status": "Online",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 0,
+			"total-created-apps": 0,
+			"total-created-assets": 0
+		  },
+		  {
+			"address": "KLWQTWPJXUAPVZNANKGGTTFGPPJZDOLGOCBCBRHR53C6J2FDYF2GBABCRU",
+			"amount": 27300019,
+			"amount-without-pending-rewards": 27300019,
+			"min-balance": 100000,
+			"pending-rewards": 0,
+			"reward-base": 1,
+			"rewards": 19,
+			"round": 41,
+			"status": "Offline",
+			"total-apps-opted-in": 0,
+			"total-assets-opted-in": 0,
+			"total-created-apps": 0,
+			"total-created-assets": 0
+		  }
+		],
+		"apps": [
+		  {
+			"id": 39,
+			"params": {
+			  "approval-program": "%s",
+			  "clear-state-program": "BoEB",
+			  "creator": "5Z2LOJJCA52LM6I6FLS3DLRBG7UWDEQ2RS2Y76Z66QPUNLAGGJIDDX7BII",
+			  "global-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  },
+			  "local-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  }
+			}
+		  },
+		  {
+			"id": 41,
+			"params": {
+			  "approval-program": "%s",
+			  "clear-state-program": "BoEB",
+			  "creator": "5P7Y556QIE3UCBNWJ7GXPNDCV6CLZF5VDEZ2PTTGNY5PQ2OBA4D6GXZFZA",
+			  "global-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  },
+			  "local-state-schema": {
+				"num-byte-slice": 1,
+				"num-uint": 1
+			  }
+			}
+		  }
+		],
+		"latest-timestamp": 1646848841,
+		"protocol-version": "future",
+		"round": 41,
+		"sources": null,
+		"txns": [
+		  {
+		"sig": "EPT8gSZDv20jj+bRwoqeqt7js8pquiYoH+pK4tl+qzujseK6+3QiFJV0qFU6p2xlrLNvsbqHBMmbOGjX9HUmAQ==",
+		"txn": {
+		  "amt": 41300000,
+		  "fee": 1000,
+		  "fv": 40,
+		  "gen": "sandnet-v1",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "rcv": "55VWZPQYI3VTDONPQX2RD77F2VULZ3SXPTIZ42QXO7TETRU5TJ5VZYLT44",
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+		  "type": "pay"
+		}
+	  },
+		  {
+		"sig": "Wmphf7cw//QSlNg0WD1VjFRwtVh6KOo/hFxdwD57aW/swuNCUN7L5ew0BS1vWOp2C6eVzZPK145b+H2A2PziBg==",
+		"txn": {
+		  "amt": 7700000,
+		  "fee": 1000,
+		  "fv": 40,
+		  "gen": "sandnet-v1",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "rcv": "KLWQTWPJXUAPVZNANKGGTTFGPPJZDOLGOCBCBRHR53C6J2FDYF2GBABCRU",
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+		  "type": "pay"
+		}
+	  },
+		  {
+		"sig": "IyrYrbX6yaQfUcNHmArTWptV3WI9fdUbRT4K7q6KaCoub5L/dRRV6bFcLAcNZKTXNLYR+d4/GYz6XFhfFBp+DQ==",
+		"txn": {
+		  "apid": 39,
+		  "fee": 1000,
+		  "fv": 40,
+		  "gen": "sandnet-v1",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+		  "type": "appl"
+		}
+	  },
+		  {
+		"sig": "H1TQRug7WG3tjGae3bXzDiAoXbILByvc9//J+imkFgaAHW5UPzvJGtn7yVpr8tInYVPnnTF+l88TXY/ANUB2CQ==",
+		"txn": {
+		  "apid": 41,
+		  "fee": 1000,
+		  "fv": 40,
+		  "gen": "sandnet-v1",
+		  "gh": "2m5E5yOWZvqfj2FL3GRJOo+Pq2tJMRH8LbpCwQRPRDY=",
+		  "grp": "SY3swywpYP2hEQqZCKSM6uvqHgI34063jST7KPiKjBg=",
+		  "lv": 1040,
+		  "snd": "KQCXQJRLGPOQCMGM6ZH2WOVCQXYMH4XVYBJFTNPY4YW3CAVN3DB72N6ODA",
+		  "type": "appl"
+		}
+	  }
+		]
+	  }`
+
+	// Format string with base64 encoded program bytes string
+	ddrBlob = fmt.Sprintf(ddrBlob, progA, progB)
+
+	ds := DebugParams{
+		Proto:      string(protocol.ConsensusCurrentVersion),
+		DdrBlob:    []byte(ddrBlob),
+		GroupIndex: 4,
+		RunMode:    "application",
+	}
+
+	local := MakeLocalRunner(nil)
+	err = local.Setup(&ds)
+	a.NoError(err)
+
+	err = local.RunAll()
+	a.NoError(err)
 }

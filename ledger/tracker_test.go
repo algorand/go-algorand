@@ -18,18 +18,31 @@ package ledger
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// commitRoundNext schedules a commit with as many rounds as possible
+func commitRoundNext(l *Ledger) {
+	// maxAcctLookback := l.trackers.cfg.MaxAcctLookback
+	maxAcctLookback := 320
+	commitRoundLookback(basics.Round(maxAcctLookback), l)
+}
 
 // TestTrackerScheduleCommit checks catchpointTracker.produceCommittingTask does not increase commit offset relative
 // to the value set by accountUpdates
@@ -132,4 +145,164 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	a.NotContains(bufNewLogger.String(), "tracker *ledger.catchpointTracker produced offset")
 	dc := <-ml.trackers.deferredCommits
 	a.Equal(expectedOffset, dc.offset)
+}
+
+type producePrepareBlockingTracker struct {
+	produceReleaseLock       chan struct{}
+	prepareCommitEntryLock   chan struct{}
+	prepareCommitReleaseLock chan struct{}
+	cancelTasks              bool
+}
+
+// loadFromDisk is not implemented in the blockingTracker.
+func (bt *producePrepareBlockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
+	return nil
+}
+
+// newBlock is not implemented in the blockingTracker.
+func (bt *producePrepareBlockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+}
+
+// committedUpTo in the blockingTracker just stores the committed round.
+func (bt *producePrepareBlockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
+	return 0, basics.Round(0)
+}
+
+func (bt *producePrepareBlockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	if bt.cancelTasks {
+		return nil
+	}
+
+	<-bt.produceReleaseLock
+	return dcr
+}
+
+// prepareCommit, is not used by the blockingTracker
+func (bt *producePrepareBlockingTracker) prepareCommit(*deferredCommitContext) error {
+	bt.prepareCommitEntryLock <- struct{}{}
+	<-bt.prepareCommitReleaseLock
+	return nil
+}
+
+// commitRound is not used by the blockingTracker
+func (bt *producePrepareBlockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+	return nil
+}
+
+func (bt *producePrepareBlockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// postCommitUnlocked implements entry/exit blockers, designed for testing.
+func (bt *producePrepareBlockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// handleUnorderedCommit is not used by the blockingTracker
+func (bt *producePrepareBlockingTracker) handleUnorderedCommit(*deferredCommitContext) {
+}
+
+// close is not used by the blockingTracker
+func (bt *producePrepareBlockingTracker) close() {
+}
+
+func (bt *producePrepareBlockingTracker) reset() {
+	bt.prepareCommitEntryLock = make(chan struct{})
+	bt.prepareCommitReleaseLock = make(chan struct{})
+	bt.prepareCommitReleaseLock = make(chan struct{})
+	bt.cancelTasks = false
+}
+
+// TestTrackerDbRoundDataRace checks for dbRound data race
+// when commit scheduling relies on dbRound from the tracker registry but tracker's deltas
+// are used in calculations
+// 1. Add say 128 + MaxAcctLookback (MaxLookback) blocks and commit
+// 2. Add 2*MaxLookback blocks without committing
+// 3. Set a block in prepareCommit, and initiate the commit
+// 4. Set a block in produceCommittingTask, add a new block and resume the commit
+// 5. Resume produceCommittingTask
+// 6. The data race and panic happens in block queue syncher thread
+func TestTrackerDbRoundDataRace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Skip("For manual run when touching ledger locking")
+
+	a := require.New(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1)
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+	cfg := config.GetDefaultLocal()
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer ledger.Close()
+
+	stallingTracker := &producePrepareBlockingTracker{
+		// produceEntryLock:         make(chan struct{}, 10),
+		produceReleaseLock:       make(chan struct{}),
+		prepareCommitEntryLock:   make(chan struct{}, 10),
+		prepareCommitReleaseLock: make(chan struct{}),
+	}
+	ledger.trackerMu.Lock()
+	ledger.trackers.mu.Lock()
+	ledger.trackers.trackers = append([]ledgerTracker{stallingTracker}, ledger.trackers.trackers...)
+	ledger.trackers.mu.Unlock()
+	ledger.trackerMu.Unlock()
+
+	close(stallingTracker.produceReleaseLock)
+	close(stallingTracker.prepareCommitReleaseLock)
+
+	targetRound := basics.Round(128) * 5
+	blk := genesisInitState.Block
+	for i := basics.Round(0); i < targetRound-1; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := ledger.AddBlock(blk, agreement.Certificate{})
+		a.NoError(err)
+	}
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+	err = ledger.AddBlock(blk, agreement.Certificate{})
+	a.NoError(err)
+	commitRoundNext(ledger)
+	ledger.trackers.waitAccountsWriting()
+	lookback := 320
+	// lookback := cfg.MaxAcctLookback
+	a.Equal(targetRound-basics.Round(lookback), ledger.trackers.dbRound)
+
+	// build up some non-committed queue
+	stallingTracker.cancelTasks = true
+	for i := targetRound; i < 2*targetRound; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := ledger.AddBlock(blk, agreement.Certificate{})
+		a.NoError(err)
+	}
+	ledger.WaitForCommit(2*targetRound - 1)
+
+	stallingTracker.reset()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		commitRoundNext(ledger)
+		wg.Done()
+	}()
+
+	<-stallingTracker.prepareCommitEntryLock
+	stallingTracker.produceReleaseLock = make(chan struct{})
+
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+	err = ledger.AddBlock(blk, agreement.Certificate{})
+	a.NoError(err)
+	// the notifyCommit -> committedUpTo -> scheduleCommit chain
+	// is called right after the cond var, so wait until that moment
+	ledger.WaitForCommit(2 * targetRound)
+
+	// let the commit to complete
+	close(stallingTracker.prepareCommitReleaseLock)
+	wg.Wait()
+
+	// unblock the notifyCommit (scheduleCommit) goroutine
+	stallingTracker.cancelTasks = true
+	close(stallingTracker.produceReleaseLock)
 }

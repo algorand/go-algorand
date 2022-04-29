@@ -612,6 +612,13 @@ type CompileResponse struct {
 	Result string `json:"result"`
 }
 
+// DisassembleResponse defines model for DisassembleResponse.
+type DisassembleResponse struct {
+
+	// disassembled Teal code
+	Result string `json:"result"`
+}
+
 // DryrunResponse defines model for DryrunResponse.
 type DryrunResponse struct {
 	Error string `json:"error"`
