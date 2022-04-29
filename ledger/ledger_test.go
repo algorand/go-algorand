@@ -17,12 +17,14 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime/pprof"
+	"sort"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/account"
@@ -1807,7 +1809,9 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 		accounts[addr] = genesisInitState.Accounts[addr]
 		keys[addr] = initKeys[addr]
 	}
+	sort.SliceStable(addresses, func(i, j int) bool { return bytes.Compare(addresses[i][:], addresses[j][:]) == -1 })
 
+	onlineTotals := make([]basics.MicroAlgos, maxBlocks+1)
 	curAddressIdx := 0
 	// run for maxBlocks rounds with random payment transactions
 	// generate 1000 txn per block
@@ -1844,6 +1848,8 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 		if i%100 == 0 || i == maxBlocks-1 {
 			l.WaitForCommit(l.Latest())
 		}
+		onlineTotals[i+1], err = l.accts.onlineTotals(basics.Round(i + 1))
+		require.NoError(t, err)
 	}
 
 	latest := l.Latest()
@@ -1851,12 +1857,19 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
 
 	origBalances := make([]basics.MicroAlgos, len(addresses))
+	origRewardsBalances := make([]basics.MicroAlgos, len(addresses))
 	origAgreementBalances := make([]basics.MicroAlgos, len(addresses))
 	for i, addr := range addresses {
 		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
 		require.NoError(t, err)
 		require.Equal(t, latest, rnd)
 		origBalances[i] = ad.MicroAlgos
+
+		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origBalances[i], wo)
+		origRewardsBalances[i] = acct.MicroAlgos
 
 		oad, err := l.LookupAgreement(balancesRound, addr)
 		require.NoError(t, err)
@@ -1869,15 +1882,32 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	l.cfg = cfg
 	l.reloadLedger()
 
+	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	require.Error(t, err)
+	for i := basics.Round(proto.MaxBalLookback - shorterLookback + 1); i <= l.Latest(); i++ {
+		online, err := l.OnlineTotals(i)
+		require.NoError(t, err)
+		require.Equal(t, onlineTotals[i], online)
+	}
+
 	for i, addr := range addresses {
 		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
 		require.NoError(t, err)
 		require.Equal(t, latest, rnd)
 		require.Equal(t, origBalances[i], ad.MicroAlgos)
 
-		// TODO: enable after supply history
-		// oad, err := l.LookupAgreement(balancesRound, addr)
-		// require.NoError(t, err)
-		// require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
+		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origRewardsBalances[i], acct.MicroAlgos)
+		require.Equal(t, origBalances[i], wo)
+
+		// TODO: FIXME: fails after load - need in-memory cache populated by newBlock while replaying blocks
+		oad, err := l.LookupAgreement(balancesRound, addr)
+		require.NoError(t, err)
+		require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
+
+		// TODO:
+		// add a test checking all committed pre-reload entries are gone
 	}
 }

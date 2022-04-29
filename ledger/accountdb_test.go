@@ -3331,8 +3331,6 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 func TestAccountOnlineRoundParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
@@ -3345,7 +3343,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 	// entry i is for round i+1 since db initialized with entry for round 0
-	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, 80+proto.MaxBalLookback)
+	const maxRounds = 40 // any number
+	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, maxRounds)
 	for i := range onlineRoundParams {
 		onlineRoundParams[i].OnlineSupply = uint64(i + 1)
 	}
@@ -3355,9 +3354,9 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 
 	dbOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
-	require.Equal(t, 80+int(proto.MaxBalLookback)+1, len(dbOnlineRoundParams)) // +1 comes from init state
+	require.Equal(t, maxRounds+1, len(dbOnlineRoundParams)) // +1 comes from init state
 	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
-	require.Equal(t, 80+proto.MaxBalLookback, uint64(endRound))
+	require.Equal(t, maxRounds, int(endRound))
 
 	err = accountsPruneOnlineRoundParams(tx, 10)
 	require.NoError(t, err)
@@ -3365,5 +3364,5 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
 	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
-	require.Equal(t, 80+proto.MaxBalLookback, uint64(endRound))
+	require.Equal(t, maxRounds, int(endRound))
 }

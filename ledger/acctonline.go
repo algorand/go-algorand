@@ -20,6 +20,7 @@ import (
 	"container/heap"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -487,7 +488,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// OnlineTotals return the total online balance for the given round. It would replace the existing accountupdates.Total(rnd).
+// OnlineTotals return the total online balance for the given round.
 func (ao *onlineAccounts) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	ao.accountsMu.RLock()
 	defer ao.accountsMu.RUnlock()
@@ -580,35 +581,43 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
 		offset, err = ao.roundOffset(rnd)
+		inHistory := false
 		if err != nil {
-			return
+			var roundOffsetError *RoundOffsetError
+			if !errors.As(err, &roundOffsetError) {
+				return
+			}
+			// the round number cannot be found in deltas, it is in history
+			inHistory = true
+			err = nil
 		}
 		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
 			return
 		}
 
-		// TODO: ensure protocol version and totals are available after shrinking deltas
 		rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
 		rewardsLevel = ao.onlineRoundParamsData[paramsOffset].RewardsLevel
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := ao.accounts[addr]
-		if indeltas {
-			// Check if this is the most recent round, in which case, we can
-			// use a cache of the most recent account state.
-			if offset == uint64(len(ao.deltas)) {
-				return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
-			}
-			// the account appears in the deltas, but we don't know if it appears in the
-			// delta range of [0..offset], so we'll need to check :
-			// Traverse the deltas backwards to ensure that later updates take
-			// priority if present.
-			for offset > 0 {
-				offset--
-				d, ok := ao.deltas[offset].GetData(addr)
-				if ok {
-					return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+		if !inHistory {
+			macct, indeltas := ao.accounts[addr]
+			if indeltas {
+				// Check if this is the most recent round, in which case, we can
+				// use a cache of the most recent account state.
+				if offset == uint64(len(ao.deltas)) {
+					return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+				}
+				// the account appears in the deltas, but we don't know if it appears in the
+				// delta range of [0..offset], so we'll need to check :
+				// Traverse the deltas backwards to ensure that later updates take
+				// priority if present.
+				for offset > 0 {
+					offset--
+					d, ok := ao.deltas[offset].GetData(addr)
+					if ok {
+						return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+					}
 				}
 			}
 		}
@@ -663,33 +672,42 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
 		offset, err := ao.roundOffset(rnd)
+		inMemory := true
 		if err != nil {
-			ao.accountsMu.RUnlock()
-			return nil, err
+			var roundOffsetError *RoundOffsetError
+			if !errors.As(err, &roundOffsetError) {
+				ao.accountsMu.RUnlock()
+				return nil, err
+			}
+			// the round number cannot be found in deltas, it is in history
+			inMemory = false
+			err = nil
 		}
 
-		// Determine how many accounts have been modified in-memory,
-		// so that we obtain enough top accounts from disk (accountdb).
-		// If the *onlineAccount is nil, that means the account is offline
-		// as of the most recent change to that account, or its vote key
-		// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
-		// representation of the most recent state of the account, and it
-		// is online and can vote in voteRnd.
 		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
-		for o := uint64(0); o < offset; o++ {
-			for i := 0; i < ao.deltas[o].Len(); i++ {
-				addr, d := ao.deltas[o].GetByIdx(i)
-				if d.Status != basics.Online {
-					modifiedAccounts[addr] = nil
-					continue
-				}
+		if inMemory {
+			// Determine how many accounts have been modified in-memory,
+			// so that we obtain enough top accounts from disk (accountdb).
+			// If the *onlineAccount is nil, that means the account is offline
+			// as of the most recent change to that account, or its vote key
+			// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
+			// representation of the most recent state of the account, and it
+			// is online and can vote in voteRnd.
+			for o := uint64(0); o < offset; o++ {
+				for i := 0; i < ao.deltas[o].Len(); i++ {
+					addr, d := ao.deltas[o].GetByIdx(i)
+					if d.Status != basics.Online {
+						modifiedAccounts[addr] = nil
+						continue
+					}
 
-				if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
-					modifiedAccounts[addr] = nil
-					continue
-				}
+					if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
+						modifiedAccounts[addr] = nil
+						continue
+					}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
+					modifiedAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
+				}
 			}
 		}
 

@@ -594,13 +594,11 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
 			blk, blockRetrievalError = l.Block(roundNumber)
 			if blockRetrievalError != nil {
-				fmt.Printf("block retrieve failed %v\n", blockRetrievalError)
 				return
 			}
 			select {
 			case blocksStream <- blk:
 			case <-blockEvalFailed:
-				fmt.Printf("block eval failed\n")
 				return
 			}
 		}

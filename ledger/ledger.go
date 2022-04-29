@@ -510,7 +510,7 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 	}
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
-	withoutRewards = data.MicroAlgos
+	withoutRewards = baseData.MicroAlgos
 
 	// mixin online data
 	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)

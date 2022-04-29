@@ -148,8 +148,7 @@ func TestAcctOnline(t *testing.T) {
 	}
 
 	// the test 1 requires 2 blocks with different resource state,
-	// oa requires MaxBalLookback block to start persisting
-	// TODO: change MaxBalLookback to the actual lookback parameter
+	// online accounts tracker requires maxDeltaLookback block to start persisting
 	const numAcctsStage1 = 10
 	numConsumedStage1 := basics.Round(maxDeltaLookback) + numAcctsStage1
 	targetRound := numConsumedStage1
@@ -220,11 +219,11 @@ func TestAcctOnline(t *testing.T) {
 			require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.accountData)
 
-			// TODO: restore after introducing lookback and supply history
-			// roundOffset fails with round 1 before dbRound 3
-			// oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
-			// require.NoError(t, err)
-			// require.Empty(t, oad)
+			// committed round i => dbRound = i - maxDeltaLookback
+			// lookup should correctly return data for earlist round dbRound - maxBalLookback + 1
+			oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
+			require.NoError(t, err)
+			require.Empty(t, oad)
 		}
 	}
 
@@ -249,10 +248,9 @@ func TestAcctOnline(t *testing.T) {
 		require.NotEmpty(t, data.rowid)
 		require.Empty(t, data.accountData)
 
-		// TODO: restore after introducing lookback and supply history
-		// oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
-		// require.NoError(t, err)
-		// require.Empty(t, oad)
+		oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
+		require.NoError(t, err)
+		require.Empty(t, oad)
 
 		// ensure the online entry is still in the DB for the round i
 		data, err = oa.accountsq.lookupOnline(bal.Addr, basics.Round(i))
@@ -310,6 +308,7 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
 	offset, err = ao.roundParamsOffset(basics.Round(6))
 	require.Error(t, err)
+	require.Zero(t, offset)
 
 	ao.cachedDBRoundOnline = 400
 	ao.deltas = nil
@@ -323,6 +322,7 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	ao.onlineRoundParamsData = nil
 	offset, err = ao.roundParamsOffset(basics.Round(400))
 	require.Error(t, err)
+	require.Zero(t, offset)
 }
 
 // TestAcctOnlineRoundParamsCache tests that the ao.onlineRoundParamsData cache and

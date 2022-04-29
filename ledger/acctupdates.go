@@ -490,13 +490,6 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	au.accountsReadCond.Broadcast()
 }
 
-// OnlineTotals returns the online totals of all accounts at the end of round rnd.
-func (au *accountUpdates) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.onlineTotalsImpl(rnd)
-}
-
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
 func (au *accountUpdates) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	au.accountsMu.RLock()
@@ -612,8 +605,9 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }
 
-// onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.
-func (au *accountUpdates) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
+// onlineTotals returns the online totals of all accounts at the end of round rnd.
+// used in tests only
+func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
