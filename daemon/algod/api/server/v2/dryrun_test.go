@@ -1665,15 +1665,16 @@ func checkStateDelta(t *testing.T,
 		assert.Equal(t, (*expectedDelta)[i].Key, vd.Key)
 
 		// Pointer checks: make sure we don't try to derefence a nil.
-		if vd.Value.Bytes != nil && (*expectedDelta)[i].Value.Bytes != nil {
-			assert.Equal(t, *(*expectedDelta)[i].Value.Bytes, *vd.Value.Bytes)
+		if (*expectedDelta)[i].Value.Bytes == nil {
+			assert.Nil(t, vd.Value.Bytes)
 		} else {
+			assert.NotNil(t, vd.Value.Bytes)
 			assert.Equal(t, (*expectedDelta)[i].Value.Bytes, vd.Value.Bytes)
 		}
-
-		if vd.Value.Uint != nil && (*expectedDelta)[i].Value.Uint != nil {
-			assert.Equal(t, *(*expectedDelta)[i].Value.Uint, *vd.Value.Uint)
+		if (*expectedDelta)[i].Value.Uint == nil {
+			assert.Nil(t, vd.Value.Uint)
 		} else {
+			assert.NotNil(t, vd.Value.Uint)
 			assert.Equal(t, (*expectedDelta)[i].Value.Uint, vd.Value.Uint)
 		}
 	}
@@ -1689,8 +1690,7 @@ func checkEvalDelta(t *testing.T,
 			assert.Equal(t, len(*expectedGlobalDelta), len(*rt.GlobalDelta))
 			checkStateDelta(t, rt.GlobalDelta, expectedGlobalDelta)
 		} else {
-			assert.Equal(t, expectedGlobalDelta, nil)
-			assert.Equal(t, len(*expectedGlobalDelta), 0)
+			assert.Nil(t, expectedGlobalDelta)
 		}
 
 		if rt.LocalDeltas != nil {
@@ -1699,7 +1699,7 @@ func checkEvalDelta(t *testing.T,
 				checkStateDelta(t, &ld.Delta, &expectedLocalDelta.Delta)
 			}
 		} else {
-			assert.Equal(t, expectedLocalDelta, nil)
+			assert.Nil(t, expectedLocalDelta)
 		}
 	}
 }
