@@ -1725,8 +1725,6 @@ func TestValidAppReentry(t *testing.T) {
 	endBlock(t, l, eval)
 }
 
-			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
-			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
 func TestMaxInnerTxForSingleAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1756,7 +1754,6 @@ load 0
 <=
 bnz loop
 load 0
-			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
 int 1
 +
 ==
@@ -1806,7 +1803,6 @@ assert
 				Sender:        addrs[0],
 				ApplicationID: index1,
 				Note:          []byte{byte(i)},
-			Note:          []byte{byte(i)}, // we need the note to ensure the transactions have a unique txid.
 			}
 		}
 		dl.txgroup("", callTxGroup...)
