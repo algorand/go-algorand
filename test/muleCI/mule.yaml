@@ -28,6 +28,20 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
+  - name: cicd.centos8.amd64
+    dockerFilePath: docker/build/cicd.centos8.Dockerfile
+    image: algorand/go-algorand-ci-linux-centos8
+    version: scripts/configure_dev-deps.sh
+    arch: amd64
+    env:
+      - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
+      - GOHOSTARCH=amd64
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - ARCH=amd64
   - name: cicd.ubuntu.arm64
     dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
     image: algorand/go-algorand-ci-linux-ubuntu
@@ -104,7 +118,7 @@ tasks:
 
   - task: docker.Make
     name: archive.amd64
-    agent: cicd.centos.amd64
+    agent: cicd.centos8.amd64
     target: archive
 
   - task: docker.Make
