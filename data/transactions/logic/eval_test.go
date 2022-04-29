@@ -154,7 +154,7 @@ func (ep *EvalParams) reset() {
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
-	ep.created = &resources{}
+	ep.available = &resources{}
 	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
 	ep.Trace = &strings.Builder{}
 }
@@ -413,22 +413,22 @@ func TestTLHC(t *testing.T) {
 
 func TestU64Math(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	testAccepts(t, "int 0x1234567812345678; int 0x100000000; /; int 0x12345678; ==", 1)
 }
 
 func TestItob(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	testAccepts(t, "byte 0x1234567812345678; int 0x1234567812345678; itob; ==", 1)
 }
 
 func TestBtoi(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	testAccepts(t, "int 0x1234567812345678; byte 0x1234567812345678; btoi; ==", 1)
 	testAccepts(t, "int 0x34567812345678; byte 0x34567812345678; btoi; ==", 1)
 	testAccepts(t, "int 0x567812345678; byte 0x567812345678; btoi; ==", 1)
@@ -1011,7 +1011,7 @@ func TestGlobal(t *testing.T) {
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
 	require.Len(t, globalFieldSpecs, int(invalidGlobalField))
 
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
 	ledger.NewApp(addr, 888, basics.AppParams{})
@@ -1517,6 +1517,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetFrozen = true
 	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
 	txn.Txn.ForeignApps = []basics.AppIndex{56, 100, 111} // 100 must be 2nd, 111 must be present
+	txn.Txn.Boxes = []transactions.BoxRef{{Index: 0, Name: "self"}, {Index: 2, Name: "hundy"}}
 	txn.Txn.GlobalStateSchema = basics.StateSchema{NumUint: 3, NumByteSlice: 0}
 	txn.Txn.LocalStateSchema = basics.StateSchema{NumUint: 1, NumByteSlice: 2}
 	return txn
@@ -1702,7 +1703,7 @@ func TestGaid(t *testing.T) {
 	txgroup[0] = targetTxn
 	ep := defaultEvalParams(nil)
 	ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
-	ep.Ledger = MakeLedger(nil)
+	ep.Ledger = NewLedger(nil)
 
 	// should fail when no creatable was created
 	_, err := EvalApp(check0.Program, 1, 888, ep)
@@ -2472,9 +2473,9 @@ int 1`,
 			}
 
 			if testCase.errContains != "" {
-				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil), Expect{testCase.errTxn, testCase.errContains})
+				testApps(t, sources, txgroup, LogicVersion, nil, Expect{testCase.errTxn, testCase.errContains})
 			} else {
-				testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil))
+				testApps(t, sources, txgroup, LogicVersion, nil)
 			}
 		})
 	}
@@ -2580,7 +2581,7 @@ int 1
 		txgroup[j].Txn.Type = protocol.ApplicationCallTx
 	}
 
-	testApps(t, sources, txgroup, LogicVersion, MakeLedger(nil))
+	testApps(t, sources, txgroup, LogicVersion, nil)
 }
 
 const testCompareProgramText = `int 35
@@ -4485,7 +4486,7 @@ func TestLog(t *testing.T) {
 	t.Parallel()
 	var txn transactions.SignedTxn
 	txn.Txn.Type = protocol.ApplicationCallTx
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	ep := defaultEvalParams(&txn)
 	ep.Proto = makeTestProtoV(LogicVersion)
@@ -4825,7 +4826,7 @@ func TestOpJSONRef(t *testing.T) {
 			Type: protocol.ApplicationCallTx,
 		},
 	}
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	ep := defaultEvalParams(&txn)
 	ep.Proto = proto

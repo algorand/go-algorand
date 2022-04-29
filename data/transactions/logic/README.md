@@ -609,6 +609,10 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
+| `box_create` | make a box |
+| `box_extract` | read from a box |
+| `box_replace` | write to a box |
+| `box_del` | delete a box |
 
 ### Inner Transactions
 

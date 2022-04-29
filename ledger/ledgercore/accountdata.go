@@ -42,12 +42,14 @@ type AccountBaseData struct {
 	RewardedMicroAlgos basics.MicroAlgos
 	AuthAddr           basics.Address
 
-	TotalAppSchema      basics.StateSchema
-	TotalExtraAppPages  uint32
-	TotalAppParams      uint64
-	TotalAppLocalStates uint64
-	TotalAssetParams    uint64
-	TotalAssets         uint64
+	TotalAppSchema      basics.StateSchema // Totals across created globals, and opted in locals.
+	TotalExtraAppPages  uint32             // Total number of extra pages across all created apps
+	TotalAppParams      uint64             // Total number of apps this account has created
+	TotalAppLocalStates uint64             // Total number of apps this account is opted into.
+	TotalAssetParams    uint64             // Total number of assets created by this account
+	TotalAssets         uint64             // Total of asset creations and optins (i.e. number of holdings)
+	TotalBoxes          uint64             // Total number of boxes associated to this account
+	TotalBoxBytes       uint64             // Total bytes for this account's boxes. keys _and_ values count
 }
 
 // VotingData holds participation information
@@ -136,6 +138,7 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.Micro
 		u.TotalAppSchema,
 		uint64(u.TotalAppParams), uint64(u.TotalAppLocalStates),
 		uint64(u.TotalExtraAppPages),
+		u.TotalBoxes, u.TotalBoxBytes,
 	)
 }
 

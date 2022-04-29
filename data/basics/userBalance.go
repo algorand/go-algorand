@@ -223,6 +223,12 @@ type AccountData struct {
 	// TotalExtraAppPages stores the extra length in pages (MaxAppProgramLen bytes per page)
 	// requested for app program by this account
 	TotalExtraAppPages uint32 `codec:"teap"`
+
+	// Boxes is all of the boxes associated with this account. (This account must be an app account)
+	Boxes map[string][]byte
+
+	// TotalBoxBytes stores the sum of all len(keys) and len(values) of Boxes
+	TotalBoxBytes uint64
 }
 
 // AppLocalState stores the LocalState associated with an application. It also
@@ -469,6 +475,7 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 		u.TotalAppSchema,
 		uint64(len(u.AppParams)), uint64(len(u.AppLocalStates)),
 		uint64(u.TotalExtraAppPages),
+		uint64(len(u.Boxes)), u.TotalBoxBytes,
 	)
 }
 
@@ -481,6 +488,7 @@ func MinBalance(
 	totalAppSchema StateSchema,
 	totalAppParams uint64, totalAppLocalStates uint64,
 	totalExtraAppPages uint64,
+	totalBoxes uint64, totalBoxBytes uint64,
 ) (res MicroAlgos) {
 	var min uint64
 
@@ -507,6 +515,14 @@ func MinBalance(
 	// MinBalance for each extra app program page
 	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, totalExtraAppPages)
 	min = AddSaturate(min, extraAppProgramLenCost)
+
+	// Base MinBalance for each created box
+	boxBaseCost := MulSaturate(proto.BoxFlatMinBalance, totalBoxes)
+	min = AddSaturate(min, boxBaseCost)
+
+	// Per byte MinBalance for boxes
+	boxByteCost := MulSaturate(proto.BoxByteMinBalance, totalBoxBytes)
+	min = AddSaturate(min, boxByteCost)
 
 	res.Raw = min
 	return res

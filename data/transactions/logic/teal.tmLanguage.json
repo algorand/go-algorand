@@ -72,7 +72,7 @@
         },
         {
           "name": "keyword.other.unit.teal",
-          "match": "^(acct_params_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|asset_holding_get|asset_params_get|balance|log|min_balance)\\b"
+          "match": "^(acct_params_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|asset_holding_get|asset_params_get|balance|box_create|box_del|box_extract|box_replace|log|min_balance)\\b"
         },
         {
           "name": "keyword.operator.teal",

@@ -2149,6 +2149,47 @@
       ]
     },
     {
+      "Opcode": 185,
+      "Name": "box_create",
+      "Args": "UB",
+      "Size": 1,
+      "Doc": "make a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 186,
+      "Name": "box_extract",
+      "Args": "BUU",
+      "Returns": "B",
+      "Size": 1,
+      "Doc": "read from a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 187,
+      "Name": "box_replace",
+      "Args": "BUB",
+      "Size": 1,
+      "Doc": "write to a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
+      "Opcode": 188,
+      "Name": "box_del",
+      "Args": "B",
+      "Size": 1,
+      "Doc": "delete a box",
+      "Groups": [
+        "State Access"
+      ]
+    },
+    {
       "Opcode": 192,
       "Name": "txnas",
       "Args": "U",

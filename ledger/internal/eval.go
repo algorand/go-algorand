@@ -45,6 +45,7 @@ type LedgerForCowBase interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
+	LookupKv(basics.Round, string) (*string, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
@@ -132,6 +133,9 @@ type roundCowBase struct {
 
 	// Similar cache for asset/app creators.
 	creators map[creatable]foundAddress
+
+	// Similar cache for kv entries. A nil entry means ledger has no such pair
+	kvStore map[string]*string
 }
 
 func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
@@ -147,6 +151,7 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, com
 		appLocalStates:     make(map[ledgercore.AccountApp]cachedAppLocalState),
 		assets:             make(map[ledgercore.AccountAsset]cachedAssetHolding),
 		creators:           make(map[creatable]foundAddress),
+		kvStore:            make(map[string]*string),
 	}
 }
 
@@ -320,7 +325,7 @@ func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transac
 	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
 }
 
-func (x *roundCowBase) txnCounter() uint64 {
+func (x *roundCowBase) Counter() uint64 {
 	return x.txnCount
 }
 
@@ -1082,7 +1087,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.txnCounter())
+	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -1145,7 +1150,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, eval.specials, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.round())
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, eval.specials, &ad, balances.Round())
 
 	case protocol.AssetConfigTx:
 		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, eval.specials, &ad, ctr)
@@ -1223,7 +1228,7 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.GenericDige
 
 // TestingTxnCounter - the method returns the current evaluator transaction counter. The method is used for testing purposes only.
 func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
-	return eval.state.txnCounter()
+	return eval.state.Counter()
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
@@ -1236,7 +1241,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 
 		if eval.proto.TxnCounter {
-			eval.block.TxnCounter = eval.state.txnCounter()
+			eval.block.TxnCounter = eval.state.Counter()
 		} else {
 			eval.block.TxnCounter = 0
 		}
@@ -1281,7 +1286,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 		var expectedTxnCount uint64
 		if eval.proto.TxnCounter {
-			expectedTxnCount = eval.state.txnCounter()
+			expectedTxnCount = eval.state.Counter()
 		}
 		if eval.block.TxnCounter != expectedTxnCount {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)

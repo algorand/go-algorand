@@ -521,6 +521,14 @@ func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basi
 	return res, nil
 }
 
+// LookupKv loads a KV pair from the accounts update
+func (l *Ledger) LookupKv(rnd basics.Round, key string) (*string, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	return l.accts.LookupKv(rnd, key)
+}
+
 // LookupAgreement returns account data used by agreement.
 func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	l.trackerMu.RLock()

@@ -68,6 +68,9 @@ const appAddressAvailableVersion = 7
 const fidoVersion = 7    // base64, json, secp256r1
 const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
 
+// Unlimited Global Storage opcodes
+const boxVersion = 7 // box_*
+
 type linearCost struct {
 	baseCost  int
 	chunkCost int
@@ -577,6 +580,12 @@ var OpSpecs = []OpSpec{
 	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(modeApp)},
 	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(modeApp).assembler(asmGitxn)},
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(modeApp)},
+
+	// Unlimited Global Storage - Boxes
+	{0xb9, "box_create", opBoxCreate, proto("ib:"), boxVersion, only(modeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(modeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(modeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:"), boxVersion, only(modeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},

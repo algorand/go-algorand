@@ -332,6 +332,15 @@ type ConsensusParams struct {
 	// []byte values stored in LocalState or GlobalState key/value stores
 	SchemaBytesMinBalance uint64
 
+	// MBR per box created
+	BoxFlatMinBalance uint64
+
+	// MBR per byte in a box
+	BoxByteMinBalance uint64
+
+	// Number of box references allowed
+	MaxAppBoxReferences uint64
+
 	// maximum number of total key/value pairs allowed by a given
 	// LocalStateSchema (and therefore allowed in LocalState)
 	MaxLocalSchemaEntries uint64
@@ -1146,10 +1155,14 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4
-
 	vFuture.UnifyInnerTxIDs = true
 
 	vFuture.EnableSHA256TxnCommitmentHeader = true
+
+	// Boxes (unlimited global storage)
+	vFuture.BoxFlatMinBalance = 2500
+	vFuture.BoxByteMinBalance = 400
+	vFuture.MaxAppBoxReferences = 8
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

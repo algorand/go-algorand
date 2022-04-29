@@ -125,6 +125,20 @@ type modifiedResource struct {
 	ndeltas int
 }
 
+// A modifiedValue represents the value that has been modified since the
+// persistent state stored in the account DB (i.e., in the range of rounds
+// covered by the accountUpdates tracker).
+type modifiedValue struct {
+	// data stores the most recent value (nil == deleted)
+	data *string
+
+	// ndelta keeps track of how many times the key for this value appears in
+	// accountUpdates.deltas.  This is used to evict modifiedValue entries when
+	// all changes to a key have been reflected in the kv table, and no
+	// outstanding modifications remain.
+	ndeltas int
+}
+
 type accountUpdates struct {
 	// Connection to the database.
 	dbs db.Pair
@@ -146,6 +160,13 @@ type accountUpdates struct {
 	// resources stored the most recent resource state for every
 	// address&resource that appears in deltas.
 	resources resourcesUpdates
+
+	// kvDeltas stores kvPair updates for every round after dbRound.
+	kvDeltas []map[string]*string
+
+	// kvStore has the most recent kv pairs for every write/del that appears in
+	// deltas.
+	kvStore map[string]modifiedValue
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -296,6 +317,68 @@ func (au *accountUpdates) LookupOnlineAccountData(rnd basics.Round, addr basics.
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
+}
+
+func (au *accountUpdates) LookupKv(rnd basics.Round, key string) (*string, error) {
+	// TODO: Learn how locking discipline works in lookupResource /
+	// LookupWithoutRewards, particularly the optional lock taking.
+
+	// TODO lookupResource / lookupWithoutRewards uses a loop and round checking
+	// here. It _looks_ like that only loops in case of programming error?
+	// Maybe it has to do with outstanding writes that haven't hit db yet. Is
+	// that possible, since we don't trim delta until it happens?
+	currentDbRound := au.cachedDBRound
+	currentDeltaLen := len(au.deltas)
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return nil, err
+	}
+
+	// check if we have this key in `kvStore`, as that means the change we
+	// care about is in kvDeltas (and maybe just kvStore itself)
+	mval, indeltas := au.kvStore[key]
+	if indeltas {
+		// Check if this is the most recent round, in which case, we can
+		// use a cache of the most recent kvStore state
+		if offset == uint64(len(au.kvDeltas)) {
+			return mval.data, nil
+		}
+
+		// the key is in the deltas, but we don't know if it appears in the
+		// delta range of [0..offset], so we'll need to check. Walk deltas
+		// backwards so later updates take priority.
+		for i := offset - 1; i > 0; i-- {
+			mval, ok := au.kvDeltas[i][key]
+			if ok {
+				return mval, nil
+			}
+		}
+	} else {
+		// we know that the key in not in kvDeltas - so there is no point in scanning it.
+		// we've going to fall back to search in the database, but before doing so, we should
+		// update the rnd so that it would point to the end of the known delta range.
+		// ( that would give us the best validity range )
+		rnd = currentDbRound + basics.Round(currentDeltaLen)
+		// TODO: THIS IS POINTLESS FOT KV's current interface. I don't know
+		// how the validity window is used yet. -jj
+	}
+
+	// OTHER LOOKUPS USE "base" caches here.
+
+	// No updates of this account in kvDeltas; use on-disk DB.  The check in
+	// roundOffset() made sure the round is exactly the one present in the
+	// on-disk DB.  As an optimization, we avoid creating a separate
+	// transaction here, and directly use a prepared SQL query against the
+	// database.
+
+	persistedValue, ok, err := au.accountsq.lookupKvPair(key)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	return &persistedValue, nil
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
@@ -723,6 +806,10 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr bas
 	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
 }
 
+func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) (*string, error) {
+	panic("not implemented")
+}
+
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
@@ -782,9 +869,11 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	au.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
 	au.deltas = nil
+	au.kvDeltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.resources = resourcesUpdates(make(map[accountCreatable]modifiedResource))
+	au.resources = make(resourcesUpdates)
+	au.kvStore = make(map[string]modifiedValue)
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
@@ -809,6 +898,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.deltas = append(au.deltas, delta.Accts)
 	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
+	au.kvDeltas = append(au.kvDeltas, delta.KvMods)
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	au.baseAccounts.flushPendingWrites()
@@ -842,6 +932,13 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		mres.resource.AppParams = res.Params.Params
 		mres.ndeltas++
 		au.resources.set(key, mres)
+	}
+
+	for k, v := range delta.KvMods {
+		mvalue := au.kvStore[k]
+		mvalue.ndeltas++
+		mvalue.data = v
+		au.kvStore[k] = mvalue
 	}
 
 	for cidx, cdelta := range delta.Creatables {
@@ -1094,7 +1191,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	}
 }
 
-// lookupWithRewards returns the online account data for a given address at a given round.
+// lookupOnlineAccountData returns the online account data for a given address at a given round.
 func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
@@ -1485,9 +1582,11 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
+	kvDeltas := make([]map[string]*string, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset)
 	dcc.roundTotals = au.roundTotals[offset]
 	copy(dcc.deltas, au.deltas[:offset])
+	copy(kvDeltas, au.kvDeltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
@@ -1512,6 +1611,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts)
 	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
+	dcc.compactKvDeltas = compactKvDeltas(kvDeltas)
 	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	au.accountsMu.RUnlock()
@@ -1525,8 +1625,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-// commitRound closure is called within the same transaction for all trackers
-// it receives current offset and dbRound
+// commitRound is called within the same transaction for all trackers it
+// receives current offset and dbRound
 func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
@@ -1578,7 +1678,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
@@ -1656,6 +1756,19 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
+	for key, out := range dcc.compactKvDeltas {
+		cnt := out.ndeltas
+		mval := au.kvStore[key]
+		if cnt > mval.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to key %d, but au.kvStore had %d", cnt, key, mval.ndeltas)
+		} else if cnt == mval.ndeltas {
+			delete(au.kvStore, key)
+		} else {
+			mval.ndeltas -= cnt
+			au.kvStore[key] = mval
+		}
+	}
+
 	for cidx, modCrt := range dcc.compactCreatableDeltas {
 		cnt := modCrt.Ndeltas
 		mcreat, ok := au.creatables[cidx]
@@ -1677,6 +1790,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.versions = au.versions[offset:]
 	au.roundTotals = au.roundTotals[offset:]
+	au.kvDeltas = au.kvDeltas[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.cachedDBRound = newBase
 
@@ -1706,6 +1820,27 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 }
 
 func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// compactKvDeltas takes an array of kv deltas (one array entry per round), and
+// compacts the array into a single map that contains all the
+// changes. Intermediate changes are eliminated.  It counts the number of
+// changes per round by specifying it in the ndeltas field of the modifiedKv.
+func compactKvDeltas(kvDeltas []map[string]*string) map[string]modifiedValue {
+	if len(kvDeltas) == 0 {
+		return nil
+	}
+	outKvDeltas := make(map[string]modifiedValue)
+	for _, roundKv := range kvDeltas {
+		for key, value := range roundKv {
+			prev := outKvDeltas[key] // prev may be the zero value. that's correct.
+			outKvDeltas[key] = modifiedValue{
+				data:    value,
+				ndeltas: prev.ndeltas + 1,
+			}
+		}
+	}
+	return outKvDeltas
 }
 
 // compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single
