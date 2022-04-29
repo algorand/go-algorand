@@ -39,6 +39,9 @@ for LEDGER in $LEDGERS; do
       acctrounds)
         SORT=id
         ;;
+      onlineroundparamstail)
+        SORT=round
+        ;;
       participationperiods)
         SORT=period
         ;;
@@ -61,7 +64,7 @@ for LEDGER in $LEDGERS; do
         SORT=address
         ;;
       txtail)
-        SORT=address
+        SORT=round
         ;;
       *)
         echo "Unknown table $T" >&2

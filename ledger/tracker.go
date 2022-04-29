@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
 )
@@ -142,6 +143,7 @@ type ledgerForTracker interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
+	GenesisProtoVersion() protocol.ConsensusVersion
 	GenesisAccounts() map[basics.Address]basics.AccountData
 }
 
@@ -225,8 +227,11 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	deltas                 []ledgercore.AccountDeltas
-	roundTotals            ledgercore.AccountTotals
+	deltas                   []ledgercore.AccountDeltas
+	roundTotals              ledgercore.AccountTotals
+	onlineRoundParams        []ledgercore.OnlineRoundParamsData
+	onlineTotalsForgetBefore basics.Round
+
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -361,23 +366,20 @@ func (tr *trackerRegistry) produceCommittingTask(blockqRound basics.Round, dbRou
 }
 
 func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
-	tr.mu.RLock()
-	dbRound := tr.dbRound
-	tr.mu.RUnlock()
-
 	dcc := &deferredCommitContext{
 		deferredCommitRange: deferredCommitRange{
 			lookback: maxLookback,
 		},
 	}
+
+	tr.mu.RLock()
+	dbRound := tr.dbRound
 	cdr := tr.produceCommittingTask(blockqRound, dbRound, &dcc.deferredCommitRange)
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
 	} else {
 		dcc = nil
 	}
-
-	tr.mu.RLock()
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )

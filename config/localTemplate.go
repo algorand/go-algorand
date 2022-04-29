@@ -115,7 +115,7 @@ type Local struct {
 	// SRV-based phonebook
 	DNSBootstrapID string `version[0]:"<network>.algorand.network"`
 
-	// Log file size limit in bytes
+	// Log file size limit in bytes. When set to 0 logs will be written to stdout.
 	LogSizeLimit uint64 `version[0]:"1073741824"`
 
 	// text/template for creating log archive filename.

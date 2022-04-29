@@ -292,8 +292,8 @@ return stack matches the name of the input value.
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | A == 0 yields 1; else 0 |
 | `len` | yields length of byte value A |
-| `itob` | converts uint64 A to big endian bytes |
-| `btoi` | converts bytes A as big endian to uint64 |
+| `itob` | converts uint64 A to big-endian byte array, always of length 8 |
+| `btoi` | converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8. |
 | `%` | A modulo B. Fail if B == 0. |
 | `\|` | A bitwise-or B |
 | `&` | A bitwise-and B |
@@ -436,7 +436,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 16 | TypeEnum | uint64 |      | See table below |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | []byte |      | 32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset. |
+| 19 | AssetSender | []byte |      | 32 byte address. Moves asset from AssetSender if Sender is the Clawback address of the asset. |
 | 20 | AssetReceiver | []byte |      | 32 byte address |
 | 21 | AssetCloseTo | []byte |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
@@ -457,7 +457,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 37 | ConfigAssetUnitName | []byte | v2  | Unit name of the asset |
 | 38 | ConfigAssetName | []byte | v2  | The asset name |
 | 39 | ConfigAssetURL | []byte | v2  | URL |
-| 40 | ConfigAssetMetadataHash | []byte | v2  | 32 byte commitment to some unspecified asset metadata |
+| 40 | ConfigAssetMetadataHash | []byte | v2  | 32 byte commitment to unspecified asset metadata |
 | 41 | ConfigAssetManager | []byte | v2  | 32 byte address |
 | 42 | ConfigAssetReserve | []byte | v2  | 32 byte address |
 | 43 | ConfigAssetFreeze | []byte | v2  | 32 byte address |
@@ -527,7 +527,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in the
 | 4 | AssetName | []byte |      | Asset name |
 | 5 | AssetURL | []byte |      | URL with additional info about the asset |
 | 6 | AssetMetadataHash | []byte |      | Arbitrary commitment |
-| 7 | AssetManager | []byte |      | Manager commitment |
+| 7 | AssetManager | []byte |      | Manager address |
 | 8 | AssetReserve | []byte |      | Reserve address |
 | 9 | AssetFreeze | []byte |      | Freeze address |
 | 10 | AssetClawback | []byte |      | Clawback address |
@@ -623,7 +623,8 @@ In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
-to invoke a program with version less than v6.
+to invoke a program with version less than v4, or if they attempt to
+opt-in to an app with a ClearState Program less than v4.
 
 In v5, only a subset of the transaction's header fields may be set: `Type`/`TypeEnum`,
 `Sender`, and `Fee`. In v6, header fields `Note` and `RekeyTo` may

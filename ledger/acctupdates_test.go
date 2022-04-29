@@ -50,14 +50,15 @@ var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
 type mockLedgerForTracker struct {
-	dbs             db.Pair
-	blocks          []blockEntry
-	deltas          []ledgercore.StateDelta
-	log             logging.Logger
-	filename        string
-	inMemory        bool
-	consensusParams config.ConsensusParams
-	accts           map[basics.Address]basics.AccountData
+	dbs              db.Pair
+	blocks           []blockEntry
+	deltas           []ledgercore.StateDelta
+	log              logging.Logger
+	filename         string
+	inMemory         bool
+	consensusParams  config.ConsensusParams
+	consensusVersion protocol.ConsensusVersion
+	accts            map[basics.Address]basics.AccountData
 
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
 	trackers trackerRegistry
@@ -99,8 +100,7 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 			Totals: totals,
 		}
 	}
-	consensusParams := config.Consensus[consensusVersion]
-	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams, accts: accts[0]}
+	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: config.Consensus[consensusVersion], consensusVersion: consensusVersion, accts: accts[0]}
 
 }
 
@@ -225,6 +225,10 @@ func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
 	return ml.consensusParams
 }
 
+func (ml *mockLedgerForTracker) GenesisProtoVersion() protocol.ConsensusVersion {
+	return ml.consensusVersion
+}
+
 func (ml *mockLedgerForTracker) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return ml.accts
 }
@@ -278,7 +282,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
-	_, err := au.OnlineTotals(latest + 1)
+	_, err := ao.OnlineTotals(latest + 1)
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -287,7 +291,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 {
-		_, err := au.OnlineTotals(base - 1)
+		_, err := ao.OnlineTotals(base - basics.Round(ao.maxBalLookback()))
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -350,7 +354,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			bll := accts[rnd]
 			require.Equal(t, all, bll)
 
-			totals, err := au.OnlineTotals(rnd)
+			totals, err := ao.OnlineTotals(rnd)
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
@@ -539,7 +543,6 @@ func TestAcctUpdates(t *testing.T) {
 					checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
 				}
 			}
-
 			for i := basics.Round(0); i < 15; i++ {
 				// Clear the timer to ensure a flush
 				ml.trackers.lastFlushTime = time.Time{}
@@ -1189,7 +1192,7 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	_ = accountsInitTest(t, tx, accts, proto)
+	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 
 	err = accountsAddNormalizedBalance(tx, proto)
