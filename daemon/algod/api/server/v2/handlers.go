@@ -19,6 +19,7 @@ package v2
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1132,14 +1133,26 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
-func (v2 *Handlers) TealCompile(ctx echo.Context) error {
-	// return early if teal compile is not allowed in node config
+func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompileParams) (err error) {
+	// Return early if teal compile is not allowed in node config.
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
+	// Check if we should return the source map.
+	sourcemapFlag := false
+	var sourcemap logic.SourceMap
+	if params.Sourcemap != nil {
+		switch *params.Sourcemap {
+		case "map":
+			sourcemapFlag = true
+		case "nomap", "":
+		default:
+			return badRequest(ctx, err, errFailedToParseSourcemap, v2.Log)
+		}
+	}
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
-	_, err := buf.ReadFrom(ctx.Request().Body)
+	_, err = buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -1152,9 +1165,20 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	}
 	pd := logic.HashProgram(ops.Program)
 	addr := basics.Address(pd)
+
+	// If source map flag is enabled, then return the map.
+	var encodedMap *map[string]interface{}
+	if sourcemapFlag {
+		sourcemap = logic.GetSourceMap([]string{}, ops.OffsetToLine)
+		encodedMapString, _ := json.Marshal(sourcemap)
+		json.Unmarshal(encodedMapString, &encodedMap)
+
+	}
+
 	response := generated.CompileResponse{
-		Hash:   addr.String(),
-		Result: base64.StdEncoding.EncodeToString(ops.Program),
+		Hash:      addr.String(),
+		Result:    base64.StdEncoding.EncodeToString(ops.Program),
+		Sourcemap: encodedMap,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }

@@ -532,7 +532,8 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(bytesToUse))
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.TealCompile(c)
+	params := generated.TealCompileParams{}
+	err := handler.TealCompile(c, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }

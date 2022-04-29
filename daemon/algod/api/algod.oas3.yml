@@ -380,6 +380,12 @@
                 "result": {
                   "description": "base64 encoded program bytes",
                   "type": "string"
+                },
+                "sourcemap": {
+                  "description": "JSON of the source map",
+                  "properties": {},
+                  "type": "object",
+                  "x-algorand-format": "Sourcemap"
                 }
               },
               "required": [
@@ -3634,6 +3640,20 @@
       "post": {
         "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "operationId": "TealCompile",
+        "parameters": [
+          {
+            "description": "When set to `map`, returns the source map of the program as a JSON. Defaults to `none`.",
+            "in": "query",
+            "name": "sourcemap",
+            "schema": {
+              "enum": [
+                "map",
+                "nomap"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "text/plain": {
@@ -3659,6 +3679,12 @@
                     "result": {
                       "description": "base64 encoded program bytes",
                       "type": "string"
+                    },
+                    "sourcemap": {
+                      "description": "JSON of the source map",
+                      "properties": {},
+                      "type": "object",
+                      "x-algorand-format": "Sourcemap"
                     }
                   },
                   "required": [

@@ -1385,6 +1385,17 @@
               "type": "string",
               "format": "binary"
             }
+          }, 
+          {
+            "name": "sourcemap",
+            "description": "When set to `map`, returns the source map of the program as a JSON. Defaults to `none`.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "map",
+              "nomap"
+            ]
           }
         ],
         "responses": {
@@ -3094,6 +3105,11 @@
           "result": {
             "description": "base64 encoded program bytes",
             "type": "string"
+          },
+          "sourcemap": {
+            "description": "JSON of the source map",
+            "type": "object",
+            "x-algorand-format": "Sourcemap"
           }
         }
       }
