@@ -1388,7 +1388,7 @@
           }, 
           {
             "name": "sourcemap",
-            "description": "When set to `map`, returns the source map of the program as a JSON. Defaults to `none`.",
+            "description": "When set to `map`, returns the source map of the program as a JSON. Defaults to `nomap`.",
             "in": "query",
             "required": false,
             "type": "string",
