@@ -640,7 +640,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		}
 		found = true
 
-		// Keep looking in the ledger..
+		// Keep looking in the ledger.
 	}
 
 	var maxLife basics.Round
@@ -651,10 +651,17 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	} else {
 		node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", latest)
 	}
+
+	// Search from newest to oldest round up to the max life of a transaction.
 	maxRound := latest
 	minRound := maxRound.SubSaturate(maxLife)
 
-	for r := minRound; r <= maxRound; r++ {
+	// Since we're using uint64, if the minRound is 0, we need to check for an underflow.
+	if minRound == 0 {
+		minRound++
+	}
+
+	for r := maxRound; r >= minRound; r-- {
 		tx, found, err := node.ledger.LookupTxid(txID, r)
 		if err != nil || !found {
 			continue

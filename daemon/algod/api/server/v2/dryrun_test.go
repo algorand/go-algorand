@@ -563,27 +563,27 @@ func TestDryrunLocal1(t *testing.T) {
 	if response.Txns[0].LocalDeltas == nil {
 		t.Fatal("empty local delta")
 	}
-	addrFound := false
-	valueFound := false
-	for _, lds := range *response.Txns[0].LocalDeltas {
-		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
-			addrFound = true
-			for _, ld := range lds.Delta {
-				if ld.Key == b64("foo") {
-					valueFound = true
-					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, b64("bar"))
 
-				}
-			}
+	// Should be a single account
+	assert.Len(t, *response.Txns[0].LocalDeltas, 1)
+
+	lds := (*response.Txns[0].LocalDeltas)[0]
+	assert.Equal(t, lds.Address, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+
+	valueFound := false
+	for _, ld := range lds.Delta {
+		if ld.Key == b64("foo") {
+			valueFound = true
+			assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
+			assert.Equal(t, *ld.Value.Bytes, b64("bar"))
+
 		}
 	}
-	if !addrFound {
-		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
-	}
+
 	if !valueFound {
 		t.Error("no local delta for value foo")
 	}
+
 	if t.Failed() {
 		logResponse(t, &response)
 	}
@@ -644,24 +644,22 @@ func TestDryrunLocal1A(t *testing.T) {
 	if response.Txns[0].LocalDeltas == nil {
 		t.Fatal("empty local delta")
 	}
-	addrFound := false
-	valueFound := false
-	for _, lds := range *response.Txns[0].LocalDeltas {
-		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
-			addrFound = true
-			for _, ld := range lds.Delta {
-				if ld.Key == b64("foo") {
-					valueFound = true
-					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, b64("bar"))
 
-				}
-			}
+	assert.Len(t, *response.Txns[0].LocalDeltas, 1)
+
+	lds := (*response.Txns[0].LocalDeltas)[0]
+	assert.Equal(t, lds.Address, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+
+	valueFound := false
+	for _, ld := range lds.Delta {
+		if ld.Key == b64("foo") {
+			valueFound = true
+			assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
+			assert.Equal(t, *ld.Value.Bytes, b64("bar"))
+
 		}
 	}
-	if !addrFound {
-		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
-	}
+
 	if !valueFound {
 		t.Error("no local delta for value foo")
 	}
