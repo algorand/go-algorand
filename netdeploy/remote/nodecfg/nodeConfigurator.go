@@ -236,7 +236,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 
 func getClouldflareCredentials() (zoneID string, token string, err error) {
 	zoneID = os.Getenv("CLOUDFLARE_ZONE_ID")
-	token = os.Getenv("CLOUDFLARE_TOKEN")
+	token = os.Getenv("CLOUDFLARE_API_TOKEN")
 	if zoneID == "" || token == "" {
 		err = fmt.Errorf("one or more credentials missing from ENV")
 	}

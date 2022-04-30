@@ -209,9 +209,9 @@ func doAddDNS(from string, to string) (err error) {
 }
 
 func getClouldflareAuthCredentials() (token string, err error) {
-	token = os.Getenv("CLOUDFLARE_TOKEN")
+	token = os.Getenv("CLOUDFLARE_API_TOKEN")
 	if token == "" {
-		err = fmt.Errorf("CLOUDFLARE_TOKEN credential missing from ENV")
+		err = fmt.Errorf("CLOUDFLARE_API_TOKEN credential missing from ENV")
 	}
 	return
 }

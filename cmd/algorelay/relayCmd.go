@@ -49,9 +49,9 @@ var srvRecordTypes = []string{"SRV"}
 const metricsPort = uint16(9100)
 
 func init() {
-	cfToken = os.Getenv("CLOUDFLARE_TOKEN")
+	cfToken = os.Getenv("CLOUDFLARE_API_TOKEN")
 	if cfToken == "" {
-		panic(makeExitError(1, "CLOUDFLARE_TOKEN credentials missing from ENV"))
+		panic(makeExitError(1, "CLOUDFLARE_API_TOKEN credentials missing from ENV"))
 	}
 
 	rootCmd.AddCommand(checkCmd)
