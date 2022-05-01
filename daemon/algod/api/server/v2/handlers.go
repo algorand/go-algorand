@@ -1166,7 +1166,7 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	}
 
 	if basics.Round(round) > ledger.Latest() {
-		return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("round does not exist"), v2.Log)
+		return notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
 	}
 	consensus, err := ledger.ConsensusParams(basics.Round(round))
 	if err != nil {

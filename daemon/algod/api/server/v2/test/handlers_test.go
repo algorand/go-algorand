@@ -839,6 +839,8 @@ func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
 }
 
 func TestStateProofNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
@@ -860,6 +862,8 @@ func TestStateProofNotFound(t *testing.T) {
 }
 
 func TestStateProofNoConsensusVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
@@ -870,6 +874,8 @@ func TestStateProofNoConsensusVersion(t *testing.T) {
 }
 
 func TestStateProof200(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
