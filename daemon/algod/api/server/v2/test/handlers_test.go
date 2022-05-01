@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/algorand/go-algorand/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -857,7 +858,7 @@ func TestStateProofNotFound(t *testing.T) {
 	handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = []node.TxnWithStatus{}
 
 	// we didn't add any certificate
-	a.NoError(handler.StateProof(ctx, 2))
+	a.NoError(handler.StateProof(ctx, 5))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -888,8 +889,9 @@ func TestStateProof200(t *testing.T) {
 		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
 		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 	}
+
 	//setting
-	for i := 0; i < 300; i += 128 {
+	for i := 0; i < 300; i += int(config.Consensus[protocol.ConsensusFuture].CompactCertRounds) {
 		tx := node.TxnWithStatus{
 			Txn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
