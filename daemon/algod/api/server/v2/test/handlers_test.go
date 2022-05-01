@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/algorand/go-algorand/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
