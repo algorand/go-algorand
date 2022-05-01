@@ -2546,7 +2546,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
 	var addr1 basics.Address
@@ -2684,7 +2684,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, _ := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
 	var addr1 basics.Address
