@@ -4238,6 +4238,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "minimum": 0,
               "type": "integer"
             }
           }

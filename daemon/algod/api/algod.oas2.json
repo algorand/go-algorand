@@ -1241,7 +1241,8 @@
           "type": "integer",
           "name": "round",
           "in": "path",
-          "required": true
+          "required": true,
+          "minimum": 0
         }
       ],
       "get": {
