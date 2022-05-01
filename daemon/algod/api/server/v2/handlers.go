@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -1172,6 +1173,14 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	txns, err := v2.Node.ListTxns(transactions.CompactCertSender, basics.Round(round), ledger.Latest())
 	if err != nil {
 		return internalError(ctx, err, errNilLedger.Error(), v2.Log)
+	}
+
+	compareFunc := func(i, j int) bool {
+		return txns[i].ConfirmedRound < txns[j].ConfirmedRound
+	}
+
+	if !sort.SliceIsSorted(txns, compareFunc) {
+		sort.Slice(txns, compareFunc)
 	}
 
 	for _, txn := range txns {
