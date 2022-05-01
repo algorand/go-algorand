@@ -1155,7 +1155,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 }
 
 var errNilLedger = errors.New("could not contact ledger")
-var errNoStateProofInRange = errors.New("no state proof in range")
+var errNoStateProofInRange = errors.New("no stateproof for that round")
 
 // StateProof returns the state proof for a given round.
 // (GET /v2/transaction/state-proof/{round})
@@ -1168,14 +1168,8 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	if basics.Round(round) > ledger.Latest() {
 		return notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
 	}
-	consensus, err := ledger.ConsensusParams(basics.Round(round))
-	if err != nil {
-		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for round (%d)", round), v2.Log)
-	}
 
-	lastCompCertLocation := round - (round % consensus.CompactCertRounds) + consensus.CompactCertRounds
-
-	txns, err := v2.Node.ListTxns(transactions.CompactCertSender, basics.Round(round), basics.Round(lastCompCertLocation))
+	txns, err := v2.Node.ListTxns(transactions.CompactCertSender, basics.Round(round), ledger.Latest())
 	if err != nil {
 		return internalError(ctx, err, errNilLedger.Error(), v2.Log)
 	}
