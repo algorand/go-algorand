@@ -40,8 +40,10 @@ type AppResource struct {
 	AppParams     *basics.AppParams
 }
 
-// AssignAccountResourceToAccountData assignes the Asset/App params/holdings contained
+// AssignAccountResourceToAccountData assigns the Asset/App params/holdings contained
 // in the AccountResource to the given basics.AccountData, creating maps if necessary.
+// Returns true if the AccountResource contained a new or updated resource,
+// and false if the AccountResource contained no changes (indicating the resource was deleted).
 func AssignAccountResourceToAccountData(cindex basics.CreatableIndex, resource AccountResource, ad *basics.AccountData) (assigned bool) {
 	if resource.AssetParams != nil {
 		if ad.AssetParams == nil {
