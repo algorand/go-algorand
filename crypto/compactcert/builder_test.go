@@ -470,8 +470,7 @@ func TestCoinIndex(t *testing.T) {
 
 	n := 1000
 	b := &Builder{
-		sigs:          make([]sigslot, n),
-		sigsHasValidL: true,
+		sigs: make([]sigslot, n),
 	}
 
 	for i := 0; i < n; i++ {

@@ -120,7 +120,7 @@ func (ccw *Worker) initBuilders() {
 				continue
 			}
 
-			if builder.Present(pos) {
+			if isPresent, err := builder.Present(pos); err != nil || isPresent {
 				ccw.log.Warnf("initBuilders: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
 				continue
 			}
@@ -129,7 +129,10 @@ func (ccw *Worker) initBuilders() {
 				ccw.log.Warnf("initBuilders: cannot add %v in round %d: %v", sig.signer, rnd, err)
 				continue
 			}
-			builder.Add(pos, sig.sig)
+			if err := builder.Add(pos, sig.sig); err != nil {
+				ccw.log.Warnf("initBuilders: error while adding sig. inner error: %w", err)
+				continue
+			}
 		}
 	}
 }
@@ -179,7 +182,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.Signer, sfa.Round)
 	}
 
-	if builder.Present(pos) {
+	if isPresent, err := builder.Present(pos); err != nil || isPresent {
 		// Signature already part of the builder, ignore.
 		return network.Ignore, nil
 	}
@@ -199,7 +202,9 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		return network.Ignore, err
 	}
 	// validated that we can add the sig previously.
-	builder.Add(pos, sfa.Sig)
+	if err := builder.Add(pos, sfa.Sig); err != nil {
+		return network.Ignore, err
+	}
 	return network.Broadcast, nil
 }
 
