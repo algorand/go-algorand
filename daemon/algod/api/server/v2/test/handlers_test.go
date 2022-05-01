@@ -861,7 +861,7 @@ func TestStateProofNotFound(t *testing.T) {
 	a.Equal(404, responseRecorder.Code)
 }
 
-func TestStateProofNoConsensusVersion(t *testing.T) {
+func TestStateProofHigherRoundThanLatest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
