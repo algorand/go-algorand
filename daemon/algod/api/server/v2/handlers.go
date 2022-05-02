@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -93,6 +94,7 @@ type NodeInterface interface {
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
+	ListTxns(addr basics.Address, minRound, maxRound basics.Round) ([]node.TxnWithStatus, error)
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -1151,4 +1153,55 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 		Result: base64.StdEncoding.EncodeToString(ops.Program),
 	}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+var errNilLedger = errors.New("could not contact ledger")
+var errNoStateProofInRange = errors.New("no stateproof for that round")
+
+// StateProof returns the state proof for a given round.
+// (GET /v2/transaction/state-proof/{round})
+func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	if ledger == nil {
+		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
+	}
+
+	if basics.Round(round) > ledger.Latest() {
+		return notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
+	}
+
+	txns, err := v2.Node.ListTxns(transactions.CompactCertSender, basics.Round(round), ledger.Latest())
+	if err != nil {
+		return internalError(ctx, err, errNilLedger.Error(), v2.Log)
+	}
+
+	compareFunc := func(i, j int) bool {
+		return txns[i].ConfirmedRound < txns[j].ConfirmedRound
+	}
+
+	if !sort.SliceIsSorted(txns, compareFunc) {
+		sort.Slice(txns, compareFunc)
+	}
+
+	for _, txn := range txns {
+		if txn.ConfirmedRound < basics.Round(round) {
+			continue
+		}
+
+		tx := txn.Txn.Txn
+		if tx.Type != protocol.CompactCertTx {
+			continue
+		}
+
+		if basics.Round(round) > tx.CompactCertTxnFields.CertIntervalLatestRound {
+			continue
+		}
+
+		response := generated.StateProofResponse{
+			StateProofMessage: protocol.Encode(&tx.CertMsg),
+			StateProof:        protocol.Encode(&tx.Cert),
+		}
+		return ctx.JSON(http.StatusOK, response)
+	}
+	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
 }

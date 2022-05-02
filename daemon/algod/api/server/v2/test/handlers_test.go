@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -38,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
@@ -796,4 +798,126 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, http.StatusInternalServerError, rec.Code)
 		require.Contains(t, rec.Body.String(), expectedErr.Error())
 	})
+}
+
+func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
+	genBlk, err := l.Block(0)
+	a.NoError(err)
+
+	totalsRound, totals, err := l.LatestTotals()
+	a.NoError(err)
+	a.Equal(l.Latest(), totalsRound)
+
+	totalRewardUnits := totals.RewardUnits()
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
+	a.NoError(err)
+
+	latestBlock, err := l.Block(l.Latest())
+	a.NoError(err)
+
+	var blk bookkeeping.Block
+	blk.BlockHeader = bookkeeping.BlockHeader{
+		GenesisID:    genBlk.GenesisID(),
+		GenesisHash:  genBlk.GenesisHash(),
+		Round:        l.Latest() + 1,
+		Branch:       latestBlock.Hash(),
+		RewardsState: latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+		UpgradeState: latestBlock.UpgradeState,
+	}
+
+	blk.BlockHeader.TxnCounter = latestBlock.TxnCounter
+
+	blk.RewardsPool = latestBlock.RewardsPool
+	blk.FeeSink = latestBlock.FeeSink
+	blk.CurrentProtocol = latestBlock.CurrentProtocol
+	blk.TimeStamp = latestBlock.TimeStamp + 1
+
+	blk.BlockHeader.TxnCounter++
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+
+	return blk
+}
+
+func TestStateProofNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	ldger := handler.Node.LedgerForAPI()
+
+	for i := 0; i < 5; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+	}
+
+	handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = []node.TxnWithStatus{}
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 5))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestStateProofHigherRoundThanLatest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestStateProof200(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	ldger := handler.Node.LedgerForAPI()
+
+	for i := 0; i < 5; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+	}
+
+	//setting
+	for i := 0; i < 300; i += int(config.Consensus[protocol.ConsensusFuture].CompactCertRounds) {
+		tx := node.TxnWithStatus{
+			Txn: transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.CompactCertTx,
+					CompactCertTxnFields: transactions.CompactCertTxnFields{
+						CertIntervalLatestRound: basics.Round(i + 1),
+						CertType:                0,
+						CertMsg: stateproof.Message{
+							BlockHeadersCommitment: []byte("blockheaderscommitment"),
+						},
+					},
+				},
+			},
+			ConfirmedRound: basics.Round(i + 1),
+		}
+		handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = append(handler.Node.(*mockNode).usertxns[transactions.CompactCertSender], tx)
+	}
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(200, responseRecorder.Code)
+
+	stprfResp := generated.StateProofResponse{}
+	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
+
+	msg := stateproof.Message{}
+	a.NoError(protocol.Decode(stprfResp.StateProofMessage, &msg))
+	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
 }
