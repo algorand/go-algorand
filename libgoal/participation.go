@@ -38,7 +38,7 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 	}
 
 	// Loop through each of the participation keys; pick the one that expires farthest in the future.
-	var expiry uint64
+	var expiry uint64 = 0
 	for _, info := range parts {
 		// Choose the Participation valid for this round that relates to the passed address
 		// that expires farthest in the future.
@@ -108,9 +108,9 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	// If the key is being installed, remove it afterwards.
 	if install {
-		// Explicitly any errors
+		// Explicitly ignore any errors
 		defer func(name string) {
-			_ = os.RemoveAll(name)
+			_ = os.Remove(name)
 		}(partKeyPath)
 	}
 
