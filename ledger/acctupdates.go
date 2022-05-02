@@ -763,9 +763,10 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	addResource := func(cidx basics.CreatableIndex, round basics.Round, res ledgercore.AccountResource) error {
 		foundRound, ok := foundResources[cidx]
 		if !ok { // first time seeing this cidx
-			resourceCount++
 			foundResources[cidx] = round
-			ledgercore.AssignAccountResourceToAccountData(cidx, res, &data)
+			if ledgercore.AssignAccountResourceToAccountData(cidx, res, &data) {
+				resourceCount++
+			}
 			return nil
 		}
 		// is this newer than current "found" rnd for this resource?

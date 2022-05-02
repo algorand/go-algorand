@@ -40,31 +40,38 @@ type AppResource struct {
 	AppParams     *basics.AppParams
 }
 
-// AssignAccountResourceToAccountData assignes the Asset/App params/holdings contained
+// AssignAccountResourceToAccountData assigns the Asset/App params/holdings contained
 // in the AccountResource to the given basics.AccountData, creating maps if necessary.
-func AssignAccountResourceToAccountData(cindex basics.CreatableIndex, resource AccountResource, ad *basics.AccountData) {
+// Returns true if the AccountResource contained a new or updated resource,
+// and false if the AccountResource contained no changes (indicating the resource was deleted).
+func AssignAccountResourceToAccountData(cindex basics.CreatableIndex, resource AccountResource, ad *basics.AccountData) (assigned bool) {
 	if resource.AssetParams != nil {
 		if ad.AssetParams == nil {
 			ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 		}
 		ad.AssetParams[basics.AssetIndex(cindex)] = *resource.AssetParams
+		assigned = true
 	}
 	if resource.AssetHolding != nil {
 		if ad.Assets == nil {
 			ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		}
 		ad.Assets[basics.AssetIndex(cindex)] = *resource.AssetHolding
+		assigned = true
 	}
 	if resource.AppParams != nil {
 		if ad.AppParams == nil {
 			ad.AppParams = make(map[basics.AppIndex]basics.AppParams)
 		}
 		ad.AppParams[basics.AppIndex(cindex)] = *resource.AppParams
+		assigned = true
 	}
 	if resource.AppLocalState != nil {
 		if ad.AppLocalStates == nil {
 			ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 		}
 		ad.AppLocalStates[basics.AppIndex(cindex)] = *resource.AppLocalState
+		assigned = true
 	}
+	return
 }
