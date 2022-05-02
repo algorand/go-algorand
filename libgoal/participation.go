@@ -37,28 +37,19 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 		return
 	}
 
-	// This lambda will be used for finding the desired file.
-	checkIfFileIsDesiredKey := func(partCandidate generated.ParticipationKey, expiresAfter uint64) (part generated.ParticipationKey, err error) {
-		// Return the Participation valid for this round that relates to the passed address
+	// Loop through each of the participation keys; pick the one that expires farthest in the future.
+	var expiry uint64
+	for _, info := range parts {
+		// Choose the Participation valid for this round that relates to the passed address
 		// that expires farthest in the future.
 		// Note that algod will sign votes with all possible Participations. so any should work
 		// in the short-term.
 		// In the future we should allow the user to specify exactly which partkeys to register.
-		if partCandidate.Key.VoteFirstValid <= uint64(round) && uint64(round) <= partCandidate.Key.VoteLastValid && partCandidate.Address == address.String() && partCandidate.Key.VoteLastValid > expiresAfter {
-			part = partCandidate
-		}
-		return
-	}
-
-	// Loop through each of the files; pick the one that expires farthest in the future.
-	var expiry uint64
-	for _, info := range parts {
-		// Use above lambda so the deferred handle closure happens each loop
-		partCandidate, err := checkIfFileIsDesiredKey(info, expiry)
-		if err == nil && partCandidate.Address != "" {
-			part = partCandidate
+		if info.Key.VoteFirstValid <= uint64(round) && uint64(round) <= info.Key.VoteLastValid && info.Address == address.String() && info.Key.VoteLastValid > expiry {
+			part = info
 			expiry = part.Key.VoteLastValid
 		}
+
 	}
 	if part.Address == "" {
 		// Couldn't find one
@@ -115,6 +106,14 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 		return
 	}
 
+	// If the key is being installed, remove it afterwards.
+	if install {
+		// Explicitly any errors
+		defer func(name string) {
+			_ = os.RemoveAll(name)
+		}(partKeyPath)
+	}
+
 	partdb, err := db.MakeErasableAccessor(partKeyPath)
 	if err != nil {
 		return
@@ -130,7 +129,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	partdb.Close()
 
 	if err != nil {
-		return part, partKeyPath, err
+		return
 	}
 
 	if install {
