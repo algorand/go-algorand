@@ -191,8 +191,9 @@ type persistedOnlineAccountData struct {
 	addr        basics.Address
 	accountData baseOnlineAccountData
 	rowid       int64
-	round       basics.Round
-	// normalizedBalance basics.MicroAlgos
+	// the round number that is associated with the baseOnlineAccountData. This field is the corresponding one to the round field
+	// in persistedAccountData, and serves the same purpose.
+	round basics.Round
 }
 
 //msgp:ignore persistedResourcesData
@@ -279,12 +280,12 @@ type compactAccountDeltas struct {
 }
 
 type onlineAccountDelta struct {
-	oldAcct     persistedOnlineAccountData
-	newAcct     baseOnlineAccountData
-	nAcctDeltas int
-	address     basics.Address
-	updRound    uint64
-	newStatus   basics.Status
+	oldAcct           persistedOnlineAccountData
+	newAcct           []baseOnlineAccountData
+	nOnlineAcctDeltas int
+	address           basics.Address
+	updRound          []uint64
+	newStatus         []basics.Status
 }
 
 type compactOnlineAccountDeltas struct {
@@ -787,6 +788,14 @@ func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
 	a.deltas[idx].oldAcct = old
 }
 
+func (c *onlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound basics.Round) {
+	var baseEntry baseOnlineAccountData
+	baseEntry.SetCoreAccountData(acctDelta)
+	c.newAcct = append(c.newAcct, baseEntry)
+	c.updRound = append(c.updRound, uint64(deltaRound))
+	c.newStatus = append(c.newStatus, acctDelta.Status)
+}
+
 // makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
@@ -801,31 +810,23 @@ func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 	outAccountDeltas.deltas = make([]onlineAccountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
 
-	deltaRound := uint64(baseRound)
+	deltaRound := baseRound
 	for _, roundDelta := range accountDeltas {
 		deltaRound++
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
-				updEntry := onlineAccountDelta{
-					oldAcct:     prev.oldAcct,
-					nAcctDeltas: prev.nAcctDeltas + 1,
-					address:     prev.address,
-				}
-				updEntry.newAcct.SetCoreAccountData(acctDelta)
-				updEntry.updRound = deltaRound
-				updEntry.newStatus = acctDelta.Status
+				updEntry := prev
+				updEntry.nOnlineAcctDeltas += 1
+				updEntry.append(acctDelta, deltaRound)
 				outAccountDeltas.update(idx, updEntry)
 			} else {
 				// it's a new entry.
 				newEntry := onlineAccountDelta{
-					nAcctDeltas: 1,
-					newAcct:     baseOnlineAccountData{},
-					address:     addr,
-					updRound:    deltaRound,
-					newStatus:   acctDelta.Status,
+					nOnlineAcctDeltas: 1,
+					address:           addr,
 				}
-				newEntry.newAcct.SetCoreAccountData(acctDelta)
+				newEntry.append(acctDelta, deltaRound)
 				// the cache always has the most recent data,
 				// including deleted/expired online accounts with empty voting data
 				if baseOnlineAccountData, has := baseOnlineAccounts.read(addr); has {
@@ -3537,88 +3538,98 @@ func onlineAccountsNewRoundImpl(
 
 	for i := 0; i < updates.len(); i++ {
 		data := updates.getByIdx(i)
-		if data.oldAcct.rowid == 0 {
-			// zero rowid means we don't have a previous value.
-			if data.newAcct.IsEmpty() {
-				// IsEmpty means we don't have a previous value.
-				// if we didn't had it before, and we don't have anything now, just skip it.
+		prevAcct := data.oldAcct
+		for j := 0; j < len(data.newAcct); j++ {
+			newAcct := data.newAcct[j]
+			updRound := data.updRound[j]
+			newStatus := data.newStatus[j]
+			if prevAcct.rowid == 0 {
+				// zero rowid means we don't have a previous value.
+				if newAcct.IsEmpty() {
+					// IsEmpty means we don't have a previous value.
+					// if we didn't had it before, and we don't have anything now, just skip it.
+				} else {
+					if newStatus == basics.Online {
+						if newAcct.IsVotingEmpty() {
+							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), data.newAcct)
+						} else {
+							// create a new entry.
+							var rowid int64
+							normBalance := newAcct.NormalizedOnlineBalance(proto)
+							rowid, err = writer.insertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+							if err == nil {
+								updated := persistedOnlineAccountData{
+									addr:        data.address,
+									accountData: newAcct,
+									round:       lastUpdateRound,
+									rowid:       rowid,
+								}
+								updatedAccounts = append(updatedAccounts, updated)
+								prevAcct = updated
+							}
+						}
+					} else if !newAcct.IsVotingEmpty() {
+						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), data.newAcct)
+					}
+				}
 			} else {
-				if data.newStatus == basics.Online {
-					if data.newAcct.IsVotingEmpty() {
-						err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), data.newAcct)
+				// non-zero rowid means we had a previous value.
+				if newAcct.IsVotingEmpty() {
+					// new value is zero then go offline
+					if newStatus == basics.Online {
+						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), data.newAcct)
 					} else {
-						// create a new entry.
 						var rowid int64
-						normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-						rowid, err = writer.insertOnlineAccount(data.address, normBalance, data.newAcct, data.updRound, uint64(data.newAcct.VoteLastValid))
+						rowid, err = writer.insertOnlineAccount(data.address, 0, baseOnlineAccountData{}, updRound, 0)
 						if err == nil {
 							updated := persistedOnlineAccountData{
 								addr:        data.address,
-								accountData: data.newAcct,
+								accountData: baseOnlineAccountData{},
 								round:       lastUpdateRound,
 								rowid:       rowid,
 							}
 							updatedAccounts = append(updatedAccounts, updated)
+							prevAcct = updated
+
+							targetRound := basics.Round(updRound + proto.MaxBalLookback)
+							if entries, ok := expirationMap[targetRound]; ok {
+								entries = append(entries, data.oldAcct.rowid, rowid)
+								expirationMap[targetRound] = entries
+							} else {
+								expirationMap[targetRound] = []int64{data.oldAcct.rowid, rowid}
+							}
 						}
 					}
-				} else if !data.newAcct.IsVotingEmpty() {
-					err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), data.newAcct)
-				}
-			}
-		} else {
-			// non-zero rowid means we had a previous value.
-			if data.newAcct.IsVotingEmpty() {
-				// new value is zero then go offline
-				if data.newStatus == basics.Online {
-					err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), data.newAcct)
 				} else {
-					var rowid int64
-					rowid, err = writer.insertOnlineAccount(data.address, 0, baseOnlineAccountData{}, data.updRound, 0)
-					if err == nil {
-						updated := persistedOnlineAccountData{
-							addr:        data.address,
-							accountData: baseOnlineAccountData{},
-							round:       lastUpdateRound,
-							rowid:       rowid,
-						}
-						updatedAccounts = append(updatedAccounts, updated)
-						targetRound := basics.Round(data.updRound + proto.MaxBalLookback)
-						if entries, ok := expirationMap[targetRound]; ok {
-							entries = append(entries, data.oldAcct.rowid, rowid)
-							expirationMap[targetRound] = entries
-						} else {
-							expirationMap[targetRound] = []int64{data.oldAcct.rowid, rowid}
-						}
-					}
-				}
-			} else {
-				if data.oldAcct.accountData != data.newAcct {
-					var rowid int64
-					normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-					rowid, err = writer.insertOnlineAccount(data.address, normBalance, data.newAcct, data.updRound, uint64(data.newAcct.VoteLastValid))
-					if err == nil {
-						updated := persistedOnlineAccountData{
-							addr:        data.address,
-							accountData: data.newAcct,
-							round:       lastUpdateRound,
-							rowid:       rowid,
-						}
-						updatedAccounts = append(updatedAccounts, updated)
+					if prevAcct.accountData != newAcct {
+						var rowid int64
+						normBalance := newAcct.NormalizedOnlineBalance(proto)
+						rowid, err = writer.insertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+						if err == nil {
+							updated := persistedOnlineAccountData{
+								addr:        data.address,
+								accountData: newAcct,
+								round:       lastUpdateRound,
+								rowid:       rowid,
+							}
+							updatedAccounts = append(updatedAccounts, updated)
+							prevAcct = updated
 
-						targetRound := basics.Round(data.updRound + proto.MaxBalLookback)
-						if entries, ok := expirationMap[targetRound]; ok {
-							entries = append(entries, data.oldAcct.rowid)
-							expirationMap[targetRound] = entries
-						} else {
-							expirationMap[targetRound] = []int64{data.oldAcct.rowid}
+							targetRound := basics.Round(updRound + proto.MaxBalLookback)
+							if entries, ok := expirationMap[targetRound]; ok {
+								entries = append(entries, data.oldAcct.rowid)
+								expirationMap[targetRound] = entries
+							} else {
+								expirationMap[targetRound] = []int64{data.oldAcct.rowid}
+							}
 						}
 					}
 				}
 			}
-		}
 
-		if err != nil {
-			return
+			if err != nil {
+				return
+			}
 		}
 	}
 

@@ -3236,21 +3236,21 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	// acct B is new and offline
 	deltaB := onlineAccountDelta{
 		address: addrB,
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
-		},
-		updRound:  1,
-		newStatus: basics.Offline,
+		}},
+		updRound:  []uint64{1},
+		newStatus: []basics.Status{basics.Offline},
 	}
 	// acct C is new and online
 	deltaC := onlineAccountDelta{
 		address: addrC,
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
 			VoteFirstValid: 500,
-		},
-		newStatus: basics.Online,
-		updRound:  2,
+		}},
+		newStatus: []basics.Status{basics.Online},
+		updRound:  []uint64{2},
 	}
 	// acct D is old and went offline
 	deltaD := onlineAccountDelta{
@@ -3263,11 +3263,11 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			},
 			rowid: 1,
 		},
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 400_000_000},
-		},
-		newStatus: basics.Offline,
-		updRound:  3,
+		}},
+		newStatus: []basics.Status{basics.Offline},
+		updRound:  []uint64{3},
 	}
 
 	// acct E is old online
@@ -3281,12 +3281,12 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			},
 			rowid: 2,
 		},
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
 			VoteFirstValid: 600,
-		},
-		newStatus: basics.Online,
-		updRound:  4,
+		}},
+		newStatus: []basics.Status{basics.Online},
+		updRound:  []uint64{4},
 	}
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC, deltaD, deltaE)
@@ -3308,21 +3308,21 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	require.Equal(t, []int64{2}, expired[1].rowids)
 
 	// check errors: new online with empty voting data
-	deltaC.newStatus = basics.Online
-	deltaC.newAcct.VoteFirstValid = 0
+	deltaC.newStatus[0] = basics.Online
+	deltaC.newAcct[0].VoteFirstValid = 0
 	updates.deltas = []onlineAccountDelta{deltaC}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new non-online with non-empty voting data
-	deltaB.newStatus = basics.Offline
-	deltaB.newAcct.VoteFirstValid = 1
+	deltaB.newStatus[0] = basics.Offline
+	deltaB.newAcct[0].VoteFirstValid = 1
 	updates.deltas = []onlineAccountDelta{deltaB}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new online with empty voting data
-	deltaD.newStatus = basics.Online
+	deltaD.newStatus[0] = basics.Online
 	updates.deltas = []onlineAccountDelta{deltaD}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)

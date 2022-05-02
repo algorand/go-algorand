@@ -447,7 +447,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// from in-memory cache when no references remain.
 	for i := 0; i < dcc.compactOnlineAccountDeltas.len(); i++ {
 		acctUpdate := dcc.compactOnlineAccountDeltas.getByIdx(i)
-		cnt := acctUpdate.nAcctDeltas
+		cnt := acctUpdate.nOnlineAcctDeltas
 		macct, ok := ao.accounts[acctUpdate.address]
 		if !ok {
 			ao.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, acctUpdate.address)

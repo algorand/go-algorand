@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -41,11 +42,11 @@ import (
 func TestAcctOnline(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	const seedLookback = 1
-	const seedInteval = 1
+	const seedLookback = 2
+	const seedInteval = 3
 	const maxBalLookback = 2 * seedLookback * seedInteval
 
-	const numAccts = maxBalLookback * 10
+	const numAccts = maxBalLookback * 20
 	allAccts := make([]basics.BalanceRecord, numAccts)
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
@@ -147,11 +148,9 @@ func TestAcctOnline(t *testing.T) {
 		return newTotals
 	}
 
-	// the test 1 requires 2 blocks with different resource state,
 	// online accounts tracker requires maxDeltaLookback block to start persisting
-	const numAcctsStage1 = 10
-	numConsumedStage1 := basics.Round(maxDeltaLookback) + numAcctsStage1
-	targetRound := numConsumedStage1
+	numPersistedAccounts := numAccts - maxDeltaLookback*2
+	targetRound := basics.Round(maxDeltaLookback + numPersistedAccounts)
 	for i := basics.Round(1); i <= targetRound; i++ {
 		var updates ledgercore.AccountDeltas
 		acctIdx := int(i) - 1
@@ -229,11 +228,11 @@ func TestAcctOnline(t *testing.T) {
 
 	// ensure rounds
 	require.Equal(t, targetRound, au.latest())
-	require.Equal(t, basics.Round(numAcctsStage1), oa.cachedDBRoundOnline)
+	require.Equal(t, basics.Round(numPersistedAccounts), oa.cachedDBRoundOnline)
 
-	// at this point we should have maxBalLookback last accounts of numAcctsStage1
+	// at this point we should have maxBalLookback last accounts of numPersistedAccounts
 	// to be in the DB and in the cache and not yet removed
-	for i := numAcctsStage1 - maxBalLookback; i < numAcctsStage1; i++ {
+	for i := numPersistedAccounts - maxBalLookback; i < numPersistedAccounts; i++ {
 		bal := allAccts[i]
 		// we expire account i at round i+1
 		data, err := oa.accountsq.lookupOnline(bal.Addr, basics.Round(i+1))
@@ -262,7 +261,7 @@ func TestAcctOnline(t *testing.T) {
 	}
 
 	// check maxDeltaLookback accounts in in-memory deltas, check it
-	for i := numAcctsStage1; i < numAcctsStage1+int(maxDeltaLookback); i++ {
+	for i := numPersistedAccounts; i < numPersistedAccounts+maxDeltaLookback; i++ {
 		bal := allAccts[i]
 		oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
 		require.NoError(t, err)
@@ -280,6 +279,49 @@ func TestAcctOnline(t *testing.T) {
 		data, has := oa.baseOnlineAccounts.read(bal.Addr)
 		require.False(t, has)
 		require.Empty(t, data)
+	}
+
+	// not take some account and modify its stake.
+	// ensure it has the valid entries in both deltas and history
+	start := targetRound + 1
+	end := start + basics.Round(maxDeltaLookback+10)
+	mutAccount := allAccts[start]
+	ad := ledgercore.ToAccountData(mutAccount.AccountData)
+	const delta = 1000
+	for i := start; i <= end; i++ {
+		newAD := ad.AccountBaseData
+		newAD.MicroAlgos.Raw += uint64(i-start+1) * delta
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(
+			mutAccount.Addr,
+			ledgercore.AccountData{
+				AccountBaseData: newAD,
+				VotingData:      ad.VotingData,
+			},
+		)
+
+		base := genesisAccts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		genesisAccts = append(genesisAccts, newAccts)
+
+		// prepare block
+		totals = newBlock(i, base, updates, totals)
+
+		// flush all old deltas
+		if uint64(i-start+1) == maxDeltaLookback {
+			commitSync(i)
+		}
+	}
+	// flush the mutAccount
+	commitSync(end)
+
+	for i := start; i <= end; i++ {
+		oad, err := oa.lookupOnlineAccountData(basics.Round(i), mutAccount.Addr)
+		require.NoError(t, err)
+		// rewardLevel is zero => MicroAlgos == MicroAlgosWithRewards
+		expected := ad.AccountBaseData.MicroAlgos.Raw + uint64(i-start+1)*delta
+		fmt.Printf("rnd = %d, base=%x, new=%x\n", i, ad.AccountBaseData.MicroAlgos.Raw, expected)
+		require.Equal(t, expected, oad.MicroAlgosWithRewards.Raw)
 	}
 }
 
