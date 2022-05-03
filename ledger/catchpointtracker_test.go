@@ -639,8 +639,9 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	ledger.trackers.mu.Unlock()
 	ledger.trackerMu.Unlock()
 
-	// create the first CatchpointLookback blocks
-	for rnd := ledger.Latest() + 1; rnd <= basics.Round(protoParams.CatchpointLookback); rnd++ {
+	// Create the first `cfg.MaxAcctLookback` blocks for which account updates tracker
+	// will skip committing.
+	for rnd := ledger.Latest() + 1; rnd <= basics.Round(cfg.MaxAcctLookback); rnd++ {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
 	}
