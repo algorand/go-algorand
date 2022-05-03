@@ -972,7 +972,7 @@ func TestApplSubmission(t *testing.T) {
 	// All zeros is v0, so we get a complaint, but that means lengths were ok when set.
 	TestApp(t, p+a+`int 600; bzero; itxn_field ApprovalProgram;
                   int 600; bzero; itxn_field ClearStateProgram;`+s, ep,
-		"inner app call with version 0")
+		"inner app call with version v0 < v4")
 
 	TestApp(t, p+`int 601; bzero; itxn_field ApprovalProgram;
                   int 600; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
@@ -981,7 +981,7 @@ func TestApplSubmission(t *testing.T) {
 	TestApp(t, p+a+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
                   int 1200; bzero; itxn_field ClearStateProgram;`+s, ep,
-		"inner app call with version 0")
+		"inner app call with version v0 < v4")
 	TestApp(t, p+`int 1; itxn_field ExtraProgramPages
                   int 1200; bzero; itxn_field ApprovalProgram;
                   int 1201; bzero; itxn_field ClearStateProgram;`+s, ep, "too long")
@@ -1071,32 +1071,37 @@ func TestCreateOldAppFails(t *testing.T) {
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
 
-	ops := TestProg(t, "int 1", InnerAppsEnabledVersion-1)
-	old := "byte 0x" + hex.EncodeToString(ops.Program)
+	three := "byte 0x" + hex.EncodeToString(TestProg(t, "int 1", 3).Program)
 
 	TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
-`+old+`; itxn_field ApprovalProgram
-`+old+`; itxn_field ClearStateProgram
-int 1;       itxn_field GlobalNumUint
-int 2;       itxn_field LocalNumByteSlice
-int 3;       itxn_field LocalNumUint
+`+three+`; itxn_field ApprovalProgram
+`+three+`; itxn_field ClearStateProgram
 itxn_submit
 int 1
-`, ep, "inner app call with version 5")
+`, ep, "inner app call with version v3 < v4")
 
-	ops = TestProg(t, "int 1", InnerAppsEnabledVersion)
-	recent := "byte 0x" + hex.EncodeToString(ops.Program)
+	four := "byte 0x" + hex.EncodeToString(TestProg(t, "int 1", 4).Program)
 
 	TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
-`+recent+`; itxn_field ApprovalProgram
-`+recent+`; itxn_field ClearStateProgram
-int 1;       itxn_field GlobalNumUint
-int 2;       itxn_field LocalNumByteSlice
-int 3;       itxn_field LocalNumUint
+`+four+`; itxn_field ApprovalProgram
+`+four+`; itxn_field ClearStateProgram
+itxn_submit
+int 1
+`, ep)
+
+	// Version synch is only enforced for v6 and up, since it was a new rule when 6 came out.
+	five := "byte 0x" + hex.EncodeToString(TestProg(t, "int 1", 5).Program)
+	six := "byte 0x" + hex.EncodeToString(TestProg(t, "int 1", 6).Program)
+
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+`+four+`; itxn_field ApprovalProgram
+`+five+`; itxn_field ClearStateProgram
 itxn_submit
 int 1
 `, ep)
@@ -1104,11 +1109,8 @@ int 1
 	TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
-`+old+`; itxn_field ApprovalProgram
-`+recent+`; itxn_field ClearStateProgram
-int 1;       itxn_field GlobalNumUint
-int 2;       itxn_field LocalNumByteSlice
-int 3;       itxn_field LocalNumUint
+`+six+`; itxn_field ApprovalProgram
+`+five+`; itxn_field ClearStateProgram
 itxn_submit
 int 1
 `, ep, "program version mismatch")
@@ -1116,11 +1118,8 @@ int 1
 	TestApp(t, `
 itxn_begin
 int appl;    itxn_field TypeEnum
-`+recent+`; itxn_field ApprovalProgram
-`+old+`; itxn_field ClearStateProgram
-int 1;       itxn_field GlobalNumUint
-int 2;       itxn_field LocalNumByteSlice
-int 3;       itxn_field LocalNumUint
+`+five+`; itxn_field ApprovalProgram
+`+six+`; itxn_field ClearStateProgram
 itxn_submit
 int 1
 `, ep, "program version mismatch")
