@@ -24,7 +24,7 @@ import (
 )
 
 // StateProofMessageHash represents any message that we want to have a certification over.
-type StateProofMessageHash [128]byte
+type StateProofMessageHash [32]byte
 
 // StateProofMessageHashType is the type of hash used to generate StateProofMessageHash
 const StateProofMessageHashType = crypto.Sha256
