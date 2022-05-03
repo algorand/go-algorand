@@ -1150,6 +1150,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 			return badRequest(ctx, err, errFailedToParseSourcemap, v2.Log)
 		}
 	}
+
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	_, err = buf.ReadFrom(ctx.Request().Body)
