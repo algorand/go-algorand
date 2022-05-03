@@ -3453,3 +3453,65 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
 	require.Equal(t, maxRounds, int(endRound))
 }
+
+func TestRowidsToChunkedArgs(t *testing.T) {
+	res := rowidsToChunkedArgs([]int64{1})
+	require.Equal(t, 1, cap(res))
+	require.Equal(t, 1, len(res))
+	require.Equal(t, 1, cap(res[0]))
+	require.Equal(t, 1, len(res[0]))
+	require.Equal(t, []interface{}{int64(1)}, res[0])
+
+	input := make([]int64, 999)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 1, cap(res))
+	require.Equal(t, 1, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	for i := 0; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+
+	input = make([]int64, 1001)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 2, cap(res))
+	require.Equal(t, 2, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	require.Equal(t, 2, cap(res[1]))
+	require.Equal(t, 2, len(res[1]))
+	for i := 0; i < 999; i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+	j := 0
+	for i := 999; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[1][j])
+		j++
+	}
+
+	input = make([]int64, 2*999)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 2, cap(res))
+	require.Equal(t, 2, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	require.Equal(t, 999, cap(res[1]))
+	require.Equal(t, 999, len(res[1]))
+	for i := 0; i < 999; i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+	j = 0
+	for i := 999; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[1][j])
+		j++
+	}
+}

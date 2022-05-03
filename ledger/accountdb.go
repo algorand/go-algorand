@@ -3650,17 +3650,52 @@ func onlineAccountsNewRoundImpl(
 	return
 }
 
+func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
+	const sqliteMaxVariableNumber = 999
+
+	numChunks := len(rowids)/sqliteMaxVariableNumber + 1
+	if len(rowids)%sqliteMaxVariableNumber == 0 {
+		numChunks--
+	}
+	chunks := make([][]interface{}, numChunks)
+	if numChunks == 1 {
+		// optimize memory consumption for the most common case
+		chunks[0] = make([]interface{}, len(rowids))
+		for i, rowid := range rowids {
+			chunks[0][i] = interface{}(rowid)
+		}
+	} else {
+		for i := 0; i < numChunks; i++ {
+			var chunkSize int = sqliteMaxVariableNumber
+			if i == numChunks-1 {
+				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
+			}
+			chunks[i] = make([]interface{}, chunkSize)
+		}
+		for i, rowid := range rowids {
+			chunkIndex := i / sqliteMaxVariableNumber
+			chunks[chunkIndex][i%sqliteMaxVariableNumber] = interface{}(rowid)
+		}
+	}
+	return chunks
+}
+
 func onlineAccountsDeleteExpired(tx *sql.Tx, rowids []int64) (err error) {
 	if len(rowids) == 0 {
 		return
 	}
 
-	args := make([]interface{}, len(rowids))
-	for i, rowid := range rowids {
-		args[i] = interface{}(rowid)
+	// sqlite3 < 3.32.0 allows SQLITE_MAX_VARIABLE_NUMBER = 999 bindings
+	// see https://www.sqlite.org/limits.html
+	// rowids might be larger => split to chunks are remove
+	chunks := rowidsToChunkedArgs(rowids)
+	for _, chunk := range chunks {
+		_, err = tx.Exec("DELETE FROM onlineaccounts WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
+		if err != nil {
+			return
+		}
 	}
-	_, err = tx.Exec("DELETE FROM onlineaccounts WHERE rowid IN (?"+strings.Repeat(",?", len(rowids)-1)+")", args...)
-	return err
+	return
 }
 
 // updates the round number associated with the current account data.
