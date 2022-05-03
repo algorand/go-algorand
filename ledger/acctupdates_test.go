@@ -266,7 +266,7 @@ func newAcctUpdates(tb testing.TB, l *mockLedgerForTracker, conf config.Local, d
 	au := &accountUpdates{}
 	au.initialize(conf)
 	ao := &onlineAccounts{}
-	ao.initialize()
+	ao.initialize(conf)
 
 	_, err := trackerDBInitialize(l, false, ".")
 	require.NoError(tb, err)
@@ -459,113 +459,125 @@ func TestAcctUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
-	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
-
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
 	conf := config.GetDefaultLocal()
-	au, ao := newAcctUpdates(t, ml, conf, ".")
-	defer au.close()
-	defer ao.close()
+	for _, lookback := range []uint64{conf.MaxAcctLookback, proto.MaxBalLookback} {
+		t.Run(fmt.Sprintf("lookback=%d", lookback), func(t *testing.T) {
 
-	// cover 10 genesis blocks
-	rewardLevel := uint64(0)
-	for i := 1; i < 10; i++ {
-		accts = append(accts, accts[0])
-		rewardsLevels = append(rewardsLevels, rewardLevel)
+			conf.MaxAcctLookback = lookback
+
+			accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+			rewardsLevels := []uint64{0}
+
+			pooldata := basics.AccountData{}
+			pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+			pooldata.Status = basics.NotParticipating
+			accts[0][testPoolAddr] = pooldata
+
+			sinkdata := basics.AccountData{}
+			sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+			sinkdata.Status = basics.NotParticipating
+			accts[0][testSinkAddr] = sinkdata
+
+			initialBlocksCount := int(lookback)
+			ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+			defer ml.Close()
+
+			au, ao := newAcctUpdates(t, ml, conf, ".")
+			defer au.close()
+			defer ao.close()
+
+			// cover 10 genesis blocks
+			rewardLevel := uint64(0)
+			for i := 1; i < initialBlocksCount; i++ {
+				accts = append(accts, accts[0])
+				rewardsLevels = append(rewardsLevels, rewardLevel)
+			}
+
+			checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount-1), accts, rewardsLevels, proto)
+
+			// lastCreatableID stores asset or app max used index to get rid of conflicts
+			lastCreatableID := crypto.RandUint64() % 512
+			knownCreatables := make(map[basics.CreatableIndex]bool)
+
+			maxLookback := conf.MaxAcctLookback
+
+			start := basics.Round(initialBlocksCount)
+			end := basics.Round(maxLookback + 15)
+			for i := start; i < end; i++ {
+				rewardLevelDelta := crypto.RandUint64() % 5
+				rewardLevel += rewardLevelDelta
+				var updates ledgercore.AccountDeltas
+				var totals map[basics.Address]ledgercore.AccountData
+				base := accts[i-1]
+				updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
+				prevRound, prevTotals, err := au.LatestTotals()
+				require.Equal(t, i-1, prevRound)
+				require.NoError(t, err)
+
+				newPool := totals[testPoolAddr]
+				newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+				updates.Upsert(testPoolAddr, newPool)
+				totals[testPoolAddr] = newPool
+				newAccts := applyPartialDeltas(base, updates)
+
+				blk := bookkeeping.Block{
+					BlockHeader: bookkeeping.BlockHeader{
+						Round: basics.Round(i),
+					},
+				}
+				blk.RewardsLevel = rewardLevel
+				blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+				delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+				delta.Accts.MergeAccounts(updates)
+				delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+
+				delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
+				ml.trackers.newBlock(blk, delta)
+				accts = append(accts, newAccts)
+				rewardsLevels = append(rewardsLevels, rewardLevel)
+
+				// checkAcctUpdates is kind of slow because of amount of data it needs to compare
+				// instead, compare at start, end in between approx 10 rounds
+				if i == start || i == end-1 || crypto.RandUint64()%10 == 0 || lookback < 10 {
+					checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
+				}
+			}
+			for i := basics.Round(0); i < 15; i++ {
+				// Clear the timer to ensure a flush
+				ml.trackers.lastFlushTime = time.Time{}
+
+				ml.trackers.committedUpTo(basics.Round(maxLookback) + i)
+				ml.trackers.waitAccountsWriting()
+				checkAcctUpdates(t, au, ao, i, basics.Round(maxLookback+14), accts, rewardsLevels, proto)
+			}
+
+			// check the account totals.
+			var dbRound basics.Round
+			err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				dbRound, err = accountsRound(tx)
+				return
+			})
+			require.NoError(t, err)
+
+			var updates ledgercore.AccountDeltas
+			for addr, acctData := range accts[dbRound] {
+				updates.Upsert(addr, ledgercore.ToAccountData(acctData))
+			}
+
+			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
+			var actualTotals ledgercore.AccountTotals
+			err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				actualTotals, err = accountsTotals(tx, false)
+				return
+			})
+			require.NoError(t, err)
+			require.Equal(t, expectedTotals, actualTotals)
+		})
 	}
-
-	checkAcctUpdates(t, au, ao, 0, 9, accts, rewardsLevels, proto)
-
-	// lastCreatableID stores asset or app max used index to get rid of conflicts
-	lastCreatableID := crypto.RandUint64() % 512
-	knownCreatables := make(map[basics.CreatableIndex]bool)
-
-	start := basics.Round(10)
-	end := basics.Round(proto.MaxBalLookback + 15)
-	for i := start; i < end; i++ {
-		rewardLevelDelta := crypto.RandUint64() % 5
-		rewardLevel += rewardLevelDelta
-		var updates ledgercore.AccountDeltas
-		var totals map[basics.Address]ledgercore.AccountData
-		base := accts[i-1]
-		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
-		prevRound, prevTotals, err := au.LatestTotals()
-		require.Equal(t, i-1, prevRound)
-		require.NoError(t, err)
-
-		newPool := totals[testPoolAddr]
-		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
-		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(base, updates)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
-
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
-
-		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.trackers.newBlock(blk, delta)
-		accts = append(accts, newAccts)
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-
-		// checkAcctUpdates is kind of slow because of amount of data it needs to compare
-		// instead, compare at start, end in between approx 10 rounds
-		if i == start || i == end-1 || crypto.RandUint64()%10 == 0 {
-			checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
-		}
-	}
-	for i := basics.Round(0); i < 15; i++ {
-		// Clear the timer to ensure a flush
-		ml.trackers.lastFlushTime = time.Time{}
-
-		ml.trackers.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
-		ml.trackers.waitAccountsWriting()
-		checkAcctUpdates(t, au, ao, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
-	}
-
-	// check the account totals.
-	var dbRound basics.Round
-	err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbRound, err = accountsRound(tx)
-		return
-	})
-	require.NoError(t, err)
-
-	var updates ledgercore.AccountDeltas
-	for addr, acctData := range accts[dbRound] {
-		updates.Upsert(addr, ledgercore.ToAccountData(acctData))
-	}
-
-	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
-	var actualTotals ledgercore.AccountTotals
-	err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		actualTotals, err = accountsTotals(tx, false)
-		return
-	})
-	require.NoError(t, err)
-	require.Equal(t, expectedTotals, actualTotals)
 }
+
+// TestAcctUpdatesFastUpdates tests catchpoint label writing datarace
 func TestAcctUpdatesFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -587,27 +599,28 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
 	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 	defer ao.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
-	for i := 1; i < 10; i++ {
+	for i := 1; i < initialBlocksCount; i++ {
 		accts = append(accts, accts[0])
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	checkAcctUpdates(t, au, ao, 0, 9, accts, rewardsLevels, proto)
+	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
 
 	wg := sync.WaitGroup{}
 
-	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
+	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
@@ -651,15 +664,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	if b.N < 100 {
 		b.N = 50
 	}
-	protocolVersion := protocol.ConsensusVersion("BenchmarkBalancesChanges-test-protocol-version")
-	testProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
-	testProtocol.MaxBalLookback = 25
-	config.Consensus[protocolVersion] = testProtocol
-	defer func() {
-		delete(config.Consensus, protocolVersion)
-	}()
-
-	proto := config.Consensus[protocolVersion]
+	protocolVersion := protocol.ConsensusCurrentVersion
 
 	initialRounds := uint64(1)
 
@@ -681,6 +686,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
+	maxAcctLookback := conf.MaxAcctLookback
 	au, ao := newAcctUpdates(b, ml, conf, ".")
 	defer au.close()
 	defer ao.close()
@@ -692,12 +698,12 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	for i := basics.Round(initialRounds); i < basics.Round(proto.MaxBalLookback+uint64(b.N)); i++ {
+	for i := basics.Round(initialRounds); i < basics.Round(maxAcctLookback+uint64(b.N)); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 0
 		if i <= basics.Round(initialRounds)+basics.Round(b.N) {
-			accountChanges = accountsCount - 2 - int(basics.Round(proto.MaxBalLookback+uint64(b.N))+i)
+			accountChanges = accountsCount - 2 - int(basics.Round(maxAcctLookback+uint64(b.N))+i)
 		}
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
@@ -725,7 +731,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
+	for i := maxAcctLookback; i < maxAcctLookback+initialRounds; i++ {
 		// Clear the timer to ensure a flush
 		ml.trackers.lastFlushTime = time.Time{}
 		ml.trackers.committedUpTo(basics.Round(i))
@@ -733,7 +739,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	ml.trackers.waitAccountsWriting()
 	b.ResetTimer()
 	startTime := time.Now()
-	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
+	for i := maxAcctLookback + initialRounds; i < maxAcctLookback+uint64(b.N); i++ {
 		// Clear the timer to ensure a flush
 		ml.trackers.lastFlushTime = time.Time{}
 		ml.trackers.committedUpTo(basics.Round(i))
@@ -792,6 +798,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	// TODO: fix MaxBalLookback after updating catchpoint round
 	protoParams.MaxBalLookback = 32
 	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
@@ -814,23 +821,26 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, accts)
-	defer ml.Close()
-
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
+	defer ml.Close()
+
 	au, _ := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
-	for i := 1; i < 10; i++ {
+	for i := 1; i < initialBlocksCount; i++ {
 		accts = append(accts, accts[0])
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	for i := basics.Round(10); i < basics.Round(protoParams.MaxBalLookback+5); i++ {
+	start := basics.Round(initialBlocksCount)
+	end := basics.Round(protoParams.MaxBalLookback + 5)
+	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
@@ -860,7 +870,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
 		ml.trackers.committedUpTo(i)
-		if i%2 == 1 {
+		if i%2 == 1 || i == end-1 {
 			ml.trackers.waitAccountsWriting()
 		}
 	}
@@ -884,14 +894,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	}
 
 	// create new protocol version, which has lower look back.
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesUpdatesCorrectness")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 5
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
-
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	maxAcctLookback := config.GetDefaultLocal().MaxAcctLookback
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
@@ -982,10 +986,10 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			moneyAccountsExpectedAmounts[i][0] = moneyAccountsExpectedAmounts[i-1][0] + uint64(len(moneyAccounts)-1)*uint64(i-10)
 
 			// force to perform a test that goes directly to disk, and see if it has the expected values.
-			if uint64(i) > protoParams.MaxBalLookback+3 {
+			if uint64(i) > maxAcctLookback+3 {
 
 				// check the status at a historical time:
-				checkRound := uint64(i) - protoParams.MaxBalLookback - 2
+				checkRound := uint64(i) - maxAcctLookback - 2
 
 				testback := 1
 				for j := 1; j < len(moneyAccounts); j++ {
@@ -1619,7 +1623,6 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	runtime.GC()
 
 	protocolVersion := protocol.ConsensusCurrentVersion
-	proto := config.Consensus[protocolVersion]
 
 	initialRounds := uint64(1)
 	accountsCount := 5
@@ -1651,7 +1654,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	recoveredLedgerRound := basics.Round(initialRounds + initializeCachesRoundFlushInterval + proto.MaxBalLookback + 1)
+	recoveredLedgerRound := basics.Round(initialRounds + initializeCachesRoundFlushInterval + conf.MaxAcctLookback + 1)
 
 	for i := basics.Round(initialRounds); i <= recoveredLedgerRound; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
@@ -1706,8 +1709,8 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	defer au.close()
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
-	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
-	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.cachedDBRound)
+	require.Equal(t, int(conf.MaxAcctLookback), len(au.deltas))
+	require.Equal(t, recoveredLedgerRound-basics.Round(conf.MaxAcctLookback), au.cachedDBRound)
 
 	// Garbage collection helps prevent trashing for next tests
 	runtime.GC()
@@ -1718,7 +1721,6 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	initProtocolVersion := protocol.ConsensusV20
-	initialProtoParams := config.Consensus[initProtocolVersion]
 
 	initialRounds := uint64(1)
 
@@ -1742,9 +1744,6 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover initialRounds genesis blocks
@@ -1792,8 +1791,9 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 	newVersionBlocksCount := uint64(47)
 	newVersion := protocol.ConsensusV21
-	// add 47 more rounds that contains blocks using a newer consensus version, and stuff it with MaxBalLookback
-	lastRoundToWrite := basics.Round(initialRounds + initialProtoParams.MaxBalLookback + extraRounds + newVersionBlocksCount)
+	maxAcctLookback := conf.MaxAcctLookback
+	// add 47 more rounds that contains blocks using a newer consensus version, and stuff it with maxAcctLookback
+	lastRoundToWrite := basics.Round(initialRounds + maxAcctLookback + extraRounds + newVersionBlocksCount)
 	for i := basics.Round(initialRounds + extraRounds); i < lastRoundToWrite; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -1833,13 +1833,12 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 }
 
-// TestAcctUpdatesSplittingConsensusVersionCommitsBoundry tests the a sequence of commits that spans over multiple consensus versions works correctly, and
+// TestAcctUpdatesSplittingConsensusVersionCommitsBoundary tests the a sequence of commits that spans over multiple consensus versions works correctly, and
 // in particular, complements TestAcctUpdatesSplittingConsensusVersionCommits by testing the commit boundary.
-func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
+func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	initProtocolVersion := protocol.ConsensusV20
-	initialProtoParams := config.Consensus[initProtocolVersion]
 
 	initialRounds := uint64(1)
 
@@ -1863,9 +1862,6 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf, ".")
-
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	defer au.close()
 
 	// cover initialRounds genesis blocks
@@ -1912,8 +1908,9 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	}
 
 	newVersion := protocol.ConsensusV21
-	// add MaxBalLookback-extraRounds more rounds that contains blocks using a newer consensus version.
-	endOfFirstNewProtocolSegment := basics.Round(initialRounds + extraRounds + initialProtoParams.MaxBalLookback)
+	maxAcctLockback := conf.MaxAcctLookback
+	// add maxAcctLockback-extraRounds more rounds that contains blocks using a newer consensus version.
+	endOfFirstNewProtocolSegment := basics.Round(initialRounds + extraRounds + maxAcctLockback)
 	for i := basics.Round(initialRounds + extraRounds); i <= endOfFirstNewProtocolSegment; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -1952,7 +1949,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 	// write additional extraRounds elements and verify these can be flushed.
-	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+initialProtoParams.MaxBalLookback); i++ {
+	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+maxAcctLockback); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -2005,15 +2002,8 @@ func TestAcctUpdatesResources(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesResources")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 2
-	protoParams.SeedLookback = 1
-	protoParams.SeedRefreshInterval = 1
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
 
 	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
@@ -2036,6 +2026,8 @@ func TestAcctUpdatesResources(t *testing.T) {
 		}
 	}
 
+	maxAcctLookback := conf.MaxAcctLookback
+
 	aidx := basics.AssetIndex(1)
 	aidx2 := basics.AssetIndex(2)
 	aidx3 := basics.AppIndex(3)
@@ -2043,10 +2035,10 @@ func TestAcctUpdatesResources(t *testing.T) {
 
 	rewardLevel := uint64(0)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
-	// the test 1 requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
+	// the test 1 requires 3 blocks with different resource state, au requires maxAcctLookback blocks to start persisting
 	// the test 2 requires 2 more blocks
 	// the test 2 requires 2 more blocks
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3+2+2); i++ {
+	for i := basics.Round(1); i <= basics.Round(maxAcctLookback+3+2+2); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
@@ -2221,9 +2213,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
 	defer au.close()
-	require.NoError(t, err)
 	withoutVotingData := func(ad basics.AccountData) basics.AccountData {
 		ad.VoteID = crypto.OneTimeSignatureVerifier{}
 		ad.SelectionID = crypto.VRFVerifier{}
@@ -2256,13 +2246,8 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 // In this case it waits on a condition variable and retries when
 // commitSyncer/accountUpdates has advanced the cachedDBRound.
 func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64)) {
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	proto.MaxBalLookback = 10
-	config.Consensus[testProtocolVersion] = proto
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	proto := config.Consensus[testProtocolVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
@@ -2277,28 +2262,29 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, false, 10, testProtocolVersion, accts)
+	conf := config.GetDefaultLocal()
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, false, initialBlocksCount, testProtocolVersion, accts)
 	defer ml.Close()
 
-	conf := config.GetDefaultLocal()
 	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
 	defer ao.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
-	for i := 1; i < 10; i++ {
+	for i := 1; i < initialBlocksCount; i++ {
 		accts = append(accts, accts[0])
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	checkAcctUpdates(t, au, ao, 0, 9, accts, rewardsLevels, proto)
+	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
-	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
+	for i := basics.Round(initialBlocksCount); i < basics.Round(conf.MaxAcctLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
@@ -2338,7 +2324,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		// Clear the timer to ensure a flush
 		ml.trackers.lastFlushTime = time.Time{}
 
-		ml.trackers.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
+		ml.trackers.committedUpTo(basics.Round(conf.MaxAcctLookback) + i)
 		ml.trackers.waitAccountsWriting()
 	}
 
@@ -2377,7 +2363,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	// issue a lookupWithoutRewards while persistedData.round != au.cachedDBRound
 	// when synchronized=false it will fail fast
 	_, _, _, _, err := au.lookupWithoutRewards(rnd, basics.Address{}, false)
-	require.Equal(t, err, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1})
+	require.Equal(t, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1}, err)
 
 	// release the postCommit lock, once au.lookupWithoutRewards hits au.accountsReadCond.Wait()
 	go func() {
@@ -2532,15 +2518,8 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupLatestCacheRetry")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 2
-	protoParams.SeedLookback = 1
-	protoParams.SeedRefreshInterval = 1
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
 
 	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
 	defer ml.Close()
@@ -2562,7 +2541,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
 	// the test 1 requires 2 blocks with different resource state, au requires MaxBalLookback block to start persisting
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+2); i++ {
+	for i := basics.Round(1); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
 		var updates ledgercore.AccountDeltas
 
 		// add data
@@ -2586,7 +2565,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 	// ensure rounds
 	rnd := au.latest()
-	require.Equal(t, basics.Round(protoParams.MaxBalLookback+2), rnd)
+	require.Equal(t, basics.Round(conf.MaxAcctLookback+2), rnd)
 	require.Equal(t, basics.Round(2), au.cachedDBRound)
 	oldCachedDBRound := au.cachedDBRound
 

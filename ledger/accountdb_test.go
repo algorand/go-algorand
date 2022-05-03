@@ -3236,21 +3236,21 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	// acct B is new and offline
 	deltaB := onlineAccountDelta{
 		address: addrB,
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
-		},
-		updRound:  1,
-		newStatus: basics.Offline,
+		}},
+		updRound:  []uint64{1},
+		newStatus: []basics.Status{basics.Offline},
 	}
 	// acct C is new and online
 	deltaC := onlineAccountDelta{
 		address: addrC,
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
 			VoteFirstValid: 500,
-		},
-		newStatus: basics.Online,
-		updRound:  2,
+		}},
+		newStatus: []basics.Status{basics.Online},
+		updRound:  []uint64{2},
 	}
 	// acct D is old and went offline
 	deltaD := onlineAccountDelta{
@@ -3263,11 +3263,11 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			},
 			rowid: 1,
 		},
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 400_000_000},
-		},
-		newStatus: basics.Offline,
-		updRound:  3,
+		}},
+		newStatus: []basics.Status{basics.Offline},
+		updRound:  []uint64{3},
 	}
 
 	// acct E is old online
@@ -3281,12 +3281,12 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			},
 			rowid: 2,
 		},
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
 			VoteFirstValid: 600,
-		},
-		newStatus: basics.Online,
-		updRound:  4,
+		}},
+		newStatus: []basics.Status{basics.Online},
+		updRound:  []uint64{4},
 	}
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC, deltaD, deltaE)
@@ -3308,30 +3308,115 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	require.Equal(t, []int64{2}, expired[1].rowids)
 
 	// check errors: new online with empty voting data
-	deltaC.newStatus = basics.Online
-	deltaC.newAcct.VoteFirstValid = 0
+	deltaC.newStatus[0] = basics.Online
+	deltaC.newAcct[0].VoteFirstValid = 0
 	updates.deltas = []onlineAccountDelta{deltaC}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new non-online with non-empty voting data
-	deltaB.newStatus = basics.Offline
-	deltaB.newAcct.VoteFirstValid = 1
+	deltaB.newStatus[0] = basics.Offline
+	deltaB.newAcct[0].VoteFirstValid = 1
 	updates.deltas = []onlineAccountDelta{deltaB}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new online with empty voting data
-	deltaD.newStatus = basics.Online
+	deltaD.newStatus[0] = basics.Online
 	updates.deltas = []onlineAccountDelta{deltaD}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 }
 
+func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	writer := &mockOnlineAccountsWriter{rowid: 100}
+
+	updates := compactOnlineAccountDeltas{}
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+
+	// acct A is new, offline and then online
+	deltaA := onlineAccountDelta{
+		address: addrA,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			},
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				VoteFirstValid: 100,
+			},
+		},
+		updRound:  []uint64{1, 2},
+		newStatus: []basics.Status{basics.Offline, basics.Online},
+	}
+	// acct B is new and online and then offline
+	deltaB := onlineAccountDelta{
+		address: addrB,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
+				VoteFirstValid: 200,
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+			},
+		},
+		updRound:  []uint64{3, 4},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+	}
+	// acct C is old online, then online and then offline
+	deltaC := onlineAccountDelta{
+		address: addrC,
+		oldAcct: persistedOnlineAccountData{
+			addr: addrC,
+			accountData: baseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+				VoteFirstValid: 300,
+			},
+			rowid: 1,
+		},
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+				VoteFirstValid: 301,
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
+			},
+		},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+		updRound:  []uint64{5, 6},
+	}
+
+	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC)
+	lastUpdateRound := basics.Round(1)
+	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+
+	require.Len(t, updated, 5)
+	require.Equal(t, updated[0].addr, addrA)
+	require.Equal(t, updated[1].addr, addrB)
+	require.Equal(t, updated[2].addr, addrB)
+	require.Equal(t, updated[3].addr, addrC)
+	require.Equal(t, updated[4].addr, addrC)
+
+	require.Len(t, expired, 3)
+	// deltaB went offline
+	require.Equal(t, proto.MaxBalLookback+4, uint64(expired[0].rnd))
+	require.Equal(t, []int64{102, 103}, expired[0].rowids)
+
+	// deltaC old, new and new
+	require.Equal(t, proto.MaxBalLookback+5, uint64(expired[1].rnd))
+	require.Equal(t, []int64{1}, expired[1].rowids)
+	require.Equal(t, proto.MaxBalLookback+6, uint64(expired[2].rnd))
+	require.Equal(t, []int64{104, 105}, expired[2].rowids)
+}
+
 func TestAccountOnlineRoundParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
@@ -3345,7 +3430,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 	// entry i is for round i+1 since db initialized with entry for round 0
-	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, 80+proto.MaxBalLookback)
+	const maxRounds = 40 // any number
+	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, maxRounds)
 	for i := range onlineRoundParams {
 		onlineRoundParams[i].OnlineSupply = uint64(i + 1)
 	}
@@ -3355,9 +3441,9 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 
 	dbOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
-	require.Equal(t, 80+int(proto.MaxBalLookback)+1, len(dbOnlineRoundParams)) // +1 comes from init state
+	require.Equal(t, maxRounds+1, len(dbOnlineRoundParams)) // +1 comes from init state
 	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
-	require.Equal(t, 80+proto.MaxBalLookback, uint64(endRound))
+	require.Equal(t, maxRounds, int(endRound))
 
 	err = accountsPruneOnlineRoundParams(tx, 10)
 	require.NoError(t, err)
@@ -3365,5 +3451,67 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
 	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
-	require.Equal(t, 80+proto.MaxBalLookback, uint64(endRound))
+	require.Equal(t, maxRounds, int(endRound))
+}
+
+func TestRowidsToChunkedArgs(t *testing.T) {
+	res := rowidsToChunkedArgs([]int64{1})
+	require.Equal(t, 1, cap(res))
+	require.Equal(t, 1, len(res))
+	require.Equal(t, 1, cap(res[0]))
+	require.Equal(t, 1, len(res[0]))
+	require.Equal(t, []interface{}{int64(1)}, res[0])
+
+	input := make([]int64, 999)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 1, cap(res))
+	require.Equal(t, 1, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	for i := 0; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+
+	input = make([]int64, 1001)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 2, cap(res))
+	require.Equal(t, 2, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	require.Equal(t, 2, cap(res[1]))
+	require.Equal(t, 2, len(res[1]))
+	for i := 0; i < 999; i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+	j := 0
+	for i := 999; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[1][j])
+		j++
+	}
+
+	input = make([]int64, 2*999)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 2, cap(res))
+	require.Equal(t, 2, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	require.Equal(t, 999, cap(res[1]))
+	require.Equal(t, 999, len(res[1]))
+	for i := 0; i < 999; i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+	j = 0
+	for i := 999; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[1][j])
+		j++
+	}
 }
