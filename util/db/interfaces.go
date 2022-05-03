@@ -17,6 +17,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 )
 
@@ -38,4 +39,5 @@ type Queryable interface {
 type Executable interface {
 	Queryable
 	Exec(query string, args ...interface{}) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }

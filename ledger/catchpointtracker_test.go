@@ -749,3 +749,78 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 		require.FailNow(t, "The LookupAgreement wasn't getting release as expected by the blocked tracker")
 	}
 }
+
+func TestCalculateFirstStageRounds(t *testing.T) {
+	type TestCase struct {
+		// input
+		oldBase basics.Round
+		offset uint64
+		accountDataResourceSeparationRound basics.Round
+		catchpointInterval uint64
+		catchpointLookback uint64
+		// output
+		hasIntermediateFirstStageRound bool
+		hasMultipleIntermediateFirstStageRounds bool
+		retOffset uint64
+	}
+	testCases := []TestCase {
+		{0, 6, 1, 10, 3, false, false, 6},
+		{0, 7, 1, 10, 3, true, false, 7},
+		{0, 16, 1, 10, 3, true, false, 7},
+		{0, 17, 1, 10, 3, true, true, 17},
+		{7, 9, 1, 10, 3, false, false, 9},
+		{7, 10, 1, 10, 3, true, false, 10},
+		{7, 19, 1, 10, 3, true, false, 10},
+		{7, 20, 1, 10, 3, true, true, 20},
+		{1, 1, 1, 10, 169, false, false, 1},
+		{1, 9, 1, 10, 169, false, false, 9},
+		{1, 10, 1, 10, 169, true, false, 10},
+		{1, 22, 1, 10, 169, true, true, 20},
+		{1, 95, 100, 1, 3, false, false, 95},
+		{1, 96, 100, 1, 3, true, false, 96},
+		{1, 97, 100, 1, 3, true, true, 97},
+		{1, 97, 99, 10, 3, true, false, 96},
+	}
+
+	for i, testCase := range testCases {
+		t.Run(fmt.Sprintf("test_case_%d", i), func(t *testing.T) {
+			hasIntermediateFirstStageRound, hasMultipleIntermediateFirstStageRounds, offset :=
+				calculateFirstStageRounds(
+					testCase.oldBase, testCase.offset, testCase.accountDataResourceSeparationRound,
+					testCase.catchpointInterval, testCase.catchpointLookback)
+			require.Equal(
+				t, testCase.hasIntermediateFirstStageRound, hasIntermediateFirstStageRound)
+			require.Equal(
+				t, testCase.hasMultipleIntermediateFirstStageRounds,
+				hasMultipleIntermediateFirstStageRounds)
+			require.Equal(t, testCase.retOffset, offset)
+		})
+	}
+}
+
+func TestCalculateCatchpointRounds(t *testing.T) {
+	type TestCase struct {
+		// input
+		min basics.Round
+		max basics.Round
+		catchpointInterval uint64
+		// output
+		output []basics.Round
+	}
+	testCases := []TestCase {
+		{1, 0, 10, nil},
+		{0, 0, 10, []basics.Round{0}},
+		{11, 19, 10, nil},
+		{11, 20, 10, []basics.Round{20}},
+		{11, 29, 10, []basics.Round{20}},
+		{11, 30, 10, []basics.Round{20, 30}},
+	}
+
+	for i, testCase := range testCases {
+		t.Run(fmt.Sprintf("test_case_%d", i), func(t *testing.T) {
+			rounds := calculateCatchpointRounds(
+				testCase.min, testCase.max, testCase.catchpointInterval)
+			require.Equal(t, testCase.output, rounds)
+		})
+	}
+}

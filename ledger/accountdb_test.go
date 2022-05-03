@@ -3313,3 +3313,47 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 }
+
+// Test functions operating on catchpointfirststageinfo table.
+func TestCatchpointFristStageInfoTable(t *testing.T) {
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+
+	err := accountsCreateCatchpointFirstStageInfoTable(
+		context.Background(), dbs.Wdb.Handle)
+	require.NoError(t, err)
+
+	for _, round := range []basics.Round{4, 6, 8} {
+		info := catchpointDataInfo {
+			TotalAccounts: uint64(round) * 10,
+		}
+		err = insertCatchpointFirstStageInfo(dbs.Wdb.Handle, round, &info)
+		require.NoError(t, err)
+	}
+
+	for _, round := range []basics.Round{4, 6, 8} {
+		info, exists, err := selectCatchpointFirstStageInfo(dbs.Rdb.Handle, round)
+		require.NoError(t, err)
+		require.True(t, exists)
+
+		infoExpected := catchpointDataInfo{
+			TotalAccounts: uint64(round) * 10,
+		}
+		require.Equal(t, infoExpected, info)
+	}
+
+	_, exists, err := selectCatchpointFirstStageInfo(dbs.Rdb.Handle, 7)
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	rounds, err := selectOldCatchpointFirstStageInfoRounds(dbs.Rdb.Handle, 6)
+	require.NoError(t, err)
+	require.Equal(t, []basics.Round{4, 6}, rounds)
+
+	err = deleteOldCatchpointFirstStageInfo(dbs.Wdb.Handle, 6)
+	require.NoError(t, err)
+
+	rounds, err = selectOldCatchpointFirstStageInfoRounds(dbs.Rdb.Handle, 9)
+	require.NoError(t, err)
+	require.Equal(t, []basics.Round{8}, rounds)
+}

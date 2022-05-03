@@ -256,6 +256,45 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback
 	return rnd, basics.Round(0)
 }
 
+// Calculate whether we have intermediate first stage catchpoint rounds and the
+// new offset.
+func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataResourceSeparationRound basics.Round, catchpointInterval uint64, catchpointLookback uint64) (bool /*hasIntermediateFirstStageRound*/, bool /*hasMultipleIntermediateFirstStageRounds*/, uint64 /*offset*/) {
+	hasIntermediateFirstStageRound := false
+	hasMultipleIntermediateFirstStageRounds := false
+
+	if accountDataResourceSeparationRound > 0 {
+		minFirstStageRound := oldBase + 1
+		if (accountDataResourceSeparationRound > basics.Round(catchpointLookback)) &&
+				(accountDataResourceSeparationRound - basics.Round(catchpointLookback) >
+					minFirstStageRound) {
+			minFirstStageRound =
+				accountDataResourceSeparationRound - basics.Round(catchpointLookback)
+		}
+
+		// The smallest integer r >= dcr.minFirstStageRound such that
+		// (r + catchpointLookback) % ct.catchpointInterval == 0.
+		first := (int64(minFirstStageRound) + int64(catchpointLookback) +
+			int64(catchpointInterval) - 1) /
+				int64(catchpointInterval) * int64(catchpointInterval) -
+					int64(catchpointLookback)
+		// The largest integer r <= dcr.oldBase + dcr.offset such that
+		// (r + catchpointLookback) % ct.catchpointInterval == 0.
+		last := (int64(oldBase) + int64(offset) + int64(catchpointLookback)) /
+			int64(catchpointInterval) * int64(catchpointInterval) - int64(catchpointLookback)
+
+		if first <= last {
+			hasIntermediateFirstStageRound = true
+			offset = uint64(last) - uint64(oldBase)
+
+			if first < last {
+				hasMultipleIntermediateFirstStageRounds = true
+			}
+		}
+	}
+
+	return hasIntermediateFirstStageRound, hasMultipleIntermediateFirstStageRounds, offset
+}
+
 func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	if ct.catchpointInterval == 0 {
 		return dcr
@@ -266,39 +305,12 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	ct.catchpointsMu.Unlock()
 
 	// Check if we need to do the first stage of catchpoint generation.
-	hasIntermediateFirstStageRound := false
-	hasMultipleIntermediateFirstStageRounds := false
-
-	if accountDataResourceSeparationRound > 0 {
-		dcr.minCatchpointRound = dcr.oldBase + 1
-		if accountDataResourceSeparationRound > dcr.minCatchpointRound {
-			dcr.minCatchpointRound = accountDataResourceSeparationRound
-		}
-
-		minFirstStageRound := dcr.oldBase + 1
-		if (accountDataResourceSeparationRound > 320) &&
-				(accountDataResourceSeparationRound - 320) > minFirstStageRound {
-			minFirstStageRound = accountDataResourceSeparationRound - 320
-		}
-
-		// The smallest integer r >= dcr.minFirstStageRound such that
-		// (r + 320) % ct.catchpointInterval == 0.
-		first := (int64(minFirstStageRound) + 320 + int64(ct.catchpointInterval) - 1) /
-			int64(ct.catchpointInterval) * int64(ct.catchpointInterval) - 320
-		// The largest integer r <= dcr.oldBase + dcr.offset such that
-		// (r + 320) % ct.catchpointInterval == 0.
-		last := (int64(dcr.oldBase) + int64(dcr.offset) + 320) /
-			int64(ct.catchpointInterval) * int64(ct.catchpointInterval) - 320
-
-		if first <= last {
-			hasIntermediateFirstStageRound = true
-			dcr.offset = uint64(last) - uint64(dcr.oldBase)
-
-			if first < last {
-				hasMultipleIntermediateFirstStageRounds = true
-			}
-		}
-	}
+	var hasIntermediateFirstStageRound bool
+	var hasMultipleIntermediateFirstStageRounds bool
+	hasIntermediateFirstStageRound, hasMultipleIntermediateFirstStageRounds, dcr.offset =
+		calculateFirstStageRounds(
+			dcr.oldBase, dcr.offset, accountDataResourceSeparationRound,
+			ct.catchpointInterval, 320)
 
 	// if we're still writing the previous balances, we can't move forward yet.
 	if ct.IsWritingCatchpointDataFile() {
@@ -327,6 +339,13 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 			if hasMultipleIntermediateFirstStageRounds {
 				close(ct.catchpointDataSlowWriting)
 			}
+		}
+	}
+
+	if accountDataResourceSeparationRound > 0 {
+		dcr.minCatchpointRound = dcr.oldBase + 1
+		if accountDataResourceSeparationRound > dcr.minCatchpointRound {
+			dcr.minCatchpointRound = accountDataResourceSeparationRound
 		}
 	}
 
@@ -589,6 +608,24 @@ func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round 
 	return nil
 }
 
+// Calculate catchpoint rounds numbers in [min, max].
+// `catchpointInterval` must be non-zero.
+func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInterval uint64) []basics.Round {
+	var res []basics.Round
+
+	// The smallest integer i such that i * ct.catchpointInterval >= first.
+	l := (uint64(min) + catchpointInterval - 1) / catchpointInterval
+	// The largest integer i such that i * ct.catchpointInterval <= last.
+	r := uint64(max) / catchpointInterval
+
+	for i := l; i <= r; i++ {
+		round := basics.Round(i * catchpointInterval)
+		res = append(res, round)
+	}
+
+	return res
+}
+
 // Generate catchpoints (labels and possibly files with db records) for rounds in
 // [first, last] and delete corresponding first stage catchpoint db records and
 // data files. `ct.catchpointInterval` must be non-zero.
@@ -596,13 +633,9 @@ func (ct *catchpointTracker) createCatchpoints(first basics.Round, last basics.R
 	if 320 + 1 > first {
 		first = 320 + 1
 	}
-	// The smallest integer i such that i * ct.catchpointInterval >= first.
-	l := (uint64(first) + ct.catchpointInterval - 1) / ct.catchpointInterval
-	// The largest integer i such that i * ct.catchpointInterval <= last.
-	r := uint64(last) / ct.catchpointInterval
+	rounds := calculateCatchpointRounds(first, last, ct.catchpointInterval)
 
-	for i := l; i <= r; i++ {
-		round := basics.Round(i * ct.catchpointInterval)
+	for _, round := range rounds {
 		accountsRound := round - 320
 
 		dataInfo, exists, err :=

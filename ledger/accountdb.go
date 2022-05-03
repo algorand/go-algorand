@@ -141,6 +141,11 @@ var createTxTailTable = []string{
 		data blob)`,
 }
 
+const createCatchpointFirstStageInfoTable = `
+	CREATE TABLE IF NOT EXISTS catchpointfirststageinfo (
+	round integer primary key NOT NULL,
+	info blob NOT NULL)`
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -152,6 +157,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS resources`,
 	`DROP TABLE IF EXISTS onlineaccounts`,
 	`DROP TABLE IF EXISTS txtail`,
+	`DROP TABLE IF EXISTS catchpointfirststageinfo`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -1308,6 +1314,11 @@ func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	return nil
 }
 
+func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createCatchpointFirstStageInfoTable)
+	return err
+}
+
 type baseOnlineAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -2235,14 +2246,6 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 		}
 	}
 
-	return err
-}
-
-func createCatchpointDataFilesTable(ctx context.Context, tx *sql.Tx) error {
-	stmt := `CREATE TABLE IF NOT EXISTS catchpointfirststageinfo (
-		round integer primary key NOT NULL,
-		info blob NOT NULL)`
-	_, err := tx.ExecContext(ctx, stmt)
 	return err
 }
 
