@@ -123,7 +123,12 @@ func (ccw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
 			continue
 		}
 
-		if isPresent, err := builderForRound.Present(pos); err != nil || isPresent {
+		isPresent, err := builderForRound.Present(pos)
+		if err != nil {
+			ccw.log.Warnf("initBuilders: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+			continue
+		}
+		if isPresent {
 			ccw.log.Warnf("initBuilders: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
 			continue
 		}

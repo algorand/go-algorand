@@ -55,9 +55,10 @@ type Builder struct {
 
 // Errors for the CompactCert builder
 var (
-	ErrPositionOutOfBound     = errors.New("requested position is out of bound")
+	ErrPositionOutOfBound     = errors.New("requested position is out of bounds")
+	ErrPositionAlreadyPresent = errors.New("requested position is already present")
 	ErrPositionWithZeroWeight = errors.New("position has zero weight")
-	ErrInternalCoinIndexError = errors.New("error while calculate coin to index")
+	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
 )
 
 // MkBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a compact cert.
@@ -123,9 +124,14 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 
 // Add a signature to the set of signatures available for building a certificate.
 func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
-	if isPresent, err := b.Present(pos); err != nil || isPresent {
+	isPresent, err := b.Present(pos)
+	if err != nil {
 		return err
 	}
+	if isPresent {
+		return ErrPositionAlreadyPresent
+	}
+
 	p := b.participants[pos]
 
 	// Remember the signature
@@ -157,7 +163,7 @@ func (b *Builder) coinIndex(coinWeight uint64) (uint64, error) {
 
 again:
 	if lo >= hi {
-		return 0, fmt.Errorf("%w: lo %d >= hi %d", ErrInternalCoinIndexError, lo, hi)
+		return 0, fmt.Errorf("%w: lo %d >= hi %d and coin %d", ErrCoinIndexError, lo, hi, coinWeight)
 	}
 
 	mid := (lo + hi) / 2

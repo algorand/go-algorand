@@ -108,7 +108,7 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 // inequality checked by the verifyWeights function.
 // In order to make sure the number will satisfy the verifier we will use the following inequality
 //
-// numReveals > = ((strengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
+// numReveals >= ((strengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
 // where signedWeight/(2^d) >=1 for some integer d>=0, p = P/(2^b) >= ln(provenWeight), t = T/(2^b) >= ln(2) >= (T-1)/(2^b)
 // for some integers P,T >= 0 and b=16.
 //
@@ -123,11 +123,11 @@ func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint6
 	// x = 3 * 2^b * (signedWeight^2 - 2^2d)
 	// w = d * (T - 1)
 	//
-	// numReveals > = ((strengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
+	// numReveals >= ((strengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
 	//        /\
 	//        ||
 	//        \/
-	// numReveals > = ((strengthTarget) * T * y / (x + (w - P) * y))
+	// numReveals >= ((strengthTarget) * T * y / (x + (w - P) * y))
 	y, x, w := getSubExpressions(signedWeight)
 
 	// numerator = strengthTarget * ln2IntApproximation * y
