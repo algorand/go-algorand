@@ -93,10 +93,15 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	mu        deadlock.RWMutex
+	mu        deadlock.Mutex
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	config    config.Local
+
+	// Dedicated RWMutex for ctx and cancelCtx
+	// Required because we read the ctx variable in the monitoring goroutines
+	// and write it when switching to and from catchpoint catchup mode
+	ctxMu deadlock.RWMutex
 
 	ledger *data.Ledger
 	net    network.GossipNode
@@ -347,6 +352,22 @@ func bootstrapData(genesis bookkeeping.Genesis, log logging.Logger) (bookkeeping
 	return bookkeeping.MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
 }
 
+// Create a new context and assign it to the node's root context
+func (node *AlgorandFullNode) resetContext() {
+	node.ctxMu.Lock()
+	defer node.ctxMu.Unlock()
+
+	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+}
+
+// Acquire the node's context done channel via rlock
+func (node *AlgorandFullNode) contextDone() <-chan struct{} {
+	node.ctxMu.RLock()
+	defer node.ctxMu.RUnlock()
+
+	return node.ctx.Done()
+}
+
 // Config returns a copy of the node's Local configuration
 func (node *AlgorandFullNode) Config() config.Local {
 	return node.config
@@ -354,11 +375,9 @@ func (node *AlgorandFullNode) Config() config.Local {
 
 // Start the node: connect to peers and run the agreement service while obtaining a lock. Doesn't wait for initial sync.
 func (node *AlgorandFullNode) Start() {
+	node.resetContext()
 	node.mu.Lock()
 	defer node.mu.Unlock()
-
-	// Set up a context we can use to cancel goroutines on Stop()
-	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
 
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
@@ -792,7 +811,7 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 			if err != nil {
 				node.log.Errorf("Could not refresh participation keys: %v", err)
 			}
-		case <-node.ctx.Done():
+		case <-node.contextDone():
 			ticker.Stop()
 			return
 		}
@@ -1037,13 +1056,10 @@ func (node *AlgorandFullNode) txPoolGaugeThread() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
-		node.mu.RLock()
-		done := node.ctx.Done()
-		node.mu.RUnlock()
 		select {
 		case <-ticker.C:
 			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
-		case <-done:
+		case <-node.contextDone():
 			return
 		}
 	}
@@ -1077,11 +1093,8 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 func (node *AlgorandFullNode) oldKeyDeletionThread() {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
-		node.mu.RLock()
-		done := node.ctx.Done()
-		node.mu.RUnlock()
 		select {
-		case <-done:
+		case <-node.contextDone():
 			return
 		case <-node.oldKeyDeletionNotify:
 		}
@@ -1234,8 +1247,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 
 			prevNodeCancelFunc := node.cancelCtx
 
-			// Set up a context we can use to cancel goroutines on Stop()
-			node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+			node.resetContext()
 			ctxCh <- node.ctx
 
 			prevNodeCancelFunc()
@@ -1264,8 +1276,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.log.Infof("Indexer is not available - %v", err)
 		}
 
-		// Set up a context we can use to cancel goroutines on Stop()
-		node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+		node.resetContext()
 
 		node.startMonitoringRoutines()
 
