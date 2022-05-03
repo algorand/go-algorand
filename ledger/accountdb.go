@@ -279,6 +279,8 @@ type compactAccountDeltas struct {
 	misses []int
 }
 
+// onlineAccountDelta track all changes of account state within a range
+// used in conjunction wih compactOnlineAccountDeltas to group and represent per-account changes
 type onlineAccountDelta struct {
 	oldAcct           persistedOnlineAccountData
 	newAcct           []baseOnlineAccountData
@@ -817,7 +819,7 @@ func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 			addr, acctDelta := roundDelta.GetByIdx(i)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
 				updEntry := prev
-				updEntry.nOnlineAcctDeltas += 1
+				updEntry.nOnlineAcctDeltas++
 				updEntry.append(acctDelta, deltaRound)
 				outAccountDeltas.update(idx, updEntry)
 			} else {
@@ -3551,7 +3553,7 @@ func onlineAccountsNewRoundImpl(
 				} else {
 					if newStatus == basics.Online {
 						if newAcct.IsVotingEmpty() {
-							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), data.newAcct)
+							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), newAcct)
 						} else {
 							// create a new entry.
 							var rowid int64
@@ -3569,7 +3571,7 @@ func onlineAccountsNewRoundImpl(
 							}
 						}
 					} else if !newAcct.IsVotingEmpty() {
-						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), data.newAcct)
+						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
 					}
 				}
 			} else {
@@ -3577,7 +3579,7 @@ func onlineAccountsNewRoundImpl(
 				if newAcct.IsVotingEmpty() {
 					// new value is zero then go offline
 					if newStatus == basics.Online {
-						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), data.newAcct)
+						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
 					} else {
 						var rowid int64
 						rowid, err = writer.insertOnlineAccount(data.address, 0, baseOnlineAccountData{}, updRound, 0)
@@ -3588,16 +3590,17 @@ func onlineAccountsNewRoundImpl(
 								round:       lastUpdateRound,
 								rowid:       rowid,
 							}
-							updatedAccounts = append(updatedAccounts, updated)
-							prevAcct = updated
 
 							targetRound := basics.Round(updRound + proto.MaxBalLookback)
 							if entries, ok := expirationMap[targetRound]; ok {
-								entries = append(entries, data.oldAcct.rowid, rowid)
+								entries = append(entries, prevAcct.rowid, rowid)
 								expirationMap[targetRound] = entries
 							} else {
-								expirationMap[targetRound] = []int64{data.oldAcct.rowid, rowid}
+								expirationMap[targetRound] = []int64{prevAcct.rowid, rowid}
 							}
+
+							updatedAccounts = append(updatedAccounts, updated)
+							prevAcct = updated
 						}
 					}
 				} else {
@@ -3612,16 +3615,17 @@ func onlineAccountsNewRoundImpl(
 								round:       lastUpdateRound,
 								rowid:       rowid,
 							}
-							updatedAccounts = append(updatedAccounts, updated)
-							prevAcct = updated
 
 							targetRound := basics.Round(updRound + proto.MaxBalLookback)
 							if entries, ok := expirationMap[targetRound]; ok {
-								entries = append(entries, data.oldAcct.rowid)
+								entries = append(entries, prevAcct.rowid)
 								expirationMap[targetRound] = entries
 							} else {
-								expirationMap[targetRound] = []int64{data.oldAcct.rowid}
+								expirationMap[targetRound] = []int64{prevAcct.rowid}
 							}
+
+							updatedAccounts = append(updatedAccounts, updated)
+							prevAcct = updated
 						}
 					}
 				}

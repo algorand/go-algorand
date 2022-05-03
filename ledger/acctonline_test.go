@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"testing"
 	"time"
 
@@ -320,7 +319,6 @@ func TestAcctOnline(t *testing.T) {
 		require.NoError(t, err)
 		// rewardLevel is zero => MicroAlgos == MicroAlgosWithRewards
 		expected := ad.AccountBaseData.MicroAlgos.Raw + uint64(i-start+1)*delta
-		fmt.Printf("rnd = %d, base=%x, new=%x\n", i, ad.AccountBaseData.MicroAlgos.Raw, expected)
 		require.Equal(t, expected, oad.MicroAlgosWithRewards.Raw)
 	}
 }

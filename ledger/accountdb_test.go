@@ -3328,6 +3328,93 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	writer := &mockOnlineAccountsWriter{rowid: 100}
+
+	updates := compactOnlineAccountDeltas{}
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+
+	// acct A is new, offline and then online
+	deltaA := onlineAccountDelta{
+		address: addrA,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			},
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				VoteFirstValid: 100,
+			},
+		},
+		updRound:  []uint64{1, 2},
+		newStatus: []basics.Status{basics.Offline, basics.Online},
+	}
+	// acct B is new and online and then offline
+	deltaB := onlineAccountDelta{
+		address: addrB,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
+				VoteFirstValid: 200,
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+			},
+		},
+		updRound:  []uint64{3, 4},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+	}
+	// acct C is old online, then online and then offline
+	deltaC := onlineAccountDelta{
+		address: addrC,
+		oldAcct: persistedOnlineAccountData{
+			addr: addrC,
+			accountData: baseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+				VoteFirstValid: 300,
+			},
+			rowid: 1,
+		},
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+				VoteFirstValid: 301,
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
+			},
+		},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+		updRound:  []uint64{5, 6},
+	}
+
+	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC)
+	lastUpdateRound := basics.Round(1)
+	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+
+	require.Len(t, updated, 5)
+	require.Equal(t, updated[0].addr, addrA)
+	require.Equal(t, updated[1].addr, addrB)
+	require.Equal(t, updated[2].addr, addrB)
+	require.Equal(t, updated[3].addr, addrC)
+	require.Equal(t, updated[4].addr, addrC)
+
+	require.Len(t, expired, 3)
+	// deltaB went offline
+	require.Equal(t, proto.MaxBalLookback+4, uint64(expired[0].rnd))
+	require.Equal(t, []int64{102, 103}, expired[0].rowids)
+
+	// deltaC old, new and new
+	require.Equal(t, proto.MaxBalLookback+5, uint64(expired[1].rnd))
+	require.Equal(t, []int64{1}, expired[1].rowids)
+	require.Equal(t, proto.MaxBalLookback+6, uint64(expired[2].rnd))
+	require.Equal(t, []int64{104, 105}, expired[2].rowids)
+}
+
 func TestAccountOnlineRoundParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

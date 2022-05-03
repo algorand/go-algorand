@@ -608,6 +608,8 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 // onlineTotals returns the online totals of all accounts at the end of round rnd.
 // used in tests only
 func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
