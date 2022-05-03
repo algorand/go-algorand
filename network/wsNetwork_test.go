@@ -1788,6 +1788,351 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	}
 }
 
+// Set up two nodes, have one of them work through TX gossip message-of-interest logic
+// test:
+// * wn.config.ForceFetchTransactions
+// * wn.config.ForceRelayMessages
+// * NetworkNodeInfo.IsParticipating() + WebsocketNetwork.OnNetworkAdvance()
+// TODO WRITEME
+func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
+	// Tests that A->B follows MOI
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.config.EnablePingHandler = false
+
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	bConfig := defaultConfig
+	bConfig.NetAddress = ""
+	bConfig.ForceRelayMessages = true
+	netB := makeTestWebsocketNodeWithConfig(t, bConfig)
+	netB.config.GossipFanout = 1
+	netB.config.EnablePingHandler = false
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	incomingMsgSync := deadlock.Mutex{}
+	msgCounters := make(map[protocol.Tag]int)
+	messageArriveWg := sync.WaitGroup{}
+	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		incomingMsgSync.Lock()
+		defer incomingMsgSync.Unlock()
+		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
+		messageArriveWg.Done()
+		return
+	}
+	messageFilterArriveWg := sync.WaitGroup{}
+	messageFilterArriveWg.Add(1)
+	waitMessageArriveHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		messageFilterArriveWg.Done()
+		return
+	}
+
+	// register all the handlers.
+	taggedHandlers := []TaggedMessageHandler{}
+	for tag := range defaultSendMessageTags {
+		taggedHandlers = append(taggedHandlers, TaggedMessageHandler{
+			Tag:            tag,
+			MessageHandler: HandlerFunc(msgHandler),
+		})
+	}
+	netB.RegisterHandlers(taggedHandlers)
+	netA.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandler),
+		}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+
+	netB.OnNetworkAdvance()
+	// send another message which we can track, so that we'll know that the first message was delivered.
+	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	messageFilterArriveWg.Wait()
+
+	messageArriveWg.Add(5 * 4) // we're expecting exactly 20 messages.
+	// send 5 messages of few types.
+	for i := 0; i < 5; i++ {
+		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	}
+	// wait until all the expected messages arrive.
+	messageArriveWg.Wait()
+	for _, count := range msgCounters {
+		require.Equal(t, 5, count)
+	}
+}
+
+func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
+	// Tests that A->B follows MOI
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.config.EnablePingHandler = false
+
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	bConfig := defaultConfig
+	bConfig.NetAddress = ""
+	bConfig.ForceFetchTransactions = true
+	netB := makeTestWebsocketNodeWithConfig(t, bConfig)
+	netB.config.GossipFanout = 1
+	netB.config.EnablePingHandler = false
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	incomingMsgSync := deadlock.Mutex{}
+	msgCounters := make(map[protocol.Tag]int)
+	messageArriveWg := sync.WaitGroup{}
+	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		incomingMsgSync.Lock()
+		defer incomingMsgSync.Unlock()
+		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
+		messageArriveWg.Done()
+		return
+	}
+	messageFilterArriveWg := sync.WaitGroup{}
+	messageFilterArriveWg.Add(1)
+	waitMessageArriveHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		messageFilterArriveWg.Done()
+		return
+	}
+
+	// register all the handlers.
+	taggedHandlers := []TaggedMessageHandler{}
+	for tag := range defaultSendMessageTags {
+		taggedHandlers = append(taggedHandlers, TaggedMessageHandler{
+			Tag:            tag,
+			MessageHandler: HandlerFunc(msgHandler),
+		})
+	}
+	netB.RegisterHandlers(taggedHandlers)
+	netA.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandler),
+		}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+
+	netB.OnNetworkAdvance()
+	// send another message which we can track, so that we'll know that the first message was delivered.
+	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	messageFilterArriveWg.Wait()
+
+	messageArriveWg.Add(5 * 4) // we're expecting exactly 20 messages.
+	// send 5 messages of few types.
+	for i := 0; i < 5; i++ {
+		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	}
+	// wait until all the expected messages arrive.
+	messageArriveWg.Wait()
+	for _, count := range msgCounters {
+		require.Equal(t, 5, count)
+	}
+}
+func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
+	// Tests that A->B follows MOI
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.config.EnablePingHandler = false
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+
+	bConfig := defaultConfig
+	bConfig.NetAddress = ""
+	netB := makeTestWebsocketNodeWithConfig(t, bConfig)
+	netB.config.GossipFanout = 1
+	netB.config.EnablePingHandler = false
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+	require.False(t, netB.relayMessages)
+	require.Equal(t, uint32(wantTXGossip_unk), netB.wantTXGossip)
+
+	incomingMsgSync := deadlock.Mutex{}
+	msgCounters := make(map[protocol.Tag]int)
+	messageArriveWg := sync.WaitGroup{}
+	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		incomingMsgSync.Lock()
+		defer incomingMsgSync.Unlock()
+		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
+		messageArriveWg.Done()
+		return
+	}
+	messageFilterArriveWg := sync.WaitGroup{}
+	messageFilterArriveWg.Add(1)
+	waitMessageArriveHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		messageFilterArriveWg.Done()
+		return
+	}
+
+	// register all the handlers.
+	taggedHandlers := []TaggedMessageHandler{}
+	for tag := range defaultSendMessageTags {
+		taggedHandlers = append(taggedHandlers, TaggedMessageHandler{
+			Tag:            tag,
+			MessageHandler: HandlerFunc(msgHandler),
+		})
+	}
+	netB.RegisterHandlers(taggedHandlers)
+	netA.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandler),
+		}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+
+	netB.OnNetworkAdvance()
+	// TODO: better event driven thing for netB sending new MOI
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, uint32(wantTXGossip_no), netB.wantTXGossip)
+	// send another message which we can track, so that we'll know that the first message was delivered.
+	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	messageFilterArriveWg.Wait()
+
+	messageArriveWg.Add(5 * 3) // we're expecting exactly 15 messages.
+	// send 5 messages of few types.
+	for i := 0; i < 5; i++ {
+		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil) // THESE WILL BE DROPPED
+		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	}
+	// wait until all the expected messages arrive.
+	messageArriveWg.Wait()
+	for tag, count := range msgCounters {
+		if tag == protocol.TxnTag {
+			require.Equal(t, 0, count)
+		} else {
+			require.Equal(t, 5, count)
+		}
+	}
+}
+
+type participatingNetworkNodeInfo struct {
+}
+
+func (nnni *participatingNetworkNodeInfo) IsParticipating() bool {
+	return true
+}
+
+func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
+	// Tests that A->B follows MOI
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.config.EnablePingHandler = false
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+
+	bConfig := defaultConfig
+	bConfig.NetAddress = ""
+	netB := makeTestWebsocketNodeWithConfig(t, bConfig)
+	netB.node = &participatingNetworkNodeInfo{}
+	netB.config.GossipFanout = 1
+	netB.config.EnablePingHandler = false
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+	require.False(t, netB.relayMessages)
+	require.Equal(t, uint32(wantTXGossip_unk), netB.wantTXGossip)
+
+	incomingMsgSync := deadlock.Mutex{}
+	msgCounters := make(map[protocol.Tag]int)
+	messageArriveWg := sync.WaitGroup{}
+	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		incomingMsgSync.Lock()
+		defer incomingMsgSync.Unlock()
+		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
+		messageArriveWg.Done()
+		return
+	}
+	messageFilterArriveWg := sync.WaitGroup{}
+	messageFilterArriveWg.Add(1)
+	waitMessageArriveHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		messageFilterArriveWg.Done()
+		return
+	}
+
+	// register all the handlers.
+	taggedHandlers := []TaggedMessageHandler{}
+	for tag := range defaultSendMessageTags {
+		taggedHandlers = append(taggedHandlers, TaggedMessageHandler{
+			Tag:            tag,
+			MessageHandler: HandlerFunc(msgHandler),
+		})
+	}
+	netB.RegisterHandlers(taggedHandlers)
+	netA.RegisterHandlers([]TaggedMessageHandler{
+		{
+			Tag:            protocol.AgreementVoteTag,
+			MessageHandler: HandlerFunc(waitMessageArriveHandler),
+		}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+
+	netB.OnNetworkAdvance()
+	// TODO: better event driven thing for netB sending new MOI
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, uint32(wantTXGossip_yes), netB.wantTXGossip)
+	// send another message which we can track, so that we'll know that the first message was delivered.
+	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	messageFilterArriveWg.Wait()
+
+	messageArriveWg.Add(5 * 4) // we're expecting exactly 20 messages.
+	// send 5 messages of few types.
+	for i := 0; i < 5; i++ {
+		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	}
+	// wait until all the expected messages arrive.
+	messageArriveWg.Wait()
+	for tag, count := range msgCounters {
+		if tag == protocol.TxnTag {
+			require.Equal(t, 5, count)
+		} else {
+			require.Equal(t, 5, count)
+		}
+	}
+}
+
 // Set up two nodes, have one of them disconnect from the other, and monitor disconnection error on the side that did not issue the disconnection.
 // Plan:
 // Network A will be sending messages to network B.

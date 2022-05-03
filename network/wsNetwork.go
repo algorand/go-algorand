@@ -686,6 +686,9 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.config.DNSSecurityRelayAddrEnforced() {
 		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
 	}
+	if wn.node == nil {
+		wn.node = &nopeNetworkNodeInfo{}
+	}
 	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
 	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer, maxIdleConnsPerHost)
@@ -2149,9 +2152,6 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 
 // NewWebsocketNetwork constructor for websockets based gossip network
 func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NetworkNodeInfo) (wn *WebsocketNetwork, err error) {
-	if node == nil {
-		node = &nopeNetworkNodeInfo{}
-	}
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
