@@ -118,6 +118,14 @@ type ConsensusParams struct {
 	//
 	// Rewards are received by whole reward units.  Fractions of
 	// RewardUnits do not receive rewards.
+	//
+	// Ensure both considerations below  are taken into account if RewardUnit is planned for change:
+	// 1. RewardUnits should not be changed without touching all accounts to apply their rewards
+	// based on the old RewardUnits and then use the new RewardUnits for all subsequent calculations.
+	// 2. Having a consistent RewardUnit is also important for preserving
+	// a constant amount of total algos in the system:
+	// the block header tracks how many reward units worth of algos are in existence
+	// and have logically received rewards.
 	RewardUnit uint64
 
 	// RewardsRateRefreshInterval is the number of rounds after which the
@@ -292,6 +300,9 @@ type ConsensusParams struct {
 
 	// provide greater isolation for clear state programs
 	IsolateClearState bool
+
+	// The minimum app version that can be called in an inner transaction
+	MinInnerApplVersion uint64
 
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
@@ -1067,6 +1078,7 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
+	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true
@@ -1121,6 +1133,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertSecKQ = 128
 
 	vFuture.LogicSigVersion = 7
+	vFuture.MinInnerApplVersion = 4
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

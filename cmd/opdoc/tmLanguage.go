@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -122,15 +123,31 @@ func buildSyntaxHighlight() *tmLanguage {
 		},
 	}
 	var allNamedFields []string
-	allNamedFields = append(allNamedFields, logic.TxnFieldNames...)
-	allNamedFields = append(allNamedFields, logic.GlobalFieldNames...)
-	allNamedFields = append(allNamedFields, logic.AssetHoldingFieldNames...)
-	allNamedFields = append(allNamedFields, logic.AssetParamsFieldNames...)
-	allNamedFields = append(allNamedFields, logic.OnCompletionNames...)
+	allNamedFields = append(allNamedFields, logic.TxnTypeNames[:]...)
+	allNamedFields = append(allNamedFields, logic.OnCompletionNames[:]...)
+	accumulated := make(map[string]bool)
+	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	for _, spec := range opSpecs {
+		for _, imm := range spec.OpDetails.Immediates {
+			if imm.Group != nil && !accumulated[imm.Group.Name] {
+				allNamedFields = append(allNamedFields, imm.Group.Names...)
+				accumulated[imm.Group.Name] = true
+			}
+		}
+	}
+
+	var seen = make(map[string]bool, len(allNamedFields))
+	var dedupe = make([]string, 0, len(allNamedFields))
+	for _, name := range allNamedFields {
+		if name != "" && !seen[name] {
+			dedupe = append(dedupe, name)
+		}
+		seen[name] = true
+	}
 
 	literals.Patterns = append(literals.Patterns, pattern{
 		Name:  "variable.parameter.teal",
-		Match: fmt.Sprintf("\\b(%s)\\b", strings.Join(allNamedFields, "|")),
+		Match: fmt.Sprintf("\\b(%s)\\b", strings.Join(dedupe, "|")),
 	})
 	tm.Repository["literals"] = literals
 
@@ -153,7 +170,15 @@ func buildSyntaxHighlight() *tmLanguage {
 		},
 	}
 	var allArithmetics []string
-	for grp, names := range logic.OpGroups {
+
+	var keys []string
+	for key := range logic.OpGroups {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, grp := range keys {
+		names := logic.OpGroups[grp]
+		sort.Strings(names)
 		switch grp {
 		case "Flow Control":
 			keywords.Patterns = append(keywords.Patterns, pattern{
