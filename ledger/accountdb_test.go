@@ -46,11 +46,11 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool) {
-	newDB, err := accountsInit(tx, initAccounts, proto)
+func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
+	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
 	require.NoError(tb, err)
 
-	err = accountsAddNormalizedBalance(tx, proto)
+	err = accountsAddNormalizedBalance(tx, config.Consensus[proto])
 	require.NoError(tb, err)
 
 	err = accountsCreateResourceTable(context.Background(), tx)
@@ -72,6 +72,12 @@ func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	// we'll pass a nil here in order to ensure we still call this method, although it would
 	// be a noop.
 	err = performTxTailTableMigration(context.Background(), nil, db.Accessor{})
+	require.NoError(tb, err)
+
+	err = accountsCreateOnlineRoundParamsTable(context.Background(), tx)
+	require.NoError(tb, err)
+
+	err = performOnlineRoundParamsTailMigration(context.Background(), tx, db.Accessor{}, true, proto)
 	require.NoError(tb, err)
 
 	return newDB
@@ -183,7 +189,7 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	newDB := accountsInitTest(t, tx, accts, proto)
+	newDB := accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.True(t, newDB)
 
 	checkAccounts(t, tx, 0, accts)
@@ -244,10 +250,13 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	accountsInitTest(t, tx, accts, proto)
+	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	checkAccounts(t, tx, 0, accts)
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
+	expectedOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
+	require.Equal(t, 0, int(endRound))
 
 	// used to determine how many creatables element will be in the test per iteration
 	numElementsPerSegment := 10
@@ -292,6 +301,11 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
+		onlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}
+		err = accountsPutOnlineRoundParams(tx, []ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
+		require.NoError(t, err)
+		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
+
 		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
@@ -326,6 +340,11 @@ func TestAccountDBRound(t *testing.T) {
 	actualTotals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
+
+	actualOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
+	require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
+	require.Equal(t, 9, int(endRound))
 
 	// check LoadAllFullAccounts
 	loaded := make(map[basics.Address]basics.AccountData, len(accts))
@@ -384,7 +403,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 		defer tx.Rollback()
 
 		accts := ledgertesting.RandomAccounts(1, true)
-		accountsInitTest(t, tx, accts, proto)
+		accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 		addr := ledgertesting.RandomAddress()
 
 		// lastCreatableID stores asset or app max used index to get rid of conflicts
@@ -445,8 +464,6 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 func TestAccountStorageWithStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.Close()
@@ -456,7 +473,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, false)
-	_ = accountsInitTest(t, tx, accts, proto)
+	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	checkAccounts(t, tx, 0, accts)
 	require.True(t, allAccountsHaveStateProofPKs(accts))
 }
@@ -639,7 +656,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	return
 }
 
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto protocol.ConsensusVersion) (updates map[basics.Address]basics.AccountData) {
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
 
@@ -659,12 +676,11 @@ func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
 }
 
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbs, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	benchmarkInitBalances(b, b.N, dbs, proto)
+	benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
 	tx, err := dbs.Rdb.Handle.Begin()
 	require.NoError(b, err)
 
@@ -691,12 +707,11 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 }
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbs, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
+	accounts := benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
 
 	qs, err := accountsInitDbQueries(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
@@ -730,14 +745,13 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	batchCount := 1000
 	startupAcct := 5
 	initDatabase := func() (*sql.Tx, func(), error) {
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
 		dbs, fn := dbOpenTest(b, false)
 		setDbLogging(b, dbs)
 		cleanup := func() {
 			cleanupTestDb(dbs, fn, false)
 		}
 
-		benchmarkInitBalances(b, startupAcct, dbs, proto)
+		benchmarkInitBalances(b, startupAcct, dbs, protocol.ConsensusCurrentVersion)
 		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
 		// insert 1M accounts data, in batches of 1000
@@ -868,7 +882,7 @@ func TestAccountsReencoding(t *testing.T) {
 	crypto.RandBytes(stateProofID[:])
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 
 		for _, oldAccData := range oldEncodedAccountsData {
 			addr := ledgertesting.RandomAddress()
@@ -946,7 +960,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 		return nil
 	})
 	require.NoError(t, err)
@@ -2209,7 +2223,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	}
 	addrsids := make(map[basics.Address]int64)
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 
 		for i := range addrs {
 			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
@@ -2831,7 +2845,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	accountsInitTest(t, tx, accts, proto)
+	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 
@@ -3089,7 +3103,7 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		defer tx.Rollback()
 
 		accts := getAccounts(basics.Online)
-		accountsInitTest(t, tx, accts, proto)
+		accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 		result, err := onlineAccountsExpirations(tx, proto.MaxBalLookback)
 		require.NoError(t, err)
@@ -3105,7 +3119,7 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.NoError(t, err)
 		defer tx.Rollback()
 
-		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, protocol.ConsensusCurrentVersion)
 		accts := getAccounts(basics.Offline)
 		addAccounts(t, tx, accts, 0)
 
@@ -3121,7 +3135,7 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.NoError(t, err)
 		defer tx.Rollback()
 
-		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, protocol.ConsensusCurrentVersion)
 		accts := getAccounts(basics.Offline)
 		addAccounts(t, tx, accts, 0)
 		accts = getAccounts(basics.Online)
@@ -3155,7 +3169,7 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.NoError(t, err)
 		defer tx.Rollback()
 
-		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, protocol.ConsensusCurrentVersion)
 		for updRound := int64(0); updRound < 3; updRound++ {
 			accts := getAccounts(basics.Online)
 			addAccounts(t, tx, accts, updRound)
@@ -3175,7 +3189,7 @@ func TestAccountOnlineAccountsExpirations(t *testing.T) {
 		require.NoError(t, err)
 		defer tx.Rollback()
 
-		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, proto)
+		accountsInitTest(t, tx, map[basics.Address]basics.AccountData{}, protocol.ConsensusCurrentVersion)
 		accts := getAccounts(basics.Online)
 		addAccounts(t, tx, accts, 0)
 		accts = getAccounts(basics.Offline)
@@ -3222,21 +3236,21 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	// acct B is new and offline
 	deltaB := onlineAccountDelta{
 		address: addrB,
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
-		},
-		updRound:  1,
-		newStatus: basics.Offline,
+		}},
+		updRound:  []uint64{1},
+		newStatus: []basics.Status{basics.Offline},
 	}
 	// acct C is new and online
 	deltaC := onlineAccountDelta{
 		address: addrC,
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
 			VoteFirstValid: 500,
-		},
-		newStatus: basics.Online,
-		updRound:  2,
+		}},
+		newStatus: []basics.Status{basics.Online},
+		updRound:  []uint64{2},
 	}
 	// acct D is old and went offline
 	deltaD := onlineAccountDelta{
@@ -3249,11 +3263,11 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			},
 			rowid: 1,
 		},
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 400_000_000},
-		},
-		newStatus: basics.Offline,
-		updRound:  3,
+		}},
+		newStatus: []basics.Status{basics.Offline},
+		updRound:  []uint64{3},
 	}
 
 	// acct E is old online
@@ -3267,12 +3281,12 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			},
 			rowid: 2,
 		},
-		newAcct: baseOnlineAccountData{
+		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
 			VoteFirstValid: 600,
-		},
-		newStatus: basics.Online,
-		updRound:  4,
+		}},
+		newStatus: []basics.Status{basics.Online},
+		updRound:  []uint64{4},
 	}
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC, deltaD, deltaE)
@@ -3294,28 +3308,216 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	require.Equal(t, []int64{2}, expired[1].rowids)
 
 	// check errors: new online with empty voting data
-	deltaC.newStatus = basics.Online
-	deltaC.newAcct.VoteFirstValid = 0
+	deltaC.newStatus[0] = basics.Online
+	deltaC.newAcct[0].VoteFirstValid = 0
 	updates.deltas = []onlineAccountDelta{deltaC}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new non-online with non-empty voting data
-	deltaB.newStatus = basics.Offline
-	deltaB.newAcct.VoteFirstValid = 1
+	deltaB.newStatus[0] = basics.Offline
+	deltaB.newAcct[0].VoteFirstValid = 1
 	updates.deltas = []onlineAccountDelta{deltaB}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new online with empty voting data
-	deltaD.newStatus = basics.Online
+	deltaD.newStatus[0] = basics.Online
 	updates.deltas = []onlineAccountDelta{deltaD}
 	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 }
 
+func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	writer := &mockOnlineAccountsWriter{rowid: 100}
+
+	updates := compactOnlineAccountDeltas{}
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+	addrC := ledgertesting.RandomAddress()
+
+	// acct A is new, offline and then online
+	deltaA := onlineAccountDelta{
+		address: addrA,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			},
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				VoteFirstValid: 100,
+			},
+		},
+		updRound:  []uint64{1, 2},
+		newStatus: []basics.Status{basics.Offline, basics.Online},
+	}
+	// acct B is new and online and then offline
+	deltaB := onlineAccountDelta{
+		address: addrB,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
+				VoteFirstValid: 200,
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+			},
+		},
+		updRound:  []uint64{3, 4},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+	}
+	// acct C is old online, then online and then offline
+	deltaC := onlineAccountDelta{
+		address: addrC,
+		oldAcct: persistedOnlineAccountData{
+			addr: addrC,
+			accountData: baseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+				VoteFirstValid: 300,
+			},
+			rowid: 1,
+		},
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
+				VoteFirstValid: 301,
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
+			},
+		},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+		updRound:  []uint64{5, 6},
+	}
+
+	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC)
+	lastUpdateRound := basics.Round(1)
+	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+
+	require.Len(t, updated, 5)
+	require.Equal(t, updated[0].addr, addrA)
+	require.Equal(t, updated[1].addr, addrB)
+	require.Equal(t, updated[2].addr, addrB)
+	require.Equal(t, updated[3].addr, addrC)
+	require.Equal(t, updated[4].addr, addrC)
+
+	require.Len(t, expired, 3)
+	// deltaB went offline
+	require.Equal(t, proto.MaxBalLookback+4, uint64(expired[0].rnd))
+	require.Equal(t, []int64{102, 103}, expired[0].rowids)
+
+	// deltaC old, new and new
+	require.Equal(t, proto.MaxBalLookback+5, uint64(expired[1].rnd))
+	require.Equal(t, []int64{1}, expired[1].rowids)
+	require.Equal(t, proto.MaxBalLookback+6, uint64(expired[2].rnd))
+	require.Equal(t, []int64{104, 105}, expired[2].rowids)
+}
+
+func TestAccountOnlineRoundParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	var accts map[basics.Address]basics.AccountData
+	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+
+	// entry i is for round i+1 since db initialized with entry for round 0
+	const maxRounds = 40 // any number
+	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, maxRounds)
+	for i := range onlineRoundParams {
+		onlineRoundParams[i].OnlineSupply = uint64(i + 1)
+	}
+
+	err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 1)
+	require.NoError(t, err)
+
+	dbOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
+	require.Equal(t, maxRounds+1, len(dbOnlineRoundParams)) // +1 comes from init state
+	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
+	require.Equal(t, maxRounds, int(endRound))
+
+	err = accountsPruneOnlineRoundParams(tx, 10)
+	require.NoError(t, err)
+
+	dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+	require.NoError(t, err)
+	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
+	require.Equal(t, maxRounds, int(endRound))
+}
+
+func TestRowidsToChunkedArgs(t *testing.T) {
+	res := rowidsToChunkedArgs([]int64{1})
+	require.Equal(t, 1, cap(res))
+	require.Equal(t, 1, len(res))
+	require.Equal(t, 1, cap(res[0]))
+	require.Equal(t, 1, len(res[0]))
+	require.Equal(t, []interface{}{int64(1)}, res[0])
+
+	input := make([]int64, 999)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 1, cap(res))
+	require.Equal(t, 1, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	for i := 0; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+
+	input = make([]int64, 1001)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 2, cap(res))
+	require.Equal(t, 2, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	require.Equal(t, 2, cap(res[1]))
+	require.Equal(t, 2, len(res[1]))
+	for i := 0; i < 999; i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+	j := 0
+	for i := 999; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[1][j])
+		j++
+	}
+
+	input = make([]int64, 2*999)
+	for i := 0; i < len(input); i++ {
+		input[i] = int64(i)
+	}
+	res = rowidsToChunkedArgs(input)
+	require.Equal(t, 2, cap(res))
+	require.Equal(t, 2, len(res))
+	require.Equal(t, 999, cap(res[0]))
+	require.Equal(t, 999, len(res[0]))
+	require.Equal(t, 999, cap(res[1]))
+	require.Equal(t, 999, len(res[1]))
+	for i := 0; i < 999; i++ {
+		require.Equal(t, interface{}(int64(i)), res[0][i])
+	}
+	j = 0
+	for i := 999; i < len(input); i++ {
+		require.Equal(t, interface{}(int64(i)), res[1][j])
+		j++
+	}
+}
+
 // Test functions operating on catchpointfirststageinfo table.
-func TestCatchpointFristStageInfoTable(t *testing.T) {
+func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 

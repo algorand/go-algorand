@@ -23,6 +23,14 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+// OnlineRoundParamsData
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
@@ -776,4 +784,156 @@ func (z *AlgoCount) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AlgoCount) MsgIsZero() bool {
 	return ((*z).Money.MsgIsZero()) && ((*z).RewardUnits == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *OnlineRoundParamsData) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).OnlineSupply == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).RewardsLevel == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).CurrentProtocol.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "a"
+			o = append(o, 0xa1, 0x61)
+			o = msgp.AppendUint64(o, (*z).OnlineSupply)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "b"
+			o = append(o, 0xa1, 0x62)
+			o = msgp.AppendUint64(o, (*z).RewardsLevel)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "c"
+			o = append(o, 0xa1, 0x63)
+			o = (*z).CurrentProtocol.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *OnlineRoundParamsData) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OnlineRoundParamsData)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *OnlineRoundParamsData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).OnlineSupply, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OnlineSupply")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RewardsLevel")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).CurrentProtocol.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "CurrentProtocol")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = OnlineRoundParamsData{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "a":
+				(*z).OnlineSupply, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "OnlineSupply")
+					return
+				}
+			case "b":
+				(*z).RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RewardsLevel")
+					return
+				}
+			case "c":
+				bts, err = (*z).CurrentProtocol.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CurrentProtocol")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *OnlineRoundParamsData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OnlineRoundParamsData)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *OnlineRoundParamsData) Msgsize() (s int) {
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).CurrentProtocol.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *OnlineRoundParamsData) MsgIsZero() bool {
+	return ((*z).OnlineSupply == 0) && ((*z).RewardsLevel == 0) && ((*z).CurrentProtocol.MsgIsZero())
 }

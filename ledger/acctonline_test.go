@@ -17,9 +17,13 @@
 package ledger
 
 import (
+	"context"
+	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -37,12 +41,11 @@ import (
 func TestAcctOnline(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	const seedLookback = 1
-	const seedInteval = 1
+	const seedLookback = 2
+	const seedInteval = 3
 	const maxBalLookback = 2 * seedLookback * seedInteval
-	const maxDeltaLookback = maxBalLookback // TODO: change
 
-	const numAccts = maxBalLookback * 10
+	const numAccts = maxBalLookback * 20
 	allAccts := make([]basics.BalanceRecord, numAccts)
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
@@ -78,6 +81,8 @@ func TestAcctOnline(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
+	maxDeltaLookback := conf.MaxAcctLookback
+
 	au, oa := newAcctUpdates(t, ml, conf, ".")
 	defer oa.close()
 
@@ -142,12 +147,9 @@ func TestAcctOnline(t *testing.T) {
 		return newTotals
 	}
 
-	// the test 1 requires 2 blocks with different resource state,
-	// oa requires MaxBalLookback block to start persisting
-	// TODO: change MaxBalLookback to the actual lookback parameter
-	const numAcctsStage1 = 10
-	numConsumedStage1 := basics.Round(maxDeltaLookback) + numAcctsStage1
-	targetRound := numConsumedStage1
+	// online accounts tracker requires maxDeltaLookback block to start persisting
+	numPersistedAccounts := numAccts - maxDeltaLookback*2
+	targetRound := basics.Round(maxDeltaLookback + numPersistedAccounts)
 	for i := basics.Round(1); i <= targetRound; i++ {
 		var updates ledgercore.AccountDeltas
 		acctIdx := int(i) - 1
@@ -166,8 +168,8 @@ func TestAcctOnline(t *testing.T) {
 
 		// check the table data and the cache
 		// data gets committed after maxDeltaLookback
-		if i > maxDeltaLookback {
-			rnd := i - maxDeltaLookback
+		if i > basics.Round(maxDeltaLookback) {
+			rnd := i - basics.Round(maxDeltaLookback)
 			acctIdx := int(rnd) - 1
 			bal := allAccts[acctIdx]
 			data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
@@ -199,8 +201,8 @@ func TestAcctOnline(t *testing.T) {
 		// account 0 is set to Offline at round 1
 		// and set expired at X = 1 + MaxBalLookback (= 3)
 		// actual removal happens when X is committed i.e. at round X + maxDeltaLookback (= 5)
-		if i > maxDeltaLookback+maxDeltaLookback {
-			rnd := i - (maxDeltaLookback + maxDeltaLookback)
+		if i > basics.Round(maxBalLookback+maxDeltaLookback) {
+			rnd := i - basics.Round(maxBalLookback+maxDeltaLookback)
 			acctIdx := int(rnd) - 1
 			bal := allAccts[acctIdx]
 			data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
@@ -215,21 +217,21 @@ func TestAcctOnline(t *testing.T) {
 			require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.accountData)
 
-			// TODO: restore after introducing lookback
-			// roundOffset fails with round 1 before dbRound 3
-			// oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
-			// require.NoError(t, err)
-			// require.Empty(t, oad)
+			// committed round i => dbRound = i - maxDeltaLookback
+			// lookup should correctly return data for earlist round dbRound - maxBalLookback + 1
+			oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
+			require.NoError(t, err)
+			require.Empty(t, oad)
 		}
 	}
 
 	// ensure rounds
 	require.Equal(t, targetRound, au.latest())
-	require.Equal(t, basics.Round(numAcctsStage1), oa.cachedDBRoundOnline)
+	require.Equal(t, basics.Round(numPersistedAccounts), oa.cachedDBRoundOnline)
 
-	// at this point we should have maxBalLookback last accounts of numAcctsStage1
+	// at this point we should have maxBalLookback last accounts of numPersistedAccounts
 	// to be in the DB and in the cache and not yet removed
-	for i := numAcctsStage1 - maxBalLookback; i < numAcctsStage1; i++ {
+	for i := numPersistedAccounts - maxBalLookback; i < numPersistedAccounts; i++ {
 		bal := allAccts[i]
 		// we expire account i at round i+1
 		data, err := oa.accountsq.lookupOnline(bal.Addr, basics.Round(i+1))
@@ -244,10 +246,9 @@ func TestAcctOnline(t *testing.T) {
 		require.NotEmpty(t, data.rowid)
 		require.Empty(t, data.accountData)
 
-		// TODO: restore after introducing lookback
-		// oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
-		// require.NoError(t, err)
-		// require.Empty(t, oad)
+		oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
+		require.NoError(t, err)
+		require.Empty(t, oad)
 
 		// ensure the online entry is still in the DB for the round i
 		data, err = oa.accountsq.lookupOnline(bal.Addr, basics.Round(i))
@@ -259,7 +260,7 @@ func TestAcctOnline(t *testing.T) {
 	}
 
 	// check maxDeltaLookback accounts in in-memory deltas, check it
-	for i := numAcctsStage1; i < numAcctsStage1+maxDeltaLookback; i++ {
+	for i := numPersistedAccounts; i < numPersistedAccounts+maxDeltaLookback; i++ {
 		bal := allAccts[i]
 		oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
 		require.NoError(t, err)
@@ -277,5 +278,211 @@ func TestAcctOnline(t *testing.T) {
 		data, has := oa.baseOnlineAccounts.read(bal.Addr)
 		require.False(t, has)
 		require.Empty(t, data)
+	}
+
+	// not take some account and modify its stake.
+	// ensure it has the valid entries in both deltas and history
+	start := targetRound + 1
+	end := start + basics.Round(maxDeltaLookback+10)
+	mutAccount := allAccts[start]
+	ad := ledgercore.ToAccountData(mutAccount.AccountData)
+	const delta = 1000
+	for i := start; i <= end; i++ {
+		newAD := ad.AccountBaseData
+		newAD.MicroAlgos.Raw += uint64(i-start+1) * delta
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(
+			mutAccount.Addr,
+			ledgercore.AccountData{
+				AccountBaseData: newAD,
+				VotingData:      ad.VotingData,
+			},
+		)
+
+		base := genesisAccts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		genesisAccts = append(genesisAccts, newAccts)
+
+		// prepare block
+		totals = newBlock(i, base, updates, totals)
+
+		// flush all old deltas
+		if uint64(i-start+1) == maxDeltaLookback {
+			commitSync(i)
+		}
+	}
+	// flush the mutAccount
+	commitSync(end)
+
+	for i := start; i <= end; i++ {
+		oad, err := oa.lookupOnlineAccountData(basics.Round(i), mutAccount.Addr)
+		require.NoError(t, err)
+		// rewardLevel is zero => MicroAlgos == MicroAlgosWithRewards
+		expected := ad.AccountBaseData.MicroAlgos.Raw + uint64(i-start+1)*delta
+		require.Equal(t, expected, oad.MicroAlgosWithRewards.Raw)
+	}
+}
+
+// TestAcctOnlineRoundParamsOffset checks that roundParamsOffset return the correct indices.
+func TestAcctOnlineRoundParamsOffset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ao := onlineAccounts{}
+
+	ao.cachedDBRoundOnline = 0
+	ao.deltas = make([]ledgercore.AccountDeltas, 10)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 11)
+	offset, err := ao.roundParamsOffset(basics.Round(6))
+	require.NoError(t, err)
+	require.Equal(t, uint64(6), offset)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = make([]ledgercore.AccountDeltas, 10)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
+	offset, err = ao.roundParamsOffset(basics.Round(100))
+	require.NoError(t, err)
+	require.Equal(t, uint64(20), offset)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = make([]ledgercore.AccountDeltas, 10)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
+	offset, err = ao.roundParamsOffset(basics.Round(6))
+	require.Error(t, err)
+	require.Zero(t, offset)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = nil
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 1)
+	offset, err = ao.roundParamsOffset(basics.Round(400))
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), offset)
+
+	ao.cachedDBRoundOnline = 400
+	ao.deltas = nil
+	ao.onlineRoundParamsData = nil
+	offset, err = ao.roundParamsOffset(basics.Round(400))
+	require.Error(t, err)
+	require.Zero(t, offset)
+}
+
+// TestAcctOnlineRoundParamsCache tests that the ao.onlineRoundParamsData cache and
+// the onlineRoundParamsData db are synced and contain the right data after a series
+// of new blocks are added to the ledger. Also ensure that these data structures are
+// trimmed properly to hold only proto.MaxBalLookback entries.
+func TestAcctOnlineRoundParamsCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusV30]
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusV30, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, ao := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+	defer ao.close()
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < 10; i++ {
+		accts = append(accts, accts[0])
+	}
+
+	allTotals := make(map[basics.Round]ledgercore.AccountTotals)
+
+	start := basics.Round(10)
+	end := basics.Round(2*proto.MaxBalLookback + 15)
+	for i := start; i < end; i++ {
+		consensusVersion := protocol.ConsensusV30
+		if i > basics.Round(proto.MaxBalLookback) {
+			consensusVersion = protocol.ConsensusCurrentVersion
+		}
+		if i > 2*basics.Round(proto.MaxBalLookback) {
+			consensusVersion = protocol.ConsensusFuture
+		}
+		rewardLevelDelta := crypto.RandUint64() % 3
+		rewardLevel += rewardLevelDelta
+		var updates ledgercore.AccountDeltas
+		var totals map[basics.Address]ledgercore.AccountData
+		base := accts[i-1]
+		updates, totals = ledgertesting.RandomDeltasBalanced(1, base, rewardLevel)
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(base, updates)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = consensusVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+
+		delta.Totals = accumulateTotals(t, consensusVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
+		allTotals[i] = delta.Totals
+		ml.trackers.newBlock(blk, delta)
+		accts = append(accts, newAccts)
+
+		if i > basics.Round(proto.MaxBalLookback) && i%10 == 0 {
+			onlineTotal, err := ao.OnlineTotals(i - basics.Round(proto.MaxBalLookback))
+			require.NoError(t, err)
+			require.Equal(t, allTotals[i-basics.Round(proto.MaxBalLookback)].Online.Money, onlineTotal)
+			expectedConsensusVersion := protocol.ConsensusV30
+			if i > 2*basics.Round(proto.MaxBalLookback) {
+				expectedConsensusVersion = protocol.ConsensusCurrentVersion
+			}
+			roundParamsOffset, err := ao.roundParamsOffset(i - basics.Round(proto.MaxBalLookback))
+			require.NoError(t, err)
+			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset].CurrentProtocol)
+			expectedConsensusVersion = protocol.ConsensusCurrentVersion
+			if i > 2*basics.Round(proto.MaxBalLookback) {
+				expectedConsensusVersion = protocol.ConsensusFuture
+			}
+			roundParamsOffset, err = ao.roundParamsOffset(i)
+			require.NoError(t, err)
+			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset].CurrentProtocol)
+		}
+	}
+
+	ml.trackers.lastFlushTime = time.Time{}
+
+	ml.trackers.committedUpTo(2*basics.Round(proto.MaxBalLookback) + 14)
+	ml.trackers.waitAccountsWriting()
+
+	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
+	var endRound basics.Round
+	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, ao.cachedDBRoundOnline, endRound)
+	require.Equal(t, ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)], dbOnlineRoundParams)
+
+	for i := ml.Latest() - basics.Round(proto.MaxBalLookback); i < ml.Latest(); i++ {
+		onlineTotal, err := ao.OnlineTotals(i)
+		require.NoError(t, err)
+		require.Equal(t, allTotals[i].Online.Money, onlineTotal)
 	}
 }

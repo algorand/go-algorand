@@ -118,6 +118,14 @@ type ConsensusParams struct {
 	//
 	// Rewards are received by whole reward units.  Fractions of
 	// RewardUnits do not receive rewards.
+	//
+	// Ensure both considerations below  are taken into account if RewardUnit is planned for change:
+	// 1. RewardUnits should not be changed without touching all accounts to apply their rewards
+	// based on the old RewardUnits and then use the new RewardUnits for all subsequent calculations.
+	// 2. Having a consistent RewardUnit is also important for preserving
+	// a constant amount of total algos in the system:
+	// the block header tracks how many reward units worth of algos are in existence
+	// and have logically received rewards.
 	RewardUnit uint64
 
 	// RewardsRateRefreshInterval is the number of rounds after which the
@@ -293,6 +301,9 @@ type ConsensusParams struct {
 	// provide greater isolation for clear state programs
 	IsolateClearState bool
 
+	// The minimum app version that can be called in an inner transaction
+	MinInnerApplVersion uint64
+
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
 	MaxAppsCreated int
@@ -421,6 +432,10 @@ type ConsensusParams struct {
 	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
+
+	// CatchpointLookback specified a round lookback to take catchpoints at.
+	// Accounts snapshot for round X will be taken at X-CatchpointLookback
+	CatchpointLookback uint64
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -436,7 +451,7 @@ const (
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
 
-	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	// PaysetCommitMerkle uses merkle array to commit to the payset.
 	PaysetCommitMerkle
 )
 
@@ -577,7 +592,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	return staticConsensus
 }
 
-// Merge merges a configurable consensus ontop of the existing consensus protocol and return
+// Merge merges a configurable consensus on top of the existing consensus protocol and return
 // a new consensus protocol without modify any of the incoming structures.
 func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
 	staticConsensus := cp.DeepCopy()
@@ -1071,6 +1086,7 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
+	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true
@@ -1117,6 +1133,9 @@ func initConsensusProtocols() {
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
+	// Make the accounts snapshot for round X at X-CatchpointLookback
+	vFuture.CatchpointLookback = 320
+
 	// Enable compact certificates.
 	vFuture.CompactCertRounds = 256
 	vFuture.CompactCertTopVoters = 1024 * 1024
@@ -1125,6 +1144,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertSecKQ = 128
 
 	vFuture.LogicSigVersion = 7
+	vFuture.MinInnerApplVersion = 4
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

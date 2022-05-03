@@ -188,6 +188,9 @@ type accountUpdates struct {
 
 	// lastMetricsLogTime is the time when the previous metrics logging occurred
 	lastMetricsLogTime time.Time
+
+	// maxAcctLookback sets the minimim deltas size to keep in memory
+	acctLookback uint64
 }
 
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
@@ -251,6 +254,8 @@ func (r resourcesUpdates) getForAddress(addr basics.Address) map[basics.Creatabl
 // initialize initializes the accountUpdates structure
 func (au *accountUpdates) initialize(cfg config.Local) {
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
+
+	au.acctLookback = cfg.MaxAcctLookback
 
 	// log metrics
 	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
@@ -400,7 +405,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound, 
 	defer au.accountsMu.RUnlock()
 
 	retRound = basics.Round(0)
-	lookback = basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
+	// lookback = basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
+	lookback = basics.Round(au.acctLookback)
 	if committedRound < lookback {
 		return
 	}
@@ -441,6 +447,12 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 	// calculate the number of pending deltas
 	dcr.pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
 
+	proto := config.Consensus[au.versions[offset]]
+	dcr.catchpointLookback = proto.CatchpointLookback
+	if dcr.catchpointLookback == 0 {
+		dcr.catchpointLookback = proto.MaxBalLookback
+	}
+
 	// submit committing task only if offset is non-zero in addition to
 	// 1) no pending catchpoint writes
 	// 2) batching requirements meet or catchpoint round
@@ -472,13 +484,6 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	au.newBlockImpl(blk, delta)
 	au.accountsMu.Unlock()
 	au.accountsReadCond.Broadcast()
-}
-
-// OnlineTotals returns the online totals of all accounts at the end of round rnd.
-func (au *accountUpdates) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.onlineTotalsImpl(rnd)
 }
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
@@ -596,8 +601,11 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }
 
-// onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.
-func (au *accountUpdates) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
+// onlineTotals returns the online totals of all accounts at the end of round rnd.
+// used in tests only
+func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
@@ -759,9 +767,10 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	addResource := func(cidx basics.CreatableIndex, round basics.Round, res ledgercore.AccountResource) error {
 		foundRound, ok := foundResources[cidx]
 		if !ok { // first time seeing this cidx
-			resourceCount++
 			foundResources[cidx] = round
-			ledgercore.AssignAccountResourceToAccountData(cidx, res, &data)
+			if ledgercore.AssignAccountResourceToAccountData(cidx, res, &data) {
+				resourceCount++
+			}
 			return nil
 		}
 		// is this newer than current "found" rnd for this resource?

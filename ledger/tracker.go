@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
 )
@@ -142,6 +143,7 @@ type ledgerForTracker interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
+	GenesisProtoVersion() protocol.ConsensusVersion
 	GenesisAccounts() map[basics.Address]basics.AccountData
 }
 
@@ -184,6 +186,8 @@ type trackerRegistry struct {
 	// lastFlushTime is the time we last flushed updates to
 	// the accounts DB (bumping dbRound).
 	lastFlushTime time.Time
+
+	cfg config.Local
 }
 
 // deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
@@ -193,6 +197,10 @@ type deferredCommitRange struct {
 	offset   uint64
 	oldBase  basics.Round
 	lookback basics.Round
+
+	// catchpointLookback determines the offset from round number to take a snapshot for.
+	// i.e. for round X the DB snapshot is taken at X-catchpointLookback
+	catchpointLookback uint64
 
 	// pendingDeltas is the number of accounts that were modified within this commit context.
 	// note that in this number we might have the same account being modified several times.
@@ -225,8 +233,11 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	deltas                 []ledgercore.AccountDeltas
-	roundTotals            ledgercore.AccountTotals
+	deltas                   []ledgercore.AccountDeltas
+	roundTotals              ledgercore.AccountTotals
+	onlineRoundParams        []ledgercore.OnlineRoundParamsData
+	onlineTotalsForgetBefore basics.Round
+
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
@@ -266,6 +277,7 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.commitSyncerClosed = make(chan struct{})
 	tr.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	tr.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
+	tr.cfg = cfg
 	go tr.commitSyncer(tr.deferredCommits)
 
 	tr.trackers = append([]ledgerTracker{}, trackers...)
@@ -296,7 +308,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 		}
 	}
 
-	err := tr.initializeTrackerCaches(l)
+	err := tr.initializeTrackerCaches(l, tr.cfg)
 	if err != nil {
 		return fmt.Errorf("initializeTrackerCaches failed : %w", err)
 	}
@@ -353,23 +365,20 @@ func (tr *trackerRegistry) produceCommittingTask(blockqRound basics.Round, dbRou
 }
 
 func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
-	tr.mu.RLock()
-	dbRound := tr.dbRound
-	tr.mu.RUnlock()
-
 	dcc := &deferredCommitContext{
 		deferredCommitRange: deferredCommitRange{
 			lookback: maxLookback,
 		},
 	}
+
+	tr.mu.RLock()
+	dbRound := tr.dbRound
 	cdr := tr.produceCommittingTask(blockqRound, dbRound, &dcc.deferredCommitRange)
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
 	} else {
 		dcc = nil
 	}
-
-	tr.mu.RLock()
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
@@ -520,7 +529,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 // initializeTrackerCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
 // the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
 // is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
-func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err error) {
+func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg config.Local) (err error) {
 	lastestBlockRound := l.Latest()
 	lastBalancesRound := tr.dbRound
 
@@ -626,7 +635,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
 		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
+		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(cfg.MaxAcctLookback) < lastestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			tr.lastFlushTime = time.Now().Add(-balancesFlushInterval)
@@ -645,7 +654,7 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker) (err erro
 			var roundsBehind basics.Round
 
 			// flush the account data
-			tr.scheduleCommit(blk.Round(), basics.Round(config.Consensus[blk.BlockHeader.CurrentProtocol].MaxBalLookback))
+			tr.scheduleCommit(blk.Round(), basics.Round(cfg.MaxAcctLookback))
 			// wait for the writing to complete.
 			tr.waitAccountsWriting()
 

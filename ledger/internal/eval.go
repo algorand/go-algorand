@@ -1267,8 +1267,6 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		return err
 	}
 
-	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
-
 	if eval.validate {
 		// check commitments
 		txnRoot, err := eval.block.PaysetCommit()

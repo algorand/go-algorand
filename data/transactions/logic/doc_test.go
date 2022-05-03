@@ -40,15 +40,8 @@ func TestOpDocs(t *testing.T) {
 		assert.True(t, seen, "opDocByName is missing doc for %#v", op)
 	}
 
-	require.Len(t, txnFieldDocs, len(TxnFieldNames))
 	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
-	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
-	require.Len(t, assetHoldingFieldDocs, len(AssetHoldingFieldNames))
-	require.Len(t, assetParamsFieldDocs, len(AssetParamsFieldNames))
-	require.Len(t, appParamsFieldDocs, len(AppParamsFieldNames))
-	require.Len(t, acctParamsFieldDocs, len(AcctParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
-	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }
 
 // TestDocStragglers confirms that we don't have any docs laying
@@ -112,9 +105,9 @@ func TestAllImmediatesDocumented(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for _, op := range OpSpecs {
-		count := len(op.Details.Immediates)
+		count := len(op.OpDetails.Immediates)
 		note := OpImmediateNote(op.Name)
-		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
+		if count == 1 && op.OpDetails.Immediates[0].kind >= immBytes {
 			// More elaborate than can be checked by easy count.
 			assert.NotEmpty(t, note)
 			continue
@@ -137,12 +130,12 @@ func TestOpAllCosts(t *testing.T) {
 
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
-	require.Equal(t, 1, a[0].Cost)
+	require.Equal(t, "1", a[0].Cost)
 
 	a = OpAllCosts("sha256")
 	require.Len(t, a, 2)
 	for _, cost := range a {
-		require.True(t, cost.Cost > 1)
+		require.True(t, cost.Cost != "0")
 	}
 }
 

@@ -131,7 +131,7 @@ const (
 	loggingNotEnabled    = "Remote logging is current disabled"
 	loggingEnabled       = "Remote logging is enabled.  Node = %s, Guid = %s"
 
-	infoNetworkAlreadyExists = "Network Root Directory '%s' already exists"
+	infoNetworkAlreadyExists = "Network Root Directory '%s' already exists and is not empty"
 	errorCreateNetwork       = "Error creating private network: %s"
 	infoNetworkCreated       = "Network %s created under %s"
 	errorLoadingNetwork      = "Error loading deployed network: %s"

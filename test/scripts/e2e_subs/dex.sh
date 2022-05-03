@@ -26,7 +26,7 @@ $gcmd clerk send -a 10000000 -t "${ACCT_ACTOR}" -f "${ACCOUNT}"
 echo "Created and funded accounts: creator ${ACCT_CREATOR}, actor ${ACCT_ACTOR}"
 
 ASSETID=$(${gcmd} asset create --creator "${ACCT_CREATOR}" --total 100000 --unitname STOK  --decimals 0 | grep "Created asset with asset index" | rev | cut -d ' ' -f 1 | rev)
-${gcmd} asset send -a 0 -f "${ACCT_ACTOR}" -t "${ACCT_ACTOR}"  --creator "${ACCT_CREATOR}" --assetid "${ASSETID}"
+${gcmd} asset optin -a "${ACCT_ACTOR}" --creator "${ACCT_CREATOR}" --assetid "${ASSETID}"
 echo "Created asset ${ASSETID}"
 
 APPID=$(${gcmd} app create --creator "${ACCT_CREATOR}" --approval-prog "${DIR}/tealprogs/dex.teal" --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 16  --clear-prog <(printf '#pragma version 2\nint 1') | grep Created | awk '{ print $6 }')

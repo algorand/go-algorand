@@ -153,7 +153,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T) error {
 
 	accts := ledgertesting.RandomAccounts(20, true)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	newDB := accountsInitTest(ts, tx, accts, proto)
+	newDB := accountsInitTest(ts, tx, accts, protocol.ConsensusCurrentVersion)
 	require.True(ts, newDB)
 	_, err = accountsInit(tx, accts, proto)
 	require.NoError(ts, err)

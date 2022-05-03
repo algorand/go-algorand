@@ -243,7 +243,11 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
 	if config.Consensus[blk.CurrentProtocol].EnableAccountDataResourceSeparation && ct.accountDataResourceSeparationRound == 0 {
-		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
+		catchpointLookback := config.Consensus[blk.CurrentProtocol].CatchpointLookback
+		if catchpointLookback == 0 {
+			catchpointLookback = config.Consensus[blk.CurrentProtocol].MaxBalLookback
+		}
+		ct.accountDataResourceSeparationRound = blk.BlockHeader.Round + basics.Round(catchpointLookback)
 	}
 }
 
