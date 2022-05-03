@@ -105,6 +105,17 @@ func (l *persistedOnlineAccountDataList) pushFront(v *persistedOnlineAccountData
 	return l.insertValue(newNode, &l.root)
 }
 
+// pushFront inserts a new element e with value v at the back of list l and returns e.
+func (l *persistedOnlineAccountDataList) pushBack(v *persistedOnlineAccountData) *persistedOnlineAccountDataListNode {
+	newNode := l.getNewNode()
+	newNode.Value = v
+	newNode.prev = l.root.prev
+	newNode.next = &l.root
+	l.root.prev.next = newNode
+	l.root.prev = newNode
+	return newNode
+}
+
 // insertValue inserts e after at, increments l.len, and returns e.
 func (l *persistedOnlineAccountDataList) insertValue(newNode *persistedOnlineAccountDataListNode, at *persistedOnlineAccountDataListNode) *persistedOnlineAccountDataListNode {
 	n := at.next

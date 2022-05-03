@@ -99,6 +99,8 @@ type onlineAccounts struct {
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseOnlineAccounts lruOnlineAccounts
 
+	onlineAccountsCache onlineAccountsCache
+
 	// maxAcctLookback sets the minimim deltas size to keep in memory
 	acctLookback uint64
 }
@@ -174,6 +176,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.deltasAccum = []int{0}
 
 	ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+	ao.onlineAccountsCache.init()
 	return
 }
 
@@ -465,6 +468,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
 		ao.baseOnlineAccounts.write(persistedAcct)
+		ao.onlineAccountsCache.writeFront(persistedAcct)
 	}
 
 	ao.deltas = ao.deltas[offset:]
@@ -479,6 +483,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
 		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
 	}
+
+	ao.onlineAccountsCache.prune(newBase.SubSaturate(basics.Round(ao.maxBalLookback())))
 
 	ao.accountsMu.Unlock()
 
@@ -622,13 +628,9 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			}
 		}
 
-		// TODO: baseOnlineAccounts is not good for round-based lookup since it always contains the latest updated value
-		// if macct, has := ao.baseOnlineAccounts.read(addr); has && macct.round == currentDbRound {
-		// 	// we don't technically need this, since it's already in the baseAccounts, however, writing this over
-		// 	// would ensure that we promote this field.
-		// 	ao.baseOnlineAccounts.writePending(macct)
-		// 	return macct.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
-		// }
+		if macct, has := ao.onlineAccountsCache.read(addr, rnd); has {
+			return macct.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+		}
 
 		ao.accountsMu.RUnlock()
 		needUnlock = false
@@ -642,8 +644,9 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if persistedData.round == currentDbRound {
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
-				// TODO: add another cache
-				// ao.baseOnlineAccounts.writePending(persistedData)
+				ao.accountsMu.Lock()
+				ao.onlineAccountsCache.writeBack(persistedData)
+				ao.accountsMu.Unlock()
 				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
 			}
 			// otherwise return empty
