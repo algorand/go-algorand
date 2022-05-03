@@ -626,7 +626,8 @@ In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
-to invoke a program with version less than v6.
+to invoke a program with version less than v4, or if they attempt to
+opt-in to an app with a ClearState Program less than v4.
 
 In v5, only a subset of the transaction's header fields may be set: `Type`/`TypeEnum`,
 `Sender`, and `Fee`. In v6, header fields `Note` and `RekeyTo` may

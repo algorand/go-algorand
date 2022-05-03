@@ -513,7 +513,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 func TestEcdsaCostVariation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Doesn't matter if it passes or fails. Just confirm the cost depends on curve.
+	// Doesn't matter if the actual verify returns true or false. Just confirm the cost depends on curve.
 	source := `
 global ZeroAddress				// need 32 bytes
 byte "signature r"

@@ -31,7 +31,7 @@ func TestOpSpecs(t *testing.T) {
 	t.Parallel()
 
 	for _, spec := range OpSpecs {
-		require.NotEmpty(t, spec.Details, spec)
+		require.NotEmpty(t, spec.OpDetails, spec)
 	}
 }
 
@@ -42,10 +42,10 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	if os.Name != oso.Name {
 		return false
 	}
-	if !reflect.DeepEqual(os.Args, oso.Args) {
+	if !reflect.DeepEqual(os.Arg, oso.Arg) {
 		return false
 	}
-	if !reflect.DeepEqual(os.Returns, oso.Returns) {
+	if !reflect.DeepEqual(os.Return, oso.Return) {
 		return false
 	}
 	if os.Version != oso.Version {
@@ -167,11 +167,10 @@ func TestOpcodesVersioningV2(t *testing.T) {
 		eq = a.Opcode == b.Opcode && a.Name == b.Name &&
 			reflect.ValueOf(a.op).Pointer() == reflect.ValueOf(b.op).Pointer() &&
 			reflect.ValueOf(a.asm).Pointer() == reflect.ValueOf(b.asm).Pointer() &&
-			reflect.ValueOf(a.dis).Pointer() == reflect.ValueOf(b.dis).Pointer() &&
-			reflect.DeepEqual(a.Args, b.Args) && reflect.DeepEqual(a.Returns, b.Returns) &&
+			reflect.DeepEqual(a.Arg, b.Arg) && reflect.DeepEqual(a.Return, b.Return) &&
 			a.Modes == b.Modes &&
-			a.Details.FullCost == b.Details.FullCost && a.Details.Size == b.Details.Size &&
-			reflect.ValueOf(a.Details.checkFunc).Pointer() == reflect.ValueOf(b.Details.checkFunc).Pointer()
+			a.OpDetails.FullCost == b.OpDetails.FullCost && a.OpDetails.Size == b.OpDetails.Size &&
+			reflect.ValueOf(a.OpDetails.check).Pointer() == reflect.ValueOf(b.OpDetails.check).Pointer()
 		return
 	}
 	// ensure v0 and v1 are the same

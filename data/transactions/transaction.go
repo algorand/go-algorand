@@ -380,7 +380,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		} else {
 			// This will check version matching, but not downgrading. That
 			// depends on chain state (so we pass an empty AppParams)
-			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{})
+			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{}, &proto)
 			if err != nil {
 				return err
 			}
@@ -713,14 +713,14 @@ func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
 	return version, vlen, nil
 }
 
-// ExtraProgramChecksVersion is version of AVM programs that are subject to
-// extra test - approval and clear must match versions, and they may not be
-// downgraded
-const ExtraProgramChecksVersion = 6
+// syncProgramsVersion is version of AVM programs that are required to have
+// matching versions between approval and clearstate.
+const syncProgramsVersion = 6
 
 // CheckContractVersions ensures that for v6 and higher two programs are version
-// matched, and that they are not a downgrade.
-func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams) error {
+// matched, and that they are not a downgrade.  If proto.AllowV4InnerAppls, then
+// no downgrades are allowed, regardless of version.
+func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParams) error {
 	av, _, err := ProgramVersion(approval)
 	if err != nil {
 		return fmt.Errorf("bad ApprovalProgram: %v", err)
@@ -729,18 +729,30 @@ func CheckContractVersions(approval []byte, clear []byte, previous basics.AppPar
 	if err != nil {
 		return fmt.Errorf("bad ClearStateProgram: %v", err)
 	}
-	if av >= ExtraProgramChecksVersion || cv >= ExtraProgramChecksVersion {
+	if av >= syncProgramsVersion || cv >= syncProgramsVersion {
 		if av != cv {
 			return fmt.Errorf("program version mismatch: %d != %d", av, cv)
 		}
 	}
-	if len(previous.ApprovalProgram) != 0 { // if creation or in call from WellFormed() previous is empty
-		pv, _, err := ProgramVersion(previous.ApprovalProgram)
+	// The downgrade check ensures that if app A opts its account into app B
+	// (which requires B's CSP to be a callable version), the CSP will STAY
+	// callable. That way, A can certainly ClearState its account out of B.
+	if len(previous.ApprovalProgram) != 0 { // in creation and in call from WellFormed() previous is empty
+		pav, _, err := ProgramVersion(previous.ApprovalProgram)
 		if err != nil {
 			return err
 		}
-		if pv >= ExtraProgramChecksVersion && av < pv {
-			return fmt.Errorf("program version downgrade: %d < %d", av, pv)
+		if pav >= proto.MinInnerApplVersion && av < pav {
+			return fmt.Errorf("approval program version downgrade: %d < %d", av, pav)
+		}
+	}
+	if len(previous.ClearStateProgram) != 0 {
+		pcv, _, err := ProgramVersion(previous.ClearStateProgram)
+		if err != nil {
+			return err
+		}
+		if pcv >= proto.MinInnerApplVersion && cv < pcv {
+			return fmt.Errorf("clearstate program version downgrade: %d < %d", cv, pcv)
 		}
 	}
 	return nil

@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // TODO put these in config
@@ -42,6 +43,9 @@ var errPseudonodeBacklogFull = fmt.Errorf("pseudonode input channel is full")
 var errPseudonodeVerifierClosedChannel = errors.New("crypto verifier closed the output channel prematurely")
 var errPseudonodeNoVotes = errors.New("no valid participation keys to generate votes for given round")
 var errPseudonodeNoProposals = errors.New("no valid participation keys to generate proposals for given round")
+
+var pseudonodeBacklogFullByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_dropped_{TAG}", "Number of pseudonode tasks dropped per type")
+var pseudonodeResultTimeoutsByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_timeouts_{TAG}", "Number of pseudonode task result timeouts per type")
 
 // A pseudonode creates proposals and votes with a KeyManager which holds participation keys.
 //
@@ -176,6 +180,7 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
+		pseudonodeBacklogFullByType.Add("proposal", 1)
 		return nil, fmt.Errorf("unable to make proposal for (%d, %d): %w", r, p, errPseudonodeBacklogFull)
 	}
 }
@@ -193,6 +198,7 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
+		pseudonodeBacklogFullByType.Add("vote", 1)
 		return nil, fmt.Errorf("unable to make vote for (%d, %d, %d): %w", r, p, s, errPseudonodeBacklogFull)
 	}
 }
@@ -474,6 +480,7 @@ verifiedVotesLoop:
 				return
 			case <-outputTimeout:
 				// we've been waiting for too long for this vote to be written to the output.
+				pseudonodeResultTimeoutsByType.Add("vote", 1)
 				t.node.log.Warnf("pseudonode.makeVotes: unable to write vote to output channel for round %d, period %d", t.round, t.period)
 				outputTimeout = nil
 			}
@@ -577,6 +584,7 @@ verifiedVotesLoop:
 				return
 			case <-outputTimeout:
 				// we've been waiting for too long for this vote to be written to the output.
+				pseudonodeResultTimeoutsByType.Add("pvote", 1)
 				t.node.log.Warnf("pseudonode.makeProposals: unable to write proposal vote to output channel for round %d, period %d", t.round, t.period)
 				outputTimeout = nil
 			}
@@ -597,6 +605,7 @@ verifiedPayloadsLoop:
 				return
 			case <-outputTimeout:
 				// we've been waiting for too long for this vote to be written to the output.
+				pseudonodeResultTimeoutsByType.Add("ppayload", 1)
 				t.node.log.Warnf("pseudonode.makeProposals: unable to write proposal payload to output channel for round %d, period %d", t.round, t.period)
 				outputTimeout = nil
 			}

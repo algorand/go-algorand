@@ -259,21 +259,6 @@ func OpImmediateNote(opName string) string {
 	return opcodeImmediateNotes[opName]
 }
 
-var opcodeSpecialStackEffects = map[string]string{
-	"dup":     "..., A &rarr; ..., A, A",
-	"dup2":    "..., A, B &rarr; ..., A, B, A, B",
-	"dig":     "..., A, [N items] &rarr; ..., A, [N items], A",
-	"swap":    "..., A, B &rarr; ..., B, A",
-	"select":  "..., A, B, C &rarr; ..., A or B",
-	"cover":   "..., [N items], A &rarr; ..., A, [N items]",
-	"uncover": "..., A, [N items] &rarr; ..., [N items], A",
-}
-
-// OpStackEffects returns a "stack pattern" for opcodes that do not have a derivable effect
-func OpStackEffects(opName string) string {
-	return opcodeSpecialStackEffects[opName]
-}
-
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
 	"ed25519verify":       "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
@@ -371,7 +356,7 @@ func OpAllCosts(opName string) []VerCost {
 		if !ok {
 			continue
 		}
-		cost := spec.Details.docCost()
+		cost := spec.OpDetails.docCost()
 		if costs == nil || cost != costs[len(costs)-1].Cost {
 			costs = append(costs, VerCost{v, v, cost})
 		} else {
