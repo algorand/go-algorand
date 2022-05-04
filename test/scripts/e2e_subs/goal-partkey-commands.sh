@@ -9,11 +9,12 @@ date "+$0 start %Y%m%d_%H%M%S"
 # Registered  Account      ParticipationID   Last Used  First round  Last round
 # yes         LFMT...RHJQ  4UPT6AQC...               4            0     3000000
 OUTPUT=$(goal account listpartkeys)
-OUTPUT=$(echo "$OUTPUT"|tail -n 1|tr -s ' ')
-if [[ "$OUTPUT"                          != yes*    ]]; then echo "Registered should be 'yes' but wasn't.";   exit 1; fi
-if [[ $(echo "$OUTPUT" | cut -d' ' -f 4) == 0       ]]; then echo "Last Used shouldn't be 0 but was.";        exit 1; fi
-if [[ $(echo "$OUTPUT" | cut -d' ' -f 5) != 0       ]]; then echo "First round should be 0 but wasn't.";      exit 1; fi
-if [[ $(echo "$OUTPUT" | cut -d' ' -f 6) != 3000 ]]; then echo "Last round should be 3000 but wasn't."; exit 1; fi
+# In case there are multiple keys, make sure we are checking the correct one.
+OUTPUT=$(echo "$OUTPUT"|grep "yes.*3000"|tr -s ' ')
+if [[ "$OUTPUT"                          != yes*    ]]; then echo "Registered should be 'yes' but wasn't."; exit 1; fi
+if [[ $(echo "$OUTPUT" | cut -d' ' -f 4) == 0       ]]; then echo "Last Used shouldn't be 0 but was.";      exit 1; fi
+if [[ $(echo "$OUTPUT" | cut -d' ' -f 5) != 0       ]]; then echo "First round should be 0 but wasn't.";    exit 1; fi
+if [[ $(echo "$OUTPUT" | cut -d' ' -f 6) != 3000 ]];    then echo "Last round should be 3000 but wasn't.";  exit 1; fi
 
 #Dumping participation key info from /tmp/tmpwtomya9x/net/Node...
 #
@@ -22,24 +23,25 @@ if [[ $(echo "$OUTPUT" | cut -d' ' -f 6) != 3000 ]]; then echo "Last round shoul
 #Last vote round:           3
 #Last block proposal round: 4
 #Effective first round:     0
-#Effective last round:      3000000
+#Effective last round:      3000
 #First round:               0
-#Last round:                3000000
+#Last round:                3000
 #Key dilution:              10000
 #Selection key:             esIsBJB86P+sLeqO3gVoLBGfpuwYlWN4lNzz2AYslTo=
 #Voting key:                W1OcXLZsaATyOd5FbhRgXHmcywvn++xEVUAQ0NejmW4=
 OUTPUT=$(goal account partkeyinfo)
-if ! echo "$OUTPUT" | grep -q 'First round:[[:space:]]* 0';                     then echo "First round should have been 0.";                exit 1; fi
+if ! echo "$OUTPUT" | grep -q 'First round:[[:space:]]* 0';                  then echo "First round should have been 0.";             exit 1; fi
 if ! echo "$OUTPUT" | grep -q 'Last round:[[:space:]]* 3000';                then echo "Last round should have been 3000.";           exit 1; fi
 if ! echo "$OUTPUT" | grep -q 'Effective last round:[[:space:]]* 3000';      then echo "Effective last round should have been 3000."; exit 1; fi
 # 100 or 10000 due to arm64 bug
-if ! echo "$OUTPUT" | grep -q 'Key dilution:[[:space:]]* 100\(00\)\?';            then echo "Key dilution should have been 10000.";           exit 1; fi
-if ! echo "$OUTPUT" | grep -q 'Participation ID:[[:space:]]*[[:alnum:]]\{52\}'; then echo "There should be a participation ID.";            exit 1; fi
+if ! echo "$OUTPUT" | grep -q 'Key dilution:[[:space:]]* 100\(00\)\?';          then echo "Key dilution should have been 10000."; exit 1; fi
+if ! echo "$OUTPUT" | grep -q 'Participation ID:[[:space:]]*[[:alnum:]]\{52\}'; then echo "There should be a participation ID.";  exit 1; fi
 
 # Test multiple data directory supported
+NUM_OUTPUT_1=$(echo "$OUTPUT"|grep -c 'Participation ID')
 OUTPUT=$(goal account partkeyinfo -d "$ALGORAND_DATA" -d "$ALGORAND_DATA2")
-OUTPUT=$(echo "$OUTPUT"|grep -c 'Participation ID')
-if [[ "$OUTPUT" != "2" ]]; then echo "Two Participation IDs should have been found."; exit 1; fi
+NUM_OUTPUT_2=$(echo "$OUTPUT"|grep -c 'Participation ID')
+if (( "$NUM_OUTPUT_2" <= "$NUM_OUTPUT_1" )); then echo "Should have found more participation keys when checking both data directories."; exit 1; fi
 
 # get stderr from this one
 OUTPUT=$(goal account listpartkeys -d "$ALGORAND_DATA" -d "$ALGORAND_DATA2" 2>&1)
