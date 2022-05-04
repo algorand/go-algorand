@@ -1380,6 +1380,7 @@ func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round,
 	node.accountManager.Record(account, round, participationType)
 }
 
+// IsParticipating implements network.NodeInfo
 func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round)

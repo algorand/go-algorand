@@ -1460,6 +1460,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	now := time.Now()
 	expire := now.Add(5 * time.Second)
 	for {
+		time.Sleep(time.Millisecond)
 		if len(peer.sendBufferHighPrio)+len(peer.sendBufferBulk) == 0 {
 			break
 		}
@@ -1467,7 +1468,6 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		if now.After(expire) {
 			t.Errorf("wait for empty peer outbound queue expired")
 		}
-		time.Sleep(time.Millisecond)
 	}
 	// modify the peer on netA and
 	beforeLoopTime := time.Now()
@@ -1805,7 +1805,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 // test:
 // * wn.config.ForceFetchTransactions
 // * wn.config.ForceRelayMessages
-// * NetworkNodeInfo.IsParticipating() + WebsocketNetwork.OnNetworkAdvance()
+// * NodeInfo.IsParticipating() + WebsocketNetwork.OnNetworkAdvance()
 // TODO WRITEME
 func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	// Tests that A->B follows MOI
@@ -1986,7 +1986,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	require.False(t, netB.relayMessages)
-	require.Equal(t, uint32(wantTXGossip_unk), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipUnk), netB.wantTXGossip)
 
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
@@ -2027,7 +2027,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	netB.OnNetworkAdvance()
 	// TODO: better event driven thing for netB sending new MOI
 	time.Sleep(10 * time.Millisecond)
-	require.Equal(t, uint32(wantTXGossip_no), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipNo), netB.wantTXGossip)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -2051,10 +2051,10 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	}
 }
 
-type participatingNetworkNodeInfo struct {
+type participatingNodeInfo struct {
 }
 
-func (nnni *participatingNetworkNodeInfo) IsParticipating() bool {
+func (nnni *participatingNodeInfo) IsParticipating() bool {
 	return true
 }
 
@@ -2071,7 +2071,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	bConfig := defaultConfig
 	bConfig.NetAddress = ""
 	netB := makeTestWebsocketNodeWithConfig(t, bConfig)
-	netB.node = &participatingNetworkNodeInfo{}
+	netB.node = &participatingNodeInfo{}
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
 	addrA, postListen := netA.Address()
@@ -2081,7 +2081,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	require.False(t, netB.relayMessages)
-	require.Equal(t, uint32(wantTXGossip_unk), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipUnk), netB.wantTXGossip)
 
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
@@ -2122,7 +2122,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	netB.OnNetworkAdvance()
 	// TODO: better event driven thing for netB sending new MOI
 	time.Sleep(10 * time.Millisecond)
-	require.Equal(t, uint32(wantTXGossip_yes), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipYes), netB.wantTXGossip)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()

@@ -69,6 +69,7 @@ func (m *MockParticipationRegistry) GetStateProofForRound(id account.Participati
 	return account.StateProofRecordForRound{}, nil
 }
 
+// HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds
 func (m *MockParticipationRegistry) HasLiveKeys(from, to basics.Round) bool {
 	return false
 }

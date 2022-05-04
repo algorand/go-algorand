@@ -301,15 +301,16 @@ func Propagate(msg IncomingMessage) OutgoingMessage {
 // Contains {genesisID} param to be handled by gorilla/mux
 const GossipNetworkPath = "/v1/{genesisID}/gossip"
 
-type NetworkNodeInfo interface {
+// NodeInfo helps the network get information about the node it is running on
+type NodeInfo interface {
 	// IsParticipating returns true if this node has stake and may vote on blocks or propose blocks.
 	IsParticipating() bool
 }
 
-type nopeNetworkNodeInfo struct {
+type nopeNodeInfo struct {
 }
 
-func (nnni *nopeNetworkNodeInfo) IsParticipating() bool {
+func (nnni *nopeNodeInfo) IsParticipating() bool {
 	return false
 }
 
@@ -425,16 +426,16 @@ type WebsocketNetwork struct {
 	// Start(), and being shut down when Stop() is called.
 	peersConnectivityCheckTicker *time.Ticker
 
-	node NetworkNodeInfo
+	node NodeInfo
 
 	// atomic {0:unknown, 1:yes, 2:no}
 	wantTXGossip uint32
 }
 
 const (
-	wantTXGossip_unk = 0
-	wantTXGossip_yes = 1
-	wantTXGossip_no  = 2
+	wantTXGossipUnk = 0
+	wantTXGossipYes = 1
+	wantTXGossipNo  = 2
 )
 
 type broadcastRequest struct {
@@ -687,7 +688,7 @@ func (wn *WebsocketNetwork) setup() {
 		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
 	}
 	if wn.node == nil {
-		wn.node = &nopeNetworkNodeInfo{}
+		wn.node = &nopeNodeInfo{}
 	}
 	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
@@ -713,7 +714,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
 	wn.relayMessages = wn.config.NetAddress != "" || wn.config.ForceRelayMessages
 	if wn.relayMessages || wn.config.ForceFetchTransactions {
-		wn.wantTXGossip = wantTXGossip_yes
+		wn.wantTXGossip = wantTXGossipYes
 	}
 	// roughly estimate the number of messages that could be seen at any given moment.
 	// For the late/redo/down committee, which happen in parallel, we need to allocate
@@ -1729,13 +1730,13 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 		wantTXGossipPrev := atomic.LoadUint32(&wn.wantTXGossip)
 		wantTXGossip := wn.node.IsParticipating()
 		wn.log.Infof("msgOfInterest netadv isP=%v wasP=%v", wantTXGossip, wantTXGossipPrev)
-		if wantTXGossip && (wantTXGossipPrev != wantTXGossip_yes) {
-			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossip_yes)
+		if wantTXGossip && (wantTXGossipPrev != wantTXGossipYes) {
+			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossipYes)
 			if didChange {
 				wn.RegisterMessageInterest(protocol.TxnTag)
 			}
-		} else if !wantTXGossip && (wantTXGossipPrev != wantTXGossip_no) {
-			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossip_no)
+		} else if !wantTXGossip && (wantTXGossipPrev != wantTXGossipNo) {
+			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossipNo)
 			if didChange {
 				wn.DeregisterMessageInterest(protocol.TxnTag)
 			}
@@ -2151,7 +2152,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NetworkNodeInfo) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
@@ -2334,6 +2335,7 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 	return nil
 }
 
+// DeregisterMessageInterest will tell peers to no longer send us traffic with a protocol Tag
 func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
 	wn.log.Infof("msgOfInterest DEL %s", string(t))
 	wn.messagesOfInterestMu.Lock()
@@ -2354,7 +2356,7 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
 	wantTXGossip := atomic.LoadUint32(&wn.wantTXGossip)
-	if wantTXGossip != wantTXGossip_no {
+	if wantTXGossip != wantTXGossipNo {
 		wn.messagesOfInterest[protocol.TxnTag] = true
 	} else {
 		delete(wn.messagesOfInterest, protocol.TxnTag)
