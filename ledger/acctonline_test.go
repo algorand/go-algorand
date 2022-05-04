@@ -199,8 +199,8 @@ func TestAcctOnline(t *testing.T) {
 
 		// check data gets expired and removed from the DB
 		// account 0 is set to Offline at round 1
-		// and set expired at X = 1 + MaxBalLookback (= 3)
-		// actual removal happens when X is committed i.e. at round X + maxDeltaLookback (= 5)
+		// and set expired at X = 1 + MaxBalLookback (= 13)
+		// actual removal happens when X is committed i.e. at round X + maxDeltaLookback (= 21)
 		if i > basics.Round(maxBalLookback+maxDeltaLookback) {
 			rnd := i - basics.Round(maxBalLookback+maxDeltaLookback)
 			acctIdx := int(rnd) - 1
@@ -217,11 +217,61 @@ func TestAcctOnline(t *testing.T) {
 			require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.accountData)
 
-			// committed round i => dbRound = i - maxDeltaLookback
-			// lookup should correctly return data for earlist round dbRound - maxBalLookback + 1
+			// committed round i => dbRound = i - maxDeltaLookback (= 13 for the account 0)
+			// dbRound - maxBalLookback (= 1) is the "set offline" round for account 0
+			// lookup should correctly return empty data round dbRound - maxBalLookback + 1 (simulate the latest +1)
 			oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
 			require.NoError(t, err)
 			require.Empty(t, oad)
+
+			// check next account
+			// for the account 1, it set to Offline at round 2
+			// and set expired at X = 2 + MaxBalLookback (= 14)
+			nextAcctIdx := acctIdx + 1
+			if nextAcctIdx < int(targetRound) {
+				bal := allAccts[nextAcctIdx]
+				data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
+				require.NoError(t, err)
+				require.Equal(t, bal.Addr, data.addr)
+				require.NotEmpty(t, data.rowid)
+				require.Equal(t, oa.cachedDBRoundOnline, data.round)
+				require.NotEmpty(t, data.accountData)
+
+				// the most recent value is empty because the account is scheduled for removal
+				data, has := oa.baseOnlineAccounts.read(bal.Addr)
+				require.True(t, has)
+				require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
+				require.Empty(t, data.accountData)
+
+				// account 1 went offline at round 2 => it offline at requested round 1+1=2
+				oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
+				require.NoError(t, err)
+				require.Empty(t, oad)
+			}
+			// check next next account
+			// for the account 2, it set to Offline at round 3
+			// at round 1 + 1 = 2 it online and should te correctly retrieved from DB and lookup
+			nextNextAcctIdx := nextAcctIdx + 1
+			if nextNextAcctIdx < int(targetRound) {
+				bal := allAccts[nextNextAcctIdx]
+				data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
+				require.NoError(t, err)
+				require.Equal(t, bal.Addr, data.addr)
+				require.NotEmpty(t, data.rowid)
+				require.Equal(t, oa.cachedDBRoundOnline, data.round)
+				require.NotEmpty(t, data.accountData)
+
+				// the most recent value is empty because the account is scheduled for removal
+				data, has := oa.baseOnlineAccounts.read(bal.Addr)
+				require.True(t, has)
+				require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
+				require.Empty(t, data.accountData)
+
+				// account 2 went offline at round 3 => it online at requested round 1+1=2
+				oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
+				require.NoError(t, err)
+				require.NotEmpty(t, oad)
+			}
 		}
 	}
 
