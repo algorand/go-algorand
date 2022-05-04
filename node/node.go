@@ -403,11 +403,7 @@ func (node *AlgorandFullNode) Start() {
 
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
 func (node *AlgorandFullNode) startMonitoringRoutines() {
-	node.monitoringRoutinesWaitGroup.Add(3)
-
-	// PKI TODO: Remove this with #2596
-	// Periodically check for new participation keys
-	go node.checkForParticipationKeys(node.ctx.Done())
+	node.monitoringRoutinesWaitGroup.Add(2)
 
 	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
@@ -781,24 +777,6 @@ func ensureParticipationDB(genesisDir string, log logging.Logger) (account.Parti
 	return account.MakeParticipationRegistry(accessor, log)
 }
 
-// Reload participation keys from disk periodically
-func (node *AlgorandFullNode) checkForParticipationKeys(done <-chan struct{}) {
-	defer node.monitoringRoutinesWaitGroup.Done()
-	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
-	for {
-		select {
-		case <-ticker.C:
-			err := node.loadParticipationKeys()
-			if err != nil {
-				node.log.Errorf("Could not refresh participation keys: %v", err)
-			}
-		case <-done:
-			ticker.Stop()
-			return
-		}
-	}
-}
-
 // ListParticipationKeys returns all participation keys currently installed on the node
 func (node *AlgorandFullNode) ListParticipationKeys() (partKeys []account.ParticipationRecord, err error) {
 	return node.accountManager.Registry().GetAll(), nil
@@ -940,19 +918,6 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 	if err != nil {
 		return account.ParticipationID{}, err
-	}
-
-	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
-	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))
-
-	if _, err = os.Stat(newFullyQualifiedFilename); os.IsExist(err) {
-		return account.ParticipationID{}, fmt.Errorf("KeyInstallation: cannot register duplicate participation key")
-	}
-
-	err = os.Rename(fullyQualifiedTempFile, newFullyQualifiedFilename)
-
-	if err != nil {
-		return account.ParticipationID{}, nil
 	}
 
 	return partkey.ID(), nil
