@@ -1456,11 +1456,24 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	peers, _ = netA.peerSnapshot(peers)
 	require.Equalf(t, len(peers), 1, "Expected number of peers should be 1")
 	peer := peers[0]
+	// On connection may send a MOI message, wait for it to go out
+	now := time.Now()
+	expire := now.Add(5 * time.Second)
+	for {
+		if len(peer.sendBufferHighPrio)+len(peer.sendBufferBulk) == 0 {
+			break
+		}
+		now = time.Now()
+		if now.After(expire) {
+			t.Errorf("wait for empty peer outbound queue expired")
+		}
+		time.Sleep(time.Millisecond)
+	}
 	// modify the peer on netA and
 	beforeLoopTime := time.Now()
 	atomic.StoreInt64(&peer.intermittentOutgoingMessageEnqueueTime, beforeLoopTime.Add(-maxMessageQueueDuration).Add(time.Second).UnixNano())
 	// wait up to 10 seconds for the monitor to figure out it needs to disconnect.
-	expire := beforeLoopTime.Add(2 * slowWritingPeerMonitorInterval)
+	expire = beforeLoopTime.Add(2 * slowWritingPeerMonitorInterval)
 	for {
 		peers, _ = netA.peerSnapshot(peers)
 		if len(peers) == 0 || peers[0] != peer {
