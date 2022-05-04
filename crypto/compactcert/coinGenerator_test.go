@@ -51,7 +51,7 @@ func TestCoinFixedLengthHash(t *testing.T) {
 	}
 
 	rep := crypto.HashRep(&choice)
-	a.Equal(275, len(rep))
+	a.Equal(179, len(rep))
 }
 
 func TestHashCoin(t *testing.T) {
