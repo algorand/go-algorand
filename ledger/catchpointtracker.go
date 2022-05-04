@@ -135,7 +135,8 @@ type catchpointTracker struct {
 	//    but that's only if newBlock was called with that round ), plus the lookback.
 	accountDataResourceSeparationRound basics.Round
 
-	// catchpointsMu protects `roundDigest` and `accountDataResourceSeparationRound`.
+	// catchpointsMu protects `roundDigest`, `accountDataResourceSeparationRound` and
+	// `lastCatchpointLabel`.
 	catchpointsMu deadlock.RWMutex
 }
 
@@ -314,7 +315,7 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	hasIntermediateFirstStageRound, hasMultipleIntermediateFirstStageRounds, dcr.offset =
 		calculateFirstStageRounds(
 			dcr.oldBase, dcr.offset, accountDataResourceSeparationRound,
-			ct.catchpointInterval, 320)
+			ct.catchpointInterval, dcr.catchpointLookback)
 
 	// if we're still writing the previous balances, we can't move forward yet.
 	if ct.IsWritingCatchpointDataFile() {
@@ -343,13 +344,6 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 			if hasMultipleIntermediateFirstStageRounds {
 				close(ct.catchpointDataSlowWriting)
 			}
-		}
-	}
-
-	if accountDataResourceSeparationRound > 0 {
-		dcr.minCatchpointRound = dcr.oldBase + 1
-		if accountDataResourceSeparationRound > dcr.minCatchpointRound {
-			dcr.minCatchpointRound = accountDataResourceSeparationRound
 		}
 	}
 
@@ -555,6 +549,10 @@ func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round 
 	label := ledgercore.MakeCatchpointLabel(
 		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals).String()
 
+	ct.catchpointsMu.Lock()
+	ct.lastCatchpointLabel = label
+	ct.catchpointsMu.Unlock()
+
 	_, err := ct.accountsq.writeCatchpointStateString(
 		context.Background(), catchpointStateLastCatchpoint, label)
 	if err != nil {
@@ -633,14 +631,14 @@ func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInt
 // Generate catchpoints (labels and possibly files with db records) for rounds in
 // [first, last] and delete corresponding first stage catchpoint db records and
 // data files. `ct.catchpointInterval` must be non-zero.
-func (ct *catchpointTracker) createCatchpoints(first basics.Round, last basics.Round, oldBase basics.Round) error {
-	if 320 + 1 > first {
-		first = 320 + 1
+func (ct *catchpointTracker) createCatchpoints(first basics.Round, last basics.Round, oldBase basics.Round, catchpointLookback uint64) error {
+	if catchpointLookback + 1 > uint64(first) {
+		first = basics.Round(catchpointLookback) + 1
 	}
 	rounds := calculateCatchpointRounds(first, last, ct.catchpointInterval)
 
 	for _, round := range rounds {
-		accountsRound := round - 320
+		accountsRound := round - basics.Round(catchpointLookback)
 
 		dataInfo, exists, err :=
 			selectCatchpointFirstStageInfo(ct.dbs.Rdb.Handle, accountsRound)
@@ -716,18 +714,31 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	}
 
 	if ct.catchpointInterval != 0 {
-		// Generate catchpoints for rounds in [dcc.minCatchpointRound, dcc.newBase].
-		err := ct.createCatchpoints(dcc.minCatchpointRound, dcc.newBase, dcc.oldBase)
-		if err != nil {
-			ct.log.Warnf(
-				"error creating catchpoints dcc.oldBase: %d dcc.newBase: %d err: %v",
-				dcc.oldBase, dcc.newBase, err)
+		ct.catchpointsMu.Lock()
+		accountDataResourceSeparationRound := ct.accountDataResourceSeparationRound
+		ct.catchpointsMu.Unlock()
+
+		if accountDataResourceSeparationRound > 0 {
+			minCatchpointRound := dcc.oldBase + 1
+			if accountDataResourceSeparationRound > minCatchpointRound {
+				minCatchpointRound = accountDataResourceSeparationRound
+			}
+
+			// Generate catchpoints for rounds in [dcc.minCatchpointRound, dcc.newBase].
+			err := ct.createCatchpoints(
+				minCatchpointRound, dcc.newBase, dcc.oldBase, dcc.catchpointLookback)
+			if err != nil {
+				ct.log.Warnf(
+					"error creating catchpoints dcc.oldBase: %d dcc.newBase: %d err: %v",
+					dcc.oldBase, dcc.newBase, err)
+			}
 		}
 	}
 
 	// Prune first stage catchpoint records from the database.
-	if dcc.newBase >= 320 {
-		err := ct.pruneFirstStageRecordsData(dcc.newBase - 320)
+	if uint64(dcc.newBase) >= dcc.catchpointLookback {
+		err := ct.pruneFirstStageRecordsData(
+			dcc.newBase - basics.Round(dcc.catchpointLookback))
 		if err != nil {
 			ct.log.Warnf(
 				"error pruning first stage records and data dcc.newBase: %d err: %v",

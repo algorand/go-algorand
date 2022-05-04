@@ -69,7 +69,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
-	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao}, conf)
+	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao}, conf, true)
 	require.NoError(tb, err)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
@@ -448,7 +448,10 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	catchpointLabels := make(map[basics.Round]string)
 	ledgerHistory := make(map[basics.Round]*mockLedgerForTracker)
 	roundDeltas := make(map[basics.Round]ledgercore.StateDelta)
-	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
+	numCatchpointsCreated := 0
+	i := basics.Round(0)
+	for numCatchpointsCreated < testCatchpointLabelsCount {
+		i++
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
@@ -489,25 +492,28 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 		roundDeltas[i] = delta
 
-		// if this is a catchpoint round, save the label.
-		if uint64(i)%cfg.CatchpointInterval == 0 {
+		// If we made a catchpoint, save the label.
+		if (uint64(i) > protoParams.CatchpointLookback) && ((uint64(i) - cfg.MaxAcctLookback) % cfg.CatchpointInterval == 0) {
 			ml.trackers.waitAccountsWriting()
 			catchpointLabels[i] = ct.GetLastCatchpointLabel()
+			require.NotEmpty(t, catchpointLabels[i], i)
 			ledgerHistory[i] = ml.fork(t)
 			defer ledgerHistory[i].Close()
+			numCatchpointsCreated++
 		}
 	}
+	lastRound := i
 
 	// Test in reverse what happens when we try to repeat the exact same blocks.
 	// Start off with the catchpoint before the last one.
-	startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval)
-	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
+	for startingRound := lastRound - basics.Round(cfg.CatchpointInterval); uint64(startingRound) > protoParams.CatchpointLookback; startingRound -= basics.Round(cfg.CatchpointInterval) {
 		au.close()
 		ml2 := ledgerHistory[startingRound]
+		require.NotNil(t, ml2)
 
 		ct2 := newCatchpointTracker(t, ml2, cfg, ".")
 		defer ct2.close()
-		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
+		for i := startingRound + 1; i <= lastRound; i++ {
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
 					Round: basics.Round(i),
@@ -520,7 +526,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			ml2.trackers.committedUpTo(i)
 
 			// if this is a catchpoint round, check the label.
-			if uint64(i)%cfg.CatchpointInterval == 0 {
+			if (uint64(i) > protoParams.CatchpointLookback) && ((uint64(i) - cfg.MaxAcctLookback) % cfg.CatchpointInterval == 0) {
 				ml2.trackers.waitAccountsWriting()
 				require.Equal(t, catchpointLabels[i], ct2.GetLastCatchpointLabel())
 			}
@@ -650,7 +656,8 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if uint64(ledger.Latest() + 320)%cfg.CatchpointInterval == 0 {
+		if (uint64(ledger.Latest()) + protoParams.CatchpointLookback) %
+				cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 
@@ -698,7 +705,8 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if uint64(ledger.Latest() + 320)%cfg.CatchpointInterval == 0 {
+		if (uint64(ledger.Latest()) + protoParams.CatchpointLookback) %
+				cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 			break
