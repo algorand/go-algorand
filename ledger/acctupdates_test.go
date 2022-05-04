@@ -62,7 +62,7 @@ type mockLedgerForTracker struct {
 	trackers trackerRegistry
 }
 
-func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
+func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]ledgercore.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
 	var ot basics.OverflowTracker
 	proto := config.Consensus[consensusVersion]
 	totals.RewardsLevel = rewardLevel
@@ -75,16 +75,23 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 	return
 }
 
-func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
+func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
 	dbs, fileName := dbOpenTest(t, inMemory)
-	dblogger := logging.TestingLog(t)
-	dblogger.SetLevel(logging.Info)
-	dbs.Rdb.SetLogger(dblogger)
-	dbs.Wdb.SetLogger(dblogger)
+	dbs.Rdb.SetLogger(l)
+	dbs.Wdb.SetLogger(l)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
-	totals := accumulateTotals(t, consensusVersion, accts, 0)
+
+	newAccts := make([]map[basics.Address]ledgercore.AccountData, len(accts))
+	for idx, update := range accts {
+		newAcct := make(map[basics.Address]ledgercore.AccountData, len(update))
+		for addr, bad := range update {
+			newAcct[addr] = ledgercore.ToAccountData(bad)
+		}
+		newAccts[idx] = newAcct
+	}
+	totals := accumulateTotals(t, consensusVersion, newAccts, 0)
 	for i := range deltas {
 		deltas[i] = ledgercore.StateDelta{
 			Hdr:    &bookkeeping.BlockHeader{},
@@ -92,7 +99,15 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount in
 		}
 	}
 	consensusParams := config.Consensus[consensusVersion]
-	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams, accts: accts[0]}
+	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams, accts: accts[0]}
+
+}
+
+func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
+	dblogger := logging.TestingLog(t)
+	dblogger.SetLevel(logging.Info)
+
+	return makeMockLedgerForTrackerWithLogger(t, inMemory, initialBlocksCount, consensusVersion, accts, dblogger)
 }
 
 // fork creates another database which has the same content as the current one. Works only for non-memory databases.
@@ -119,7 +134,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	copy(newLedgerTracker.blocks, ml.blocks)
 	copy(newLedgerTracker.deltas, ml.deltas)
 
-	// calling Vacuum implies flushing the datbaase content to disk..
+	// calling Vacuum implies flushing the database content to disk..
 	ml.dbs.Wdb.Vacuum(context.Background())
 	// copy the database files.
 	for _, ext := range []string{"", "-shm", "-wal"} {
@@ -236,10 +251,8 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	}
 
 	for offset := uint64(0); offset < offsetLimit; offset++ {
-		for i := 0; i < au.deltas[offset].Len(); i++ {
-			addr, delta := au.deltas[offset].GetByIdx(i)
-			bals[addr] = delta
-		}
+		deltas := au.deltas[offset]
+		bals = ledgercore.AccumulateDeltas(bals, deltas)
 	}
 	return
 }
@@ -261,7 +274,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
-	_, err := au.Totals(latest + 1)
+	_, err := au.OnlineTotals(latest + 1)
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -270,7 +283,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 {
-		_, err := au.Totals(base - 1)
+		_, err := au.OnlineTotals(base - 1)
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -302,7 +315,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			for addr, data := range accts[rnd] {
 				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, d, data)
+				require.Equal(t, d, ledgercore.ToAccountData(data))
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
@@ -322,27 +335,25 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 
 			all, err := au.allBalances(rnd)
 			require.NoError(t, err)
-			require.Equal(t, all, accts[rnd])
+			bll := accts[rnd]
+			require.Equal(t, all, bll)
 
-			totals, err := au.Totals(rnd)
+			totals, err := au.OnlineTotals(rnd)
 			require.NoError(t, err)
-			require.Equal(t, totals.Online.Money.Raw, totalOnline)
-			require.Equal(t, totals.Offline.Money.Raw, totalOffline)
-			require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
-			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
-			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
+			require.Equal(t, totals.Raw, totalOnline)
 
 			d, validThrough, err := au.LookupWithoutRewards(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
-			require.Equal(t, d, basics.AccountData{})
+			require.Equal(t, d, ledgercore.AccountData{})
 		}
 	}
-	checkAcctUpdatesConsistency(t, au)
+	checkAcctUpdatesConsistency(t, au, latestRnd)
 }
 
-func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates) {
+func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Round) {
 	accounts := make(map[basics.Address]modifiedAccount)
+	resources := make(resourcesUpdates)
 
 	for _, rdelta := range au.deltas {
 		for i := 0; i < rdelta.Len(); i++ {
@@ -352,9 +363,44 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates) {
 			macct.ndeltas++
 			accounts[addr] = macct
 		}
+
+		for _, rec := range rdelta.GetAllAppResources() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AppLocalState = rec.State.LocalState
+			entry.resource.AppParams = rec.Params.Params
+			entry.ndeltas++
+			resources[key] = entry
+		}
+		for _, rec := range rdelta.GetAllAssetResources() {
+			key := accountCreatable{rec.Addr, basics.CreatableIndex(rec.Aidx)}
+			entry, _ := resources.get(key)
+			entry.resource.AssetHolding = rec.Holding.Holding
+			entry.resource.AssetParams = rec.Params.Params
+			entry.ndeltas++
+			resources[key] = entry
+		}
 	}
 
 	require.Equal(t, au.accounts, accounts)
+	require.Equal(t, au.resources, resources)
+
+	latest := au.deltas[len(au.deltas)-1]
+	for i := 0; i < latest.Len(); i++ {
+		addr, acct := latest.GetByIdx(i)
+		d, r, withoutRewards, err := au.lookupLatest(addr)
+		require.NoError(t, err)
+		require.Equal(t, rnd, r)
+		require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
+		require.Equal(t, int(acct.TotalAssetParams), len(d.AssetParams))
+		require.Equal(t, int(acct.TotalAppLocalStates), len(d.AppLocalStates))
+		require.Equal(t, int(acct.TotalAssets), len(d.Assets))
+		// check "withoutRewards" matches result of LookupWithoutRewards
+		d2, r2, err2 := au.LookupWithoutRewards(r, addr)
+		require.NoError(t, err2)
+		require.Equal(t, r2, r)
+		require.Equal(t, withoutRewards, d2.MicroAlgos)
+	}
 }
 
 func TestAcctUpdates(t *testing.T) {
@@ -398,22 +444,24 @@ func TestAcctUpdates(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
-	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
+	start := basics.Round(10)
+	end := basics.Round(proto.MaxBalLookback + 15)
+	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
-		var totals map[basics.Address]basics.AccountData
+		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(base, updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -426,12 +474,17 @@ func TestAcctUpdates(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
-		delta.Totals = curTotals
+
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
-		checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
+		// checkAcctUpdates is kind of slow because of amount of data it needs to compare
+		// instead, compare at start, end in between approx 10 rounds
+		if i == start || i == end-1 || crypto.RandUint64()%10 == 0 {
+			checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
+		}
 	}
 
 	for i := basics.Round(0); i < 15; i++ {
@@ -453,7 +506,7 @@ func TestAcctUpdates(t *testing.T) {
 
 	var updates ledgercore.AccountDeltas
 	for addr, acctData := range accts[dbRound] {
-		updates.Upsert(addr, acctData)
+		updates.Upsert(addr, ledgercore.ToAccountData(acctData))
 	}
 
 	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
@@ -509,16 +562,15 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
-
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -530,9 +582,8 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
 		wg.Add(1)
@@ -600,15 +651,15 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		}
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(b, i-1, prevRound)
 		require.NoError(b, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(b, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(b, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -620,9 +671,8 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
@@ -639,12 +689,12 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		ml.trackers.committedUpTo(basics.Round(i))
 	}
 	ml.trackers.waitAccountsWriting()
-	deltaTime := time.Now().Sub(startTime)
+	deltaTime := time.Since(startTime)
 	if deltaTime > time.Second {
 		return
 	}
 	// we want to fake the N to reflect the time it took us, if we were to wait an entire second.
-	singleIterationTime := deltaTime / time.Duration((uint64(b.N) - initialRounds))
+	singleIterationTime := deltaTime / time.Duration(uint64(b.N)-initialRounds)
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)
@@ -684,6 +734,11 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -693,7 +748,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll("./catchpoints")
+		os.RemoveAll(CatchpointDirName)
 	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}
@@ -730,15 +785,15 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -750,9 +805,8 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
 		ml.trackers.committedUpTo(i)
@@ -760,6 +814,9 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 			ml.trackers.waitAccountsWriting()
 		}
 	}
+
+	// Garbage collection helps prevent trashing for next tests
+	runtime.GC()
 }
 
 // The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
@@ -806,7 +863,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		var moneyAccounts []basics.Address
 
 		for addr := range accts[0] {
-			if bytes.Compare(addr[:], testPoolAddr[:]) == 0 || bytes.Compare(addr[:], testSinkAddr[:]) == 0 {
+			if bytes.Equal(addr[:], testPoolAddr[:]) || bytes.Equal(addr[:], testSinkAddr[:]) {
 				continue
 			}
 			moneyAccounts = append(moneyAccounts, addr)
@@ -840,7 +897,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		i := basics.Round(10)
 		roundCount := 50
 		for ; i < basics.Round(10+roundCount); i++ {
-			updates := make(map[basics.Address]basics.AccountData)
+			updates := make(map[basics.Address]ledgercore.AccountData)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
 			toAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
@@ -1067,7 +1124,7 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	_, err = accountsInit(tx, accts, proto)
+	_ = accountsInitTest(t, tx, accts, proto)
 	require.NoError(t, err)
 
 	err = accountsAddNormalizedBalance(tx, proto)
@@ -1092,7 +1149,8 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates compactAccountDeltas
-	_, err = accountsNewRound(tx, updates, ctbsWithDeletes, proto, basics.Round(1))
+	var resUpdates compactResourcesDeltas
+	_, _, err = accountsNewRound(tx, updates, resUpdates, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
@@ -1108,7 +1166,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	_, err = accountsNewRound(tx, updates, au.creatables, proto, basics.Round(1))
+	_, _, err = accountsNewRound(tx, updates, resUpdates, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
@@ -1117,7 +1175,7 @@ func TestListCreatables(t *testing.T) {
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -1127,12 +1185,13 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
+		var rowid sql.NullInt64
+		err = rows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
 			return
 		}
 
-		var data basics.AccountData
+		var data baseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -1140,12 +1199,18 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 
 		var addr basics.Address
 		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf)
+
+		var ad basics.AccountData
+		ad, err = loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
+		if err != nil {
 			return
 		}
 
-		copy(addr[:], addrbuf)
-		bals[addr] = data
+		bals[addr] = ad
 	}
 
 	err = rows.Err()
@@ -1181,14 +1246,14 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		var updates compactAccountDeltas
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := ledgertesting.RandomAddress()
-			acctData := basics.AccountData{}
+			acctData := baseAccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates.upsert(addr, accountDelta{new: acctData})
+			updates.upsert(addr, accountDelta{newAcct: acctData})
 			i++
 		}
 
 		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			_, err = accountsNewRound(tx, updates, nil, proto, basics.Round(1))
+			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
@@ -1226,7 +1291,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 				start = window/2 + (rnd-1)*window
 			}
 			for k := start; k < start+window; k++ {
-				accountDeltas[rnd].Upsert(addrs[k], basics.AccountData{})
+				accountDeltas[rnd].Upsert(addrs[k], ledgercore.AccountData{})
 				m[addrs[k]] = basics.AccountData{}
 			}
 		}
@@ -1234,7 +1299,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 		baseAccounts.init(nil, 100, 80)
 		b.ResetTimer()
 
-		makeCompactAccountDeltas(accountDeltas, baseAccounts)
+		makeCompactAccountDeltas(accountDeltas, 0, false, baseAccounts)
 
 	})
 }
@@ -1246,49 +1311,61 @@ func TestCompactDeltas(t *testing.T) {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
-	accountDeltas := make([]ledgercore.AccountDeltas, 1, 1)
-	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1, 1)
+	accountDeltas := make([]ledgercore.AccountDeltas, 1)
+	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1)
 	creatableDeltas[0] = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	accountDeltas[0].Upsert(addrs[0], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}})
+	accountDeltas[0].Upsert(addrs[0], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 2}}})
 	creatableDeltas[0][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
-	outAccountDeltas := makeCompactAccountDeltas(accountDeltas, baseAccounts)
+	outAccountDeltas := makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas := compactCreatableDeltas(creatableDeltas)
 
 	require.Equal(t, accountDeltas[0].Len(), outAccountDeltas.len())
 	require.Equal(t, len(creatableDeltas[0]), len(outCreatableDeltas))
 	require.Equal(t, accountDeltas[0].Len(), len(outAccountDeltas.misses))
 
+	// check deltas with missing accounts
 	delta, _ := outAccountDeltas.get(addrs[0])
-	require.Equal(t, persistedAccountData{}, delta.old)
-	require.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, delta.new)
+	require.Equal(t, persistedAccountData{}, delta.oldAcct)
+	require.NotEmpty(t, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
+
+	// check deltas without missing accounts
+	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: baseAccountData{}})
+	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
+	require.Equal(t, 0, len(outAccountDeltas.misses))
+	delta, _ = outAccountDeltas.get(addrs[0])
+	require.Equal(t, persistedAccountData{addr: addrs[0]}, delta.oldAcct)
+	require.Equal(t, baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
+	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
+	baseAccounts.init(nil, 100, 80)
 
 	// add another round
 	accountDeltas = append(accountDeltas, ledgercore.AccountDeltas{})
 	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable))
-	accountDeltas[1].Upsert(addrs[0], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}})
-	accountDeltas[1].Upsert(addrs[3], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}})
+	accountDeltas[1].Upsert(addrs[0], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 3}}})
+	accountDeltas[1].Upsert(addrs[3], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 8}}})
 
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
-	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, baseAccounts)
+	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.write(persistedAccountData{addr: addrs[3], accountData: baseAccountData{}})
+	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	require.Equal(t, 2, outAccountDeltas.len())
 	require.Equal(t, 2, len(outCreatableDeltas))
 
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, uint64(1), delta.old.accountData.MicroAlgos.Raw)
-	require.Equal(t, uint64(3), delta.new.MicroAlgos.Raw)
-	require.Equal(t, int(2), delta.ndeltas)
+	require.Equal(t, uint64(1), delta.oldAcct.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(3), delta.newAcct.MicroAlgos.Raw)
+	require.Equal(t, int(2), delta.nAcctDeltas)
 	delta, _ = outAccountDeltas.get(addrs[3])
-	require.Equal(t, uint64(0), delta.old.accountData.MicroAlgos.Raw)
-	require.Equal(t, uint64(8), delta.new.MicroAlgos.Raw)
-	require.Equal(t, int(1), delta.ndeltas)
+	require.Equal(t, uint64(0), delta.oldAcct.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(8), delta.newAcct.MicroAlgos.Raw)
+	require.Equal(t, int(1), delta.nAcctDeltas)
 
 	require.Equal(t, addrs[2], outCreatableDeltas[100].Creator)
 	require.Equal(t, addrs[4], outCreatableDeltas[101].Creator)
@@ -1296,12 +1373,186 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, true, outCreatableDeltas[101].Created)
 	require.Equal(t, 2, outCreatableDeltas[100].Ndeltas)
 	require.Equal(t, 1, outCreatableDeltas[101].Ndeltas)
+}
 
+func TestCompactDeltasResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	addrs := make([]basics.Address, 10)
+	for i := 0; i < len(addrs); i++ {
+		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
+	}
+
+	var baseAccounts lruAccounts
+	var baseResources lruResources
+	baseResources.init(nil, 100, 80)
+
+	// check empty deltas do no produce empty resourcesData records
+	accountDeltas := make([]ledgercore.AccountDeltas, 1)
+	accountDeltas[0].UpsertAppResource(addrs[0], 100, ledgercore.AppParamsDelta{Deleted: true}, ledgercore.AppLocalStateDelta{})
+	accountDeltas[0].UpsertAppResource(addrs[1], 101, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{Deleted: true})
+	accountDeltas[0].UpsertAssetResource(addrs[2], 102, ledgercore.AssetParamsDelta{Deleted: true}, ledgercore.AssetHoldingDelta{})
+	accountDeltas[0].UpsertAssetResource(addrs[3], 103, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+
+	outResourcesDeltas := makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	delta, _ := outResourcesDeltas.get(addrs[0], 100)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[1], 101)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[2], 102)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	delta, _ = outResourcesDeltas.get(addrs[3], 103)
+	require.NotEmpty(t, delta.newResource)
+	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
+	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+
+	// check actual data on non-empty input
+	accountDeltas = make([]ledgercore.AccountDeltas, 1)
+	// addr 0 has app params and a local state for another app
+	appParams100 := basics.AppParams{ApprovalProgram: []byte{100}}
+	appLocalState200 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"200": basics.TealValue{Type: basics.TealBytesType, Bytes: "200"}}}
+	accountDeltas[0].UpsertAppResource(addrs[0], 100, ledgercore.AppParamsDelta{Params: &appParams100}, ledgercore.AppLocalStateDelta{})
+	accountDeltas[0].UpsertAppResource(addrs[0], 200, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState200})
+
+	// addr 1 has app params and a local state for the same app
+	appParams101 := basics.AppParams{ApprovalProgram: []byte{101}}
+	appLocalState101 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"101": basics.TealValue{Type: basics.TealBytesType, Bytes: "101"}}}
+	accountDeltas[0].UpsertAppResource(addrs[1], 101, ledgercore.AppParamsDelta{Params: &appParams101}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState101})
+
+	// addr 2 has asset params and a holding for another asset
+	assetParams102 := basics.AssetParams{Total: 102}
+	assetHolding202 := basics.AssetHolding{Amount: 202}
+	accountDeltas[0].UpsertAssetResource(addrs[2], 102, ledgercore.AssetParamsDelta{Params: &assetParams102}, ledgercore.AssetHoldingDelta{})
+	accountDeltas[0].UpsertAssetResource(addrs[2], 202, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &assetHolding202})
+
+	// addr 3 has asset params and a holding for the same asset
+	assetParams103 := basics.AssetParams{Total: 103}
+	assetHolding103 := basics.AssetHolding{Amount: 103}
+	accountDeltas[0].UpsertAssetResource(addrs[3], 103, ledgercore.AssetParamsDelta{Params: &assetParams103}, ledgercore.AssetHoldingDelta{Holding: &assetHolding103})
+
+	baseResources.init(nil, 100, 80)
+
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
+	require.Equal(t, 6, len(outResourcesDeltas.misses))
+	require.Equal(t, 6, len(outResourcesDeltas.deltas))
+
+	// check deltas with missing accounts
+
+	checkNewDeltas := func(outResourcesDeltas compactResourcesDeltas) {
+		delta, _ := outResourcesDeltas.get(addrs[0], 100)
+		require.NotEmpty(t, delta.newResource)
+		require.Equal(t, appParams100.ApprovalProgram, delta.newResource.ApprovalProgram)
+		// do not check delta.nAcctDeltas since checkNewDeltas func is reused and this entry gets modified
+
+		delta, _ = outResourcesDeltas.get(addrs[0], 200)
+		require.NotEmpty(t, delta.newResource)
+		require.Equal(t, appLocalState200.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
+		require.Equal(t, int(1), delta.nAcctDeltas)
+
+		delta, _ = outResourcesDeltas.get(addrs[1], 101)
+		require.NotEmpty(t, delta.newResource)
+		require.Equal(t, appParams101.ApprovalProgram, delta.newResource.ApprovalProgram)
+		require.Equal(t, appLocalState101.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
+		require.Equal(t, int(1), delta.nAcctDeltas)
+
+		delta, _ = outResourcesDeltas.get(addrs[2], 102)
+		require.NotEmpty(t, delta.newResource)
+		require.Equal(t, assetParams102.Total, delta.newResource.Total)
+		require.Equal(t, int(1), delta.nAcctDeltas)
+		delta, _ = outResourcesDeltas.get(addrs[2], 202)
+		require.NotEmpty(t, delta.newResource)
+		require.Equal(t, assetHolding202.Amount, delta.newResource.GetAssetHolding().Amount)
+		require.Equal(t, int(1), delta.nAcctDeltas)
+
+		delta, _ = outResourcesDeltas.get(addrs[3], 103)
+		require.NotEmpty(t, delta.newResource)
+		require.Equal(t, assetParams103.Total, delta.newResource.Total)
+		require.Equal(t, assetHolding103.Amount, delta.newResource.GetAssetHolding().Amount)
+		require.Equal(t, int(1), delta.nAcctDeltas)
+	}
+
+	checkNewDeltas(outResourcesDeltas)
+	for i := int64(0); i < 4; i++ {
+		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
+		require.NotEqual(t, -1, idx)
+		require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		if i%2 == 0 {
+			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
+			require.NotEqual(t, -1, idx)
+			require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+		}
+	}
+
+	// check deltas without missing accounts
+	for i := int64(0); i < 4; i++ {
+		baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		if i%2 == 0 {
+			baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+		}
+	}
+
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	require.Equal(t, 0, len(outResourcesDeltas.misses))
+	require.Equal(t, 6, len(outResourcesDeltas.deltas))
+
+	checkNewDeltas(outResourcesDeltas)
+	for i := int64(0); i < 4; i++ {
+		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
+		require.NotEqual(t, -1, idx)
+		require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		if i%2 == 0 {
+			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
+			require.NotEqual(t, -1, idx)
+			require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+		}
+	}
+
+	// add another round
+	accountDeltas = append(accountDeltas, ledgercore.AccountDeltas{})
+	accountDeltas[1].Upsert(addrs[0], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 3}}})
+	accountDeltas[1].Upsert(addrs[3], ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 8}}})
+
+	appLocalState100 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"100": basics.TealValue{Type: basics.TealBytesType, Bytes: "100"}}}
+	accountDeltas[1].UpsertAppResource(addrs[0], 100, ledgercore.AppParamsDelta{}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState100})
+
+	appParams104 := basics.AppParams{ApprovalProgram: []byte{104}}
+	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
+	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
+
+	baseResources.write(persistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
+	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
+
+	require.Equal(t, 0, len(outResourcesDeltas.misses))
+	require.Equal(t, 7, len(outResourcesDeltas.deltas))
+
+	checkNewDeltas(outResourcesDeltas)
+	delta, _ = outResourcesDeltas.get(addrs[0], 100)
+	require.Equal(t, appLocalState100.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
+	require.Equal(t, int(2), delta.nAcctDeltas)
+
+	delta, _ = outResourcesDeltas.get(addrs[4], 104)
+	require.Equal(t, appParams104.ApprovalProgram, delta.newResource.GetAppParams().ApprovalProgram)
+	require.Equal(t, appLocalState204.KeyValue, delta.newResource.GetAppLocalState().KeyValue)
+	require.Equal(t, int(1), delta.nAcctDeltas)
 }
 
 // TestAcctUpdatesCachesInitialization test the functionality of the initializeCaches cache.
 func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
 
 	protocolVersion := protocol.ConsensusCurrentVersion
 	proto := config.Consensus[protocolVersion]
@@ -1344,15 +1595,15 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		accountChanges := 2
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1364,12 +1615,12 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
 		ml.trackers.committedUpTo(basics.Round(i))
 		ml.trackers.waitAccountsWriting()
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	au.close()
@@ -1393,6 +1644,9 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
 	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.cachedDBRound)
+
+	// Garbage collection helps prevent trashing for next tests
+	runtime.GC()
 }
 
 // TestAcctUpdatesSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
@@ -1445,15 +1699,15 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		accountChanges := 2
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1465,10 +1719,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
@@ -1482,15 +1736,15 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		accountChanges := 2
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1502,10 +1756,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	// now, commit and verify that the produceCommittingTask method broken the range correctly.
@@ -1566,15 +1820,15 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accountChanges := 2
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1586,10 +1840,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
@@ -1602,15 +1856,15 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accountChanges := 2
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1622,10 +1876,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	// now, commit and verify that the produceCommittingTask method broken the range correctly.
@@ -1640,15 +1894,15 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accountChanges := 2
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
-		curTotals := accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
-		require.Equal(t, prevTotals.All(), curTotals.All())
+		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1660,15 +1914,208 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		delta.Totals = curTotals
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	ml.trackers.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
 	ml.trackers.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
+}
+
+// TestAcctUpdatesResources checks that created, deleted, and created resource keep
+// acct updates' compact deltas in a correct state
+func TestAcctUpdatesResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesResources")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	var addr1 basics.Address
+	var addr2 basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			if addr1 == (basics.Address{}) {
+				addr1 = addr
+			} else if addr2 == (basics.Address{}) {
+				addr2 = addr
+			} else {
+				break
+			}
+		}
+	}
+
+	aidx := basics.AssetIndex(1)
+	aidx2 := basics.AssetIndex(2)
+	aidx3 := basics.AppIndex(3)
+	aidx4 := basics.AssetIndex(5)
+
+	rewardLevel := uint64(0)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	// the test 1 requires 3 blocks with different resource state, au requires MaxBalLookback block to start persisting
+	// the test 2 requires 2 more blocks
+	// the test 2 requires 2 more blocks
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3+2+2); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		var updates ledgercore.AccountDeltas
+
+		// test 1: modify state as needed for the tests: create, delete, create
+		// expect no errors on accounts writing
+		if i == 1 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+		}
+		if i == 2 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 0}})
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+		}
+		if i == 3 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
+		}
+
+		// test 2: send back to creator creator
+		// expect matching balances at the end
+		creatorParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
+		if i == 4 {
+			// create base account to make lookup work
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2, TotalAssetParams: 1}})
+			updates.Upsert(addr2, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+
+			// create an asset
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 1000}})
+
+			// transfer
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 900}})
+			updates.UpsertAssetResource(addr2, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+		}
+		if i == 5 {
+			// transfer back: asset holding record incorrectly clears params record
+			updates.UpsertAssetResource(addr2, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 99}})
+			updates.UpsertAssetResource(addr1, aidx2, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 901}})
+		}
+
+		// test 3: own app local state closeout, own empty
+		appParams := ledgercore.AppParamsDelta{Params: &basics.AppParams{ApprovalProgram: []byte{2, 0x20, 1, 1, 0x22} /* int 1 */}}
+		if i == 6 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 3, TotalAssetParams: 2, TotalAppParams: 1, TotalAppLocalStates: 1}})
+
+			// create an app
+			updates.UpsertAppResource(addr1, aidx3, appParams, ledgercore.AppLocalStateDelta{LocalState: &basics.AppLocalState{Schema: basics.StateSchema{NumUint: 10}}})
+			// create an asset
+			updates.UpsertAssetResource(addr1, aidx4, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 1000}})
+		}
+		if i == 7 {
+			// closeout app
+			updates.UpsertAppResource(addr1, aidx3, appParams, ledgercore.AppLocalStateDelta{LocalState: nil, Deleted: true})
+			// transfer own holdings
+			updates.UpsertAssetResource(addr1, aidx4, creatorParams, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+		}
+
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
+		delta.Totals = newTotals
+
+		au.newBlock(blk, delta)
+
+		// commit changes synchroniously
+		_, maxLookback := au.committedUpTo(i)
+		dcc := &deferredCommitContext{
+			deferredCommitRange: deferredCommitRange{
+				lookback: maxLookback,
+			},
+		}
+		cdr := &dcc.deferredCommitRange
+		cdr = au.produceCommittingTask(i, ml.trackers.dbRound, cdr)
+		if cdr != nil {
+			func() {
+				dcc.deferredCommitRange = *cdr
+				ml.trackers.accountsWriting.Add(1)
+				defer ml.trackers.accountsWriting.Done()
+
+				// do not take any locks since all operations are synchronous
+				newBase := basics.Round(dcc.offset) + dcc.oldBase
+				dcc.newBase = newBase
+
+				err := au.prepareCommit(dcc)
+				require.NoError(t, err)
+				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+					err = au.commitRound(ctx, tx, dcc)
+					if err != nil {
+						return err
+					}
+					err = updateAccountsRound(tx, newBase)
+					return err
+				})
+				require.NoError(t, err)
+				ml.trackers.dbRound = newBase
+				au.postCommit(ml.trackers.ctx, dcc)
+				au.postCommitUnlocked(ml.trackers.ctx, dcc)
+			}()
+
+		}
+		accts = append(accts, newAccts)
+	}
+
+	ad, _, _, err := au.lookupLatest(addr1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1000), ad.AssetParams[aidx2].Total)
+	require.Equal(t, uint64(901), ad.Assets[aidx2].Amount)
+
+	require.NotEmpty(t, ad.AppParams[aidx3])
+	require.NotEmpty(t, ad.AppParams[aidx3].ApprovalProgram)
+	require.NotEmpty(t, ad.AssetParams[aidx4])
+	h, ok := ad.Assets[aidx4]
+	require.True(t, ok)
+	require.Empty(t, h)
+
+	ad, _, _, err = au.lookupLatest(addr2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(99), ad.Assets[aidx2].Amount)
 }
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.
@@ -1701,7 +2148,32 @@ func TestConsecutiveVersion(t *testing.T) {
 	}
 }
 
-// This test attempts to cover the case when an accountUpdates.lookupX method:
+func TestAcctUpdatesLookupLatest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accts := ledgertesting.RandomAccounts(10, false)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	err := au.loadFromDisk(ml, 0)
+	defer au.close()
+	require.NoError(t, err)
+	for addr, acct := range accts {
+		acctData, validThrough, withoutRewards, err := au.lookupLatest(addr)
+		require.NoError(t, err)
+		require.Equal(t, acct, acctData)
+
+		// check "withoutRewards" matches result of LookupWithoutRewards
+		d, r, err := au.LookupWithoutRewards(validThrough, addr)
+		require.NoError(t, err)
+		require.Equal(t, validThrough, r)
+		require.Equal(t, withoutRewards, d.MicroAlgos)
+	}
+}
+
+// This test helper attempts to cover the case when an accountUpdates.lookupX method:
 // - can't find the requested address,
 // - falls through looking at deltas and the LRU accounts cache,
 // - then hits the database (calling accountsDbQueries.lookup)
@@ -1710,9 +2182,7 @@ func TestConsecutiveVersion(t *testing.T) {
 //
 // In this case it waits on a condition variable and retries when
 // commitSyncer/accountUpdates has advanced the cachedDBRound.
-func TestAcctUpdatesLookupRetry(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64)) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupRetry")
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.MaxBalLookback = 10
@@ -1734,7 +2204,7 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, false, 10, testProtocolVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -1758,16 +2228,18 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
-		var totals map[basics.Address]basics.AccountData
+		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
 		updates.Upsert(testPoolAddr, newPool)
 		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(base, updates)
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1780,9 +2252,9 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
-		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]basics.AccountData{totals}, rewardLevel)
+		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		au.newBlock(blk, delta)
-		accts = append(accts, totals)
+		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
 		checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
@@ -1811,7 +2283,8 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
 	// kick off another round
-	go flushRound(basics.Round(2))
+	rnd := basics.Round(2)
+	go flushRound(rnd)
 
 	// let stallingTracker enter postCommit() and block (waiting on postCommitReleaseLock)
 	// this will prevent accountUpdates.postCommit() from updating au.cachedDBRound = newBase
@@ -1822,36 +2295,364 @@ func TestAcctUpdatesLookupRetry(t *testing.T) {
 	au.baseAccounts.prune(0)
 	au.accountsMu.Unlock()
 
-	rnd := basics.Round(2)
-
-	// grab any address and data to use for call to lookup
-	var addr basics.Address
-	var data basics.AccountData
-	for a, d := range accts[rnd] {
-		addr = a
-		data = d
-		break
-	}
-
 	defer func() { // allow the postCommitUnlocked() handler to go through, even if test fails
 		<-stallingTracker.postCommitUnlockedEntryLock
 		stallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
 	}()
 
-	// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
+	// issue a lookupWithoutRewards while persistedData.round != au.cachedDBRound
 	// when synchronized=false it will fail fast
-	d, validThrough, err := au.lookupWithoutRewards(rnd, addr, false)
+	_, _, _, _, err := au.lookupWithoutRewards(rnd, basics.Address{}, false)
 	require.Equal(t, err, &MismatchingDatabaseRoundError{databaseRound: 2, memoryRound: 1})
 
-	// release the postCommit lock, once au.lookupWithoutRewards() hits au.accountsReadCond.Wait()
+	// release the postCommit lock, once au.lookupWithoutRewards hits au.accountsReadCond.Wait()
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		stallingTracker.postCommitReleaseLock <- struct{}{}
 	}()
 
-	// when synchronized=true it will wait until above goroutine releases postCommitReleaseLock
-	d, validThrough, err = au.lookupWithoutRewards(rnd, addr, true)
+	assertFn(au, accts, rnd, proto, rewardsLevels)
+}
+
+func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testAcctUpdatesLookupRetry(t,
+		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
+			// grab any address and data to use for call to lookup
+			var addr basics.Address
+			for a := range accts[rnd] {
+				addr = a
+				break
+			}
+
+			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
+			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
+			require.NoError(t, err)
+			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
+			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
+		})
+}
+
+func TestAcctUpdatesLookupRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testAcctUpdatesLookupRetry(t,
+		func(au *accountUpdates, accts []map[basics.Address]basics.AccountData, rnd basics.Round, proto config.ConsensusParams, rewardsLevels []uint64) {
+			// grab any address and data to use for call to lookup
+			var addr basics.Address
+			var data basics.AccountData
+			for a, d := range accts[rnd] {
+				addr = a
+				data = d
+				break
+			}
+
+			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
+			d, validThrough, _, _, err := au.lookupWithoutRewards(rnd, addr, true)
+			require.NoError(t, err)
+			require.Equal(t, d, ledgercore.ToAccountData(data))
+			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
+		})
+}
+
+// auCommitSync is a helper function calling the committing sequence similarly to what tracker registry does
+func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLedgerForTracker) {
+	_, maxLookback := au.committedUpTo(rnd)
+	dcc := &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
+	}
+	cdr := &dcc.deferredCommitRange
+	cdr = au.produceCommittingTask(rnd, ml.trackers.dbRound, cdr)
+	if cdr != nil {
+		func() {
+			dcc.deferredCommitRange = *cdr
+			ml.trackers.accountsWriting.Add(1)
+			defer ml.trackers.accountsWriting.Done()
+
+			// do not take any locks since all operations are synchronous
+			newBase := basics.Round(dcc.offset) + dcc.oldBase
+			dcc.newBase = newBase
+
+			err := au.prepareCommit(dcc)
+			require.NoError(t, err)
+			err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				err = au.commitRound(ctx, tx, dcc)
+				if err != nil {
+					return err
+				}
+				err = updateAccountsRound(tx, newBase)
+				return err
+			})
+			require.NoError(t, err)
+			ml.trackers.dbRound = newBase
+			au.postCommit(ml.trackers.ctx, dcc)
+			au.postCommitUnlocked(ml.trackers.ctx, dcc)
+		}()
+	}
+}
+
+type auNewBlockOpts struct {
+	updates         ledgercore.AccountDeltas
+	version         protocol.ConsensusVersion
+	protoParams     config.ConsensusParams
+	knownCreatables map[basics.CreatableIndex]bool
+}
+
+func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts) {
+	rewardLevel := uint64(0)
+	prevRound, prevTotals, err := au.LatestTotals()
+	require.Equal(t, rnd-1, prevRound)
 	require.NoError(t, err)
-	require.Equal(t, d, data)
-	require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
+
+	newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, data.updates, rewardLevel, data.protoParams, base, prevTotals)
+
+	blk := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round: basics.Round(rnd),
+		},
+	}
+	blk.RewardsLevel = rewardLevel
+	blk.CurrentProtocol = data.version
+	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, data.updates.Len(), 0)
+	delta.Accts.MergeAccounts(data.updates)
+	delta.Creatables = creatablesFromUpdates(base, data.updates, data.knownCreatables)
+	delta.Totals = newTotals
+
+	au.newBlock(blk, delta)
+}
+
+// TestAcctUpdatesLookupLatestCacheRetry simulates a situation when base account and resources are in a cache but
+// account updates advances while calling lookupLatest
+// The idea of the test:
+// - create some base accounts and an account with resources
+// - set that account to be in the caches
+// - force cached round to be one less than the real DB round
+// - call lookupLatest, ensure it blocks
+// - advance lookupLatest and check the content is actual
+func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupLatestCacheRetry")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	var addr1 basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			addr1 = addr
+			break
+		}
+	}
+
+	aidx1 := basics.AssetIndex(1)
+	aidx2 := basics.AssetIndex(2)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	// the test 1 requires 2 blocks with different resource state, au requires MaxBalLookback block to start persisting
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+2); i++ {
+		var updates ledgercore.AccountDeltas
+
+		// add data
+		if i == 1 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssetParams: 1, TotalAssets: 2}})
+			updates.UpsertAssetResource(addr1, aidx1, ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 100}}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
+		}
+
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		// prepare block
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts)
+
+		// commit changes synchroniously
+		auCommitSync(t, i, au, ml)
+	}
+
+	// ensure rounds
+	rnd := au.latest()
+	require.Equal(t, basics.Round(protoParams.MaxBalLookback+2), rnd)
+	require.Equal(t, basics.Round(2), au.cachedDBRound)
+	oldCachedDBRound := au.cachedDBRound
+
+	// simulate the following state
+	// 1. addr1 and in baseAccounts and its round is less than addr1's data in baseResources
+	// 2. au.cachedDBRound is less than actual DB round
+	delete(au.accounts, addr1)
+	au.cachedDBRound--
+
+	pad, ok := au.baseAccounts.read(addr1)
+	require.True(t, ok)
+	pad.round = au.cachedDBRound
+	au.baseAccounts.write(pad)
+
+	prd, ok := au.baseResources.read(addr1, basics.CreatableIndex(aidx1))
+	require.True(t, ok)
+	prd.round = oldCachedDBRound
+	au.baseResources.write(prd, addr1)
+	prd, ok = au.baseResources.read(addr1, basics.CreatableIndex(aidx2))
+	require.True(t, ok)
+	prd.round = oldCachedDBRound
+	au.baseResources.write(prd, addr1)
+
+	var ad basics.AccountData
+	var err error
+
+	// lookupLatest blocks on waiting new round. There is no reliable way to say it is blocked,
+	// so run it in a goroutine and query it to ensure it is blocked.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	done := make(chan struct{})
+	go func() {
+		ad, _, _, err = au.lookupLatest(addr1)
+		close(done)
+		wg.Done()
+	}()
+
+	// wait to ensure lookupLatest is stuck
+	maxIterations := 10
+	i := 0
+	for i < maxIterations {
+		select {
+		case <-done:
+			require.Fail(t, "lookupLatest returns without waiting for new block")
+		default:
+			i++
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	// give it a new block and restore the original cachedDBRound value
+	au.accountsMu.Lock()
+	au.cachedDBRound = oldCachedDBRound
+	au.accountsMu.Unlock()
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+	auNewBlock(t, rnd+1, au, accts[rnd], opts)
+	auCommitSync(t, rnd+1, au, ml)
+
+	wg.Wait()
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(1000000), ad.MicroAlgos.Raw)
+	require.Equal(t, uint64(100), ad.AssetParams[aidx1].Total)
+	require.Equal(t, uint64(100), ad.Assets[aidx1].Amount)
+	require.Equal(t, uint64(200), ad.Assets[aidx2].Amount)
+}
+
+// TestAcctUpdatesLookupResources creates 3 assets, deletes one
+// and checks au.resources with deleted resources are not counted toward totals
+func TestAcctUpdatesLookupResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(1, true)}
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupResources")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	var addr1 basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			addr1 = addr
+			break
+		}
+	}
+
+	aidx1 := basics.AssetIndex(1)
+	aidx2 := basics.AssetIndex(2)
+	aidx3 := basics.AssetIndex(3)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	// test requires 5 blocks: 1 with aidx1, protoParams.MaxBalLookback empty blocks to commit the first one
+	// and 1 block with aidx2 and aidx3, and another one with aidx2 deleted
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3); i++ {
+		var updates ledgercore.AccountDeltas
+
+		// add data
+		if i == 1 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+			updates.UpsertAssetResource(addr1, aidx1, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+		}
+		if i == basics.Round(protoParams.MaxBalLookback+2) {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 3}})
+			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
+			updates.UpsertAssetResource(addr1, aidx3, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 300}})
+		}
+		if i == basics.Round(protoParams.MaxBalLookback+3) {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2}})
+			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+		}
+
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		// prepare block
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts)
+
+		if i <= basics.Round(protoParams.MaxBalLookback+1) {
+			auCommitSync(t, i, au, ml)
+		}
+		// do not commit two last blocks to keep data in memory deltas
+	}
+	data, rnd, _, err := au.lookupLatest(addr1)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(protoParams.MaxBalLookback+3), rnd)
+	require.Len(t, data.Assets, 2)
+	require.Contains(t, data.Assets, aidx1)
+	require.Contains(t, data.Assets, aidx3)
+	require.NotContains(t, data.Assets, aidx2)
 }

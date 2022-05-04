@@ -73,7 +73,6 @@ func (m *lruAccounts) flushPendingWrites() {
 			return
 		}
 	}
-	return
 }
 
 // writePending write a single persistedAccountData entry to the pendingAccounts buffer.

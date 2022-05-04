@@ -23,7 +23,9 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -31,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
+	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/abi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -405,13 +408,13 @@ func mustParseProgArgs() (approval []byte, clear []byte) {
 	}
 
 	if approvalProgFile != "" {
-		approval = assembleFile(approvalProgFile)
+		approval = assembleFile(approvalProgFile, false)
 	} else {
 		approval = mustReadFile(approvalProgRawFile)
 	}
 
 	if clearProgFile != "" {
-		clear = assembleFile(clearProgFile)
+		clear = assembleFile(clearProgFile, false)
 	} else {
 		clear = mustReadFile(clearProgRawFile)
 	}
@@ -953,18 +956,20 @@ var readStateAppCmd = &cobra.Command{
 
 		if fetchLocal {
 			// Fetching local state. Get account information
-			ad, err := client.AccountData(account)
+			ai, err := client.RawAccountApplicationInformation(account, appIdx)
 			if err != nil {
+				var httpError apiclient.HTTPError
+				if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
+					reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
+				}
 				reportErrorf(errorRequestFail, err)
 			}
 
-			// Get application local state
-			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
-			if !ok {
+			if ai.AppLocalState == nil {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
-			kv := local.KeyValue
+			kv := ai.AppLocalState.KeyValue
 			if guessFormat {
 				kv = heuristicFormat(kv)
 			}
@@ -985,18 +990,16 @@ var readStateAppCmd = &cobra.Command{
 			}
 
 			// Get creator information
-			ad, err := client.AccountData(app.Params.Creator)
+			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
-			// Get app params
-			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
-			if !ok {
-				reportErrorf(errorNoSuchApplication, appIdx)
+			if ai.AppParams == nil {
+				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
-			kv := params.GlobalState
+			kv := ai.AppParams.GlobalState
 			if guessFormat {
 				kv = heuristicFormat(kv)
 			}
@@ -1235,7 +1238,7 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		var retType *abi.Type
-		if retTypeStr != "void" {
+		if retTypeStr != abi.VoidReturnType {
 			theRetType, err := abi.TypeOf(retTypeStr)
 			if err != nil {
 				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)

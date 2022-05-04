@@ -28,7 +28,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -110,7 +109,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) *uint64 {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -154,7 +153,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) *uint64 {
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) *uint64 {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -324,10 +323,13 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
 	response.AssetIndex = numOrNil(uint64(txn.ApplyData.ConfigAsset))
 	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
 
-	// Deltas, Logs, and Inners can not be set until we allow appl
-	// response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-	// response.Logs = convertLogs(txn)
-	// response.Inners = convertInners(&txn)
+	withStatus := node.TxnWithStatus{
+		Txn:       txn.SignedTxn,
+		ApplyData: txn.ApplyData,
+	}
+	response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(withStatus)
+	response.Logs = convertLogs(withStatus)
+	response.Inners = convertInners(&withStatus)
 	return response
 }
 

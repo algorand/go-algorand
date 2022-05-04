@@ -21,8 +21,10 @@ void fe25519_tobytes(unsigned char *s, const fe25519 h);
 
 #ifdef HAVE_TI_MODE
 # include "ed25519_ref10_fe_51.h"
+# include "ed25519_ref10_sc_51.h"
 #else
 # include "ed25519_ref10_fe_25_5.h"
+# include "ed25519_ref10_sc_25_5.h"
 #endif
 
 
@@ -73,6 +75,8 @@ typedef struct {
     fe25519 T2d;
 } ge25519_cached;
 
+extern const ge25519_p3 ge25519_basepoint;
+
 void ge25519_tobytes(unsigned char *s, const ge25519_p2 *h);
 
 void ge25519_p3_tobytes(unsigned char *s, const ge25519_p3 *h);
@@ -80,6 +84,8 @@ void ge25519_p3_tobytes(unsigned char *s, const ge25519_p3 *h);
 int ge25519_frombytes(ge25519_p3 *h, const unsigned char *s);
 
 int ge25519_frombytes_negate_vartime(ge25519_p3 *h, const unsigned char *s);
+
+int ge25519_frombytes_vartime(ge25519_p3 *h, const unsigned char *s);
 
 void ge25519_p3_to_cached(ge25519_cached *r, const ge25519_p3 *p);
 
@@ -93,14 +99,28 @@ void ge25519_sub(ge25519_p1p1 *r, const ge25519_p3 *p, const ge25519_cached *q);
 
 void ge25519_scalarmult_base(ge25519_p3 *h, const unsigned char *a);
 
+void ge25519_p2_dbl(ge25519_p1p1 *r, const ge25519_p2 *p);
+
+void ge25519_p3_dbl(ge25519_p1p1 *r, const ge25519_p3 *p);
+
 void ge25519_double_scalarmult_vartime(ge25519_p2 *r, const unsigned char *a,
                                        const ge25519_p3 *A,
                                        const unsigned char *b);
+
+void ge25519_double_scalarmult_vartime_p3(ge25519_p3 *r, const unsigned char *a,
+                                          const ge25519_p3 *A,
+                                          const unsigned char *b);
 
 void ge25519_scalarmult(ge25519_p3 *h, const unsigned char *a,
                         const ge25519_p3 *p);
 
 int ge25519_is_canonical(const unsigned char *s);
+
+int ge25519_is_canonical_vartime(const unsigned char *s);
+
+int ge25519_is_neutral_vartime(const ge25519_p3 *p);
+
+void ge25519_mul_by_cofactor(ge25519_p3* p_out, const ge25519_p3* p_in);
 
 int ge25519_is_on_curve(const ge25519_p3 *p);
 
@@ -123,5 +143,7 @@ void sc25519_muladd(unsigned char s[32], const unsigned char a[32],
                     const unsigned char b[32], const unsigned char c[32]);
 
 int sc25519_is_canonical(const unsigned char s[32]);
+
+int sc25519_is_canonical_vartime(const unsigned char s[32]);
 
 #endif

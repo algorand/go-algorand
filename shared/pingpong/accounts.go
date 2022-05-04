@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -138,7 +139,7 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 	if currentTps > float64(cfg.TxnPerSec) {
 		sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
 		sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
-		time.Sleep(sleepTime)
+		util.NanoSleep(sleepTime)
 	}
 }
 
@@ -273,7 +274,14 @@ func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, clie
 			err = addrErr
 			return
 		}
-		numSlots := proto.MaxAssetsPerAccount - len(acct.Assets)
+		maxAssetsPerAccount := proto.MaxAssetsPerAccount
+		// TODO : given that we've added unlimited asset support, we should revise this
+		// code so that we'll have control on how many asset/account we want to create.
+		// for now, I'm going to keep the previous max values until we have refactored this code.
+		if maxAssetsPerAccount == 0 {
+			maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
+		}
+		numSlots := maxAssetsPerAccount - len(acct.Assets)
 		optInsByAddr[addr] = make(map[uint64]bool)
 		for k, creator := range allAssets {
 			if creator == addr {
@@ -667,6 +675,13 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 
 	toCreate := int(cfg.NumApp)
 	appsPerAcct := proto.MaxAppsCreated
+	// TODO : given that we've added unlimited app support, we should revise this
+	// code so that we'll have control on how many app/account we want to create.
+	// for now, I'm going to keep the previous max values until we have refactored this code.
+	if appsPerAcct == 0 {
+		appsPerAcct = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	}
+
 	// create min(groupSize, maxAppsPerAcct) per account to optimize sending in batches
 	groupSize := proto.MaxTxGroupSize
 	if appsPerAcct > groupSize {
@@ -682,7 +697,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		return
 	}
 	maxOptIn := uint32(config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn)
-	if cfg.NumAppOptIn > maxOptIn {
+	if maxOptIn > 0 && cfg.NumAppOptIn > maxOptIn {
 		err = fmt.Errorf("each acct can only opt in to %d but %d requested", maxOptIn, cfg.NumAppOptIn)
 		return
 	}

@@ -232,9 +232,13 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %d with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address: a.Certificate.Proposal.OriginalProposer.String(),
-			Hash:    a.Certificate.Proposal.BlockDigest.String(),
-			Round:   uint64(a.Certificate.Round),
+			Address:      a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:         a.Certificate.Proposal.BlockDigest.String(),
+			Round:        uint64(a.Certificate.Round),
+			ValidatedAt:  a.Payload.validatedAt,
+			PreValidated: true,
+			PropBufLen:   uint64(len(s.demux.rawProposals)),
+			VoteBufLen:   uint64(len(s.demux.rawVotes)),
 		})
 		s.Ledger.EnsureValidatedBlock(a.Payload.ve, a.Certificate)
 	} else {
@@ -242,9 +246,13 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %d with block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address: a.Certificate.Proposal.OriginalProposer.String(),
-			Hash:    a.Certificate.Proposal.BlockDigest.String(),
-			Round:   uint64(a.Certificate.Round),
+			Address:      a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:         a.Certificate.Proposal.BlockDigest.String(),
+			Round:        uint64(a.Certificate.Round),
+			ValidatedAt:  a.Payload.validatedAt,
+			PreValidated: false,
+			PropBufLen:   uint64(len(s.demux.rawProposals)),
+			VoteBufLen:   uint64(len(s.demux.rawVotes)),
 		})
 		s.Ledger.EnsureBlock(block, a.Certificate)
 	}

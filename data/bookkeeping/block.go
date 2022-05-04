@@ -152,7 +152,7 @@ type (
 		FeeSink basics.Address `codec:"fees"`
 
 		// The RewardsPool accepts periodic injections from the
-		// FeeSink and continually redistributes them to adresses as
+		// FeeSink and continually redistributes them to addresses as
 		// rewards.
 		RewardsPool basics.Address `codec:"rwd"`
 
@@ -214,7 +214,7 @@ type (
 		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
 		// that are not a multiple of ConsensusParams.CompactCertRounds,
 		// this value is zero.
-		CompactCertVoters crypto.Digest `codec:"v"`
+		CompactCertVoters crypto.GenericDigest `codec:"v"`
 
 		// CompactCertVotersTotal is the total number of microalgos held by
 		// the accounts in CompactCertVoters (or zero, if the merkle root is
@@ -285,17 +285,17 @@ func (block *Block) Seed() committee.Seed {
 // NextRewardsState computes the RewardsState of the subsequent round
 // given the subsequent consensus parameters, along with the incentive pool
 // balance and the total reward units in the system as of the current round.
-func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.ConsensusParams, incentivePoolBalance basics.MicroAlgos, totalRewardUnits uint64) (res RewardsState) {
+func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.ConsensusParams, incentivePoolBalance basics.MicroAlgos, totalRewardUnits uint64, log logging.Logger) (res RewardsState) {
 	res = s
 
-	if nextRound == s.RewardsRecalculationRound {
+	if nextRound == res.RewardsRecalculationRound {
 		maxSpentOver := nextProto.MinBalance
 		overflowed := false
 
 		if nextProto.PendingResidueRewards {
-			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, s.RewardsResidue)
+			maxSpentOver, overflowed = basics.OAdd(maxSpentOver, res.RewardsResidue)
 			if overflowed {
-				logging.Base().Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, s.RewardsResidue, nextRound, s)
+				log.Errorf("overflowed when trying to accumulate MinBalance(%d) and RewardsResidue(%d) for round %d (state %+v)", nextProto.MinBalance, res.RewardsResidue, nextRound, s)
 				// this should never happen, but if it does, adjust the maxSpentOver so that we will have no rewards.
 				maxSpentOver = incentivePoolBalance.Raw
 			}
@@ -304,7 +304,7 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 		// it is time to refresh the rewards rate
 		newRate, overflowed := basics.OSub(incentivePoolBalance.Raw, maxSpentOver)
 		if overflowed {
-			logging.Base().Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
+			log.Errorf("overflowed when trying to refresh RewardsRate for round %v (state %+v)", nextRound, s)
 			newRate = 0
 		}
 
@@ -317,14 +317,21 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 		return
 	}
 
+	var rewardsRate uint64
+	if nextProto.RewardsCalculationFix {
+		rewardsRate = res.RewardsRate
+	} else {
+		rewardsRate = s.RewardsRate
+	}
+
 	var ot basics.OverflowTracker
-	rewardsWithResidue := ot.Add(s.RewardsRate, s.RewardsResidue)
-	nextRewardLevel := ot.Add(s.RewardsLevel, rewardsWithResidue/totalRewardUnits)
+	rewardsWithResidue := ot.Add(rewardsRate, res.RewardsResidue)
+	nextRewardLevel := ot.Add(res.RewardsLevel, rewardsWithResidue/totalRewardUnits)
 	nextResidue := rewardsWithResidue % totalRewardUnits
 
 	if ot.Overflowed {
-		logging.Base().Errorf("could not compute next reward level (current level %v, adding %v MicroAlgos in total, number of reward units %v) using old level",
-			s.RewardsLevel, s.RewardsRate, totalRewardUnits)
+		log.Errorf("could not compute next reward level (current level %v, adding %v MicroAlgos in total, number of reward units %v) using old level",
+			res.RewardsLevel, rewardsRate, totalRewardUnits)
 		return
 	}
 
@@ -519,7 +526,14 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 		if err != nil {
 			return crypto.Digest{}, err
 		}
-		return tree.Root(), nil
+		// in case there are no leaves (e.g empty block with 0 txns) the merkle root is a slice with length of 0.
+		// Here we convert the empty slice to a 32-bytes of zeros. this conversion is okay because this merkle
+		// tree uses sha512_256 function. for this function the pre-image of [0x0...0x0] is not known
+		// (it might not be the cases for a different hash function)
+		rootSlice := tree.Root()
+		var rootAsByteArray crypto.Digest
+		copy(rootAsByteArray[:], rootSlice)
+		return rootAsByteArray, nil
 	default:
 		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}

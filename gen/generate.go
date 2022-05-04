@@ -27,6 +27,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -243,6 +244,9 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						errorsChannel <- err
 						return
 					}
+					if verbose {
+						verbosedOutput <- fmt.Sprintf("Generating %s's keys for a period of %d rounds", wallet.Name, basics.Round(lastWalletValid).SubSaturate(basics.Round(firstWalletValid)))
+					}
 
 					part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
 					if err != nil {
@@ -252,7 +256,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						return
 					}
 					if verbose {
-						verbosedOutput <- fmt.Sprintf("Created new partkey: %s", pfilename)
+						verbosedOutput <- fmt.Sprintf("participation key generation for %s completed successfully", wallet.Name)
 					}
 					atomic.AddInt64(&partKeyCreated, 1)
 				}
@@ -267,6 +271,9 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 				data.VoteFirstValid = part.FirstValid
 				data.VoteLastValid = part.LastValid
 				data.VoteKeyDilution = part.KeyDilution
+				if protoParams.EnableStateProofKeyregCheck {
+					data.StateProofID = *part.StateProofVerifier()
+				}
 			}
 
 			writeMu.Lock()
@@ -295,6 +302,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 		}()
 	}
 
+	createStart := time.Now()
 	creatingWalletsWaitGroup.Add(concurrentWalletGenerators)
 	for routinesCounter := 0; routinesCounter < concurrentWalletGenerators; routinesCounter++ {
 		go createWallet()
@@ -368,8 +376,9 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	jsonData := protocol.EncodeJSON(g)
 	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
 
-	if (!verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
-		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
+	if (verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
+		fmt.Printf("Created %d new rootkeys and %d new partkeys in %s.\n", rootKeyCreated, partKeyCreated, time.Since(createStart))
+		fmt.Printf("NOTICE: Participation keys are valid for a period of %d rounds. After this many rounds the network will stall unless new keys are registered.\n", lastWalletValid-firstWalletValid)
 	}
 
 	return

@@ -80,6 +80,18 @@ type Account struct {
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
+
+	// The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.
+	TotalAppsOptedIn uint64 `json:"total-apps-opted-in"`
+
+	// The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
+	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
+
+	// The count of all apps (AppParams objects) created by this account.
+	TotalCreatedApps uint64 `json:"total-created-apps"`
+
+	// The count of all assets (AssetParams objects) created by this account.
+	TotalCreatedAssets uint64 `json:"total-created-assets"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
@@ -87,6 +99,9 @@ type AccountParticipation struct {
 
 	// \[sel\] Selection public key (if any) currently registered for this round.
 	SelectionParticipationKey []byte `json:"selection-participation-key"`
+
+	// \[stprf\] Root of the state proof key (if any)
+	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
 
 	// \[voteFst\] First round for which this participation is valid.
 	VoteFirstValid uint64 `json:"vote-first-valid"`
@@ -190,9 +205,6 @@ type AssetHolding struct {
 
 	// Asset ID of the holding.
 	AssetId uint64 `json:"asset-id"`
-
-	// Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.
-	Creator string `json:"creator"`
 
 	// \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
@@ -311,17 +323,20 @@ type DryrunTxnResult struct {
 	Disassembly []string `json:"disassembly"`
 
 	// Application state delta.
-	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
-	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
-	Logs             *[][]byte            `json:"logs,omitempty"`
+	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
+
+	// Disassembled lsig program line by line.
+	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
+	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
+	Logs                *[][]byte      `json:"logs,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
-	Data    *string `json:"data,omitempty"`
-	Message string  `json:"message"`
+	Data    *map[string]interface{} `json:"data,omitempty"`
+	Message string                  `json:"message"`
 }
 
 // EvalDelta defines model for EvalDelta.
@@ -520,6 +535,40 @@ type TxId string
 // TxType defines model for tx-type.
 type TxType string
 
+// AccountApplicationResponse defines model for AccountApplicationResponse.
+type AccountApplicationResponse struct {
+
+	// Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// Stores the global information associated with an application.
+	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
+// AccountAssetResponse defines model for AccountAssetResponse.
+type AccountAssetResponse struct {
+
+	// Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
+
+	// AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
+
+	// The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
 // AccountResponse defines model for AccountResponse.
 type AccountResponse Account
 
@@ -560,6 +609,13 @@ type CompileResponse struct {
 	Hash string `json:"hash"`
 
 	// base64 encoded program bytes
+	Result string `json:"result"`
+}
+
+// DisassembleResponse defines model for DisassembleResponse.
+type DisassembleResponse struct {
+
+	// disassembled Teal code
 	Result string `json:"result"`
 }
 
@@ -654,6 +710,11 @@ type PostTransactionsResponse struct {
 // ProofResponse defines model for ProofResponse.
 type ProofResponse struct {
 
+	// The type of hash function used to create the proof, must be one of:
+	// * sumhash
+	// * sha512_256
+	Hashtype string `json:"hashtype"`
+
 	// Index of the transaction in the block's payset.
 	Idx uint64 `json:"idx"`
 
@@ -662,6 +723,9 @@ type ProofResponse struct {
 
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // SupplyResponse defines model for SupplyResponse.
@@ -709,6 +773,23 @@ type VersionsResponse Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+
+	// When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
+	Exclude *string `json:"exclude,omitempty"`
+}
+
+// AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
+type AccountApplicationInformationParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+}
+
+// AccountAssetInformationParams defines parameters for AccountAssetInformation.
+type AccountAssetInformationParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`

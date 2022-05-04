@@ -160,7 +160,7 @@ type OneTimeSignatureSecretsPersistent struct {
 	// FirstOffset denotes the first offset whose subkey appears in Offsets.
 	// These subkeys correspond to batch FirstBatch-1.
 	FirstOffset uint64            `codec:"firstoff"`
-	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=-"`
+	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=-"` // the bound is keyDilution
 
 	// When Offsets is non-empty, OffsetsPK2 is the intermediate-level public
 	// key that can be used to verify signatures on the subkeys in Offsets, and
@@ -211,7 +211,7 @@ func GenerateOneTimeSignatureSecretsRNG(startBatch uint64, numBatches uint64, rn
 		batchnum := startBatch + i
 
 		newid := OneTimeSignatureSubkeyBatchID{SubKeyPK: pk, Batch: batchnum}
-		newsig := ed25519Sign(ephemeralSec, hashRep(newid))
+		newsig := ed25519Sign(ephemeralSec, HashRep(newid))
 
 		subkeys[i] = ephemeralSubkey{
 			PK:       pk,
@@ -253,7 +253,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 	// Check if we already have a partial batch of subkeys.
 	if id.Batch+1 == s.FirstBatch && id.Offset >= s.FirstOffset && id.Offset-s.FirstOffset < uint64(len(s.Offsets)) {
 		offidx := id.Offset - s.FirstOffset
-		sig := ed25519Sign(s.Offsets[offidx].SK, hashRep(message))
+		sig := ed25519Sign(s.Offsets[offidx].SK, HashRep(message))
 		return OneTimeSignature{
 			Sig:    sig,
 			PK:     s.Offsets[offidx].PK,
@@ -268,7 +268,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 		// Since we have not yet broken out this batch into per-offset keys,
 		// generate a fresh subkey right away, sign it, and use it.
 		pk, sk := ed25519GenerateKeyRNG(s.getRNG())
-		sig := ed25519Sign(sk, hashRep(message))
+		sig := ed25519Sign(sk, HashRep(message))
 
 		batchidx := id.Batch - s.FirstBatch
 		pksig := s.Batches[batchidx].PKSigNew
@@ -281,7 +281,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 		return OneTimeSignature{
 			Sig:    sig,
 			PK:     pk,
-			PK1Sig: ed25519Sign(s.Batches[batchidx].SK, hashRep(pk1id)),
+			PK1Sig: ed25519Sign(s.Batches[batchidx].SK, HashRep(pk1id)),
 			PK2:    s.Batches[batchidx].PK,
 			PK2Sig: pksig,
 		}
@@ -308,7 +308,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
 //
 // It returns true if this is the case; otherwise, it returns false.
-func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature) bool {
+func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message Hashable, sig OneTimeSignature, batchVersionCompatible bool) bool {
 	offsetID := OneTimeSignatureSubkeyOffsetID{
 		SubKeyPK: sig.PK,
 		Batch:    id.Batch,
@@ -319,13 +319,21 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
-	if !ed25519Verify(ed25519PublicKey(v), hashRep(batchID), sig.PK2Sig) {
+	if batchVersionCompatible {
+		return batchVerificationImpl(
+			[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
+			[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
+			[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
+		)
+	}
+
+	if !ed25519Verify(ed25519PublicKey(v), HashRep(batchID), sig.PK2Sig, batchVersionCompatible) {
 		return false
 	}
-	if !ed25519Verify(batchID.SubKeyPK, hashRep(offsetID), sig.PK1Sig) {
+	if !ed25519Verify(batchID.SubKeyPK, HashRep(offsetID), sig.PK1Sig, batchVersionCompatible) {
 		return false
 	}
-	if !ed25519Verify(offsetID.SubKeyPK, hashRep(message), sig.Sig) {
+	if !ed25519Verify(offsetID.SubKeyPK, HashRep(message), sig.Sig, batchVersionCompatible) {
 		return false
 	}
 	return true
@@ -391,7 +399,7 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 	s.FirstOffset = current.Offset
 	for off := current.Offset; off < numKeysPerBatch; off++ {
 		pk, sk := ed25519GenerateKeyRNG(s.getRNG())
-		pksig := ed25519Sign(s.Batches[0].SK, hashRep(OneTimeSignatureSubkeyOffsetID{
+		pksig := ed25519Sign(s.Batches[0].SK, HashRep(OneTimeSignatureSubkeyOffsetID{
 			SubKeyPK: pk,
 			Batch:    current.Batch,
 			Offset:   off,

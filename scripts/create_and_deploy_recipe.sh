@@ -20,6 +20,7 @@
 #           directory as the recipe file path.
 
 set -e
+set -x
 
 if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
     echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY for this to work"
@@ -27,7 +28,8 @@ if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
 fi
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-export GOPATH=$(go env GOPATH)
+GOPATH=$(go env GOPATH)
+export GOPATH=${GOPATH%:*}
 
 # Anchor our repo root reference location
 REPO_ROOT=${SCRIPTPATH}/..

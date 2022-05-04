@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -115,7 +115,7 @@ type Local struct {
 	// SRV-based phonebook
 	DNSBootstrapID string `version[0]:"<network>.algorand.network"`
 
-	// Log file size limit in bytes
+	// Log file size limit in bytes. When set to 0 logs will be written to stdout.
 	LogSizeLimit uint64 `version[0]:"1073741824"`
 
 	// text/template for creating log archive filename.
@@ -430,6 +430,20 @@ type Local struct {
 	// The http server does not accept new connections as long we have this many
 	// (hard limit) connections already.
 	RestConnectionsHardLimit uint64 `version[20]:"2048"`
+
+	// MaxAPIResourcesPerAccount sets the maximum total number of resources (created assets, created apps,
+	// asset holdings, and application local state) per account that will be allowed in AccountInformation
+	// REST API responses before returning a 400 Bad Request. Set zero for no limit.
+	MaxAPIResourcesPerAccount uint64 `version[21]:"100000"`
+
+	// AgreementIncomingVotesQueueLength sets the size of the buffer holding incoming votes.
+	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000"`
+
+	// AgreementIncomingProposalsQueueLength sets the size of the buffer holding incoming proposals.
+	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25"`
+
+	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
+	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -460,11 +474,19 @@ func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
 	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)
 }
 
-// SaveToDisk writes the Local settings into a root/ConfigFilename file
+// SaveToDisk writes the non-default Local settings into a root/ConfigFilename file
 func (cfg Local) SaveToDisk(root string) error {
 	configpath := filepath.Join(root, ConfigFilename)
 	filename := os.ExpandEnv(configpath)
 	return cfg.SaveToFile(filename)
+}
+
+// SaveAllToDisk writes the all Local settings into a root/ConfigFilename file
+func (cfg Local) SaveAllToDisk(root string) error {
+	configpath := filepath.Join(root, ConfigFilename)
+	filename := os.ExpandEnv(configpath)
+	prettyPrint := true
+	return codecs.SaveObjectToFile(filename, cfg, prettyPrint)
 }
 
 // SaveToFile saves the config to a specific filename, allowing overriding the default name

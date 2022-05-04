@@ -127,6 +127,7 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 		return fmt.Errorf("TxSyncer.Sync: peer '%v' error '%v'", client.Address(), err)
 	}
 
+	var pendingTxidMap map[transactions.Txid]struct{}
 	// test to see if all the transaction that we've received honor the bloom filter constraints
 	// that we've requested.
 	for _, txgroup := range txgroups {
@@ -134,11 +135,23 @@ func (syncer *TxSyncer) syncFromClient(client TxSyncClient) error {
 		for i := range txgroup {
 			txID := txgroup[i].ID()
 			if filter.Test(txID[:]) {
-				// we just found a transaction that shouldn't have been
-				// included in the response.  maybe this is a false positive
-				// and other transactions in the group aren't included in the
-				// bloom filter, though.
-				txnsInFilter++
+				// having the transaction id tested here might still fall into the false-positive class, so we
+				// need to perform explicit check. This is not too bad since we're doing this check only on the fail
+				// cases.
+				if pendingTxidMap == nil {
+					// construct and initialize it.
+					pendingTxidMap = make(map[transactions.Txid]struct{}, len(pending))
+					for _, txid := range pending {
+						pendingTxidMap[txid] = struct{}{}
+					}
+				}
+				if _, has := pendingTxidMap[txID]; has {
+					// we just found a transaction that shouldn't have been
+					// included in the response.  maybe this is a false positive
+					// and other transactions in the group aren't included in the
+					// bloom filter, though.
+					txnsInFilter++
+				}
 			}
 		}
 

@@ -64,6 +64,7 @@ var (
 	mnemonic           string
 	dumpOutFile        string
 	listAccountInfo    bool
+	onlyShowAssetIds   bool
 )
 
 func init() {
@@ -126,6 +127,7 @@ func init() {
 	// Info flags
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
 	infoCmd.MarkFlagRequired("address")
+	infoCmd.Flags().BoolVar(&onlyShowAssetIds, "onlyShowAssetIds", false, "Only show ASA IDs and not pull asset metadata")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -159,7 +161,7 @@ func init() {
 	addParticipationKeyCmd.Flags().Uint64VarP(&roundLastValid, "roundLastValid", "", 0, "The last round for which the generated partkey will be valid")
 	addParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	addParticipationKeyCmd.Flags().StringVarP(&partKeyOutDir, "outdir", "o", "", "Save participation key file to specified output directory to (for offline creation)")
-	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
+	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys (defaults to sqrt of validity window)")
 
 	// installParticipationKey flags
 	installParticipationKeyCmd.Flags().StringVar(&partKeyFile, "partkey", "", "Participation key file to install")
@@ -394,7 +396,7 @@ var newMultisigCmd = &cobra.Command{
 			}
 		}
 		if duplicatesDetected {
-			reportWarnln(warnMultisigDuplicatesDetected)
+			reportWarnRawln(warnMultisigDuplicatesDetected)
 		}
 		// Generate a new address in the default wallet
 		addr, err := client.CreateMultisigAccount(wh, threshold, args)
@@ -483,7 +485,7 @@ var listCmd = &cobra.Command{
 
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
-			response, _ := client.AccountInformationV2(addr.Addr)
+			response, _ := client.AccountInformationV2(addr.Addr, true)
 			// it's okay to proceed without algod info
 
 			// Display this information to the user
@@ -500,7 +502,7 @@ var listCmd = &cobra.Command{
 			}
 
 			if listAccountInfo {
-				hasError := printAccountInfo(client, addr.Addr, response)
+				hasError := printAccountInfo(client, addr.Addr, false, response)
 				accountInfoError = accountInfoError || hasError
 			}
 		}
@@ -519,19 +521,19 @@ var infoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, true)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		hasError := printAccountInfo(client, accountAddress, response)
+		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIds, response)
 		if hasError {
 			os.Exit(1)
 		}
 	},
 }
 
-func printAccountInfo(client libgoal.Client, address string, account generatedV2.Account) bool {
+func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account generatedV2.Account) bool {
 	var createdAssets []generatedV2.Asset
 	if account.CreatedAssets != nil {
 		createdAssets = make([]generatedV2.Asset, len(*account.CreatedAssets))
@@ -611,6 +613,10 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, assetHolding := range heldAssets {
+		if onlyShowAssetIds {
+			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetId)
+			continue
+		}
 		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
 		if err != nil {
 			hasError = true
@@ -713,7 +719,7 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -758,7 +764,7 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -877,11 +883,19 @@ var addParticipationKeyCmd = &cobra.Command{
 		// Generate a participation keys database and install it
 		client := ensureFullClient(dataDir)
 
-		_, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+		reportInfof("Please stand by while generating keys. This might take a few minutes...")
+
+		var err error
+		participationGen := func() {
+			_, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+		}
+
+		util.RunFuncWithSpinningCursor(participationGen)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		fmt.Println("Participation key generation successful")
+
+		reportInfof("Participation key generation successful")
 	},
 }
 
@@ -964,11 +978,21 @@ var renewParticipationKeyCmd = &cobra.Command{
 
 func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
-	part, keyPath, err := client.GenParticipationKeysTo(address, currentRound, keyLastValidRound, dilution, "")
-	if err != nil {
-		return fmt.Errorf(errorRequestFail, err)
+	var part algodAcct.Participation
+	var keyPath string
+	var err error
+	genFunc := func() {
+		part, keyPath, err = client.GenParticipationKeysTo(address, currentRound, keyLastValidRound, dilution, "")
+		if err != nil {
+			err = fmt.Errorf(errorRequestFail, err)
+		}
+		fmt.Println("Participation key generation successful")
 	}
-	fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, keyLastValidRound)
+	fmt.Println("Please stand by while generating keys. This might take a few minutes...")
+	util.RunFuncWithSpinningCursor(genFunc)
+	if err != nil {
+		return err
+	}
 
 	// Now register it as our new online participation key
 	goOnline := true
@@ -1449,8 +1473,9 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
-				// PKI TODO: enable with state proof support.
-				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
+				if part.Key.StateProofKey != nil {
+					fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+				}
 			}
 		})
 	},

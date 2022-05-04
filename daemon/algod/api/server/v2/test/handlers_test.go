@@ -30,9 +30,11 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -122,7 +124,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	l := handler.Node.Ledger()
+	l := handler.Node.LedgerForAPI()
 
 	genBlk, err := l.Block(0)
 	require.NoError(t, err)
@@ -167,7 +169,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, l.Latest(), totalsRound)
 	totalRewardUnits := totals.RewardUnits()
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	require.NoError(t, err)
 
 	var blk bookkeeping.Block
@@ -177,7 +179,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 		Round:        l.Latest() + 1,
 		Branch:       genBlk.Hash(),
 		TimeStamp:    0,
-		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: genBlk.UpgradeState,
 	}
 
@@ -194,7 +196,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	blk.TxnRoot, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
-	err = l.AddBlock(blk, agreement.Certificate{})
+	err = l.(*data.Ledger).AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
@@ -549,6 +551,68 @@ func TestTealCompile(t *testing.T) {
 	tealCompileTest(t, badProgramBytes, 400, true)
 }
 
+func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
+	expectedString string, enableDeveloperAPI bool,
+) (response generatedV2.DisassembleResponse) {
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(program))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := handler.TealDisassemble(c)
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+
+	if rec.Code == 200 {
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Equal(t, expectedString, response.Result)
+	} else if rec.Code == 400 {
+		var response generatedV2.ErrorResponse
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Contains(t, response.Message, expectedString)
+	}
+	return
+}
+
+func TestTealDisassemble(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// nil program works, but results in invalid version text.
+	testProgram := []byte{}
+	tealDisassembleTest(t, testProgram, 200, "// invalid version\n", true)
+
+	// Test a valid program.
+	for ver := 1; ver < logic.AssemblerMaxVersion; ver++ {
+		goodProgram := `int 1`
+		ops, _ := logic.AssembleStringWithVersion(goodProgram, uint64(ver))
+		disassembledProgram, _ := logic.Disassemble(ops.Program)
+		tealDisassembleTest(t, ops.Program, 200, disassembledProgram, true)
+	}
+	// Test a nil program without the developer API flag.
+	tealDisassembleTest(t, testProgram, 404, "", false)
+
+	// Test bad program
+	badProgram := []byte{1, 99}
+	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+}
+
 func tealDryrunTest(
 	t *testing.T, obj *generatedV2.DryrunRequest, format string,
 	expCode int, expResult string, enableDeveloperAPI bool,
@@ -690,9 +754,15 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	t.Run("Happy path", func(t *testing.T) {
 		// Create test object to append.
-		keys := make(account.StateProofKeys)
-		keys[100] = []byte{100}
-		keys[101] = []byte{101}
+		keys := make(account.StateProofKeys, 2)
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
+
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
+
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
@@ -709,8 +779,12 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 		require.Equal(t, id, mockNode.id)
 		require.Len(t, mockNode.keys, 2)
-		require.Equal(t, mockNode.keys[100], keys[100])
-		require.Equal(t, mockNode.keys[101], keys[101])
+		require.Equal(t, mockNode.keys[0].Round, keys[0].Round)
+		require.Equal(t, mockNode.keys[0].Key, keys[0].Key)
+
+		require.Equal(t, mockNode.keys[1].Round, keys[1].Round)
+		require.Equal(t, mockNode.keys[1].Key, keys[1].Key)
+
 	})
 
 	t.Run("Invalid body", func(t *testing.T) {
@@ -731,7 +805,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	t.Run("Empty body", func(t *testing.T) {
 		// Create test object with no keys to append.
-		keys := make(account.StateProofKeys)
+		keys := make(account.StateProofKeys, 0)
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.
@@ -759,9 +833,15 @@ func TestAppendParticipationKeys(t *testing.T) {
 			Shutdown: make(chan struct{}),
 		}
 
-		keys := make(account.StateProofKeys)
-		keys[100] = []byte{100}
-		keys[101] = []byte{101}
+		keys := make(account.StateProofKeys, 2)
+		testKey1 := crypto.FalconSigner{}
+		testKey1.PrivateKey[0] = 100
+
+		testKey2 := crypto.FalconSigner{}
+		testKey2.PrivateKey[0] = 101
+
+		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
+		keys[1] = merklesignature.KeyRoundPair{Round: 101, Key: &testKey2}
 		keyBytes := protocol.Encode(keys)
 
 		// Put keys in the body.

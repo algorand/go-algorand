@@ -59,7 +59,7 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
@@ -69,6 +69,12 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 
 	template, err := loadTemplate(templateFile)
 	if err == nil {
+		if overrideDevMode {
+			template.Genesis.DevMode = true
+			if len(template.Nodes) > 0 {
+				template.Nodes[0].IsRelay = false
+			}
+		}
 		err = template.Validate()
 	}
 	if err != nil {
@@ -265,8 +271,8 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 	var relayAddress string
 	var err error
 	for _, relayDir := range n.cfg.RelayDirs {
-		nodeFulllPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		nodeFullPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:    redirectOutput,
 			ExitErrorCallback: n.nodeExitCallback,
@@ -457,16 +463,16 @@ func (n Network) Delete(binDir string) error {
 // any of the nodes starts
 func (n Network) SetConsensus(binDir string, consensus config.ConsensusProtocols) error {
 	for _, relayDir := range n.cfg.RelayDirs {
-		relayFulllPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)
+		relayFullPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err
 		}
 	}
 	for _, nodeDir := range n.nodeDirs {
-		nodeFulllPath := n.getNodeFullPath(nodeDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		nodeFullPath := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err

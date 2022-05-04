@@ -58,6 +58,7 @@ func init() {
 	assetCmd.AddCommand(sendAssetCmd)
 	assetCmd.AddCommand(infoAssetCmd)
 	assetCmd.AddCommand(freezeAssetCmd)
+	assetCmd.AddCommand(optinAssetCmd)
 
 	assetCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
 
@@ -116,12 +117,18 @@ func init() {
 	freezeAssetCmd.MarkFlagRequired("account")
 	freezeAssetCmd.MarkFlagRequired("freeze")
 
+	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being accepted")
+	optinAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being accepted")
+	optinAssetCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to opt in to using the asset (if not specified, uses default account)")
+	optinAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
+
 	// Add common transaction flags to all txn-generating asset commands
 	addTxnFlags(createAssetCmd)
 	addTxnFlags(destroyAssetCmd)
 	addTxnFlags(configAssetCmd)
 	addTxnFlags(sendAssetCmd)
 	addTxnFlags(freezeAssetCmd)
+	addTxnFlags(optinAssetCmd)
 
 	infoAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "DEPRECATED! Unit name of the asset to look up")
@@ -529,10 +536,6 @@ var sendAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
@@ -541,9 +544,15 @@ var sendAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
+
 		tx, err = client.FillUnsignedTxTemplate(sender, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		if outFilename == "" {
@@ -657,6 +666,81 @@ func assetDecimalsFmt(amount uint64, decimals uint32) string {
 		pow *= 10
 	}
 	return fmt.Sprintf("%d.%0*d", amount/pow, decimals, amount%pow)
+}
+
+var optinAssetCmd = &cobra.Command{
+	Use:   "optin",
+	Short: "Optin to assets",
+	Long:  "Opt in to receive a new asset. An account will begin accepting an asset by issuing a zero-amount asset transfer to itself.",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		checkTxValidityPeriodCmdFlags(cmd)
+
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+		accountList := makeAccountsList(dataDir)
+		// Opt in txns are always 0
+		const xferAmount uint64 = 0
+
+		creatorResolved := accountList.getAddressByName(assetCreator)
+
+		lookupAssetID(cmd, creatorResolved, client)
+
+		// Check if from was specified, else use default
+		if account == "" {
+			account = accountList.getDefaultAccount()
+		}
+		tx, err := client.MakeUnsignedAssetSendTx(assetID, xferAmount, account, "", "")
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		tx.Note = parseNoteField(cmd)
+		tx.Lease = parseLease(cmd)
+
+		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		if err != nil {
+			reportErrorf("Cannot determine last valid round: %s", err)
+		}
+
+		tx, err = client.FillUnsignedTxTemplate(account, firstValid, lastValid, fee, tx)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
+		}
+
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
+
+		if outFilename == "" {
+			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
+			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
+			if err != nil {
+				reportErrorf(errorSigningTX, err)
+			}
+
+			txid, err := client.BroadcastTransaction(signedTxn)
+			if err != nil {
+				reportErrorf(errorBroadcastingTX, err)
+			}
+
+			// Report tx details to user
+			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
+
+			if !noWaitAfterSend {
+				_, err = waitForCommit(client, txid, lastValid)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+			}
+		} else {
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+		}
+	},
 }
 
 var infoAssetCmd = &cobra.Command{

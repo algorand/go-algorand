@@ -87,19 +87,23 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 	blk.BlockHeader.GenesisID = "test"
 	blk.FeeSink = testSinkAddr
 	blk.RewardsPool = testPoolAddr
-
 	crypto.RandBytes(blk.BlockHeader.GenesisHash[:])
 
-	addrs := []basics.Address{}
-	keys := []*crypto.SignatureSecrets{}
+	addrs := make([]basics.Address, 0, naccts)
+	keys := make([]*crypto.SignatureSecrets, 0, naccts)
 	accts := make(map[basics.Address]basics.AccountData)
 
 	// 10 billion microalgos, across N accounts and pool and sink
 	amount := 10 * 1000000000 * 1000000 / uint64(naccts+2)
 
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
 	for i := 0; i < naccts; i++ {
-		var seed crypto.Seed
-		crypto.RandBytes(seed[:])
+		seed[0] = byte(i)
+		seed[1] = byte(i >> 8)
+		seed[2] = byte(i >> 16)
+		seed[3] = byte(i >> 24)
+
 		key := crypto.GenerateSignatureSecrets(seed)
 		addr := basics.Address(key.SignatureVerifier)
 

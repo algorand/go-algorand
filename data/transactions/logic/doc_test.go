@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,26 +33,15 @@ func TestOpDocs(t *testing.T) {
 		opsSeen[op.Name] = false
 	}
 	for name := range opDocByName {
-		_, exists := opsSeen[name]
-		if !exists {
-			t.Errorf("error: doc for op %#v that does not exist in OpSpecs", name)
-		}
+		assert.Contains(t, opsSeen, name, "opDocByName contains strange opcode %#v", name)
 		opsSeen[name] = true
 	}
 	for op, seen := range opsSeen {
-		if !seen {
-			t.Errorf("error: doc for op %#v missing from opDocByName", op)
-		}
+		assert.True(t, seen, "opDocByName is missing doc for %#v", op)
 	}
 
-	require.Len(t, txnFieldDocs, len(TxnFieldNames))
 	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
-	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
-	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
-	require.Len(t, assetParamsFieldDocs, len(AssetParamsFieldNames))
-	require.Len(t, appParamsFieldDocs, len(AppParamsFieldNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
-	require.Len(t, EcdsaCurveDocs, len(EcdsaCurveNames))
 }
 
 // TestDocStragglers confirms that we don't have any docs laying
@@ -80,7 +70,7 @@ func TestOpGroupCoverage(t *testing.T) {
 		for _, name := range names {
 			_, exists := opsSeen[name]
 			if !exists {
-				t.Errorf("error: op %#v in group list but not in OpSpecs\n", name)
+				t.Errorf("op %#v in group list but not in OpSpecs\n", name)
 				continue
 			}
 			opsSeen[name] = true
@@ -88,7 +78,7 @@ func TestOpGroupCoverage(t *testing.T) {
 	}
 	for name, seen := range opsSeen {
 		if !seen {
-			t.Errorf("warning: op %#v not in any group of OpGroups\n", name)
+			t.Errorf("op %#v not in any group of OpGroups\n", name)
 		}
 	}
 }
@@ -115,14 +105,14 @@ func TestAllImmediatesDocumented(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for _, op := range OpSpecs {
-		count := len(op.Details.Immediates)
+		count := len(op.OpDetails.Immediates)
 		note := OpImmediateNote(op.Name)
-		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
+		if count == 1 && op.OpDetails.Immediates[0].kind >= immBytes {
 			// More elaborate than can be checked by easy count.
-			require.NotEmpty(t, note)
+			assert.NotEmpty(t, note)
 			continue
 		}
-		require.Equal(t, count, strings.Count(note, "{"), "%s immediates doc is wrong", op.Name)
+		assert.Equal(t, count, strings.Count(note, "{"), "opcodeImmediateNotes for %s is wrong", op.Name)
 	}
 }
 
@@ -140,12 +130,12 @@ func TestOpAllCosts(t *testing.T) {
 
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
-	require.Equal(t, 1, a[0].Cost)
+	require.Equal(t, "1", a[0].Cost)
 
 	a = OpAllCosts("sha256")
 	require.Len(t, a, 2)
 	for _, cost := range a {
-		require.True(t, cost.Cost > 1)
+		require.True(t, cost.Cost != "0")
 	}
 }
 
@@ -157,21 +147,4 @@ func TestOnCompletionDescription(t *testing.T) {
 
 	desc = OnCompletionDescription(100)
 	require.Equal(t, "invalid constant value", desc)
-}
-
-func TestFieldDocs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	txnFields := TxnFieldDocs()
-	require.Greater(t, len(txnFields), 0)
-
-	globalFields := GlobalFieldDocs()
-	require.Greater(t, len(globalFields), 0)
-
-	doc := globalFields["MinTxnFee"]
-	require.NotContains(t, doc, "LogicSigVersion >= 2")
-
-	doc = globalFields["Round"]
-	require.Contains(t, doc, "LogicSigVersion >= 2")
-
 }

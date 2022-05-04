@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // CreatablesInfo has information about created assets, apps and opting in
@@ -229,12 +230,24 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (fundingRequi
 		runningRequiredBalance += assetCost
 	}
 	if cfg.NumApp > 0 {
-		creationCost := uint64(cfg.NumApp) * proto.AppFlatParamsMinBalance * uint64(proto.MaxAppsCreated)
-		optInCost := uint64(cfg.NumApp) * proto.AppFlatOptInMinBalance * uint64(proto.MaxAppsOptedIn)
+		maxAppsCreated := proto.MaxAppsCreated
+		maxAppsOptedIn := proto.MaxAppsOptedIn
+		// TODO : given that we've added unlimited app support, we should revise this
+		// code so that we'll have control on how many app/account we want to create.
+		// for now, I'm going to keep the previous max values until we have refactored this code.
+		if maxAppsCreated == 0 {
+			maxAppsCreated = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+		}
+		if maxAppsOptedIn == 0 {
+			maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
+		}
+
+		creationCost := uint64(cfg.NumApp) * proto.AppFlatParamsMinBalance * uint64(maxAppsCreated)
+		optInCost := uint64(cfg.NumApp) * proto.AppFlatOptInMinBalance * uint64(maxAppsOptedIn)
 		maxGlobalSchema := basics.StateSchema{NumUint: proto.MaxGlobalSchemaEntries, NumByteSlice: proto.MaxGlobalSchemaEntries}
 		maxLocalSchema := basics.StateSchema{NumUint: proto.MaxLocalSchemaEntries, NumByteSlice: proto.MaxLocalSchemaEntries}
-		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsCreated) +
-			maxLocalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsOptedIn))
+		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(&proto).Raw*uint64(maxAppsCreated) +
+			maxLocalSchema.MinBalance(&proto).Raw*uint64(maxAppsOptedIn))
 		fundingRequiredBalance += creationCost + optInCost + schemaCost
 		runningRequiredBalance += creationCost + optInCost + schemaCost
 	}
@@ -870,7 +883,7 @@ func (pps *WorkerState) sendFromTo(
 			timeCredit -= took
 			if timeCredit > 0 {
 				time.Sleep(timeCredit)
-				timeCredit = time.Duration(0)
+				timeCredit -= time.Since(now)
 			} else if timeCredit < -1000*time.Millisecond {
 				// cap the "time debt" to 1000 ms.
 				timeCredit = -1000 * time.Millisecond
@@ -1220,7 +1233,7 @@ func (t *throttler) maybeSleep(count int) {
 		desiredSeconds := float64(countsum) / t.xps
 		extraSeconds := desiredSeconds - dt.Seconds()
 		t.iterm += 0.1 * extraSeconds / float64(len(t.times))
-		time.Sleep(time.Duration(int64(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times)))))
+		util.NanoSleep(time.Duration(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times))))
 
 	} else {
 		t.iterm *= 0.95

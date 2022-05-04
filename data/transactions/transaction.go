@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -180,6 +181,19 @@ func (tx Transaction) ID() Txid {
 	return Txid(crypto.Hash(enc))
 }
 
+// InnerID returns something akin to Txid, but folds in the parent Txid and the
+// index of the inner call.
+func (tx Transaction) InnerID(parent Txid, index int) Txid {
+	input := append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...)
+	input = append(input, parent[:]...)
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(index))
+	input = append(input, buf...)
+	enc := tx.MarshalMsg(input)
+	defer protocol.PutEncodingBuf(enc)
+	return Txid(crypto.Hash(enc))
+}
+
 // Sign signs a transaction using a given Account's secrets.
 func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 	sig := secrets.Sign(tx)
@@ -262,6 +276,11 @@ var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tr
 var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
 var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
 var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
+var errKeyRegEmptyStateProofPK = errors.New("online keyreg transaction cannot have empty field StateProofPK")
+var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofPK should be empty in this consensus version")
+var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
+var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
+var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -318,6 +337,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		}
 
+		if err := tx.stateProofPKWellFormed(proto); err != nil {
+			return err
+		}
+
 	case protocol.AssetConfigTx:
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
@@ -353,6 +376,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
 			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
 				return fmt.Errorf("programs may only be specified during application creation or update")
+			}
+		} else {
+			// This will check version matching, but not downgrading. That
+			// depends on chain state (so we pass an empty AppParams)
+			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{}, &proto)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -405,11 +435,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		// Limit the sum of all types of references that bring in account records
 		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTotalTxnReferences {
-			return fmt.Errorf("tx has too many references, max is %d", proto.MaxAppTotalTxnReferences)
+			return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
 		}
 
 		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
-			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
+			return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
 		}
 
 		lap := len(tx.ApprovalProgram)
@@ -547,6 +577,44 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	return nil
 }
 
+func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
+	isEmpty := tx.KeyregTxnFields.StateProofPK.IsEmpty()
+	if !proto.EnableStateProofKeyregCheck {
+		// make certain empty key is stored.
+		if !isEmpty {
+			return errKeyregTxnNotEmptyStateProofPK
+		}
+		return nil
+	}
+
+	if proto.MaxKeyregValidPeriod != 0 && uint64(tx.VoteLast.SubSaturate(tx.VoteFirst)) > proto.MaxKeyregValidPeriod {
+		return errKeyRegTxnValidityPeriodTooLong
+	}
+
+	if tx.Nonparticipation {
+		// make certain that set offline request clears the stateProofPK.
+		if !isEmpty {
+			return errKeyregTxnNonParticipantShouldBeEmptyStateProofPK
+		}
+		return nil
+	}
+
+	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
+		if !isEmpty {
+			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
+		}
+		return nil
+	}
+
+	// online transactions:
+	// setting online cannot set an empty stateProofPK
+	if isEmpty {
+		return errKeyRegEmptyStateProofPK
+	}
+
+	return nil
+}
+
 // Aux returns the note associated with this transaction
 func (tx Header) Aux() []byte {
 	return tx.Note
@@ -631,6 +699,63 @@ type TxnContext interface {
 	ConsensusProtocol() config.ConsensusParams
 	GenesisID() string
 	GenesisHash() crypto.Digest
+}
+
+// ProgramVersion extracts the version of an AVM program from its bytecode
+func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
+	if len(bytecode) == 0 {
+		return 0, 0, errors.New("invalid program (empty)")
+	}
+	version, vlen := binary.Uvarint(bytecode)
+	if vlen <= 0 {
+		return 0, 0, errors.New("invalid version")
+	}
+	return version, vlen, nil
+}
+
+// syncProgramsVersion is version of AVM programs that are required to have
+// matching versions between approval and clearstate.
+const syncProgramsVersion = 6
+
+// CheckContractVersions ensures that for v6 and higher two programs are version
+// matched, and that they are not a downgrade.  If proto.AllowV4InnerAppls, then
+// no downgrades are allowed, regardless of version.
+func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParams) error {
+	av, _, err := ProgramVersion(approval)
+	if err != nil {
+		return fmt.Errorf("bad ApprovalProgram: %v", err)
+	}
+	cv, _, err := ProgramVersion(clear)
+	if err != nil {
+		return fmt.Errorf("bad ClearStateProgram: %v", err)
+	}
+	if av >= syncProgramsVersion || cv >= syncProgramsVersion {
+		if av != cv {
+			return fmt.Errorf("program version mismatch: %d != %d", av, cv)
+		}
+	}
+	// The downgrade check ensures that if app A opts its account into app B
+	// (which requires B's CSP to be a callable version), the CSP will STAY
+	// callable. That way, A can certainly ClearState its account out of B.
+	if len(previous.ApprovalProgram) != 0 { // in creation and in call from WellFormed() previous is empty
+		pav, _, err := ProgramVersion(previous.ApprovalProgram)
+		if err != nil {
+			return err
+		}
+		if pav >= proto.MinInnerApplVersion && av < pav {
+			return fmt.Errorf("approval program version downgrade: %d < %d", av, pav)
+		}
+	}
+	if len(previous.ClearStateProgram) != 0 {
+		pcv, _, err := ProgramVersion(previous.ClearStateProgram)
+		if err != nil {
+			return err
+		}
+		if pcv >= proto.MinInnerApplVersion && cv < pcv {
+			return fmt.Errorf("clearstate program version downgrade: %d < %d", cv, pcv)
+		}
+	}
+	return nil
 }
 
 // ExplicitTxnContext is a struct that implements TxnContext with
