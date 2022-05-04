@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2022 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package ledger
 
 import (
@@ -43,7 +59,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 		require.Equal(t, int64(i), acct.rowid)
 	}
 
-	for i := proto.MaxBalLookback; i < uint64(accountsNum) + proto.MaxBalLookback; i++ {
+	for i := proto.MaxBalLookback; i < uint64(accountsNum)+proto.MaxBalLookback; i++ {
 		acct := persistedOnlineAccountData{
 			addr:        addr,
 			round:       basics.Round(i),
@@ -53,7 +69,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 		oac.writeFront(acct)
 	}
 
-	oac.prune(basics.Round(proto.MaxBalLookback-1))
+	oac.prune(basics.Round(proto.MaxBalLookback - 1))
 
 	// verify that all these accounts are truly there.
 	acct, has := oac.read(addr, basics.Round(proto.MaxBalLookback-1))
@@ -63,8 +79,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	require.Equal(t, uint64(accountsNum-1), acct.accountData.MicroAlgos.Raw)
 	require.Equal(t, int64(accountsNum-1), acct.rowid)
 
-
-	for i := proto.MaxBalLookback; i < uint64(accountsNum) + proto.MaxBalLookback; i++ {
+	for i := proto.MaxBalLookback; i < uint64(accountsNum)+proto.MaxBalLookback; i++ {
 		acct, has := oac.read(addr, basics.Round(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.round)

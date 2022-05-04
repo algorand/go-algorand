@@ -475,7 +475,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		for j := 0; j < roundDelta.Len(); j++ {
 			addr, acctDelta := roundDelta.GetByIdx(j)
 			persistedAcct := persistedOnlineAccountData{
-				addr: addr,
+				addr:  addr,
 				round: ao.cachedDBRoundOnline + basics.Round(i+1),
 			}
 			persistedAcct.accountData.SetCoreAccountData(acctDelta)
