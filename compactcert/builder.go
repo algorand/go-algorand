@@ -112,33 +112,33 @@ func (ccw *Worker) initBuilders() {
 func (ccw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
 	builderForRound, err := ccw.builderForRound(rnd)
 	if err != nil {
-		ccw.log.Warnf("initBuilders: builderForRound(%d): %v", rnd, err)
+		ccw.log.Warnf("addSigsToBuilder: builderForRound(%d): %v", rnd, err)
 		return
 	}
 
 	for _, sig := range sigs {
 		pos, ok := builderForRound.voters.AddrToPos[sig.signer]
 		if !ok {
-			ccw.log.Warnf("initBuilders: cannot find %v in round %d", sig.signer, rnd)
+			ccw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
 			continue
 		}
 
 		isPresent, err := builderForRound.Present(pos)
 		if err != nil {
-			ccw.log.Warnf("initBuilders: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+			ccw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
 			continue
 		}
 		if isPresent {
-			ccw.log.Warnf("initBuilders: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
+			ccw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
 			continue
 		}
 
 		if err := builderForRound.IsValid(pos, sig.sig, false); err != nil {
-			ccw.log.Warnf("initBuilders: cannot add %v in round %d: %v", sig.signer, rnd, err)
+			ccw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
 			continue
 		}
 		if err := builderForRound.Add(pos, sig.sig); err != nil {
-			ccw.log.Warnf("initBuilders: error while adding sig. inner error: %w", err)
+			ccw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
 			continue
 		}
 	}
