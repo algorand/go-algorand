@@ -109,11 +109,7 @@ func (l *persistedOnlineAccountDataList) pushFront(v *persistedOnlineAccountData
 func (l *persistedOnlineAccountDataList) pushBack(v *persistedOnlineAccountData) *persistedOnlineAccountDataListNode {
 	newNode := l.getNewNode()
 	newNode.Value = v
-	newNode.prev = l.root.prev
-	newNode.next = &l.root
-	l.root.prev.next = newNode
-	l.root.prev = newNode
-	return newNode
+	return l.insertValue(newNode, l.root.prev)
 }
 
 // insertValue inserts e after at, increments l.len, and returns e.

@@ -72,4 +72,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 		require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
 		require.Equal(t, int64(i), acct.rowid)
 	}
+
+	_, has = oac.read(addr, basics.Round(0))
+	require.False(t, has)
 }
