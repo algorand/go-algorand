@@ -931,6 +931,12 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	if !added {
 		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
 	}
+
+	err = insertStateProofToRegistry(partkey, node)
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
+
 	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 	if err != nil {
 		return account.ParticipationID{}, err
