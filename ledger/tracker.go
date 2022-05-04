@@ -708,14 +708,12 @@ func (tr *trackerRegistry) initializeTrackerCaches(l ledgerForTracker, cfg confi
 	return
 }
 
-func (tr *trackerRegistry) blockTimestamp(rnd basics.Round) (int64, error) {
+func (tr *trackerRegistry) blockHeaderCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
-	return tr.txtail.blockTimestamp(rnd, tr.dbRound)
-}
-
-func (tr *trackerRegistry) blockSeed(rnd basics.Round) ([]byte, error) {
-	tr.mu.RLock()
-	defer tr.mu.RUnlock()
-	return tr.txtail.blockSeed(rnd, tr.dbRound)
+	hdr, ok := tr.txtail.blockHeader(rnd)
+	if !ok {
+		err = fmt.Errorf("no cached header data for round %d", rnd)
+	}
+	return
 }

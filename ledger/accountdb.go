@@ -4635,13 +4635,6 @@ type txTailRoundLease struct {
 	TxnIdx uint64         `code:"i"` //!-- index of the entry in TxnIDs/LastValid
 }
 
-// txTailBlockHeaderData contains block header data we want to lookup
-type txTailBlockHeaderData struct {
-	TimeStamp        int64                     `codec:"a"` //!-- timestamp from block header
-	BlockSeed        []byte                    `codec:"b"` //!-- block seed from the block header
-	ConsensusVersion protocol.ConsensusVersion `codec:"c"` //!-- protocol version from block header
-}
-
 // TxTailRound contains the information about a single round of transactions.
 // The TxnIDs and LastValid would both be of the same length, and are stored
 // in that way for efficient message=pack encoding. The Leases would point to the
@@ -4650,10 +4643,10 @@ type txTailBlockHeaderData struct {
 type txTailRound struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	TxnIDs    []transactions.Txid `codec:"t,allocbound=-"`
-	LastValid []basics.Round      `codec:"v,allocbound=-"`
-	Leases    []txTailRoundLease  `codec:"l,allocbound=-"`
-	txTailBlockHeaderData
+	TxnIDs    []transactions.Txid `codec:"tti,allocbound=-"`
+	LastValid []basics.Round      `codec:"ttv,allocbound=-"`
+	Leases    []txTailRoundLease  `codec:"tte,allocbound=-"`
+	bookkeeping.BlockHeader
 }
 
 // encode the transaction tail data into a serialized form, and return the serialized data
@@ -4674,9 +4667,7 @@ func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
 
 	tail.TxnIDs = make([]transactions.Txid, len(payset))
 	tail.LastValid = make([]basics.Round, len(payset))
-	tail.TimeStamp = blk.TimeStamp
-	tail.BlockSeed = blk.BlockHeader.Seed[:]
-	tail.ConsensusVersion = blk.CurrentProtocol
+	tail.BlockHeader = blk.BlockHeader
 
 	for txIdxtxid, txn := range payset {
 		tail.TxnIDs[txIdxtxid] = txn.ID()

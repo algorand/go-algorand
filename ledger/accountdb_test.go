@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -3536,7 +3537,7 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	roundData := make([][]byte, 1500)
 	const retainSize = 1001
 	for i := startRound; i <= endRound; i++ {
-		data := txTailRound{txTailBlockHeaderData: txTailBlockHeaderData{TimeStamp: int64(i)}}
+		data := txTailRound{BlockHeader: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
 		roundData[i-1] = protocol.Encode(&data)
 	}
 	forgetBefore := (endRound + 1).SubSaturate(retainSize)

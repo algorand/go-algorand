@@ -1902,12 +1902,61 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 		require.Equal(t, origRewardsBalances[i], acct.MicroAlgos)
 		require.Equal(t, origBalances[i], wo)
 
-		// TODO: FIXME: fails after load - need in-memory cache populated by newBlock while replaying blocks
 		oad, err := l.LookupAgreement(balancesRound, addr)
 		require.NoError(t, err)
 		require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
 
 		// TODO:
 		// add a test checking all committed pre-reload entries are gone
+		// add as a tracker test
 	}
+}
+
+// TestLedgerTxTailCachedBlockHeaders checks [Latest - MaxTxnLife...Latest] block headers
+// are available via txTail
+func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	const maxBlocks = 2000
+	for i := 0; i < maxBlocks; i++ {
+		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		require.NoError(t, err)
+		if i%100 == 0 || i == maxBlocks-1 {
+			l.WaitForCommit(l.Latest())
+		}
+	}
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	latest := l.Latest()
+	for i := latest - basics.Round(proto.MaxTxnLife); i <= latest; i++ {
+		blk, err := l.BlockHdrCached(i)
+		require.NoError(t, err)
+		require.Equal(t, blk.Round, i)
+	}
+
+	// additional checks: the txTail should have additional blocks:
+	// dbRound - (MaxTxnLife+1) is expected to be deleted and dbRound - (MaxTxnLife) is earliest available
+	l.trackerMu.RLock()
+	dbRound := l.trackers.dbRound
+	l.trackerMu.RUnlock()
+
+	start := dbRound - basics.Round(proto.MaxTxnLife)
+	end := latest - basics.Round(proto.MaxTxnLife)
+	for i := start; i < end; i++ {
+		blk, err := l.BlockHdrCached(i)
+		require.NoError(t, err)
+		require.Equal(t, blk.Round, i)
+	}
+
+	_, err = l.BlockHdrCached(start - 1)
+	require.Error(t, err)
 }

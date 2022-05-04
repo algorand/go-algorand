@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -313,62 +312,47 @@ func TestTxTailDeltaTracking(t *testing.T) {
 	}
 }
 
-func TestBlockHeaderDataOffset(t *testing.T) {
-	t.Run("dcc-offset", func(t *testing.T) {
-		var tests = []struct {
-			offset    uint64
-			dataLen   int
-			deltasLen int
-			expected  int
-		}{
-			{0, 0, 0, -1}, // -1 is expected but should not happen with non-empty history data slice
-			{0, 1, 0, 0},  // simulate empty DB, no blocks
-			{0, 2, 1, 0},  // one block arrived, zero offset
-			{1, 2, 1, 1},  // one block arrived, non-zero offset
+// BenchmarkTxTailBlockHeaderCache adds 2M random blocks by calling
+// newBlock and postCommit on txTail tracker, and reports memory allocations
+func BenchmarkTxTailBlockHeaderCache(b *testing.B) {
+	const numBlocks = 2_000_000
+	b.ReportAllocs()
+
+	accts := ledgertesting.RandomAccounts(10, false)
+	ledger := makeMockLedgerForTracker(b, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
+	tail := txTail{}
+	require.NoError(b, tail.loadFromDisk(ledger, 0))
+
+	dbRound := basics.Round(0)
+	const lookback = 8
+	for i := 1; i < numBlocks+1; i++ {
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round:     basics.Round(i),
+				TimeStamp: int64(i << 10),
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: protocol.ConsensusCurrentVersion,
+				},
+			},
 		}
+		tail.newBlock(blk, ledgercore.StateDelta{})
 
-		for i, test := range tests {
-			t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-				res := blockHeaderDataDeltasOffset(test.offset, test.dataLen, test.deltasLen)
-				require.Equal(t, test.expected, res)
-			})
+		if i%10 == 0 || i == numBlocks {
+
+			offset := uint64(i - int(dbRound) - lookback)
+			dcc := &deferredCommitContext{
+				deferredCommitRange: deferredCommitRange{
+					offset:   offset,
+					oldBase:  dbRound,
+					lookback: lookback,
+				},
+				newBase: dbRound + basics.Round(offset),
+			}
+			err := tail.prepareCommit(dcc)
+			require.NoError(b, err)
+			tail.postCommit(context.Background(), dcc)
+			dbRound = dcc.newBase
+			require.Less(b, len(tail.blockHeaderData), 1001+10)
 		}
-
-	})
-
-	t.Run("round-offset", func(t *testing.T) {
-		var tests = []struct {
-			round     basics.Round
-			dbRound   basics.Round
-			dataLen   int
-			deltasLen int
-			expected  int
-			err       string
-		}{
-			{1, 0, 0, 0, 0, "too new"}, // error
-			{1, 1, 0, 0, 0, "too old"}, // error, no history
-			{0, 1, 1, 0, 0, "too old"}, // error, too old
-			{1, 1, 1, 1, 0, "too old"}, // error, short history
-			{1, 1, 1, 0, 0, ""},        // empty delta ok
-			{1, 1, 2, 1, 0, ""},
-			{0, 1, 3, 1, 0, ""},
-			{5, 6, 7, 3, 2, ""}, // blockHeaderData comment test case
-			{3, 6, 7, 3, 0, ""},
-			{9, 6, 7, 3, 6, ""},
-		}
-
-		for i, test := range tests {
-			t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-				res, err := blockHeaderDataRoundOffset(test.round, test.dbRound, test.dataLen, test.deltasLen)
-				if len(test.err) > 0 {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), test.err)
-				} else {
-					require.NoError(t, err)
-				}
-				require.Equal(t, test.expected, res)
-			})
-		}
-
-	})
+	}
 }

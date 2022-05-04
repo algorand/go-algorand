@@ -733,22 +733,19 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
 }
 
-// BlockTimestamp returns the block timestamp if available
+// BlockHdrCached returns the block header if available.
 // Expected availability range is [Latest - MaxTxnLife, Latest]
-// allowing (MaxTxnLife + 1 = 1001) rounds back loopback
-func (l *Ledger) BlockTimestamp(rnd basics.Round) (int64, error) {
+// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+// Explanation:
+// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+// and because a txn is alive when the current round <= txn.LastValid
+// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Lastest + 1
+// that gives Lastest + 1 - (MaxTxnLife + 1) = Lastest - MaxTxnLife as the first round to be accessible.
+func (l *Ledger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.trackers.blockTimestamp(rnd)
-}
-
-// BlockSeed returns the block seed if available
-// Expected availability range is [Latest - MaxTxnLife, Latest]
-// allowing (MaxTxnLife + 1 = 1001) rounds back loopback
-func (l *Ledger) BlockSeed(rnd basics.Round) ([]byte, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.trackers.blockSeed(rnd)
+	return l.trackers.blockHeaderCached(rnd)
 }
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
