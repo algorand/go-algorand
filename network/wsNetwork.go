@@ -1168,7 +1168,6 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOfInterestEnc []byte) {
 	messagesOfInterestGeneration := atomic.LoadUint32(&wn.messagesOfInterestGeneration)
-	wn.log.Infof("msgOfInterest maybe gen=%d p.gen=%d", messagesOfInterestGeneration, peer.messagesOfInterestGeneration)
 	if peer.messagesOfInterestGeneration != messagesOfInterestGeneration {
 		if messagesOfInterestEnc == nil {
 			wn.messagesOfInterestMu.Lock()
@@ -1729,7 +1728,6 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 		// if we're not a relay, and not participating, we don't need txn pool
 		wantTXGossipPrev := atomic.LoadUint32(&wn.wantTXGossip)
 		wantTXGossip := wn.node.IsParticipating()
-		wn.log.Infof("msgOfInterest netadv isP=%v wasP=%v", wantTXGossip, wantTXGossipPrev)
 		if wantTXGossip && (wantTXGossipPrev != wantTXGossipYes) {
 			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossipYes)
 			if didChange {
@@ -2319,7 +2317,6 @@ func SetUserAgentHeader(header http.Header) {
 // newly connecting peers.  This should be called before the network
 // is started.
 func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
-	wn.log.Infof("msgOfInterest reg %s", string(t))
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2337,7 +2334,6 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 
 // DeregisterMessageInterest will tell peers to no longer send us traffic with a protocol Tag
 func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
-	wn.log.Infof("msgOfInterest DEL %s", string(t))
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2363,7 +2359,6 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	}
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
-	wn.log.Infof("msgOfInterest new enc %s", string(wn.messagesOfInterestEnc))
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
 	wn.messagesOfInterestCond.Broadcast()
 }
@@ -2374,7 +2369,6 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThraed() {
 	defer wn.messagesOfInterestMu.Unlock()
 	for {
 		wn.messagesOfInterestCond.Wait()
-		wn.log.Infof("msgOfInterest push thread, %s", string(wn.messagesOfInterestEnc))
 		peers, _ = wn.peerSnapshot(peers)
 		for _, peer := range peers {
 			wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
