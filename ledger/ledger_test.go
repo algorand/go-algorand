@@ -1918,7 +1918,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10_000_000_000)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
@@ -1935,7 +1935,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 		}
 	}
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusFuture]
 	latest := l.Latest()
 	for i := latest - basics.Round(proto.MaxTxnLife); i <= latest; i++ {
 		blk, err := l.BlockHdrCached(i)

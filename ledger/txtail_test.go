@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -108,19 +109,20 @@ func TestTxTailCheckdup(t *testing.T) {
 
 type txTailTestLedger struct {
 	Ledger
+	protoVersion protocol.ConsensusVersion
 }
 
 const testTxTailValidityRange = 200
 const testTxTailTxnPerRound = 150
 
 func (t *txTailTestLedger) Latest() basics.Round {
-	return basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife + 10)
+	return basics.Round(config.Consensus[t.protoVersion].MaxTxnLife + 10)
 }
 
 func (t *txTailTestLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{
 		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
+			CurrentProtocol: t.protoVersion,
 		},
 	}, nil
 }
@@ -129,7 +131,7 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	blk := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
+				CurrentProtocol: t.protoVersion,
 			},
 			Round: r,
 		},
@@ -142,23 +144,24 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	return blk, nil
 }
 
-func (t *txTailTestLedger) initialize(ts *testing.T) error {
+func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.ConsensusVersion) error {
 	// create a corresponding blockdb.
 	inMemory := true
 	t.blockDBs, _ = dbOpenTest(ts, inMemory)
 	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+	t.protoVersion = protoVersion
 
 	tx, err := t.trackerDBs.Wdb.Handle.Begin()
 	require.NoError(ts, err)
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	newDB := accountsInitTest(ts, tx, accts, protocol.ConsensusCurrentVersion)
+	proto := config.Consensus[protoVersion]
+	newDB := accountsInitTest(ts, tx, accts, protoVersion)
 	require.True(ts, newDB)
 	_, err = accountsInit(tx, accts, proto)
 	require.NoError(ts, err)
 
-	roundData := make([][]byte, 0, proto.MaxTxnLife+1)
+	roundData := make([][]byte, 0, proto.MaxTxnLife)
 	startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
 	for i := startRound; i <= t.Latest(); i++ {
 		blk, err := t.Block(i)
@@ -168,6 +171,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T) error {
 		encoded, _ := tail.encode()
 		roundData = append(roundData, encoded)
 	}
+	fmt.Printf("%d\n", len(roundData))
 	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
 	require.NoError(ts, err)
 	tx.Commit()
@@ -192,7 +196,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var ledger txTailTestLedger
 	txtail := txTail{}
-	require.NoError(t, ledger.initialize(t))
+	require.NoError(t, ledger.initialize(t, protocol.ConsensusCurrentVersion))
 
 	err := txtail.loadFromDisk(&ledger, ledger.Latest())
 	require.NoError(t, err)
@@ -238,77 +242,85 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 
 func TestTxTailDeltaTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var ledger txTailTestLedger
-	txtail := txTail{}
-	require.NoError(t, ledger.initialize(t))
 
-	err := txtail.loadFromDisk(&ledger, ledger.Latest())
-	require.NoError(t, err)
-	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
-	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
-	require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
+	for _, protoVersion := range []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusFuture} {
+		t.Run(string(protoVersion), func(t *testing.T) {
 
-	var lease [32]byte
-	for i := int(ledger.Latest()) + 1; i < int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)*3; i++ {
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round:     basics.Round(i),
-				TimeStamp: int64(i << 10),
-				UpgradeState: bookkeeping.UpgradeState{
-					CurrentProtocol: protocol.ConsensusCurrentVersion,
-				},
-			},
-			Payset: make(transactions.Payset, 1),
-		}
-		sender := &basics.Address{}
-		sender[0] = byte(i)
-		sender[1] = byte(i >> 8)
-		sender[2] = byte(i >> 16)
-		blk.Payset[0].Txn.Sender = *sender
-		blk.Payset[0].Txn.Lease = lease
-		deltas := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
-		deltas.Txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{
-			LastValid:        basics.Round(i + 50),
-			TransactionIndex: 0,
-		}
-		deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
+			var ledger txTailTestLedger
+			txtail := txTail{}
+			require.NoError(t, ledger.initialize(t, protoVersion))
 
-		txtail.newBlock(blk, deltas)
-		txtail.committedUpTo(basics.Round(i))
-		dcc := &deferredCommitContext{
-			deferredCommitRange: deferredCommitRange{
-				oldBase:           basics.Round(i - 1),
-				offset:            1,
-				isCatchpointRound: true,
-			},
-		}
-		err = txtail.prepareCommit(dcc)
-		require.NoError(t, err)
+			err := txtail.loadFromDisk(&ledger, ledger.Latest())
+			require.NoError(t, err)
+			fmt.Printf("%d, %s\n", len(txtail.recent), protoVersion)
+			require.Equal(t, int(config.Consensus[protoVersion].MaxTxnLife), len(txtail.recent))
+			require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
+			require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
 
-		tx, err := ledger.trackerDBs.Wdb.Handle.Begin()
-		require.NoError(t, err)
+			var lease [32]byte
+			for i := int(ledger.Latest()) + 1; i < int(config.Consensus[protoVersion].MaxTxnLife)*3; i++ {
+				blk := bookkeeping.Block{
+					BlockHeader: bookkeeping.BlockHeader{
+						Round:     basics.Round(i),
+						TimeStamp: int64(i << 10),
+						UpgradeState: bookkeeping.UpgradeState{
+							CurrentProtocol: protoVersion,
+						},
+					},
+					Payset: make(transactions.Payset, 1),
+				}
+				sender := &basics.Address{}
+				sender[0] = byte(i)
+				sender[1] = byte(i >> 8)
+				sender[2] = byte(i >> 16)
+				blk.Payset[0].Txn.Sender = *sender
+				blk.Payset[0].Txn.Lease = lease
+				deltas := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+				deltas.Txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{
+					LastValid:        basics.Round(i + 50),
+					TransactionIndex: 0,
+				}
+				deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
 
-		err = txtail.commitRound(context.Background(), tx, dcc)
-		require.NoError(t, err)
-		tx.Commit()
-		retainSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife + 1
-		if uint64(i) > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife*2 {
-			// validate internal storage length.
-			require.Equal(t, 1, len(txtail.roundTailSerializedDeltas))
-			require.Equal(t, int(retainSize+1), len(txtail.blockHeaderData)) // retainSize + 1 in-memory delta
-			if enableTxTailHashes {
-				require.Equal(t, int(retainSize+1), len(txtail.roundTailHashes))
+				txtail.newBlock(blk, deltas)
+				txtail.committedUpTo(basics.Round(i))
+				dcc := &deferredCommitContext{
+					deferredCommitRange: deferredCommitRange{
+						oldBase:           basics.Round(i - 1),
+						offset:            1,
+						isCatchpointRound: true,
+					},
+				}
+				err = txtail.prepareCommit(dcc)
+				require.NoError(t, err)
+
+				tx, err := ledger.trackerDBs.Wdb.Handle.Begin()
+				require.NoError(t, err)
+
+				err = txtail.commitRound(context.Background(), tx, dcc)
+				require.NoError(t, err)
+				tx.Commit()
+				proto := config.Consensus[protoVersion]
+				retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
+				if uint64(i) > proto.MaxTxnLife*2 {
+					// validate internal storage length.
+					require.Equal(t, 1, len(txtail.roundTailSerializedDeltas))
+					require.Equal(t, int(retainSize+1), len(txtail.blockHeaderData)) // retainSize + 1 in-memory delta
+					if enableTxTailHashes {
+						require.Equal(t, int(retainSize+1), len(txtail.roundTailHashes))
+					}
+				}
+				txtail.postCommit(context.Background(), dcc)
+				if uint64(i) > proto.MaxTxnLife*2 {
+					// validate internal storage length.
+					require.Zero(t, len(txtail.roundTailSerializedDeltas))
+					require.Equal(t, int(retainSize), len(txtail.blockHeaderData))
+					if enableTxTailHashes {
+						require.Equal(t, int(retainSize), len(txtail.roundTailHashes))
+					}
+				}
 			}
-		}
-		txtail.postCommit(context.Background(), dcc)
-		if uint64(i) > config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife*2 {
-			// validate internal storage length.
-			require.Zero(t, len(txtail.roundTailSerializedDeltas))
-			require.Equal(t, int(retainSize), len(txtail.blockHeaderData))
-			if enableTxTailHashes {
-				require.Equal(t, int(retainSize), len(txtail.roundTailHashes))
-			}
-		}
+		})
 	}
 }
 
