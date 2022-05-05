@@ -42,5 +42,4 @@ var TestAppBytes = testAppBytes
 var TestApps = testApps
 var TestProg = testProg
 
-const InnerAppsEnabledVersion = innerAppsEnabledVersion
 const CreatedResourcesVersion = createdResourcesVersion

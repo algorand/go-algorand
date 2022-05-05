@@ -14,21 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-//go:build !linux
-// +build !linux
+package internal
 
-package util
+// Export for testing only.  See
+// https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
+// nice explanation. tl;dr: Since some of our testing is in logic_test package,
+// we export some extra things to make testing easier there. But we do it in a
+// _test.go file, so they are only exported during testing.
 
-import (
-	"time"
-)
-
-// NanoSleep sleeps for the given d duration.
-func NanoSleep(d time.Duration) {
-	time.Sleep(d)
-}
-
-// NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
-func NanoAfter(d time.Duration) <-chan time.Time {
-	return time.After(d)
+// In order to generate a block
+func (eval *BlockEvaluator) SetGenerate(g bool) {
+	eval.generate = g
 }

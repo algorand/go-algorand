@@ -176,10 +176,8 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of TEAL. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
-// anywhere in the transaction group, or the group will be rejected. In
-// addition, inner app calls must not call teal from before inner app calls were
-// introduced.
-func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uint64 {
+// anywhere in the transaction group, or the group will be rejected.
+func ComputeMinTealVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -190,11 +188,6 @@ func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uin
 		if txn.Txn.Type == protocol.ApplicationCallTx {
 			if minVersion < appsEnabledVersion {
 				minVersion = appsEnabledVersion
-			}
-		}
-		if inner {
-			if minVersion < innerAppsEnabledVersion {
-				minVersion = innerAppsEnabledVersion
 			}
 		}
 	}
@@ -278,7 +271,8 @@ type EvalParams struct {
 
 	// Cache the txid hashing, but do *not* share this into inner EvalParams, as
 	// the key is just the index in the txgroup.
-	txidCache map[int]transactions.Txid
+	txidCache      map[int]transactions.Txid
+	innerTxidCache map[int]transactions.Txid
 
 	// The calling context, if this is an inner app call
 	caller *EvalContext
@@ -311,7 +305,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
-	minTealVersion := ComputeMinTealVersion(txgroup, false)
+	minTealVersion := ComputeMinTealVersion(txgroup)
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
@@ -363,9 +357,10 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txg, true)
-	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
-	// imposed otherwise.  But is correct to check, in case of future restriction.
+	minTealVersion := ComputeMinTealVersion(txg)
+	// Can't happen currently, since earliest inner callable version is higher
+	// than any minimum imposed otherwise.  But is correct to inherit a stronger
+	// restriction from above, in case of future restriction.
 	if minTealVersion < *caller.MinTealVersion {
 		minTealVersion = *caller.MinTealVersion
 	}
@@ -835,7 +830,7 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 	}
 
 	if params.MinTealVersion == nil {
-		minVersion := ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
+		minVersion := ComputeMinTealVersion(params.TxnGroup)
 		params.MinTealVersion = &minVersion
 	}
 	if version < *params.MinTealVersion {
@@ -2191,9 +2186,68 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	return sv.toTealValue(), err
 }
 
-func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+// currentTxID is a convenience method to get the Txid for the txn being evaluated
+func (cx *EvalContext) currentTxID() transactions.Txid {
+	if cx.Proto.UnifyInnerTxIDs {
+		// can't just return cx.txn.ID() because I might be an inner txn
+		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
+	}
+
+	// original behavior, for backwards comatability
+	return cx.txn.ID()
+}
+
+// getTxIDNotUnified is a backwards-compatible getTxID used when the consensus param UnifyInnerTxIDs
+// is false. DO NOT call directly, and DO NOT change its behavior
+func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+	if cx.EvalParams.txidCache == nil {
+		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	}
+
+	txid, ok := cx.EvalParams.txidCache[groupIndex]
+	if !ok {
+		if cx.caller != nil {
+			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns)
+			txid = txn.InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
+		} else {
+			txid = txn.ID()
+		}
+		cx.EvalParams.txidCache[groupIndex] = txid
+	}
+
+	return txid
+}
+
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
+	// inner indicates that groupIndex is an index into the most recent inner txn group
+
 	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
 		return txn.ID()
+	}
+
+	if !cx.Proto.UnifyInnerTxIDs {
+		// original behavior, for backwards comatability
+		return cx.getTxIDNotUnified(txn, groupIndex)
+	}
+
+	if inner {
+		// Initialize innerTxidCache if necessary
+		if cx.EvalParams.innerTxidCache == nil {
+			cx.EvalParams.innerTxidCache = make(map[int]transactions.Txid)
+		}
+
+		txid, ok := cx.EvalParams.innerTxidCache[groupIndex]
+		if !ok {
+			// We're referencing an inner and the current txn is the parent
+			myTxid := cx.currentTxID()
+			lastGroupLen := len(cx.getLastInnerGroup())
+			// innerIndex is the referenced inner txn's index in cx.txn.EvalDelta.InnerTxns
+			innerIndex := len(cx.txn.EvalDelta.InnerTxns) - lastGroupLen + groupIndex
+			txid = txn.InnerID(myTxid, innerIndex)
+			cx.EvalParams.innerTxidCache[groupIndex] = txid
+		}
+
+		return txid
 	}
 
 	// Initialize txidCache if necessary
@@ -2201,13 +2255,15 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
 
-	// Hashes are expensive, so we cache computed TxIDs
 	txid, ok := cx.EvalParams.txidCache[groupIndex]
 	if !ok {
 		if cx.caller != nil {
-			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns)
-			txid = txn.InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
+			// We're referencing a peer txn, not my inner, but I am an inner
+			parentTxid := cx.caller.currentTxID()
+			innerIndex := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
+			txid = txn.InnerID(parentTxid, innerIndex)
 		} else {
+			// We're referencing a peer txn and I am not an inner
 			txid = txn.ID()
 		}
 		cx.EvalParams.txidCache[groupIndex] = txid
@@ -2282,7 +2338,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case GroupIndex:
 		sv.Uint = uint64(groupIndex)
 	case TxID:
-		txid := cx.getTxID(txn, groupIndex)
+		txid := cx.getTxID(txn, groupIndex, inner)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
@@ -4501,7 +4557,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	var parent transactions.Txid
 	isGroup := len(cx.subtxns) > 1
 	if isGroup {
-		parent = cx.txn.ID()
+		parent = cx.currentTxID()
 	}
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the
@@ -4520,7 +4576,7 @@ func opItxnSubmit(cx *EvalContext) error {
 			return err
 		}
 
-		// Disallow reentrancy and limit inner app call depth
+		// Disallow reentrancy, limit inner app call depth, and do version checks
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
 			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
 				return fmt.Errorf("attempt to self-call")
@@ -4536,9 +4592,7 @@ func opItxnSubmit(cx *EvalContext) error {
 				return fmt.Errorf("appl depth (%d) exceeded", depth)
 			}
 
-			// Can't call version < innerAppsEnabledVersion, and apps with such
-			// versions will always match, so just check approval program
-			// version.
+			// Set program by txn, approval, or clear state
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
 				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
@@ -4546,18 +4600,50 @@ func opItxnSubmit(cx *EvalContext) error {
 					return err
 				}
 				program = app.ApprovalProgram
+				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
+					program = app.ClearStateProgram
+				}
 			}
+
+			// Can't call old versions in inner apps.
 			v, _, err := transactions.ProgramVersion(program)
 			if err != nil {
 				return err
 			}
-			if v < innerAppsEnabledVersion {
-				return fmt.Errorf("inner app call with version %d < %d", v, innerAppsEnabledVersion)
+			if v < cx.Proto.MinInnerApplVersion {
+				return fmt.Errorf("inner app call with version v%d < v%d",
+					v, cx.Proto.MinInnerApplVersion)
 			}
+
+			// Don't allow opt-in if the CSP is not runnable as an inner.
+			// This test can only fail for v4 and v5 approval programs,
+			// since v6 requires synchronized versions.
+			if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
+				csp := cx.subtxns[itx].Txn.ClearStateProgram
+				if cx.subtxns[itx].Txn.ApplicationID != 0 {
+					app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+					if err != nil {
+						return err
+					}
+					csp = app.ClearStateProgram
+				}
+				csv, _, err := transactions.ProgramVersion(csp)
+				if err != nil {
+					return err
+				}
+				if csv < cx.Proto.MinInnerApplVersion {
+					return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",
+						csv, cx.Proto.MinInnerApplVersion)
+				}
+			}
+
 		}
 
 		if isGroup {
 			innerOffset := len(cx.txn.EvalDelta.InnerTxns)
+			if cx.Proto.UnifyInnerTxIDs {
+				innerOffset += itx
+			}
 			group.TxGroupHashes = append(group.TxGroupHashes,
 				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
 		}
@@ -4588,6 +4674,8 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
+	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
+	cx.innerTxidCache = nil
 	return nil
 }
 
