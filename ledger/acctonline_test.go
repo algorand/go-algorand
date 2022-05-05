@@ -33,6 +33,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd basics.Round) {
+	_, maxLookback := oa.committedUpTo(rnd)
+	dcc := &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
+	}
+	cdr := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, &dcc.deferredCommitRange)
+	if cdr != nil {
+		func() {
+			dcc.deferredCommitRange = *cdr
+			ml.trackers.accountsWriting.Add(1)
+
+			// do not take any locks since all operations are synchronous
+			newBase := basics.Round(dcc.offset) + dcc.oldBase
+			dcc.newBase = newBase
+			err := ml.trackers.commitRound(dcc)
+			require.NoError(t, err)
+		}()
+	}
+}
+
+func newBlock(t *testing.T, ml *mockLedgerForTracker, totals ledgercore.AccountTotals, testProtocolVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, prevTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
+	rewardLevel := uint64(0)
+	newTotals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
+
+	blk := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round: basics.Round(rnd),
+		},
+	}
+	blk.RewardsLevel = rewardLevel
+	blk.CurrentProtocol = testProtocolVersion
+	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+	delta.Accts.MergeAccounts(updates)
+	delta.Totals = totals
+
+	ml.trackers.newBlock(blk, delta)
+
+	return newTotals
+}
+
 // TestAcctOnline checks the online accounts tracker correctly stores accont change history
 // 1. Start with 1000 online accounts
 // 2. Every round set one of them offline
@@ -104,49 +146,6 @@ func TestAcctOnline(t *testing.T) {
 		require.NotEmpty(t, oad)
 	}
 
-	commitSync := func(rnd basics.Round) {
-		_, maxLookback := oa.committedUpTo(rnd)
-		dcc := &deferredCommitContext{
-			deferredCommitRange: deferredCommitRange{
-				lookback: maxLookback,
-			},
-		}
-		cdr := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, &dcc.deferredCommitRange)
-		if cdr != nil {
-			func() {
-				dcc.deferredCommitRange = *cdr
-				ml.trackers.accountsWriting.Add(1)
-
-				// do not take any locks since all operations are synchronous
-				newBase := basics.Round(dcc.offset) + dcc.oldBase
-				dcc.newBase = newBase
-				err = ml.trackers.commitRound(dcc)
-				require.NoError(t, err)
-			}()
-
-		}
-	}
-
-	newBlock := func(rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, prevTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
-		rewardLevel := uint64(0)
-		newTotals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(rnd),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = testProtocolVersion
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		delta.Totals = totals
-
-		ml.trackers.newBlock(blk, delta)
-
-		return newTotals
-	}
-
 	// online accounts tracker requires maxDeltaLookback block to start persisting
 	numPersistedAccounts := numAccts - maxDeltaLookback*2
 	targetRound := basics.Round(maxDeltaLookback + numPersistedAccounts)
@@ -161,10 +160,10 @@ func TestAcctOnline(t *testing.T) {
 		genesisAccts = append(genesisAccts, newAccts)
 
 		// prepare block
-		totals = newBlock(i, base, updates, totals)
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, i, base, updates, totals)
 
 		// commit changes synchroniously
-		commitSync(i)
+		commitSync(t, oa, ml, i)
 
 		// check the table data and the cache
 		// data gets committed after maxDeltaLookback
@@ -304,15 +303,15 @@ func TestAcctOnline(t *testing.T) {
 		genesisAccts = append(genesisAccts, newAccts)
 
 		// prepare block
-		totals = newBlock(i, base, updates, totals)
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, i, base, updates, totals)
 
 		// flush all old deltas
 		if uint64(i-start+1) == maxDeltaLookback {
-			commitSync(i)
+			commitSync(t, oa, ml, i)
 		}
 	}
 	// flush the mutAccount
-	commitSync(end)
+	commitSync(t, oa, ml, end)
 
 	for i := start; i <= end; i++ {
 		oad, err := oa.lookupOnlineAccountData(basics.Round(i), mutAccount.Addr)
@@ -389,49 +388,6 @@ func TestAcctOnlineCache(t *testing.T) {
 		require.NotEmpty(t, oad)
 	}
 
-	commitSync := func(rnd basics.Round) {
-		_, maxLookback := oa.committedUpTo(rnd)
-		dcc := &deferredCommitContext{
-			deferredCommitRange: deferredCommitRange{
-				lookback: maxLookback,
-			},
-		}
-		cdr := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, &dcc.deferredCommitRange)
-		if cdr != nil {
-			func() {
-				dcc.deferredCommitRange = *cdr
-				ml.trackers.accountsWriting.Add(1)
-
-				// do not take any locks since all operations are synchronous
-				newBase := basics.Round(dcc.offset) + dcc.oldBase
-				dcc.newBase = newBase
-				err = ml.trackers.commitRound(dcc)
-				require.NoError(t, err)
-			}()
-
-		}
-	}
-
-	newBlock := func(rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, prevTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
-		rewardLevel := uint64(0)
-		newTotals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(rnd),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = testProtocolVersion
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		delta.Totals = totals
-
-		ml.trackers.newBlock(blk, delta)
-
-		return newTotals
-	}
-
 	// online accounts tracker requires maxDeltaLookback block to start persisting
 	targetRound := basics.Round(maxDeltaLookback * 2)
 	for i := basics.Round(1); i <= targetRound; i++ {
@@ -449,10 +405,10 @@ func TestAcctOnlineCache(t *testing.T) {
 		genesisAccts = append(genesisAccts, newAccts)
 
 		// prepare block
-		totals = newBlock(i, base, updates, totals)
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, i, base, updates, totals)
 
 		// commit changes synchroniously
-		commitSync(i)
+		commitSync(t, oa, ml, i)
 
 		// check the table data and the cache
 		// data gets committed after maxDeltaLookback
@@ -473,7 +429,7 @@ func TestAcctOnlineCache(t *testing.T) {
 
 			data, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
 			require.True(t, has)
-			require.Empty(t, data.rowid)
+			require.NotEmpty(t, data.rowid)
 			if int(i)%2 == 0 {
 				require.Empty(t, data.accountData)
 			} else {
@@ -497,7 +453,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.addr)
-			require.Empty(t, data.rowid)
+			require.NotEmpty(t, data.rowid)
 			require.Equal(t, oa.cachedDBRoundOnline, data.round)
 			if int(i)%2 == 0 {
 				require.Empty(t, data.accountData)

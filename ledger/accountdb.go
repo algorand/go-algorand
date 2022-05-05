@@ -196,6 +196,11 @@ type persistedOnlineAccountData struct {
 	round basics.Round
 }
 
+type wrappedPersistedOnlineAccountData struct {
+	data     persistedOnlineAccountData
+	updRound basics.Round
+}
+
 //msgp:ignore persistedResourcesData
 type persistedResourcesData struct {
 	// addrid is the rowid of the account address that holds this resource.
@@ -3299,7 +3304,7 @@ func onlineAccountsNewRound(
 	tx *sql.Tx,
 	updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
+) (updatedAccounts []wrappedPersistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
 	hasAccounts := updates.len() > 0
 
 	writer, err := makeOnlineAccountsSQLWriter(tx, hasAccounts)
@@ -3534,7 +3539,7 @@ func accountsNewRoundImpl(
 func onlineAccountsNewRoundImpl(
 	writer onlineAccountsWriter, updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
+) (updatedAccounts []wrappedPersistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
 
 	expirationMap := make(map[basics.Round][]int64)
 
@@ -3566,7 +3571,7 @@ func onlineAccountsNewRoundImpl(
 									round:       lastUpdateRound,
 									rowid:       rowid,
 								}
-								updatedAccounts = append(updatedAccounts, updated)
+								updatedAccounts = append(updatedAccounts, wrappedPersistedOnlineAccountData{data: updated, updRound: basics.Round(updRound)})
 								prevAcct = updated
 							}
 						}
@@ -3599,7 +3604,7 @@ func onlineAccountsNewRoundImpl(
 								expirationMap[targetRound] = []int64{prevAcct.rowid, rowid}
 							}
 
-							updatedAccounts = append(updatedAccounts, updated)
+							updatedAccounts = append(updatedAccounts, wrappedPersistedOnlineAccountData{data: updated, updRound: basics.Round(updRound)})
 							prevAcct = updated
 						}
 					}
@@ -3624,7 +3629,7 @@ func onlineAccountsNewRoundImpl(
 								expirationMap[targetRound] = []int64{prevAcct.rowid}
 							}
 
-							updatedAccounts = append(updatedAccounts, updated)
+							updatedAccounts = append(updatedAccounts, wrappedPersistedOnlineAccountData{data: updated, updRound: basics.Round(updRound)})
 							prevAcct = updated
 						}
 					}

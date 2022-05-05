@@ -20,6 +20,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+const onlineAccountsCacheMaxSize = 1000
+
 type onlineAccountsCache struct {
 	accounts map[basics.Address]*persistedOnlineAccountDataList
 }
@@ -54,6 +56,9 @@ func (o *onlineAccountsCache) read(addr basics.Address, rnd basics.Round) (data 
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) writeFront(acctData persistedOnlineAccountData) {
 	if _, ok := o.accounts[acctData.addr]; !ok {
+		if len(o.accounts) >= onlineAccountsCacheMaxSize {
+			return
+		}
 		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
 	}
 	list := o.accounts[acctData.addr]
@@ -67,6 +72,9 @@ func (o *onlineAccountsCache) writeFront(acctData persistedOnlineAccountData) {
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) writeBack(acctData persistedOnlineAccountData) {
 	if _, ok := o.accounts[acctData.addr]; !ok {
+		if len(o.accounts) >= onlineAccountsCacheMaxSize {
+			return
+		}
 		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
 	}
 	list := o.accounts[acctData.addr]
@@ -80,13 +88,22 @@ func (o *onlineAccountsCache) writeBack(acctData persistedOnlineAccountData) {
 // of rounds past targetRound
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) prune(targetRound basics.Round) {
-	for _, list := range o.accounts {
+	for addr, list := range o.accounts {
 		node := list.back()
 		for node.prev != &list.root {
 			node = node.prev
 			// only need one entry that is targetRound or older
+			// discard all older additional entries older than targetRound
 			if node.Value.round <= targetRound {
 				list.remove(node.next)
+			} else {
+				break
+			}
+		}
+		// only one item left in cache
+		if node.prev == &list.root && node.next == &list.root {
+			if node.Value.accountData.MsgIsZero() {
+				delete(o.accounts, addr)
 			}
 		}
 	}

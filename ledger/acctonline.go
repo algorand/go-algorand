@@ -466,21 +466,15 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
-		ao.baseOnlineAccounts.write(persistedAcct)
-	}
-
-	for i := uint64(0); i < offset; i++ {
-		roundDelta := ao.deltas[i]
-		for j := 0; j < roundDelta.Len(); j++ {
-			addr, acctDelta := roundDelta.GetByIdx(j)
-			persistedAcct := persistedOnlineAccountData{
-				addr:  addr,
-				round: ao.cachedDBRoundOnline + basics.Round(i+1),
-			}
-			persistedAcct.accountData.SetCoreAccountData(acctDelta)
-			ao.onlineAccountsCache.writeFront(persistedAcct)
+	for _, wrappedPersistedAcct := range dcc.updatedPersistedOnlineAccounts {
+		ao.baseOnlineAccounts.write(wrappedPersistedAcct.data)
+		persistedAcct := persistedOnlineAccountData{
+			addr:        wrappedPersistedAcct.data.addr,
+			accountData: wrappedPersistedAcct.data.accountData,
+			rowid:       wrappedPersistedAcct.data.rowid,
+			round:       wrappedPersistedAcct.updRound,
 		}
+		ao.onlineAccountsCache.writeFront(persistedAcct)
 	}
 
 	ao.deltas = ao.deltas[offset:]
