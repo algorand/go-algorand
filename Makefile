@@ -36,13 +36,6 @@ else
 export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 endif
 
-# M1 Mac--homebrew install location in /opt/homebrew
-ifeq ($(OS_TYPE), darwin)
-ifeq ($(ARCH), arm64)
-export CPATH=/opt/homebrew/include
-export LIBRARY_PATH=/opt/homebrew/lib
-endif
-endif
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
