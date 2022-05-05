@@ -1257,12 +1257,12 @@ func TestDryrunCost(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			costs := make([]uint64, 2)
+			costs := make([]int64, 2)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
 			approval := ops.Program
-			costs[0] = 3 + uint64(test.numHashes)*130
+			costs[0] = 3 + int64(test.numHashes)*130
 
 			ops, err = logic.AssembleString("int 1")
 			require.NoError(t, err)

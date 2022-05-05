@@ -538,7 +538,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
 					}
 				}
-				cost64 := uint64(cost)
+				cost64 := int64(cost)
 				result.Cost = &cost64
 				maxCurrentBudget = pooledAppBudget
 				cumulativeCost += cost
