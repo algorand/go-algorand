@@ -432,6 +432,9 @@ type ConsensusParams struct {
 	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
+
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1138,6 +1141,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4
+
+	vFuture.UnifyInnerTxIDs = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
