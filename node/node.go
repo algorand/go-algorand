@@ -93,7 +93,7 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	mu        deadlock.RWMutex
+	mu        deadlock.Mutex
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	config    config.Local
@@ -784,7 +784,9 @@ func ensureParticipationDB(genesisDir string, log logging.Logger) (account.Parti
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	done := node.ctx.Done()
 	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -792,8 +794,7 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 			if err != nil {
 				node.log.Errorf("Could not refresh participation keys: %v", err)
 			}
-		case <-node.ctx.Done():
-			ticker.Stop()
+		case <-done:
 			return
 		}
 	}
@@ -1034,12 +1035,10 @@ var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_coun
 
 func (node *AlgorandFullNode) txPoolGaugeThread() {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	done := node.ctx.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
-		node.mu.RLock()
-		done := node.ctx.Done()
-		node.mu.RUnlock()
 		select {
 		case <-ticker.C:
 			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
@@ -1075,11 +1074,9 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // It runs in a separate thread so that, during catchup, we
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread() {
+	done := node.ctx.Done()
 	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
-		node.mu.RLock()
-		done := node.ctx.Done()
-		node.mu.RUnlock()
 		select {
 		case <-done:
 			return
