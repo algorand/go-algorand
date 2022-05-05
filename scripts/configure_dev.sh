@@ -28,6 +28,7 @@ done
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("$SCRIPTPATH"/ostype.sh)
+ARCH=$("$SCRIPTPATH"/archtype.sh)
 
 function install_or_upgrade {
     if ${FORCE} ; then
@@ -72,6 +73,10 @@ if [ "${OS}" = "linux" ]; then
         sudo "$SCRIPTPATH/install_linux_deps.sh"
     fi
 elif [ "${OS}" = "darwin" ]; then
+    if [ "${ARCH}" = "arm64" ]; then
+        export CPATH=/opt/homebrew/include
+        export LIBRARY_PATH=/opt/homebrew/lib
+    fi
     if [ "${CIRCLECI}" != "true" ]; then
         brew update
         brew tap homebrew/cask
