@@ -93,7 +93,7 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	mu        deadlock.RWMutex
+	mu        deadlock.Mutex
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	config    config.Local
@@ -1039,9 +1039,6 @@ func (node *AlgorandFullNode) txPoolGaugeThread() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
-		node.mu.RLock()
-		done := node.ctx.Done()
-		node.mu.RUnlock()
 		select {
 		case <-ticker.C:
 			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
@@ -1080,9 +1077,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 	done := node.ctx.Done()
 	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
-		node.mu.RLock()
-		done := node.ctx.Done()
-		node.mu.RUnlock()
 		select {
 		case <-done:
 			return
