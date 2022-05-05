@@ -93,7 +93,7 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	mu        deadlock.Mutex
+	mu        deadlock.RWMutex
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	config    config.Local
@@ -784,7 +784,9 @@ func ensureParticipationDB(genesisDir string, log logging.Logger) (account.Parti
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	node.mu.RLock()
 	done := node.ctx.Done()
+	node.mu.RUnlock()
 	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
 	defer ticker.Stop()
 	for {
@@ -1035,7 +1037,9 @@ var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_coun
 
 func (node *AlgorandFullNode) txPoolGaugeThread() {
 	defer node.monitoringRoutinesWaitGroup.Done()
+	node.mu.RLock()
 	done := node.ctx.Done()
+	node.mu.RUnlock()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
@@ -1074,7 +1078,9 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // It runs in a separate thread so that, during catchup, we
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread() {
+	node.mu.RLock()
 	done := node.ctx.Done()
+	node.mu.RUnlock()
 	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
 		select {
