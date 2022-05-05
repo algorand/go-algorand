@@ -111,6 +111,7 @@ func (ccw *Worker) Start() {
 
 	ccw.wg.Add(1)
 	go ccw.builder(latest)
+	ccw.log.Infof("started compactcert worker")
 }
 
 // Shutdown stops any goroutines associated with this worker.

@@ -1,0 +1,44 @@
+{
+  "network": {
+    "wallets": 6,
+    "nodes": 3,
+    "ConsensusProtocol": "https://github.com/algorandfoundation/specs/tree/d5ac876d7ede07367dbaa26e149aa42589aac1f7"
+  },
+  "instances": {
+    "relays": {
+      "config": "./configs/relay.json",
+      "type": "m5d.4xl",
+      "count": 1
+    },
+    "participatingNodes": {
+      "config": "./configs/node.json",
+      "type": "m5d.4xl",
+      "count": 3
+    },
+    "nonParticipatingNodes": {
+      "config": "./configs/nonPartNode.json",
+      "type": "m5d.4xl",
+      "count": 5
+    }
+  },
+  "groups": [
+    {
+      "name": "us-r",
+      "percent": {
+        "relays": 100,
+        "participatingNodes": 0,
+        "nonParticipatingNodes": 0
+      },
+      "region": "us-east-2"
+    },
+    {
+      "name": "us-n",
+      "percent": {
+        "relays": 0,
+        "participatingNodes": 100,
+        "nonParticipatingNodes": 100
+      },
+      "region": "us-east-2"
+    }
+  ]
+}
