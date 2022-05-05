@@ -1645,37 +1645,37 @@ int 1`)
 }
 
 func checkStateDelta(t *testing.T,
-	response *generated.StateDelta,
-	expectedDelta *generated.StateDelta,
+	response generated.StateDelta,
+	expectedDelta generated.StateDelta,
 ) {
-	for i, vd := range *response {
-		assert.Equal(t, (*expectedDelta)[i].Key, vd.Key)
+	for i, vd := range response {
+		assert.Equal(t, expectedDelta[i].Key, vd.Key)
 
 		// Pointer checks: make sure we don't try to derefence a nil.
-		if (*expectedDelta)[i].Value.Bytes == nil {
+		if expectedDelta[i].Value.Bytes == nil {
 			assert.Nil(t, vd.Value.Bytes)
 		} else {
 			assert.NotNil(t, vd.Value.Bytes)
-			assert.Equal(t, *(*expectedDelta)[i].Value.Bytes, *vd.Value.Bytes)
+			assert.Equal(t, *expectedDelta[i].Value.Bytes, *vd.Value.Bytes)
 		}
-		if (*expectedDelta)[i].Value.Uint == nil {
+		if expectedDelta[i].Value.Uint == nil {
 			assert.Nil(t, vd.Value.Uint)
 		} else {
 			assert.NotNil(t, vd.Value.Uint)
-			assert.Equal(t, *(*expectedDelta)[i].Value.Uint, *vd.Value.Uint)
+			assert.Equal(t, *expectedDelta[i].Value.Uint, *vd.Value.Uint)
 		}
 	}
 }
 
 func checkEvalDelta(t *testing.T,
-	response *generated.DryrunResponse,
-	expectedGlobalDelta *generated.StateDelta,
-	expectedLocalDelta *generated.AccountStateDelta,
+	response generated.DryrunResponse,
+	expectedGlobalDelta generated.StateDelta,
+	expectedLocalDelta generated.AccountStateDelta,
 ) {
 	for _, rt := range response.Txns {
 		if rt.GlobalDelta != nil && len(*rt.GlobalDelta) > 0 {
-			assert.Equal(t, len(*expectedGlobalDelta), len(*rt.GlobalDelta))
-			checkStateDelta(t, rt.GlobalDelta, expectedGlobalDelta)
+			assert.Equal(t, len(expectedGlobalDelta), len(*rt.GlobalDelta))
+			checkStateDelta(t, *rt.GlobalDelta, expectedGlobalDelta)
 		} else {
 			assert.Nil(t, expectedGlobalDelta)
 		}
@@ -1683,7 +1683,7 @@ func checkEvalDelta(t *testing.T,
 		if rt.LocalDeltas != nil {
 			for _, ld := range *rt.LocalDeltas {
 				assert.Equal(t, expectedLocalDelta.Address, ld.Address)
-				checkStateDelta(t, &ld.Delta, &expectedLocalDelta.Delta)
+				checkStateDelta(t, ld.Delta, expectedLocalDelta.Delta)
 			}
 		} else {
 			assert.Nil(t, expectedLocalDelta)
@@ -1781,7 +1781,7 @@ int %d`, expectedUint, i))
 		} else {
 			checkAppCallPass(t, &response)
 		}
-		checkEvalDelta(t, &response, &expectedGlobalDelta, &expectedLocalDelta)
+		checkEvalDelta(t, response, expectedGlobalDelta, expectedLocalDelta)
 		if t.Failed() {
 			logResponse(t, &response)
 		}
