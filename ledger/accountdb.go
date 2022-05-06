@@ -127,7 +127,7 @@ var createResourcesTable = []string{
 var createOnlineAccountsTable = []string{
 	`CREATE TABLE IF NOT EXISTS onlineaccounts (
 		address BLOB NOT NULL,
-		updround INTEGER,
+		updround INTEGER NOT NULL,
 		normalizedonlinebalance INTEGER NOT NULL,
 		votelastvalid INTEGER NOT NULL,
 		data BLOB NOT NULL,
@@ -2414,7 +2414,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
@@ -2648,11 +2648,13 @@ func (qs *accountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round)
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &data.round, &buf)
+		var updround sql.NullInt64
+		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
-			if len(buf) > 0 && rowid.Valid {
+			if len(buf) > 0 && rowid.Valid && updround.Valid {
 				data.rowid = rowid.Int64
+				data.updRound = basics.Round(updround.Int64)
 				err = protocol.Decode(buf, &data.accountData)
 				return err
 			}
