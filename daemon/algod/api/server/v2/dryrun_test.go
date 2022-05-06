@@ -1279,9 +1279,9 @@ int appl
 itxn_field TypeEnum
 int DeleteApplication
 itxn_field OnCompletion
-byte 0x068101
+byte 0x068101 // #pragma version 6; int 1;
 itxn_field ApprovalProgram
-byte 0x068101
+byte 0x068101 // #pragma version 6; int 1;
 itxn_field ClearStateProgram
 itxn_submit
 int 1`)
