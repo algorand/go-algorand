@@ -466,14 +466,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	for _, wrappedPersistedAcct := range dcc.updatedPersistedOnlineAccounts {
-		ao.baseOnlineAccounts.write(wrappedPersistedAcct.data)
-		persistedAcct := persistedOnlineAccountData{
-			addr:        wrappedPersistedAcct.data.addr,
-			accountData: wrappedPersistedAcct.data.accountData,
-			rowid:       wrappedPersistedAcct.data.rowid,
-			round:       wrappedPersistedAcct.updRound,
-		}
+	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
+		ao.baseOnlineAccounts.write(persistedAcct)
 		ao.onlineAccountsCache.writeFront(persistedAcct)
 	}
 

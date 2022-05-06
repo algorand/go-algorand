@@ -240,7 +240,7 @@ type deferredCommitContext struct {
 	updatedPersistedResources map[basics.Address][]persistedResourcesData
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []wrappedPersistedOnlineAccountData
+	updatedPersistedOnlineAccounts []persistedOnlineAccountData
 	onlineAccountExpirations       []onlineAccountExpiration
 	onlineAccountExpiredRowids     []int64
 	expirationOffset               uint64

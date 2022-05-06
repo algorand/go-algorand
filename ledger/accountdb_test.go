@@ -3295,9 +3295,9 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, updated, 3)
-	require.Equal(t, updated[0].data.addr, addrC)
-	require.Equal(t, updated[1].data.addr, addrD)
-	require.Equal(t, updated[2].data.addr, addrE)
+	require.Equal(t, updated[0].addr, addrC)
+	require.Equal(t, updated[1].addr, addrD)
+	require.Equal(t, updated[2].addr, addrE)
 
 	require.Len(t, expired, 2)
 	// deltaD old and new
@@ -3397,11 +3397,11 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, updated, 5)
-	require.Equal(t, updated[0].data.addr, addrA)
-	require.Equal(t, updated[1].data.addr, addrB)
-	require.Equal(t, updated[2].data.addr, addrB)
-	require.Equal(t, updated[3].data.addr, addrC)
-	require.Equal(t, updated[4].data.addr, addrC)
+	require.Equal(t, updated[0].addr, addrA)
+	require.Equal(t, updated[1].addr, addrB)
+	require.Equal(t, updated[2].addr, addrB)
+	require.Equal(t, updated[3].addr, addrC)
+	require.Equal(t, updated[4].addr, addrC)
 
 	require.Len(t, expired, 3)
 	// deltaB went offline

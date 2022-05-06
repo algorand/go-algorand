@@ -322,6 +322,8 @@ func TestAcctOnline(t *testing.T) {
 	}
 }
 
+// TestAcctOnlineCache toggles accounts from being online to offline and verifies
+// that the db and cache have the correct data
 func TestAcctOnlineCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -374,27 +376,19 @@ func TestAcctOnlineCache(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, bal := range allAccts {
-		data, err := oa.accountsq.lookupOnline(bal.Addr, 0)
-		require.NoError(t, err)
-		require.Equal(t, bal.Addr, data.addr)
-		require.Equal(t, basics.Round(0), data.round)
-		require.Equal(t, bal.AccountData.MicroAlgos, data.accountData.MicroAlgos)
-		require.Equal(t, bal.AccountData.RewardsBase, data.accountData.RewardsBase)
-		require.Equal(t, bal.AccountData.VoteFirstValid, data.accountData.VoteFirstValid)
-		require.Equal(t, bal.AccountData.VoteLastValid, data.accountData.VoteLastValid)
-
+		// force populate the cache
 		oad, err := oa.lookupOnlineAccountData(0, bal.Addr)
 		require.NoError(t, err)
 		require.NotEmpty(t, oad)
 	}
 
 	// online accounts tracker requires maxDeltaLookback block to start persisting
-	targetRound := basics.Round(maxDeltaLookback * 2)
+	targetRound := basics.Round(maxDeltaLookback * numAccts * 2)
 	for i := basics.Round(1); i <= targetRound; i++ {
 		var updates ledgercore.AccountDeltas
 		acctIdx := (int(i) - 1) % numAccts
 
-		if int(i)%2 == 0 {
+		if (int(i)-1)%(numAccts*2) >= 5 {
 			updates.Upsert(allAccts[acctIdx].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
 		} else {
 			updates.Upsert(allAccts[acctIdx].Addr, ledgercore.ToAccountData(allAccts[acctIdx].AccountData))
@@ -421,7 +415,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			require.Equal(t, bal.Addr, data.addr)
 			require.NotEmpty(t, data.rowid)
 			require.Equal(t, oa.cachedDBRoundOnline, data.round)
-			if int(i)%2 == 0 {
+			if (rnd-1)%(numAccts*2) >= 5 {
 				require.Empty(t, data.accountData)
 			} else {
 				require.NotEmpty(t, data.accountData)
@@ -430,7 +424,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			data, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
 			require.True(t, has)
 			require.NotEmpty(t, data.rowid)
-			if int(i)%2 == 0 {
+			if (rnd-1)%(numAccts*2) >= 5 {
 				require.Empty(t, data.accountData)
 			} else {
 				require.NotEmpty(t, data.accountData)
@@ -438,7 +432,7 @@ func TestAcctOnlineCache(t *testing.T) {
 
 			oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
 			require.NoError(t, err)
-			if int(i)%2 == 0 {
+			if (rnd-1)%(numAccts*2) >= 5 {
 				require.Empty(t, oad)
 			} else {
 				require.NotEmpty(t, oad)
@@ -453,18 +447,19 @@ func TestAcctOnlineCache(t *testing.T) {
 			data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.addr)
-			require.NotEmpty(t, data.rowid)
 			require.Equal(t, oa.cachedDBRoundOnline, data.round)
-			if int(i)%2 == 0 {
+			if (rnd-1)%(numAccts*2) >= 5 {
 				require.Empty(t, data.accountData)
+				require.Empty(t, data.rowid)
 			} else {
+				require.NotEmpty(t, data.rowid)
 				require.NotEmpty(t, data.accountData)
 			}
 
 			data, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
 			require.True(t, has)
-			require.Empty(t, data.rowid)
-			if int(i)%2 == 0 {
+			require.NotEmpty(t, data.rowid)
+			if (rnd-1)%(numAccts*2) >= 5 {
 				require.Empty(t, data.accountData)
 			} else {
 				require.NotEmpty(t, data.accountData)
@@ -474,7 +469,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			// lookup should correctly return data for earlist round dbRound - maxBalLookback + 1
 			oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
 			require.NoError(t, err)
-			if int(i)%2 == 0 {
+			if (rnd-1)%(numAccts*2) >= 5 {
 				require.Empty(t, oad)
 			} else {
 				require.NotEmpty(t, oad)

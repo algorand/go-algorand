@@ -37,13 +37,13 @@ func (o *onlineAccountsCache) init() {
 func (o *onlineAccountsCache) read(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, has bool) {
 	if list := o.accounts[addr]; list != nil {
 		node := list.back()
-		if node.Value.round > rnd {
+		if node.Value.updRound > rnd {
 			return persistedOnlineAccountData{}, false
 		}
 		for node.prev != &list.root {
 			node = node.prev
 			// only need one entry that is targetRound or older
-			if node.Value.round > rnd {
+			if node.Value.updRound > rnd {
 				return *node.next.Value, true
 			}
 		}
@@ -62,7 +62,7 @@ func (o *onlineAccountsCache) writeFront(acctData persistedOnlineAccountData) {
 		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
 	}
 	list := o.accounts[acctData.addr]
-	if list.root.next != &list.root && acctData.round <= list.root.next.Value.round {
+	if list.root.next != &list.root && acctData.updRound <= list.root.next.Value.updRound {
 		return
 	}
 	o.accounts[acctData.addr].pushFront(&acctData)
@@ -78,7 +78,7 @@ func (o *onlineAccountsCache) writeBack(acctData persistedOnlineAccountData) {
 		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
 	}
 	list := o.accounts[acctData.addr]
-	if list.root.prev != &list.root && acctData.round >= list.root.prev.Value.round {
+	if list.root.prev != &list.root && acctData.updRound >= list.root.prev.Value.updRound {
 		return
 	}
 	o.accounts[acctData.addr].pushBack(&acctData)
@@ -94,7 +94,7 @@ func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 			node = node.prev
 			// only need one entry that is targetRound or older
 			// discard all older additional entries older than targetRound
-			if node.Value.round <= targetRound {
+			if node.Value.updRound <= targetRound {
 				list.remove(node.next)
 			} else {
 				break
@@ -102,10 +102,9 @@ func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 		}
 		// only one item left in cache
 		if node.prev == &list.root && node.next == &list.root {
-			if node.Value.accountData.MsgIsZero() {
+			if node.Value.accountData.IsVotingEmpty() {
 				delete(o.accounts, addr)
 			}
 		}
 	}
-	return
 }
