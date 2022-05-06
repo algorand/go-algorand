@@ -28,7 +28,7 @@ APP_ID=$(${gcmd} app create --creator ${ACCOUNT} --foreign-asset $ASSET_ID --app
 # Create another account, fund it, send it some asset
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ${gcmd} clerk send -a 1000000 -f $ACCOUNT -t $ACCOUNTB
-${gcmd} asset send --assetid $ASSET_ID -a 0 -f $ACCOUNTB -t $ACCOUNTB
+${gcmd} asset optin --assetid $ASSET_ID -a $ACCOUNTB
 ${gcmd} asset send --assetid $ASSET_ID -a 17 -f $ACCOUNT -t $ACCOUNTB
 
 # Call app from account B, do some checks on asset balance

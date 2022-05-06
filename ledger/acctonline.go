@@ -20,6 +20,7 @@ import (
 	"container/heap"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -33,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -69,13 +69,10 @@ type onlineAccounts struct {
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedOnlineAccount
 
-	// versions stores consensus version dbRound and every
-	// round after it; i.e., versions is one longer than deltas.
-	versions []protocol.ConsensusVersion
-
-	// totals stores the totals for dbRound and every round after it;
-	// i.e., totals is one longer than deltas.
-	roundTotals []ledgercore.AccountTotals
+	// onlineRoundParamsData stores onlineMoney, rewards from rounds
+	// dbRound - maxBalLookback to current round.
+	// It behaves as delta storage and a cache.
+	onlineRoundParamsData []ledgercore.OnlineRoundParamsData
 
 	// log copied from ledger
 	log logging.Logger
@@ -100,13 +97,16 @@ type onlineAccounts struct {
 	expirations []onlineAccountExpiration
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
-	// TODO: restore the cache
-	// baseAccounts lruAccounts
+	baseOnlineAccounts lruOnlineAccounts
+
+	// maxAcctLookback sets the minimim deltas size to keep in memory
+	acctLookback uint64
 }
 
 // initialize initializes the accountUpdates structure
-func (ao *onlineAccounts) initialize() {
+func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.accountsReadCond = sync.NewCond(ao.accountsMu.RLocker())
+	ao.acctLookback = cfg.MaxAcctLookback
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -138,16 +138,19 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	proto := config.Consensus[hdr.CurrentProtocol]
 
 	err = ao.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		totals, err0 := accountsTotals(tx, false)
+		var err0 error
+		ao.expirations, err0 = onlineAccountsExpirations(tx, proto.MaxBalLookback)
 		if err0 != nil {
 			return err0
 		}
 
-		ao.roundTotals = []ledgercore.AccountTotals{totals}
-
-		ao.expirations, err0 = onlineAccountsExpirations(tx, proto.MaxBalLookback)
+		var endRound basics.Round
+		ao.onlineRoundParamsData, endRound, err0 = accountsOnlineRoundParams(tx)
 		if err0 != nil {
 			return err0
+		}
+		if endRound != ao.cachedDBRoundOnline {
+			return fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
 		}
 
 		return nil
@@ -166,12 +169,11 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	ao.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
 	ao.deltas = nil
 	ao.accounts = make(map[basics.Address]modifiedOnlineAccount)
 	ao.deltasAccum = []int{0}
 
-	// ao.baseAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+	ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	return
 }
 
@@ -191,7 +193,7 @@ func (ao *onlineAccounts) close() {
 		ao.voters = nil
 	}
 
-	// ao.baseAccounts.prune(0)
+	ao.baseOnlineAccounts.prune(0)
 }
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
@@ -217,10 +219,9 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		ao.log.Panicf("onlineAccounts: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 	ao.deltas = append(ao.deltas, delta.Accts)
-	ao.versions = append(ao.versions, blk.CurrentProtocol)
 	ao.deltasAccum = append(ao.deltasAccum, delta.Accts.Len()+ao.deltasAccum[len(ao.deltasAccum)-1])
 
-	// ao.baseAccounts.flushPendingWrites()
+	ao.baseOnlineAccounts.flushPendingWrites()
 
 	for i := 0; i < delta.Accts.Len(); i++ {
 		addr, data := delta.Accts.GetByIdx(i)
@@ -230,11 +231,15 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		ao.accounts[addr] = macct
 	}
 
-	ao.roundTotals = append(ao.roundTotals, delta.Totals)
+	ao.onlineRoundParamsData = append(ao.onlineRoundParamsData, ledgercore.OnlineRoundParamsData{
+		OnlineSupply:    delta.Totals.Online.Money.Raw,
+		RewardsLevel:    delta.Totals.RewardsLevel,
+		CurrentProtocol: blk.CurrentProtocol,
+	})
 
 	// calling prune would drop old entries from the base accounts.
-	// newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
-	// ao.baseAccounts.prune(newBaseAccountSize)
+	newBaseAccountSize := (len(ao.accounts) + 1) + baseAccountsPendingAccountsBufferSize
+	ao.baseOnlineAccounts.prune(newBaseAccountSize)
 
 	if ao.voters != nil {
 		ao.voters.newBlock(blk.BlockHeader)
@@ -251,7 +256,7 @@ func (ao *onlineAccounts) committedUpTo(committedRound basics.Round) (retRound, 
 	defer ao.accountsMu.RUnlock()
 
 	retRound = basics.Round(0)
-	lookback = basics.Round(config.Consensus[ao.versions[len(ao.versions)-1]].MaxBalLookback)
+	lookback = basics.Round(ao.acctLookback)
 	if committedRound < lookback {
 		return
 	}
@@ -304,18 +309,20 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	if offset < dcr.offset {
 		dcr.offset = offset
 	}
+	dcr.oldBase = dbRound
 	return dcr
 }
 
 func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
+	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
 	// consensus version.
-	if ao.versions[1] != ao.versions[offset] {
+	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		// find the tip point.
 		tipPoint := sort.Search(int(offset), func(i int) bool {
 			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
 			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
-			return ao.versions[1] != ao.versions[1+i]
+			return ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+1+i].CurrentProtocol
 		})
 		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
 		offset = uint64(tipPoint)
@@ -326,11 +333,17 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
 }
 
+func (ao *onlineAccounts) maxBalLookback() uint64 {
+	lastProtoVersion := ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol
+	return config.Consensus[lastProtoVersion].MaxBalLookback
+}
+
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	offset := dcc.offset
 
 	ao.accountsMu.RLock()
+	defer ao.accountsMu.RUnlock()
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset)
@@ -347,7 +360,8 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	}
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
-	if ao.versions[1] != ao.versions[offset] {
+	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
+	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		ao.accountsMu.RUnlock()
 
 		// in scheduleCommit, we expect that this function to update the catchpointWriting when
@@ -362,14 +376,24 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, lruAccounts{})
-
-	ao.accountsMu.RUnlock()
+	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, ao.baseOnlineAccounts)
 
 	dcc.onlineAccountExpiredRowids = expirations
 	dcc.expirationOffset = expirationOffset
 
 	dcc.genesisProto = ao.ledger.GenesisProto()
+
+	start, err := ao.roundParamsOffset(dcc.oldBase)
+	if err != nil {
+		return err
+	}
+	end, err := ao.roundParamsOffset(dcc.newBase)
+	if err != nil {
+		return err
+	}
+	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1 : end+1]
+	maxOnlineLookback := basics.Round(ao.maxBalLookback())
+	dcc.onlineTotalsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
 
 	return nil
 }
@@ -402,6 +426,14 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
+	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound+1)
+	if err != nil {
+		return err
+	}
+
+	// delete all entries all older than maxBalLookback rounds ago
+	err = accountsPruneOnlineRoundParams(tx, dcc.onlineTotalsForgetBefore)
+
 	return
 }
 
@@ -415,7 +447,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// from in-memory cache when no references remain.
 	for i := 0; i < dcc.compactOnlineAccountDeltas.len(); i++ {
 		acctUpdate := dcc.compactOnlineAccountDeltas.getByIdx(i)
-		cnt := acctUpdate.nAcctDeltas
+		cnt := acctUpdate.nOnlineAcctDeltas
 		macct, ok := ao.accounts[acctUpdate.address]
 		if !ok {
 			ao.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, acctUpdate.address)
@@ -431,20 +463,22 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		}
 	}
 
-	// TODO: restore the cache
-	// for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
-	// 	ao.baseAccounts.write(persistedAcct)
-	// }
+	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
+		ao.baseOnlineAccounts.write(persistedAcct)
+	}
 
 	ao.deltas = ao.deltas[offset:]
 	ao.deltasAccum = ao.deltasAccum[offset:]
-	ao.versions = ao.versions[offset:]
-	ao.roundTotals = ao.roundTotals[offset:]
 	ao.cachedDBRoundOnline = newBase
 	ao.expirations = ao.expirations[expirationOffset:]
 
 	// simply contatenate since both sequences are sorted
 	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
+
+	maxOnlineLookback := int(ao.maxBalLookback()) + len(ao.deltas)
+	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
+		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
+	}
 
 	ao.accountsMu.Unlock()
 
@@ -452,6 +486,24 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 }
 
 func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// OnlineTotals return the total online balance for the given round.
+func (ao *onlineAccounts) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	ao.accountsMu.RLock()
+	defer ao.accountsMu.RUnlock()
+	return ao.onlineTotalsImpl(rnd)
+}
+
+// onlineTotalsImpl returns the online totals of all accounts at the end of round rnd.
+func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
+	offset, err := ao.roundParamsOffset(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+
+	onlineRoundParams := ao.onlineRoundParamsData[offset]
+	return basics.MicroAlgos{Raw: onlineRoundParams.OnlineSupply}, nil
 }
 
 // LookupOnlineAccountData returns the online account data for a given address at a given round.
@@ -491,6 +543,26 @@ func (ao *onlineAccounts) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
+// roundParamsOffset calculates the offset of the given round compared to the onlineRoundParams cache. Requires that the lock would be taken.
+func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, err error) {
+	startRound := ao.latest() + 1 - basics.Round(len(ao.onlineRoundParamsData))
+	if rnd < startRound {
+		err = &RoundOffsetError{
+			round:   rnd,
+			dbRound: startRound,
+		}
+		return
+	}
+
+	off := uint64(rnd - startRound)
+	if off >= uint64(len(ao.onlineRoundParamsData)) {
+		err = fmt.Errorf("round %d too high: dbRound %d, onlineRoundParamsData %d", rnd, startRound, len(ao.onlineRoundParamsData))
+		return
+	}
+
+	return off, nil
+}
+
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
 func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data ledgercore.OnlineAccountData, err error) {
 	ao.accountsMu.RLock()
@@ -501,6 +573,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		}
 	}()
 	var offset uint64
+	var paramsOffset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
 	var persistedData persistedOnlineAccountData
@@ -508,42 +581,53 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
 		offset, err = ao.roundOffset(rnd)
+		inHistory := false
+		if err != nil {
+			var roundOffsetError *RoundOffsetError
+			if !errors.As(err, &roundOffsetError) {
+				return
+			}
+			// the round number cannot be found in deltas, it is in history
+			inHistory = true
+			err = nil
+		}
+		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
 			return
 		}
 
-		// TODO: ensure protocol version and totals are available after shrinking deltas
-		rewardsProto = config.Consensus[ao.versions[offset]]
-		rewardsLevel = ao.roundTotals[offset].RewardsLevel
+		rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
+		rewardsLevel = ao.onlineRoundParamsData[paramsOffset].RewardsLevel
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		macct, indeltas := ao.accounts[addr]
-		if indeltas {
-			// Check if this is the most recent round, in which case, we can
-			// use a cache of the most recent account state.
-			if offset == uint64(len(ao.deltas)) {
-				return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
-			}
-			// the account appears in the deltas, but we don't know if it appears in the
-			// delta range of [0..offset], so we'll need to check :
-			// Traverse the deltas backwards to ensure that later updates take
-			// priority if present.
-			for offset > 0 {
-				offset--
-				d, ok := ao.deltas[offset].GetData(addr)
-				if ok {
-					return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+		if !inHistory {
+			macct, indeltas := ao.accounts[addr]
+			if indeltas {
+				// Check if this is the most recent round, in which case, we can
+				// use a cache of the most recent account state.
+				if offset == uint64(len(ao.deltas)) {
+					return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+				}
+				// the account appears in the deltas, but we don't know if it appears in the
+				// delta range of [0..offset], so we'll need to check :
+				// Traverse the deltas backwards to ensure that later updates take
+				// priority if present.
+				for offset > 0 {
+					offset--
+					d, ok := ao.deltas[offset].GetData(addr)
+					if ok {
+						return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+					}
 				}
 			}
 		}
 
-		// // check the baseAccounts -
-		// if macct, has := ao.baseAccounts.read(addr); has && macct.round == currentDbRound {
+		// TODO: baseOnlineAccounts is not good for round-based lookup since it always contains the latest updated value
+		// if macct, has := ao.baseOnlineAccounts.read(addr); has && macct.round == currentDbRound {
 		// 	// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 		// 	// would ensure that we promote this field.
-		// 	ao.baseAccounts.writePending(macct)
-		// 	u := macct.accountData.GetLedgerCoreAccountData()
-		// 	return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
+		// 	ao.baseOnlineAccounts.writePending(macct)
+		// 	return macct.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		// }
 
 		ao.accountsMu.RUnlock()
@@ -558,7 +642,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if persistedData.round == currentDbRound {
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
-				// ao.baseAccounts.writePending(persistedData)
+				// TODO: add another cache
+				// ao.baseOnlineAccounts.writePending(persistedData)
 				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
 			}
 			// otherwise return empty
@@ -587,33 +672,42 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		currentDbRound := ao.cachedDBRoundOnline
 		currentDeltaLen := len(ao.deltas)
 		offset, err := ao.roundOffset(rnd)
+		inMemory := true
 		if err != nil {
-			ao.accountsMu.RUnlock()
-			return nil, err
+			var roundOffsetError *RoundOffsetError
+			if !errors.As(err, &roundOffsetError) {
+				ao.accountsMu.RUnlock()
+				return nil, err
+			}
+			// the round number cannot be found in deltas, it is in history
+			inMemory = false
+			err = nil
 		}
 
-		// Determine how many accounts have been modified in-memory,
-		// so that we obtain enough top accounts from disk (accountdb).
-		// If the *onlineAccount is nil, that means the account is offline
-		// as of the most recent change to that account, or its vote key
-		// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
-		// representation of the most recent state of the account, and it
-		// is online and can vote in voteRnd.
 		modifiedAccounts := make(map[basics.Address]*ledgercore.OnlineAccount)
-		for o := uint64(0); o < offset; o++ {
-			for i := 0; i < ao.deltas[o].Len(); i++ {
-				addr, d := ao.deltas[o].GetByIdx(i)
-				if d.Status != basics.Online {
-					modifiedAccounts[addr] = nil
-					continue
-				}
+		if inMemory {
+			// Determine how many accounts have been modified in-memory,
+			// so that we obtain enough top accounts from disk (accountdb).
+			// If the *onlineAccount is nil, that means the account is offline
+			// as of the most recent change to that account, or its vote key
+			// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
+			// representation of the most recent state of the account, and it
+			// is online and can vote in voteRnd.
+			for o := uint64(0); o < offset; o++ {
+				for i := 0; i < ao.deltas[o].Len(); i++ {
+					addr, d := ao.deltas[o].GetByIdx(i)
+					if d.Status != basics.Online {
+						modifiedAccounts[addr] = nil
+						continue
+					}
 
-				if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
-					modifiedAccounts[addr] = nil
-					continue
-				}
+					if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
+						modifiedAccounts[addr] = nil
+						continue
+					}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
+					modifiedAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
+				}
 			}
 		}
 

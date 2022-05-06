@@ -22,9 +22,11 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/require"
 )
 
 type MetricTest struct {
@@ -90,4 +92,23 @@ func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) 
 		w.Header()["SampleRate"] = []string{fmt.Sprintf("%2.2f", p.sampleRate.Seconds())}
 	}
 	w.Write([]byte(""))
+}
+
+func TestSanitizeTelemetryName(t *testing.T) {
+	for _, tc := range []struct{ in, out string }{
+		{in: "algod_counter_x", out: "algod_counter_x"},
+		{in: "algod_counter_x{a=b}", out: "algod_counter_x_a_b_"},
+		{in: "this_is1-a-name0", out: "this_is1-a-name0"},
+		{in: "myMetricName1:a=yes", out: "myMetricName1_a_yes"},
+		{in: "myMetricName1:a=yes,b=no", out: "myMetricName1_a_yes_b_no"},
+		{in: "0myMetricName1", out: "_myMetricName1"},
+		{in: "myMetricName1{hello=x}", out: "myMetricName1_hello_x_"},
+		{in: "myMetricName1.moreNames-n.3", out: "myMetricName1_moreNames-n_3"},
+		{in: "-my-metric-name", out: "_my-metric-name"},
+		{in: `label-counter:label="a label value"`, out: "label-counter_label__a_label_value_"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			require.Equal(t, tc.out, sanitizeTelemetryName(tc.in))
+		})
+	}
 }

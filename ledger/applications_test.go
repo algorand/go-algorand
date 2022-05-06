@@ -33,12 +33,18 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// commitRound schedules a commit for known offset and dbRound
+// and waits for completion
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
+	commitRoundLookback(dbRound+basics.Round(offset), l)
+}
+
+func commitRoundLookback(lookback basics.Round, l *Ledger) {
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	l.trackers.scheduleCommit(l.Latest(), l.Latest()-(dbRound+basics.Round(offset)))
+	l.trackers.scheduleCommit(l.Latest(), l.Latest()-lookback)
 	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
 	// use that as an indicator.
 	for {
@@ -49,7 +55,6 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 			break
 		}
 		time.Sleep(time.Millisecond)
-
 	}
 }
 
@@ -138,19 +143,14 @@ return`
 	// the difference between these encoded structure is the UpdateRound variable. This variable is not being set before
 	// the consensus upgrade, and affects only nodes that have been updated.
 	if proto.EnableAccountDataResourceSeparation {
-		// expectedCreatorBase, err = hex.DecodeString("85a16101a162ce009d2290a16704a16b01a17a01")
-		// add vote first and last
 		expectedCreatorBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce009d2290a16704a16b01a17a01")
 		a.NoError(err)
 		expectedCreatorResource, err = hex.DecodeString("86a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903a17a01")
 		a.NoError(err)
-		// expectedUserOptInBase, err = hex.DecodeString("85a16101a162ce00a02fd0a16701a16c01a17a02")
-		// add vote first and last
 		expectedUserOptInBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a02fd0a16701a16c01a17a02")
 		a.NoError(err)
 		expectedUserOptInResource, err = hex.DecodeString("82a16f01a17a02")
 		a.NoError(err)
-		// expectedUserLocalBase, err = hex.DecodeString("85a16101a162ce00a33540a16701a16c01a17a04")
 		expectedUserLocalBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a33540a16701a16c01a17a04")
 		a.NoError(err)
 		expectedUserLocalResource, err = hex.DecodeString("83a16f01a17081a26c6b82a27462a56c6f63616ca2747401a17a04")

@@ -198,9 +198,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
+	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
 	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	defer func() {
@@ -296,9 +294,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
+	protoParams.CatchpointLookback = 32
 	config.Consensus[testProtocolVersion] = protoParams
 	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	defer func() {
@@ -388,17 +384,6 @@ func TestFullCatchpointWriter(t *testing.T) {
 		return err
 	})
 	require.NoError(t, err)
-
-	// TODO: FIX but adding voting data into catchpoint
-	// withoutVotingData := func(ad basics.AccountData) basics.AccountData {
-	// 	ad.VoteID = crypto.OneTimeSignatureVerifier{}
-	// 	ad.SelectionID = crypto.VRFVerifier{}
-	// 	ad.StateProofID = merklesignature.Verifier{}
-	// 	ad.VoteKeyDilution = 0
-	// 	ad.VoteFirstValid = 0
-	// 	ad.VoteLastValid = 0
-	// 	return ad
-	// }
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {

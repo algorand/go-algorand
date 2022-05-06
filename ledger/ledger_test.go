@@ -17,12 +17,14 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime/pprof"
+	"sort"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/account"
@@ -1771,4 +1773,141 @@ func BenchmarkLedgerStartup(b *testing.B) {
 		testOpenLedger(b, false, cfg)
 	})
 	os.RemoveAll(tmpDir)
+}
+
+// TestLedgerReloadShrinkDeltas checks the ledger has correct account state
+// after reloading with new configuration with shorter in-memory deltas for trackers
+func TestLedgerReloadShrinkDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = proto.MaxBalLookback
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		os.Remove(dbName + ".tracker.sqlite")
+	}()
+
+	maxBlocks := int(proto.MaxBalLookback * 2)
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
+	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys))
+	// regular addresses: all init accounts minus pools
+	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts))
+	i := 0
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			addresses[i] = addr
+			i++
+		}
+		accounts[addr] = genesisInitState.Accounts[addr]
+		keys[addr] = initKeys[addr]
+	}
+	sort.SliceStable(addresses, func(i, j int) bool { return bytes.Compare(addresses[i][:], addresses[j][:]) == -1 })
+
+	onlineTotals := make([]basics.MicroAlgos, maxBlocks+1)
+	curAddressIdx := 0
+	// run for maxBlocks rounds with random payment transactions
+	// generate 1000 txn per block
+	for i := 0; i < maxBlocks; i++ {
+		stxns := make([]transactions.SignedTxn, 10)
+		for j := 0; j < 10; j++ {
+			feeMult := rand.Intn(5) + 1
+			amountMult := rand.Intn(1000) + 1
+			receiver := ledgertesting.RandomAddress()
+			txHeader := transactions.Header{
+				Sender:      addresses[curAddressIdx],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * uint64(feeMult)},
+				FirstValid:  l.Latest() + 1,
+				LastValid:   l.Latest() + 10,
+				GenesisID:   t.Name(),
+				GenesisHash: crypto.Hash([]byte(t.Name())),
+			}
+
+			correctPayFields := transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: uint64(100 * amountMult)},
+			}
+
+			tx := transactions.Transaction{
+				Type:             protocol.PaymentTx,
+				Header:           txHeader,
+				PaymentTxnFields: correctPayFields,
+			}
+
+			stxns[j] = sign(initKeys, tx)
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+		require.NoError(t, err)
+		if i%100 == 0 || i == maxBlocks-1 {
+			l.WaitForCommit(l.Latest())
+		}
+		onlineTotals[i+1], err = l.accts.onlineTotals(basics.Round(i + 1))
+		require.NoError(t, err)
+	}
+
+	latest := l.Latest()
+	nextRound := latest + 1
+	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
+
+	origBalances := make([]basics.MicroAlgos, len(addresses))
+	origRewardsBalances := make([]basics.MicroAlgos, len(addresses))
+	origAgreementBalances := make([]basics.MicroAlgos, len(addresses))
+	for i, addr := range addresses {
+		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		origBalances[i] = ad.MicroAlgos
+
+		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origBalances[i], wo)
+		origRewardsBalances[i] = acct.MicroAlgos
+
+		oad, err := l.LookupAgreement(balancesRound, addr)
+		require.NoError(t, err)
+		origAgreementBalances[i] = oad.MicroAlgosWithRewards
+	}
+
+	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
+	require.Less(t, shorterLookback, cfg.MaxAcctLookback)
+	cfg.MaxAcctLookback = shorterLookback
+	l.cfg = cfg
+	l.reloadLedger()
+
+	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	require.Error(t, err)
+	for i := basics.Round(proto.MaxBalLookback - shorterLookback + 1); i <= l.Latest(); i++ {
+		online, err := l.OnlineTotals(i)
+		require.NoError(t, err)
+		require.Equal(t, onlineTotals[i], online)
+	}
+
+	for i, addr := range addresses {
+		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origBalances[i], ad.MicroAlgos)
+
+		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		require.NoError(t, err)
+		require.Equal(t, latest, rnd)
+		require.Equal(t, origRewardsBalances[i], acct.MicroAlgos)
+		require.Equal(t, origBalances[i], wo)
+
+		// TODO: FIXME: fails after load - need in-memory cache populated by newBlock while replaying blocks
+		oad, err := l.LookupAgreement(balancesRound, addr)
+		require.NoError(t, err)
+		require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
+
+		// TODO:
+		// add a test checking all committed pre-reload entries are gone
+	}
 }

@@ -72,7 +72,8 @@ type Ledger struct {
 
 	genesisAccounts map[basics.Address]basics.AccountData
 
-	genesisProto config.ConsensusParams
+	genesisProto        config.ConsensusParams
+	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
 	accts       accountUpdates
@@ -92,6 +93,8 @@ type Ledger struct {
 	verifiedTxnCache verify.VerifiedTransactionCache
 
 	cfg config.Local
+
+	dbPathPrefix string
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
@@ -114,10 +117,12 @@ func OpenLedger(
 		genesisHash:                    genesisInitState.GenesisHash,
 		genesisAccounts:                genesisInitState.Accounts,
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
+		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
+		dbPathPrefix:                   dbPathPrefix,
 	}
 
 	l.headerCache.maxEntries = 10
@@ -155,10 +160,6 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.accts.initialize(cfg)
-	l.acctsOnline.initialize()
-	l.catchpoint.initialize(cfg, dbPathPrefix)
-
 	err = l.reloadLedger()
 	if err != nil {
 		return nil, err
@@ -190,6 +191,10 @@ func (l *Ledger) reloadLedger() error {
 		err = fmt.Errorf("reloadLedger.bqInit %v", err)
 		return err
 	}
+
+	l.accts.initialize(l.cfg)
+	l.acctsOnline.initialize(l.cfg)
+	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
 
 	// init tracker db
 	trackerDBInitParams, err := trackerDBInitialize(l, l.catchpoint.catchpointEnabled(), l.catchpoint.dbDirectory)
@@ -472,21 +477,6 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
-
-	// TODO: restore after catchpoint implementation
-	// // mixin online data
-	// onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
-	// if err != nil {
-	// 	return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-	// }
-
-	// data.VoteID = onlineData.VoteID
-	// data.SelectionID = onlineData.SelectionID
-	// data.StateProofID = onlineData.StateProofID
-	// data.VoteKeyDilution = onlineData.VoteKeyDilution
-	// data.VoteFirstValid = onlineData.VoteFirstValid
-	// data.VoteLastValid = onlineData.VoteLastValid
-
 	return data, rnd, withoutRewards, nil
 }
 
@@ -507,18 +497,7 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards = data.MicroAlgos
-
-	// TODO: restore after catchpoint implementation
-	// // mixin online data
-	// onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
-	// if err != nil {
-	// 	return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-	// }
-	// data.AccountBaseData = baseData
-	// data.VotingData = onlineData.VotingData
-
 	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
-
 	return data, rnd, withoutRewards, nil
 }
 
@@ -598,7 +577,7 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.OnlineTotals(rnd)
+	return l.acctsOnline.OnlineTotals(rnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
@@ -718,6 +697,11 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 // GenesisProto returns the initial protocol for this ledger.
 func (l *Ledger) GenesisProto() config.ConsensusParams {
 	return l.genesisProto
+}
+
+// GenesisProtoVersion returns the initial protocol version for this ledger.
+func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return l.genesisProtoVersion
 }
 
 // GenesisAccounts returns initial accounts for this ledger.
