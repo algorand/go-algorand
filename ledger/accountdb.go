@@ -1350,8 +1350,8 @@ type baseOnlineAccountData struct {
 
 	baseVotingData
 
-	MicroAlgos  basics.MicroAlgos `codec:"G"`
-	RewardsBase uint64            `codec:"H"`
+	MicroAlgos  basics.MicroAlgos `codec:"Y"`
+	RewardsBase uint64            `codec:"Z"`
 }
 
 type baseAccountData struct {

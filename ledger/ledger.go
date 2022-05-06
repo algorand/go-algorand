@@ -554,15 +554,6 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 		return ledgercore.AccountData{}, basics.Round(0), err
 	}
 
-	// // mixin online data
-	// onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
-	// if err != nil {
-	// 	return ledgercore.AccountData{}, basics.Round(0), err
-	// }
-
-	// result.AccountBaseData = baseData
-	// result.VotingData = onlineData.VotingData
-
 	return result, validThrough, nil
 }
 

@@ -1558,13 +1558,13 @@ func (z *baseOnlineAccountData) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).baseVotingData.StateProofID.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
-			// string "G"
-			o = append(o, 0xa1, 0x47)
+			// string "Y"
+			o = append(o, 0xa1, 0x59)
 			o = (*z).MicroAlgos.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x80) == 0 { // if not empty
-			// string "H"
-			o = append(o, 0xa1, 0x48)
+			// string "Z"
+			o = append(o, 0xa1, 0x5a)
 			o = msgp.AppendUint64(o, (*z).RewardsBase)
 		}
 	}
@@ -1712,13 +1712,13 @@ func (z *baseOnlineAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "StateProofID")
 					return
 				}
-			case "G":
+			case "Y":
 				bts, err = (*z).MicroAlgos.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "MicroAlgos")
 					return
 				}
-			case "H":
+			case "Z":
 				(*z).RewardsBase, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsBase")
