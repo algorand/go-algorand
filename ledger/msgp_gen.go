@@ -3624,13 +3624,13 @@ func (z *resourcesData) MsgIsZero() bool {
 func (z *txTailRound) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0004Len := uint32(5)
-	var zb0004Mask uint8 /* 6 bits */
-	if (*z).TimeStamp == 0 {
+	zb0004Len := uint32(4)
+	var zb0004Mask uint8 /* 5 bits */
+	if (*z).Hdr.MsgIsZero() {
 		zb0004Len--
 		zb0004Mask |= 0x2
 	}
-	if (*z).ConsensusVersion.MsgIsZero() {
+	if len((*z).TxnIDs) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x4
 	}
@@ -3638,26 +3638,29 @@ func (z *txTailRound) MarshalMsg(b []byte) (o []byte) {
 		zb0004Len--
 		zb0004Mask |= 0x8
 	}
-	if len((*z).TxnIDs) == 0 {
-		zb0004Len--
-		zb0004Mask |= 0x10
-	}
 	if len((*z).LastValid) == 0 {
 		zb0004Len--
-		zb0004Mask |= 0x20
+		zb0004Mask |= 0x10
 	}
 	// variable map header, size zb0004Len
 	o = append(o, 0x80|uint8(zb0004Len))
 	if zb0004Len != 0 {
 		if (zb0004Mask & 0x2) == 0 { // if not empty
-			// string "a"
-			o = append(o, 0xa1, 0x61)
-			o = msgp.AppendInt64(o, (*z).TimeStamp)
+			// string "h"
+			o = append(o, 0xa1, 0x68)
+			o = (*z).Hdr.MarshalMsg(o)
 		}
 		if (zb0004Mask & 0x4) == 0 { // if not empty
-			// string "b"
-			o = append(o, 0xa1, 0x62)
-			o = (*z).ConsensusVersion.MarshalMsg(o)
+			// string "i"
+			o = append(o, 0xa1, 0x69)
+			if (*z).TxnIDs == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).TxnIDs)))
+			}
+			for zb0001 := range (*z).TxnIDs {
+				o = (*z).TxnIDs[zb0001].MarshalMsg(o)
+			}
 		}
 		if (zb0004Mask & 0x8) == 0 { // if not empty
 			// string "l"
@@ -3672,18 +3675,6 @@ func (z *txTailRound) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0004Mask & 0x10) == 0 { // if not empty
-			// string "t"
-			o = append(o, 0xa1, 0x74)
-			if (*z).TxnIDs == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = msgp.AppendArrayHeader(o, uint32(len((*z).TxnIDs)))
-			}
-			for zb0001 := range (*z).TxnIDs {
-				o = (*z).TxnIDs[zb0001].MarshalMsg(o)
-			}
-		}
-		if (zb0004Mask & 0x20) == 0 { // if not empty
 			// string "v"
 			o = append(o, 0xa1, 0x76)
 			if (*z).LastValid == nil {
@@ -3791,17 +3782,9 @@ func (z *txTailRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			(*z).TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
+			bts, err = (*z).Hdr.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TimeStamp")
-				return
-			}
-		}
-		if zb0004 > 0 {
-			zb0004--
-			bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ConsensusVersion")
+				err = msgp.WrapError(err, "struct-from-array", "Hdr")
 				return
 			}
 		}
@@ -3828,7 +3811,7 @@ func (z *txTailRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "t":
+			case "i":
 				var zb0012 int
 				var zb0013 bool
 				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -3894,16 +3877,10 @@ func (z *txTailRound) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				}
-			case "a":
-				(*z).TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
+			case "h":
+				bts, err = (*z).Hdr.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "TimeStamp")
-					return
-				}
-			case "b":
-				bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ConsensusVersion")
+					err = msgp.WrapError(err, "Hdr")
 					return
 				}
 			default:
@@ -3938,13 +3915,13 @@ func (z *txTailRound) Msgsize() (s int) {
 	for zb0003 := range (*z).Leases {
 		s += (*z).Leases[zb0003].Msgsize()
 	}
-	s += 2 + msgp.Int64Size + 2 + (*z).ConsensusVersion.Msgsize()
+	s += 2 + (*z).Hdr.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *txTailRound) MsgIsZero() bool {
-	return (len((*z).TxnIDs) == 0) && (len((*z).LastValid) == 0) && (len((*z).Leases) == 0) && ((*z).TimeStamp == 0) && ((*z).ConsensusVersion.MsgIsZero())
+	return (len((*z).TxnIDs) == 0) && (len((*z).LastValid) == 0) && (len((*z).Leases) == 0) && ((*z).Hdr.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

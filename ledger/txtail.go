@@ -29,10 +29,13 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 const initialLastValidArrayLen = 256
+
+// enableTxTailHashes enables txtail data hashing for catchpoints.
+// enable by removing it as needed (phase 2 of the catchpoints re-work)
+const enableTxTailHashes = false
 
 type roundLeases struct {
 	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
@@ -42,21 +45,37 @@ type roundLeases struct {
 type txTail struct {
 	recent map[basics.Round]roundLeases
 
-	// roundTailSerializedData contains the rounds that need to be flushed to disk.
+	// roundTailSerializedDeltas contains the rounds that need to be flushed to disk.
 	// It contain the serialized(encoded) form of the txTailRound. This field would remain
 	// maintained in this data structure up until being cleared out by postCommit
-	roundTailSerializedData [][]byte
+	roundTailSerializedDeltas [][]byte
 
-	// roundTailHashes contains the recent 1001 hashes. The first entry matches that current tracker database round - 1001,
-	// the second to tracker database round - 1000, and so forth. The roundTailHashes always has it's first array element
-	// not being used.
+	// roundTailHashes contains the recent (MaxTxnLife + DeeperBlockHeaderHistory + len(deltas)) hashes.
+	// The first entry matches that current tracker database round - (MaxTxnLife + DeeperBlockHeaderHistory) + 1
+	// the second to tracker database round - (MaxTxnLife + DeeperBlockHeaderHistory - 1) + 1, and so forth.
+	// See blockHeaderData description below for the indexing details.
+	//
+	// The layout for MaxTxnLife = 3 and 3 elements in in-memory deltas:
+	// ──────────────────┐
+	// maxTxnLife(3) + 1 ├────────────
+	//                   │  deltas
+	//   │ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ indices
+	//   └───┴───┴───┴───┴───┴───┴───┘
+	//     3   4   5   6   7   8   9   rounds
+	//                /|\
+	//                 │
+	//              dbRound
 	roundTailHashes []crypto.Digest
 
-	// consensusVersions contains the recent 1001 consensus versions. The first entry matches that current tracker database round - 1001,
-	// the second to tracker database round - 1000, and so forth.
-	consensusVersions []protocol.ConsensusVersion
+	// blockHeaderData contains the recent (MaxTxnLife + DeeperBlockHeaderHistory + len(deltas)) block header data.
+	// The first entry matches that current tracker database round - MaxTxnLife (tail size is MaxTxnLife + DeeperBlockHeaderHistory)
+	// the second to tracker database round - (MaxTxnLife - 1), and so forth, and the last element is for the latest round.
+	// Deltas are in-memory not-committed-yet data.
+	blockHeaderData map[basics.Round]bookkeeping.BlockHeader
+	// lowestBlockHeaderRound is the lowest round in blockHeaderData, used as a starting point for old entries removal
+	lowestBlockHeaderRound basics.Round
 
-	// tailMu is the synchronization mutex for accessing roundTailHashes, roundTailSerializedData and consensusVersions.
+	// tailMu is the synchronization mutex for accessing roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
 	tailMu deadlock.RWMutex
 
 	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
@@ -84,7 +103,6 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 	t.lowWaterMark = dbRound
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
-
 	t.recent = make(map[basics.Round]roundLeases)
 
 	// the roundsLastValids is a temporary map used during the execution of
@@ -93,15 +111,15 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	// more memory than we truly need.
 	roundsLastValids := make(map[basics.Round][]transactions.Txid)
 
-	// allocate with size 0, just so that we can start from fresh.
-	// the roundTailHashes and consensusVersions always has 1 extra element being unused, so preallocate that.
+	// the roundTailHashes and blockHeaderData need a single element to start with
+	// in order to allow lookups on zero offsets when they are empty (new database)
 	roundTailHashes = append([]crypto.Digest{{}}, roundTailHashes...)
-	consensusVersions := make([]protocol.ConsensusVersion, 1)
-	roundTailSerializedData := make([][]byte, 0)
+	blockHeaderData := make(map[basics.Round]bookkeeping.BlockHeader, len(roundData)+1)
 
+	t.lowestBlockHeaderRound = baseRound
 	for old := baseRound; old <= dbRound && dbRound > baseRound; old++ {
 		txTailRound := roundData[0]
-		consensusParams := config.Consensus[txTailRound.ConsensusVersion]
+		consensusParams := config.Consensus[txTailRound.Hdr.CurrentProtocol]
 
 		t.recent[old] = roundLeases{
 			txleases: make(map[ledgercore.Txlease]basics.Round, len(txTailRound.TxnIDs)),
@@ -133,7 +151,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 			}
 		}
 
-		consensusVersions = append(consensusVersions, txTailRound.ConsensusVersion)
+		blockHeaderData[old] = txTailRound.Hdr
 		roundData = roundData[1:]
 	}
 
@@ -145,10 +163,13 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 		}
 		t.lastValid[lastValid] = lastValueMap
 	}
+
 	t.tailMu.Lock()
-	t.roundTailHashes = roundTailHashes
-	t.consensusVersions = consensusVersions
-	t.roundTailSerializedData = roundTailSerializedData
+	if enableTxTailHashes {
+		t.roundTailHashes = roundTailHashes
+	}
+	t.blockHeaderData = blockHeaderData
+	t.roundTailSerializedDeltas = make([][]byte, 0)
 	t.tailMu.Unlock()
 
 	return nil
@@ -168,8 +189,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	var tail txTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
 	tail.LastValid = make([]basics.Round, len(delta.Txids))
-	tail.TimeStamp = blk.TimeStamp
-	tail.ConsensusVersion = blk.BlockHeader.CurrentProtocol
+	tail.Hdr = blk.BlockHeader
 
 	for txid, txnInc := range delta.Txids {
 		t.putLV(txnInc.LastValid, txid)
@@ -185,19 +205,23 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 	encodedTail, tailHash := tail.encode()
 
+	t.tailMu.Lock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}
-	t.tailMu.Lock()
-	t.roundTailSerializedData = append(t.roundTailSerializedData, encodedTail)
-	t.roundTailHashes = append(t.roundTailHashes, tailHash)
-	t.consensusVersions = append(t.consensusVersions, blk.CurrentProtocol)
+	t.roundTailSerializedDeltas = append(t.roundTailSerializedDeltas, encodedTail)
+	if enableTxTailHashes {
+		t.roundTailHashes = append(t.roundTailHashes, tailHash)
+	}
+	t.blockHeaderData[rnd] = blk.BlockHeader
 	t.tailMu.Unlock()
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
-	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
+	proto := t.recent[rnd].proto
+	maxlife := basics.Round(proto.MaxTxnLife)
+
 	for r := range t.recent {
 		if r+maxlife < rnd {
 			delete(t.recent, r)
@@ -207,7 +231,8 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 		delete(t.lastValid, t.lowWaterMark)
 	}
 
-	return (rnd + 1).SubSaturate(maxlife), basics.Round(0)
+	deeperHistory := basics.Round(proto.DeeperBlockHeaderHistory)
+	return (rnd + 1).SubSaturate(maxlife + deeperHistory), basics.Round(0)
 }
 
 func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
@@ -215,9 +240,17 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 		return nil
 	}
 
-	maxTxnLife := config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife
-	// update the dcc with the hash we'll need.
-	dcc.txTailHash, err = t.recentTailHash(dcc.offset, maxTxnLife)
+	if enableTxTailHashes {
+		rnd := dcc.oldBase + basics.Round(dcc.offset)
+		t.tailMu.RLock()
+		proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
+		if !ok {
+			return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, t.lowestBlockHeaderRound, dcc.oldBase)
+		}
+		t.tailMu.RUnlock()
+		// update the dcc with the hash we'll need.
+		dcc.txTailHash, err = t.recentTailHash(dcc.offset, proto.MaxTxnLife+proto.DeeperBlockHeaderHistory)
+	}
 	return
 }
 
@@ -227,14 +260,22 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 
 	t.tailMu.RLock()
 	for i := uint64(0); i < dcc.offset; i++ {
-		roundsData = append(roundsData, t.roundTailSerializedData[i])
+		roundsData = append(roundsData, t.roundTailSerializedDeltas[i])
 	}
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
-	maxTxnLifeRound := basics.Round(config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife) + 1
+	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
+	rnd := dcc.oldBase + basics.Round(dcc.offset)
+	proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
+	if !ok {
+		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, t.lowestBlockHeaderRound, dcc.oldBase)
+	}
+	retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
 	t.tailMu.RUnlock()
 
-	forgetRound := (baseRound + basics.Round(dcc.offset)).SubSaturate(maxTxnLifeRound)
-	if err := txtailNewRound(ctx, tx, baseRound, roundsData, forgetRound); err != nil {
+	// determine the round to remove data
+	// This is the similar formula to the committedUpTo: rnd + 1 - retain size
+	forgetBeforeRound := (baseRound + basics.Round(dcc.offset)).SubSaturate(basics.Round(retainSize))
+	if err := txtailNewRound(ctx, tx, baseRound, roundsData, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
 	return nil
@@ -242,14 +283,27 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 
 func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	t.tailMu.Lock()
-	t.roundTailSerializedData = t.roundTailSerializedData[dcc.offset:]
+	newBase := dcc.newBase
+
+	t.roundTailSerializedDeltas = t.roundTailSerializedDeltas[dcc.offset:]
+
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
-	maxTxnLife := config.Consensus[t.consensusVersions[dcc.offset]].MaxTxnLife
-	// keep the latest 1001 entries on the hash, before roundTailSerializedData
-	firstTailIdx := len(t.roundTailHashes) - len(t.roundTailSerializedData) - int(maxTxnLife)
-	if firstTailIdx > 0 {
-		t.roundTailHashes = t.roundTailHashes[firstTailIdx:]
-		t.consensusVersions = t.consensusVersions[firstTailIdx:]
+	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory rounds
+	proto := config.Consensus[t.blockHeaderData[newBase].CurrentProtocol]
+	retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
+	newLowestRound := newBase.SubSaturate(basics.Round(retainSize) - 1)
+	if newLowestRound > t.lowestBlockHeaderRound {
+		for r := t.lowestBlockHeaderRound; r < newLowestRound; r++ {
+			delete(t.blockHeaderData, r)
+		}
+		t.lowestBlockHeaderRound = newLowestRound
+	}
+	if enableTxTailHashes {
+		newDeltaLength := len(t.roundTailSerializedDeltas)
+		firstTailIdx := len(t.roundTailHashes) - newDeltaLength - int(retainSize)
+		if firstTailIdx > 0 {
+			t.roundTailHashes = t.roundTailHashes[firstTailIdx:]
+		}
 	}
 	t.tailMu.Unlock()
 }
@@ -310,12 +364,12 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 	t.lastValid[lastValid][id] = struct{}{}
 }
 
-func (t *txTail) recentTailHash(offset uint64, maxTxnLife uint64) (crypto.Digest, error) {
-	// preapare a buffer to hash.
-	buffer := make([]byte, (maxTxnLife+1)*crypto.DigestSize)
+func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest, error) {
+	// prepare a buffer to hash.
+	buffer := make([]byte, (retainSize)*crypto.DigestSize)
 	bufIdx := 0
 	t.tailMu.RLock()
-	lastOffset := offset + maxTxnLife
+	lastOffset := offset + retainSize // size of interval [offset, lastOffset) is retainSize
 	if lastOffset > uint64(len(t.roundTailHashes)) {
 		lastOffset = uint64(len(t.roundTailHashes))
 	}
@@ -325,4 +379,11 @@ func (t *txTail) recentTailHash(offset uint64, maxTxnLife uint64) (crypto.Digest
 	}
 	t.tailMu.RUnlock()
 	return crypto.Hash(buffer), nil
+}
+
+func (t *txTail) blockHeader(rnd basics.Round) (bookkeeping.BlockHeader, bool) {
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+	hdr, ok := t.blockHeaderData[rnd]
+	return hdr, ok
 }
