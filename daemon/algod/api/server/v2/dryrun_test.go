@@ -1251,17 +1251,17 @@ func TestDryrunCost(t *testing.T) {
 		msg       string
 		numHashes int
 	}{
-		{"REJECT", 12},
-		{"PASS", 5},
+		{"REJECT", 22},
+		{"PASS", 16},
 	}
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			costs := make([]int64, 2)
+			costs := make([]int64, 3)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
-			approval := ops.Program
+			app1 := ops.Program
 			costs[0] = 3 + int64(test.numHashes)*130
 
 			ops, err = logic.AssembleString("int 1")
@@ -1270,8 +1270,24 @@ func TestDryrunCost(t *testing.T) {
 
 			ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
 			require.NoError(t, err)
-			approv := ops.Program
+			app2 := ops.Program
 			costs[1] = 3
+
+			ops, err = logic.AssembleString(`#pragma version 6
+itxn_begin
+int appl
+itxn_field TypeEnum
+int DeleteApplication
+itxn_field OnCompletion
+byte 0x068101
+itxn_field ApprovalProgram
+byte 0x068101
+itxn_field ClearStateProgram
+itxn_submit
+int 1`)
+			require.NoError(t, err)
+			app3 := ops.Program
+			costs[2] = -687
 
 			var appIdx basics.AppIndex = 1
 			creator := randomAddress()
@@ -1298,13 +1314,23 @@ func TestDryrunCost(t *testing.T) {
 							},
 						},
 					},
+					{
+						Txn: transactions.Transaction{
+							Header: transactions.Header{Sender: sender},
+							Type:   protocol.ApplicationCallTx,
+							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+								ApplicationID: appIdx + 2,
+								OnCompletion:  transactions.OptInOC,
+							},
+						},
+					},
 				},
 				Apps: []generated.Application{
 					{
 						Id: uint64(appIdx),
 						Params: generated.ApplicationParams{
 							Creator:           creator.String(),
-							ApprovalProgram:   approval,
+							ApprovalProgram:   app1,
 							ClearStateProgram: clst,
 							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
 						},
@@ -1313,7 +1339,16 @@ func TestDryrunCost(t *testing.T) {
 						Id: uint64(appIdx + 1),
 						Params: generated.ApplicationParams{
 							Creator:           creator.String(),
-							ApprovalProgram:   approv,
+							ApprovalProgram:   app2,
+							ClearStateProgram: clst,
+							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+						},
+					},
+					{
+						Id: uint64(appIdx + 2),
+						Params: generated.ApplicationParams{
+							Creator:           creator.String(),
+							ApprovalProgram:   app3,
 							ClearStateProgram: clst,
 							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
 						},
@@ -1331,7 +1366,7 @@ func TestDryrunCost(t *testing.T) {
 			var response generated.DryrunResponse
 			doDryrunRequest(&dr, &response)
 			require.Empty(t, response.Error)
-			require.Equal(t, 2, len(response.Txns))
+			require.Equal(t, 3, len(response.Txns))
 
 			for i, txn := range response.Txns {
 				messages := *txn.AppCallMessages
