@@ -96,7 +96,6 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	for addr, data := range accts {
 		expected := ledgercore.ToAccountData(data)
-		expected.VotingData = ledgercore.VotingData{}
 		pad, err := aq.lookup(addr)
 		require.NoError(t, err)
 		d := pad.accountData.GetLedgerCoreAccountData()
@@ -2154,7 +2153,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	}
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"VoteID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"SelectionID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"UpdateRound":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -2355,7 +2354,7 @@ func (m *mockAccountWriter) lookup(addr basics.Address) (pad persistedAccountDat
 		err = fmt.Errorf("not found %s", addr.String())
 		return
 	}
-	pad.accountData.SetCoreAccountData(&data)
+	pad.accountData.SetCoreAccountData(data)
 	pad.addr = addr
 	pad.rowid = rowid
 	return
@@ -2388,7 +2387,7 @@ func (m *mockAccountWriter) lookupResource(addr basics.Address, cidx basics.Crea
 	return
 }
 
-func (m *mockAccountWriter) insertAccount(addr basics.Address, data baseAccountData) (rowid int64, err error) {
+func (m *mockAccountWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
 	rowid, ok := m.addresses[addr]
 	if ok {
 		err = fmt.Errorf("insertAccount: addr %s, rowid %d: UNIQUE constraint failed", addr.String(), rowid)
@@ -2415,7 +2414,7 @@ func (m *mockAccountWriter) deleteAccount(rowid int64) (rowsAffected int64, err 
 	return 1, nil
 }
 
-func (m *mockAccountWriter) updateAccount(rowid int64, data baseAccountData) (rowsAffected int64, err error) {
+func (m *mockAccountWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
 	if _, ok := m.rowids[rowid]; !ok {
 		return 0, fmt.Errorf("updateAccount: not found rowid %d", rowid)
 	}
@@ -3247,7 +3246,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 		address: addrC,
 		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
-			VoteFirstValid: 500,
+			baseVotingData: baseVotingData{VoteFirstValid: 500},
 		}},
 		newStatus: []basics.Status{basics.Online},
 		updRound:  []uint64{2},
@@ -3259,7 +3258,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			addr: addrD,
 			accountData: baseOnlineAccountData{
 				MicroAlgos:     basics.MicroAlgos{Raw: 400_000_000},
-				VoteFirstValid: 500,
+				baseVotingData: baseVotingData{VoteFirstValid: 500},
 			},
 			rowid: 1,
 		},
@@ -3277,13 +3276,13 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 			addr: addrE,
 			accountData: baseOnlineAccountData{
 				MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
-				VoteFirstValid: 500,
+				baseVotingData: baseVotingData{VoteFirstValid: 500},
 			},
 			rowid: 2,
 		},
 		newAcct: []baseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
-			VoteFirstValid: 600,
+			baseVotingData: baseVotingData{VoteFirstValid: 600},
 		}},
 		newStatus: []basics.Status{basics.Online},
 		updRound:  []uint64{4},
@@ -3346,7 +3345,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 			},
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
-				VoteFirstValid: 100,
+				baseVotingData: baseVotingData{VoteFirstValid: 100},
 			},
 		},
 		updRound:  []uint64{1, 2},
@@ -3358,7 +3357,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 		newAcct: []baseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
-				VoteFirstValid: 200,
+				baseVotingData: baseVotingData{VoteFirstValid: 200},
 			},
 			{
 				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
@@ -3374,14 +3373,14 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 			addr: addrC,
 			accountData: baseOnlineAccountData{
 				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
-				VoteFirstValid: 300,
+				baseVotingData: baseVotingData{VoteFirstValid: 300},
 			},
 			rowid: 1,
 		},
 		newAcct: []baseOnlineAccountData{
 			{
 				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
-				VoteFirstValid: 301,
+				baseVotingData: baseVotingData{VoteFirstValid: 301},
 			},
 			{
 				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},

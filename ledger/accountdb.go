@@ -103,6 +103,12 @@ var creatablesMigration = []string{
 // createNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
 func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
 	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
+		ON %s ( normalizedonlinebalance, address ) WHERE normalizedonlinebalance>0`, idxname, tablename)
+}
+
+// createNormalizedOnlineBalanceIndexOnline handles onlineaccounts/catchpointonlineaccounts tables
+func createNormalizedOnlineBalanceIndexOnline(idxname string, tablename string) string {
+	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
 		ON %s ( normalizedonlinebalance, address )`, idxname, tablename)
 }
 
@@ -132,7 +138,7 @@ var createOnlineAccountsTable = []string{
 		votelastvalid INTEGER NOT NULL,
 		data BLOB NOT NULL,
 		PRIMARY KEY (address, updround) )`,
-	createNormalizedOnlineBalanceIndex("onlineaccountnorm", "onlineaccounts"),
+	createNormalizedOnlineBalanceIndexOnline("onlineaccountnorm", "onlineaccounts"),
 }
 
 var createTxTailTable = []string{
@@ -353,7 +359,7 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].accountData.SetAccountData(&accountDataV5)
+		normalizedAccountBalances[i].accountData.SetAccountData(accountDataV5)
 		normalizedAccountBalances[i].normalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
@@ -676,7 +682,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 					nAcctDeltas: prev.nAcctDeltas + 1,
 					address:     prev.address,
 				}
-				updEntry.newAcct.SetCoreAccountData(&acctDelta)
+				updEntry.newAcct.SetCoreAccountData(acctDelta)
 				updEntry.newAcct.UpdateRound = deltaRound * updateRoundMultiplier
 				outAccountDeltas.update(idx, updEntry)
 			} else {
@@ -688,7 +694,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 					},
 					address: addr,
 				}
-				newEntry.newAcct.SetCoreAccountData(&acctDelta)
+				newEntry.newAcct.SetCoreAccountData(acctDelta)
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.oldAcct = baseAccountData
 					outAccountDeltas.insert(newEntry) // insert instead of upsert economizes one map lookup
@@ -1086,7 +1092,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointtxtail (round INTEGER PRIMARY KEY NOT NULL, data blob)",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
-			createNormalizedOnlineBalanceIndex(idxnameOnlineBalances, "catchpointonlineaccounts"),
+			createNormalizedOnlineBalanceIndexOnline(idxnameOnlineBalances, "catchpointonlineaccounts"),
 		)
 	}
 
@@ -1328,7 +1334,7 @@ func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err 
 	return nil
 }
 
-type baseOnlineAccountData struct {
+type baseVotingData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"A"`
@@ -1337,8 +1343,15 @@ type baseOnlineAccountData struct {
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
 	StateProofID    merklesignature.Verifier        `codec:"F"`
-	MicroAlgos      basics.MicroAlgos               `codec:"G"`
-	RewardsBase     uint64                          `codec:"H"`
+}
+
+type baseOnlineAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	baseVotingData
+
+	MicroAlgos  basics.MicroAlgos `codec:"Y"`
+	RewardsBase uint64            `codec:"Z"`
 }
 
 type baseAccountData struct {
@@ -1356,6 +1369,8 @@ type baseAccountData struct {
 	TotalAssets                uint64            `codec:"j"`
 	TotalAppParams             uint64            `codec:"k"`
 	TotalAppLocalStates        uint64            `codec:"l"`
+
+	baseVotingData
 
 	// UpdateRound is the round that modified this account data last. Since we want all the nodes to have the exact same
 	// value for this field, we'll be setting the value of this field to zero *before* the EnableAccountDataResourceSeparation
@@ -1377,14 +1392,15 @@ func (ba baseAccountData) IsEmpty() bool {
 		ba.TotalAssetParams == 0 &&
 		ba.TotalAssets == 0 &&
 		ba.TotalAppParams == 0 &&
-		ba.TotalAppLocalStates == 0
+		ba.TotalAppLocalStates == 0 &&
+		ba.baseVotingData.IsEmpty()
 }
 
 func (ba baseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
 	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
 
-func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
+func (ba *baseAccountData) SetCoreAccountData(ad ledgercore.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
@@ -1397,9 +1413,11 @@ func (ba *baseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.TotalAssets = ad.TotalAssets
 	ba.TotalAppParams = ad.TotalAppParams
 	ba.TotalAppLocalStates = ad.TotalAppLocalStates
+
+	ba.baseVotingData.SetCoreAccountData(ad)
 }
 
-func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
+func (ba *baseAccountData) SetAccountData(ad basics.AccountData) {
 	ba.Status = ad.Status
 	ba.MicroAlgos = ad.MicroAlgos
 	ba.RewardsBase = ad.RewardsBase
@@ -1412,11 +1430,19 @@ func (ba *baseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAssets = uint64(len(ad.Assets))
 	ba.TotalAppParams = uint64(len(ad.AppParams))
 	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
+
+	ba.baseVotingData.VoteID = ad.VoteID
+	ba.baseVotingData.SelectionID = ad.SelectionID
+	ba.baseVotingData.StateProofID = ad.StateProofID
+	ba.baseVotingData.VoteFirstValid = ad.VoteFirstValid
+	ba.baseVotingData.VoteLastValid = ad.VoteLastValid
+	ba.baseVotingData.VoteKeyDilution = ad.VoteKeyDilution
 }
 
 func (ba baseAccountData) GetLedgerCoreAccountData() ledgercore.AccountData {
 	return ledgercore.AccountData{
 		AccountBaseData: ba.GetLedgerCoreAccountBaseData(),
+		VotingData:      ba.GetLedgerCoreVotingData(),
 	}
 }
 
@@ -1439,6 +1465,17 @@ func (ba baseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBaseD
 	}
 }
 
+func (ba baseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
+	return ledgercore.VotingData{
+		VoteID:          ba.VoteID,
+		SelectionID:     ba.SelectionID,
+		StateProofID:    ba.StateProofID,
+		VoteFirstValid:  ba.VoteFirstValid,
+		VoteLastValid:   ba.VoteLastValid,
+		VoteKeyDilution: ba.VoteKeyDilution,
+	}
+}
+
 func (ba *baseAccountData) GetAccountData() basics.AccountData {
 	return basics.AccountData{
 		Status:             ba.Status,
@@ -1451,73 +1488,92 @@ func (ba *baseAccountData) GetAccountData() basics.AccountData {
 			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
 		},
 		TotalExtraAppPages: ba.TotalExtraAppPages,
+
+		VoteID:          ba.VoteID,
+		SelectionID:     ba.SelectionID,
+		StateProofID:    ba.StateProofID,
+		VoteFirstValid:  ba.VoteFirstValid,
+		VoteLastValid:   ba.VoteLastValid,
+		VoteKeyDilution: ba.VoteKeyDilution,
 	}
 }
 
-func (ba baseOnlineAccountData) IsVotingEmpty() bool {
-	return ba.VoteID.MsgIsZero() &&
-		ba.SelectionID.MsgIsZero() &&
-		ba.StateProofID.MsgIsZero() &&
-		ba.VoteFirstValid == 0 &&
-		ba.VoteLastValid == 0 &&
-		ba.VoteKeyDilution == 0
+// IsEmpty return true if any of the fields other then the UpdateRound are non-zero.
+func (bv baseVotingData) IsEmpty() bool {
+	return bv.VoteID.MsgIsZero() &&
+		bv.SelectionID.MsgIsZero() &&
+		bv.StateProofID.MsgIsZero() &&
+		bv.VoteFirstValid == 0 &&
+		bv.VoteLastValid == 0 &&
+		bv.VoteKeyDilution == 0
 }
 
-func (ba baseOnlineAccountData) IsEmpty() bool {
-	return ba.IsVotingEmpty() &&
-		ba.MicroAlgos.Raw == 0 &&
-		ba.RewardsBase == 0
+// SetCoreAccountData initializes baseVotingData from ledgercore.AccountData
+func (bv *baseVotingData) SetCoreAccountData(ad ledgercore.AccountData) {
+	bv.VoteID = ad.VoteID
+	bv.SelectionID = ad.SelectionID
+	bv.StateProofID = ad.StateProofID
+	bv.VoteFirstValid = ad.VoteFirstValid
+	bv.VoteLastValid = ad.VoteLastValid
+	bv.VoteKeyDilution = ad.VoteKeyDilution
+}
+
+// IsVotingEmpty checks if voting data fields are empty
+func (bo baseOnlineAccountData) IsVotingEmpty() bool {
+	return bo.baseVotingData.IsEmpty()
+}
+
+// IsEmpty return true if any of the fields are non-zero.
+func (bo baseOnlineAccountData) IsEmpty() bool {
+	return bo.IsVotingEmpty() &&
+		bo.MicroAlgos.Raw == 0 &&
+		bo.RewardsBase == 0
 }
 
 // GetOnlineAccount returns ledgercore.OnlineAccount for top online accounts / voters
 // TODO: unify
-func (ba baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalance uint64) ledgercore.OnlineAccount {
+func (bo baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalance uint64) ledgercore.OnlineAccount {
 	return ledgercore.OnlineAccount{
 		Address:                 addr,
-		MicroAlgos:              ba.MicroAlgos,
-		RewardsBase:             ba.RewardsBase,
+		MicroAlgos:              bo.MicroAlgos,
+		RewardsBase:             bo.RewardsBase,
 		NormalizedOnlineBalance: normBalance,
-		VoteFirstValid:          ba.VoteFirstValid,
-		VoteLastValid:           ba.VoteLastValid,
-		StateProofID:            ba.StateProofID,
+		VoteFirstValid:          bo.VoteFirstValid,
+		VoteLastValid:           bo.VoteLastValid,
+		StateProofID:            bo.StateProofID,
 	}
 }
 
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
-func (ba baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
+func (bo baseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
 	microAlgos, _, _ := basics.WithUpdatedRewards(
-		proto, basics.Online, ba.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
+		proto, basics.Online, bo.MicroAlgos, basics.MicroAlgos{}, bo.RewardsBase, rewardsLevel,
 	)
 
 	return ledgercore.OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
 		VotingData: ledgercore.VotingData{
-			VoteID:          ba.VoteID,
-			SelectionID:     ba.SelectionID,
-			StateProofID:    ba.StateProofID,
-			VoteFirstValid:  ba.VoteFirstValid,
-			VoteLastValid:   ba.VoteLastValid,
-			VoteKeyDilution: ba.VoteKeyDilution,
+			VoteID:          bo.VoteID,
+			SelectionID:     bo.SelectionID,
+			StateProofID:    bo.StateProofID,
+			VoteFirstValid:  bo.VoteFirstValid,
+			VoteLastValid:   bo.VoteLastValid,
+			VoteKeyDilution: bo.VoteKeyDilution,
 		},
 	}
 }
 
-func (ba baseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
-	return basics.NormalizedOnlineAccountBalance(basics.Online, ba.RewardsBase, ba.MicroAlgos, proto)
+func (bo baseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
+	return basics.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, proto)
 }
 
-func (ba *baseOnlineAccountData) SetCoreAccountData(ad ledgercore.AccountData) {
-	ba.VoteID = ad.VoteID
-	ba.SelectionID = ad.SelectionID
-	ba.StateProofID = ad.StateProofID
-	ba.VoteFirstValid = ad.VoteFirstValid
-	ba.VoteLastValid = ad.VoteLastValid
-	ba.VoteKeyDilution = ad.VoteKeyDilution
+func (bo *baseOnlineAccountData) SetCoreAccountData(ad ledgercore.AccountData) {
+	bo.baseVotingData.SetCoreAccountData(ad)
 
 	// MicroAlgos/RewardsBase are updated by the evaluator when accounts are touched
-	ba.MicroAlgos = ad.MicroAlgos
-	ba.RewardsBase = ad.RewardsBase
+	bo.MicroAlgos = ad.MicroAlgos
+	bo.RewardsBase = ad.RewardsBase
 }
 
 type resourceFlags uint8
@@ -1910,7 +1966,6 @@ type baseAccountDataMigrate struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	baseAccountData
-	baseOnlineAccountData
 }
 
 func (ba *baseAccountDataMigrate) SetAccountData(ad *basics.AccountData) {
@@ -1933,10 +1988,6 @@ func (ba *baseAccountDataMigrate) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAppParams = uint64(len(ad.AppParams))
 	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
 }
-
-// func (ba baseAccountDataMigrate) IsEmpty() bool {
-// 	return ba.baseAccountData.IsEmpty() && ba.baseOnlineAccountData.IsEmpty()
-// }
 
 // performResourceTableMigration migrate the database to use the resources table.
 func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
@@ -2163,37 +2214,6 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 
 func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
 
-	now := time.Now().UnixNano()
-	idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
-
-	createNewAcctBase := []string{
-		`CREATE TABLE IF NOT EXISTS accountbase_online_migration (
-		addrid INTEGER PRIMARY KEY NOT NULL,
-		address blob NOT NULL,
-		data blob)`,
-		createUniqueAddressBalanceIndex(idxnameAddress, "accountbase_online_migration"),
-	}
-
-	applyNewAcctBase := []string{
-		`ALTER TABLE accountbase RENAME TO accountbase_old`,
-		`ALTER TABLE accountbase_online_migration RENAME TO accountbase`,
-		`DROP TABLE IF EXISTS accountbase_old`,
-	}
-
-	for _, stmt := range createNewAcctBase {
-		_, err = tx.ExecContext(ctx, stmt)
-		if err != nil {
-			return err
-		}
-	}
-
-	var insertAcctBase *sql.Stmt
-	insertAcctBase, err = tx.PrepareContext(ctx, "INSERT INTO accountbase_online_migration(addrid, address, data) VALUES(?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer insertAcctBase.Close()
-
 	var insertOnlineAcct *sql.Stmt
 	insertOnlineAcct, err = tx.PrepareContext(ctx, "INSERT INTO onlineaccounts(address, data, normalizedonlinebalance, updround, votelastvalid) VALUES(?, ?, ?, ?, ?)")
 	if err != nil {
@@ -2261,9 +2281,8 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 				copy(addr[:], addrbuf)
 				return fmt.Errorf("non valid norm balance for online account %s", addr.String())
 			}
-			baseOnlineAD := ba.baseOnlineAccountData
-			// TODO: recalculate MicroAlgos/RewardsBase?
-			// Probably it is OK to proceed since lookup functions will apply pending reward anyway
+			var baseOnlineAD baseOnlineAccountData
+			baseOnlineAD.baseVotingData = ba.baseVotingData
 			baseOnlineAD.MicroAlgos = ba.baseAccountData.MicroAlgos
 			baseOnlineAD.RewardsBase = ba.baseAccountData.RewardsBase
 			encodedOnlineAcctData := protocol.Encode(&baseOnlineAD)
@@ -2274,15 +2293,6 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 			}
 		}
 
-		// insert base account data without voting data
-		baseAccountData := ba.baseAccountData
-		baseAccountDataEncoded := protocol.Encode(&baseAccountData)
-		insertRes, err = insertAcctBase.ExecContext(ctx, addrid, addrbuf, baseAccountDataEncoded)
-		err = checkSQLResult(err, insertRes)
-		if err != nil {
-			return err
-		}
-
 		processedAccounts++
 		if log != nil {
 			log(processedAccounts, totalOnlineBaseAccounts)
@@ -2290,13 +2300,6 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log fu
 	}
 	if err = rows.Err(); err != nil {
 		return err
-	}
-
-	for _, stmt := range applyNewAcctBase {
-		_, err = tx.Exec(stmt)
-		if err != nil {
-			return err
-		}
 	}
 
 	return err
@@ -3054,9 +3057,9 @@ func accountsPruneOnlineRoundParams(tx *sql.Tx, retainRound basics.Round) error 
 }
 
 type accountsWriter interface {
-	insertAccount(addr basics.Address, data baseAccountData) (rowid int64, err error)
+	insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error)
 	deleteAccount(rowid int64) (rowsAffected int64, err error)
-	updateAccount(rowid int64, data baseAccountData) (rowsAffected int64, err error)
+	updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error)
 
 	insertResource(addrid int64, aidx basics.CreatableIndex, data resourcesData) (rowid int64, err error)
 	deleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
@@ -3135,12 +3138,12 @@ func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasC
 			return
 		}
 
-		w.insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, data) VALUES (?, ?)")
+		w.insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.updateStmt, err = tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
+		w.updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
 		if err != nil {
 			return
 		}
@@ -3177,8 +3180,8 @@ func makeAccountsSQLWriter(tx *sql.Tx, hasAccounts bool, hasResources bool, hasC
 	return
 }
 
-func (w accountsSQLWriter) insertAccount(addr basics.Address, data baseAccountData) (rowid int64, err error) {
-	result, err := w.insertStmt.Exec(addr[:], protocol.Encode(&data))
+func (w accountsSQLWriter) insertAccount(addr basics.Address, normBalance uint64, data baseAccountData) (rowid int64, err error) {
+	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data))
 	if err != nil {
 		return
 	}
@@ -3195,8 +3198,8 @@ func (w accountsSQLWriter) deleteAccount(rowid int64) (rowsAffected int64, err e
 	return
 }
 
-func (w accountsSQLWriter) updateAccount(rowid int64, data baseAccountData) (rowsAffected int64, err error) {
-	result, err := w.updateStmt.Exec(protocol.Encode(&data), rowid)
+func (w accountsSQLWriter) updateAccount(rowid int64, normBalance uint64, data baseAccountData) (rowsAffected int64, err error) {
+	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
 	if err != nil {
 		return
 	}
@@ -3334,7 +3337,8 @@ func accountsNewRoundImpl(
 			} else {
 				// create a new entry.
 				var rowid int64
-				rowid, err = writer.insertAccount(data.address, data.newAcct)
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				rowid, err = writer.insertAccount(data.address, normBalance, data.newAcct)
 				if err == nil {
 					updatedAccounts[updatedAccountIdx].rowid = rowid
 					updatedAccounts[updatedAccountIdx].accountData = data.newAcct
@@ -3357,7 +3361,8 @@ func accountsNewRoundImpl(
 				}
 			} else {
 				var rowsAffected int64
-				rowsAffected, err = writer.updateAccount(data.oldAcct.rowid, data.newAcct)
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				rowsAffected, err = writer.updateAccount(data.oldAcct.rowid, normBalance, data.newAcct)
 				if err == nil {
 					// rowid doesn't change on update.
 					updatedAccounts[updatedAccountIdx].rowid = data.oldAcct.rowid
@@ -4170,32 +4175,6 @@ func processAllBaseAccountRecords(
 func loadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, addr basics.Address, addrid int64, data baseAccountData) (ad basics.AccountData, err error) {
 	ad = data.GetAccountData()
 
-	var onlineRows *sql.Rows
-	query := "SELECT data FROM onlineaccounts where address = ? ORDER BY updround DESC LIMIT 1"
-	onlineRows, err = tx.QueryContext(ctx, query, addr[:])
-	if err != nil {
-		return
-	}
-	defer onlineRows.Close()
-	for onlineRows.Next() {
-		var buf []byte
-		err = onlineRows.Scan(&buf)
-		if err != nil {
-			return
-		}
-		var onlineData baseOnlineAccountData
-		err = protocol.Decode(buf, &onlineData)
-		if err != nil {
-			return
-		}
-		ad.VoteID = onlineData.VoteID
-		ad.SelectionID = onlineData.SelectionID
-		ad.VoteFirstValid = onlineData.VoteFirstValid
-		ad.VoteLastValid = onlineData.VoteLastValid
-		ad.VoteKeyDilution = onlineData.VoteKeyDilution
-		ad.StateProofID = onlineData.StateProofID
-	}
-
 	hasResources := false
 	if data.TotalAppParams > 0 {
 		ad.AppParams = make(map[basics.AppIndex]basics.AppParams, data.TotalAppParams)
@@ -4219,7 +4198,7 @@ func loadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, add
 	}
 
 	var resRows *sql.Rows
-	query = fmt.Sprintf("SELECT aidx, data FROM %s where addrid = ?", resourcesTable)
+	query := fmt.Sprintf("SELECT aidx, data FROM %s where addrid = ?", resourcesTable)
 	resRows, err = tx.QueryContext(ctx, query, addrid)
 	if err != nil {
 		return
