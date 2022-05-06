@@ -1141,7 +1141,7 @@ func initConsensusProtocols() {
 	// Make the accounts snapshot for round X at X-CatchpointLookback
 	vFuture.CatchpointLookback = 320
 
-	// Require MaxTxnLife + 1 blocks and headers preserved by on a node
+	// Require MaxTxnLife + 1 blocks and headers preserved by a node
 	vFuture.DeeperBlockHeaderHistory = 1
 
 	// Enable compact certificates.

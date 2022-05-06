@@ -1917,12 +1917,11 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10_000_000_000)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 

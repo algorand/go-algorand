@@ -35,7 +35,7 @@ const initialLastValidArrayLen = 256
 
 // enableTxTailHashes enables txtail data hashing for catchpoints.
 // enable by removing it as needed (phase 2 of the catchpoints re-work)
-const enableTxTailHashes = true
+const enableTxTailHashes = false
 
 type roundLeases struct {
 	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
@@ -51,8 +51,8 @@ type txTail struct {
 	roundTailSerializedDeltas [][]byte
 
 	// roundTailHashes contains the recent (MaxTxnLife + DeeperBlockHeaderHistory + len(deltas)) hashes.
-	// The first entry matches that current tracker database round - MaxTxnLife
-	// the second to tracker database round - (MaxTxnLife - 1), and so forth.
+	// The first entry matches that current tracker database round - (MaxTxnLife + DeeperBlockHeaderHistory) + 1
+	// the second to tracker database round - (MaxTxnLife + DeeperBlockHeaderHistory - 1) + 1, and so forth.
 	// See blockHeaderData description below for the indexing details.
 	//
 	// The layout for MaxTxnLife = 3 and 3 elements in in-memory deltas:
@@ -72,7 +72,7 @@ type txTail struct {
 	// the second to tracker database round - (MaxTxnLife - 1), and so forth, and the last element is for the latest round.
 	// Deltas are in-memory not-committed-yet data.
 	blockHeaderData map[basics.Round]bookkeeping.BlockHeader
-	// lowestBlockHeaderRound is the lowest round in blockHeaderData, used as a starting point for old entires removal
+	// lowestBlockHeaderRound is the lowest round in blockHeaderData, used as a starting point for old entries removal
 	lowestBlockHeaderRound basics.Round
 
 	// tailMu is the synchronization mutex for accessing roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
@@ -283,16 +283,16 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 
 func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	t.tailMu.Lock()
-	rnd := dcc.oldBase + basics.Round(dcc.offset)
+	newBase := dcc.newBase
 
 	t.roundTailSerializedDeltas = t.roundTailSerializedDeltas[dcc.offset:]
 
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
-	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
-	proto := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
+	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory rounds
+	proto := config.Consensus[t.blockHeaderData[newBase].CurrentProtocol]
 	retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
-	newLowestRound := rnd.SubSaturate(basics.Round(retainSize)) + 1
-	if newLowestRound > 0 {
+	newLowestRound := newBase.SubSaturate(basics.Round(retainSize) - 1)
+	if newLowestRound > t.lowestBlockHeaderRound {
 		for r := t.lowestBlockHeaderRound; r < newLowestRound; r++ {
 			delete(t.blockHeaderData, r)
 		}

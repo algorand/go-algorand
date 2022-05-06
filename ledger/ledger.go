@@ -736,6 +736,8 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 // BlockHdrCached returns the block header if available.
 // Expected availability range is [Latest - MaxTxnLife, Latest]
 // allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+// The depth besides the MaxTxnLife is controller by DeeperBlockHeaderHistory parameter
+// and currently set to 1.
 // Explanation:
 // Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
 // and because a txn is alive when the current round <= txn.LastValid
