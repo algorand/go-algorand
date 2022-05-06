@@ -68,13 +68,6 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	defer fixture.Shutdown()
 
 	accountsNum := len(fixture.NodeDataDirs())
-	for _, dataDir := range fixture.NodeDataDirs() {
-		cfg, err := config.LoadConfigFromDisk(dataDir)
-		a.NoError(err)
-		cfg.ParticipationKeysRefreshInterval = 500 * time.Millisecond
-		err = cfg.SaveToDisk(dataDir)
-		a.NoError(err)
-	}
 
 	genesis, err := bookkeeping.LoadGenesisFromFile(filepath.Join(fixture.PrimaryDataDir(), "genesis.json"))
 	a.NoError(err)
@@ -100,9 +93,25 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	fixture.Start()
 	currentRound := uint64(0)
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.NC)
+
+	// ******** IMPORTANT ********
+	// It is CRITICAL that this for loop NOT BLOCK.
+	// This loop assumes that it stays current with the round of the network.
+	// Remember: this test is running while the network is advancing rounds in parallel
+	// If this test blocks for more than a couple seconds, then the network round count will have advanced
+	// farther than the current "currentRound" variable.  This will mean that the "addParticipationKey" function
+	// will NOT install the participation key in time for the shortened SeedLookback variable resulting
+	// in a network stall and a test failure
 	for {
 		err := fixture.WaitForRoundWithTimeout(currentRound + 1)
 		a.NoError(err)
+
+		// A sanity check that makes sure that the round of the network is the same as our
+		// current round variable
+		sts, err := fixture.GetAlgodClientForController(fixture.NC).Status()
+		a.NoError(err)
+		a.Equal(sts.LastRound, currentRound+1)
+
 		currentRound++
 		if (currentRound-1)%10 < uint64(accountsNum) {
 			acctIdx := (currentRound - 1) % 10
@@ -111,6 +120,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 			regStartRound := currentRound
 			regEndRound := regStartRound + 11 + 4
 
+			// This cannot block! (See above)
 			pk, err := addParticipationKey(a, &fixture, acctIdx, startRound, endRound, regTransactions)
 			a.NoError(err)
 			t.Logf("[.] Round %d, Added reg key for node %d range [%d..%d] %s\n", currentRound, acctIdx, regStartRound, regEndRound, hex.EncodeToString(pk[:8]))
@@ -128,17 +138,20 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, startRound, endRound uint64, regTransactions map[int]transactions.SignedTxn) (crypto.OneTimeSignatureVerifier, error) {
 	dataDir := fixture.NodeDataDirs()[acctNum]
 	nc := fixture.GetNodeControllerForDataDir(dataDir)
-	genesisDir, err := nc.GetGenesisDir()
 
 	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", startRound, endRound))
-	partKeyNameTarget := filepath.Join(genesisDir, config.PartKeyFilename("Wallet", startRound, endRound))
 
-	// make the rename in the background to ensure it won't take too long. We have ~4 rounds to complete this.
-	go os.Rename(partKeyName, partKeyNameTarget)
+	// This function can take more than a couple seconds, we can't have this function block so
+	// we wrap it in a go routine
+	go func() {
+		clientController := fixture.GetLibGoalClientFromNodeController(nc)
+		_, err := clientController.AddParticipationKey(partKeyName)
+		a.NoError(err)
+	}()
 
 	signedTxn := regTransactions[int(startRound-2)]
 	a.NotEmpty(signedTxn.Sig)
-	_, err = fixture.GetAlgodClientForController(nc).SendRawTransaction(signedTxn)
+	_, err := fixture.GetAlgodClientForController(nc).SendRawTransaction(signedTxn)
 	a.NoError(err)
 	return signedTxn.Txn.KeyregTxnFields.VotePK, err
 }
