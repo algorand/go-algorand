@@ -1325,7 +1325,7 @@
           },
           "cost": {
             "description": "Execution cost of app call transaction",
-            "type": "integer"
+            "type": "number"
           },
           "disassembly": {
             "description": "Disassembled program line by line.",

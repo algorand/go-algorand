@@ -317,7 +317,7 @@ type DryrunTxnResult struct {
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
 	// Execution cost of app call transaction
-	Cost *uint64 `json:"cost,omitempty"`
+	Cost *float32 `json:"cost,omitempty"`
 
 	// Disassembled program line by line.
 	Disassembly []string `json:"disassembly"`

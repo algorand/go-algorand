@@ -2280,7 +2280,7 @@
         },
         "cost": {
           "description": "Execution cost of app call transaction",
-          "type": "integer"
+          "type": "number"
         }
       }
     },
