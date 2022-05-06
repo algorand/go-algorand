@@ -740,8 +740,8 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 // Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
 // and because a txn is alive when the current round <= txn.LastValid
 // and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
-// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Lastest + 1
-// that gives Lastest + 1 - (MaxTxnLife + 1) = Lastest - MaxTxnLife as the first round to be accessible.
+// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
 func (l *Ledger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()

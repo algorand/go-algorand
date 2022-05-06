@@ -39,7 +39,6 @@ const enableTxTailHashes = true
 
 type roundLeases struct {
 	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
-	proto    config.ConsensusParams
 }
 
 type txTail struct {
@@ -119,11 +118,10 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	t.lowestBlockHeaderRound = baseRound
 	for old := baseRound; old <= dbRound && dbRound > baseRound; old++ {
 		txTailRound := roundData[0]
-		consensusParams := config.Consensus[txTailRound.BlockHeader.CurrentProtocol]
+		consensusParams := config.Consensus[txTailRound.Hdr.CurrentProtocol]
 
 		t.recent[old] = roundLeases{
 			txleases: make(map[ledgercore.Txlease]basics.Round, len(txTailRound.TxnIDs)),
-			proto:    consensusParams,
 		}
 
 		for i := 0; i < len(txTailRound.Leases); i++ {
@@ -151,7 +149,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 			}
 		}
 
-		blockHeaderData[old] = txTailRound.BlockHeader
+		blockHeaderData[old] = txTailRound.Hdr
 		roundData = roundData[1:]
 	}
 
@@ -189,7 +187,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	var tail txTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
 	tail.LastValid = make([]basics.Round, len(delta.Txids))
-	tail.BlockHeader = blk.BlockHeader
+	tail.Hdr = blk.BlockHeader
 
 	for txid, txnInc := range delta.Txids {
 		t.putLV(txnInc.LastValid, txid)
@@ -205,11 +203,10 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 	encodedTail, tailHash := tail.encode()
 
+	t.tailMu.Lock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
-		proto:    config.Consensus[blk.CurrentProtocol],
 	}
-	t.tailMu.Lock()
 	t.roundTailSerializedDeltas = append(t.roundTailSerializedDeltas, encodedTail)
 	if enableTxTailHashes {
 		t.roundTailHashes = append(t.roundTailHashes, tailHash)
@@ -219,7 +216,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
-	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
+	proto := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
+	maxlife := basics.Round(proto.MaxTxnLife)
+
 	for r := range t.recent {
 		if r+maxlife < rnd {
 			delete(t.recent, r)
@@ -229,7 +228,7 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 		delete(t.lastValid, t.lowWaterMark)
 	}
 
-	deeperHistory := basics.Round(t.recent[rnd].proto.DeeperBlockHeaderHistory)
+	deeperHistory := basics.Round(proto.DeeperBlockHeaderHistory)
 	return (rnd + 1).SubSaturate(maxlife + deeperHistory), basics.Round(0)
 }
 
@@ -362,12 +361,12 @@ func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
 	t.lastValid[lastValid][id] = struct{}{}
 }
 
-func (t *txTail) recentTailHash(offset uint64, retianSize uint64) (crypto.Digest, error) {
+func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest, error) {
 	// prepare a buffer to hash.
-	buffer := make([]byte, (retianSize)*crypto.DigestSize)
+	buffer := make([]byte, (retainSize)*crypto.DigestSize)
 	bufIdx := 0
 	t.tailMu.RLock()
-	lastOffset := offset + retianSize - 1
+	lastOffset := offset + retainSize // size of interval [offset, lastOffset) is retainSize
 	if lastOffset > uint64(len(t.roundTailHashes)) {
 		lastOffset = uint64(len(t.roundTailHashes))
 	}

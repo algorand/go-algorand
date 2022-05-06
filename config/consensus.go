@@ -437,9 +437,9 @@ type ConsensusParams struct {
 	// Accounts snapshot for round X will be taken at X-CatchpointLookback
 	CatchpointLookback uint64
 
-	// DeeperBlockHeaderHistory defines number of rounds in additional to MaxTxnLife
+	// DeeperBlockHeaderHistory defines number of rounds in addition to MaxTxnLife
 	// available for lookup for smart conttracts and smart signatures.
-	// Setting it to 1 for example allows querying data up to Latest-MaxTxnLife rounds back.
+	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
 	DeeperBlockHeaderHistory uint64
 }
 

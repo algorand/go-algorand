@@ -2091,7 +2091,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		if err != nil {
 			return fmt.Errorf("latest block header %d cannot be retrieved : %w", latest, err)
 		}
-		//
+
 		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife)
 		firstRound := (latest + 1).SubSaturate(maxTxnLife)
 		// we don't need to have the txtail for round 0.
@@ -2114,7 +2114,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 			tailRounds = append(tailRounds, encodedTail)
 		}
 
-		return txtailNewRound(ctx, tx, firstRound, tailRounds, firstRound-1)
+		return txtailNewRound(ctx, tx, firstRound, tailRounds, firstRound)
 	})
 
 	return err
@@ -4643,10 +4643,10 @@ type txTailRoundLease struct {
 type txTailRound struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	TxnIDs    []transactions.Txid `codec:"tti,allocbound=-"`
-	LastValid []basics.Round      `codec:"ttv,allocbound=-"`
-	Leases    []txTailRoundLease  `codec:"tte,allocbound=-"`
-	bookkeeping.BlockHeader
+	TxnIDs    []transactions.Txid     `codec:"i,allocbound=-"`
+	LastValid []basics.Round          `codec:"v,allocbound=-"`
+	Leases    []txTailRoundLease      `codec:"l,allocbound=-"`
+	Hdr       bookkeeping.BlockHeader `codec:"h,allocbound=-"`
 }
 
 // encode the transaction tail data into a serialized form, and return the serialized data
@@ -4667,7 +4667,7 @@ func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
 
 	tail.TxnIDs = make([]transactions.Txid, len(payset))
 	tail.LastValid = make([]basics.Round, len(payset))
-	tail.BlockHeader = blk.BlockHeader
+	tail.Hdr = blk.BlockHeader
 
 	for txIdxtxid, txn := range payset {
 		tail.TxnIDs[txIdxtxid] = txn.ID()

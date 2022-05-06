@@ -3537,7 +3537,7 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	roundData := make([][]byte, 1500)
 	const retainSize = 1001
 	for i := startRound; i <= endRound; i++ {
-		data := txTailRound{BlockHeader: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
+		data := txTailRound{Hdr: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
 		roundData[i-1] = protocol.Encode(&data)
 	}
 	forgetBefore := (endRound + 1).SubSaturate(retainSize)
@@ -3550,6 +3550,6 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	require.Equal(t, basics.Round(endRound-retainSize+1), baseRound) // 500...1500
 
 	for i, entry := range data {
-		require.Equal(t, int64(i+int(baseRound)), entry.TimeStamp)
+		require.Equal(t, int64(i+int(baseRound)), entry.Hdr.TimeStamp)
 	}
 }

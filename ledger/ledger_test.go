@@ -1926,8 +1926,9 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	const maxBlocks = 2000
-	for i := 0; i < maxBlocks; i++ {
+	proto := config.Consensus[protocol.ConsensusFuture]
+	maxBlocks := 2 * proto.MaxTxnLife
+	for i := uint64(0); i < maxBlocks; i++ {
 		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
 		if i%100 == 0 || i == maxBlocks-1 {
@@ -1935,7 +1936,6 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 		}
 	}
 
-	proto := config.Consensus[protocol.ConsensusFuture]
 	latest := l.Latest()
 	for i := latest - basics.Round(proto.MaxTxnLife); i <= latest; i++ {
 		blk, err := l.BlockHdrCached(i)

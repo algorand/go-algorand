@@ -243,7 +243,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 func TestTxTailDeltaTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, protoVersion := range []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusFuture} {
+	for _, protoVersion := range []protocol.ConsensusVersion{protocol.ConsensusV32, protocol.ConsensusFuture} {
 		t.Run(string(protoVersion), func(t *testing.T) {
 
 			var ledger txTailTestLedger
