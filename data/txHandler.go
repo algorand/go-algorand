@@ -187,6 +187,7 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
 
+	// TODO: at this point we need to either send TX data or Ta txid advertisement depending on what protocol the peer is
 	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
