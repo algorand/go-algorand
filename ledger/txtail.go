@@ -39,6 +39,7 @@ const enableTxTailHashes = true
 
 type roundLeases struct {
 	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
+	proto    config.ConsensusParams
 }
 
 type txTail struct {
@@ -122,6 +123,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 		t.recent[old] = roundLeases{
 			txleases: make(map[ledgercore.Txlease]basics.Round, len(txTailRound.TxnIDs)),
+			proto:    consensusParams,
 		}
 
 		for i := 0; i < len(txTailRound.Leases); i++ {
@@ -206,6 +208,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	t.tailMu.Lock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
+		proto:    config.Consensus[blk.CurrentProtocol],
 	}
 	t.roundTailSerializedDeltas = append(t.roundTailSerializedDeltas, encodedTail)
 	if enableTxTailHashes {
@@ -216,7 +219,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
-	proto := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
+	proto := t.recent[rnd].proto
 	maxlife := basics.Round(proto.MaxTxnLife)
 
 	for r := range t.recent {
