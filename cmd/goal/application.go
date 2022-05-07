@@ -408,13 +408,13 @@ func mustParseProgArgs() (approval []byte, clear []byte) {
 	}
 
 	if approvalProgFile != "" {
-		approval = assembleFile(approvalProgFile)
+		approval = assembleFile(approvalProgFile, false)
 	} else {
 		approval = mustReadFile(approvalProgRawFile)
 	}
 
 	if clearProgFile != "" {
-		clear = assembleFile(clearProgFile)
+		clear = assembleFile(clearProgFile, false)
 	} else {
 		clear = mustReadFile(clearProgRawFile)
 	}
@@ -1238,7 +1238,7 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		var retType *abi.Type
-		if retTypeStr != "void" {
+		if retTypeStr != abi.VoidReturnType {
 			theRetType, err := abi.TypeOf(retTypeStr)
 			if err != nil {
 				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)

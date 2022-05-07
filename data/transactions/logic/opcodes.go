@@ -17,9 +17,10 @@
 package logic
 
 import (
+	"fmt"
 	"sort"
-
-	"github.com/algorand/go-algorand/data/transactions"
+	"strconv"
+	"strings"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -44,10 +45,8 @@ const backBranchEnabledVersion = 4
 // using an index into arrays.
 const directRefEnabledVersion = 4
 
-// innerAppsEnabledVersion is the version that allowed inner app calls. No old
-// apps should be called as inner apps. Set to ExtraProgramChecks version
-// because those checks protect from tricky ClearState Programs.
-const innerAppsEnabledVersion = transactions.ExtraProgramChecksVersion
+// innerAppsEnabledVersion is the version that allowed inner app calls.
+const innerAppsEnabledVersion = 6
 
 // txnEffectsVersion is first version that allowed txn opcode to access
 // "effects" (ApplyData info)
@@ -61,45 +60,208 @@ const createdResourcesVersion = 6
 // experimental-
 const fidoVersion = 7 // base64, json, secp256r1
 
-// opDetails records details such as non-standard costs, immediate
-// arguments, or dynamic layout controlled by a check function.
-type opDetails struct {
-	Cost       int
-	Size       int
-	checkFunc  opCheckFunc
-	Immediates []immediate
-	typeFunc   opTypeFunc
+type linearCost struct {
+	baseCost  int
+	chunkCost int
+	chunkSize int
 }
 
-var opDefault = opDetails{1, 1, nil, nil, nil}
-var opBranch = opDetails{1, 3, checkBranch, []immediate{{"target", immLabel}}, nil}
-
-func costly(cost int) opDetails {
-	return opDetails{cost, 1, nil, nil, nil}
+// divideCeilUnsafely provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
+// The method does _not_ check for divide-by-zero.
+func divideCeilUnsafely(numerator int, denominator int) int {
+	return (numerator + denominator - 1) / denominator
 }
 
-func immediates(names ...string) opDetails {
-	immediates := make([]immediate, len(names))
-	for i, name := range names {
-		immediates[i] = immediate{name, immByte}
+func (lc *linearCost) compute(stack []stackValue) int {
+	cost := lc.baseCost
+	if lc.chunkCost != 0 && lc.chunkSize != 0 {
+		// Uses divideCeilUnsafely rather than (len/size) to match how Ethereum discretizes hashing costs.
+		cost += divideCeilUnsafely(lc.chunkCost*len(stack[len(stack)-1].Bytes), lc.chunkSize)
 	}
-	return opDetails{1, 1 + len(immediates), nil, immediates, nil}
+	return cost
 }
 
-func stacky(typer opTypeFunc, imms ...string) opDetails {
-	d := immediates(imms...)
-	d.typeFunc = typer
+func (lc *linearCost) docCost() string {
+	if *lc == (linearCost{}) {
+		return ""
+	}
+	if lc.chunkCost == 0 {
+		return strconv.Itoa(lc.baseCost)
+	}
+	if lc.chunkSize == 1 {
+		return fmt.Sprintf("%d + %d per byte", lc.baseCost, lc.chunkCost)
+	}
+	return fmt.Sprintf("%d + %d per %d bytes", lc.baseCost, lc.chunkCost, lc.chunkSize)
+}
+
+// OpDetails records details such as non-standard costs, immediate arguments, or
+// dynamic layout controlled by a check function. These objects are mostly built
+// with constructor functions, so it's cleaner to have defaults set here, rather
+// than in line after line of OpSpecs.
+type OpDetails struct {
+	asm    asmFunc    // assemble the op
+	check  checkFunc  // static check bytecode (and determine size)
+	refine refineFunc // refine arg/return types based on ProgramKnowledge at assembly time
+
+	Modes runMode // all modes that opcode can run in. i.e (cx.mode & Modes) != 0 allows
+
+	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
+	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
+	Immediates []immediate // details of each immediate arg to opcode
+}
+
+func (d *OpDetails) docCost() string {
+	cost := d.FullCost.docCost()
+	if cost != "" {
+		return cost
+	}
+	found := false
+	for _, imm := range d.Immediates {
+		if imm.fieldCosts != nil {
+			if found {
+				panic("two cost dependent fields")
+			}
+			found = true
+			group := imm.Group
+			for _, name := range group.Names {
+				fs, ok := group.SpecByName(name)
+				if !ok {
+					continue
+				}
+				cost += fmt.Sprintf(" %s=%d", name, imm.fieldCosts[fs.Field()])
+			}
+		}
+	}
+	return cost
+}
+
+// Cost computes the cost of the opcode, given details about how it is used,
+// both static (the program, which can be used to find the immediate values
+// supplied), and dynamic (the stack, which can be used to find the run-time
+// arguments supplied). Cost is used at run-time. docCost returns similar
+// information in human-reable form.
+func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
+	cost := d.FullCost.compute(stack)
+	if cost != 0 {
+		return cost
+	}
+	for i := range d.Immediates {
+		if d.Immediates[i].fieldCosts != nil {
+			cost += d.Immediates[i].fieldCosts[program[pc+1+i]]
+		}
+	}
+	return cost
+}
+
+func opDefault() OpDetails {
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil}
+}
+
+func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}}
+}
+
+func opBranch() OpDetails {
+	d := opDefault()
+	d.asm = asmBranch
+	d.check = checkBranch
+	d.Size = 3
+	d.Immediates = []immediate{imm("target", immLabel)}
 	return d
 }
 
-func varies(checker opCheckFunc, name string, kind immKind) opDetails {
-	return opDetails{1, 0, checker, []immediate{{name, kind}}, nil}
+func assembler(asm asmFunc) OpDetails {
+	d := opDefault()
+	d.asm = asm
+	return d
 }
 
-func costlyImm(cost int, names ...string) opDetails {
-	opd := immediates(names...)
-	opd.Cost = cost
+func (d OpDetails) assembler(asm asmFunc) OpDetails {
+	clone := d
+	clone.asm = asm
+	return clone
+}
+
+func costly(cost int) OpDetails {
+	d := opDefault()
+	d.FullCost.baseCost = cost
+	return d
+}
+
+func (d OpDetails) costs(cost int) OpDetails {
+	clone := d
+	clone.FullCost = linearCost{baseCost: cost}
+	return clone
+}
+
+func only(m runMode) OpDetails {
+	d := opDefault()
+	d.Modes = m
+	return d
+}
+
+func (d OpDetails) only(m runMode) OpDetails {
+	clone := d
+	clone.Modes = m
+	return clone
+}
+
+func (d OpDetails) costByLength(initial, perChunk, chunkSize int) OpDetails {
+	clone := d
+	clone.FullCost = costByLength(initial, perChunk, chunkSize).FullCost
+	return clone
+}
+
+func immediates(names ...string) OpDetails {
+	d := opDefault()
+	d.Size = len(names) + 1
+	d.Immediates = make([]immediate, len(names))
+	for i, name := range names {
+		d.Immediates[i] = imm(name, immByte)
+	}
+	return d
+}
+
+func stacky(typer refineFunc, imms ...string) OpDetails {
+	d := immediates(imms...)
+	d.refine = typer
+	return d
+}
+
+// field is used to create an opDetails for an opcode with a single field
+func field(immediate string, group *FieldGroup) OpDetails {
+	opd := immediates(immediate)
+	opd.Immediates[0].Group = group
 	return opd
+}
+
+// field is used to annotate an existing immediate with group info
+func (d OpDetails) field(name string, group *FieldGroup) OpDetails {
+	for i := range d.Immediates {
+		if d.Immediates[i].Name == name {
+			d.Immediates[i].Group = group
+			return d
+		}
+	}
+	panic(name)
+}
+
+func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
+	opd := immediates(immediate).costs(0)
+	opd.Immediates[0].Group = group
+	fieldCosts := make([]int, 256)
+	copy(fieldCosts, costs)
+	opd.Immediates[0].fieldCosts = fieldCosts
+	return opd
+}
+
+func costByLength(initial int, perChunk int, chunkSize int) OpDetails {
+	if initial < 1 || perChunk <= 0 || chunkSize < 1 || chunkSize > maxStringSize {
+		panic("bad cost configuration")
+	}
+	d := opDefault()
+	d.FullCost = linearCost{initial, perChunk, chunkSize}
+	return d
 }
 
 // immType describes the immediate arguments to an opcode
@@ -115,35 +277,76 @@ const (
 )
 
 type immediate struct {
-	Name string
-	kind immKind
+	Name  string
+	kind  immKind
+	Group *FieldGroup
+
+	// If non-nil, always 256 long, so cost can be checked before eval
+	fieldCosts []int
+}
+
+func imm(name string, kind immKind) immediate {
+	return immediate{name, kind, nil, nil}
+}
+
+type typedList struct {
+	Types   StackTypes
+	Effects string
+}
+
+// Proto describes the "stack behavior" of an opcode, what it pops as arguments
+// and pushes onto the stack as return values.
+type Proto struct {
+	Arg    typedList // what gets popped from the stack
+	Return typedList // what gets pushed to the stack
+}
+
+func proto(signature string, effects ...string) Proto {
+	parts := strings.Split(signature, ":")
+	if len(parts) != 2 {
+		panic(signature)
+	}
+	var argEffect, retEffect string
+	switch len(effects) {
+	case 0:
+		// will be generated
+	case 1:
+		retEffect = effects[0]
+	case 2:
+		argEffect = effects[0]
+		retEffect = effects[1]
+	default:
+		panic(effects)
+	}
+	return Proto{
+		Arg:    typedList{parseStackTypes(parts[0]), argEffect},
+		Return: typedList{parseStackTypes(parts[1]), retEffect},
+	}
 }
 
 // OpSpec defines an opcode
 type OpSpec struct {
-	Opcode  byte
-	Name    string
-	op      opEvalFunc      // evaluate the op
-	asm     assembleFunc    // assemble the op
-	dis     disassembleFunc // disassemble the op
-	Args    StackTypes      // what gets popped from the stack
-	Returns StackTypes      // what gets pushed to the stack
-	Version uint64          // TEAL version opcode introduced
-	Modes   runMode         // if non-zero, then (mode & Modes) != 0 to allow
-	Details opDetails       // Special cost or bytecode layout considerations
+	Opcode byte
+	Name   string
+	op     evalFunc // evaluate the op
+	Proto
+	Version   uint64 // TEAL version opcode introduced
+	OpDetails        // Special cost or bytecode layout considerations
 }
 
-var oneBytes = StackTypes{StackBytes}
-var twoBytes = StackTypes{StackBytes, StackBytes}
-var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
-var byteInt = StackTypes{StackBytes, StackUint64}
-var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
-var oneInt = StackTypes{StackUint64}
-var twoInts = StackTypes{StackUint64, StackUint64}
-var oneAny = StackTypes{StackAny}
-var twoAny = StackTypes{StackAny, StackAny}
-var anyInt = StackTypes{StackAny, StackUint64}
-var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
+// AlwaysExits is true iff the opcode always ends the program.
+func (spec *OpSpec) AlwaysExits() bool {
+	return len(spec.Return.Types) == 1 && spec.Return.Types[0] == StackNone
+}
+
+func (spec *OpSpec) deadens() bool {
+	switch spec.Name {
+	case "b", "callsub", "retsub", "err", "return":
+		return true
+	default:
+		return false
+	}
+}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -152,211 +355,225 @@ var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
 // Note: assembly can specialize an Any return type if known at
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, asmDefault, disDefault, nil, nil, 1, modeAny, opDefault},
-	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(7)},
-	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(26)},
-	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(9)},
+	{0x00, "err", opErr, proto(":x"), 1, opDefault()},
+	{0x01, "sha256", opSHA256, proto("b:b"), 1, costly(7)},
+	{0x02, "keccak256", opKeccak256, proto("b:b"), 1, costly(26)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 1, costly(9)},
 
 	// Cost of these opcodes increases in TEAL version 2 based on measured
 	// performance. Should be able to run max hashes during stateful TEAL
 	// and achieve reasonable TPS. Same opcode for different TEAL versions
 	// is OK.
-	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, costly(35)},
-	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, costly(130)},
-	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, costly(45)},
+	{0x01, "sha256", opSHA256, proto("b:b"), 2, costly(35)},
+	{0x02, "keccak256", opKeccak256, proto("b:b"), 2, costly(130)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 2, costly(45)},
 
-	{0x04, "ed25519verify", opEd25519Verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, costly(1900)},
-	{0x04, "ed25519verify", opEd25519Verify, asmDefault, disDefault, threeBytes, oneInt, 5, modeAny, costly(1900)},
+	/*
+		Tabling these changes until we offer unlimited global storage as there
+		is currently a useful pattern that requires hashes on long slices to
+		creating logicsigs in apps.
 
-	{0x05, "ecdsa_verify", opEcdsaVerify, assembleEcdsa, disEcdsa, threeBytes.plus(twoBytes), oneInt, 5, modeAny, costlyImm(1700, "v")},
-	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, assembleEcdsa, disEcdsa, oneBytes, twoBytes, 5, modeAny, costlyImm(650, "v")},
-	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, assembleEcdsa, disEcdsa, oneBytes.plus(oneInt).plus(twoBytes), twoBytes, 5, modeAny, costlyImm(2000, "v")},
+		{0x01, "sha256", opSHA256, proto("b:b"), unlimitedStorage, costByLength(12, 6, 8)},
+		{0x02, "keccak256", opKeccak256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},
+		{0x03, "sha512_256", opSHA512_256, proto("b:b"), 7, unlimitedStorage, costByLength(17, 5, 8)},
+	*/
 
-	{0x08, "+", opPlus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x09, "-", opMinus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x0a, "/", opDiv, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x0b, "*", opMul, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x0c, "<", opLt, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x0d, ">", opGt, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x0e, "<=", opLe, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x0f, ">=", opGe, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x10, "&&", opAnd, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x11, "||", opOr, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x12, "==", opEq, asmDefault, disDefault, twoAny, oneInt, 1, modeAny, stacky(typeEquals)},
-	{0x13, "!=", opNeq, asmDefault, disDefault, twoAny, oneInt, 1, modeAny, stacky(typeEquals)},
-	{0x14, "!", opNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
-	{0x15, "len", opLen, asmDefault, disDefault, oneBytes, oneInt, 1, modeAny, opDefault},
-	{0x16, "itob", opItob, asmDefault, disDefault, oneInt, oneBytes, 1, modeAny, opDefault},
-	{0x17, "btoi", opBtoi, asmDefault, disDefault, oneBytes, oneInt, 1, modeAny, opDefault},
-	{0x18, "%", opModulo, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x19, "|", opBitOr, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x1a, "&", opBitAnd, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x1b, "^", opBitXor, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opDefault},
-	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
-	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
-	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
-	{0x1f, "divmodw", opDivModw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, costly(20)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:i"), 1, costly(1900).only(modeSig)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:i"), 5, costly(1900)},
 
-	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
-	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},
-	{0x22, "intc_0", opIntConst0, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
-	{0x23, "intc_1", opIntConst1, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
-	{0x24, "intc_2", opIntConst2, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
-	{0x25, "intc_3", opIntConst3, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
-	{0x26, "bytecblock", opByteConstBlock, assembleByteCBlock, disBytecblock, nil, nil, 1, modeAny, varies(checkByteConstBlock, "bytes ...", immBytess)},
-	{0x27, "bytec", opByteConstLoad, assembleByteC, disBytec, nil, oneBytes, 1, modeAny, immediates("i")},
-	{0x28, "bytec_0", opByteConst0, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
-	{0x29, "bytec_1", opByteConst1, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
-	{0x2a, "bytec_2", opByteConst2, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
-	{0x2b, "bytec_3", opByteConst3, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
-	{0x2c, "arg", opArg, assembleArg, disDefault, nil, oneBytes, 1, runModeSignature, immediates("n")},
-	{0x2d, "arg_0", opArg0, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
-	{0x2e, "arg_1", opArg1, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
-	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
-	{0x30, "arg_3", opArg3, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
-	{0x31, "txn", opTxn, asmTxn, disTxn, nil, oneAny, 1, modeAny, immediates("f")},
+	{0x05, "ecdsa_verify", opEcdsaVerify, proto("bbbbb:i"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
+	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b:bb"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
+	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("bibb:bb"), 5, field("v", &EcdsaCurves).costs(2000)},
+
+	{0x08, "+", opPlus, proto("ii:i"), 1, opDefault()},
+	{0x09, "-", opMinus, proto("ii:i"), 1, opDefault()},
+	{0x0a, "/", opDiv, proto("ii:i"), 1, opDefault()},
+	{0x0b, "*", opMul, proto("ii:i"), 1, opDefault()},
+	{0x0c, "<", opLt, proto("ii:i"), 1, opDefault()},
+	{0x0d, ">", opGt, proto("ii:i"), 1, opDefault()},
+	{0x0e, "<=", opLe, proto("ii:i"), 1, opDefault()},
+	{0x0f, ">=", opGe, proto("ii:i"), 1, opDefault()},
+	{0x10, "&&", opAnd, proto("ii:i"), 1, opDefault()},
+	{0x11, "||", opOr, proto("ii:i"), 1, opDefault()},
+	{0x12, "==", opEq, proto("aa:i"), 1, stacky(typeEquals)},
+	{0x13, "!=", opNeq, proto("aa:i"), 1, stacky(typeEquals)},
+	{0x14, "!", opNot, proto("i:i"), 1, opDefault()},
+	{0x15, "len", opLen, proto("b:i"), 1, opDefault()},
+	{0x16, "itob", opItob, proto("i:b"), 1, opDefault()},
+	{0x17, "btoi", opBtoi, proto("b:i"), 1, opDefault()},
+	{0x18, "%", opModulo, proto("ii:i"), 1, opDefault()},
+	{0x19, "|", opBitOr, proto("ii:i"), 1, opDefault()},
+	{0x1a, "&", opBitAnd, proto("ii:i"), 1, opDefault()},
+	{0x1b, "^", opBitXor, proto("ii:i"), 1, opDefault()},
+	{0x1c, "~", opBitNot, proto("i:i"), 1, opDefault()},
+	{0x1d, "mulw", opMulw, proto("ii:ii"), 1, opDefault()},
+	{0x1e, "addw", opAddw, proto("ii:ii"), 2, opDefault()},
+	{0x1f, "divmodw", opDivModw, proto("iiii:iiii"), 4, costly(20)},
+
+	{0x20, "intcblock", opIntConstBlock, proto(":"), 1, constants(asmIntCBlock, checkIntConstBlock, "uint ...", immInts)},
+	{0x21, "intc", opIntConstLoad, proto(":i"), 1, immediates("i").assembler(asmIntC)},
+	{0x22, "intc_0", opIntConst0, proto(":i"), 1, opDefault()},
+	{0x23, "intc_1", opIntConst1, proto(":i"), 1, opDefault()},
+	{0x24, "intc_2", opIntConst2, proto(":i"), 1, opDefault()},
+	{0x25, "intc_3", opIntConst3, proto(":i"), 1, opDefault()},
+	{0x26, "bytecblock", opByteConstBlock, proto(":"), 1, constants(asmByteCBlock, checkByteConstBlock, "bytes ...", immBytess)},
+	{0x27, "bytec", opByteConstLoad, proto(":b"), 1, immediates("i").assembler(asmByteC)},
+	{0x28, "bytec_0", opByteConst0, proto(":b"), 1, opDefault()},
+	{0x29, "bytec_1", opByteConst1, proto(":b"), 1, opDefault()},
+	{0x2a, "bytec_2", opByteConst2, proto(":b"), 1, opDefault()},
+	{0x2b, "bytec_3", opByteConst3, proto(":b"), 1, opDefault()},
+	{0x2c, "arg", opArg, proto(":b"), 1, immediates("n").only(modeSig).assembler(asmArg)},
+	{0x2d, "arg_0", opArg0, proto(":b"), 1, only(modeSig)},
+	{0x2e, "arg_1", opArg1, proto(":b"), 1, only(modeSig)},
+	{0x2f, "arg_2", opArg2, proto(":b"), 1, only(modeSig)},
+	{0x30, "arg_3", opArg3, proto(":b"), 1, only(modeSig)},
+	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
 	// It is ok to have the same opcode for different TEAL versions.
 	// This 'txn' asm command supports additional argument in version 2 and
 	// generates 'txna' opcode in that particular case
-	{0x31, "txn", opTxn, asmTxn2, disTxn, nil, oneAny, 2, modeAny, immediates("f")},
-	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, immediates("f")},
-	{0x33, "gtxn", opGtxn, asmGtxn, disGtxn, nil, oneAny, 1, modeAny, immediates("t", "f")},
-	{0x33, "gtxn", opGtxn, asmGtxn2, disGtxn, nil, oneAny, 2, modeAny, immediates("t", "f")},
-	{0x34, "load", opLoad, asmDefault, disDefault, nil, oneAny, 1, modeAny, immediates("i")},
-	{0x35, "store", opStore, asmDefault, disDefault, oneAny, nil, 1, modeAny, immediates("i")},
-	{0x36, "txna", opTxna, asmTxna, disTxna, nil, oneAny, 2, modeAny, immediates("f", "i")},
-	{0x37, "gtxna", opGtxna, asmGtxna, disGtxna, nil, oneAny, 2, modeAny, immediates("t", "f", "i")},
+	{0x31, "txn", opTxn, proto(":a"), 2, field("f", &TxnFields).assembler(asmTxn2)},
+	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
+	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
+	{0x33, "gtxn", opGtxn, proto(":a"), 2, immediates("t", "f").field("f", &TxnFields).assembler(asmGtxn2)},
+	{0x34, "load", opLoad, proto(":a"), 1, immediates("i")},
+	{0x35, "store", opStore, proto("a:"), 1, immediates("i")},
+	{0x36, "txna", opTxna, proto(":a"), 2, immediates("f", "i").field("f", &TxnArrayFields)},
+	{0x37, "gtxna", opGtxna, proto(":a"), 2, immediates("t", "f", "i").field("f", &TxnArrayFields)},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
-	{0x38, "gtxns", opGtxns, asmGtxns, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
-	{0x39, "gtxnsa", opGtxnsa, asmGtxns, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
+	{0x38, "gtxns", opGtxns, proto("i:a"), 3, immediates("f").field("f", &TxnFields).assembler(asmGtxns)},
+	{0x39, "gtxnsa", opGtxnsa, proto("i:a"), 3, immediates("f", "i").field("f", &TxnArrayFields)},
 	// Group scratch space access
-	{0x3a, "gload", opGload, asmDefault, disDefault, nil, oneAny, 4, runModeApplication, immediates("t", "i")},
-	{0x3b, "gloads", opGloads, asmDefault, disDefault, oneInt, oneAny, 4, runModeApplication, immediates("i")},
+	{0x3a, "gload", opGload, proto(":a"), 4, immediates("t", "i").only(modeApp)},
+	{0x3b, "gloads", opGloads, proto("i:a"), 4, immediates("i").only(modeApp)},
 	// Access creatable IDs (consider deprecating, as txn CreatedAssetID, CreatedApplicationID should be enough
-	{0x3c, "gaid", opGaid, asmDefault, disDefault, nil, oneInt, 4, runModeApplication, immediates("t")},
-	{0x3d, "gaids", opGaids, asmDefault, disDefault, oneInt, oneInt, 4, runModeApplication, opDefault},
+	{0x3c, "gaid", opGaid, proto(":i"), 4, immediates("t").only(modeApp)},
+	{0x3d, "gaids", opGaids, proto("i:i"), 4, only(modeApp)},
 
 	// Like load/store, but scratch slot taken from TOS instead of immediate
-	{0x3e, "loads", opLoads, asmDefault, disDefault, oneInt, oneAny, 5, modeAny, opDefault},
-	{0x3f, "stores", opStores, asmDefault, disDefault, oneInt.plus(oneAny), nil, 5, modeAny, opDefault},
+	{0x3e, "loads", opLoads, proto("i:a"), 5, opDefault()},
+	{0x3f, "stores", opStores, proto("ia:"), 5, opDefault()},
 
-	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
-	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
-	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, opBranch},
-	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, opDefault},
-	{0x44, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opDefault},
-	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opDefault},
-	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, stacky(typeDup)},
-	{0x4a, "dup2", opDup2, asmDefault, disDefault, twoAny, twoAny.plus(twoAny), 2, modeAny, stacky(typeDupTwo)},
+	{0x40, "bnz", opBnz, proto("i:"), 1, opBranch()},
+	{0x41, "bz", opBz, proto("i:"), 2, opBranch()},
+	{0x42, "b", opB, proto(":"), 2, opBranch()},
+	{0x43, "return", opReturn, proto("i:x"), 2, opDefault()},
+	{0x44, "assert", opAssert, proto("i:"), 3, opDefault()},
+	{0x48, "pop", opPop, proto("a:"), 1, opDefault()},
+	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, stacky(typeDup)},
+	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, stacky(typeDupTwo)},
 	// There must be at least one thing on the stack for dig, but
 	// it would be nice if we did better checking than that.
-	{0x4b, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, stacky(typeDig, "n")},
-	{0x4c, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, stacky(typeSwap)},
-	{0x4d, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, stacky(typeSelect)},
-	{0x4e, "cover", opCover, asmDefault, disDefault, oneAny, oneAny, 5, modeAny, stacky(typeCover, "n")},
-	{0x4f, "uncover", opUncover, asmDefault, disDefault, oneAny, oneAny, 5, modeAny, stacky(typeUncover, "n")},
+	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A"), 3, stacky(typeDig, "n")},
+	{0x4c, "swap", opSwap, proto("aa:aa", "B, A"), 3, stacky(typeSwap)},
+	{0x4d, "select", opSelect, proto("aai:a", "A or B"), 3, stacky(typeSelect)},
+	{0x4e, "cover", opCover, proto("a:a", "[N items], A", "A, [N items]"), 5, stacky(typeCover, "n")},
+	{0x4f, "uncover", opUncover, proto("a:a", "A, [N items]", "[N items], A"), 5, stacky(typeUncover, "n")},
 
 	// byteslice processing / StringOps
-	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opDefault},
-	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, immediates("s", "e")},
-	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opDefault},
-	{0x53, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opDefault},
-	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, stacky(typeSetBit)},
-	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
-	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
-	{0x57, "extract", opExtract, asmDefault, disDefault, oneBytes, oneBytes, 5, modeAny, immediates("s", "l")},
-	{0x58, "extract3", opExtract3, asmDefault, disDefault, byteIntInt, oneBytes, 5, modeAny, opDefault},
-	{0x59, "extract_uint16", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5a, "extract_uint32", opExtract32Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5b, "extract_uint64", opExtract64Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5c, "base64_decode", opBase64Decode, assembleBase64Decode, disBase64Decode, oneBytes, oneBytes, fidoVersion, modeAny, costlyImm(25, "e")},
-	{0x5d, "json_ref", opJSONRef, assembleJSONRef, disJSONRef, twoBytes, oneAny, fidoVersion, modeAny, immediates("r")},
+	{0x50, "concat", opConcat, proto("bb:b"), 2, opDefault()},
+	{0x51, "substring", opSubstring, proto("b:b"), 2, immediates("s", "e").assembler(asmSubstring)},
+	{0x52, "substring3", opSubstring3, proto("bii:b"), 2, opDefault()},
+	{0x53, "getbit", opGetBit, proto("ai:i"), 3, opDefault()},
+	{0x54, "setbit", opSetBit, proto("aii:a"), 3, stacky(typeSetBit)},
+	{0x55, "getbyte", opGetByte, proto("bi:i"), 3, opDefault()},
+	{0x56, "setbyte", opSetByte, proto("bii:b"), 3, opDefault()},
+	{0x57, "extract", opExtract, proto("b:b"), 5, immediates("s", "l")},
+	{0x58, "extract3", opExtract3, proto("bii:b"), 5, opDefault()},
+	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
+	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
+	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
+	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16)},
+	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes)},
 
-	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opDefault},
-	{0x60, "balance", opBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x61, "app_opted_in", opAppOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opDefault},
-	{0x61, "app_opted_in", opAppOptedIn, asmDefault, disDefault, oneAny.plus(oneInt), oneInt, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x62, "app_local_get", opAppLocalGet, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny, 2, runModeApplication, opDefault},
-	{0x62, "app_local_get", opAppLocalGet, asmDefault, disDefault, oneAny.plus(oneBytes), oneAny, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, asmDefault, disDefault, twoInts.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opDefault},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, asmDefault, disDefault, oneAny.plus(oneInt).plus(oneBytes), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, opDefault},
-	{0x64, "app_global_get", opAppGlobalGet, asmDefault, disDefault, oneBytes, oneAny, 2, runModeApplication, opDefault},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opDefault},
-	{0x66, "app_local_put", opAppLocalPut, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, runModeApplication, opDefault},
-	{0x66, "app_local_put", opAppLocalPut, asmDefault, disDefault, oneAny.plus(oneBytes).plus(oneAny), nil, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x67, "app_global_put", opAppGlobalPut, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, runModeApplication, opDefault},
-	{0x68, "app_local_del", opAppLocalDel, asmDefault, disDefault, oneInt.plus(oneBytes), nil, 2, runModeApplication, opDefault},
-	{0x68, "app_local_del", opAppLocalDel, asmDefault, disDefault, oneAny.plus(oneBytes), nil, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x69, "app_global_del", opAppGlobalDel, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opDefault},
+	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
+	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i"), 2, only(modeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i"), directRefEnabledVersion, only(modeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(modeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(modeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:ai"), 2, only(modeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:ai"), directRefEnabledVersion, only(modeApp)},
+	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(modeApp)},
+	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:ai"), 2, only(modeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(modeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(modeApp)},
+	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(modeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ib:"), 2, only(modeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ab:"), directRefEnabledVersion, only(modeApp)},
+	{0x69, "app_global_del", opAppGlobalDel, proto("b:"), 2, only(modeApp)},
 
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, immediates("f")},
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, oneAny.plus(oneInt), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, immediates("f")},
-	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, immediates("f")},
-	{0x72, "app_params_get", opAppParamsGet, assembleAppParams, disAppParams, oneInt, oneAny.plus(oneInt), 5, runModeApplication, immediates("f")},
-	{0x73, "acct_params_get", opAcctParamsGet, assembleAcctParams, disAcctParams, oneAny, oneAny.plus(oneInt), 6, runModeApplication, immediates("f")},
+	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:ai"), 2, field("f", &AssetHoldingFields).only(modeApp)},
+	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:ai"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(modeApp)},
+	{0x71, "asset_params_get", opAssetParamsGet, proto("i:ai"), 2, field("f", &AssetParamsFields).only(modeApp)},
+	{0x72, "app_params_get", opAppParamsGet, proto("i:ai"), 5, field("f", &AppParamsFields).only(modeApp)},
+	{0x73, "acct_params_get", opAcctParamsGet, proto("a:ai"), 6, field("f", &AcctParamsFields).only(modeApp)},
 
-	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opDefault},
-	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
+	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(modeApp)},
+	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
-	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},
-	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
+	{0x80, "pushbytes", opPushBytes, proto(":b"), 3, constants(asmPushBytes, opPushBytes, "bytes", immBytes)},
+	{0x81, "pushint", opPushInt, proto(":i"), 3, constants(asmPushInt, opPushInt, "uint", immInt)},
 
-	{0x84, "ed25519verify_bare", opEd25519VerifyBare, asmDefault, disDefault, threeBytes, oneInt, 7, modeAny, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:i"), 7, costly(1900)},
 
 	// "Function oriented"
-	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, opBranch},
-	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, opDefault},
+	{0x88, "callsub", opCallSub, proto(":"), 4, opBranch()},
+	{0x89, "retsub", opRetSub, proto(":"), 4, opDefault()},
 	// Leave a little room for indirect function calls, or similar
 
 	// More math
-	{0x90, "shl", opShiftLeft, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
-	{0x91, "shr", opShiftRight, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
-	{0x92, "sqrt", opSqrt, asmDefault, disDefault, oneInt, oneInt, 4, modeAny, costly(4)},
-	{0x93, "bitlen", opBitLen, asmDefault, disDefault, oneAny, oneInt, 4, modeAny, opDefault},
-	{0x94, "exp", opExp, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
-	{0x95, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, costly(10)},
-	{0x96, "bsqrt", opBytesSqrt, asmDefault, disDefault, oneBytes, oneBytes, 6, modeAny, costly(40)},
-	{0x97, "divw", opDivw, asmDefault, disDefault, twoInts.plus(oneInt), oneInt, 6, modeAny, opDefault},
-	{0x98, "sha3_256", opSHA3_256, asmDefault, disDefault, oneBytes, oneBytes, 7, modeAny, costly(130)},
+	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, opDefault()},
+	{0x91, "shr", opShiftRight, proto("ii:i"), 4, opDefault()},
+	{0x92, "sqrt", opSqrt, proto("i:i"), 4, costly(4)},
+	{0x93, "bitlen", opBitLen, proto("a:i"), 4, opDefault()},
+	{0x94, "exp", opExp, proto("ii:i"), 4, opDefault()},
+	{0x95, "expw", opExpw, proto("ii:ii"), 4, costly(10)},
+	{0x96, "bsqrt", opBytesSqrt, proto("b:b"), 6, costly(40)},
+	{0x97, "divw", opDivw, proto("iii:i"), 6, opDefault()},
+	{0x98, "sha3_256", opSHA3_256, proto("b:b"), 7, costly(130)},
+
+	/* Will end up following keccak256 -
+	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
+	*/
 
 	// Byteslice math.
-	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
-	{0xa1, "b-", opBytesMinus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
-	{0xa2, "b/", opBytesDiv, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
-	{0xa3, "b*", opBytesMul, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
-	{0xa4, "b<", opBytesLt, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
-	{0xa5, "b>", opBytesGt, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
-	{0xa6, "b<=", opBytesLe, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
-	{0xa7, "b>=", opBytesGe, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
-	{0xa8, "b==", opBytesEq, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
-	{0xa9, "b!=", opBytesNeq, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
-	{0xaa, "b%", opBytesModulo, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
-	{0xab, "b|", opBytesBitOr, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
-	{0xac, "b&", opBytesBitAnd, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
-	{0xad, "b^", opBytesBitXor, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
-	{0xae, "b~", opBytesBitNot, asmDefault, disDefault, oneBytes, oneBytes, 4, modeAny, costly(4)},
-	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
+	{0xa0, "b+", opBytesPlus, proto("bb:b"), 4, costly(10)},
+	{0xa1, "b-", opBytesMinus, proto("bb:b"), 4, costly(10)},
+	{0xa2, "b/", opBytesDiv, proto("bb:b"), 4, costly(20)},
+	{0xa3, "b*", opBytesMul, proto("bb:b"), 4, costly(20)},
+	{0xa4, "b<", opBytesLt, proto("bb:i"), 4, opDefault()},
+	{0xa5, "b>", opBytesGt, proto("bb:i"), 4, opDefault()},
+	{0xa6, "b<=", opBytesLe, proto("bb:i"), 4, opDefault()},
+	{0xa7, "b>=", opBytesGe, proto("bb:i"), 4, opDefault()},
+	{0xa8, "b==", opBytesEq, proto("bb:i"), 4, opDefault()},
+	{0xa9, "b!=", opBytesNeq, proto("bb:i"), 4, opDefault()},
+	{0xaa, "b%", opBytesModulo, proto("bb:b"), 4, costly(20)},
+	{0xab, "b|", opBytesBitOr, proto("bb:b"), 4, costly(6)},
+	{0xac, "b&", opBytesBitAnd, proto("bb:b"), 4, costly(6)},
+	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
+	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
+	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, opDefault()},
 
 	// AVM "effects"
-	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, nil, 5, runModeApplication, opDefault},
-	{0xb1, "itxn_begin", opTxBegin, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
-	{0xb2, "itxn_field", opTxField, asmTxField, disTxField, oneAny, nil, 5, runModeApplication, stacky(typeTxField, "f")},
-	{0xb3, "itxn_submit", opTxSubmit, asmDefault, disDefault, nil, nil, 5, runModeApplication, opDefault},
-	{0xb4, "itxn", opItxn, asmItxn, disTxn, nil, oneAny, 5, runModeApplication, immediates("f")},
-	{0xb5, "itxna", opItxna, asmTxna, disTxna, nil, oneAny, 5, runModeApplication, immediates("f", "i")},
-	{0xb6, "itxn_next", opTxNext, asmDefault, disDefault, nil, nil, 6, runModeApplication, opDefault},
-	{0xb7, "gitxn", opGitxn, asmGitxn, disGtxn, nil, oneAny, 6, runModeApplication, immediates("t", "f")},
-	{0xb8, "gitxna", opGitxna, asmGtxna, disGtxna, nil, oneAny, 6, runModeApplication, immediates("t", "f", "i")},
+	{0xb0, "log", opLog, proto("b:"), 5, only(modeApp)},
+	{0xb1, "itxn_begin", opTxBegin, proto(":"), 5, only(modeApp)},
+	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, stacky(typeTxField, "f").field("f", &TxnFields).only(modeApp).assembler(asmItxnField)},
+	{0xb3, "itxn_submit", opItxnSubmit, proto(":"), 5, only(modeApp)},
+	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(modeApp).assembler(asmItxn)},
+	{0xb5, "itxna", opItxna, proto(":a"), 5, immediates("f", "i").field("f", &TxnArrayFields).only(modeApp)},
+	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(modeApp)},
+	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(modeApp).assembler(asmGitxn)},
+	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(modeApp)},
 
 	// Dynamic indexing
-	{0xc0, "txnas", opTxnas, asmTxnas, disTxn, oneInt, oneAny, 5, modeAny, immediates("f")},
-	{0xc1, "gtxnas", opGtxnas, asmGtxnas, disGtxn, oneInt, oneAny, 5, modeAny, immediates("t", "f")},
-	{0xc2, "gtxnsas", opGtxnsas, asmGtxnsas, disTxn, twoInts, oneAny, 5, modeAny, immediates("f")},
-	{0xc3, "args", opArgs, asmDefault, disDefault, oneInt, oneBytes, 5, runModeSignature, opDefault},
-	{0xc4, "gloadss", opGloadss, asmDefault, disDefault, twoInts, oneAny, 6, runModeApplication, opDefault},
-	{0xc5, "itxnas", opItxnas, asmTxnas, disTxn, oneInt, oneAny, 6, runModeApplication, immediates("f")},
-	{0xc6, "gitxnas", opGitxnas, asmGtxnas, disGtxn, oneInt, oneAny, 6, runModeApplication, immediates("t", "f")},
+	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},
+	{0xc1, "gtxnas", opGtxnas, proto("i:a"), 5, immediates("t", "f").field("f", &TxnArrayFields)},
+	{0xc2, "gtxnsas", opGtxnsas, proto("ii:a"), 5, field("f", &TxnArrayFields)},
+	{0xc3, "args", opArgs, proto("i:b"), 5, only(modeSig)},
+	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(modeApp)},
+	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(modeApp)},
+	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
 }
 
 type sortByOpcode []OpSpec
@@ -414,7 +631,7 @@ func OpcodesByVersion(version uint64) []OpSpec {
 // direct opcode bytes
 var opsByOpcode [LogicVersion + 1][256]OpSpec
 
-// OpsByName map for each each version, mapping opcode name to OpSpec
+// OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
 // Migration from TEAL v1 to TEAL v2.
@@ -441,7 +658,7 @@ func init() {
 	}
 	// Start from v2 TEAL and higher,
 	// copy lower version opcodes and overwrite matching version
-	for v := uint64(2); v <= EvalMaxVersion; v++ {
+	for v := uint64(2); v <= evalMaxVersion; v++ {
 		OpsByName[v] = make(map[string]OpSpec, 256)
 
 		// Copy opcodes from lower version
