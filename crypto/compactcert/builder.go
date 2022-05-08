@@ -183,8 +183,7 @@ again:
 // Build returns a compact certificate, if the builder has accumulated
 // enough signatures to construct it.
 func (b *Builder) Build() (*Cert, error) {
-
-	if b.signedWeight <= b.provenWeight {
+	if !b.Ready() {
 		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
 	}
 

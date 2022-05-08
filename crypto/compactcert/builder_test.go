@@ -122,10 +122,15 @@ func generateCertForTesting(a *require.Assertions) paramsForTest {
 	b, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
 	a.NoError(err)
 
-	for i := 0; i < npart; i++ {
-		a.False(b.Present(uint64(i)))
-		a.NoError(b.IsValid(uint64(i), sigs[i], !doLargeTest))
-		b.Add(uint64(i), sigs[i])
+	for i := uint64(0); i < uint64(npart); i++ {
+		a.False(b.Present(i))
+		a.NoError(b.IsValid(i, sigs[i], !doLargeTest))
+		b.Add(i, sigs[i])
+
+		// sanity check that the builder add the signature
+		isPresent, err := b.Present(i)
+		a.NoError(err)
+		a.True(isPresent)
 	}
 
 	cert, err := b.Build()
@@ -465,7 +470,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrSignatureSaltVersionMismatch)
 }
 
-func TestReady(t *testing.T) {
+func TestBuildAndReady(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -480,12 +485,18 @@ func TestReady(t *testing.T) {
 	a.NoError(err)
 
 	a.False(builder.Ready())
+	_, err = builder.Build()
+	a.ErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
 	builder.signedWeight = builder.provenWeight
 	a.False(builder.Ready())
+	_, err = builder.Build()
+	a.ErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
 	builder.signedWeight = builder.provenWeight + 1
 	a.True(builder.Ready())
+	_, err = builder.Build()
+	a.NotErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
 }
 
