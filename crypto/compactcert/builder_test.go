@@ -465,24 +465,114 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	a.ErrorIs(builder.IsValid(0, sig, true), merklesignature.ErrSignatureSaltVersionMismatch)
 }
 
+func TestReady(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	totalWeight := 10000000
+	data := testMessage("hello world").IntoStateProofMessageHash()
+	var parts []basics.Participant
+
+	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
+	a.NoError(err)
+
+	builder, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
+	a.NoError(err)
+
+	a.False(builder.Ready())
+
+	builder.signedWeight = builder.provenWeight
+	a.False(builder.Ready())
+
+	builder.signedWeight = builder.provenWeight + 1
+	a.True(builder.Ready())
+
+}
+
+func TestErrorCases(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	builder := Builder{}
+	_, err := builder.Present(1)
+	a.ErrorIs(err, ErrPositionOutOfBound)
+
+	builder.participants = make([]basics.Participant, 1, 1)
+	builder.sigs = make([]sigslot, 1, 1)
+	err = builder.IsValid(1, merklesignature.Signature{}, false)
+	a.ErrorIs(err, ErrPositionOutOfBound)
+
+	err = builder.IsValid(0, merklesignature.Signature{}, false)
+	require.ErrorIs(t, err, ErrPositionWithZeroWeight)
+
+	builder.participants[0].Weight = 1
+	err = builder.IsValid(0, merklesignature.Signature{}, true)
+	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
+
+	builder.sigs[0].Weight = 1
+	err = builder.Add(1, merklesignature.Signature{})
+	a.ErrorIs(err, ErrPositionOutOfBound)
+
+	err = builder.Add(0, merklesignature.Signature{})
+	a.ErrorIs(err, ErrPositionAlreadyPresent)
+}
+
+func checkSigsArray(n int, a *require.Assertions) {
+	b := &Builder{
+		sigs: make([]sigslot, n),
+	}
+	for i := 0; i < n; i++ {
+		b.sigs[i].L = uint64(i)
+		b.sigs[i].Weight = 1
+	}
+	for i := 0; i < n; i++ {
+		pos, err := b.coinIndex(uint64(i))
+		a.NoError(err)
+		a.Equal(uint64(i), pos)
+	}
+}
+
 func TestCoinIndex(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	n := 1000
+	checkSigsArray(n, a)
+
+	n = 1
+	checkSigsArray(n, a)
+
+	n = 2
+	checkSigsArray(n, a)
+
+	n = 3
+	checkSigsArray(n, a)
+}
+
+func TestCoinIndexBetweenWeights(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	n := 1000
 	b := &Builder{
 		sigs: make([]sigslot, n),
 	}
-
 	for i := 0; i < n; i++ {
-		b.sigs[i].L = uint64(i)
-		b.sigs[i].Weight = 1
+		b.sigs[i].Weight = 2
 	}
 
-	for i := 0; i < n; i++ {
+	b.sigs[0].L = 0
+	for i := 1; i < n; i++ {
+		b.sigs[i].L = b.sigs[i-1].L + b.sigs[i-1].Weight
+	}
+	for i := 0; i < 2*n; i++ {
 		pos, err := b.coinIndex(uint64(i))
-		require.NoError(t, err)
-		require.Equal(t, pos, uint64(i))
+		a.NoError(err)
+		a.Equal(pos, uint64(i/2))
 	}
+
+	_, err := b.coinIndex(uint64(2*n + 1))
+	a.ErrorIs(err, ErrCoinIndexError)
 }
 
 func TestBuilderWithZeroProvenWeight(t *testing.T) {

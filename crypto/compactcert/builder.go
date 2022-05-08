@@ -104,7 +104,7 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 	p := b.participants[pos]
 
 	if p.Weight == 0 {
-		return fmt.Errorf("%w :position %d", ErrPositionWithZeroWeight, pos)
+		return fmt.Errorf("builder.IsValid: %w: position = %d", ErrPositionWithZeroWeight, pos)
 	}
 
 	// Check signature
