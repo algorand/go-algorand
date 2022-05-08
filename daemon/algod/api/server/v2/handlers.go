@@ -569,11 +569,14 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 // GetProof generates a Merkle proof for a transaction in a block.
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params generated.GetProofParams) error {
-
 	var txID transactions.Txid
 	err := txID.UnmarshalText([]byte(txid))
 	if err != nil {
 		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
+	}
+
+	if params.Hashtype != nil && *params.Hashtype != "sha512_256" && *params.Hashtype != "sha256" {
+		return badRequest(ctx, nil, errInvalidHashType, v2.Log)
 	}
 
 	ledger := v2.Node.LedgerForAPI()
