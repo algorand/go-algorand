@@ -14,21 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-//go:build !linux
-// +build !linux
-
 package util
 
 import (
-	"time"
+	"os"
+	"path"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// NanoSleep sleeps for the given d duration.
-func NanoSleep(d time.Duration) {
-	time.Sleep(d)
-}
+func TestIsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-// NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
-func NanoAfter(d time.Duration) <-chan time.Time {
-	return time.After(d)
+	testPath := path.Join(os.TempDir(), "this", "is", "a", "long", "path")
+	err := os.MkdirAll(testPath, os.ModePerm)
+	assert.NoError(t, err)
+	defer os.RemoveAll(testPath)
+	assert.True(t, IsEmpty(testPath))
+
+	_, err = os.Create(path.Join(testPath, "file.txt"))
+	assert.NoError(t, err)
+	assert.False(t, IsEmpty(testPath))
 }

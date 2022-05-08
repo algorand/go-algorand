@@ -433,6 +433,9 @@ type ConsensusParams struct {
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
 
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
+
 	// EnableSHA256TxnRootHeader enables the creation of a transaction vector commitment tree using SHA256 hash function. (vector commitment extends Merkle tree by having a position binding property).
 	// This new header is in addition to the existing SHA512_256 merkle root.
 	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
@@ -1143,6 +1146,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4
+
+	vFuture.UnifyInnerTxIDs = true
 
 	vFuture.EnableSHA256TxnRootHeader = true
 
