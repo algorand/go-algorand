@@ -85,7 +85,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		},
 		consensusVersion: contextHdr.CurrentProtocol,
 		consensusParams:  consensusParams,
-		minTealVersion:   logic.ComputeMinTealVersion(transactions.WrapSignedTxnsWithAD(group), false),
+		minTealVersion:   logic.ComputeMinTealVersion(transactions.WrapSignedTxnsWithAD(group)),
 		signedGroupTxns:  group,
 	}, nil
 }

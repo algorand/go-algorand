@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -138,7 +139,7 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 	if currentTps > float64(cfg.TxnPerSec) {
 		sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
 		sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
-		time.Sleep(sleepTime)
+		util.NanoSleep(sleepTime)
 	}
 }
 

@@ -20,6 +20,7 @@
 #           directory as the recipe file path.
 
 set -e
+set -x
 
 if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
     echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY for this to work"

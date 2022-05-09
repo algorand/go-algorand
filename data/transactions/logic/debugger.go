@@ -56,6 +56,13 @@ type PCOffset struct {
 	Offset int `codec:"offset"`
 }
 
+// CallFrame stores the label name and the line of the subroutine.
+// An array of CallFrames form the CallStack.
+type CallFrame struct {
+	FrameLine int    `codec:"frameLine"`
+	LabelName string `codec:"labelname"`
+}
+
 // DebugState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
 type DebugState struct {
@@ -75,6 +82,7 @@ type DebugState struct {
 	Scratch      []basics.TealValue `codec:"scratch"`
 	Error        string             `codec:"error"`
 	OpcodeBudget int                `codec:"budget"`
+	CallStack    []CallFrame        `codec:"callstack"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
 	transactions.EvalDelta
@@ -87,7 +95,7 @@ func GetProgramID(program []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func makeDebugState(cx *EvalContext) DebugState {
+func makeDebugState(cx *EvalContext) *DebugState {
 	disasm, dsInfo, err := disassembleInstrumented(cx.program, nil)
 	if err != nil {
 		// Report disassembly error as program text
@@ -95,11 +103,11 @@ func makeDebugState(cx *EvalContext) DebugState {
 	}
 
 	// initialize DebuggerState with immutable fields
-	ds := DebugState{
+	ds := &DebugState{
 		ExecID:      GetProgramID(cx.program),
 		Disassembly: disasm,
 		PCOffset:    dsInfo.pcOffset,
-		GroupIndex:  int(cx.GroupIndex),
+		GroupIndex:  int(cx.groupIndex),
 		TxnGroup:    cx.TxnGroup,
 		Proto:       cx.Proto,
 	}
@@ -107,7 +115,7 @@ func makeDebugState(cx *EvalContext) DebugState {
 	globals := make([]basics.TealValue, len(globalFieldSpecs))
 	for _, fs := range globalFieldSpecs {
 		// Don't try to grab app only fields when evaluating a signature
-		if (cx.runModeFlags&runModeSignature) != 0 && fs.mode == runModeApplication {
+		if (cx.runModeFlags&modeSig) != 0 && fs.mode == modeApp {
 			continue
 		}
 		sv, err := cx.globalFieldToValue(fs)
@@ -118,8 +126,8 @@ func makeDebugState(cx *EvalContext) DebugState {
 	}
 	ds.Globals = globals
 
-	if (cx.runModeFlags & runModeApplication) != 0 {
-		ds.EvalDelta = cx.Txn.EvalDelta
+	if (cx.runModeFlags & modeApp) != 0 {
+		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
 	return ds
@@ -192,14 +200,36 @@ func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
 	}
 }
 
-func (cx *EvalContext) refreshDebugState() *DebugState {
-	ds := &cx.debugState
+// parseCallStack initializes an array of CallFrame objects from the raw
+// callstack.
+func (d *DebugState) parseCallstack(callstack []int) []CallFrame {
+	callFrames := make([]CallFrame, 0)
+	lines := strings.Split(d.Disassembly, "\n")
+	for _, pc := range callstack {
+		// The callsub is pc - 3 from the callstack pc
+		callsubLineNum := d.PCToLine(pc - 3)
+		callSubLine := strings.Fields(lines[callsubLineNum])
+		label := ""
+		if callSubLine[0] == "callsub" {
+			label = callSubLine[1]
+		}
+		callFrames = append(callFrames, CallFrame{
+			FrameLine: callsubLineNum,
+			LabelName: label,
+		})
+	}
+	return callFrames
+}
 
-	// Update pc, line, error, stack, and scratch space
+func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
+	ds := cx.debugState
+
+	// Update pc, line, error, stack, scratch space, callstack,
+	// and opcode budget
 	ds.PC = cx.pc
 	ds.Line = ds.PCToLine(cx.pc)
-	if cx.err != nil {
-		ds.Error = cx.err.Error()
+	if evalError != nil {
+		ds.Error = evalError.Error()
 	}
 
 	stack := make([]basics.TealValue, len(cx.stack))
@@ -215,9 +245,10 @@ func (cx *EvalContext) refreshDebugState() *DebugState {
 	ds.Stack = stack
 	ds.Scratch = scratch
 	ds.OpcodeBudget = cx.remainingBudget()
+	ds.CallStack = ds.parseCallstack(cx.callstack)
 
-	if (cx.runModeFlags & runModeApplication) != 0 {
-		ds.EvalDelta = cx.Txn.EvalDelta
+	if (cx.runModeFlags & modeApp) != 0 {
+		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
 	return ds
