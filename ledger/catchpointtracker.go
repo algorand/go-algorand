@@ -216,24 +216,24 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, lastBalancesRound 
 
 	// TODO: prune data, restart generating catchpoint data file or catchpoint file.
 	/*
-	writingCatchpointDataFileRound, _, err := ct.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
-	if err != nil {
-		return err
-	}
-	if writingCatchpointDataFileRound == 0 || !ct.catchpointEnabled() {
-		return nil
-	}
+		writingCatchpointDataFileRound, _, err := ct.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
+		if err != nil {
+			return err
+		}
+		if writingCatchpointDataFileRound == 0 || !ct.catchpointEnabled() {
+			return nil
+		}
 
-	// make sure that the database is at the desired round.
-	dbRound, err := accountsRound(ct.dbs.Rdb.Handle)
-	if err != nil {
-		return err
-	}
-	if dbRound != basics.Round(writingCatchpointDataFileRound) {
-		return nil
-	}
+		// make sure that the database is at the desired round.
+		dbRound, err := accountsRound(ct.dbs.Rdb.Handle)
+		if err != nil {
+			return err
+		}
+		if dbRound != basics.Round(writingCatchpointDataFileRound) {
+			return nil
+		}
 
-	ct.generateCatchpointData(context.Background(), basics.Round(writingCatchpointDataFileRound), time.Duration(0))
+		ct.generateCatchpointData(context.Background(), basics.Round(writingCatchpointDataFileRound), time.Duration(0))
 	*/
 	return nil
 }
@@ -890,20 +890,20 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	//retryCatchpointCreation := false
 	ct.log.Debugf("accountUpdates: generateCatchpoint: writing catchpoint accounts for round %d", accountsRound)
 	/*
-	defer func() {
-		if !retryCatchpointCreation {
-			// clear the writingCatchpoint flag
-			_, err := ct.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(0))
-			if err != nil {
-				ct.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, accountsRound, err)
+		defer func() {
+			if !retryCatchpointCreation {
+				// clear the writingCatchpoint flag
+				_, err := ct.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(0))
+				if err != nil {
+					ct.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, accountsRound, err)
+				}
 			}
-		}
-	}()
+		}()
 
-	_, err := ct.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(accountsRound))
-	if err != nil {
-		return 0, 0, err
-	}
+		_, err := ct.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(accountsRound))
+		if err != nil {
+			return 0, 0, err
+		}
 	*/
 
 	catchpointDataFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
