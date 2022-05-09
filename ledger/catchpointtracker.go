@@ -879,7 +879,7 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 
 // Generates a (first stage) catchpoint data file.
 func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (uint64 /*totalAccounts*/, uint64 /*totalChunks*/, error) {
-	beforeGeneratingCatchpointTime := time.Now()
+	startTime := time.Now()
 	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
 		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
 	}
@@ -983,7 +983,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
-	catchpointGenerationStats.WritingDuration = uint64(time.Since(beforeGeneratingCatchpointTime).Nanoseconds())
+	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
 	//catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
