@@ -143,25 +143,29 @@ type catchpointTracker struct {
 // initialize initializes the catchpointTracker structure
 func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
 	ct.dbDirectory = filepath.Dir(dbPathPrefix)
-	ct.enableGeneratingCatchpointFiles = cfg.Archival
+
 	switch cfg.CatchpointTracking {
 	case -1:
-		ct.catchpointInterval = 0
+		// No catchpoints.
 	default:
-		// give a warning, then fall thought
+		// Give a warning, then fall through to case 0.
 		logging.Base().Warnf("catchpointTracker: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
 		fallthrough
 	case 0:
-		if ct.enableGeneratingCatchpointFiles {
+		if cfg.Archival && (cfg.CatchpointInterval > 0) {
 			ct.catchpointInterval = cfg.CatchpointInterval
-		} else {
-			ct.catchpointInterval = 0
+			ct.enableGeneratingCatchpointFiles = true
 		}
 	case 1:
-		ct.catchpointInterval = cfg.CatchpointInterval
+		if cfg.CatchpointInterval > 0 {
+			ct.catchpointInterval = cfg.CatchpointInterval
+			ct.enableGeneratingCatchpointFiles = cfg.Archival
+		}
 	case 2:
-		ct.catchpointInterval = cfg.CatchpointInterval
-		ct.enableGeneratingCatchpointFiles = true
+		if cfg.CatchpointInterval > 0 {
+			ct.catchpointInterval = cfg.CatchpointInterval
+			ct.enableGeneratingCatchpointFiles = true
+		}
 	}
 
 	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
