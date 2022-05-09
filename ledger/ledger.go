@@ -477,20 +477,6 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
-
-	// mixin online data
-	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
-	if err != nil {
-		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-	}
-
-	data.VoteID = onlineData.VoteID
-	data.SelectionID = onlineData.SelectionID
-	data.StateProofID = onlineData.StateProofID
-	data.VoteKeyDilution = onlineData.VoteKeyDilution
-	data.VoteFirstValid = onlineData.VoteFirstValid
-	data.VoteLastValid = onlineData.VoteLastValid
-
 	return data, rnd, withoutRewards, nil
 }
 
@@ -504,24 +490,14 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	baseData, rnd, rewardsVersion, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
+	data, rnd, rewardsVersion, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
-	withoutRewards = baseData.MicroAlgos
-
-	// mixin online data
-	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
-	if err != nil {
-		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-	}
-	data.AccountBaseData = baseData
-	data.VotingData = onlineData.VotingData
-
+	withoutRewards = data.MicroAlgos
 	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
-
 	return data, rnd, withoutRewards, nil
 }
 
@@ -573,19 +549,10 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 
 	var result ledgercore.AccountData
 
-	baseData, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
+	result, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), err
 	}
-
-	// mixin online data
-	onlineData, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
-	if err != nil {
-		return ledgercore.AccountData{}, basics.Round(0), err
-	}
-
-	result.AccountBaseData = baseData
-	result.VotingData = onlineData.VotingData
 
 	return result, validThrough, nil
 }
@@ -731,6 +698,23 @@ func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
 // GenesisAccounts returns initial accounts for this ledger.
 func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
+}
+
+// BlockHdrCached returns the block header if available.
+// Expected availability range is [Latest - MaxTxnLife, Latest]
+// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+// The depth besides the MaxTxnLife is controller by DeeperBlockHeaderHistory parameter
+// and currently set to 1.
+// Explanation:
+// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+// and because a txn is alive when the current round <= txn.LastValid
+// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
+func (l *Ledger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.trackers.blockHeaderCached(rnd)
 }
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
