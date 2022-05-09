@@ -805,27 +805,28 @@ func TestCalculateFirstStageRounds(t *testing.T) {
 }
 
 func TestCalculateCatchpointRounds(t *testing.T) {
+	const catchpointInterval = 10
+
 	type TestCase struct {
 		// input
 		min basics.Round
 		max basics.Round
-		catchpointInterval uint64
 		// output
 		output []basics.Round
 	}
 	testCases := []TestCase {
-		{1, 0, 10, nil},
-		{0, 0, 10, []basics.Round{0}},
-		{11, 19, 10, nil},
-		{11, 20, 10, []basics.Round{20}},
-		{11, 29, 10, []basics.Round{20}},
-		{11, 30, 10, []basics.Round{20, 30}},
+		{1, 0, nil},
+		{0, 0, []basics.Round{0}},
+		{11, 19, nil},
+		{11, 20, []basics.Round{20}},
+		{11, 29, []basics.Round{20}},
+		{11, 30, []basics.Round{20, 30}},
 	}
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("test_case_%d", i), func(t *testing.T) {
 			rounds := calculateCatchpointRounds(
-				testCase.min, testCase.max, testCase.catchpointInterval)
+				testCase.min, testCase.max, catchpointInterval)
 			require.Equal(t, testCase.output, rounds)
 		})
 	}
