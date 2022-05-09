@@ -1393,8 +1393,8 @@
             "required": false,
             "type": "string",
             "enum": [
-              "map",
-              "nomap"
+              "include",
+              "exclude"
             ]
           }
         ],

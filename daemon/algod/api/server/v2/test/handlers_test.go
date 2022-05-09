@@ -548,10 +548,10 @@ func TestTealCompile(t *testing.T) {
 
 	// Test good program with params
 	tealCompileTest(t, goodProgramBytes, 200, true, params)
-	paramValue := "map"
+	paramValue := "include"
 	params = generated.TealCompileParams{Sourcemap: &paramValue}
 	tealCompileTest(t, goodProgramBytes, 200, true, params)
-	paramValue = "nomap"
+	paramValue = "exclude"
 	params = generated.TealCompileParams{Sourcemap: &paramValue}
 	tealCompileTest(t, goodProgramBytes, 200, true, params)
 	paramValue = "bad"

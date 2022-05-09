@@ -3646,8 +3646,8 @@
             "name": "sourcemap",
             "schema": {
               "enum": [
-                "map",
-                "nomap"
+                "include",
+                "exclude"
               ],
               "type": "string"
             }

@@ -1143,9 +1143,9 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	var sourcemap logic.SourceMap
 	if params.Sourcemap != nil {
 		switch *params.Sourcemap {
-		case "map":
+		case "include":
 			sourcemapFlag = true
-		case "nomap", "":
+		case "exclude", "":
 		default:
 			return badRequest(ctx, err, errFailedToParseSourcemap, v2.Log)
 		}
