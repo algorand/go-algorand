@@ -4731,14 +4731,14 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 type catchpointDataInfo struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
-	TrieBalancesHash crypto.Digest             `codec:"trieBalancesHash"`
+	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
+	TrieBalancesHash crypto.Digest            `codec:"trieBalancesHash"`
 	// Total number of accounts in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
-	TotalAccounts     uint64                   `codec:"accountsCount"`
+	TotalAccounts uint64 `codec:"accountsCount"`
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
-	TotalChunks       uint64                   `codec:"chunksCount"`
+	TotalChunks uint64 `codec:"chunksCount"`
 }
 
 func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointDataInfo) error {

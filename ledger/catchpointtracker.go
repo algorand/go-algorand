@@ -273,22 +273,22 @@ func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataR
 	if accountDataResourceSeparationRound > 0 {
 		minFirstStageRound := oldBase + 1
 		if (accountDataResourceSeparationRound > basics.Round(catchpointLookback)) &&
-				(accountDataResourceSeparationRound - basics.Round(catchpointLookback) >
-					minFirstStageRound) {
+			(accountDataResourceSeparationRound-basics.Round(catchpointLookback) >
+				minFirstStageRound) {
 			minFirstStageRound =
 				accountDataResourceSeparationRound - basics.Round(catchpointLookback)
 		}
 
 		// The smallest integer r >= dcr.minFirstStageRound such that
 		// (r + catchpointLookback) % ct.catchpointInterval == 0.
-		first := (int64(minFirstStageRound) + int64(catchpointLookback) +
-			int64(catchpointInterval) - 1) /
-				int64(catchpointInterval) * int64(catchpointInterval) -
-					int64(catchpointLookback)
+		first := (int64(minFirstStageRound)+int64(catchpointLookback)+
+			int64(catchpointInterval)-1)/
+			int64(catchpointInterval)*int64(catchpointInterval) -
+			int64(catchpointLookback)
 		// The largest integer r <= dcr.oldBase + dcr.offset such that
 		// (r + catchpointLookback) % ct.catchpointInterval == 0.
-		last := (int64(oldBase) + int64(offset) + int64(catchpointLookback)) /
-			int64(catchpointInterval) * int64(catchpointInterval) - int64(catchpointLookback)
+		last := (int64(oldBase)+int64(offset)+int64(catchpointLookback))/
+			int64(catchpointInterval)*int64(catchpointInterval) - int64(catchpointLookback)
 
 		if first <= last {
 			hasIntermediateFirstStageRound = true
@@ -369,7 +369,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 
 	defer func() {
 		if err != nil && dcc.catchpointFirstStage &&
-				ct.enableGeneratingCatchpointFiles {
+			ct.enableGeneratingCatchpointFiles {
 			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		}
 	}()
@@ -570,13 +570,13 @@ func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round 
 		// Exists.
 		if ct.enableGeneratingCatchpointFiles {
 			header := CatchpointFileHeader{
-				Version: CatchpointFileVersionV6,
-				BalancesRound: accountsRound,
-				BlocksRound: round,
-				Totals: dataInfo.Totals,
-				TotalAccounts: dataInfo.TotalAccounts,
-				TotalChunks: dataInfo.TotalChunks,
-				Catchpoint: label,
+				Version:           CatchpointFileVersionV6,
+				BalancesRound:     accountsRound,
+				BlocksRound:       round,
+				Totals:            dataInfo.Totals,
+				TotalAccounts:     dataInfo.TotalAccounts,
+				TotalChunks:       dataInfo.TotalChunks,
+				Catchpoint:        label,
 				BlockHeaderDigest: blockHash,
 			}
 
@@ -633,7 +633,7 @@ func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInt
 // Generate catchpoints (labels and possibly files with db records) for rounds in
 // [first, last]. `ct.catchpointInterval` must be non-zero.
 func (ct *catchpointTracker) createCatchpoints(first basics.Round, last basics.Round, oldBase basics.Round, catchpointLookback uint64) error {
-	if catchpointLookback + 1 > uint64(first) {
+	if catchpointLookback+1 > uint64(first) {
 		first = basics.Round(catchpointLookback) + 1
 	}
 	rounds := calculateCatchpointRounds(first, last, ct.catchpointInterval)
@@ -1029,17 +1029,17 @@ func (ct *catchpointTracker) recordFirstStageInfo(accountsRound basics.Round, to
 		return err
 	}
 
-	info := catchpointDataInfo {
-		Totals: accountTotals,
-		TotalAccounts: totalAccounts,
-		TotalChunks: totalChunks,
+	info := catchpointDataInfo{
+		Totals:           accountTotals,
+		TotalAccounts:    totalAccounts,
+		TotalChunks:      totalChunks,
 		TrieBalancesHash: trieBalancesHash,
 	}
 	return insertCatchpointFirstStageInfo(ct.dbs.Wdb.Handle, accountsRound, &info)
 }
 
 func makeCatchpointDataFilePath(accountsRound basics.Round) string {
-	return strconv.FormatInt(int64(accountsRound), 10)+".data"
+	return strconv.FormatInt(int64(accountsRound), 10) + ".data"
 }
 
 func makeCatchpointFilePath(round basics.Round) string {

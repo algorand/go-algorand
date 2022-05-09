@@ -42,18 +42,18 @@ const (
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
-	ctx               context.Context
-	tx                *sql.Tx
-	filePath          string
-	totalAccounts uint64
-	totalChunks uint64
-	file              *os.File
-	gzip              *gzip.Writer
-	tar               *tar.Writer
-	balancesChunk     catchpointFileBalancesChunkV6
-	balancesChunkNum  uint64
-	writtenBytes      int64
-	accountsIterator  encodedAccountsBatchIter
+	ctx              context.Context
+	tx               *sql.Tx
+	filePath         string
+	totalAccounts    uint64
+	totalChunks      uint64
+	file             *os.File
+	gzip             *gzip.Writer
+	tar              *tar.Writer
+	balancesChunk    catchpointFileBalancesChunkV6
+	balancesChunkNum uint64
+	writtenBytes     int64
+	accountsIterator encodedAccountsBatchIter
 }
 
 type encodedBalanceRecordV5 struct {
@@ -103,14 +103,14 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 	tar := tar.NewWriter(gzip)
 
 	res := &catchpointWriter{
-		ctx:               ctx,
-		tx:                tx,
-		filePath:          filePath,
+		ctx:           ctx,
+		tx:            tx,
+		filePath:      filePath,
 		totalAccounts: totalAccounts,
-		totalChunks: (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
-		file: file,
-		gzip: gzip,
-		tar: tar,
+		totalChunks:   (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
+		file:          file,
+		gzip:          gzip,
+		tar:           tar,
 	}
 	return res, nil
 }

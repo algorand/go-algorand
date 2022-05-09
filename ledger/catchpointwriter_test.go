@@ -333,13 +333,13 @@ func TestFullCatchpointWriter(t *testing.T) {
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 	catchpointFileHeader := CatchpointFileHeader{
-		Version: CatchpointFileVersionV6,
-		BalancesRound: accountsRnd,
-		BlocksRound: blocksRound,
-		Totals: totals,
-		TotalAccounts: totalAccounts,
-		TotalChunks: totalChunks,
-		Catchpoint: catchpointLabel,
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     accountsRnd,
+		BlocksRound:       blocksRound,
+		Totals:            totals,
+		TotalAccounts:     totalAccounts,
+		TotalChunks:       totalChunks,
+		Catchpoint:        catchpointLabel,
 		BlockHeaderDigest: blockHeaderDigest,
 	}
 	err = repackCatchpoint(

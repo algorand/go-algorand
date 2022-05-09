@@ -3563,7 +3563,7 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, round := range []basics.Round{4, 6, 8} {
-		info := catchpointDataInfo {
+		info := catchpointDataInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
 		err = insertCatchpointFirstStageInfo(dbs.Wdb.Handle, round, &info)

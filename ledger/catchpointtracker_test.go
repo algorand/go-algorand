@@ -318,7 +318,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 
-		err = ct.createCatchpoint(accountsRound, round,	catchpointDataInfo{}, crypto.Digest{})
+		err = ct.createCatchpoint(accountsRound, round, catchpointDataInfo{}, crypto.Digest{})
 		require.NoError(t, err)
 	}
 
@@ -493,7 +493,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		roundDeltas[i] = delta
 
 		// If we made a catchpoint, save the label.
-		if (uint64(i) > protoParams.CatchpointLookback) && ((uint64(i) - cfg.MaxAcctLookback) % cfg.CatchpointInterval == 0) {
+		if (uint64(i) > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 			ml.trackers.waitAccountsWriting()
 			catchpointLabels[i] = ct.GetLastCatchpointLabel()
 			require.NotEmpty(t, catchpointLabels[i], i)
@@ -526,7 +526,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			ml2.trackers.committedUpTo(i)
 
 			// if this is a catchpoint round, check the label.
-			if (uint64(i) > protoParams.CatchpointLookback) && ((uint64(i) - cfg.MaxAcctLookback) % cfg.CatchpointInterval == 0) {
+			if (uint64(i) > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 				ml2.trackers.waitAccountsWriting()
 				require.Equal(t, catchpointLabels[i], ct2.GetLastCatchpointLabel())
 			}
@@ -656,8 +656,8 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if (uint64(ledger.Latest()) + protoParams.CatchpointLookback) %
-				cfg.CatchpointInterval == 0 {
+		if (uint64(ledger.Latest())+protoParams.CatchpointLookback)%
+			cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 
@@ -705,8 +705,8 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	for {
 		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
-		if (uint64(ledger.Latest()) + protoParams.CatchpointLookback) %
-				cfg.CatchpointInterval == 0 {
+		if (uint64(ledger.Latest())+protoParams.CatchpointLookback)%
+			cfg.CatchpointInterval == 0 {
 			// release the entry lock for postCommit
 			<-writeStallingTracker.postCommitEntryLock
 			break
@@ -759,17 +759,17 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 func TestCalculateFirstStageRounds(t *testing.T) {
 	type TestCase struct {
 		// input
-		oldBase basics.Round
-		offset uint64
+		oldBase                            basics.Round
+		offset                             uint64
 		accountDataResourceSeparationRound basics.Round
-		catchpointInterval uint64
-		catchpointLookback uint64
+		catchpointInterval                 uint64
+		catchpointLookback                 uint64
 		// output
-		hasIntermediateFirstStageRound bool
+		hasIntermediateFirstStageRound          bool
 		hasMultipleIntermediateFirstStageRounds bool
-		retOffset uint64
+		retOffset                               uint64
 	}
-	testCases := []TestCase {
+	testCases := []TestCase{
 		{0, 6, 1, 10, 3, false, false, 6},
 		{0, 7, 1, 10, 3, true, false, 7},
 		{0, 16, 1, 10, 3, true, false, 7},
@@ -814,7 +814,7 @@ func TestCalculateCatchpointRounds(t *testing.T) {
 		// output
 		output []basics.Round
 	}
-	testCases := []TestCase {
+	testCases := []TestCase{
 		{1, 0, nil},
 		{0, 0, []basics.Round{0}},
 		{11, 19, nil},
