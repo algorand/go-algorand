@@ -833,7 +833,7 @@ func (wn *WebsocketNetwork) Start() {
 		go wn.prioWeightRefresh()
 	}
 
-	go wn.postMessagesOfInterestThraed()
+	go wn.postMessagesOfInterestThread()
 
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
 }
@@ -2363,7 +2363,7 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	wn.messagesOfInterestCond.Broadcast()
 }
 
-func (wn *WebsocketNetwork) postMessagesOfInterestThraed() {
+func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 	var peers []*wsPeer
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
