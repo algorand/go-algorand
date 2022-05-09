@@ -236,7 +236,7 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 }
 
 func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
-	if !dcc.isCatchpointRound {
+	if !dcc.catchpointFirstStage {
 		return nil
 	}
 

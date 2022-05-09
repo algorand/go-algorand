@@ -52,15 +52,6 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
-<<<<<<< HEAD
-// catchpointDataInfo
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
-=======
 // baseVotingData
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
@@ -68,7 +59,14 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
->>>>>>> feature/320-rounds
+//
+// catchpointDataInfo
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
 //
 // catchpointFileBalancesChunkV5
 //               |-----> (*) MarshalMsg
@@ -2061,6 +2059,14 @@ func (z *catchpointDataInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
+			bts, err = (*z).TrieBalancesHash.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TrieBalancesHash")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
 			(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalAccounts")
@@ -2072,14 +2078,6 @@ func (z *catchpointDataInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalChunks")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).TrieBalancesHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TrieBalancesHash")
 				return
 			}
 		}
@@ -2112,6 +2110,12 @@ func (z *catchpointDataInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Totals")
 					return
 				}
+			case "trieBalancesHash":
+				bts, err = (*z).TrieBalancesHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TrieBalancesHash")
+					return
+				}
 			case "accountsCount":
 				(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
@@ -2122,12 +2126,6 @@ func (z *catchpointDataInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TotalChunks")
-					return
-				}
-			case "trieBalancesHash":
-				bts, err = (*z).TrieBalancesHash.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TrieBalancesHash")
 					return
 				}
 			default:
@@ -2150,13 +2148,13 @@ func (_ *catchpointDataInfo) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *catchpointDataInfo) Msgsize() (s int) {
-	s = 1 + 14 + (*z).Totals.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 17 + (*z).TrieBalancesHash.Msgsize()
+	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointDataInfo) MsgIsZero() bool {
-	return ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).TrieBalancesHash.MsgIsZero())
+	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

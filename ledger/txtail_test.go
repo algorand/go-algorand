@@ -288,7 +288,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 					deferredCommitRange: deferredCommitRange{
 						oldBase:           basics.Round(i - 1),
 						offset:            1,
-						isCatchpointRound: true,
+						catchpointFirstStage: true,
 					},
 				}
 				err = txtail.prepareCommit(dcc)
