@@ -85,7 +85,7 @@ type catchpointTracker struct {
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directory for the catchup files to be generated
 	dbDirectory string
 
-	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
+	// catchpointInterval is the configured interval at which the catchpointTracker would generate catchpoint labels and catchpoint files.
 	catchpointInterval uint64
 
 	// catchpointFileHistoryLength defines how many catchpoint files we want to store back.
@@ -888,14 +888,14 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	// the retryCatchpointCreation is used to repeat the catchpoint file generation in case the node crashed / aborted during startup
 	// before the catchpoint file generation could be completed.
 	//retryCatchpointCreation := false
-	ct.log.Debugf("accountUpdates: generateCatchpoint: writing catchpoint accounts for round %d", accountsRound)
+	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 	/*
 		defer func() {
 			if !retryCatchpointCreation {
 				// clear the writingCatchpoint flag
 				_, err := ct.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(0))
 				if err != nil {
-					ct.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, accountsRound, err)
+					ct.log.Warnf("catchpointTracker.generateCatchpointData() unable to clear catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, accountsRound, err)
 				}
 			}
 		}()
@@ -969,7 +969,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 					accountsRound, err)
 				err2 := catchpointWriter.Abort()
 				if err2 != nil {
-					ct.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
+					ct.log.Warnf("catchpointTracker.generateCatchpointData() error removing catchpoint file : %v", err2)
 				}
 				return
 			}
@@ -978,7 +978,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	})
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
-		ct.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
+		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
 		return 0, 0, err
 	}
 
@@ -1061,13 +1061,13 @@ func (ct *catchpointTracker) recordCatchpointFile(round basics.Round, relCatchpo
 	if ct.catchpointFileHistoryLength != 0 {
 		err = ct.accountsq.storeCatchpoint(context.Background(), round, relCatchpointFilePath, "", fileSize)
 		if err != nil {
-			ct.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
+			ct.log.Warnf("catchpointTracker.recordCatchpointFile() unable to save catchpoint: %v", err)
 			return
 		}
 	} else {
 		err = os.Remove(relCatchpointFilePath)
 		if err != nil {
-			ct.log.Warnf("accountUpdates: saveCatchpoint: unable to remove file (%s): %v", relCatchpointFilePath, err)
+			ct.log.Warnf("catchpointTracker.recordCatchpointFile() unable to remove file (%s): %v", relCatchpointFilePath, err)
 			return
 		}
 	}
@@ -1105,7 +1105,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
-		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
+		return nil, fmt.Errorf("catchpointTracker.GetCatchpointStream() unable to lookup catchpoint %d: %v", round, err)
 	}
 	if dbFileName != "" {
 		catchpointPath := filepath.Join(ct.dbDirectory, dbFileName)
@@ -1119,14 +1119,14 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 			// delete it from the database.
 			err := ct.recordCatchpointFile(round, "", 0)
 			if err != nil {
-				ct.log.Warnf("accountUpdates: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
+				ct.log.Warnf("catchpointTracker.GetCatchpointStream() unable to delete missing catchpoint entry: %v", err)
 				return nil, err
 			}
 
 			return nil, ledgercore.ErrNoEntry{}
 		}
 		// it's some other error.
-		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
+		return nil, fmt.Errorf("catchpointTracker.GetCatchpointStream() unable to open catchpoint file '%s' %v", catchpointPath, err)
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
@@ -1144,7 +1144,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 
 		err = ct.recordCatchpointFile(round, relCatchpointFilePath, fileInfo.Size())
 		if err != nil {
-			ct.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
+			ct.log.Warnf("catchpointTracker.GetCatchpointStream() unable to save missing catchpoint entry: %v", err)
 		}
 		return &readCloseSizer{ReadCloser: file, size: fileInfo.Size()}, nil
 	}
