@@ -101,6 +101,8 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		MinInnerApplVersion: 4,
 
 		SupportBecomeNonParticipatingTransactions: true,
+
+		UnifyInnerTxIDs: true,
 	}
 }
 

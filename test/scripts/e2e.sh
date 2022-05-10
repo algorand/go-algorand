@@ -165,7 +165,7 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py
     # so that we can keep the temporary test artifact for use in the indexer e2e tests.
     # The file is located at ${TEMPDIR}/net_done.tar.bz2
-    if [ $E2E_PLATFORM == "arm64" ]; then
+    if [ "$E2E_PLATFORM" == "arm64" ]; then
       KEEP_TEMPS_CMD_STR="--keep-temps"
     fi
 
