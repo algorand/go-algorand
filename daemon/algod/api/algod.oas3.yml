@@ -3641,15 +3641,11 @@
         "operationId": "TealCompile",
         "parameters": [
           {
-            "description": "When set to `map`, returns the source map of the program as a JSON. Defaults to `nomap`.",
+            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
             "in": "query",
             "name": "sourcemap",
             "schema": {
-              "enum": [
-                "include",
-                "exclude"
-              ],
-              "type": "string"
+              "type": "boolean"
             }
           }
         ],

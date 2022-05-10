@@ -825,8 +825,8 @@ type GetProofParams struct {
 // TealCompileParams defines parameters for TealCompile.
 type TealCompileParams struct {
 
-	// When set to `map`, returns the source map of the program as a JSON. Defaults to `nomap`.
-	Sourcemap *string `json:"sourcemap,omitempty"`
+	// When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.
+	Sourcemap *bool `json:"sourcemap,omitempty"`
 }
 
 // TealDryrunJSONBody defines parameters for TealDryrun.

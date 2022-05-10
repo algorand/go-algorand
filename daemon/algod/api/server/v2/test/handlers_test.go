@@ -548,15 +548,12 @@ func TestTealCompile(t *testing.T) {
 
 	// Test good program with params
 	tealCompileTest(t, goodProgramBytes, 200, true, params)
-	paramValue := "include"
+	paramValue := true
 	params = generated.TealCompileParams{Sourcemap: &paramValue}
 	tealCompileTest(t, goodProgramBytes, 200, true, params)
-	paramValue = "exclude"
+	paramValue = false
 	params = generated.TealCompileParams{Sourcemap: &paramValue}
 	tealCompileTest(t, goodProgramBytes, 200, true, params)
-	paramValue = "bad"
-	params = generated.TealCompileParams{Sourcemap: &paramValue}
-	tealCompileTest(t, goodProgramBytes, 400, true, params)
 
 	// Test a program without the developer API flag.
 	tealCompileTest(t, goodProgramBytes, 404, false, params)

@@ -1138,17 +1138,10 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
-	// Check if we should return the source map.
-	sourcemapFlag := false
-	var sourcemap logic.SourceMap
-	if params.Sourcemap != nil {
-		switch *params.Sourcemap {
-		case "include":
-			sourcemapFlag = true
-		case "exclude", "":
-		default:
-			return badRequest(ctx, err, errFailedToParseSourcemap, v2.Log)
-		}
+	if params.Sourcemap == nil {
+		// Backwards compatibility: set sourcemap flag to default false value.
+		defaultValue := false
+		params.Sourcemap = &defaultValue
 	}
 
 	buf := new(bytes.Buffer)
@@ -1168,12 +1161,12 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	addr := basics.Address(pd)
 
 	// If source map flag is enabled, then return the map.
+	var sourcemap logic.SourceMap
 	var encodedMap *map[string]interface{}
-	if sourcemapFlag {
+	if *params.Sourcemap {
 		sourcemap = logic.GetSourceMap([]string{}, ops.OffsetToLine)
 		encodedMapString, _ := json.Marshal(sourcemap)
 		json.Unmarshal(encodedMapString, &encodedMap)
-
 	}
 
 	response := generated.CompileResponse{

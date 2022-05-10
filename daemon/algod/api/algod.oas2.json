@@ -1388,14 +1388,9 @@
           }, 
           {
             "name": "sourcemap",
-            "description": "When set to `map`, returns the source map of the program as a JSON. Defaults to `nomap`.",
+            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
             "in": "query",
-            "required": false,
-            "type": "string",
-            "enum": [
-              "include",
-              "exclude"
-            ]
+            "type": "boolean"
           }
         ],
         "responses": {
