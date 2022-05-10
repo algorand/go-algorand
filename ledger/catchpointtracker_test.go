@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -91,22 +92,22 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	filesToCreate := 4
 
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	require.NoError(t, err)
 	defer func() {
-		os.RemoveAll(temporaryDirectroy)
+		os.RemoveAll(temporaryDirectory)
 	}()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
 	err = os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
-	ct.dbDirectory = temporaryDirectroy
+	ct.dbDirectory = temporaryDirectory
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
 		fileName := filepath.Join(CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
-		err = ioutil.WriteFile(filepath.Join(temporaryDirectroy, fileName), data, 0666)
+		err = ioutil.WriteFile(filepath.Join(temporaryDirectory, fileName), data, 0666)
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database
@@ -130,7 +131,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, int64(3), len)
 
 	// File deleted, but record in the database
-	err = os.Remove(filepath.Join(temporaryDirectroy, CatchpointDirName, "2.catchpoint"))
+	err = os.Remove(filepath.Join(temporaryDirectory, CatchpointDirName, "2.catchpoint"))
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
@@ -830,4 +831,98 @@ func TestCalculateCatchpointRounds(t *testing.T) {
 			require.Equal(t, testCase.output, rounds)
 		})
 	}
+}
+
+// Test that pruning first stage catchpoint database records and catchpoint data files
+// works.
+func TestFirstStageInfoPruning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// create new protocol version, which has lower lookback
+	testProtocolVersion :=
+		protocol.ConsensusVersion("test-protocol-TestFirstStageInfoPruning")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	cfg := config.GetDefaultLocal()
+	cfg.CatchpointInterval = 4
+	cfg.CatchpointTracking = 2
+	ct := newCatchpointTracker(t, ml, cfg, ".")
+	defer ct.close()
+
+	temporaryDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	require.NoError(t, err)
+	defer func() {
+		os.RemoveAll(temporaryDirectory)
+	}()
+	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
+	err = os.Mkdir(catchpointsDirectory, 0777)
+	require.NoError(t, err)
+
+	ct.dbDirectory = temporaryDirectory
+
+	expectedNumEntries := protoParams.CatchpointLookback / cfg.CatchpointInterval
+
+	numCatchpointsCreated := uint64(0)
+	i := basics.Round(0)
+	for numCatchpointsCreated < expectedNumEntries {
+		i++
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: testProtocolVersion,
+				},
+			},
+		}
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+
+		ml.trackers.newBlock(blk, delta)
+		ml.trackers.committedUpTo(i)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+
+		// If we made a catchpoint, save the label.
+		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i) - cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
+			ml.trackers.waitAccountsWriting()
+			require.NotEmpty(t, ct.GetLastCatchpointLabel(), i)
+			numCatchpointsCreated++
+		}
+
+		// Let catchpoint data generation finish so that nothing gets skipped.
+		for ct.IsWritingCatchpointDataFile() {
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	numEntries := uint64(0)
+	i -= basics.Round(cfg.MaxAcctLookback)
+	for i > 0 {
+		_, recordExists, err := selectCatchpointFirstStageInfo(ct.dbs.Rdb.Handle, i)
+		require.NoError(t, err)
+
+		catchpointDataFilePath :=
+			filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(i))
+		_, err = os.Stat(catchpointDataFilePath)
+		if errors.Is(err, os.ErrNotExist) {
+			require.False(t, recordExists, i)
+		} else {
+			require.NoError(t, err)
+			require.True(t, recordExists, i)
+			numEntries++
+		}
+
+		i--
+	}
+
+	require.Equal(t, expectedNumEntries, numEntries)
 }

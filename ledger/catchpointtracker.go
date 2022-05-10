@@ -296,6 +296,7 @@ func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataR
 
 		if first <= last {
 			hasIntermediateFirstStageRound = true
+			// We skip earlier catchpoints if there is more than one to generate.
 			offset = uint64(last) - uint64(oldBase)
 
 			if first < last {
@@ -991,7 +992,8 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
 	//catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
-	ct.log.With("writingDuration", catchpointGenerationStats.WritingDuration).
+	ct.log.With("accountsRound", accountsRound).
+		With("writingDuration", catchpointGenerationStats.WritingDuration).
 		With("CPUTime", catchpointGenerationStats.CPUTime).
 		With("balancesWriteTime", catchpointGenerationStats.BalancesWriteTime).
 		With("accountsCount", catchpointGenerationStats.AccountsCount).
