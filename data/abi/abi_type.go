@@ -82,7 +82,7 @@ type Type struct {
 	// length for static array / tuple
 	/*
 		by ABI spec, len over binary array returns number of bytes
-		the type is uint16, which allows for only lenth in [0, 2^16 - 1]
+		the type is uint16, which allows for only length in [0, 2^16 - 1]
 		representation of static length can only be constrained in uint16 type
 	*/
 	// NOTE may want to change back to uint32/uint64
@@ -136,7 +136,7 @@ func TypeOf(str string) (Type, error) {
 		stringMatches := staticArrayRegexp.FindStringSubmatch(str)
 		// match the string itself, array element type, then array length
 		if len(stringMatches) != 3 {
-			return Type{}, fmt.Errorf("static array ill formated: %s", str)
+			return Type{}, fmt.Errorf(`static array ill formated: "%s"`, str)
 		}
 		// guaranteed that the length of array is existing
 		arrayLengthStr := stringMatches[2]
@@ -154,7 +154,7 @@ func TypeOf(str string) (Type, error) {
 	case strings.HasPrefix(str, "uint"):
 		typeSize, err := strconv.ParseUint(str[4:], 10, 16)
 		if err != nil {
-			return Type{}, fmt.Errorf("ill formed uint type: %s", str)
+			return Type{}, fmt.Errorf(`ill formed uint type: "%s"`, str)
 		}
 		return makeUintType(int(typeSize))
 	case str == "byte":
@@ -163,7 +163,7 @@ func TypeOf(str string) (Type, error) {
 		stringMatches := ufixedRegexp.FindStringSubmatch(str)
 		// match string itself, then type-bitSize, and type-precision
 		if len(stringMatches) != 3 {
-			return Type{}, fmt.Errorf("ill formed ufixed type: %s", str)
+			return Type{}, fmt.Errorf(`ill formed ufixed type: "%s"`, str)
 		}
 		// guaranteed that there are 2 uint strings in ufixed string
 		ufixedSize, err := strconv.ParseUint(stringMatches[1], 10, 16)
@@ -196,7 +196,7 @@ func TypeOf(str string) (Type, error) {
 		}
 		return MakeTupleType(tupleTypes)
 	default:
-		return Type{}, fmt.Errorf("cannot convert a string %s to an ABI type", str)
+		return Type{}, fmt.Errorf(`cannot convert the string "%s" to an ABI type`, str)
 	}
 }
 
@@ -493,3 +493,6 @@ func IsReferenceType(s string) bool {
 		return false
 	}
 }
+
+// VoidReturnType is the ABI return type string for a method that does not return any value
+const VoidReturnType = "void"

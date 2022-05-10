@@ -14,14 +14,21 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+//go:build !linux
+// +build !linux
+
+package util
 
 import (
-	"github.com/algorand/go-deadlock"
+	"time"
 )
 
-// StringGauge represents a map of key value pairs available to be written with the AddMetric
-type StringGauge struct {
-	deadlock.Mutex
-	values map[string]string
+// NanoSleep sleeps for the given d duration.
+func NanoSleep(d time.Duration) {
+	time.Sleep(d)
+}
+
+// NanoAfter waits for the duration to elapse and then sends the current time on the returned channel.
+func NanoAfter(d time.Duration) <-chan time.Time {
+	return time.After(d)
 }

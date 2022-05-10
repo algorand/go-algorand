@@ -1688,6 +1688,52 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	}
 }
 
+// TestLookupAgreement ensures LookupAgreement return an empty data for offline accounts
+func TestLookupAgreement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	var addrOnline, addrOffline basics.Address
+	for addr, ad := range genesisInitState.Accounts {
+		if addrOffline.IsZero() {
+			addrOffline = addr
+			ad.Status = basics.Offline
+			crypto.RandBytes(ad.VoteID[:]) // this is invalid but we set VoteID to ensure the account gets cleared
+			genesisInitState.Accounts[addr] = ad
+		} else if ad.Status == basics.Online {
+			addrOnline = addr
+			crypto.RandBytes(ad.VoteID[:])
+			genesisInitState.Accounts[addr] = ad
+			break
+		}
+	}
+
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	oad, err := ledger.LookupAgreement(0, addrOnline)
+	require.NoError(t, err)
+	require.NotEmpty(t, oad)
+	ad, _, _, err := ledger.LookupLatest(addrOnline)
+	require.NoError(t, err)
+	require.NotEmpty(t, ad)
+	require.Equal(t, oad, ad.OnlineAccountData())
+
+	require.NoError(t, err)
+	oad, err = ledger.LookupAgreement(0, addrOffline)
+	require.NoError(t, err)
+	require.Empty(t, oad)
+	ad, _, _, err = ledger.LookupLatest(addrOffline)
+	require.NoError(t, err)
+	require.NotEmpty(t, ad)
+	require.Equal(t, oad, ad.OnlineAccountData())
+}
+
 func BenchmarkLedgerStartup(b *testing.B) {
 	log := logging.TestingLog(b)
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "BenchmarkLedgerStartup")

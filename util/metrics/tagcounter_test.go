@@ -47,7 +47,7 @@ func TestTagCounter(t *testing.T) {
 	tc.WriteMetric(&sb, "")
 	require.Equal(t, "", sb.String())
 
-	result := make(map[string]string)
+	result := make(map[string]float64)
 	tc.AddMetric(result)
 	require.Equal(t, 0, len(result))
 

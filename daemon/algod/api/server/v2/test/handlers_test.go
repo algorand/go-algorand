@@ -551,6 +551,68 @@ func TestTealCompile(t *testing.T) {
 	tealCompileTest(t, badProgramBytes, 400, true)
 }
 
+func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
+	expectedString string, enableDeveloperAPI bool,
+) (response generatedV2.DisassembleResponse) {
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(program))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := handler.TealDisassemble(c)
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+
+	if rec.Code == 200 {
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Equal(t, expectedString, response.Result)
+	} else if rec.Code == 400 {
+		var response generatedV2.ErrorResponse
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Contains(t, response.Message, expectedString)
+	}
+	return
+}
+
+func TestTealDisassemble(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// nil program works, but results in invalid version text.
+	testProgram := []byte{}
+	tealDisassembleTest(t, testProgram, 200, "// invalid version\n", true)
+
+	// Test a valid program.
+	for ver := 1; ver < logic.AssemblerMaxVersion; ver++ {
+		goodProgram := `int 1`
+		ops, _ := logic.AssembleStringWithVersion(goodProgram, uint64(ver))
+		disassembledProgram, _ := logic.Disassemble(ops.Program)
+		tealDisassembleTest(t, ops.Program, 200, disassembledProgram, true)
+	}
+	// Test a nil program without the developer API flag.
+	tealDisassembleTest(t, testProgram, 404, "", false)
+
+	// Test bad program
+	badProgram := []byte{1, 99}
+	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+}
+
 func tealDryrunTest(
 	t *testing.T, obj *generatedV2.DryrunRequest, format string,
 	expCode int, expResult string, enableDeveloperAPI bool,

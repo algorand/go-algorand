@@ -49,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -1275,7 +1276,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 				}
 			}
 			select {
-			case <-time.After(sleepDuration):
+			case <-util.NanoAfter(sleepDuration):
 				if (request != nil) && time.Now().After(requestDeadline) {
 					// message time have elapsed.
 					return true

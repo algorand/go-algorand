@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,7 @@ var (
 	rejectsFilename string
 	closeToAddress  string
 	noProgramOutput bool
+	writeSourceMap  bool
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
@@ -123,6 +125,7 @@ func init() {
 
 	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
+	compileCmd.Flags().BoolVarP(&writeSourceMap, "map", "m", false, "write out source map")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
@@ -331,7 +334,7 @@ var sendCmd = &cobra.Command{
 			if logicSigFile != "" {
 				reportErrorln("should use at most one of --from-program/-F or --from-program-bytes/-P --logic-sig/-L")
 			}
-			program = assembleFile(programSource)
+			program = assembleFile(programSource, false)
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
 		}
@@ -724,7 +727,7 @@ var signCmd = &cobra.Command{
 		}
 
 		var lsig transactions.LogicSig
-
+		var authAddr basics.Address
 		var client libgoal.Client
 		var wh []byte
 		var pw []byte
@@ -733,7 +736,7 @@ var signCmd = &cobra.Command{
 			if logicSigFile != "" {
 				reportErrorln("goal clerk sign should have at most one of --program/-p or --logic-sig/-L")
 			}
-			lsig.Logic = assembleFile(programSource)
+			lsig.Logic = assembleFile(programSource, false)
 			lsig.Args = getProgramArgs()
 		} else if logicSigFile != "" {
 			lsigFromArgs(&lsig)
@@ -743,6 +746,11 @@ var signCmd = &cobra.Command{
 			dataDir := ensureSingleDataDir()
 			client = ensureKmdClient(dataDir)
 			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
+		} else if signerAddress != "" {
+			authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+			if err != nil {
+				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+			}
 		}
 
 		var outData []byte
@@ -790,6 +798,9 @@ var signCmd = &cobra.Command{
 			for _, txn := range txnGroups[group] {
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
+					if signerAddress != "" {
+						txn.AuthAddr = authAddr
+					}
 				}
 				txnGroup = append(txnGroup, *txn)
 			}
@@ -927,7 +938,7 @@ func mustReadFile(fname string) []byte {
 	return contents
 }
 
-func assembleFile(fname string) (program []byte) {
+func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 	text, err := readFile(fname)
 	if err != nil {
 		reportErrorf("%s: %s", fname, err)
@@ -948,7 +959,28 @@ func assembleFile(fname string) (program []byte) {
 		}
 	}
 
+	if printWarnings && len(ops.Warnings) != 0 {
+		for _, warning := range ops.Warnings {
+			reportWarnRawln(warning.Error())
+		}
+		plural := "s"
+		if len(ops.Warnings) == 1 {
+			plural = ""
+		}
+		reportWarnRawf("%d warning%s", len(ops.Warnings), plural)
+	}
+
+	return ops
+}
+
+func assembleFile(fname string, printWarnings bool) (program []byte) {
+	ops := assembleFileImpl(fname, printWarnings)
 	return ops.Program
+}
+
+func assembleFileWithMap(fname string, printWarnings bool) ([]byte, logic.SourceMap) {
+	ops := assembleFileImpl(fname, printWarnings)
+	return ops.Program, logic.GetSourceMap([]string{fname}, ops.OffsetToLine)
 }
 
 func disassembleFile(fname, outname string) {
@@ -997,8 +1029,6 @@ var compileCmd = &cobra.Command{
 				disassembleFile(fname, outFilename)
 				continue
 			}
-			program := assembleFile(fname)
-			outblob := program
 			outname := outFilename
 			if outname == "" {
 				if fname == stdinFileNameValue {
@@ -1007,6 +1037,9 @@ var compileCmd = &cobra.Command{
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
 			}
+			shouldPrintAdditionalInfo := outname != stdoutFilenameValue
+			program, sourceMap := assembleFileWithMap(fname, true)
+			outblob := program
 			if signProgram {
 				dataDir := ensureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
@@ -1036,7 +1069,21 @@ var compileCmd = &cobra.Command{
 					reportErrorf("%s: %s", outname, err)
 				}
 			}
-			if !signProgram && outname != stdoutFilenameValue {
+			if writeSourceMap {
+				if outname == stdoutFilenameValue {
+					reportErrorf("%s: %s", outname, "cannot print map to stdout")
+				}
+				mapname := outname + ".map"
+				pcblob, err := json.Marshal(sourceMap)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+				err = writeFile(mapname, pcblob, 0666)
+				if err != nil {
+					reportErrorf("%s: %s", mapname, err)
+				}
+			}
+			if !signProgram && shouldPrintAdditionalInfo {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())

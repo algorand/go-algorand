@@ -361,9 +361,9 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
-		testLine(t, text, assemblerNoVersion, "...available in version...")
+		testLine(t, text, assemblerNoVersion, "...was introduced in...")
 		for v := uint64(0); v < field.version; v++ {
-			testLine(t, text, v, "...available in version...")
+			testLine(t, text, v, "...was introduced in...")
 		}
 
 		ops := testProg(t, text, AssemblerMaxVersion)
@@ -411,13 +411,13 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
-			asmError := "...available in version ..."
+			asmError := "...was introduced in ..."
 			if fs.array {
 				parts := strings.Split(text, " ")
 				op := parts[0]
-				asmError = fmt.Sprintf("%s found array field %#v while expecting scalar", op, field)
+				asmError = fmt.Sprintf("%s unknown field: %#v", op, field)
 			}
-			// check assembler fails if version before introduction
+			// check assembler fails in versions before introduction
 			testLine(t, text, assemblerNoVersion, asmError)
 			for v := uint64(0); v < fs.version; v++ {
 				testLine(t, text, v, asmError)
@@ -426,7 +426,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 			if fs.array {
 				// "txn Accounts" is invalid, so skip evaluation
-				require.Error(t, err, asmError)
+				require.Error(t, err)
 				continue
 			} else {
 				require.NoError(t, err)
@@ -489,8 +489,8 @@ func TestBackwardCompatAssemble(t *testing.T) {
 func TestExplicitConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	require.Equal(t, 4096, MaxStringSize, "constant changed, move it to consensus params")
-	require.Equal(t, 64, MaxByteMathSize, "constant changed, move it to consensus params")
-	require.Equal(t, 1024, MaxLogSize, "constant changed, move it to consensus params")
-	require.Equal(t, 32, MaxLogCalls, "constant changed, move it to consensus params")
+	require.Equal(t, 4096, maxStringSize, "constant changed, make it version dependent")
+	require.Equal(t, 64, maxByteMathSize, "constant changed, move it version dependent")
+	require.Equal(t, 1024, maxLogSize, "constant changed, move it version dependent")
+	require.Equal(t, 32, maxLogCalls, "constant changed, move it version dependent")
 }

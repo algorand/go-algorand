@@ -191,8 +191,8 @@ bytec_0
 log
 `
 	tests := map[runMode]string{
-		runModeSignature:   opcodesRunModeAny + opcodesRunModeSignature,
-		runModeApplication: opcodesRunModeAny + opcodesRunModeApplication,
+		modeSig: opcodesRunModeAny + opcodesRunModeSignature,
+		modeApp: opcodesRunModeAny + opcodesRunModeApplication,
 	}
 
 	ep, tx, ledger := makeSampleEnv()
@@ -227,7 +227,7 @@ log
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
 			ep.TxnGroup[0].Txn.ApplicationID = 100
 			ep.TxnGroup[0].Txn.ForeignAssets = []basics.AssetIndex{5} // needed since v4
-			if mode == runModeSignature {
+			if mode == modeSig {
 				testLogic(t, test, AssemblerMaxVersion, ep)
 			} else {
 				testApp(t, test, ep)
@@ -237,9 +237,8 @@ log
 
 	// check err opcode work in both modes
 	source := "err"
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "encountered err")
-	testApp(t, source, defaultEvalParams(nil), "encountered err")
-	// require.NotContains(t, err.Error(), "not allowed in current mode")
+	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "err opcode executed")
+	testApp(t, source, defaultEvalParams(nil), "err opcode executed")
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
 	disallowedV4 := []string{
@@ -293,9 +292,9 @@ log
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
-	require.Equal(t, runMode(1), runModeSignature)
-	require.Equal(t, runMode(2), runModeApplication)
-	require.True(t, modeAny == runModeSignature|runModeApplication)
+	require.Equal(t, runMode(1), modeSig)
+	require.Equal(t, runMode(2), modeApp)
+	require.True(t, modeAny == modeSig|modeApp)
 	require.True(t, modeAny.Any())
 }
 
@@ -905,14 +904,14 @@ func TestAssets(t *testing.T) {
 }
 
 func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
-	for _, field := range AssetHoldingFieldNames {
-		fs := AssetHoldingFieldSpecByName[field]
+	for _, field := range assetHoldingFieldNames {
+		fs := assetHoldingFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
 	}
-	for _, field := range AssetParamsFieldNames {
-		fs := AssetParamsFieldSpecByName[field]
+	for _, field := range assetParamsFieldNames {
+		fs := assetParamsFieldSpecByName[field]
 		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
 			t.Errorf("TestAssets missing field %v", field)
 		}
@@ -1093,7 +1092,7 @@ intc_1
 `
 	params.URL = ""
 	ledger.NewAsset(txn.Txn.Sender, 55, params)
-	testApp(t, source, now, "cannot compare ([]byte to uint64)")
+	testApp(t, notrack(source), now, "cannot compare ([]byte to uint64)")
 }
 
 func TestAppParams(t *testing.T) {
@@ -2197,12 +2196,12 @@ func TestEnumFieldErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	source := `txn Amount`
-	origSpec := txnFieldSpecByField[Amount]
+	origSpec := txnFieldSpecs[Amount]
 	changed := origSpec
 	changed.ftype = StackBytes
-	txnFieldSpecByField[Amount] = changed
+	txnFieldSpecs[Amount] = changed
 	defer func() {
-		txnFieldSpecByField[Amount] = origSpec
+		txnFieldSpecs[Amount] = origSpec
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "Amount expected field type is []byte but got uint64")
@@ -2210,12 +2209,12 @@ func TestEnumFieldErrors(t *testing.T) {
 
 	source = `global MinTxnFee`
 
-	origMinTxnFs := globalFieldSpecByField[MinTxnFee]
+	origMinTxnFs := globalFieldSpecs[MinTxnFee]
 	badMinTxnFs := origMinTxnFs
 	badMinTxnFs.ftype = StackBytes
-	globalFieldSpecByField[MinTxnFee] = badMinTxnFs
+	globalFieldSpecs[MinTxnFee] = badMinTxnFs
 	defer func() {
-		globalFieldSpecByField[MinTxnFee] = origMinTxnFs
+		globalFieldSpecs[MinTxnFee] = origMinTxnFs
 	}()
 
 	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(nil), "MinTxnFee expected field type is []byte but got uint64")
@@ -2242,12 +2241,12 @@ int 55
 asset_holding_get AssetBalance
 assert
 `
-	origBalanceFs := assetHoldingFieldSpecByField[AssetBalance]
+	origBalanceFs := assetHoldingFieldSpecs[AssetBalance]
 	badBalanceFs := origBalanceFs
 	badBalanceFs.ftype = StackBytes
-	assetHoldingFieldSpecByField[AssetBalance] = badBalanceFs
+	assetHoldingFieldSpecs[AssetBalance] = badBalanceFs
 	defer func() {
-		assetHoldingFieldSpecByField[AssetBalance] = origBalanceFs
+		assetHoldingFieldSpecs[AssetBalance] = origBalanceFs
 	}()
 
 	testApp(t, source, ep, "AssetBalance expected field type is []byte but got uint64")
@@ -2256,12 +2255,12 @@ assert
 asset_params_get AssetTotal
 assert
 `
-	origTotalFs := assetParamsFieldSpecByField[AssetTotal]
+	origTotalFs := assetParamsFieldSpecs[AssetTotal]
 	badTotalFs := origTotalFs
 	badTotalFs.ftype = StackBytes
-	assetParamsFieldSpecByField[AssetTotal] = badTotalFs
+	assetParamsFieldSpecs[AssetTotal] = badTotalFs
 	defer func() {
-		assetParamsFieldSpecByField[AssetTotal] = origTotalFs
+		assetParamsFieldSpecs[AssetTotal] = origTotalFs
 	}()
 
 	testApp(t, source, ep, "AssetTotal expected field type is []byte but got uint64")
@@ -2392,7 +2391,7 @@ func TestReturnTypes(t *testing.T) {
 	}
 
 	byName := OpsByName[LogicVersion]
-	for _, m := range []runMode{runModeSignature, runModeApplication} {
+	for _, m := range []runMode{modeSig, modeApp} {
 		for name, spec := range byName {
 			// Only try an opcode in its modes
 			if (m & spec.Modes) == 0 {
@@ -2412,7 +2411,7 @@ func TestReturnTypes(t *testing.T) {
 						cmd = special
 					}
 				} else {
-					for _, imm := range spec.Details.Immediates {
+					for _, imm := range spec.OpDetails.Immediates {
 						switch imm.kind {
 						case immByte:
 							cmd += " 0"
@@ -2433,7 +2432,7 @@ func TestReturnTypes(t *testing.T) {
 				}
 				var sb strings.Builder
 				if provideStackInput {
-					for _, t := range spec.Args {
+					for _, t := range spec.Arg.Types {
 						sb.WriteString(typeToArg[t])
 					}
 				}
@@ -2469,10 +2468,10 @@ func TestReturnTypes(t *testing.T) {
 						require.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
 					}
 				}
-				require.Len(t, cx.stack, len(spec.Returns), "%s", ep.Trace)
-				for i := 0; i < len(spec.Returns); i++ {
+				require.Len(t, cx.stack, len(spec.Return.Types), "%s", ep.Trace)
+				for i := 0; i < len(spec.Return.Types); i++ {
 					stackType := cx.stack[i].argType()
-					retType := spec.Returns[i]
+					retType := spec.Return.Types[i]
 					require.True(
 						t, typecheck(retType, stackType),
 						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
@@ -2577,6 +2576,8 @@ func appAddr(id int) basics.Address {
 }
 
 func TestAppInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, tx, ledger := makeSampleEnv()
 	require.Equal(t, 888, int(tx.ApplicationID))
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2595,6 +2596,8 @@ func TestAppInfo(t *testing.T) {
 }
 
 func TestBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep := defaultEvalParams(nil)
 	source := `
 global OpcodeBudget
@@ -2609,6 +2612,8 @@ int 695
 }
 
 func TestSelfMutate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep, _, ledger := makeSampleEnv()
 
 	/* In order to test the added protection of mutableAccountReference, we're

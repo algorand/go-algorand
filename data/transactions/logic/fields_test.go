@@ -45,9 +45,9 @@ func TestGlobalFieldsVersions(t *testing.T) {
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
-		testLine(t, text, assemblerNoVersion, "...available in version...")
+		testLine(t, text, assemblerNoVersion, "...was introduced in...")
 		for v := uint64(0); v < field.version; v++ {
-			testLine(t, text, v, "...available in version...")
+			testLine(t, text, v, "...was introduced in...")
 		}
 		testLine(t, text, field.version, "")
 
@@ -108,7 +108,7 @@ func TestTxnFieldVersions(t *testing.T) {
 	// TEAL version
 	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
-	asmDefaultError := "...available in version ..."
+	asmDefaultError := "...was introduced in ..."
 	for _, fs := range fields {
 		field := fs.field.String()
 		for _, command := range tests {
@@ -176,7 +176,7 @@ func TestTxnEffectsAvailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	for _, fs := range txnFieldSpecByField {
+	for _, fs := range txnFieldSpecs {
 		if !fs.effects {
 			continue
 		}
@@ -225,7 +225,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 			ep, _, _ := makeSampleEnv()
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
-				testProg(t, text, v, Expect{3, "...available in version..."})
+				testProg(t, text, v, Expect{3, "...was introduced in..."})
 				ops := testProg(t, text, field.version) // assemble in the future
 				ops.Program[0] = byte(v)
 				testAppBytes(t, ops.Program, ep, "invalid asset_params_get field")

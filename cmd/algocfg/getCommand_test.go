@@ -17,21 +17,48 @@
 package main
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestVLQ(t *testing.T) {
+func TestPrint(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := require.New(t)
 
-	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))
-	a.Equal("AACA", MakeSourceMapLine(0, 0, 1, 0))
-	a.Equal("AAEA", MakeSourceMapLine(0, 0, 2, 0))
-	a.Equal("AAgBA", MakeSourceMapLine(0, 0, 16, 0))
-	a.Equal("AAggBA", MakeSourceMapLine(0, 0, 512, 0))
-	a.Equal("ADggBD", MakeSourceMapLine(0, -1, 512, -1))
+	testcases := []struct {
+		Input    interface{}
+		expected string
+	}{
+		{
+			Input:    "string",
+			expected: "string",
+		},
+		{
+			Input:    uint64(1234),
+			expected: "1234",
+		},
+		{
+			Input:    int64(-1234),
+			expected: "-1234",
+		},
+		{
+			Input:    true,
+			expected: "true",
+		},
+		{
+			Input:    time.Second,
+			expected: "1s",
+		},
+	}
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("test %d", i), func(t *testing.T) {
+			ret, err := serializeObjectProperty(tc, "Input")
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, ret)
+		})
+	}
 }

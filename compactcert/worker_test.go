@@ -197,7 +197,7 @@ func (s *testWorkerStubs) Broadcast(ctx context.Context, tag protocol.Tag, data 
 	return nil
 }
 
-func (s *testWorkerStubs) BroadcastSignedTxGroup(tx []transactions.SignedTxn) error {
+func (s *testWorkerStubs) BroadcastInternalSignedTxGroup(tx []transactions.SignedTxn) error {
 	require.Equal(s.t, len(tx), 1)
 	s.txmsg <- tx[0]
 	return nil

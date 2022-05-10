@@ -221,12 +221,11 @@ func _() {
 	_ = x[ClearState-3]
 	_ = x[UpdateApplication-4]
 	_ = x[DeleteApplication-5]
-	_ = x[invalidOnCompletionConst-6]
 }
 
-const _OnCompletionConstType_name = "NoOpOptInCloseOutClearStateUpdateApplicationDeleteApplicationinvalidOnCompletionConst"
+const _OnCompletionConstType_name = "NoOpOptInCloseOutClearStateUpdateApplicationDeleteApplication"
 
-var _OnCompletionConstType_index = [...]uint8{0, 4, 9, 17, 27, 44, 61, 85}
+var _OnCompletionConstType_index = [...]uint8{0, 4, 9, 17, 27, 44, 61}
 
 func (i OnCompletionConstType) String() string {
 	if i >= OnCompletionConstType(len(_OnCompletionConstType_index)-1) {
@@ -259,10 +258,10 @@ func _() {
 	var x [1]struct{}
 	_ = x[URLEncoding-0]
 	_ = x[StdEncoding-1]
-	_ = x[invalidBase64Alphabet-2]
+	_ = x[invalidBase64Encoding-2]
 }
 
-const _Base64Encoding_name = "URLEncodingStdEncodinginvalidBase64Alphabet"
+const _Base64Encoding_name = "URLEncodingStdEncodinginvalidBase64Encoding"
 
 var _Base64Encoding_index = [...]uint8{0, 11, 22, 43}
 

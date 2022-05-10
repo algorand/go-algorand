@@ -14,43 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+package util
 
 import (
-	"strings"
+	"os"
+	"path"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func hasKey(data map[string]string, key string) bool {
-	_, ok := data[key]
-	return ok
-}
-
-func TestMetricStringGauge(t *testing.T) {
+func TestIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	stringGauge := MakeStringGauge()
-	stringGauge.Set("number-key", "1")
-	stringGauge.Set("string-key", "value")
+	testPath := path.Join(os.TempDir(), "this", "is", "a", "long", "path")
+	err := os.MkdirAll(testPath, os.ModePerm)
+	assert.NoError(t, err)
+	defer os.RemoveAll(testPath)
+	assert.True(t, IsEmpty(testPath))
 
-	results := make(map[string]string)
-	DefaultRegistry().AddMetrics(results)
-
-	// values are populated
-	require.Equal(t, 2, len(results))
-	require.True(t, hasKey(results, "number-key"))
-	require.Equal(t, "1", results["number-key"])
-	require.True(t, hasKey(results, "string-key"))
-	require.Equal(t, "value", results["string-key"])
-
-	// not included in string builder
-	buf := strings.Builder{}
-	DefaultRegistry().WriteMetrics(&buf, "not used")
-	require.Equal(t, "", buf.String())
-
-	stringGauge.Deregister(nil)
+	_, err = os.Create(path.Join(testPath, "file.txt"))
+	assert.NoError(t, err)
+	assert.False(t, IsEmpty(testPath))
 }
