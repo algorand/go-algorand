@@ -433,9 +433,9 @@ func BenchmarkUnmarshalRewardsState(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalTxnRoot(t *testing.T) {
+func TestMarshalUnmarshalTxnCommitments(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := TxnRoot{}
+	v := TxnCommitments{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -454,12 +454,12 @@ func TestMarshalUnmarshalTxnRoot(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingTxnRoot(t *testing.T) {
-	protocol.RunEncodingTest(t, &TxnRoot{})
+func TestRandomizedEncodingTxnCommitments(t *testing.T) {
+	protocol.RunEncodingTest(t, &TxnCommitments{})
 }
 
-func BenchmarkMarshalMsgTxnRoot(b *testing.B) {
-	v := TxnRoot{}
+func BenchmarkMarshalMsgTxnCommitments(b *testing.B) {
+	v := TxnCommitments{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -467,8 +467,8 @@ func BenchmarkMarshalMsgTxnRoot(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgTxnRoot(b *testing.B) {
-	v := TxnRoot{}
+func BenchmarkAppendMsgTxnCommitments(b *testing.B) {
+	v := TxnCommitments{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -479,8 +479,8 @@ func BenchmarkAppendMsgTxnRoot(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalTxnRoot(b *testing.B) {
-	v := TxnRoot{}
+func BenchmarkUnmarshalTxnCommitments(b *testing.B) {
+	v := TxnCommitments{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

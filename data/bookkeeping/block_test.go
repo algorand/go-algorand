@@ -775,7 +775,7 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// Create a block without SHA256 TxnRoot
+	// Create a block without SHA256 TxnCommitments
 	var block Block
 	block.CurrentProtocol = protocol.ConsensusV32
 	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
@@ -816,45 +816,45 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 	/* Test V32 */
 	a.False(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
-	block.BlockHeader.TxnRoot.DigestSha256 = crypto.Digest{}
+	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
 	a.True(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], badDigestSlice)
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
+	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
-	block.BlockHeader.TxnRoot.DigestSha512_256 = crypto.Digest{}
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
+	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
 	/* Test Consensus Future */
-	// Create a block with SHA256 TxnRoot
+	// Create a block with SHA256 TxnCommitments
 	block.CurrentProtocol = protocol.ConsensusFuture
 
-	block.BlockHeader.TxnRoot.DigestSha512_256 = crypto.Digest{}
-	block.BlockHeader.TxnRoot.DigestSha256 = crypto.Digest{}
+	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
+	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
 	a.False(block.ContentsMatchHeader())
 
 	// Now update the SHA256 header to its correct value
-	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.True(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], badDigestSlice)
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
+	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnRoot.DigestSha512_256[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], badDigestSlice)
+	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], badDigestSlice)
 	a.False(block.ContentsMatchHeader())
 
-	block.BlockHeader.TxnRoot.DigestSha512_256 = crypto.Digest{}
-	copy(block.BlockHeader.TxnRoot.DigestSha256[:], rootSliceSHA256)
+	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
+	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 }
 
@@ -862,7 +862,7 @@ func TestBlockHeader_Serialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	// This serialized block header was generated from V32 e2e test, using the old BlockHeader struct which contains only TxnRoot SHA512_256 value
+	// This serialized block header was generated from V32 e2e test, using the old BlockHeader struct which contains only TxnCommitments SHA512_256 value
 	serializedBlkHdr := "8fa26363810081a16ecd0200a466656573c42007dacb4b6d9ed141b17576bd459ae6421d486da3d4ef2247c409a396b82ea221a466726163ce1dcd64fea367656ea7746573742d7631a26768c42032cb340d569e1f9e4d9690c1ba04d77759bae6f353e13af1becf42dcd7d3bdeba470726576c420a2270bc90e3cc48d56081b3b85c15d6a10e14303a6d42ca2537954ce90beec40a570726f746fa6667574757265a472617465ce0ee6b27fa3726e6402a6727763616c72ce0007a120a3727764c420ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa473656564c420a19005a25abad1ad28ec2298baeda9a17693a9ef12127a5ff3e5fa9258c7e9eba2746306a27473ce625ed0eaa374786ec420508f9330176e6064767b0fb7eb0e8bf68ffbaf995a4c7b37ca0217c5a82b4a60"
 	bytesBlkHdr, err := hex.DecodeString(serializedBlkHdr)
 	a.NoError(err)
@@ -871,6 +871,6 @@ func TestBlockHeader_Serialization(t *testing.T) {
 	err = protocol.Decode(bytesBlkHdr, &blkHdr)
 	a.NoError(err)
 
-	a.Equal(crypto.Digest{}, blkHdr.TxnRoot.DigestSha256)
-	a.NotEqual(crypto.Digest{}, blkHdr.TxnRoot.DigestSha512_256)
+	a.Equal(crypto.Digest{}, blkHdr.TxnCommitments.Sha256Commitment)
+	a.NotEqual(crypto.Digest{}, blkHdr.TxnCommitments.NativeSha512_256Commitment)
 }

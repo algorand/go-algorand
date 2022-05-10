@@ -128,9 +128,9 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems := make(map[uint64]crypto.Hashable)
 
 	elems[proofresp.Idx] = &element
-	err = merklearray.Verify(blk.TxnRoot.DigestSha512_256.ToSlice(), elems, &proof)
+	err = merklearray.Verify(blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, &proof)
 	if err != nil {
-		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnRoot.DigestSha512_256.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
+		t.Logf("blk.TxnCommitments : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnCommitments.NativeSha512_256Commitment.ToSlice(), proof.Path, proof.TreeDepth, proofresp.Stibhash, proofresp.Idx)
 		a.NoError(err)
 	}
 
@@ -140,9 +140,9 @@ func TestTxnMerkleProof(t *testing.T) {
 	elems = make(map[uint64]crypto.Hashable)
 
 	elems[proofrespSHA256.Idx] = &element
-	err = merklearray.VerifyVectorCommitment(blk.TxnRoot.DigestSha256.ToSlice(), elems, &proofSHA256)
+	err = merklearray.VerifyVectorCommitment(blk.TxnCommitments.Sha256Commitment.ToSlice(), elems, &proofSHA256)
 	if err != nil {
-		t.Logf("blk.TxnRoot : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnRoot.DigestSha256.ToSlice(), proofSHA256.Path, proofSHA256.TreeDepth, proofrespSHA256.Stibhash, proofrespSHA256.Idx)
+		t.Logf("blk.TxnCommitments : %v \nproof path %v \ndepth: %d \nStibhash %v\nIndex: %d", blk.TxnCommitments.Sha256Commitment.ToSlice(), proofSHA256.Path, proofSHA256.TreeDepth, proofrespSHA256.Stibhash, proofrespSHA256.Idx)
 		a.NoError(err)
 	}
 }
@@ -200,6 +200,6 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	proto := config.Consensus[blk.CurrentProtocol]
 	a.False(proto.EnableSHA256TxnRootHeader)
 
-	a.NotEqual(crypto.Digest{}, blk.TxnRoot.DigestSha512_256)
-	a.Equal(crypto.Digest{}, blk.TxnRoot.DigestSha256) // should be empty since not yet supported
+	a.NotEqual(crypto.Digest{}, blk.TxnCommitments.NativeSha512_256Commitment)
+	a.Equal(crypto.Digest{}, blk.TxnCommitments.Sha256Commitment) // should be empty since not yet supported
 }

@@ -191,7 +191,7 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	blk.Payset = append(blk.Payset, txib)
 	blk.BlockHeader.TxnCounter++
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	err = l.(*data.Ledger).AddBlock(blk, agreement.Certificate{})
@@ -924,6 +924,6 @@ func TestGetProofDefault(t *testing.T) {
 	elems[0] = &element
 
 	// Verifies that the default proof is using SHA512_256
-	err = merklearray.Verify(blkHdr.TxnRoot.DigestSha512_256.ToSlice(), elems, &proof)
+	err = merklearray.Verify(blkHdr.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, &proof)
 	a.NoError(err)
 }
