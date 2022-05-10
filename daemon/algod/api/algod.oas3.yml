@@ -620,10 +620,10 @@
             "schema": {
               "properties": {
                 "hashtype": {
-                  "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
                   "enum": [
-                    "sumhash",
-                    "sha512_256"
+                    "sha512_256",
+                    "sha256"
                   ],
                   "type": "string"
                 },
@@ -2607,6 +2607,18 @@
             }
           },
           {
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+            "in": "query",
+            "name": "hashtype",
+            "schema": {
+              "enum": [
+                "sha512_256",
+                "sha256"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded.",
             "in": "query",
             "name": "format",
@@ -2626,10 +2638,10 @@
                 "schema": {
                   "properties": {
                     "hashtype": {
-                      "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256",
+                      "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
                       "enum": [
-                        "sumhash",
-                        "sha512_256"
+                        "sha512_256",
+                        "sha256"
                       ],
                       "type": "string"
                     },

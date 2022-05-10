@@ -1230,7 +1230,7 @@ func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
 		var err error
-		eval.block.TxnRoot, err = eval.block.PaysetCommit()
+		eval.block.TxnCommitments, err = eval.block.PaysetCommit()
 		if err != nil {
 			return err
 		}
@@ -1275,8 +1275,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if err != nil {
 			return err
 		}
-		if txnRoot != eval.block.TxnRoot {
-			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		if txnRoot != eval.block.TxnCommitments {
+			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnCommitments)
 		}
 
 		var expectedTxnCount uint64
