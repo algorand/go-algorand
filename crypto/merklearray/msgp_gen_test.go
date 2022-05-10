@@ -1,3 +1,4 @@
+//go:build !skip_msgp_testing
 // +build !skip_msgp_testing
 
 package merklearray

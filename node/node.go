@@ -407,11 +407,11 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 
 	// PKI TODO: Remove this with #2596
 	// Periodically check for new participation keys
-	go node.checkForParticipationKeys()
+	go node.checkForParticipationKeys(node.ctx.Done())
 
-	go node.txPoolGaugeThread()
+	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
-	go node.oldKeyDeletionThread()
+	go node.oldKeyDeletionThread(node.ctx.Done())
 
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
@@ -782,7 +782,7 @@ func ensureParticipationDB(genesisDir string, log logging.Logger) (account.Parti
 }
 
 // Reload participation keys from disk periodically
-func (node *AlgorandFullNode) checkForParticipationKeys() {
+func (node *AlgorandFullNode) checkForParticipationKeys(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
 	for {
@@ -792,7 +792,7 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 			if err != nil {
 				node.log.Errorf("Could not refresh participation keys: %v", err)
 			}
-		case <-node.ctx.Done():
+		case <-done:
 			ticker.Stop()
 			return
 		}
@@ -1032,7 +1032,7 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 
 var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
 
-func (node *AlgorandFullNode) txPoolGaugeThread() {
+func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -1040,7 +1040,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread() {
 		select {
 		case <-ticker.C:
 			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
-		case <-node.ctx.Done():
+		case <-done:
 			return
 		}
 	}
@@ -1071,11 +1071,11 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // oldKeyDeletionThread keeps deleting old participation keys.
 // It runs in a separate thread so that, during catchup, we
 // don't have to delete key for each block we received.
-func (node *AlgorandFullNode) oldKeyDeletionThread() {
+func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
 		select {
-		case <-node.ctx.Done():
+		case <-done:
 			return
 		case <-node.oldKeyDeletionNotify:
 		}
