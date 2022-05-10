@@ -2278,9 +2278,13 @@
             "format": "byte"
           }
         },
-        "cost": {
-          "description": "Execution cost of app call transaction",
-          "type": "number"
+        "budgetDebit": {
+          "description": "Budget added during execution of app call transaction.",
+          "type": "integer"
+        },
+        "budgetCredit": {
+          "description": "Budget consumed during execution of app call transaction.",
+          "type": "integer"
         }
       }
     },

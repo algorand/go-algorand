@@ -538,8 +538,11 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
 					}
 				}
-				cost64 := int64(cost)
-				result.Cost = &cost64
+				// amount the budget was increased
+				budgetDebit := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
+				budgetCredit := uint64(cost) + budgetDebit
+				result.BudgetDebit = &budgetDebit
+				result.BudgetCredit = &budgetCredit
 				maxCurrentBudget = pooledAppBudget
 				cumulativeCost += cost
 
@@ -620,4 +623,14 @@ func MergeAppParams(base *basics.AppParams, update *basics.AppParams) {
 	if base.GlobalStateSchema == (basics.StateSchema{}) && update.GlobalStateSchema != (basics.StateSchema{}) {
 		base.GlobalStateSchema = update.GlobalStateSchema
 	}
+}
+
+// count all inner transactions contained within the eval delta
+func numInnerTxns(delta transactions.EvalDelta) (cnt int) {
+	cnt = len(delta.InnerTxns)
+	for _, itxn := range delta.InnerTxns {
+		cnt += numInnerTxns(itxn.EvalDelta)
+	}
+
+	return
 }

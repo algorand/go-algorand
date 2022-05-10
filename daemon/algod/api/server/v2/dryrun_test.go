@@ -1257,12 +1257,14 @@ func TestDryrunCost(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			costs := make([]int64, 3)
+			expected_costs := make([]int64, 3)
+			expected_debit := make([]uint64, 3)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
 			app1 := ops.Program
-			costs[0] = 3 + int64(test.numHashes)*130
+			expected_costs[0] = 3 + int64(test.numHashes)*130
+			expected_debit[0] = 0
 
 			ops, err = logic.AssembleString("int 1")
 			require.NoError(t, err)
@@ -1271,7 +1273,8 @@ func TestDryrunCost(t *testing.T) {
 			ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
 			require.NoError(t, err)
 			app2 := ops.Program
-			costs[1] = 3
+			expected_costs[1] = 3
+			expected_debit[1] = 0
 
 			ops, err = logic.AssembleString(`#pragma version 6
 itxn_begin
@@ -1287,7 +1290,8 @@ itxn_submit
 int 1`)
 			require.NoError(t, err)
 			app3 := ops.Program
-			costs[2] = -687
+			expected_costs[2] = -687
+			expected_debit[2] = 700
 
 			var appIdx basics.AppIndex = 1
 			creator := randomAddress()
@@ -1371,8 +1375,10 @@ int 1`)
 			for i, txn := range response.Txns {
 				messages := *txn.AppCallMessages
 				require.GreaterOrEqual(t, len(messages), 1)
-				require.NotNil(t, *txn.Cost)
-				require.Equal(t, costs[i], *txn.Cost)
+				cost := int64(*txn.BudgetCredit) - int64(*txn.BudgetDebit)
+				require.NotNil(t, cost)
+				require.Equal(t, expected_costs[i], cost)
+				require.Equal(t, expected_debit[i], *txn.BudgetDebit)
 				statusMatches := false
 				costExceedFound := false
 				for _, msg := range messages {

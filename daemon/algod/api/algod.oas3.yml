@@ -1323,9 +1323,13 @@
             },
             "type": "array"
           },
-          "cost": {
-            "description": "Execution cost of app call transaction",
-            "type": "number"
+          "budgetCredit": {
+            "description": "Budget consumed during execution of app call transaction.",
+            "type": "integer"
+          },
+          "budgetDebit": {
+            "description": "Budget added during execution of app call transaction.",
+            "type": "integer"
           },
           "disassembly": {
             "description": "Disassembled program line by line.",
