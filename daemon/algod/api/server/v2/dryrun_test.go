@@ -1651,8 +1651,7 @@ func checkEvalDelta(t *testing.T,
 ) {
 	for _, rt := range response.Txns {
 		if rt.GlobalDelta != nil && len(*rt.GlobalDelta) > 0 {
-			assert.Equal(t, len(expectedGlobalDelta), len(*rt.GlobalDelta))
-			assert.Equal(t, *rt.GlobalDelta, expectedGlobalDelta)
+			assert.Equal(t, expectedGlobalDelta, *rt.GlobalDelta)
 		} else {
 			assert.Nil(t, expectedGlobalDelta)
 		}
@@ -1660,8 +1659,7 @@ func checkEvalDelta(t *testing.T,
 		if rt.LocalDeltas != nil {
 			for _, ld := range *rt.LocalDeltas {
 				assert.Equal(t, expectedLocalDelta.Address, ld.Address)
-				assert.Equal(t, len(ld.Delta), len(expectedLocalDelta.Delta))
-				assert.Equal(t, ld.Delta, expectedLocalDelta.Delta)
+				assert.Equal(t, expectedLocalDelta.Delta, ld.Delta)
 			}
 		} else {
 			assert.Nil(t, expectedLocalDelta)
