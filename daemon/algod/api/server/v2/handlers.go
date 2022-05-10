@@ -19,7 +19,6 @@ package v2
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1131,6 +1130,11 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 	return v2.abortCatchup(ctx, catchpoint)
 }
 
+type CompileResponseWithSourceMap struct {
+	generated.CompileResponse
+	Sourcemap *logic.SourceMap `json:"sourcemap,omitempty"`
+}
+
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompileParams) (err error) {
@@ -1161,18 +1165,18 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	addr := basics.Address(pd)
 
 	// If source map flag is enabled, then return the map.
-	var sourcemap logic.SourceMap
-	var encodedMap *map[string]interface{}
+	var sourcemap *logic.SourceMap = nil
 	if *params.Sourcemap {
-		sourcemap = logic.GetSourceMap([]string{}, ops.OffsetToLine)
-		encodedMapString, _ := json.Marshal(sourcemap)
-		json.Unmarshal(encodedMapString, &encodedMap)
+		rawmap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+		sourcemap = &rawmap
 	}
 
-	response := generated.CompileResponse{
-		Hash:      addr.String(),
-		Result:    base64.StdEncoding.EncodeToString(ops.Program),
-		Sourcemap: encodedMap,
+	response := CompileResponseWithSourceMap{
+		generated.CompileResponse{
+			Hash:   addr.String(),
+			Result: base64.StdEncoding.EncodeToString(ops.Program),
+		},
+		sourcemap,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
