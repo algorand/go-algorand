@@ -1157,6 +1157,8 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 	return v2.abortCatchup(ctx, catchpoint)
 }
 
+// CompileResponseWithSourceMap overrides the sourcemap field in
+// the CompileResponse for JSON marshalling.
 type CompileResponseWithSourceMap struct {
 	generated.CompileResponse
 	Sourcemap *logic.SourceMap `json:"sourcemap,omitempty"`
