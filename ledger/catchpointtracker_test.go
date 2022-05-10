@@ -494,7 +494,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		roundDeltas[i] = delta
 
 		// If we made a catchpoint, save the label.
-		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i) - cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
+		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 			ml.trackers.waitAccountsWriting()
 			catchpointLabels[i] = ct.GetLastCatchpointLabel()
 			require.NotEmpty(t, catchpointLabels[i], i)
@@ -532,7 +532,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			ml2.trackers.committedUpTo(i)
 
 			// if this is a catchpoint round, check the label.
-			if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i) - cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
+			if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 				ml2.trackers.waitAccountsWriting()
 				require.Equal(t, catchpointLabels[i], ct2.GetLastCatchpointLabel())
 			}
@@ -905,7 +905,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 
 		// If we made a catchpoint, save the label.
-		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i) - cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
+		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 			ml.trackers.waitAccountsWriting()
 			require.NotEmpty(t, ct.GetLastCatchpointLabel(), i)
 			numCatchpointsCreated++
