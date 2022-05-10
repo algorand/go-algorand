@@ -198,7 +198,7 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
 	a.NoError(err)
 	proto := config.Consensus[blk.CurrentProtocol]
-	a.False(proto.EnableSHA256TxnRootHeader)
+	a.False(proto.EnableSHA256TxnCommitmentHeader)
 
 	a.NotEqual(crypto.Digest{}, blk.TxnCommitments.NativeSha512_256Commitment)
 	a.Equal(crypto.Digest{}, blk.TxnCommitments.Sha256Commitment) // should be empty since not yet supported

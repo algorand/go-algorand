@@ -594,7 +594,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 	if params.Hashtype != nil {
 		hashtype = *params.Hashtype
 	}
-	if hashtype == "sha256" && !proto.EnableSHA256TxnRootHeader {
+	if hashtype == "sha256" && !proto.EnableSHA256TxnCommitmentHeader {
 		return badRequest(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
 	}
 

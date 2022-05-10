@@ -531,7 +531,7 @@ func (block Block) PaysetCommit() (TxnCommitments, error) {
 	}
 
 	var digestSHA256 crypto.Digest
-	if params.EnableSHA256TxnRootHeader {
+	if params.EnableSHA256TxnCommitmentHeader {
 		digestSHA256, err = block.paysetCommitSHA256()
 		if err != nil {
 			return TxnCommitments{}, err
