@@ -50,10 +50,11 @@ var versionCheck = flag.Bool("v", false, "Display and write current build versio
 var branchCheck = flag.Bool("b", false, "Display the git branch behind the build")
 var channelCheck = flag.Bool("c", false, "Display and release channel behind the build")
 var initAndExit = flag.Bool("x", false, "Initialize the ledger and exit")
+var logToStdout = flag.Bool("o", false, "Write to stdout instead of node.log by overriding config.LogSizeLimit to 0")
 var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
 var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
-var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
+var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
 func main() {
@@ -290,6 +291,10 @@ func run() int {
 				log.Debugf("Cannot load static phonebook: %v", err)
 			}
 		}
+	}
+
+	if logToStdout != nil && *logToStdout {
+		cfg.LogSizeLimit = 0
 	}
 
 	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))

@@ -127,18 +127,6 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	firstRound, lastRound := basics.Round(firstValid), basics.Round(lastValid)
 
-	// Get the current protocol for ephemeral key parameters
-	stat, err := c.Status()
-	if err != nil {
-		return
-	}
-
-	proto, ok := c.consensus[protocol.ConsensusVersion(stat.LastVersion)]
-	if !ok {
-		err = fmt.Errorf("consensus protocol %s not supported", stat.LastVersion)
-		return
-	}
-
 	// If output directory wasn't specified, store it in the current ledger directory.
 	if outDir == "" {
 		// Get the GenesisID for use in the participation key path
@@ -170,7 +158,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	}
 
 	if keyDilution == 0 {
-		keyDilution = proto.DefaultKeyDilution
+		keyDilution = 1 + uint64(math.Sqrt(float64(lastRound-firstRound)))
 	}
 
 	// Fill the database with new participation keys

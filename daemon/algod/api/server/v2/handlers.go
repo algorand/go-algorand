@@ -768,12 +768,15 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	req := ctx.Request()
 	buf := new(bytes.Buffer)
 	req.Body = http.MaxBytesReader(nil, req.Body, maxTealDryrunBytes)
-	buf.ReadFrom(req.Body)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 	data := buf.Bytes()
 
 	var dr DryrunRequest
 	var gdr generated.DryrunRequest
-	err := decode(protocol.JSONStrictHandle, data, &gdr)
+	err = decode(protocol.JSONStrictHandle, data, &gdr)
 	if err == nil {
 		dr, err = DryrunRequestFromGenerated(&gdr)
 		if err != nil {
@@ -1138,7 +1141,10 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	}
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
-	buf.ReadFrom(ctx.Request().Body)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 	source := buf.String()
 	ops, err := logic.AssembleString(source)
 	if err != nil {
@@ -1204,4 +1210,28 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 		return ctx.JSON(http.StatusOK, response)
 	}
 	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
+}
+
+// TealDisassemble disassembles the program bytecode in base64 into TEAL code.
+// (POST /v2/teal/disassemble)
+func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
+	// return early if teal compile is not allowed in node config
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/teal/disassemble was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
+	buf := new(bytes.Buffer)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	sourceProgram := buf.Bytes()
+	program, err := logic.Disassemble(sourceProgram)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	response := generated.DisassembleResponse{
+		Result: program,
+	}
+	return ctx.JSON(http.StatusOK, response)
 }

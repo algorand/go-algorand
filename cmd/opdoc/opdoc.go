@@ -122,7 +122,7 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup) {
 
 func immediateMarkdown(op *logic.OpSpec) string {
 	markdown := ""
-	for _, imm := range op.Details.Immediates {
+	for _, imm := range op.OpDetails.Immediates {
 		markdown = markdown + " " + imm.Name
 	}
 	return markdown
@@ -130,30 +130,38 @@ func immediateMarkdown(op *logic.OpSpec) string {
 
 func stackMarkdown(op *logic.OpSpec) string {
 	out := "- Stack: "
-	special := logic.OpStackEffects(op.Name)
-	if special != "" {
-		return out + special + "\n"
-	}
 
 	out += "..."
-	for i, v := range op.Args {
-		out += fmt.Sprintf(", %c", rune(int('A')+i))
-		if v.Typed() {
-			out += fmt.Sprintf(": %s", v)
+	if op.Arg.Effects != "" {
+		out += ", " + op.Arg.Effects
+	} else {
+		for i, v := range op.Arg.Types {
+			out += fmt.Sprintf(", %c", rune(int('A')+i))
+			if v.Typed() {
+				out += fmt.Sprintf(": %s", v)
+			}
 		}
 	}
-	out += " &rarr; ..."
 
-	for i, rt := range op.Returns {
-		out += ", "
-		if len(op.Returns) > 1 {
-			start := int('X')
-			if len(op.Returns) > 3 {
-				start = int('Z') + 1 - len(op.Returns)
+	if op.AlwaysExits() {
+		return out + " &rarr; _exits_\n"
+	}
+
+	out += " &rarr; ..."
+	if op.Return.Effects != "" {
+		out += ", " + op.Return.Effects
+	} else {
+		for i, rt := range op.Return.Types {
+			out += ", "
+			if len(op.Return.Types) > 1 {
+				start := int('X')
+				if len(op.Return.Types) > 3 {
+					start = int('Z') + 1 - len(op.Return.Types)
+				}
+				out += fmt.Sprintf("%c: ", rune(start+i))
 			}
-			out += fmt.Sprintf("%c: ", rune(start+i))
+			out += rt.String()
 		}
-		out += rt.String()
 	}
 	return out + "\n"
 }
@@ -196,8 +204,8 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		fmt.Fprintf(out, "- Mode: %s\n", op.Modes)
 	}
 
-	for i := range op.Details.Immediates {
-		group := op.Details.Immediates[i].Group
+	for i := range op.OpDetails.Immediates {
+		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
 			fmt.Fprintf(out, "\n`%s` %s:\n\n", group.Name, group.Doc)
 			fieldGroupMarkdown(out, group)
@@ -314,9 +322,9 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
-		records[i].Args = typeString(spec.Args)
-		records[i].Returns = typeString(spec.Returns)
-		records[i].Size = spec.Details.Size
+		records[i].Args = typeString(spec.Arg.Types)
+		records[i].Returns = typeString(spec.Return.Types)
+		records[i].Size = spec.OpDetails.Size
 		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
 		records[i].Doc = logic.OpDoc(spec.Name)
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
@@ -361,7 +369,7 @@ func main() {
 	written := make(map[string]bool)
 	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
 	for _, spec := range opSpecs {
-		for _, imm := range spec.Details.Immediates {
+		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !written[imm.Group.Name] {
 				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
 				fieldGroupMarkdown(out, imm.Group)

@@ -31,9 +31,9 @@ ${gcmd} clerk send --from ${ACCOUNT} --to ${ACCOUNTC} --amount 1000000
 ${gcmd} clerk send --from ${ACCOUNT} --to ${ACCOUNTD} --amount 1000000
 
 # opt in to asset
-${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNTB} -t ${ACCOUNTB} -a 0
-${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNTC} -t ${ACCOUNTC} -a 0
-${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNTD} -t ${ACCOUNTD} -a 0
+${gcmd} asset optin --assetid ${ASSET_ID} -a ${ACCOUNTB}
+${gcmd} asset optin --assetid ${ASSET_ID} -a ${ACCOUNTC}
+${gcmd} asset optin --assetid ${ASSET_ID} -a ${ACCOUNTD}
 
 # fund asset
 ${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNT} -t ${ACCOUNTB} -a 1000

@@ -301,6 +301,9 @@ type ConsensusParams struct {
 	// provide greater isolation for clear state programs
 	IsolateClearState bool
 
+	// The minimum app version that can be called in an inner transaction
+	MinInnerApplVersion uint64
+
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
 	MaxAppsCreated int
@@ -428,6 +431,9 @@ type ConsensusParams struct {
 	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
+
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1078,6 +1084,7 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
+	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true
@@ -1132,6 +1139,9 @@ func initConsensusProtocols() {
 	vFuture.CompactCertStrengthTarget = 256
 
 	vFuture.LogicSigVersion = 7
+	vFuture.MinInnerApplVersion = 4
+
+	vFuture.UnifyInnerTxIDs = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

@@ -105,9 +105,9 @@ func TestAllImmediatesDocumented(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for _, op := range OpSpecs {
-		count := len(op.Details.Immediates)
+		count := len(op.OpDetails.Immediates)
 		note := OpImmediateNote(op.Name)
-		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
+		if count == 1 && op.OpDetails.Immediates[0].kind >= immBytes {
 			// More elaborate than can be checked by easy count.
 			assert.NotEmpty(t, note)
 			continue
