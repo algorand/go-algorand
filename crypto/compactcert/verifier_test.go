@@ -55,6 +55,8 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 
 }
 
+// TestVerifyWrongCoinSlot this test makes sure that the verifier uses PositionsToReveal array, and opens reveals in a specific order
+// In order to and trick the verifier we need to swap two positions in the PositionsToReveal so the coins will not match.
 func TestVerifyWrongCoinSlot(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -67,13 +69,23 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
 	a.NoError(err)
 
-	// find position to swap with 0.
+	// we need to find a reveal that will not match the first coin.
+	// In order to accomplish that we will extract the first coin and find a reveals ( > 1, since index 0 will satisfy the verifier)
+	// that doesn't match
 	coinAt0 := cert.PositionsToReveal[0]
-	sigAt0 := cert.Reveals[coinAt0]
+	choice := coinChoiceSeed{
+		partCommitment: verifier.participantsCommitment,
+		lnProvenWeight: verifier.lnProvenWeight,
+		sigCommitment:  cert.SigCommit,
+		signedWeight:   cert.SignedWeight,
+		data:           p.data,
+	}
+	coinHash := makeCoinGenerator(&choice)
+	coin := coinHash.getNextCoin()
 	j := 1
-	for j = 1; j < len(cert.PositionsToReveal); j++ {
-		element := cert.Reveals[cert.PositionsToReveal[j]]
-		if element.SigSlot.L != sigAt0.SigSlot.L {
+	for ; j < len(cert.PositionsToReveal); j++ {
+		reveal := cert.Reveals[cert.PositionsToReveal[j]]
+		if !(reveal.SigSlot.L <= coin && coin < reveal.SigSlot.L+reveal.Part.Weight) {
 			break
 		}
 	}

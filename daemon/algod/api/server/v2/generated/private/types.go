@@ -437,6 +437,16 @@ type PendingTransactionResponse struct {
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
+// StateProof defines model for StateProof.
+type StateProof struct {
+
+	// The encoded StateProof certificate.
+	StateProof []byte `json:"StateProof"`
+
+	// The encoded StateProof message.
+	StateProofMessage []byte `json:"StateProofMessage"`
+}
+
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {
 	Key string `json:"key"`
@@ -612,6 +622,13 @@ type CompileResponse struct {
 	Result string `json:"result"`
 }
 
+// DisassembleResponse defines model for DisassembleResponse.
+type DisassembleResponse struct {
+
+	// disassembled Teal code
+	Result string `json:"result"`
+}
+
 // DryrunResponse defines model for DryrunResponse.
 type DryrunResponse struct {
 	Error string `json:"error"`
@@ -721,6 +738,9 @@ type ProofResponse struct {
 	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
 }
+
+// StateProofResponse defines model for StateProofResponse.
+type StateProofResponse StateProof
 
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {

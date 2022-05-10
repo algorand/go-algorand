@@ -59,7 +59,7 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
@@ -69,6 +69,12 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 
 	template, err := loadTemplate(templateFile)
 	if err == nil {
+		if overrideDevMode {
+			template.Genesis.DevMode = true
+			if len(template.Nodes) > 0 {
+				template.Nodes[0].IsRelay = false
+			}
+		}
 		err = template.Validate()
 	}
 	if err != nil {

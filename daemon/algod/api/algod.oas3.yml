@@ -392,6 +392,25 @@
         },
         "description": "Teal compile Result"
       },
+      "DisassembleResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "result": {
+                  "description": "disassembled Teal code",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "result"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Teal disassembly Result"
+      },
       "DryrunResponse": {
         "content": {
           "application/json": {
@@ -642,6 +661,16 @@
           }
         },
         "description": "Proof of transaction in a block."
+      },
+      "StateProofResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StateProof"
+            }
+          }
+        },
+        "description": "StateProof transaction."
       },
       "SupplyResponse": {
         "content": {
@@ -1541,6 +1570,28 @@
           "$ref": "#/components/schemas/EvalDeltaKeyValue"
         },
         "type": "array"
+      },
+      "StateProof": {
+        "description": "StateProof transaction.",
+        "properties": {
+          "StateProof": {
+            "description": "The encoded StateProof certificate.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "StateProofMessage": {
+            "description": "The encoded StateProof message.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "StateProof",
+          "StateProofMessage"
+        ],
+        "type": "object"
       },
       "TealKeyValue": {
         "description": "Represents a key-value pair in an application store.",
@@ -3697,6 +3748,85 @@
         "x-codegen-request-body-name": "source"
       }
     },
+    "/v2/teal/disassemble": {
+      "post": {
+        "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "operationId": "TealDisassemble",
+        "requestBody": {
+          "content": {
+            "application/x-binary": {
+              "schema": {
+                "format": "byte",
+                "type": "string"
+              }
+            }
+          },
+          "description": "TEAL program binary to be disassembled",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "result": {
+                      "description": "disassembled Teal code",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Teal disassembly Result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Teal Compile Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {},
+            "description": "Developer API not enabled"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Disassemble program bytes into the TEAL source code.",
+        "x-codegen-request-body-name": "source"
+      }
+    },
     "/v2/teal/dryrun": {
       "post": {
         "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
@@ -4195,6 +4325,72 @@
           }
         },
         "summary": "Get a specific pending transaction."
+      }
+    },
+    "/v2/transactions/state-proof/{round}": {
+      "get": {
+        "operationId": "StateProof",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/StateProofResponse"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State proof transaction not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get the state proof transaction for a given round"
       }
     },
     "/versions": {

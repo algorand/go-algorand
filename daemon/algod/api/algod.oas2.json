@@ -1235,6 +1235,59 @@
         }
       ]
     },
+    "/v2/transactions/state-proof/{round}": {
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true,
+          "minimum": 0
+        }
+      ],
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the state proof transaction for a given round",
+        "operationId": "StateProof",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/StateProofResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "State proof transaction not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/applications/{application-id}": {
       "get": {
         "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
@@ -1295,7 +1348,7 @@
           "name": "application-id",
           "in": "path",
           "required": true
-      }
+        }
       ]
     },
     "/v2/assets/{asset-id}": {
@@ -1358,7 +1411,7 @@
           "name": "asset-id",
           "in": "path",
           "required": true
-      }
+        }
       ]
     },
     "/v2/teal/compile": {
@@ -1391,6 +1444,64 @@
           "200": {
             "description": "Successful compilation",
             "$ref": "#/responses/CompileResponse"
+          },
+          "400": {
+            "description": "Bad Request - Teal Compile Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Developer API not enabled"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/teal/disassemble": {
+      "post": {
+        "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Disassemble program bytes into the TEAL source code.",
+        "operationId": "TealDisassemble",
+        "parameters": [
+          {
+            "description": "TEAL program binary to be disassembled",
+            "name": "source",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "byte"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful disassembly",
+            "$ref": "#/responses/DisassembleResponse"
           },
           "400": {
             "description": "Bad Request - Teal Compile Error",
@@ -1776,8 +1887,8 @@
       "properties": {
         "amount": {
           "description": "\\[a\\] number of units held.",
-           "type": "integer",
-           "x-algorand-format": "uint64"
+          "type": "integer",
+          "x-algorand-format": "uint64"
         },
         "asset-id": {
           "description": "Asset ID of the holding.",
@@ -2266,7 +2377,7 @@
         "accounts": {
           "type": "array",
           "items": {
-              "$ref": "#/definitions/Account"
+            "$ref": "#/definitions/Account"
           }
         },
         "apps": {
@@ -2401,7 +2512,7 @@
         "asset-index": {
           "description": "The asset index if the transaction was found and it created an asset.",
           "type": "integer"
-          },
+        },
         "application-index": {
           "description": "The application index if the transaction was found and it created an application.",
           "type": "integer"
@@ -2462,8 +2573,28 @@
         },
         "txn": {
           "description": "The raw signed transaction.",
-            "type": "object",
+          "type": "object",
           "x-algorand-format": "SignedTransaction"
+        }
+      }
+    },
+    "StateProof": {
+      "description": "StateProof transaction.",
+      "type": "object",
+      "required": [
+        "StateProofMessage",
+        "StateProof"
+      ],
+      "properties": {
+        "StateProofMessage": {
+          "description": "The encoded StateProof message.",
+          "type": "string",
+          "format": "byte"
+        },
+        "StateProof": {
+          "description": "The encoded StateProof certificate.",
+          "type": "string",
+          "format": "byte"
         }
       }
     }
@@ -2639,6 +2770,12 @@
     }
   },
   "responses": {
+    "StateProofResponse": {
+      "description": "StateProof transaction.",
+      "schema": {
+        "$ref": "#/definitions/StateProof"
+      }
+    },
     "AccountResponse": {
       "description": "AccountResponse wraps the Account type in a response.",
       "schema": {
@@ -2679,7 +2816,7 @@
           "round": {
             "description": "The round for which this information is relevant.",
             "type": "integer"
-            },
+          },
           "app-local-state": {
             "description": "\\[appl\\] the application local data stored in this account.\n\nThe raw account uses `AppLocalState` for this type.",
             "$ref": "#/definitions/ApplicationLocalState"
@@ -2772,7 +2909,7 @@
         }
       }
     },
-    "CatchpointAbortResponse":{
+    "CatchpointAbortResponse": {
       "tags": [
         "private"
       ],
@@ -2908,12 +3045,12 @@
         "$ref": "#/definitions/ParticipationKey"
       }
     },
-    "PostParticipationResponse" : {
+    "PostParticipationResponse": {
       "description": "Participation ID of the submission",
       "schema": {
         "type": "object",
         "required": [
-         "partId"
+          "partId"
         ],
         "properties": {
           "partId": {
@@ -2922,9 +3059,7 @@
           }
         }
       }
-
     },
-
     "PostTransactionsResponse": {
       "description": "Transaction ID of the submission.",
       "schema": {
@@ -3036,6 +3171,21 @@
           },
           "result": {
             "description": "base64 encoded program bytes",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DisassembleResponse": {
+      "description": "Teal disassembly Result",
+      "schema": {
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "description": "disassembled Teal code",
             "type": "string"
           }
         }

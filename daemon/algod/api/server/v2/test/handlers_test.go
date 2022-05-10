@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -38,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproof"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
@@ -551,6 +553,68 @@ func TestTealCompile(t *testing.T) {
 	tealCompileTest(t, badProgramBytes, 400, true)
 }
 
+func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
+	expectedString string, enableDeveloperAPI bool,
+) (response generatedV2.DisassembleResponse) {
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(program))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := handler.TealDisassemble(c)
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+
+	if rec.Code == 200 {
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Equal(t, expectedString, response.Result)
+	} else if rec.Code == 400 {
+		var response generatedV2.ErrorResponse
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Contains(t, response.Message, expectedString)
+	}
+	return
+}
+
+func TestTealDisassemble(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// nil program works, but results in invalid version text.
+	testProgram := []byte{}
+	tealDisassembleTest(t, testProgram, 200, "// invalid version\n", true)
+
+	// Test a valid program.
+	for ver := 1; ver < logic.AssemblerMaxVersion; ver++ {
+		goodProgram := `int 1`
+		ops, _ := logic.AssembleStringWithVersion(goodProgram, uint64(ver))
+		disassembledProgram, _ := logic.Disassemble(ops.Program)
+		tealDisassembleTest(t, ops.Program, 200, disassembledProgram, true)
+	}
+	// Test a nil program without the developer API flag.
+	tealDisassembleTest(t, testProgram, 404, "", false)
+
+	// Test bad program
+	badProgram := []byte{1, 99}
+	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+}
+
 func tealDryrunTest(
 	t *testing.T, obj *generatedV2.DryrunRequest, format string,
 	expCode int, expResult string, enableDeveloperAPI bool,
@@ -796,4 +860,126 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, http.StatusInternalServerError, rec.Code)
 		require.Contains(t, rec.Body.String(), expectedErr.Error())
 	})
+}
+
+func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
+	genBlk, err := l.Block(0)
+	a.NoError(err)
+
+	totalsRound, totals, err := l.LatestTotals()
+	a.NoError(err)
+	a.Equal(l.Latest(), totalsRound)
+
+	totalRewardUnits := totals.RewardUnits()
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
+	a.NoError(err)
+
+	latestBlock, err := l.Block(l.Latest())
+	a.NoError(err)
+
+	var blk bookkeeping.Block
+	blk.BlockHeader = bookkeeping.BlockHeader{
+		GenesisID:    genBlk.GenesisID(),
+		GenesisHash:  genBlk.GenesisHash(),
+		Round:        l.Latest() + 1,
+		Branch:       latestBlock.Hash(),
+		RewardsState: latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+		UpgradeState: latestBlock.UpgradeState,
+	}
+
+	blk.BlockHeader.TxnCounter = latestBlock.TxnCounter
+
+	blk.RewardsPool = latestBlock.RewardsPool
+	blk.FeeSink = latestBlock.FeeSink
+	blk.CurrentProtocol = latestBlock.CurrentProtocol
+	blk.TimeStamp = latestBlock.TimeStamp + 1
+
+	blk.BlockHeader.TxnCounter++
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+
+	return blk
+}
+
+func TestStateProofNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	ldger := handler.Node.LedgerForAPI()
+
+	for i := 0; i < 5; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+	}
+
+	handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = []node.TxnWithStatus{}
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 5))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestStateProofHigherRoundThanLatest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestStateProof200(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	ldger := handler.Node.LedgerForAPI()
+
+	for i := 0; i < 5; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+	}
+
+	//setting
+	for i := 0; i < 300; i += int(config.Consensus[protocol.ConsensusFuture].CompactCertRounds) {
+		tx := node.TxnWithStatus{
+			Txn: transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.CompactCertTx,
+					CompactCertTxnFields: transactions.CompactCertTxnFields{
+						CertIntervalLatestRound: basics.Round(i + 1),
+						CertType:                0,
+						CertMsg: stateproof.Message{
+							BlockHeadersCommitment: []byte("blockheaderscommitment"),
+						},
+					},
+				},
+			},
+			ConfirmedRound: basics.Round(i + 1),
+		}
+		handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = append(handler.Node.(*mockNode).usertxns[transactions.CompactCertSender], tx)
+	}
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(200, responseRecorder.Code)
+
+	stprfResp := generated.StateProofResponse{}
+	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
+
+	msg := stateproof.Message{}
+	a.NoError(protocol.Decode(stprfResp.StateProofMessage, &msg))
+	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
 }

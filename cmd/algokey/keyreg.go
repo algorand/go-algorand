@@ -144,11 +144,11 @@ func run(params keyregCmdParams) error {
 			return errors.New("must provide --keyfile when registering participation keys")
 		}
 		if params.addr != "" {
-			return errors.New("do not provide --address when registering participation keys")
+			return errors.New("do not provide --account when registering participation keys")
 		}
 	} else {
 		if params.addr == "" {
-			return errors.New("must provide --address when bringing an account offline")
+			return errors.New("must provide --account when bringing an account offline")
 		}
 		if params.partkeyFile != "" {
 			return errors.New("do not provide --keyfile when bringing an account offline")
@@ -160,7 +160,7 @@ func run(params keyregCmdParams) error {
 		var err error
 		accountAddress, err = basics.UnmarshalChecksumAddress(params.addr)
 		if err != nil {
-			return fmt.Errorf("unable to parse --address: %w", err)
+			return fmt.Errorf("unable to parse --account: %w", err)
 		}
 	}
 
@@ -172,8 +172,8 @@ func run(params keyregCmdParams) error {
 		params.txFile = fmt.Sprintf("%s.tx", params.partkeyFile)
 	}
 
-	if util.FileExists(params.txFile) || params.txFile == stdoutFilenameValue {
-		return fmt.Errorf("outputFile '%s' already exists", params.partkeyFile)
+	if params.txFile != stdoutFilenameValue && util.FileExists(params.txFile) {
+		return fmt.Errorf("outputFile '%s' already exists", params.txFile)
 	}
 
 	// Lookup information from partkey file

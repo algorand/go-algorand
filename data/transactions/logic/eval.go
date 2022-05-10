@@ -176,10 +176,8 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of TEAL. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
-// anywhere in the transaction group, or the group will be rejected. In
-// addition, inner app calls must not call teal from before inner app calls were
-// introduced.
-func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uint64 {
+// anywhere in the transaction group, or the group will be rejected.
+func ComputeMinTealVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -190,11 +188,6 @@ func ComputeMinTealVersion(group []transactions.SignedTxnWithAD, inner bool) uin
 		if txn.Txn.Type == protocol.ApplicationCallTx {
 			if minVersion < appsEnabledVersion {
 				minVersion = appsEnabledVersion
-			}
-		}
-		if inner {
-			if minVersion < innerAppsEnabledVersion {
-				minVersion = innerAppsEnabledVersion
 			}
 		}
 	}
@@ -278,7 +271,8 @@ type EvalParams struct {
 
 	// Cache the txid hashing, but do *not* share this into inner EvalParams, as
 	// the key is just the index in the txgroup.
-	txidCache map[int]transactions.Txid
+	txidCache      map[int]transactions.Txid
+	innerTxidCache map[int]transactions.Txid
 
 	// The calling context, if this is an inner app call
 	caller *EvalContext
@@ -311,7 +305,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
-	minTealVersion := ComputeMinTealVersion(txgroup, false)
+	minTealVersion := ComputeMinTealVersion(txgroup)
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
@@ -363,9 +357,10 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minTealVersion := ComputeMinTealVersion(txg, true)
-	// Can't happen currently, since innerAppsEnabledVersion > than any minimum
-	// imposed otherwise.  But is correct to check, in case of future restriction.
+	minTealVersion := ComputeMinTealVersion(txg)
+	// Can't happen currently, since earliest inner callable version is higher
+	// than any minimum imposed otherwise.  But is correct to inherit a stronger
+	// restriction from above, in case of future restriction.
 	if minTealVersion < *caller.MinTealVersion {
 		minTealVersion = *caller.MinTealVersion
 	}
@@ -399,19 +394,19 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 }
 
 type evalFunc func(cx *EvalContext) error
-type opCheckFunc func(cx *EvalContext) error
+type checkFunc func(cx *EvalContext) error
 
 type runMode uint64
 
 const (
-	// runModeSignature is TEAL in LogicSig execution
-	runModeSignature runMode = 1 << iota
+	// modeSig is LogicSig execution
+	modeSig runMode = 1 << iota
 
-	// runModeApplication is TEAL in application/stateful mode
-	runModeApplication
+	// modeApp is application/contract execution
+	modeApp
 
 	// local constant, run in any mode
-	modeAny = runModeSignature | runModeApplication
+	modeAny = modeSig | modeApp
 )
 
 func (r runMode) Any() bool {
@@ -420,9 +415,9 @@ func (r runMode) Any() bool {
 
 func (r runMode) String() string {
 	switch r {
-	case runModeSignature:
+	case modeSig:
 		return "Signature"
-	case runModeApplication:
+	case modeApp:
 		return "Application"
 	case modeAny:
 		return "Any"
@@ -431,7 +426,7 @@ func (r runMode) String() string {
 	return "Unknown"
 }
 
-func (ep EvalParams) log() logging.Logger {
+func (ep *EvalParams) log() logging.Logger {
 	if ep.logger != nil {
 		return ep.logger
 	}
@@ -469,7 +464,7 @@ type EvalContext struct {
 
 	// the index of the transaction being evaluated
 	groupIndex int
-	// the transaction being evaluated (initialized from GroupIndex + ep.TxnGroup)
+	// the transaction being evaluated (initialized from groupIndex + ep.TxnGroup)
 	txn *transactions.SignedTxnWithAD
 
 	// Txn.EvalDelta maintains a summary of changes as we go.  We used to
@@ -532,6 +527,28 @@ const (
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
+
+func parseStackTypes(spec string) StackTypes {
+	if spec == "" {
+		return nil
+	}
+	types := make(StackTypes, len(spec))
+	for i, letter := range spec {
+		switch letter {
+		case 'a':
+			types[i] = StackAny
+		case 'b':
+			types[i] = StackBytes
+		case 'i':
+			types[i] = StackUint64
+		case 'x':
+			types[i] = StackNone
+		default:
+			panic(spec)
+		}
+	}
+	return types
+}
 
 func (st StackType) String() string {
 	switch st {
@@ -596,7 +613,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	}
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: runModeApplication,
+		runModeFlags: modeApp,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 		appID:        aid,
@@ -635,7 +652,7 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: runModeSignature,
+		runModeFlags: modeSig,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
@@ -736,14 +753,14 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
 func CheckContract(program []byte, params *EvalParams) error {
-	return check(program, params, runModeApplication)
+	return check(program, params, modeApp)
 }
 
 // CheckSignature should be faster than EvalSignature.  It can perform static
 // checks and reject programs that are invalid. Prior to v4, these static checks
 // include a cost estimate that must be low enough (controlled by params.Proto).
 func CheckSignature(gi int, params *EvalParams) error {
-	return check(params.TxnGroup[gi].Lsig.Logic, params, runModeSignature)
+	return check(params.TxnGroup[gi].Lsig.Logic, params, modeSig)
 }
 
 func check(program []byte, params *EvalParams, mode runMode) (err error) {
@@ -813,7 +830,7 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 	}
 
 	if params.MinTealVersion == nil {
-		minVersion := ComputeMinTealVersion(params.TxnGroup, params.caller != nil)
+		minVersion := ComputeMinTealVersion(params.TxnGroup)
 		params.MinTealVersion = &minVersion
 	}
 	if version < *params.MinTealVersion {
@@ -844,7 +861,7 @@ func boolToUint(x bool) uint64 {
 }
 
 func (cx *EvalContext) remainingBudget() int {
-	if cx.runModeFlags == runModeSignature {
+	if cx.runModeFlags == modeSig {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 
@@ -887,17 +904,17 @@ func (cx *EvalContext) step() error {
 	}
 
 	// check args for stack underflow and types
-	if len(cx.stack) < len(spec.Args) {
+	if len(cx.stack) < len(spec.Arg.Types) {
 		return fmt.Errorf("stack underflow in %s", spec.Name)
 	}
-	first := len(cx.stack) - len(spec.Args)
-	for i, argType := range spec.Args {
+	first := len(cx.stack) - len(spec.Arg.Types)
+	for i, argType := range spec.Arg.Types {
 		if !opCompat(argType, cx.stack[first+i].argType()) {
 			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
 		}
 	}
 
-	deets := &spec.Details
+	deets := &spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
@@ -934,14 +951,17 @@ func (cx *EvalContext) step() error {
 
 	if err == nil {
 		postheight := len(cx.stack)
-		if postheight-preheight != len(spec.Returns)-len(spec.Args) && spec.Name != "return" {
+		if postheight-preheight != len(spec.Return.Types)-len(spec.Arg.Types) && !spec.AlwaysExits() {
 			return fmt.Errorf("%s changed stack height improperly %d != %d",
-				spec.Name, postheight-preheight, len(spec.Returns)-len(spec.Args))
+				spec.Name, postheight-preheight, len(spec.Return.Types)-len(spec.Arg.Types))
 		}
-		first = postheight - len(spec.Returns)
-		for i, argType := range spec.Returns {
+		first = postheight - len(spec.Return.Types)
+		for i, argType := range spec.Return.Types {
 			stackType := cx.stack[first+i].argType()
 			if !opCompat(argType, stackType) {
+				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
+					break
+				}
 				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
 			}
 			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
@@ -968,7 +988,7 @@ func (cx *EvalContext) step() error {
 		// (changing the pc, for example) and this gives a big
 		// improvement of dryrun readability
 		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
-		sourceLine, inner := spec.dis(dstate, spec)
+		sourceLine, inner := disassemble(dstate, spec)
 		if inner != nil {
 			if err != nil { // don't override an error from evaluation
 				return err
@@ -980,8 +1000,8 @@ func (cx *EvalContext) step() error {
 			stackString = "<empty stack>"
 		} else {
 			num := 1
-			if len(spec.Returns) > 1 {
-				num = len(spec.Returns)
+			if len(spec.Return.Types) > 1 {
+				num = len(spec.Return.Types)
 			}
 			// check for nil error here, because we might not return
 			// values if we encounter an error in the opcode
@@ -1031,7 +1051,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
-	deets := spec.Details
+	deets := spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
 	}
@@ -1040,8 +1060,8 @@ func (cx *EvalContext) checkStep() (int, error) {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}
 	prevpc := cx.pc
-	if deets.checkFunc != nil {
-		err := deets.checkFunc(cx)
+	if deets.check != nil {
+		err := deets.check(cx)
 		if err != nil {
 			return 0, err
 		}
@@ -2166,17 +2186,24 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	return sv.toTealValue(), err
 }
 
-func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
-	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
-		return txn.ID()
+// currentTxID is a convenience method to get the Txid for the txn being evaluated
+func (cx *EvalContext) currentTxID() transactions.Txid {
+	if cx.Proto.UnifyInnerTxIDs {
+		// can't just return cx.txn.ID() because I might be an inner txn
+		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
 	}
 
-	// Initialize txidCache if necessary
+	// original behavior, for backwards comatability
+	return cx.txn.ID()
+}
+
+// getTxIDNotUnified is a backwards-compatible getTxID used when the consensus param UnifyInnerTxIDs
+// is false. DO NOT call directly, and DO NOT change its behavior
+func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupIndex int) transactions.Txid {
 	if cx.EvalParams.txidCache == nil {
 		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
 
-	// Hashes are expensive, so we cache computed TxIDs
 	txid, ok := cx.EvalParams.txidCache[groupIndex]
 	if !ok {
 		if cx.caller != nil {
@@ -2191,9 +2218,63 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
+	// inner indicates that groupIndex is an index into the most recent inner txn group
+
+	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
+		return txn.ID()
+	}
+
+	if !cx.Proto.UnifyInnerTxIDs {
+		// original behavior, for backwards comatability
+		return cx.getTxIDNotUnified(txn, groupIndex)
+	}
+
+	if inner {
+		// Initialize innerTxidCache if necessary
+		if cx.EvalParams.innerTxidCache == nil {
+			cx.EvalParams.innerTxidCache = make(map[int]transactions.Txid)
+		}
+
+		txid, ok := cx.EvalParams.innerTxidCache[groupIndex]
+		if !ok {
+			// We're referencing an inner and the current txn is the parent
+			myTxid := cx.currentTxID()
+			lastGroupLen := len(cx.getLastInnerGroup())
+			// innerIndex is the referenced inner txn's index in cx.txn.EvalDelta.InnerTxns
+			innerIndex := len(cx.txn.EvalDelta.InnerTxns) - lastGroupLen + groupIndex
+			txid = txn.InnerID(myTxid, innerIndex)
+			cx.EvalParams.innerTxidCache[groupIndex] = txid
+		}
+
+		return txid
+	}
+
+	// Initialize txidCache if necessary
+	if cx.EvalParams.txidCache == nil {
+		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	}
+
+	txid, ok := cx.EvalParams.txidCache[groupIndex]
+	if !ok {
+		if cx.caller != nil {
+			// We're referencing a peer txn, not my inner, but I am an inner
+			parentTxid := cx.caller.currentTxID()
+			innerIndex := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
+			txid = txn.InnerID(parentTxid, innerIndex)
+		} else {
+			// We're referencing a peer txn and I am not an inner
+			txid = txn.ID()
+		}
+		cx.EvalParams.txidCache[groupIndex] = txid
+	}
+
+	return txid
+}
+
 func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
-		if cx.runModeFlags == runModeSignature {
+		if cx.runModeFlags == modeSig {
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
 		if cx.version < txnEffectsVersion && !inner {
@@ -2257,7 +2338,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case GroupIndex:
 		sv.Uint = uint64(groupIndex)
 	case TxID:
-		txid := cx.getTxID(txn, groupIndex)
+		txid := cx.getTxID(txn, groupIndex, inner)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
@@ -2422,7 +2503,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	case srcGroup:
 		if fs.effects && gi >= uint64(cx.groupIndex) {
 			// Test mode so that error is clearer
-			if cx.runModeFlags == runModeSignature {
+			if cx.runModeFlags == modeSig {
 				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 			}
 			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.groupIndex)
@@ -4476,7 +4557,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	var parent transactions.Txid
 	isGroup := len(cx.subtxns) > 1
 	if isGroup {
-		parent = cx.txn.ID()
+		parent = cx.currentTxID()
 	}
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the
@@ -4495,7 +4576,7 @@ func opItxnSubmit(cx *EvalContext) error {
 			return err
 		}
 
-		// Disallow reentrancy and limit inner app call depth
+		// Disallow reentrancy, limit inner app call depth, and do version checks
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
 			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
 				return fmt.Errorf("attempt to self-call")
@@ -4511,9 +4592,7 @@ func opItxnSubmit(cx *EvalContext) error {
 				return fmt.Errorf("appl depth (%d) exceeded", depth)
 			}
 
-			// Can't call version < innerAppsEnabledVersion, and apps with such
-			// versions will always match, so just check approval program
-			// version.
+			// Set program by txn, approval, or clear state
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
 				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
@@ -4521,18 +4600,50 @@ func opItxnSubmit(cx *EvalContext) error {
 					return err
 				}
 				program = app.ApprovalProgram
+				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
+					program = app.ClearStateProgram
+				}
 			}
+
+			// Can't call old versions in inner apps.
 			v, _, err := transactions.ProgramVersion(program)
 			if err != nil {
 				return err
 			}
-			if v < innerAppsEnabledVersion {
-				return fmt.Errorf("inner app call with version %d < %d", v, innerAppsEnabledVersion)
+			if v < cx.Proto.MinInnerApplVersion {
+				return fmt.Errorf("inner app call with version v%d < v%d",
+					v, cx.Proto.MinInnerApplVersion)
 			}
+
+			// Don't allow opt-in if the CSP is not runnable as an inner.
+			// This test can only fail for v4 and v5 approval programs,
+			// since v6 requires synchronized versions.
+			if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
+				csp := cx.subtxns[itx].Txn.ClearStateProgram
+				if cx.subtxns[itx].Txn.ApplicationID != 0 {
+					app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+					if err != nil {
+						return err
+					}
+					csp = app.ClearStateProgram
+				}
+				csv, _, err := transactions.ProgramVersion(csp)
+				if err != nil {
+					return err
+				}
+				if csv < cx.Proto.MinInnerApplVersion {
+					return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",
+						csv, cx.Proto.MinInnerApplVersion)
+				}
+			}
+
 		}
 
 		if isGroup {
 			innerOffset := len(cx.txn.EvalDelta.InnerTxns)
+			if cx.Proto.UnifyInnerTxIDs {
+				innerOffset += itx
+			}
 			group.TxGroupHashes = append(group.TxGroupHashes,
 				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
 		}
@@ -4563,6 +4674,8 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
+	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
+	cx.innerTxidCache = nil
 	return nil
 }
 

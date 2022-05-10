@@ -104,7 +104,7 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 	p := b.participants[pos]
 
 	if p.Weight == 0 {
-		return fmt.Errorf("%w :position %d", ErrPositionWithZeroWeight, pos)
+		return fmt.Errorf("builder.IsValid: %w: position = %d", ErrPositionWithZeroWeight, pos)
 	}
 
 	// Check signature
@@ -183,8 +183,7 @@ again:
 // Build returns a compact certificate, if the builder has accumulated
 // enough signatures to construct it.
 func (b *Builder) Build() (*Cert, error) {
-
-	if b.signedWeight <= b.provenWeight {
+	if !b.Ready() {
 		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
 	}
 
