@@ -84,12 +84,6 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	<-ml.trackers.commitSyncerClosed
 	ml.trackers.commitSyncerClosed = nil
 
-	// simulate situation when au returns smaller offset b/c of consecutive versions
-	// and ct increases it
-	// base = 1, offset = 99, lookback = 16
-	// lastest = 1000
-	// would give a large mostRecentCatchpointRound value => large newBase => larger offset
-
 	expectedOffset := uint64(99)
 	blockqRound := basics.Round(1000)
 	lookback := basics.Round(16)

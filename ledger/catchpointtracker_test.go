@@ -319,7 +319,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 
-		err = ct.createCatchpoint(accountsRound, round, catchpointDataInfo{}, crypto.Digest{})
+		err = ct.createCatchpoint(accountsRound, round, catchpointFirstStageInfo{}, crypto.Digest{})
 		require.NoError(t, err)
 	}
 
@@ -797,6 +797,9 @@ func TestCalculateFirstStageRounds(t *testing.T) {
 		{1, 96, 100, 1, 3, true, false, 96},
 		{1, 97, 100, 1, 3, true, true, 97},
 		{1, 97, 99, 10, 3, true, false, 96},
+		{29680, 1, 1, 10000, 320, false, false, 1},
+		{29679, 1, 1, 10000, 320, true, false, 1},
+		{29678, 10003, 1, 10000, 320, true, true, 10002},
 	}
 
 	for i, testCase := range testCases {

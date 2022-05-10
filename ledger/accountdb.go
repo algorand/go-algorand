@@ -153,6 +153,8 @@ var createOnlineRoundParamsTable = []string{
 		data blob)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
+// Table containing some metadata for a future catchpoint. The `info` column
+// contains a serialized object of type catchpointFirstStageInfo.
 const createCatchpointFirstStageInfoTable = `
 	CREATE TABLE IF NOT EXISTS catchpointfirststageinfo (
 	round integer primary key NOT NULL,
@@ -4728,7 +4730,7 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 }
 
 // For the `catchpointfirststageinfo` table.
-type catchpointDataInfo struct {
+type catchpointFirstStageInfo struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
@@ -4741,7 +4743,7 @@ type catchpointDataInfo struct {
 	TotalChunks uint64 `codec:"chunksCount"`
 }
 
-func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointDataInfo) error {
+func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
 	infoSerialized := protocol.Encode(info)
 	f := func() error {
 		query := "INSERT INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
@@ -4751,7 +4753,7 @@ func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *c
 	return db.Retry(f)
 }
 
-func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpointDataInfo, bool /*exists*/, error) {
+func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpointFirstStageInfo, bool /*exists*/, error) {
 	var data []byte
 	f := func() error {
 		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
@@ -4764,17 +4766,17 @@ func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpo
 	}
 	err := db.Retry(f)
 	if err != nil {
-		return catchpointDataInfo{}, false, err
+		return catchpointFirstStageInfo{}, false, err
 	}
 
 	if data == nil {
-		return catchpointDataInfo{}, false, nil
+		return catchpointFirstStageInfo{}, false, nil
 	}
 
-	var res catchpointDataInfo
+	var res catchpointFirstStageInfo
 	err = protocol.Decode(data, &res)
 	if err != nil {
-		return catchpointDataInfo{}, false, err
+		return catchpointFirstStageInfo{}, false, err
 	}
 
 	return res, true, nil

@@ -552,7 +552,7 @@ func repackCatchpoint(header CatchpointFileHeader, dataPath string, outPath stri
 }
 
 // Create a catchpoint (a label and possibly a file with db record).
-func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round basics.Round, dataInfo catchpointDataInfo, blockHash crypto.Digest) error {
+func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round basics.Round, dataInfo catchpointFirstStageInfo, blockHash crypto.Digest) error {
 	label := ledgercore.MakeCatchpointLabel(
 		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals).String()
 
@@ -990,7 +990,6 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
-	//catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
 	ct.log.With("accountsRound", accountsRound).
 		With("writingDuration", catchpointGenerationStats.WritingDuration).
@@ -1035,7 +1034,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(accountsRound basics.Round, to
 		return err
 	}
 
-	info := catchpointDataInfo{
+	info := catchpointFirstStageInfo{
 		Totals:           accountTotals,
 		TotalAccounts:    totalAccounts,
 		TotalChunks:      totalChunks,
