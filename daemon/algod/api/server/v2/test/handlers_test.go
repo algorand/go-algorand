@@ -553,8 +553,8 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
 		data := rec.Body.Bytes()
 		err = protocol.DecodeJSON(data, &response)
 		require.NoError(t, err, string(data))
-		if params.Sourcemap != nil && *params.Sourcemap {
-			require.Equal(t, expectedSourcemap, response.Sourcemap)
+		if expectedSourcemap != nil {
+			require.Equal(t, *expectedSourcemap, *response.Sourcemap)
 		} else {
 			require.Nil(t, response.Sourcemap)
 		}
