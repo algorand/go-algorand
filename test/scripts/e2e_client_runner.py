@@ -372,6 +372,7 @@ def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
     kwargs['stdout'] = subprocess.PIPE
     kwargs['stderr'] = subprocess.STDOUT
+    stdout = stderr = None
     try:
         p = subprocess.Popen(cmd, *args, **kwargs)
     except Exception as e:

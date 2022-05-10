@@ -723,7 +723,7 @@ func (_ *StateProofMessageHash) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StateProofMessageHash) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (128 * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
 	return
 }
 

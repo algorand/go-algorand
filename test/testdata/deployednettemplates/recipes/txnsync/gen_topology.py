@@ -1,5 +1,5 @@
-node_types = {"R":4, "N":5, "NPN":1}
-node_size = {"R":"-Large", "N":"-Large", "NPN":"-Large"}
+node_types = {"R":4, "N":10, "NPN":1}
+node_size = {"R":"-Large", "N":"-Small", "NPN":"-Large"}
 regions = [
     "AWS-US-EAST-2",
     "AWS-US-WEST-1",

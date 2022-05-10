@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -82,7 +83,13 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			maxLogAge = 0
 		}
 	}
-	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+
+	var logWriter io.Writer
+	if cfg.LogSizeLimit > 0 {
+		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+	} else {
+		logWriter = os.Stdout
+	}
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
 	s.log.SetLevel(logging.Level(cfg.BaseLoggerDebugLevel))

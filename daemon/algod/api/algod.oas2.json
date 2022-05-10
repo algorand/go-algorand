@@ -1472,6 +1472,64 @@
         }
       }
     },
+    "/v2/teal/disassemble": {
+      "post": {
+        "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Disassemble program bytes into the TEAL source code.",
+        "operationId": "TealDisassemble",
+        "parameters": [
+          {
+            "description": "TEAL program binary to be disassembled",
+            "name": "source",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "byte"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful disassembly",
+            "$ref": "#/responses/DisassembleResponse"
+          },
+          "400": {
+            "description": "Bad Request - Teal Compile Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Developer API not enabled"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/catchup/{catchpoint}": {
       "post": {
         "tags": [
@@ -3113,6 +3171,21 @@
           },
           "result": {
             "description": "base64 encoded program bytes",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DisassembleResponse": {
+      "description": "Teal disassembly Result",
+      "schema": {
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "description": "disassembled Teal code",
             "type": "string"
           }
         }
