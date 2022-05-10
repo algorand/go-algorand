@@ -1192,7 +1192,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	addr := basics.Address(pd)
 
 	// If source map flag is enabled, then return the map.
-	var sourcemap *logic.SourceMap = nil
+	var sourcemap *logic.SourceMap
 	if *params.Sourcemap {
 		rawmap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
 		sourcemap = &rawmap
