@@ -24,19 +24,10 @@ import (
 )
 
 // StateProofMessageHash represents any message that we want to have a certification over.
-type StateProofMessageHash [128]byte
+type StateProofMessageHash [32]byte
 
 // StateProofMessageHashType is the type of hash used to generate StateProofMessageHash
 const StateProofMessageHashType = crypto.Sha256
-
-// Params defines common parameters for the verifier and builder.
-type Params struct {
-	StateProofMessageHash
-
-	ProvenWeight uint64       // Weight threshold proven by the certificate
-	SigRound     basics.Round // The round for which the ephemeral key is committed to
-	SecKQ        uint64       // Security parameter (k+q) from analysis document
-}
 
 // A sigslotCommit is a single slot in the sigs array that forms the certificate.
 type sigslotCommit struct {
@@ -65,16 +56,16 @@ type Reveal struct {
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    crypto.GenericDigest `codec:"c"`
-	SignedWeight uint64               `codec:"w"`
-	SigProofs    merklearray.Proof    `codec:"S"`
-	PartProofs   merklearray.Proof    `codec:"P"`
-
+	SigCommit                  crypto.GenericDigest `codec:"c"`
+	SignedWeight               uint64               `codec:"w"`
+	SigProofs                  merklearray.Proof    `codec:"S"`
+	PartProofs                 merklearray.Proof    `codec:"P"`
+	MerkleSignatureSaltVersion byte                 `codec:"v"`
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
 	// arrays.
-	Reveals                map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
-	MerkleSignatureVersion int32             `codec:"v"`
+	Reveals           map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
+	PositionsToReveal []uint64          `codec:"pr,allocbound=MaxReveals"`
 }
 
 // SortUint64 implements sorting by uint64 keys for

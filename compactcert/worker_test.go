@@ -294,18 +294,13 @@ func TestWorkerAllSigs(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
-			ccparams := compactcert.Params{
-				StateProofMessageHash: tx.Txn.CertMsg.IntoStateProofMessageHash(),
-				ProvenWeight:          provenWeight,
-				SigRound:              tx.Txn.CertIntervalLatestRound,
-				SecKQ:                 proto.CompactCertSecKQ,
-			}
-
 			voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 			require.NoError(t, err)
 
-			verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
-			err = verif.Verify(&tx.Txn.Cert)
+			verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.CompactCertStrengthTarget)
+			require.NoError(t, err)
+
+			err = verif.Verify(uint64(tx.Txn.CertIntervalLatestRound), tx.Txn.CertMsg.IntoStateProofMessageHash(), &tx.Txn.Cert)
 			require.NoError(t, err)
 			break
 		}
@@ -358,18 +353,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
-	ccparams := compactcert.Params{
-		StateProofMessageHash: msg.IntoStateProofMessageHash(),
-		ProvenWeight:          provenWeight,
-		SigRound:              basics.Round(tx.Txn.CertIntervalLatestRound),
-		SecKQ:                 proto.CompactCertSecKQ,
-	}
-
 	voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
 	require.NoError(t, err)
 
-	verif := compactcert.MkVerifier(ccparams, voters.Tree.Root())
-	err = verif.Verify(&tx.Txn.Cert)
+	verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.CompactCertStrengthTarget)
+	require.NoError(t, err)
+	err = verif.Verify(uint64(tx.Txn.CertIntervalLatestRound), msg.IntoStateProofMessageHash(), &tx.Txn.Cert)
 	require.NoError(t, err)
 }
 

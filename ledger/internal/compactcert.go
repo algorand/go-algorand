@@ -94,43 +94,37 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	return w
 }
 
-// CompactCertParams computes the parameters for building or verifying
+// GetProvenWeight computes the parameters for building or verifying
 // a compact cert for block hdr, using voters from block votersHdr.
-func CompactCertParams(msg stateproof.Message, votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (res compactcert.Params, err error) {
+func GetProvenWeight(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (uint64, error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
-		err = fmt.Errorf("compact certs not enabled")
-		return
+		err := fmt.Errorf("compact certs not enabled")
+		return 0, err
 	}
 
 	if votersHdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
-		err = fmt.Errorf("votersHdr %d not a multiple of %d",
+		err := fmt.Errorf("votersHdr %d not a multiple of %d",
 			votersHdr.Round, proto.CompactCertRounds)
-		return
+		return 0, err
 	}
 
 	if hdr.Round != votersHdr.Round+basics.Round(proto.CompactCertRounds) {
-		err = fmt.Errorf("certifying block %d not %d ahead of voters %d",
+		err := fmt.Errorf("certifying block %d not %d ahead of voters %d",
 			hdr.Round, proto.CompactCertRounds, votersHdr.Round)
-		return
+		return 0, err
 	}
 
 	totalWeight := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64()
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.CompactCertWeightThreshold), 1<<32)
 	if overflowed {
-		err = fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
+		err := fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
 			hdr.Round, totalWeight, proto.CompactCertWeightThreshold)
-		return
+		return 0, err
 	}
 
-	res = compactcert.Params{
-		StateProofMessageHash: msg.IntoStateProofMessageHash(),
-		ProvenWeight:          provenWeight,
-		SigRound:              hdr.Round,
-		SecKQ:                 proto.CompactCertSecKQ,
-	}
-	return
+	return provenWeight, nil
 }
 
 var (
@@ -172,12 +166,19 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 			atRound, cert.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
 
-	ccParams, err := CompactCertParams(msg, votersHdr, certHdr)
+	provenWeight, err := GetProvenWeight(votersHdr, certHdr)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errCompactCertParamCreation)
 	}
 
-	err = compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters).Verify(&cert)
+	verifier, err := compactcert.MkVerifier(votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters,
+		provenWeight,
+		config.Consensus[votersHdr.CurrentProtocol].CompactCertStrengthTarget)
+	if err != nil {
+		return err
+	}
+
+	err = verifier.Verify(uint64(certHdr.Round), msg.IntoStateProofMessageHash(), &cert)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errCompCertCrypto)
 	}

@@ -64,7 +64,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	}
 	ccw.Message = msg
 
-	p, err := ledger.CompactCertParams(msg, votersHdr, hdr)
+	provenWeight, err := ledger.GetProvenWeight(votersHdr, hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -72,7 +72,12 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	var res builder
 	res.votersHdr = votersHdr
 	res.voters = voters
-	res.Builder, err = compactcert.MkBuilder(p, voters.Participants, voters.Tree)
+	res.Builder, err = compactcert.MkBuilder(msg.IntoStateProofMessageHash(),
+		uint64(hdr.Round),
+		provenWeight,
+		voters.Participants,
+		voters.Tree,
+		config.Consensus[votersHdr.CurrentProtocol].CompactCertStrengthTarget)
 	if err != nil {
 		return builder{}, err
 	}
@@ -96,35 +101,45 @@ func (ccw *Worker) initBuilders() {
 	}
 
 	for rnd, sigs := range roundSigs {
-		_, ok := ccw.builders[rnd]
-		if ok {
+		if _, ok := ccw.builders[rnd]; ok {
 			ccw.log.Warnf("initBuilders: round %d already present", rnd)
 			continue
 		}
+		ccw.addSigsToBuilder(sigs, rnd)
+	}
+}
 
-		builder, err := ccw.builderForRound(rnd)
-		if err != nil {
-			ccw.log.Warnf("initBuilders: builderForRound(%d): %v", rnd, err)
+func (ccw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
+	builderForRound, err := ccw.builderForRound(rnd)
+	if err != nil {
+		ccw.log.Warnf("addSigsToBuilder: builderForRound(%d): %v", rnd, err)
+		return
+	}
+
+	for _, sig := range sigs {
+		pos, ok := builderForRound.voters.AddrToPos[sig.signer]
+		if !ok {
+			ccw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
 			continue
 		}
 
-		for _, sig := range sigs {
-			pos, ok := builder.voters.AddrToPos[sig.signer]
-			if !ok {
-				ccw.log.Warnf("initBuilders: cannot find %v in round %d", sig.signer, rnd)
-				continue
-			}
+		isPresent, err := builderForRound.Present(pos)
+		if err != nil {
+			ccw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+			continue
+		}
+		if isPresent {
+			ccw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
+			continue
+		}
 
-			if builder.Present(pos) {
-				ccw.log.Warnf("initBuilders: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
-				continue
-			}
-
-			if err := builder.IsValid(pos, sig.sig, false); err != nil {
-				ccw.log.Warnf("initBuilders: cannot add %v in round %d: %v", sig.signer, rnd, err)
-				continue
-			}
-			builder.Add(pos, sig.sig)
+		if err := builderForRound.IsValid(pos, sig.sig, false); err != nil {
+			ccw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
+			continue
+		}
+		if err := builderForRound.Add(pos, sig.sig); err != nil {
+			ccw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
+			continue
 		}
 	}
 }
@@ -149,7 +164,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	ccw.mu.Lock()
 	defer ccw.mu.Unlock()
 
-	builder, ok := ccw.builders[sfa.Round]
+	builderForRound, ok := ccw.builders[sfa.Round]
 	if !ok {
 		latest := ccw.ledger.Latest()
 		latestHdr, err := ccw.ledger.BlockHdr(latest)
@@ -163,23 +178,23 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, nil
 		}
 
-		builder, err = ccw.builderForRound(sfa.Round)
+		builderForRound, err = ccw.builderForRound(sfa.Round)
 		if err != nil {
 			return network.Disconnect, err
 		}
 	}
 
-	pos, ok := builder.voters.AddrToPos[sfa.Signer]
+	pos, ok := builderForRound.voters.AddrToPos[sfa.Signer]
 	if !ok {
 		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.Signer, sfa.Round)
 	}
 
-	if builder.Present(pos) {
-		// Signature already part of the builder, ignore.
+	if isPresent, err := builderForRound.Present(pos); err != nil || isPresent {
+		// Signature already part of the builderForRound, ignore.
 		return network.Ignore, nil
 	}
 
-	if err := builder.IsValid(pos, sfa.Sig, true); err != nil {
+	if err := builderForRound.IsValid(pos, sfa.Sig, true); err != nil {
 		return network.Disconnect, err
 	}
 
@@ -194,7 +209,9 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		return network.Ignore, err
 	}
 	// validated that we can add the sig previously.
-	builder.Add(pos, sfa.Sig)
+	if err := builderForRound.Add(pos, sfa.Sig); err != nil {
+		return network.Ignore, err
+	}
 	return network.Broadcast, nil
 }
 

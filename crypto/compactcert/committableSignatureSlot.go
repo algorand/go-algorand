@@ -79,9 +79,9 @@ func (cs *committableSignatureSlot) ToBeHashed() (protocol.HashID, []byte) {
 	binaryLValue := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryLValue, cs.sigCommit.L)
 
-	sigSlotCommitment := make([]byte, 0, len(binaryLValue)+len(cs.serializedSignature))
-	sigSlotCommitment = append(sigSlotCommitment, binaryLValue...)
-	sigSlotCommitment = append(sigSlotCommitment, cs.serializedSignature...)
+	sigSlotByteRepresentation := make([]byte, 0, len(binaryLValue)+len(cs.serializedSignature))
+	sigSlotByteRepresentation = append(sigSlotByteRepresentation, binaryLValue...)
+	sigSlotByteRepresentation = append(sigSlotByteRepresentation, cs.serializedSignature...)
 
-	return protocol.CompactCertSig, sigSlotCommitment
+	return protocol.CompactCertSig, sigSlotByteRepresentation
 }

@@ -17,38 +17,52 @@
 package compactcert
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
-// Verifier is used to verify a compact certificate.
+// Errors for the CompactCert verifier
+var (
+	ErrCoinNotInRange = errors.New("coin is not within slot weight range")
+	ErrNoRevealInPos  = errors.New("no reveal for position")
+)
+
+// Verifier is used to verify a compact certificate. those fields represent all the verifier's trusted data
 type Verifier struct {
-	Params
-
-	partcom crypto.GenericDigest
+	strengthTarget         uint64
+	lnProvenWeight         uint64 // ln(provenWeight) as integer with 16 bits of precision
+	participantsCommitment crypto.GenericDigest
 }
 
-// MkVerifier constructs a verifier to check the compact certificate
-// on the message specified in p, with partcom specifying the Merkle
-// root of the participants that must sign the message.
-func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
+// MkVerifier constructs a verifier to check the compact certificate. the arguments for this function
+// represent all the verifier's trusted data
+func MkVerifier(partcom crypto.GenericDigest, provenWeight uint64, strengthTarget uint64) (*Verifier, error) {
+	lnProvenWt, err := lnIntApproximation(provenWeight)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Verifier{
-		Params:  p,
-		partcom: partcom,
-	}
+		strengthTarget:         strengthTarget,
+		lnProvenWeight:         lnProvenWt,
+		participantsCommitment: partcom,
+	}, nil
 }
 
-// Verify checks if c is a valid compact certificate for the message
-// and participants that were used to construct the Verifier.
-func (v *Verifier) Verify(c *Cert) error {
-	if c.SignedWeight <= v.ProvenWeight {
-		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
+// Verify checks if c is a valid compact certificate for the data on a round.
+// it uses the trusted data from the Verifier struct
+func (v *Verifier) Verify(round uint64, data StateProofMessageHash, c *Cert) error {
+	nr := uint64(len(c.PositionsToReveal))
+	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.strengthTarget); err != nil {
+		return err
 	}
-	version := int(c.MerkleSignatureVersion)
+
+	version := c.MerkleSignatureSaltVersion
 	for _, reveal := range c.Reveals {
-		if err := reveal.SigSlot.Sig.ValidateSigVersion(version); err != nil {
+		if err := reveal.SigSlot.Sig.IsSaltVersionEqual(version); err != nil {
 			return err
 		}
 	}
@@ -56,7 +70,6 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 
-	msghash := v.Params.StateProofMessageHash
 	for pos, r := range c.Reveals {
 		sig, err := buildCommittableSignature(r.SigSlot)
 		if err != nil {
@@ -68,53 +81,45 @@ func (v *Verifier) Verify(c *Cert) error {
 
 		// verify that the msg and the signature is valid under the given participant's Pk
 		err = r.Part.PK.VerifyBytes(
-			uint64(v.SigRound),
-			msghash[:],
+			round,
+			data[:],
 			r.SigSlot.Sig,
 		)
 
 		if err != nil {
-			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)
+			return fmt.Errorf("signature in reveal pos %d does not verify. error is %w", pos, err)
 		}
 	}
 
-	// verify all the reveals proofs on the signature tree.
+	// verify all the reveals proofs on the signature commitment.
 	if err := merklearray.VerifyVectorCommitment(c.SigCommit[:], sigs, &c.SigProofs); err != nil {
 		return err
 	}
 
-	// verify all the reveals proofs on the participant tree.
-	if err := merklearray.VerifyVectorCommitment(v.partcom[:], parts, &c.PartProofs); err != nil {
+	// verify all the reveals proofs on the participant commitment.
+	if err := merklearray.VerifyVectorCommitment(v.participantsCommitment[:], parts, &c.PartProofs); err != nil {
 		return err
 	}
 
-	// Verify that the reveals contain the right coins
-	nr, err := v.numReveals(c.SignedWeight)
-	if err != nil {
-		return err
+	choice := coinChoiceSeed{
+		partCommitment: v.participantsCommitment,
+		lnProvenWeight: v.lnProvenWeight,
+		sigCommitment:  c.SigCommit,
+		signedWeight:   c.SignedWeight,
+		data:           data,
 	}
 
+	coinHash := makeCoinGenerator(&choice)
 	for j := uint64(0); j < nr; j++ {
-		choice := coinChoice{
-			J:            j,
-			SignedWeight: c.SignedWeight,
-			ProvenWeight: v.ProvenWeight,
-			Sigcom:       c.SigCommit,
-			Partcom:      v.partcom,
-			Msg:          msghash,
+		pos := c.PositionsToReveal[j]
+		reveal, exists := c.Reveals[pos]
+		if !exists {
+			return fmt.Errorf("%w: %d", ErrNoRevealInPos, pos)
 		}
 
-		coin := hashCoin(choice)
-		matchingReveal := false
-		for _, r := range c.Reveals {
-			if r.SigSlot.L <= coin && coin < r.SigSlot.L+r.Part.Weight {
-				matchingReveal = true
-				break
-			}
-		}
-
-		if !matchingReveal {
-			return fmt.Errorf("no reveal for coin %d at %d", j, coin)
+		coin := coinHash.getNextCoin()
+		if !(reveal.SigSlot.L <= coin && coin < reveal.SigSlot.L+reveal.Part.Weight) {
+			return fmt.Errorf("%w: for reveal pos %d and coin %d, ", ErrCoinNotInRange, pos, coin)
 		}
 	}
 

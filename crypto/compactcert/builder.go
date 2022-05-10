@@ -17,6 +17,7 @@
 package compactcert
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -41,33 +42,43 @@ type sigslot struct {
 // Builder keeps track of signatures on a message and eventually produces
 // a compact certificate for that message.
 type Builder struct {
-	Params
-	sigs          []sigslot // Indexed by pos in participants
-	sigsHasValidL bool      // The L values in sigs are consistent with weights
-	signedWeight  uint64    // Total weight of signatures so far
-	participants  []basics.Participant
-	parttree      *merklearray.Tree
-
-	// Cached cert, if Build() was called and no subsequent
-	// Add() calls were made.
-	cert *Cert
+	data           StateProofMessageHash
+	round          uint64
+	sigs           []sigslot // Indexed by pos in participants
+	signedWeight   uint64    // Total weight of signatures so far
+	participants   []basics.Participant
+	parttree       *merklearray.Tree
+	lnProvenWeight uint64
+	provenWeight   uint64
+	strengthTarget uint64
 }
 
-// MkBuilder constructs an empty builder (with no signatures).  The message
-// to be signed, as well as other security parameters, are specified in
-// param.  The participants that will sign the message are in part and
-// parttree.
-func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
+// Errors for the CompactCert builder
+var (
+	ErrPositionOutOfBound     = errors.New("requested position is out of bounds")
+	ErrPositionAlreadyPresent = errors.New("requested position is already present")
+	ErrPositionWithZeroWeight = errors.New("position has zero weight")
+	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
+)
+
+// MkBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a compact cert.
+func MkBuilder(data StateProofMessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {
 	npart := len(part)
+	lnProvenWt, err := lnIntApproximation(provenWeight)
+	if err != nil {
+		return nil, err
+	}
 
 	b := &Builder{
-		Params: param,
-
-		sigs:          make([]sigslot, npart),
-		sigsHasValidL: false,
-		signedWeight:  0,
-		participants:  part,
-		parttree:      parttree,
+		data:           data,
+		round:          round,
+		sigs:           make([]sigslot, npart),
+		signedWeight:   0,
+		participants:   part,
+		parttree:       parttree,
+		lnProvenWeight: lnProvenWt,
+		provenWeight:   provenWeight,
+		strengthTarget: strengthTarget,
 	}
 
 	return b, nil
@@ -75,33 +86,36 @@ func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tr
 
 // Present checks if the builder already contains a signature at a particular
 // offset.
-func (b *Builder) Present(pos uint64) bool {
-	return b.sigs[pos].Weight != 0
+func (b *Builder) Present(pos uint64) (bool, error) {
+	if pos >= uint64(len(b.sigs)) {
+		return false, fmt.Errorf("%w pos %d >= len(b.sigs) %d", ErrPositionOutOfBound, pos, len(b.sigs))
+	}
+
+	return b.sigs[pos].Weight != 0, nil
 }
 
 // IsValid verifies that the participant along with the signature can be inserted to the builder.
-// verifySig should be set to true in production; setting it to false is useful
-// for benchmarking to avoid the cost of signature checks.
+// verifySig can be set to false when the signature is already verified (e.g. loaded from the DB)
 func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig bool) error {
 	if pos >= uint64(len(b.participants)) {
-		return fmt.Errorf("pos %d >= len(participants) %d", pos, len(b.participants))
+		return fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.participants))
 	}
 
 	p := b.participants[pos]
 
 	if p.Weight == 0 {
-		return fmt.Errorf("position %d has zero weight", pos)
+		return fmt.Errorf("builder.IsValid: %w: position = %d", ErrPositionWithZeroWeight, pos)
 	}
 
 	// Check signature
 	if verifySig {
-		if err := sig.ValidateSigVersion(merklesignature.SchemeVersion); err != nil {
+		if err := sig.IsSaltVersionEqual(merklesignature.SchemeSaltVersion); err != nil {
 			return err
 		}
 
-		cpy := make([]byte, len(b.Params.StateProofMessageHash))
-		copy(cpy, b.Params.StateProofMessageHash[:]) // TODO: onmce cfalcon is fixed can remove this copy.
-		if err := p.PK.VerifyBytes(uint64(b.SigRound), cpy, sig); err != nil {
+		cpy := make([]byte, len(b.data))
+		copy(cpy, b.data[:]) // TODO: once cfalcon is fixed can remove this copy.
+		if err := p.PK.VerifyBytes(b.round, cpy, sig); err != nil {
 			return err
 		}
 	}
@@ -109,20 +123,27 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 }
 
 // Add a signature to the set of signatures available for building a certificate.
-func (b *Builder) Add(pos uint64, sig merklesignature.Signature) {
+func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
+	isPresent, err := b.Present(pos)
+	if err != nil {
+		return err
+	}
+	if isPresent {
+		return ErrPositionAlreadyPresent
+	}
+
 	p := b.participants[pos]
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
 	b.sigs[pos].Sig = sig
 	b.signedWeight += p.Weight
-	b.cert = nil
-	b.sigsHasValidL = false
+	return nil
 }
 
 // Ready returns whether the certificate is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.signedWeight > b.Params.ProvenWeight
+	return b.signedWeight > b.provenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -137,16 +158,12 @@ func (b *Builder) SignedWeight() uint64 {
 //
 // coinIndex works by doing a binary search on the sigs array.
 func (b *Builder) coinIndex(coinWeight uint64) (uint64, error) {
-	if !b.sigsHasValidL {
-		return 0, fmt.Errorf("coinIndex: need valid L values")
-	}
-
 	lo := uint64(0)
 	hi := uint64(len(b.sigs))
 
 again:
 	if lo >= hi {
-		return 0, fmt.Errorf("coinIndex: lo %d >= hi %d", lo, hi)
+		return 0, fmt.Errorf("%w: lo %d >= hi %d and coin %d", ErrCoinIndexError, lo, hi, coinWeight)
 	}
 
 	mid := (lo + hi) / 2
@@ -166,19 +183,14 @@ again:
 // Build returns a compact certificate, if the builder has accumulated
 // enough signatures to construct it.
 func (b *Builder) Build() (*Cert, error) {
-	if b.cert != nil {
-		return b.cert, nil
-	}
-
-	if b.signedWeight <= b.Params.ProvenWeight {
-		return nil, fmt.Errorf("not enough signed weight: %d <= %d", b.signedWeight, b.Params.ProvenWeight)
+	if !b.Ready() {
+		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
 	}
 
 	// Commit to the sigs array
 	for i := 1; i < len(b.sigs); i++ {
 		b.sigs[i].L = b.sigs[i-1].L + b.sigs[i-1].Weight
 	}
-	b.sigsHasValidL = true
 
 	hfactory := crypto.HashFactory{HashType: HashType}
 	sigtree, err := merklearray.BuildVectorCommitmentTree(committableSignatureSlotArray(b.sigs), hfactory)
@@ -188,38 +200,41 @@ func (b *Builder) Build() (*Cert, error) {
 
 	// Reveal sufficient number of signatures
 	c := &Cert{
-		SigCommit:              sigtree.Root(),
-		SignedWeight:           b.signedWeight,
-		Reveals:                make(map[uint64]Reveal),
-		MerkleSignatureVersion: merklesignature.SchemeVersion,
+		SigCommit:                  sigtree.Root(),
+		SignedWeight:               b.signedWeight,
+		Reveals:                    make(map[uint64]Reveal),
+		MerkleSignatureSaltVersion: merklesignature.SchemeSaltVersion,
 	}
 
-	nr, err := b.numReveals(b.signedWeight)
+	nr, err := numReveals(b.signedWeight, b.lnProvenWeight, b.strengthTarget)
 	if err != nil {
 		return nil, err
 	}
 
+	choice := coinChoiceSeed{
+		partCommitment: b.parttree.Root(),
+		lnProvenWeight: b.lnProvenWeight,
+		sigCommitment:  c.SigCommit,
+		signedWeight:   c.SignedWeight,
+		data:           b.data,
+	}
+
+	coinHash := makeCoinGenerator(&choice)
+
 	var proofPositions []uint64
-
+	revealsSequence := make([]uint64, nr)
 	for j := uint64(0); j < nr; j++ {
-		choice := coinChoice{
-			J:            j,
-			SignedWeight: c.SignedWeight,
-			ProvenWeight: b.ProvenWeight,
-			Sigcom:       c.SigCommit,
-			Partcom:      b.parttree.Root(),
-			Msg:          b.Params.StateProofMessageHash,
-		}
-
-		coin := hashCoin(choice)
+		coin := coinHash.getNextCoin()
 		pos, err := b.coinIndex(coin)
 		if err != nil {
 			return nil, err
 		}
 
 		if pos >= uint64(len(b.participants)) {
-			return nil, fmt.Errorf("pos %d >= len(participants) %d", pos, len(b.participants))
+			return nil, fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.participants))
 		}
+
+		revealsSequence[j] = pos
 
 		// If we already revealed pos, no need to do it again
 		_, alreadyRevealed := c.Reveals[pos]
@@ -248,6 +263,7 @@ func (b *Builder) Build() (*Cert, error) {
 
 	c.SigProofs = *sigProofs
 	c.PartProofs = *partProofs
+	c.PositionsToReveal = revealsSequence
 
 	return c, nil
 }

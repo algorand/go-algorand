@@ -50,6 +50,8 @@ func TestValidateCompactCert(t *testing.T) {
 	certHdr.Round = 1
 	proto := config.Consensus[certHdr.CurrentProtocol]
 	proto.CompactCertRounds = 2
+	proto.CompactCertStrengthTarget = 256
+	proto.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	config.Consensus[certHdr.CurrentProtocol] = proto
 
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
@@ -78,9 +80,9 @@ func TestValidateCompactCert(t *testing.T) {
 
 	votersHdr.CurrentProtocol = certHdr.CurrentProtocol
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
-	// still err, but a different err case to cover
 	t.Log(err)
-	require.ErrorIs(t, err, errCompCertCrypto)
+	// since proven weight is zero, we cann't create the verifier
+	require.ErrorIs(t, err, compactcert.ErrIllegalInputForLnApprox)
 
 	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
 	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
@@ -153,9 +155,7 @@ func TestCompactCertParams(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var hdr bookkeeping.BlockHeader
 
-	msg := stateproof.Message{BlockHeadersCommitment: []byte("testest")}
-
-	res, err := CompactCertParams(msg, votersHdr, hdr)
+	_, err := GetProvenWeight(votersHdr, hdr)
 	require.Error(t, err) // not enabled
 
 	votersHdr.CurrentProtocol = "TestCompactCertParams"
@@ -163,18 +163,13 @@ func TestCompactCertParams(t *testing.T) {
 	proto.CompactCertRounds = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
-	res, err = CompactCertParams(msg, votersHdr, hdr)
+	_, err = GetProvenWeight(votersHdr, hdr)
 	require.Error(t, err) // wrong round
 
 	votersHdr.Round = 2
 	hdr.Round = 3
-	res, err = CompactCertParams(msg, votersHdr, hdr)
+	_, err = GetProvenWeight(votersHdr, hdr)
 	require.Error(t, err) // wrong round
-
-	hdr.Round = 4
-	res, err = CompactCertParams(msg, votersHdr, hdr)
-	require.NoError(t, err)
-	require.Equal(t, hdr.Round, res.SigRound)
 
 	// Covers all cases except overflow
 }

@@ -85,8 +85,8 @@ type (
 	}
 )
 
-// SchemeVersion is the current version of merkleSignature
-const SchemeVersion = 0
+// SchemeSaltVersion is the current salt version of merkleSignature
+const SchemeSaltVersion = byte(0)
 
 // CryptoPrimitivesID is an identification that the Merkle Signature Scheme uses a subset sum hash function
 // and a falcon signature scheme.
@@ -98,7 +98,7 @@ var (
 	ErrDivisorIsZero                     = errors.New("received zero Interval")
 	ErrNoStateProofKeyForRound           = errors.New("no stateproof key exists for this round")
 	ErrSignatureSchemeVerificationFailed = errors.New("merkle signature verification failed")
-	ErrInvalidSignatureVersion           = fmt.Errorf("invalid signature version")
+	ErrSignatureSaltVersionMismatch      = fmt.Errorf("the signature's salt version does not match")
 )
 
 // New creates secrets needed for the merkle signature scheme.
@@ -228,10 +228,10 @@ func (v *Verifier) IsEmpty() bool {
 	return *v == [MerkleSignatureSchemeRootSize]byte{}
 }
 
-// ValidateSigVersion validates that the version of the signature is matching the expected version
-func (s *Signature) ValidateSigVersion(version int) error {
-	if !s.Signature.IsVersionEqual(version) {
-		return ErrInvalidSignatureVersion
+// IsSaltVersionEqual validates that the version of the signature is matching the expected version
+func (s *Signature) IsSaltVersionEqual(version byte) error {
+	if !s.Signature.IsSaltVersionEqual(version) {
+		return ErrSignatureSaltVersionMismatch
 	}
 	return nil
 }
@@ -267,23 +267,23 @@ func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
 func (s *Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 	schemeType := make([]byte, 2)
 	binary.LittleEndian.PutUint16(schemeType, CryptoPrimitivesID)
-	sigBytes, err := s.VerifyingKey.GetSignatureFixedLengthHashableRepresentation(s.Signature)
+	sigBytes, err := s.Signature.GetFixedLengthHashableRepresentation()
 	if err != nil {
 		return nil, err
 	}
 
 	verifierBytes := s.VerifyingKey.GetFixedLengthHashableRepresentation()
 
-	binaryMerkleIndex := make([]byte, 8)
-	binary.LittleEndian.PutUint64(binaryMerkleIndex, s.VectorCommitmentIndex)
+	binaryVectorCommitmentIndex := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryVectorCommitmentIndex, s.VectorCommitmentIndex)
 
 	proofBytes := s.Proof.GetFixedLengthHashableRepresentation()
 
-	merkleSignatureBytes := make([]byte, 0, len(schemeType)+len(sigBytes)+len(verifierBytes)+len(binaryMerkleIndex)+len(proofBytes))
+	merkleSignatureBytes := make([]byte, 0, len(schemeType)+len(sigBytes)+len(verifierBytes)+len(binaryVectorCommitmentIndex)+len(proofBytes))
 	merkleSignatureBytes = append(merkleSignatureBytes, schemeType...)
 	merkleSignatureBytes = append(merkleSignatureBytes, sigBytes...)
 	merkleSignatureBytes = append(merkleSignatureBytes, verifierBytes...)
-	merkleSignatureBytes = append(merkleSignatureBytes, binaryMerkleIndex...)
+	merkleSignatureBytes = append(merkleSignatureBytes, binaryVectorCommitmentIndex...)
 	merkleSignatureBytes = append(merkleSignatureBytes, proofBytes...)
 	return merkleSignatureBytes, nil
 }
