@@ -155,6 +155,12 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
 		}
 
+		onlineAccounts, err0 := onlineAccountsAll(tx)
+		if err0 != nil {
+			return err0
+		}
+		ao.onlineAccountsCache.init(onlineAccounts)
+
 		return nil
 	})
 	if err != nil {
@@ -176,7 +182,6 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.deltasAccum = []int{0}
 
 	ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
-	ao.onlineAccountsCache.init()
 	return
 }
 
@@ -645,7 +650,13 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
 				ao.accountsMu.Lock()
-				ao.onlineAccountsCache.writeBack(persistedData)
+				delete(ao.onlineAccountsCache.accounts, addr)
+				if !ao.onlineAccountsCache.full() {
+					persistedDataHistory, _ := ao.accountsq.lookupOnlineHistory(addr)
+					for _, data := range persistedDataHistory {
+						ao.onlineAccountsCache.writeFront(data)
+					}
+				}
 				ao.accountsMu.Unlock()
 				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
 			}

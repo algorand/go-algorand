@@ -47,6 +47,7 @@ type accountsDbQueries struct {
 	listCreatablesStmt          *sql.Stmt
 	lookupStmt                  *sql.Stmt
 	lookupOnlineStmt            *sql.Stmt
+	lookupOnlineHistoryStmt     *sql.Stmt
 	lookupResourcesStmt         *sql.Stmt
 	lookupAllResourcesStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
@@ -2419,6 +2420,11 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
+	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT rowid, updround, data FROM onlineaccounts WHERE address=? ORDER BY updround ASC")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid AND resources.aidx = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -2673,6 +2679,39 @@ func (qs *accountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round)
 	return
 }
 
+func (qs *accountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, err error) {
+	err = db.Retry(func() error {
+		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var buf []byte
+			var rowid sql.NullInt64
+			var updround sql.NullInt64
+			data := persistedOnlineAccountData{}
+			err := rows.Scan(&rowid, &updround, &buf)
+			if err != nil {
+				return err
+			}
+			if len(buf) > 0 && rowid.Valid && updround.Valid {
+				data.rowid = rowid.Int64
+				data.updRound = basics.Round(updround.Int64)
+				err = protocol.Decode(buf, &data.accountData)
+				if err != nil {
+					return err
+				}
+				data.addr = addr
+				result = append(result, data)
+			}
+		}
+		return err
+	})
+	return
+}
+
 func (qs *accountsDbQueries) storeCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
 		_, err = qs.deleteStoredCatchpoint.ExecContext(ctx, round)
@@ -2781,6 +2820,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.listCreatablesStmt,
 		&qs.lookupStmt,
 		&qs.lookupOnlineStmt,
+		&qs.lookupOnlineHistoryStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupCreatorStmt,
@@ -2977,6 +3017,42 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 		})
 	}
 
+	return result, nil
+}
+
+func onlineAccountsAll(tx *sql.Tx) ([]persistedOnlineAccountData, error) {
+	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY updround ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]persistedOnlineAccountData, 0)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid sql.NullInt64
+		var updround sql.NullInt64
+		data := persistedOnlineAccountData{}
+		err := rows.Scan(&rowid, &addrbuf, &updround, &buf)
+		if err != nil {
+			return nil, err
+		}
+		if len(buf) > 0 && rowid.Valid && updround.Valid {
+			data.rowid = rowid.Int64
+			data.updRound = basics.Round(updround.Int64)
+			err = protocol.Decode(buf, &data.accountData)
+			if err != nil {
+				return nil, err
+			}
+			if len(addrbuf) != len(data.addr) {
+				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.addr))
+				return nil, err
+			}
+			copy(data.addr[:], addrbuf)
+			result = append(result, data)
+		}
+	}
 	return result, nil
 }
 

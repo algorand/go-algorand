@@ -34,7 +34,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	var oac onlineAccountsCache
-	oac.init()
+	oac.init(nil)
 
 	addr := basics.Address(crypto.Hash([]byte{byte(0)}))
 
@@ -98,7 +98,7 @@ func TestOnlineAccountsCachePruneOffline(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	var oac onlineAccountsCache
-	oac.init()
+	oac.init(nil)
 
 	addr := basics.Address(crypto.Hash([]byte{byte(0)}))
 

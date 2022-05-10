@@ -3055,6 +3055,42 @@ func TestAccountOnlineQueries(t *testing.T) {
 	require.Equal(t, addrC, paod.addr)
 	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
 	require.Equal(t, voteIDC, paod.accountData.VoteID)
+
+	paods, err := onlineAccountsAll(tx)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(paods))
+	require.Equal(t, int64(1), paods[0].rowid)
+	require.Equal(t, basics.Round(1), paods[0].updRound)
+	require.Equal(t, int64(2), paods[1].rowid)
+	require.Equal(t, basics.Round(1), paods[1].updRound)
+	require.Equal(t, int64(3), paods[2].rowid)
+	require.Equal(t, basics.Round(2), paods[2].updRound)
+	require.Equal(t, int64(4), paods[3].rowid)
+	require.Equal(t, basics.Round(3), paods[3].updRound)
+	require.Equal(t, int64(5), paods[4].rowid)
+	require.Equal(t, basics.Round(3), paods[4].updRound)
+
+	paods, err = queries.lookupOnlineHistory(addrA)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(paods))
+	require.Equal(t, int64(1), paods[0].rowid)
+	require.Equal(t, basics.Round(1), paods[0].updRound)
+	require.Equal(t, int64(3), paods[1].rowid)
+	require.Equal(t, basics.Round(2), paods[1].updRound)
+
+	paods, err = queries.lookupOnlineHistory(addrB)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(paods))
+	require.Equal(t, int64(2), paods[0].rowid)
+	require.Equal(t, basics.Round(1), paods[0].updRound)
+	require.Equal(t, int64(4), paods[1].rowid)
+	require.Equal(t, basics.Round(3), paods[1].updRound)
+
+	paods, err = queries.lookupOnlineHistory(addrC)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(paods))
+	require.Equal(t, int64(5), paods[0].rowid)
+	require.Equal(t, basics.Round(3), paods[0].updRound)
 }
 
 func TestAccountOnlineAccountsExpirations(t *testing.T) {

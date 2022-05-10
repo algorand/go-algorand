@@ -20,7 +20,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-const onlineAccountsCacheMaxSize = 1000
+// Worst case memory usage = 2500 * 320 * 150B = 120MB
+const onlineAccountsCacheMaxSize = 2500
 
 type onlineAccountsCache struct {
 	accounts map[basics.Address]*persistedOnlineAccountDataList
@@ -28,8 +29,15 @@ type onlineAccountsCache struct {
 
 // init initializes the onlineAccountsCache for use.
 // thread locking semantics : write lock
-func (o *onlineAccountsCache) init() {
+func (o *onlineAccountsCache) init(accts []persistedOnlineAccountData) {
 	o.accounts = make(map[basics.Address]*persistedOnlineAccountDataList)
+	for _, acct := range accts {
+		o.writeFront(acct)
+	}
+}
+
+func (o *onlineAccountsCache) full() bool {
+	return len(o.accounts) >= onlineAccountsCacheMaxSize
 }
 
 // read the persistedAccountData object that the cache has for the given address.
@@ -56,7 +64,7 @@ func (o *onlineAccountsCache) read(addr basics.Address, rnd basics.Round) (data 
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) writeFront(acctData persistedOnlineAccountData) {
 	if _, ok := o.accounts[acctData.addr]; !ok {
-		if len(o.accounts) >= onlineAccountsCacheMaxSize {
+		if o.full() {
 			return
 		}
 		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
@@ -72,7 +80,7 @@ func (o *onlineAccountsCache) writeFront(acctData persistedOnlineAccountData) {
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) writeBack(acctData persistedOnlineAccountData) {
 	if _, ok := o.accounts[acctData.addr]; !ok {
-		if len(o.accounts) >= onlineAccountsCacheMaxSize {
+		if o.full() {
 			return
 		}
 		o.accounts[acctData.addr] = newPersistedOnlineAccountList()

@@ -329,9 +329,9 @@ func TestAcctOnlineCache(t *testing.T) {
 
 	const seedLookback = 2
 	const seedInteval = 3
-	const maxBalLookback = 2 * seedLookback * seedInteval
-
 	const numAccts = 5
+	const maxBalLookback = 3 * numAccts
+
 	allAccts := make([]basics.BalanceRecord, numAccts)
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
@@ -375,10 +375,10 @@ func TestAcctOnlineCache(t *testing.T) {
 	_, totals, err := au.LatestTotals()
 	require.NoError(t, err)
 
+	// check cache was initialized with db state
 	for _, bal := range allAccts {
-		// force populate the cache
-		oad, err := oa.lookupOnlineAccountData(0, bal.Addr)
-		require.NoError(t, err)
+		oad, has := oa.onlineAccountsCache.read(bal.Addr, 0)
+		require.True(t, has)
 		require.NotEmpty(t, oad)
 	}
 
@@ -477,6 +477,31 @@ func TestAcctOnlineCache(t *testing.T) {
 			}
 		}
 	}
+
+	// ensure correct behavior after deleting cache
+	acctIdx := (int(targetRound) - 1) % numAccts
+	bal := allAccts[acctIdx]
+	delete(oa.onlineAccountsCache.accounts, bal.Addr)
+	oldRound := targetRound - basics.Round(maxBalLookback+maxDeltaLookback) + 1
+
+	// cache should be repopulated on this command
+	oa.lookupOnlineAccountData(oldRound, bal.Addr)
+	data, has := oa.onlineAccountsCache.read(bal.Addr, oldRound)
+	require.True(t, has)
+	require.NotEmpty(t, data.rowid)
+	// next entry is at targetRound - 25, oldround = targetRound-22
+	require.Equal(t, oldRound-3, data.updRound)
+	require.NotEmpty(t, data.accountData)
+
+	// cache should contain data for new rounds
+	// (the last entry should be offline)
+	// check at targetRound - 10 because that is the latest round written to db
+	newRound := targetRound - basics.Round(10)
+	data, has = oa.onlineAccountsCache.read(bal.Addr, newRound)
+	require.True(t, has)
+	require.NotEmpty(t, data.rowid)
+	require.Equal(t, newRound, data.updRound)
+	require.Empty(t, data.accountData)
 }
 
 // TestAcctOnlineRoundParamsOffset checks that roundParamsOffset return the correct indices.
