@@ -433,6 +433,9 @@ type ConsensusParams struct {
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
 
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
+
 	// CatchpointLookback specifies a round lookback to take catchpoints at.
 	// Accounts snapshot for round X will be taken at X-CatchpointLookback
 	CatchpointLookback uint64
@@ -1153,6 +1156,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4
+
+	vFuture.UnifyInnerTxIDs = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

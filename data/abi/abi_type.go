@@ -82,7 +82,7 @@ type Type struct {
 	// length for static array / tuple
 	/*
 		by ABI spec, len over binary array returns number of bytes
-		the type is uint16, which allows for only lenth in [0, 2^16 - 1]
+		the type is uint16, which allows for only length in [0, 2^16 - 1]
 		representation of static length can only be constrained in uint16 type
 	*/
 	// NOTE may want to change back to uint32/uint64
