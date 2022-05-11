@@ -121,6 +121,9 @@ generate: deps
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
+gci:
+	find . -name \*.go -not -path "*/generated/*" -print0 | xargs -0 -n 100 gci write -s Standard -s Default -s "Prefix(github.com/algorand)" -s "Prefix(github.com/algorand/go-algorand)"
+
 %/msgp_gen.go: deps ALWAYS
 		@set +e; \
 		printf "msgp: $(@D)..."; \
