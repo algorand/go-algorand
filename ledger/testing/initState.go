@@ -60,8 +60,8 @@ func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoP
 		gensecrets[i] = x
 	}
 
-	initKeys = make(map[basics.Address]*crypto.SignatureSecrets)
-	initAccounts := make(map[basics.Address]basics.AccountData)
+	initKeys = make(map[basics.Address]*crypto.SignatureSecrets, len(genaddrs)+2) // + pool and sink
+	initAccounts := make(map[basics.Address]basics.AccountData, len(genaddrs)+2)
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
