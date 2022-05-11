@@ -919,8 +919,8 @@ type Block struct {
 	// TransactionsRoot authenticates the set of transactions appearing in the block.
 	// More specifically, it's the root of a merkle tree whose leaves are the block's Txids, in lexicographic order.
 	// For the empty block, it's 0.
-	// Note that the TxnRoot does not authenticate the signatures on the transactions, only the transactions themselves.
-	// Two blocks with the same transactions but in a different order and with different signatures will have the same TxnRoot.
+	// Note that the TxnCommitments does not authenticate the signatures on the transactions, only the transactions themselves.
+	// Two blocks with the same transactions but in a different order and with different signatures will have the same TxnCommitments.
 	//
 	// required: true
 	TransactionsRoot string `json:"txnRoot"`
