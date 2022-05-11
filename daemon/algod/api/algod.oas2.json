@@ -550,6 +550,17 @@
             "required": true
           },
           {
+            "type": "string",
+            "enum": [
+              "sha512_256",
+              "sha256"
+            ],
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+            "name": "hashtype",
+            "in": "query",
+            "required": false
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -2805,12 +2816,12 @@
             "type": "integer"
           },
           "hashtype": {
-            "enum": [
-              "sumhash",
-              "sha512_256"
-            ],
             "type": "string",
-            "description": "The type of hash function used to create the proof, must be one of:\n* sumhash \n* sha512_256"
+            "enum": [
+              "sha512_256",
+              "sha256"
+            ],
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256"
           }
         }
       }
