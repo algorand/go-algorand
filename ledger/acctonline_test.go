@@ -327,8 +327,6 @@ func TestAcctOnline(t *testing.T) {
 func TestAcctOnlineCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	const seedLookback = 2
-	const seedInteval = 3
 	const numAccts = 5
 	const maxBalLookback = 3 * numAccts
 
@@ -356,8 +354,6 @@ func TestAcctOnlineCache(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctOnline")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = maxBalLookback
-	protoParams.SeedLookback = seedLookback
-	protoParams.SeedRefreshInterval = seedInteval
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)

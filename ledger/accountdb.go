@@ -194,7 +194,8 @@ type persistedOnlineAccountData struct {
 	rowid       int64
 	// the round number that is associated with the baseOnlineAccountData. This field is the corresponding one to the round field
 	// in persistedAccountData, and serves the same purpose.
-	round    basics.Round
+	round basics.Round
+	// the round number that the online account is for
 	updRound basics.Round
 }
 
@@ -3021,7 +3022,7 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 }
 
 func onlineAccountsAll(tx *sql.Tx) ([]persistedOnlineAccountData, error) {
-	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY updround ASC")
+	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
 	if err != nil {
 		return nil, err
 	}
