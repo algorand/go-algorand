@@ -125,6 +125,7 @@ func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 }
 
 // replace replaces all entries for an account with provided history
+// may not insert data if cache full
 func (o *onlineAccountsCache) replace(persistedDataHistory []persistedOnlineAccountData, addr basics.Address) {
 	delete(o.accounts, addr)
 	if !o.full() {
