@@ -256,6 +256,7 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	expectedOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(expectedOnlineRoundParams))
 	require.Equal(t, 0, int(endRound))
 
 	// used to determine how many creatables element will be in the test per iteration
@@ -3434,6 +3435,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	onlineRoundParams := make([]ledgercore.OnlineRoundParamsData, maxRounds)
 	for i := range onlineRoundParams {
 		onlineRoundParams[i].OnlineSupply = uint64(i + 1)
+		onlineRoundParams[i].CurrentProtocol = protocol.ConsensusCurrentVersion
+		onlineRoundParams[i].RewardsLevel = uint64(i + 1)
 	}
 
 	err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 1)
