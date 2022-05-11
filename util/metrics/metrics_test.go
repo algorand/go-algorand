@@ -25,8 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 )
 
 type MetricTest struct {
