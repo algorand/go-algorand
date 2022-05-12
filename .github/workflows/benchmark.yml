@@ -1,0 +1,28 @@
+name: "Benchmark workflow"
+on:
+  pull_request:
+permissions:
+  contents: write
+  deployments: write
+jobs:
+  benchmark:
+    name: Run Go benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+      - name: Run benchmark
+        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: benchmark_output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # Show alert with commit comment on detecting possible performance regression
+          alert-threshold: '101%' # Test -> default is 200%
+          comment-on-alert: true
+          fail-on-alert: false # Test -> true
+          # alert-comment-cc-users: '@ktrz' # Don't think this needs to notify specific users?
