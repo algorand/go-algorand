@@ -404,7 +404,7 @@ func (node *AlgorandFullNode) Start() {
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
 func (node *AlgorandFullNode) startMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Add(2)
-	go node.txPoolGaugeThread()
+	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
@@ -898,6 +898,16 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 		return account.ParticipationID{}, err
 	}
 	defer partkey.Close()
+
+	// We want to make sure that the state proof keys are included in the participation key
+
+	if partkey.StateProofSecrets == nil {
+		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing state proof keys")
+	}
+
+	if len(partkey.StateProofSecrets.GetAllKeys()) == 0 {
+		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing state proof keys")
+	}
 
 	if partkey.Parent == (basics.Address{}) {
 		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
