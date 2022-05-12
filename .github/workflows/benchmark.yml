@@ -9,8 +9,14 @@ jobs:
     name: Run Go benchmarks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-go@v1
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Install go
+        uses: actions/setup-go@v1
+        with:
+          go-version: '1.17.9'
+      - name: Build go-algorand
+        run: scripts/travis/build.sh
       - name: Run benchmark
         run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
       - name: Store benchmark result
@@ -25,4 +31,3 @@ jobs:
           alert-threshold: '101%' # Test -> default is 200%
           comment-on-alert: true
           fail-on-alert: false # Test -> true
-          # alert-comment-cc-users: '@ktrz' # Don't think this needs to notify specific users?
