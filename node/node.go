@@ -893,7 +893,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 	defer inputdb.Close()
 
-	partkey, err := account.RestoreParticipation(inputdb)
+	partkey, err := account.RestoreParticipationWithSecrets(inputdb)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
