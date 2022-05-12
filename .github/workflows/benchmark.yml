@@ -34,5 +34,5 @@ jobs:
           # auto-push: true
           # Show alert with commit comment on detecting possible performance regression
           alert-threshold: '101%' # Test -> default is 200%
-          comment-on-alert: true
+          # comment-on-alert: true
           # fail-on-alert: false # Test -> true
