@@ -172,7 +172,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Disconnect, err
 		}
 
-		if sfa.Round < latestHdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound {
+		if sfa.Round < latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
 			// Already have a complete compact cert in ledger.
 			// Ignore this sig.
 			return network.Ignore, nil
@@ -243,7 +243,7 @@ func (ccw *Worker) builder(latest basics.Round) {
 			ccw.log.Warnf("ccw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
 		} else {
-			ccw.deleteOldSigs(hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound)
+			ccw.deleteOldSigs(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 		}
 
 		// Broadcast signatures based on the previous block(s) that

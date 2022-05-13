@@ -76,7 +76,7 @@ restart:
 			continue
 		}
 
-		nextrnd = latestHdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound
+		nextrnd = latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 		if nextrnd == 0 {
 			// Compact certs not enabled yet.  Keep monitoring new blocks.
 			nextrnd = latest + 1
@@ -163,7 +163,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	if votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment.IsEmpty() {
+	if votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEmpty() {
 		// No voter commitment, perhaps because compact certs were
 		// just enabled.
 		return

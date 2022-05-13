@@ -37,7 +37,7 @@ import (
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
 //
-// CompactCertState
+// StateProofTrackingData
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
@@ -100,7 +100,7 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0004Len := uint32(26)
 	var zb0004Mask uint32 /* 31 bits */
-	if len((*z).BlockHeader.CompactCert) == 0 {
+	if len((*z).BlockHeader.StateProofTracking) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x20
 	}
@@ -210,18 +210,18 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x20) == 0 { // if not empty
 			// string "cc"
 			o = append(o, 0xa2, 0x63, 0x63)
-			if (*z).BlockHeader.CompactCert == nil {
+			if (*z).BlockHeader.StateProofTracking == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o = msgp.AppendMapHeader(o, uint32(len((*z).BlockHeader.CompactCert)))
+				o = msgp.AppendMapHeader(o, uint32(len((*z).BlockHeader.StateProofTracking)))
 			}
-			zb0001_keys := make([]protocol.CompactCertType, 0, len((*z).BlockHeader.CompactCert))
-			for zb0001 := range (*z).BlockHeader.CompactCert {
+			zb0001_keys := make([]protocol.StateProofType, 0, len((*z).BlockHeader.StateProofTracking))
+			for zb0001 := range (*z).BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
 			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).BlockHeader.CompactCert[zb0001]
+				zb0002 := (*z).BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002
 				o = zb0001.MarshalMsg(o)
 				o = zb0002.MarshalMsg(o)
@@ -571,34 +571,34 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0007 bool
 			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0006 > protocol.NumCompactCertTypes {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumCompactCertTypes))
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+			if zb0006 > protocol.NumStateProofTypes {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumStateProofTypes))
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
 			if zb0007 {
-				(*z).BlockHeader.CompactCert = nil
-			} else if (*z).BlockHeader.CompactCert == nil {
-				(*z).BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0006)
+				(*z).BlockHeader.StateProofTracking = nil
+			} else if (*z).BlockHeader.StateProofTracking == nil {
+				(*z).BlockHeader.StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0006)
 			}
 			for zb0006 > 0 {
-				var zb0001 protocol.CompactCertType
-				var zb0002 CompactCertState
+				var zb0001 protocol.StateProofType
+				var zb0002 StateProofTrackingData
 				zb0006--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert", zb0001)
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
 					return
 				}
-				(*z).BlockHeader.CompactCert[zb0001] = zb0002
+				(*z).BlockHeader.StateProofTracking[zb0001] = zb0002
 			}
 		}
 		if zb0004 > 0 {
@@ -804,34 +804,34 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0011 bool
 				zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCert")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0010 > protocol.NumCompactCertTypes {
-					err = msgp.ErrOverflow(uint64(zb0010), uint64(protocol.NumCompactCertTypes))
-					err = msgp.WrapError(err, "CompactCert")
+				if zb0010 > protocol.NumStateProofTypes {
+					err = msgp.ErrOverflow(uint64(zb0010), uint64(protocol.NumStateProofTypes))
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				if zb0011 {
-					(*z).BlockHeader.CompactCert = nil
-				} else if (*z).BlockHeader.CompactCert == nil {
-					(*z).BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0010)
+					(*z).BlockHeader.StateProofTracking = nil
+				} else if (*z).BlockHeader.StateProofTracking == nil {
+					(*z).BlockHeader.StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0010)
 				}
 				for zb0010 > 0 {
-					var zb0001 protocol.CompactCertType
-					var zb0002 CompactCertState
+					var zb0001 protocol.StateProofType
+					var zb0002 StateProofTrackingData
 					zb0010--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert")
+						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
 					bts, err = zb0002.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert", zb0001)
+						err = msgp.WrapError(err, "StateProofTracking", zb0001)
 						return
 					}
-					(*z).BlockHeader.CompactCert[zb0001] = zb0002
+					(*z).BlockHeader.StateProofTracking[zb0001] = zb0002
 				}
 			case "partupdrmv":
 				var zb0012 int
@@ -887,8 +887,8 @@ func (_ *Block) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Block) Msgsize() (s int) {
 	s = 3 + 4 + (*z).BlockHeader.Round.Msgsize() + 5 + (*z).BlockHeader.Branch.Msgsize() + 5 + (*z).BlockHeader.Seed.Msgsize() + 4 + (*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.Msgsize() + 7 + (*z).BlockHeader.TxnCommitments.Sha256Commitment.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).BlockHeader.GenesisID) + 3 + (*z).BlockHeader.GenesisHash.Msgsize() + 5 + (*z).BlockHeader.RewardsState.FeeSink.Msgsize() + 4 + (*z).BlockHeader.RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).BlockHeader.RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).BlockHeader.UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).BlockHeader.UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).BlockHeader.UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).BlockHeader.UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
-	if (*z).BlockHeader.CompactCert != nil {
-		for zb0001, zb0002 := range (*z).BlockHeader.CompactCert {
+	if (*z).BlockHeader.StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).BlockHeader.StateProofTracking {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize() + zb0002.Msgsize()
@@ -904,7 +904,7 @@ func (z *Block) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Block) MsgIsZero() bool {
-	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.CompactCert) == 0) && (len((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Payset.MsgIsZero())
+	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.StateProofTracking) == 0) && (len((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Payset.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -941,7 +941,7 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0004Len := uint32(25)
 	var zb0004Mask uint32 /* 30 bits */
-	if len((*z).CompactCert) == 0 {
+	if len((*z).StateProofTracking) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x20
 	}
@@ -1047,18 +1047,18 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x20) == 0 { // if not empty
 			// string "cc"
 			o = append(o, 0xa2, 0x63, 0x63)
-			if (*z).CompactCert == nil {
+			if (*z).StateProofTracking == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o = msgp.AppendMapHeader(o, uint32(len((*z).CompactCert)))
+				o = msgp.AppendMapHeader(o, uint32(len((*z).StateProofTracking)))
 			}
-			zb0001_keys := make([]protocol.CompactCertType, 0, len((*z).CompactCert))
-			for zb0001 := range (*z).CompactCert {
+			zb0001_keys := make([]protocol.StateProofType, 0, len((*z).StateProofTracking))
+			for zb0001 := range (*z).StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
 			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).CompactCert[zb0001]
+				zb0002 := (*z).StateProofTracking[zb0001]
 				_ = zb0002
 				o = zb0001.MarshalMsg(o)
 				o = zb0002.MarshalMsg(o)
@@ -1403,34 +1403,34 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0007 bool
 			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0006 > protocol.NumCompactCertTypes {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumCompactCertTypes))
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+			if zb0006 > protocol.NumStateProofTypes {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumStateProofTypes))
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
 			if zb0007 {
-				(*z).CompactCert = nil
-			} else if (*z).CompactCert == nil {
-				(*z).CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0006)
+				(*z).StateProofTracking = nil
+			} else if (*z).StateProofTracking == nil {
+				(*z).StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0006)
 			}
 			for zb0006 > 0 {
-				var zb0001 protocol.CompactCertType
-				var zb0002 CompactCertState
+				var zb0001 protocol.StateProofType
+				var zb0002 StateProofTrackingData
 				zb0006--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert", zb0001)
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
 					return
 				}
-				(*z).CompactCert[zb0001] = zb0002
+				(*z).StateProofTracking[zb0001] = zb0002
 			}
 		}
 		if zb0004 > 0 {
@@ -1628,34 +1628,34 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0011 bool
 				zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCert")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0010 > protocol.NumCompactCertTypes {
-					err = msgp.ErrOverflow(uint64(zb0010), uint64(protocol.NumCompactCertTypes))
-					err = msgp.WrapError(err, "CompactCert")
+				if zb0010 > protocol.NumStateProofTypes {
+					err = msgp.ErrOverflow(uint64(zb0010), uint64(protocol.NumStateProofTypes))
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				if zb0011 {
-					(*z).CompactCert = nil
-				} else if (*z).CompactCert == nil {
-					(*z).CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0010)
+					(*z).StateProofTracking = nil
+				} else if (*z).StateProofTracking == nil {
+					(*z).StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0010)
 				}
 				for zb0010 > 0 {
-					var zb0001 protocol.CompactCertType
-					var zb0002 CompactCertState
+					var zb0001 protocol.StateProofType
+					var zb0002 StateProofTrackingData
 					zb0010--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert")
+						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
 					bts, err = zb0002.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert", zb0001)
+						err = msgp.WrapError(err, "StateProofTracking", zb0001)
 						return
 					}
-					(*z).CompactCert[zb0001] = zb0002
+					(*z).StateProofTracking[zb0001] = zb0002
 				}
 			case "partupdrmv":
 				var zb0012 int
@@ -1705,8 +1705,8 @@ func (_ *BlockHeader) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BlockHeader) Msgsize() (s int) {
 	s = 3 + 4 + (*z).Round.Msgsize() + 5 + (*z).Branch.Msgsize() + 5 + (*z).Seed.Msgsize() + 4 + (*z).TxnCommitments.NativeSha512_256Commitment.Msgsize() + 7 + (*z).TxnCommitments.Sha256Commitment.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 3 + (*z).GenesisHash.Msgsize() + 5 + (*z).RewardsState.FeeSink.Msgsize() + 4 + (*z).RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
-	if (*z).CompactCert != nil {
-		for zb0001, zb0002 := range (*z).CompactCert {
+	if (*z).StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).StateProofTracking {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize() + zb0002.Msgsize()
@@ -1721,11 +1721,11 @@ func (z *BlockHeader) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *BlockHeader) MsgIsZero() bool {
-	return ((*z).Round.MsgIsZero()) && ((*z).Branch.MsgIsZero()) && ((*z).Seed.MsgIsZero()) && ((*z).TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).TimeStamp == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).RewardsState.FeeSink.MsgIsZero()) && ((*z).RewardsState.RewardsPool.MsgIsZero()) && ((*z).RewardsState.RewardsLevel == 0) && ((*z).RewardsState.RewardsRate == 0) && ((*z).RewardsState.RewardsResidue == 0) && ((*z).RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocolApprovals == 0) && ((*z).UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).UpgradeVote.UpgradeApprove == false) && ((*z).TxnCounter == 0) && (len((*z).CompactCert) == 0) && (len((*z).ParticipationUpdates.ExpiredParticipationAccounts) == 0)
+	return ((*z).Round.MsgIsZero()) && ((*z).Branch.MsgIsZero()) && ((*z).Seed.MsgIsZero()) && ((*z).TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).TimeStamp == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).RewardsState.FeeSink.MsgIsZero()) && ((*z).RewardsState.RewardsPool.MsgIsZero()) && ((*z).RewardsState.RewardsLevel == 0) && ((*z).RewardsState.RewardsRate == 0) && ((*z).RewardsState.RewardsResidue == 0) && ((*z).RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocolApprovals == 0) && ((*z).UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).UpgradeVote.UpgradeApprove == false) && ((*z).TxnCounter == 0) && (len((*z).StateProofTracking) == 0) && (len((*z).ParticipationUpdates.ExpiredParticipationAccounts) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *CompactCertState) MarshalMsg(b []byte) (o []byte) {
+func (z *StateProofTrackingData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -1764,13 +1764,13 @@ func (z *CompactCertState) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *CompactCertState) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*CompactCertState)
+func (_ *StateProofTrackingData) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofTrackingData)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *CompactCertState) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1819,7 +1819,7 @@ func (z *CompactCertState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0002 {
-			(*z) = CompactCertState{}
+			(*z) = StateProofTrackingData{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -1860,19 +1860,19 @@ func (z *CompactCertState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *CompactCertState) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*CompactCertState)
+func (_ *StateProofTrackingData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofTrackingData)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *CompactCertState) Msgsize() (s int) {
+func (z *StateProofTrackingData) Msgsize() (s int) {
 	s = 1 + 2 + (*z).StateProofVotersCommitment.Msgsize() + 2 + (*z).StateProofVotersTotalWeight.Msgsize() + 2 + (*z).StateProofNextRound.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *CompactCertState) MsgIsZero() bool {
+func (z *StateProofTrackingData) MsgIsZero() bool {
 	return ((*z).StateProofVotersCommitment.MsgIsZero()) && ((*z).StateProofVotersTotalWeight.MsgIsZero()) && ((*z).StateProofNextRound.MsgIsZero())
 }
 

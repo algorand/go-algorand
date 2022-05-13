@@ -559,8 +559,8 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert cc.Cert, certMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
-	if certType != protocol.CompactCertBasic {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.StateProofType, cert cc.Cert, certMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
+	if certType != protocol.StateProofBasic {
 		return fmt.Errorf("compact cert type %d not supported", certType)
 	}
 
@@ -698,7 +698,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, evalOpts.PaysetHint)
 	}
 
-	base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].StateProofNextRound
+	base.compactCertNextRnd = eval.prevHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
 	// Check if compact certs are being enabled as of this block.
 	if base.compactCertNextRnd == 0 && proto.StateProofInterval != 0 {
@@ -1245,7 +1245,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		eval.generateExpiredOnlineAccountsList()
 
 		if eval.proto.StateProofInterval > 0 {
-			var basicCompactCert bookkeeping.CompactCertState
+			var basicCompactCert bookkeeping.StateProofTrackingData
 			basicCompactCert.StateProofVotersCommitment, basicCompactCert.StateProofVotersTotalWeight, err = eval.compactCertVotersAndTotal()
 			if err != nil {
 				return err
@@ -1253,8 +1253,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 			basicCompactCert.StateProofNextRound = eval.state.compactCertNext()
 
-			eval.block.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
-			eval.block.CompactCert[protocol.CompactCertBasic] = basicCompactCert
+			eval.block.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+			eval.block.StateProofTracking[protocol.StateProofBasic] = basicCompactCert
 		}
 	}
 
@@ -1292,18 +1292,18 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if err != nil {
 			return err
 		}
-		if !eval.block.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
-			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment, expectedVoters)
+		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
+			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].StateProofVotersTotalWeight != expectedVotersWeight {
-			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].StateProofVotersTotalWeight, expectedVotersWeight)
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != expectedVotersWeight {
+			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight, expectedVotersWeight)
 		}
-		if eval.block.CompactCert[protocol.CompactCertBasic].StateProofNextRound != eval.state.compactCertNext() {
-			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].StateProofNextRound, eval.state.compactCertNext())
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.compactCertNext() {
+			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.compactCertNext())
 		}
-		for ccType := range eval.block.CompactCert {
-			if ccType != protocol.CompactCertBasic {
-				return fmt.Errorf("CompactCertType %d unexpected", ccType)
+		for ccType := range eval.block.StateProofTracking {
+			if ccType != protocol.StateProofBasic {
+				return fmt.Errorf("StateProofType %d unexpected", ccType)
 			}
 		}
 	}

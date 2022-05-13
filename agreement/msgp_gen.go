@@ -1357,7 +1357,7 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0004Len := uint32(29)
 	var zb0004Mask uint64 /* 37 bits */
-	if len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert) == 0 {
+	if len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x40
 	}
@@ -1479,18 +1479,18 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x40) == 0 { // if not empty
 			// string "cc"
 			o = append(o, 0xa2, 0x63, 0x63)
-			if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
+			if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o = msgp.AppendMapHeader(o, uint32(len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert)))
+				o = msgp.AppendMapHeader(o, uint32(len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking)))
 			}
-			zb0001_keys := make([]protocol.CompactCertType, 0, len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert))
-			for zb0001 := range (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert {
+			zb0001_keys := make([]protocol.StateProofType, 0, len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking))
+			for zb0001 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
 			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001]
+				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002
 				o = zb0001.MarshalMsg(o)
 				o = zb0002.MarshalMsg(o)
@@ -1855,34 +1855,34 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0007 bool
 			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0006 > protocol.NumCompactCertTypes {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumCompactCertTypes))
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+			if zb0006 > protocol.NumStateProofTypes {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumStateProofTypes))
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
 			if zb0007 {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
-			} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0006)
+				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = nil
+			} else if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
+				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0006)
 			}
 			for zb0006 > 0 {
-				var zb0001 protocol.CompactCertType
-				var zb0002 bookkeeping.CompactCertState
+				var zb0001 protocol.StateProofType
+				var zb0002 bookkeeping.StateProofTrackingData
 				zb0006--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert", zb0001)
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
 					return
 				}
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001] = zb0002
+				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 			}
 		}
 		if zb0004 > 0 {
@@ -2116,34 +2116,34 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0012 bool
 				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCert")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0011 > protocol.NumCompactCertTypes {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(protocol.NumCompactCertTypes))
-					err = msgp.WrapError(err, "CompactCert")
+				if zb0011 > protocol.NumStateProofTypes {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(protocol.NumStateProofTypes))
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				if zb0012 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0011)
+					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = nil
+				} else if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
+					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0011)
 				}
 				for zb0011 > 0 {
-					var zb0001 protocol.CompactCertType
-					var zb0002 bookkeeping.CompactCertState
+					var zb0001 protocol.StateProofType
+					var zb0002 bookkeeping.StateProofTrackingData
 					zb0011--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert")
+						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
 					bts, err = zb0002.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert", zb0001)
+						err = msgp.WrapError(err, "StateProofTracking", zb0001)
 						return
 					}
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001] = zb0002
+					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 				}
 			case "partupdrmv":
 				var zb0013 int
@@ -2221,8 +2221,8 @@ func (_ *proposal) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *proposal) Msgsize() (s int) {
 	s = 3 + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.Round.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Branch.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Seed.Msgsize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.Msgsize() + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID) + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.Msgsize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
-	if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert != nil {
-		for zb0001, zb0002 := range (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert {
+	if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize() + zb0002.Msgsize()
@@ -2238,7 +2238,7 @@ func (z *proposal) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *proposal) MsgIsZero() bool {
-	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero())
+	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3119,7 +3119,7 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0004Len := uint32(30)
 	var zb0004Mask uint64 /* 37 bits */
-	if len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert) == 0 {
+	if len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x80
 	}
@@ -3245,18 +3245,18 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x80) == 0 { // if not empty
 			// string "cc"
 			o = append(o, 0xa2, 0x63, 0x63)
-			if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
+			if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o = msgp.AppendMapHeader(o, uint32(len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert)))
+				o = msgp.AppendMapHeader(o, uint32(len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking)))
 			}
-			zb0001_keys := make([]protocol.CompactCertType, 0, len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert))
-			for zb0001 := range (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert {
+			zb0001_keys := make([]protocol.StateProofType, 0, len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking))
+			for zb0001 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
 			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001]
+				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002
 				o = zb0001.MarshalMsg(o)
 				o = zb0002.MarshalMsg(o)
@@ -3626,34 +3626,34 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0007 bool
 			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0006 > protocol.NumCompactCertTypes {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumCompactCertTypes))
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+			if zb0006 > protocol.NumStateProofTypes {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumStateProofTypes))
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
 			if zb0007 {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
-			} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0006)
+				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = nil
+			} else if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
+				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0006)
 			}
 			for zb0006 > 0 {
-				var zb0001 protocol.CompactCertType
-				var zb0002 bookkeeping.CompactCertState
+				var zb0001 protocol.StateProofType
+				var zb0002 bookkeeping.StateProofTrackingData
 				zb0006--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert", zb0001)
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
 					return
 				}
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001] = zb0002
+				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 			}
 		}
 		if zb0004 > 0 {
@@ -3895,34 +3895,34 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0012 bool
 				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCert")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0011 > protocol.NumCompactCertTypes {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(protocol.NumCompactCertTypes))
-					err = msgp.WrapError(err, "CompactCert")
+				if zb0011 > protocol.NumStateProofTypes {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(protocol.NumStateProofTypes))
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				if zb0012 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0011)
+					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = nil
+				} else if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
+					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0011)
 				}
 				for zb0011 > 0 {
-					var zb0001 protocol.CompactCertType
-					var zb0002 bookkeeping.CompactCertState
+					var zb0001 protocol.StateProofType
+					var zb0002 bookkeeping.StateProofTrackingData
 					zb0011--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert")
+						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
 					bts, err = zb0002.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert", zb0001)
+						err = msgp.WrapError(err, "StateProofTracking", zb0001)
 						return
 					}
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001] = zb0002
+					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 				}
 			case "partupdrmv":
 				var zb0013 int
@@ -4006,8 +4006,8 @@ func (_ *transmittedPayload) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *transmittedPayload) Msgsize() (s int) {
 	s = 3 + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.Round.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Branch.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Seed.Msgsize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.Msgsize() + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID) + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.Msgsize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
-	if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert != nil {
-		for zb0001, zb0002 := range (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert {
+	if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize() + zb0002.Msgsize()
@@ -4023,7 +4023,7 @@ func (z *transmittedPayload) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *transmittedPayload) MsgIsZero() bool {
-	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.CompactCert) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero()) && ((*z).PriorVote.MsgIsZero())
+	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero()) && ((*z).PriorVote.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4695,7 +4695,7 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0004Len := uint32(29)
 	var zb0004Mask uint64 /* 35 bits */
-	if len((*z).Block.BlockHeader.CompactCert) == 0 {
+	if len((*z).Block.BlockHeader.StateProofTracking) == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x40
 	}
@@ -4817,18 +4817,18 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte) {
 		if (zb0004Mask & 0x40) == 0 { // if not empty
 			// string "cc"
 			o = append(o, 0xa2, 0x63, 0x63)
-			if (*z).Block.BlockHeader.CompactCert == nil {
+			if (*z).Block.BlockHeader.StateProofTracking == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o = msgp.AppendMapHeader(o, uint32(len((*z).Block.BlockHeader.CompactCert)))
+				o = msgp.AppendMapHeader(o, uint32(len((*z).Block.BlockHeader.StateProofTracking)))
 			}
-			zb0001_keys := make([]protocol.CompactCertType, 0, len((*z).Block.BlockHeader.CompactCert))
-			for zb0001 := range (*z).Block.BlockHeader.CompactCert {
+			zb0001_keys := make([]protocol.StateProofType, 0, len((*z).Block.BlockHeader.StateProofTracking))
+			for zb0001 := range (*z).Block.BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
 			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).Block.BlockHeader.CompactCert[zb0001]
+				zb0002 := (*z).Block.BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002
 				o = zb0001.MarshalMsg(o)
 				o = zb0002.MarshalMsg(o)
@@ -5193,34 +5193,34 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 			var zb0007 bool
 			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0006 > protocol.NumCompactCertTypes {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumCompactCertTypes))
-				err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+			if zb0006 > protocol.NumStateProofTypes {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumStateProofTypes))
+				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
 			if zb0007 {
-				(*z).Block.BlockHeader.CompactCert = nil
-			} else if (*z).Block.BlockHeader.CompactCert == nil {
-				(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0006)
+				(*z).Block.BlockHeader.StateProofTracking = nil
+			} else if (*z).Block.BlockHeader.StateProofTracking == nil {
+				(*z).Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0006)
 			}
 			for zb0006 > 0 {
-				var zb0001 protocol.CompactCertType
-				var zb0002 bookkeeping.CompactCertState
+				var zb0001 protocol.StateProofType
+				var zb0002 bookkeeping.StateProofTrackingData
 				zb0006--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert")
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompactCert", zb0001)
+					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
 					return
 				}
-				(*z).Block.BlockHeader.CompactCert[zb0001] = zb0002
+				(*z).Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 			}
 		}
 		if zb0004 > 0 {
@@ -5454,34 +5454,34 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 				var zb0012 bool
 				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCert")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0011 > protocol.NumCompactCertTypes {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(protocol.NumCompactCertTypes))
-					err = msgp.WrapError(err, "CompactCert")
+				if zb0011 > protocol.NumStateProofTypes {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(protocol.NumStateProofTypes))
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				if zb0012 {
-					(*z).Block.BlockHeader.CompactCert = nil
-				} else if (*z).Block.BlockHeader.CompactCert == nil {
-					(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0011)
+					(*z).Block.BlockHeader.StateProofTracking = nil
+				} else if (*z).Block.BlockHeader.StateProofTracking == nil {
+					(*z).Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0011)
 				}
 				for zb0011 > 0 {
-					var zb0001 protocol.CompactCertType
-					var zb0002 bookkeeping.CompactCertState
+					var zb0001 protocol.StateProofType
+					var zb0002 bookkeeping.StateProofTrackingData
 					zb0011--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert")
+						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
 					bts, err = zb0002.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "CompactCert", zb0001)
+						err = msgp.WrapError(err, "StateProofTracking", zb0001)
 						return
 					}
-					(*z).Block.BlockHeader.CompactCert[zb0001] = zb0002
+					(*z).Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 				}
 			case "partupdrmv":
 				var zb0013 int
@@ -5559,8 +5559,8 @@ func (_ *unauthenticatedProposal) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *unauthenticatedProposal) Msgsize() (s int) {
 	s = 3 + 4 + (*z).Block.BlockHeader.Round.Msgsize() + 5 + (*z).Block.BlockHeader.Branch.Msgsize() + 5 + (*z).Block.BlockHeader.Seed.Msgsize() + 4 + (*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.Msgsize() + 7 + (*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.Msgsize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).Block.BlockHeader.GenesisID) + 3 + (*z).Block.BlockHeader.GenesisHash.Msgsize() + 5 + (*z).Block.BlockHeader.RewardsState.FeeSink.Msgsize() + 4 + (*z).Block.BlockHeader.RewardsState.RewardsPool.Msgsize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.Msgsize() + 6 + (*z).Block.BlockHeader.UpgradeState.CurrentProtocol.Msgsize() + 10 + (*z).Block.BlockHeader.UpgradeState.NextProtocol.Msgsize() + 8 + msgp.Uint64Size + 11 + (*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.Msgsize() + 11 + (*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.Msgsize() + 12 + (*z).Block.BlockHeader.UpgradeVote.UpgradePropose.Msgsize() + 13 + (*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.Msgsize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 3 + msgp.MapHeaderSize
-	if (*z).Block.BlockHeader.CompactCert != nil {
-		for zb0001, zb0002 := range (*z).Block.BlockHeader.CompactCert {
+	if (*z).Block.BlockHeader.StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).Block.BlockHeader.StateProofTracking {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize() + zb0002.Msgsize()
@@ -5576,7 +5576,7 @@ func (z *unauthenticatedProposal) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *unauthenticatedProposal) MsgIsZero() bool {
-	return ((*z).Block.BlockHeader.Round.MsgIsZero()) && ((*z).Block.BlockHeader.Branch.MsgIsZero()) && ((*z).Block.BlockHeader.Seed.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TimeStamp == 0) && ((*z).Block.BlockHeader.GenesisID == "") && ((*z).Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).Block.BlockHeader.TxnCounter == 0) && (len((*z).Block.BlockHeader.CompactCert) == 0) && (len((*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Block.Payset.MsgIsZero()) && ((*z).SeedProof.MsgIsZero()) && ((*z).OriginalPeriod == 0) && ((*z).OriginalProposer.MsgIsZero())
+	return ((*z).Block.BlockHeader.Round.MsgIsZero()) && ((*z).Block.BlockHeader.Branch.MsgIsZero()) && ((*z).Block.BlockHeader.Seed.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TimeStamp == 0) && ((*z).Block.BlockHeader.GenesisID == "") && ((*z).Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).Block.BlockHeader.TxnCounter == 0) && (len((*z).Block.BlockHeader.StateProofTracking) == 0) && (len((*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Block.Payset.MsgIsZero()) && ((*z).SeedProof.MsgIsZero()) && ((*z).OriginalPeriod == 0) && ((*z).OriginalProposer.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

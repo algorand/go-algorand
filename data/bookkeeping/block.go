@@ -119,10 +119,10 @@ type (
 		// started being supported).
 		TxnCounter uint64 `codec:"tc"`
 
-		// CompactCert tracks the state of compact certs, potentially
-		// for multiple types of certs.
-		//msgp:sort protocol.CompactCertType protocol.SortCompactCertType
-		CompactCert map[protocol.CompactCertType]CompactCertState `codec:"cc,allocbound=protocol.NumCompactCertTypes"`
+		// StateProofTracking tracks the status of the state proofs, potentially
+		// for multiple types of ASP.
+		//msgp:sort protocol.StateProofType protocol.SortCompactCertType
+		StateProofTracking map[protocol.StateProofType]StateProofTrackingData `codec:"cc,allocbound=protocol.NumStateProofTypes"`
 
 		// ParticipationUpdates contains the information needed to mark
 		// certain accounts offline because their participation keys expired
@@ -214,8 +214,8 @@ type (
 		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
 	}
 
-	// CompactCertState tracks the state of compact certificates.
-	CompactCertState struct {
+	// StateProofTrackingData tracks the state of compact certificates.
+	StateProofTrackingData struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		// StateProofVotersCommitment is the root of a vector commitment containing the

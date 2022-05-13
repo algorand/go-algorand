@@ -102,7 +102,7 @@ type Txn struct {
 	ExtraProgramPages uint32
 
 	CertIntervalLatestRound basics.Round
-	CertType                protocol.CompactCertType
+	CertType                protocol.StateProofType
 	StateProof              compactcert.Cert
 	StateProofMsg           stateproofmsg.Message
 }

@@ -16,29 +16,28 @@
 
 package protocol
 
-// A single Algorand chain can support multiple types of compact certs,
+// A single Algorand chain can support multiple types of stateproofs,
 // reflecting different hash functions, signature schemes, and frequency
 // parameters.
 
-// CompactCertType identifies a particular configuration of compact certs.
-type CompactCertType uint64
+// StateProofType identifies a particular configuration of compact certs.
+type StateProofType uint64
 
 const (
-	// CompactCertBasic is our initial compact cert setup, using Ed25519
-	// ephemeral-key signatures and SHA512/256 hashes.
-	CompactCertBasic CompactCertType = 0
+	// StateProofBasic is our initial state proof setup. using falcon keys and subset-sum hash
+	StateProofBasic StateProofType = 0
 
-	// NumCompactCertTypes is the max number of types of compact certs
+	// NumStateProofTypes is the max number of types of state proofs
 	// that we support.  This is used as an allocation bound for a map
-	// containing different compact cert types in msgpack encoding.
-	NumCompactCertTypes int = 1
+	// containing different stateproof types in msgpack encoding.
+	NumStateProofTypes int = 1
 )
 
-// SortCompactCertType implements sorting by CompactCertType keys for
+// SortCompactCertType implements sorting by StateProofType keys for
 // canonical encoding of maps in msgpack format.
 //msgp:ignore SortCompactCertType
-//msgp:sort CompactCertType SortCompactCertType
-type SortCompactCertType []CompactCertType
+//msgp:sort StateProofType SortCompactCertType
+type SortCompactCertType []StateProofType
 
 func (a SortCompactCertType) Len() int           { return len(a) }
 func (a SortCompactCertType) Less(i, j int) bool { return a[i] < a[j] }

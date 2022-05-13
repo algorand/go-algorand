@@ -40,7 +40,7 @@ import (
 func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	certRound := votersHdr.Round + basics.Round(proto.StateProofInterval)
-	total := votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersTotalWeight
+	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight
 
 	// The acceptable weight depends on the elapsed time (in rounds)
 	// from the block we are trying to construct a certificate for.
@@ -116,7 +116,7 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHea
 		return 0, err
 	}
 
-	totalWeight := votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersTotalWeight.ToUint64()
+	totalWeight := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
 		err := fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
@@ -171,7 +171,7 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 		return fmt.Errorf("%v: %w", err, errCompactCertParamCreation)
 	}
 
-	verifier, err := compactcert.MkVerifier(votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment,
+	verifier, err := compactcert.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		provenWeight,
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {

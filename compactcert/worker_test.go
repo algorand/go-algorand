@@ -83,7 +83,7 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
-	var ccBasic = bookkeeping.CompactCertState{
+	var ccBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, compactcert.HashSize),
 		StateProofVotersTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
@@ -96,8 +96,8 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 
 	ccBasic.StateProofNextRound = ccNextRound
-	hdr.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
-		protocol.CompactCertBasic: ccBasic,
+	hdr.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: ccBasic,
 	}
 
 	s.blocks[s.latest] = hdr
@@ -221,7 +221,7 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	defer s.mu.Unlock()
 
 	for r := uint64(0); r < delta; r++ {
-		s.addBlock(s.blocks[s.latest].CompactCert[protocol.CompactCertBasic].StateProofNextRound)
+		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 }
 

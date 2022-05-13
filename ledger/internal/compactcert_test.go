@@ -84,10 +84,10 @@ func TestValidateCompactCert(t *testing.T) {
 	// since proven weight is zero, we cann't create the verifier
 	require.ErrorIs(t, err, compactcert.ErrIllegalInputForLnApprox)
 
-	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
-	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
+	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofVotersTotalWeight.Raw = 100
-	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
+	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
@@ -117,10 +117,10 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	out := AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0), out)
 
-	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
-	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
+	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofVotersTotalWeight.Raw = 100
-	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
+	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
@@ -140,7 +140,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	firstValid = basics.Round(29000 - 2)
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	cc.StateProofVotersTotalWeight.Raw = 0x7fffffffffffffff
-	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
+	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	proto.StateProofWeightThreshold = 0x7fffffff
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)

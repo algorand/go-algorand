@@ -91,17 +91,17 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.StateProofInterval == 0 || hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound == 0 {
+	if proto.StateProofInterval == 0 || hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound, proto)
+	startR := votersRoundForCertRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
-			hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
+			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
 
 	for r := startR; r <= latest; r += basics.Round(proto.StateProofInterval) {
@@ -167,7 +167,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	for r, tr := range vt.round {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
 		certRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
-		if certRound < hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound {
+		if certRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
 			delete(vt.round, r)
 		}
 	}

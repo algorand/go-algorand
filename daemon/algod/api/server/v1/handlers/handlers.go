@@ -505,12 +505,12 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
-		CompactCertVotersTotal: b.CompactCert[protocol.CompactCertBasic].StateProofVotersTotalWeight.ToUint64(),
-		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].StateProofNextRound),
+		CompactCertVotersTotal: b.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64(),
+		CompactCertNextRound:   uint64(b.StateProofTracking[protocol.StateProofBasic].StateProofNextRound),
 	}
 
-	if !b.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment.IsEmpty() {
-		voters := b.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment
+	if !b.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEmpty() {
+		voters := b.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment
 		block.CompactCertVoters = voters[:]
 	}
 

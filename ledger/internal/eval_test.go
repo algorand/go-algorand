@@ -204,7 +204,7 @@ func TestCowCompactCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var certRnd basics.Round
-	var certType protocol.CompactCertType
+	var certType protocol.StateProofType
 	var cert compactcert.Cert
 	var atRound basics.Round
 	var validate bool
@@ -218,12 +218,12 @@ func TestCowCompactCert(t *testing.T) {
 		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
 		0, ledgercore.AccountTotals{}, 0)
 
-	certType = protocol.CompactCertType(1234) // bad cert type
+	certType = protocol.StateProofType(1234) // bad stateproof type
 	err := c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no certRnd block
-	certType = protocol.CompactCertBasic
+	certType = protocol.StateProofBasic
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
 	certRnd = 3

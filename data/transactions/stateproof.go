@@ -28,10 +28,10 @@ import (
 type StateProofTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	StateProofIntervalLatestRound basics.Round             `codec:"sprnd"`
-	StateProofType                protocol.CompactCertType `codec:"sptype"`
-	StateProof                    compactcert.Cert         `codec:"sp"`
-	StateProofMessage             stateproofmsg.Message    `codec:"spmsg"`
+	StateProofIntervalLatestRound basics.Round            `codec:"sprnd"`
+	StateProofType                protocol.StateProofType `codec:"sptype"`
+	StateProof                    compactcert.Cert        `codec:"sp"`
+	StateProofMessage             stateproofmsg.Message   `codec:"spmsg"`
 }
 
 // Empty returns whether the StateProofTxnFields are all zero,

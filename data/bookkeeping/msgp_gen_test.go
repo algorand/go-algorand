@@ -135,7 +135,7 @@ func BenchmarkUnmarshalBlockHeader(b *testing.B) {
 
 func TestMarshalUnmarshalCompactCertState(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := CompactCertState{}
+	v := StateProofTrackingData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -155,11 +155,11 @@ func TestMarshalUnmarshalCompactCertState(t *testing.T) {
 }
 
 func TestRandomizedEncodingCompactCertState(t *testing.T) {
-	protocol.RunEncodingTest(t, &CompactCertState{})
+	protocol.RunEncodingTest(t, &StateProofTrackingData{})
 }
 
 func BenchmarkMarshalMsgCompactCertState(b *testing.B) {
-	v := CompactCertState{}
+	v := StateProofTrackingData{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -168,7 +168,7 @@ func BenchmarkMarshalMsgCompactCertState(b *testing.B) {
 }
 
 func BenchmarkAppendMsgCompactCertState(b *testing.B) {
-	v := CompactCertState{}
+	v := StateProofTrackingData{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -180,7 +180,7 @@ func BenchmarkAppendMsgCompactCertState(b *testing.B) {
 }
 
 func BenchmarkUnmarshalCompactCertState(b *testing.B) {
-	v := CompactCertState{}
+	v := StateProofTrackingData{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
