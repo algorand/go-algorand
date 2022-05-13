@@ -1222,7 +1222,7 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 		}
 
 		tx := txn.Txn.Txn
-		if tx.Type != protocol.CompactCertTx {
+		if tx.Type != protocol.StateProofTx {
 			continue
 		}
 

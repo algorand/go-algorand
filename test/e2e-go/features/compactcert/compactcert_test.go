@@ -128,7 +128,7 @@ func TestCompactCerts(t *testing.T) {
 			var certMessage stateproofmsg.Message
 			compactCertFound := false
 			for _, txn := range res.Transactions {
-				r.Equal(txn.Type, string(protocol.CompactCertTx))
+				r.Equal(txn.Type, string(protocol.StateProofTx))
 				r.True(txn.CompactCert != nil)
 				if txn.CompactCert.CertIntervalLatestRound == nextCertRound {
 					err = protocol.Decode(txn.CompactCert.Cert, &compactCert)

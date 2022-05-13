@@ -183,7 +183,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 
 	stxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
-			Type: protocol.CompactCertTx,
+			Type: protocol.StateProofTx,
 			Header: transactions.Header{
 				Sender:     transactions.StateProofSender,
 				FirstValid: 0,

@@ -93,7 +93,7 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res = assetFreezeTxEncode(tx, ad)
 	case protocol.ApplicationCallTx:
 		res = applicationCallTxEncode(tx, ad)
-	case protocol.CompactCertTx:
+	case protocol.StateProofTx:
 		res = compactCertTxEncode(tx, ad)
 	default:
 		return res, errors.New(errUnknownTransactionType)

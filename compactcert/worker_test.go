@@ -280,7 +280,7 @@ func TestWorkerAllSigs(t *testing.T) {
 		// Expect a compact cert to be formed.
 		for {
 			tx := <-s.txmsg
-			require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
+			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
@@ -343,7 +343,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	// Expect a compact cert to be formed in the next StateProofInterval/2.
 	s.advanceLatest(proto.StateProofInterval / 2)
 	tx := <-s.txmsg
-	require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
+	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
 
 	msg, err := GenerateStateProofMessage(s, tx.Txn.StateProofIntervalLatestRound, proto.StateProofInterval)

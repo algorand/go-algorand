@@ -1025,7 +1025,7 @@ func TestStateProof200(t *testing.T) {
 		tx := node.TxnWithStatus{
 			Txn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
-					Type: protocol.CompactCertTx,
+					Type: protocol.StateProofTx,
 					StateProofTxnFields: transactions.StateProofTxnFields{
 						StateProofIntervalLatestRound: basics.Round(i + 1),
 						StateProofType:                0,

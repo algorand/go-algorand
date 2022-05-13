@@ -339,7 +339,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				for ixa := range stxn.Txn.Accounts {
 					loadAccountsAddAccountTask(&stxn.Txn.Accounts[ixa], task, accountTasks, queue)
 				}
-			case protocol.CompactCertTx:
+			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx:
 			}
 			// If you add new addresses here, also add them in getTxnAddresses().

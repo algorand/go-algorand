@@ -90,7 +90,7 @@ type StateDelta struct {
 
 	// next round for which we expect a compact cert.
 	// zero if no compact cert is expected.
-	CompactCertNext basics.Round
+	StateProofNext basics.Round
 
 	// previous block timestamp
 	PrevTimestamp int64
@@ -181,7 +181,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
 		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
 		Hdr:                      hdr,
-		CompactCertNext:          compactCertNext,
+		StateProofNext:           compactCertNext,
 		PrevTimestamp:            prevTimestamp,
 		initialTransactionsCount: hint,
 	}

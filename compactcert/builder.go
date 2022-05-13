@@ -369,7 +369,7 @@ func (ccw *Worker) tryBuilding() {
 		}
 
 		var stxn transactions.SignedTxn
-		stxn.Txn.Type = protocol.CompactCertTx
+		stxn.Txn.Type = protocol.StateProofTx
 		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)

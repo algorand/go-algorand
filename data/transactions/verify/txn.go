@@ -170,7 +170,7 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
 		}
-		if stxn.Txn.Type != protocol.CompactCertTx {
+		if stxn.Txn.Type != protocol.StateProofTx {
 			minFeeCount++
 		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
@@ -218,7 +218,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		// check ensures that this transaction cannot pay any fee, and
 		// cannot have any other interesting fields, except for the compact
 		// cert payload.
-		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.CompactCertTx {
+		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.StateProofTx {
 			return nil
 		}
 

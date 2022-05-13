@@ -1265,7 +1265,7 @@ func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
 	}
 
 	txn := transactions.Transaction{
-		Type: protocol.CompactCertTx,
+		Type: protocol.StateProofTx,
 		Header: transactions.Header{
 			Sender:      addr,
 			GenesisHash: genesisHash(),

@@ -325,7 +325,7 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (x *roundCowBase) compactCertNext() basics.Round {
+func (x *roundCowBase) stateProofNext() basics.Round {
 	return x.compactCertNextRnd
 }
 
@@ -564,7 +564,7 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Sta
 		return fmt.Errorf("compact cert type %d not supported", certType)
 	}
 
-	nextCertRnd := cs.compactCertNext()
+	nextCertRnd := cs.stateProofNext()
 
 	certHdr, err := cs.blockHdr(certRnd)
 	if err != nil {
@@ -586,7 +586,7 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Sta
 		}
 	}
 
-	cs.setCompactCertNext(certRnd + basics.Round(proto.StateProofInterval))
+	cs.setStateProofNext(certRnd + basics.Round(proto.StateProofInterval))
 	return nil
 }
 
@@ -1160,8 +1160,8 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 	case protocol.ApplicationCallTx:
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, gi, evalParams, ctr)
 
-	case protocol.CompactCertTx:
-		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending on
+	case protocol.StateProofTx:
+		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNext depending on
 		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
 		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
@@ -1251,7 +1251,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				return err
 			}
 
-			basicCompactCert.StateProofNextRound = eval.state.compactCertNext()
+			basicCompactCert.StateProofNextRound = eval.state.stateProofNext()
 
 			eval.block.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 			eval.block.StateProofTracking[protocol.StateProofBasic] = basicCompactCert
@@ -1298,8 +1298,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight != expectedVotersWeight {
 			return fmt.Errorf("StateProofVotersTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight, expectedVotersWeight)
 		}
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.compactCertNext() {
-			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.compactCertNext())
+		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.stateProofNext() {
+			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.stateProofNext())
 		}
 		for ccType := range eval.block.StateProofTracking {
 			if ccType != protocol.StateProofBasic {

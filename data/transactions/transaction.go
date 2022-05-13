@@ -471,7 +471,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
 		}
 
-	case protocol.CompactCertTx:
+	case protocol.StateProofTx:
 		if proto.StateProofInterval == 0 {
 			return fmt.Errorf("compact certs not supported")
 		}
@@ -529,7 +529,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	}
 
 	if !tx.StateProofTxnFields.Empty() {
-		nonZeroFields[protocol.CompactCertTx] = true
+		nonZeroFields[protocol.StateProofTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -539,7 +539,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	}
 
 	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
-		if tx.Type == protocol.CompactCertTx {
+		if tx.Type == protocol.StateProofTx {
 			// Zero fee allowed for compact cert txn.
 		} else {
 			return makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", tx.Fee.Raw, proto.MinTxnFee)

@@ -205,11 +205,11 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
 	tr, ok := vt.round[r]
 	if !ok {
-		// Not tracked: compact certs not enabled.
+		// Not tracked: stateproofs not enabled.
 		return nil, nil
 	}
 
-	// Wait for the Merkle tree to be constructed.
+	// Wait for the vc to be constructed.
 	err := tr.Wait()
 	if err != nil {
 		return nil, err
