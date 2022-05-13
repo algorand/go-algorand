@@ -613,6 +613,9 @@ type CompileResponse struct {
 
 	// base64 encoded program bytes
 	Result string `json:"result"`
+
+	// JSON of the source map
+	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
 }
 
 // DisassembleResponse defines model for DisassembleResponse.
@@ -825,6 +828,13 @@ type GetProofParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// TealCompileParams defines parameters for TealCompile.
+type TealCompileParams struct {
+
+	// When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.
+	Sourcemap *bool `json:"sourcemap,omitempty"`
 }
 
 // TealDryrunJSONBody defines parameters for TealDryrun.
