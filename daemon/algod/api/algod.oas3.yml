@@ -3748,7 +3748,7 @@
     },
     "/v2/teal/disassemble": {
       "post": {
-        "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "description": "Given the program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "operationId": "TealDisassemble",
         "requestBody": {
           "content": {
