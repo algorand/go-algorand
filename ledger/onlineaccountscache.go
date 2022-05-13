@@ -75,27 +75,11 @@ func (o *onlineAccountsCache) writeFront(acctData persistedOnlineAccountData) bo
 		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
 	}
 	list := o.accounts[acctData.addr]
+	// do not insert if acctData would not be the newest entry in the cache
 	if list.root.next != &list.root && acctData.updRound <= list.root.next.Value.updRound {
 		return false
 	}
 	o.accounts[acctData.addr].pushFront(&acctData)
-	return true
-}
-
-// write a single persistedAccountData to the cache
-// thread locking semantics : write lock
-func (o *onlineAccountsCache) writeBack(acctData persistedOnlineAccountData) bool {
-	if _, ok := o.accounts[acctData.addr]; !ok {
-		if o.full() {
-			return false
-		}
-		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
-	}
-	list := o.accounts[acctData.addr]
-	if list.root.prev != &list.root && acctData.updRound >= list.root.prev.Value.updRound {
-		return false
-	}
-	o.accounts[acctData.addr].pushBack(&acctData)
 	return true
 }
 
@@ -108,7 +92,7 @@ func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 		for node.prev != &list.root {
 			node = node.prev
 			// keep only one entry that is targetRound or older
-			// discard all older additional entries older than targetRound
+			// discard all entries older than targetRound other than the current entry
 			if node.Value.updRound <= targetRound {
 				list.remove(node.next)
 			} else {
@@ -124,13 +108,7 @@ func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 	}
 }
 
-// replace replaces all entries for an account with provided history
-// may not insert data if cache full
-func (o *onlineAccountsCache) replace(persistedDataHistory []persistedOnlineAccountData, addr basics.Address) {
+// delete cache for a particular address
+func (o *onlineAccountsCache) clear(addr basics.Address) {
 	delete(o.accounts, addr)
-	if !o.full() {
-		for _, data := range persistedDataHistory {
-			o.writeFront(data)
-		}
-	}
 }

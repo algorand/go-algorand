@@ -2690,23 +2690,17 @@ func (qs *accountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []
 
 		for rows.Next() {
 			var buf []byte
-			var rowid sql.NullInt64
-			var updround sql.NullInt64
 			data := persistedOnlineAccountData{}
-			err := rows.Scan(&rowid, &updround, &buf)
+			err := rows.Scan(&data.rowid, &data.updRound, &buf)
 			if err != nil {
 				return err
 			}
-			if len(buf) > 0 && rowid.Valid && updround.Valid {
-				data.rowid = rowid.Int64
-				data.updRound = basics.Round(updround.Int64)
-				err = protocol.Decode(buf, &data.accountData)
-				if err != nil {
-					return err
-				}
-				data.addr = addr
-				result = append(result, data)
+			err = protocol.Decode(buf, &data.accountData)
+			if err != nil {
+				return err
 			}
+			data.addr = addr
+			result = append(result, data)
 		}
 		return err
 	})
@@ -3032,27 +3026,21 @@ func onlineAccountsAll(tx *sql.Tx) ([]persistedOnlineAccountData, error) {
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		var rowid sql.NullInt64
-		var updround sql.NullInt64
 		data := persistedOnlineAccountData{}
-		err := rows.Scan(&rowid, &addrbuf, &updround, &buf)
+		err := rows.Scan(&data.rowid, &addrbuf, &data.updRound, &buf)
 		if err != nil {
 			return nil, err
 		}
-		if len(buf) > 0 && rowid.Valid && updround.Valid {
-			data.rowid = rowid.Int64
-			data.updRound = basics.Round(updround.Int64)
-			err = protocol.Decode(buf, &data.accountData)
-			if err != nil {
-				return nil, err
-			}
-			if len(addrbuf) != len(data.addr) {
-				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.addr))
-				return nil, err
-			}
-			copy(data.addr[:], addrbuf)
-			result = append(result, data)
+		err = protocol.Decode(buf, &data.accountData)
+		if err != nil {
+			return nil, err
 		}
+		if len(addrbuf) != len(data.addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.addr))
+			return nil, err
+		}
+		copy(data.addr[:], addrbuf)
+		result = append(result, data)
 	}
 	return result, nil
 }

@@ -650,8 +650,15 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			if persistedData.rowid != 0 {
 				// if we read actual data return it
 				ao.accountsMu.Lock()
-				persistedDataHistory, _ := ao.accountsq.lookupOnlineHistory(addr)
-				ao.onlineAccountsCache.replace(persistedDataHistory, addr)
+				ao.onlineAccountsCache.clear(addr)
+				if !ao.onlineAccountsCache.full() {
+					ao.accountsMu.Unlock()
+					persistedDataHistory, _ := ao.accountsq.lookupOnlineHistory(addr)
+					ao.accountsMu.Lock()
+					for _, data := range persistedDataHistory {
+						ao.onlineAccountsCache.writeFront(data)
+					}
+				}
 				ao.accountsMu.Unlock()
 				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
 			}
