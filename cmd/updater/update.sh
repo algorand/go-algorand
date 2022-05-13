@@ -214,26 +214,36 @@ function check_for_updater() {
         exit 1
     fi
 
-    CURL_OUT=$(curl -LJO --silent ${UPDATER_URL})
+    # intitialize temporary directory for updater 
+    local updater_tempdir="" \
+        updater_archive="${updater_tempdir}/${UPDATER_FILENAME}"
+
+    # create temporary directory for updater archive 
+    updater_tempdir=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
+
+    CURL_OUT=$(curl -sSL ${UPDATER_URL} -o "$updater_archive")
     if [ "$?" != "0" ]; then
         echo "failed to download updater binary from ${UPDATER_URL} using curl."
         echo "${CURL_OUT}"
         exit 1
     fi
 
-    if [ ! -f "${SCRIPTPATH}/${UPDATER_FILENAME}" ]; then
-        echo "downloaded file ${SCRIPTPATH}/${UPDATER_FILENAME} is missing."
+    if [ ! -f "${updater_archive}" ]; then
+        echo "downloaded file ${updater_archive} is missing."
         exit
     fi
 
-    tar -zxvf "${SCRIPTPATH}/${UPDATER_FILENAME}" updater
+    # extract and install updater 
+    tar -zxf "$updater_archive" -C "$updater_tempdir" updater
+    mv "${updater_tempdir}/updater" "${SCRIPTPATH}"
     if [ "$?" != "0" ]; then
-        echo "failed to extract updater binary from ${SCRIPTPATH}/${UPDATER_FILENAME}"
+        echo "failed to extract updater binary from ${updater_archive}"
         exit 1
     fi
 
-    rm -f "${SCRIPTPATH}/${UPDATER_FILENAME}"
-    echo "updater binary was downloaded"
+    # clean up temp directory
+    rm -rf "$updater_tempdir"
+    echo "updater binary was installed at ${SCRIPTPATH}/updater"
 }
 
 function check_for_update() {
