@@ -34,13 +34,13 @@ import (
 // particular firstValid round.  Earlier rounds require a smaller cert.
 // votersHdr specifies the block that contains the Merkle commitment of
 // the voters for this compact cert (and thus the compact cert is for
-// votersHdr.Round() + CompactCertRounds).
+// votersHdr.Round() + StateProofInterval).
 //
 // logger must not be nil; use at least logging.Base()
 func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
-	certRound := votersHdr.Round + basics.Round(proto.CompactCertRounds)
-	total := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal
+	certRound := votersHdr.Round + basics.Round(proto.StateProofInterval)
+	total := votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersTotalWeight
 
 	// The acceptable weight depends on the elapsed time (in rounds)
 	// from the block we are trying to construct a certificate for.
@@ -54,32 +54,32 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	// During the first proto.CompactCertRound/2 blocks, the
 	// signatures are still being broadcast, so, continue requiring
 	// 100% votes.
-	offset = offset.SubSaturate(basics.Round(proto.CompactCertRounds / 2))
+	offset = offset.SubSaturate(basics.Round(proto.StateProofInterval / 2))
 	if offset == 0 {
 		return total.ToUint64()
 	}
 
-	// In the next proto.CompactCertRounds/2 blocks, linearly scale
-	// the acceptable weight from 100% to CompactCertWeightThreshold.
+	// In the next proto.StateProofInterval/2 blocks, linearly scale
+	// the acceptable weight from 100% to StateProofWeightThreshold.
 	// If we are outside of that window, accept any weight at or above
-	// CompactCertWeightThreshold.
-	provenWeight, overflowed := basics.Muldiv(total.ToUint64(), uint64(proto.CompactCertWeightThreshold), 1<<32)
+	// StateProofWeightThreshold.
+	provenWeight, overflowed := basics.Muldiv(total.ToUint64(), uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed || provenWeight > total.ToUint64() {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
 		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight",
-			total, proto.CompactCertRounds, certRound, firstValid)
+			total, proto.StateProofInterval, certRound, firstValid)
 		return 0
 	}
 
-	if offset >= basics.Round(proto.CompactCertRounds/2) {
+	if offset >= basics.Round(proto.StateProofInterval/2) {
 		return provenWeight
 	}
 
-	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, proto.CompactCertRounds/2-uint64(offset), proto.CompactCertRounds/2)
+	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, proto.StateProofInterval/2-uint64(offset), proto.StateProofInterval/2)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
 		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow scaledWeight",
-			total, proto.CompactCertRounds, certRound, firstValid)
+			total, proto.StateProofInterval, certRound, firstValid)
 		return 0
 	}
 
@@ -87,7 +87,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
 		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
-			total, proto.CompactCertRounds, certRound, firstValid, provenWeight, scaledWeight)
+			total, proto.StateProofInterval, certRound, firstValid, provenWeight, scaledWeight)
 		return 0
 	}
 
@@ -99,28 +99,28 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 func GetProvenWeight(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (uint64, error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 {
+	if proto.StateProofInterval == 0 {
 		err := fmt.Errorf("compact certs not enabled")
 		return 0, err
 	}
 
-	if votersHdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
+	if votersHdr.Round%basics.Round(proto.StateProofInterval) != 0 {
 		err := fmt.Errorf("votersHdr %d not a multiple of %d",
-			votersHdr.Round, proto.CompactCertRounds)
+			votersHdr.Round, proto.StateProofInterval)
 		return 0, err
 	}
 
-	if hdr.Round != votersHdr.Round+basics.Round(proto.CompactCertRounds) {
+	if hdr.Round != votersHdr.Round+basics.Round(proto.StateProofInterval) {
 		err := fmt.Errorf("certifying block %d not %d ahead of voters %d",
-			hdr.Round, proto.CompactCertRounds, votersHdr.Round)
+			hdr.Round, proto.StateProofInterval, votersHdr.Round)
 		return 0, err
 	}
 
-	totalWeight := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64()
-	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.CompactCertWeightThreshold), 1<<32)
+	totalWeight := votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersTotalWeight.ToUint64()
+	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
 		err := fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
-			hdr.Round, totalWeight, proto.CompactCertWeightThreshold)
+			hdr.Round, totalWeight, proto.StateProofWeightThreshold)
 		return 0, err
 	}
 
@@ -141,15 +141,15 @@ var (
 func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round, msg stateproof.Message) error {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 {
-		return fmt.Errorf("rounds = %d: %w", proto.CompactCertRounds, errCompCertNotEnabled)
+	if proto.StateProofInterval == 0 {
+		return fmt.Errorf("rounds = %d: %w", proto.StateProofInterval, errCompCertNotEnabled)
 	}
 
-	if certHdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
-		return fmt.Errorf("cert at %d for non-multiple of %d: %w", certHdr.Round, proto.CompactCertRounds, errNotAtRightMultiple)
+	if certHdr.Round%basics.Round(proto.StateProofInterval) != 0 {
+		return fmt.Errorf("cert at %d for non-multiple of %d: %w", certHdr.Round, proto.StateProofInterval, errNotAtRightMultiple)
 	}
 
-	votersRound := certHdr.Round.SubSaturate(basics.Round(proto.CompactCertRounds))
+	votersRound := certHdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
 	if votersRound != votersHdr.Round {
 		return fmt.Errorf("new cert is for %d (voters %d), but votersHdr from %d: %w",
 			certHdr.Round, votersRound, votersHdr.Round, errInvalidVotersRound)
@@ -171,9 +171,9 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 		return fmt.Errorf("%v: %w", err, errCompactCertParamCreation)
 	}
 
-	verifier, err := compactcert.MkVerifier(votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters,
+	verifier, err := compactcert.MkVerifier(votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment,
 		provenWeight,
-		config.Consensus[votersHdr.CurrentProtocol].CompactCertStrengthTarget)
+		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
 		return err
 	}

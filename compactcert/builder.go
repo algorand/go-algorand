@@ -40,13 +40,13 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
-	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.CompactCertRounds))
+	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.StateProofInterval))
 	votersHdr, err := ccw.ledger.BlockHdr(votersRnd)
 	if err != nil {
 		return builder{}, err
 	}
 
-	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.CompactCertVotersLookback))
+	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
 	voters, err := ccw.ledger.CompactCertVoters(lookback)
 	if err != nil {
 		return builder{}, err
@@ -58,7 +58,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
-	msg, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, hdrProto.CompactCertRounds)
+	msg, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, hdrProto.StateProofInterval)
 	if err != nil {
 		return builder{}, err
 	}
@@ -77,7 +77,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		provenWeight,
 		voters.Participants,
 		voters.Tree,
-		config.Consensus[votersHdr.CurrentProtocol].CompactCertStrengthTarget)
+		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
 		return builder{}, err
 	}
@@ -172,7 +172,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Disconnect, err
 		}
 
-		if sfa.Round < latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
+		if sfa.Round < latestHdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound {
 			// Already have a complete compact cert in ledger.
 			// Ignore this sig.
 			return network.Ignore, nil
@@ -243,7 +243,7 @@ func (ccw *Worker) builder(latest basics.Round) {
 			ccw.log.Warnf("ccw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
 		} else {
-			ccw.deleteOldSigs(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound)
+			ccw.deleteOldSigs(hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound)
 		}
 
 		// Broadcast signatures based on the previous block(s) that
@@ -265,7 +265,7 @@ func (ccw *Worker) builder(latest basics.Round) {
 // broadcastSigs periodically broadcasts pending signatures for rounds
 // that have not been able to form a compact certificate.
 //
-// Signature re-broadcasting happens in periods of proto.CompactCertRounds
+// Signature re-broadcasting happens in periods of proto.StateProofInterval
 // rounds.
 //
 // In the first half of each such period, signers of a block broadcast their
@@ -277,7 +277,7 @@ func (ccw *Worker) builder(latest basics.Round) {
 // The broadcast schedule is randomized by the address of the block signer,
 // for load-balancing over time.
 func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams) {
-	if proto.CompactCertRounds == 0 {
+	if proto.StateProofInterval == 0 {
 		return
 	}
 
@@ -286,7 +286,7 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 
 	var roundSigs map[basics.Round][]pendingSig
 	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		if brnd%basics.Round(proto.CompactCertRounds) < basics.Round(proto.CompactCertRounds/2) {
+		if brnd%basics.Round(proto.StateProofInterval) < basics.Round(proto.StateProofInterval/2) {
 			roundSigs, err = getPendingSigsFromThisNode(tx)
 		} else {
 			roundSigs, err = getPendingSigs(tx)
@@ -309,7 +309,7 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 		for _, sig := range sigs {
 			// Randomize which sigs get broadcast over time.
 			addr64 := binary.LittleEndian.Uint64(sig.signer[:])
-			if addr64%(proto.CompactCertRounds/2) != uint64(brnd)%(proto.CompactCertRounds/2) {
+			if addr64%(proto.StateProofInterval/2) != uint64(brnd)%(proto.StateProofInterval/2) {
 				continue
 			}
 
@@ -370,13 +370,13 @@ func (ccw *Worker) tryBuilding() {
 
 		var stxn transactions.SignedTxn
 		stxn.Txn.Type = protocol.CompactCertTx
-		stxn.Txn.Sender = transactions.CompactCertSender
+		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
 		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
-		stxn.Txn.CertIntervalLatestRound = rnd
-		stxn.Txn.Cert = *cert
-		stxn.Txn.CertMsg = ccw.Message
+		stxn.Txn.StateProofIntervalLatestRound = rnd
+		stxn.Txn.StateProof = *cert
+		stxn.Txn.StateProofMessage = ccw.Message
 		err = ccw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)

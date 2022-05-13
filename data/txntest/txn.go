@@ -242,11 +242,11 @@ func (tx Txn) Txn() transactions.Transaction {
 			ClearStateProgram: assemble(tx.ClearStateProgram),
 			ExtraProgramPages: tx.ExtraProgramPages,
 		},
-		CompactCertTxnFields: transactions.CompactCertTxnFields{
-			CertIntervalLatestRound: tx.CertIntervalLatestRound,
-			CertType:                tx.CertType,
-			Cert:                    tx.Cert,
-			CertMsg:                 tx.CertMsg,
+		StateProofTxnFields: transactions.StateProofTxnFields{
+			StateProofIntervalLatestRound: tx.CertIntervalLatestRound,
+			StateProofType:                tx.CertType,
+			StateProof:                    tx.Cert,
+			StateProofMessage:             tx.CertMsg,
 		},
 	}
 }

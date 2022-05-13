@@ -76,7 +76,7 @@ restart:
 			continue
 		}
 
-		nextrnd = latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
+		nextrnd = latestHdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound
 		if nextrnd == 0 {
 			// Compact certs not enabled yet.  Keep monitoring new blocks.
 			nextrnd = latest + 1
@@ -139,12 +139,12 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 
 func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	proto := config.Consensus[hdr.CurrentProtocol]
-	if proto.CompactCertRounds == 0 {
+	if proto.StateProofInterval == 0 {
 		return
 	}
 
-	// Only sign blocks that are a multiple of CompactCertRounds.
-	if hdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
+	// Only sign blocks that are a multiple of StateProofInterval.
+	if hdr.Round%basics.Round(proto.StateProofInterval) != 0 {
 		return
 	}
 
@@ -156,14 +156,14 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 
 	// votersRound is the round containing the merkle root commitment
 	// for the voters that are going to sign this block.
-	votersRound := hdr.Round.SubSaturate(basics.Round(proto.CompactCertRounds))
+	votersRound := hdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
 	votersHdr, err := ccw.ledger.BlockHdr(votersRound)
 	if err != nil {
 		ccw.log.Warnf("ccw.signBlock(%d): BlockHdr(%d): %v", hdr.Round, votersRound, err)
 		return
 	}
 
-	if votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
+	if votersHdr.CompactCert[protocol.CompactCertBasic].StateProofVotersCommitment.IsEmpty() {
 		// No voter commitment, perhaps because compact certs were
 		// just enabled.
 		return
@@ -172,7 +172,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	sigs := make([]sigFromAddr, 0, len(keys))
 	ids := make([]account.ParticipationID, 0, len(keys))
 
-	stateproofMessage, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.CompactCertRounds)
+	stateproofMessage, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.StateProofInterval)
 	if err != nil {
 		ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 		return

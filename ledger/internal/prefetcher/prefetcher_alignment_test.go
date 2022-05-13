@@ -1270,7 +1270,7 @@ func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
 			Sender:      addr,
 			GenesisHash: genesisHash(),
 		},
-		CompactCertTxnFields: transactions.CompactCertTxnFields{},
+		StateProofTxnFields: transactions.StateProofTxnFields{},
 	}
 
 	requested, prefetched := run(t, l, txn)

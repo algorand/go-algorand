@@ -51,7 +51,7 @@ type VotersForRound struct {
 	// in participants.
 	Proto config.ConsensusParams
 
-	// Participants is the array of top #CompactCertVoters online accounts
+	// Participants is the array of top #StateProofVotersCommitment online accounts
 	// in this round, sorted by normalized balance (to make sure heavyweight
 	// accounts are biased to the front).
 	Participants basics.ParticipantsArray
@@ -84,9 +84,9 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 
 	// certRound is the block that we expect to form a compact certificate for,
 	// using the balances from round r.
-	certRound := r + basics.Round(tr.Proto.CompactCertVotersLookback+tr.Proto.CompactCertRounds)
+	certRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, err := onlineTop(r, certRound, tr.Proto.CompactCertTopVoters)
+	top, err := onlineTop(r, certRound, tr.Proto.StateProofTopVoters)
 	if err != nil {
 		return err
 	}

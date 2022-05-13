@@ -24,32 +24,32 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// CompactCertTxnFields captures the fields used for compact cert transactions.
-type CompactCertTxnFields struct {
+// StateProofTxnFields captures the fields used for compact cert transactions.
+type StateProofTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	CertIntervalLatestRound basics.Round             `codec:"crtrnd"`
-	CertType                protocol.CompactCertType `codec:"crttype"`
-	Cert                    compactcert.Cert         `codec:"crt"`
-	CertMsg                 stateproof.Message       `codec:"crtmsg"`
+	StateProofIntervalLatestRound basics.Round             `codec:"crtrnd"`
+	StateProofType                protocol.CompactCertType `codec:"crttype"`
+	StateProof                    compactcert.Cert         `codec:"crt"`
+	StateProofMessage             stateproof.Message       `codec:"crtmsg"`
 }
 
-// Empty returns whether the CompactCertTxnFields are all zero,
+// Empty returns whether the StateProofTxnFields are all zero,
 // in the sense of being omitted in a msgpack encoding.
-func (cc CompactCertTxnFields) Empty() bool {
-	if cc.CertIntervalLatestRound != 0 {
+func (sp StateProofTxnFields) Empty() bool {
+	if sp.StateProofIntervalLatestRound != 0 {
 		return false
 	}
-	if !cc.Cert.SigCommit.IsEmpty() || cc.Cert.SignedWeight != 0 {
+	if !sp.StateProof.SigCommit.IsEmpty() || sp.StateProof.SignedWeight != 0 {
 		return false
 	}
-	if len(cc.Cert.SigProofs.Path) != 0 || len(cc.Cert.PartProofs.Path) != 0 {
+	if len(sp.StateProof.SigProofs.Path) != 0 || len(sp.StateProof.PartProofs.Path) != 0 {
 		return false
 	}
-	if len(cc.Cert.Reveals) != 0 {
+	if len(sp.StateProof.Reveals) != 0 {
 		return false
 	}
-	if !cc.CertMsg.MsgIsZero() {
+	if !sp.StateProofMessage.MsgIsZero() {
 		return false
 	}
 
@@ -65,9 +65,9 @@ func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.SpecialAddr, []byte(a)
 }
 
-// CompactCertSender is the computed address for sending out compact certs.
-var CompactCertSender basics.Address
+// StateProofSender is the computed address for sending out compact certs.
+var StateProofSender basics.Address
 
 func init() {
-	CompactCertSender = basics.Address(crypto.HashObj(specialAddr("CompactCertSender")))
+	StateProofSender = basics.Address(crypto.HashObj(specialAddr("StateProofSender")))
 }

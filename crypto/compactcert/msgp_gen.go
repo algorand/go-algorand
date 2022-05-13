@@ -9,7 +9,7 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// Cert
+// StateProof
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg

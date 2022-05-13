@@ -178,14 +178,14 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	proto.CompactCertRounds = 256
+	proto.StateProofInterval = 256
 	config.Consensus[ccProto] = proto
 
 	stxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
 			Type: protocol.CompactCertTx,
 			Header: transactions.Header{
-				Sender:     transactions.CompactCertSender,
+				Sender:     transactions.StateProofSender,
 				FirstValid: 0,
 				LastValid:  10,
 			},
@@ -212,7 +212,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	stxn2.Txn.Type = protocol.PaymentTx
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	err = Txn(&stxn2, 0, groupCtx)
-	require.Error(t, err, "payment txn %#v verified from CompactCertSender", stxn2)
+	require.Error(t, err, "payment txn %#v verified from StateProofSender", stxn2)
 
 	secret := keypair()
 	stxn2 = stxn
@@ -220,7 +220,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	stxn2 = stxn2.Txn.Sign(secret)
 	err = Txn(&stxn2, 0, groupCtx)
-	require.Error(t, err, "compact cert txn %#v verified from non-CompactCertSender", stxn2)
+	require.Error(t, err, "compact cert txn %#v verified from non-StateProofSender", stxn2)
 
 	// Compact cert txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn

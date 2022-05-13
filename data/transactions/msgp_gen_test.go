@@ -315,7 +315,7 @@ func BenchmarkUnmarshalAssetTransferTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalCompactCertTxnFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := CompactCertTxnFields{}
+	v := StateProofTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -335,11 +335,11 @@ func TestMarshalUnmarshalCompactCertTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingCompactCertTxnFields(t *testing.T) {
-	protocol.RunEncodingTest(t, &CompactCertTxnFields{})
+	protocol.RunEncodingTest(t, &StateProofTxnFields{})
 }
 
 func BenchmarkMarshalMsgCompactCertTxnFields(b *testing.B) {
-	v := CompactCertTxnFields{}
+	v := StateProofTxnFields{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -348,7 +348,7 @@ func BenchmarkMarshalMsgCompactCertTxnFields(b *testing.B) {
 }
 
 func BenchmarkAppendMsgCompactCertTxnFields(b *testing.B) {
-	v := CompactCertTxnFields{}
+	v := StateProofTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -360,7 +360,7 @@ func BenchmarkAppendMsgCompactCertTxnFields(b *testing.B) {
 }
 
 func BenchmarkUnmarshalCompactCertTxnFields(b *testing.B) {
-	v := CompactCertTxnFields{}
+	v := StateProofTxnFields{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

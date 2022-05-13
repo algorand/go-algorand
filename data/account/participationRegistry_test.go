@@ -46,7 +46,7 @@ import (
 )
 
 // TODO: change to ConsensusCurrentVersion when updated
-var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].StateProofInterval
 
 func getRegistry(t testing.TB) (registry *participationDB, dbfile string) {
 	return getRegistryImpl(t, true, false)

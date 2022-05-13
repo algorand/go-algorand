@@ -236,7 +236,7 @@ func TestCowCompactCert(t *testing.T) {
 	certHdr.CurrentProtocol = "TestCowCompactCert"
 	certHdr.Round = 1
 	proto := config.Consensus[certHdr.CurrentProtocol]
-	proto.CompactCertRounds = 2
+	proto.StateProofInterval = 2
 	config.Consensus[certHdr.CurrentProtocol] = proto
 	blocks[certHdr.Round] = certHdr
 

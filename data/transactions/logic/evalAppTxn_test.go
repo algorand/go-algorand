@@ -711,7 +711,7 @@ func TestKeyReg(t *testing.T) {
 `
 		ep, tx, ledger := MakeSampleEnv()
 		ep.Proto.EnableStateProofKeyregCheck = true
-		ep.Proto.MaxKeyregValidPeriod = ((1 << 16) * 256) - 1 // 2^16 StateProof keys times CompactCertRounds (interval)
+		ep.Proto.MaxKeyregValidPeriod = ((1 << 16) * 256) - 1 // 2^16 StateProof keys times StateProofInterval (interval)
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(appAddr(888), ep.Proto.MinTxnFee)
 		TestApp(t, params+keyreg, ep)
@@ -729,7 +729,7 @@ func TestKeyReg(t *testing.T) {
 `
 		ep, tx, ledger := MakeSampleEnv()
 		ep.Proto.EnableStateProofKeyregCheck = true
-		ep.Proto.MaxKeyregValidPeriod = ((1 << 16) * 256) - 1 // 2^16 StateProof keys times CompactCertRounds (interval)
+		ep.Proto.MaxKeyregValidPeriod = ((1 << 16) * 256) - 1 // 2^16 StateProof keys times StateProofInterval (interval)
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(appAddr(888), ep.Proto.MinTxnFee)
 		TestApp(t, params+keyreg, ep, "validity period for keyreg transaction is too long") // VoteLast is +1 over the limit

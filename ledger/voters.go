@@ -42,11 +42,11 @@ type votersTracker struct {
 	//
 	// To avoid increasing block latency, we include a Merkle commitment
 	// to the top online accounts as of block X in the block header of
-	// block X+CompactCertVotersLookback.  This gives each node some time
+	// block X+StateProofVotersLookback.  This gives each node some time
 	// to construct this Merkle tree, before its root is needed in a block.
 	//
 	// This round map is indexed by the block X, using the terminology from
-	// the above example, to be used in X+CompactCertVotersLookback.
+	// the above example, to be used in X+StateProofVotersLookback.
 	//
 	// We maintain round entries for two reasons:
 	//
@@ -55,10 +55,10 @@ type votersTracker struct {
 	// the tree to propose and validate a block.
 	//
 	// The second is to construct compact certificates.  Compact certificates
-	// are formed for blocks that are a multiple of CompactCertRounds, using
+	// are formed for blocks that are a multiple of StateProofInterval, using
 	// the Merkle commitment to online accounts from the previous such block.
 	// Thus, we maintain X in the round map until we form a compact certificate
-	// for round X+CompactCertVotersLookback+CompactCertRounds.
+	// for round X+StateProofVotersLookback+StateProofInterval.
 	round map[basics.Round]*ledgercore.VotersForRound
 
 	l  ledgerForTracker
@@ -73,10 +73,10 @@ type votersTracker struct {
 // will be used to sign the compact cert for certRnd.
 func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams) basics.Round {
 	// To form a compact certificate for round certRnd,
-	// we need a commitment to the voters CompactCertRounds
+	// we need a commitment to the voters StateProofInterval
 	// before that, and the voters information from
-	// CompactCertVotersLookback before that.
-	return certRnd.SubSaturate(basics.Round(proto.CompactCertRounds)).SubSaturate(basics.Round(proto.CompactCertVotersLookback))
+	// StateProofVotersLookback before that.
+	return certRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
@@ -91,20 +91,20 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 || hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
+	if proto.StateProofInterval == 0 || hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
+	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
-			hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
+			hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
 
-	for r := startR; r <= latest; r += basics.Round(proto.CompactCertRounds) {
+	for r := startR; r <= latest; r += basics.Round(proto.StateProofInterval) {
 		hdr, err = l.BlockHdr(r)
 		if err != nil {
 			return err
@@ -126,7 +126,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	}
 
 	proto := config.Consensus[hdr.CurrentProtocol]
-	if proto.CompactCertRounds == 0 {
+	if proto.StateProofInterval == 0 {
 		// No compact certs.
 		return
 	}
@@ -158,16 +158,16 @@ func (vt *votersTracker) close() {
 
 func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	proto := config.Consensus[hdr.CurrentProtocol]
-	if proto.CompactCertRounds == 0 {
+	if proto.StateProofInterval == 0 {
 		// No compact certs.
 		return
 	}
 
 	// Check if any blocks can be forgotten because the compact cert is available.
 	for r, tr := range vt.round {
-		commitRound := r + basics.Round(tr.Proto.CompactCertVotersLookback)
-		certRound := commitRound + basics.Round(tr.Proto.CompactCertRounds)
-		if certRound < hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
+		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
+		certRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
+		if certRound < hdr.CompactCert[protocol.CompactCertBasic].StateProofNextRound {
 			delete(vt.round, r)
 		}
 	}
@@ -176,7 +176,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	// to eventually construct a merkle tree for commitment in a later
 	// block.
 	r := uint64(hdr.Round)
-	if (r+proto.CompactCertVotersLookback)%proto.CompactCertRounds == 0 {
+	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval == 0 {
 		_, ok := vt.round[basics.Round(r)]
 		if ok {
 			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)

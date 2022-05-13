@@ -161,7 +161,7 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	certenc := protocol.Encode(&cert)
-	fmt.Printf("Cert size:\n")
+	fmt.Printf("StateProof size:\n")
 	fmt.Printf("  %6d elems sigproofs\n", len(cert.SigProofs.Path))
 	fmt.Printf("  %6d bytes sigproofs\n", len(protocol.EncodeReflect(cert.SigProofs)))
 	fmt.Printf("  %6d bytes partproofs\n", len(protocol.EncodeReflect(cert.PartProofs)))

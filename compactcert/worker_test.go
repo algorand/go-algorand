@@ -72,7 +72,7 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
 	}
 	s.latest--
-	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds))
+	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
 	return s
 }
 
@@ -84,18 +84,18 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
 	var ccBasic = bookkeeping.CompactCertState{
-		CompactCertVoters:      make([]byte, compactcert.HashSize),
-		CompactCertVotersTotal: basics.MicroAlgos{},
-		CompactCertNextRound:   0,
+		StateProofVotersCommitment:  make([]byte, compactcert.HashSize),
+		StateProofVotersTotalWeight: basics.MicroAlgos{},
+		StateProofNextRound:         0,
 	}
-	ccBasic.CompactCertVotersTotal.Raw = uint64(s.totalWeight)
+	ccBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
 		// Just so it's not zero, since the signer logic checks for all-zeroes
-		ccBasic.CompactCertVoters[1] = 0x12
+		ccBasic.StateProofVotersCommitment[1] = 0x12
 	}
 
-	ccBasic.CompactCertNextRound = ccNextRound
+	ccBasic.StateProofNextRound = ccNextRound
 	hdr.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
 		protocol.CompactCertBasic: ccBasic,
 	}
@@ -221,7 +221,7 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	defer s.mu.Unlock()
 
 	for r := uint64(0); r < delta; r++ {
-		s.addBlock(s.blocks[s.latest].CompactCert[protocol.CompactCertBasic].CompactCertNextRound)
+		s.addBlock(s.blocks[s.latest].CompactCert[protocol.CompactCertBasic].StateProofNextRound)
 	}
 }
 
@@ -241,7 +241,7 @@ func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipat
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].CompactCertRounds), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].StateProofInterval), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
 
 	return part
@@ -265,12 +265,12 @@ func TestWorkerAllSigs(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(proto.CompactCertRounds + proto.CompactCertRounds/2)
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	// Go through several iterations, making sure that we get
 	// the signatures and certs broadcast at each round.
 	for iter := 0; iter < 5; iter++ {
-		s.advanceLatest(proto.CompactCertRounds)
+		s.advanceLatest(proto.StateProofInterval)
 
 		for i := 0; i < len(keys); i++ {
 			// Expect all signatures to be broadcast.
@@ -281,26 +281,26 @@ func TestWorkerAllSigs(t *testing.T) {
 		for {
 			tx := <-s.txmsg
 			require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
-			if tx.Txn.CertIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.CompactCertRounds) {
+			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
 
-			require.Equal(t, tx.Txn.CertIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.CompactCertRounds))
+			require.Equal(t, tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			msg, err := GenerateStateProofMessage(s, tx.Txn.CertIntervalLatestRound, proto.CompactCertRounds)
+			msg, err := GenerateStateProofMessage(s, tx.Txn.StateProofIntervalLatestRound, proto.StateProofInterval)
 			require.NoError(t, err)
-			require.Equal(t, msg, tx.Txn.CertMsg)
+			require.Equal(t, msg, tx.Txn.StateProofMessage)
 
-			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
+			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
-			voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
+			voters, err := s.CompactCertVoters(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 			require.NoError(t, err)
 
-			verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.CompactCertStrengthTarget)
+			verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 			require.NoError(t, err)
 
-			err = verif.Verify(uint64(tx.Txn.CertIntervalLatestRound), tx.Txn.CertMsg.IntoStateProofMessageHash(), &tx.Txn.Cert)
+			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 			require.NoError(t, err)
 			break
 		}
@@ -325,8 +325,8 @@ func TestWorkerPartialSigs(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(proto.CompactCertRounds + proto.CompactCertRounds/2)
-	s.advanceLatest(proto.CompactCertRounds)
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+	s.advanceLatest(proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -340,25 +340,25 @@ func TestWorkerPartialSigs(t *testing.T) {
 	case <-time.After(time.Second):
 	}
 
-	// Expect a compact cert to be formed in the next CompactCertRounds/2.
-	s.advanceLatest(proto.CompactCertRounds / 2)
+	// Expect a compact cert to be formed in the next StateProofInterval/2.
+	s.advanceLatest(proto.StateProofInterval / 2)
 	tx := <-s.txmsg
 	require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
-	require.Equal(t, tx.Txn.CertIntervalLatestRound, 2*basics.Round(proto.CompactCertRounds))
+	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
 
-	msg, err := GenerateStateProofMessage(s, tx.Txn.CertIntervalLatestRound, proto.CompactCertRounds)
+	msg, err := GenerateStateProofMessage(s, tx.Txn.StateProofIntervalLatestRound, proto.StateProofInterval)
 	require.NoError(t, err)
-	require.Equal(t, msg, tx.Txn.CertMsg)
+	require.Equal(t, msg, tx.Txn.StateProofMessage)
 
-	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
+	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
-	voters, err := s.CompactCertVoters(tx.Txn.CertIntervalLatestRound - basics.Round(proto.CompactCertRounds) - basics.Round(proto.CompactCertVotersLookback))
+	voters, err := s.CompactCertVoters(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 	require.NoError(t, err)
 
-	verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.CompactCertStrengthTarget)
+	verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 	require.NoError(t, err)
-	err = verif.Verify(uint64(tx.Txn.CertIntervalLatestRound), msg.IntoStateProofMessageHash(), &tx.Txn.Cert)
+	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), msg.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 	require.NoError(t, err)
 }
 
@@ -380,7 +380,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(3 * proto.CompactCertRounds)
+	s.advanceLatest(3 * proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -410,7 +410,7 @@ func TestWorkerRestart(t *testing.T) {
 	s := newWorkerStubs(t, keys, 10)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(3*proto.CompactCertRounds - 1)
+	s.advanceLatest(3*proto.StateProofInterval - 1)
 
 	dbRand := crypto.RandUint64()
 
@@ -456,7 +456,7 @@ func TestWorkerHandleSig(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(3 * proto.CompactCertRounds)
+	s.advanceLatest(3 * proto.StateProofInterval)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -490,11 +490,11 @@ func TestSignerDeletesUnneededStateProofKeys(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(3 * proto.CompactCertRounds)
+	s.advanceLatest(3 * proto.StateProofInterval)
 	// Expect all signatures to be broadcast.
 
 	require.Zero(t, len(s.deletedStateProofKeys))
-	w.signBlock(s.blocks[basics.Round(proto.CompactCertRounds)])
+	w.signBlock(s.blocks[basics.Round(proto.StateProofInterval)])
 	require.Equal(t, len(s.deletedStateProofKeys), nParticipants)
 }
 
@@ -515,7 +515,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 	proto := config.Consensus[protocol.ConsensusFuture]
-	s.advanceLatest(3 * proto.CompactCertRounds)
+	s.advanceLatest(3 * proto.StateProofInterval)
 	// Expect all signatures to be broadcast.
 
 	require.NoError(t, w.db.Atomic(
@@ -526,6 +526,6 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	)
 
 	s.deletedStateProofKeys = map[account.ParticipationID]basics.Round{}
-	w.signBlock(s.blocks[3*basics.Round(proto.CompactCertRounds)])
+	w.signBlock(s.blocks[3*basics.Round(proto.StateProofInterval)])
 	require.Zero(t, len(s.deletedStateProofKeys))
 }

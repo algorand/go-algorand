@@ -218,23 +218,23 @@ type (
 	CompactCertState struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		// CompactCertVoters is the root of a Merkle tree containing the
-		// online accounts that will help sign a compact certificate.  The
-		// Merkle root, and the compact certificate, happen on blocks that
-		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
-		// that are not a multiple of ConsensusParams.CompactCertRounds,
+		// StateProofVotersCommitment is the root of a vector commitment containing the
+		// online accounts that will help sign a stateproof.  The
+		// VC root, and the stateproof, happen on blocks that
+		// are a multiple of ConsensusParams.StateProofRounds.  For blocks
+		// that are not a multiple of ConsensusParams.StateProofRounds,
 		// this value is zero.
-		CompactCertVoters crypto.GenericDigest `codec:"v"`
+		StateProofVotersCommitment crypto.GenericDigest `codec:"v"`
 
-		// CompactCertVotersTotal is the total number of microalgos held by
-		// the accounts in CompactCertVoters (or zero, if the merkle root is
+		// StateProofVotersTotalWeight is the total number of microalgos held by
+		// the accounts in StateProofVotersCommitment (or zero, if the merkle root is
 		// zero).  This is intended for computing the threshold of votes to
-		// expect from CompactCertVoters.
-		CompactCertVotersTotal basics.MicroAlgos `codec:"t"`
+		// expect from StateProofVotersCommitment.
+		StateProofVotersTotalWeight basics.MicroAlgos `codec:"t"`
 
-		// CompactCertNextRound is the next round for which we will accept
-		// a CompactCert transaction.
-		CompactCertNextRound basics.Round `codec:"n"`
+		// StateProofNextRound is the next round for which we will accept
+		// a StateProof transaction.
+		StateProofNextRound basics.Round `codec:"n"`
 	}
 
 	// A Block contains the Payset and metadata corresponding to a given Round.

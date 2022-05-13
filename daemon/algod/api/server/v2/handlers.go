@@ -1203,7 +1203,7 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 		return notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
 	}
 
-	txns, err := v2.Node.ListTxns(transactions.CompactCertSender, basics.Round(round), ledger.Latest())
+	txns, err := v2.Node.ListTxns(transactions.StateProofSender, basics.Round(round), ledger.Latest())
 	if err != nil {
 		return internalError(ctx, err, errNilLedger.Error(), v2.Log)
 	}
@@ -1226,13 +1226,13 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 			continue
 		}
 
-		if basics.Round(round) > tx.CompactCertTxnFields.CertIntervalLatestRound {
+		if basics.Round(round) > tx.StateProofTxnFields.StateProofIntervalLatestRound {
 			continue
 		}
 
 		response := generated.StateProofResponse{
-			StateProofMessage: protocol.Encode(&tx.CertMsg),
-			StateProof:        protocol.Encode(&tx.Cert),
+			StateProofMessage: protocol.Encode(&tx.StateProofMessage),
+			StateProof:        protocol.Encode(&tx.StateProof),
 		}
 		return ctx.JSON(http.StatusOK, response)
 	}

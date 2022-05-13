@@ -218,7 +218,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		// check ensures that this transaction cannot pay any fee, and
 		// cannot have any other interesting fields, except for the compact
 		// cert payload.
-		if s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx {
+		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.CompactCertTx {
 			return nil
 		}
 

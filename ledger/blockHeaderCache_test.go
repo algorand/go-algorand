@@ -91,5 +91,5 @@ func TestCacheSizeConsensus(t *testing.T) {
 	a := require.New(t)
 
 	// TODO Stateproof: change to CurrentVersion when feature is enabled
-	a.Equal(uint64(latestHeaderCacheSize), config.Consensus[protocol.ConsensusFuture].CompactCertRounds*2)
+	a.Equal(uint64(latestHeaderCacheSize), config.Consensus[protocol.ConsensusFuture].StateProofInterval*2)
 }

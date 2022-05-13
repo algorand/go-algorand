@@ -97,7 +97,7 @@ type Transaction struct {
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
 	ApplicationCallTxnFields
-	CompactCertTxnFields
+	StateProofTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -472,7 +472,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 
 	case protocol.CompactCertTx:
-		if proto.CompactCertRounds == 0 {
+		if proto.StateProofInterval == 0 {
 			return fmt.Errorf("compact certs not supported")
 		}
 
@@ -480,7 +480,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// on the ledger, and ensure they are broadly available.  Most of
 		// the fields must be empty.  It must be issued from a special
 		// sender address.
-		if tx.Sender != CompactCertSender {
+		if tx.Sender != StateProofSender {
 			return fmt.Errorf("sender must be the compact-cert sender")
 		}
 		if !tx.Fee.IsZero() {
@@ -528,7 +528,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
-	if !tx.CompactCertTxnFields.Empty() {
+	if !tx.StateProofTxnFields.Empty() {
 		nonZeroFields[protocol.CompactCertTx] = true
 	}
 

@@ -985,7 +985,7 @@ func TestStateProofNotFound(t *testing.T) {
 		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 	}
 
-	handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = []node.TxnWithStatus{}
+	handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = []node.TxnWithStatus{}
 
 	// we didn't add any certificate
 	a.NoError(handler.StateProof(ctx, 5))
@@ -1021,15 +1021,15 @@ func TestStateProof200(t *testing.T) {
 	}
 
 	//setting
-	for i := 0; i < 300; i += int(config.Consensus[protocol.ConsensusFuture].CompactCertRounds) {
+	for i := 0; i < 300; i += int(config.Consensus[protocol.ConsensusFuture].StateProofInterval) {
 		tx := node.TxnWithStatus{
 			Txn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.CompactCertTx,
-					CompactCertTxnFields: transactions.CompactCertTxnFields{
-						CertIntervalLatestRound: basics.Round(i + 1),
-						CertType:                0,
-						CertMsg: stateproof.Message{
+					StateProofTxnFields: transactions.StateProofTxnFields{
+						StateProofIntervalLatestRound: basics.Round(i + 1),
+						StateProofType:                0,
+						StateProofMessage: stateproof.Message{
 							BlockHeadersCommitment: []byte("blockheaderscommitment"),
 						},
 					},
@@ -1037,7 +1037,7 @@ func TestStateProof200(t *testing.T) {
 			},
 			ConfirmedRound: basics.Round(i + 1),
 		}
-		handler.Node.(*mockNode).usertxns[transactions.CompactCertSender] = append(handler.Node.(*mockNode).usertxns[transactions.CompactCertSender], tx)
+		handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = append(handler.Node.(*mockNode).usertxns[transactions.StateProofSender], tx)
 	}
 
 	// we didn't add any certificate

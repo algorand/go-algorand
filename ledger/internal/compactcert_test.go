@@ -49,9 +49,9 @@ func TestValidateCompactCert(t *testing.T) {
 	certHdr.CurrentProtocol = "TestValidateCompactCert"
 	certHdr.Round = 1
 	proto := config.Consensus[certHdr.CurrentProtocol]
-	proto.CompactCertRounds = 2
-	proto.CompactCertStrengthTarget = 256
-	proto.CompactCertWeightThreshold = (1 << 32) * 30 / 100
+	proto.StateProofInterval = 2
+	proto.StateProofStrengthTarget = 256
+	proto.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	config.Consensus[certHdr.CurrentProtocol] = proto
 
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
@@ -86,7 +86,7 @@ func TestValidateCompactCert(t *testing.T) {
 
 	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
 	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
-	cc.CompactCertVotersTotal.Raw = 100
+	cc.StateProofVotersTotalWeight.Raw = 100
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
 	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
@@ -112,14 +112,14 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 
 	votersHdr.CurrentProtocol = "TestAcceptableCompactCertWeight"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
-	proto.CompactCertRounds = 2
+	proto.StateProofInterval = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	out := AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0), out)
 
 	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
 	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
-	cc.CompactCertVotersTotal.Raw = 100
+	cc.StateProofVotersTotalWeight.Raw = 100
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
 	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
@@ -130,18 +130,18 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	require.Equal(t, uint64(100), out)
 
 	firstValid = basics.Round(6)
-	proto.CompactCertWeightThreshold = 999999999
+	proto.StateProofWeightThreshold = 999999999
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x17), out)
 
-	proto.CompactCertRounds = 10000
+	proto.StateProofInterval = 10000
 	votersHdr.Round = 10000
 	firstValid = basics.Round(29000 - 2)
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	cc.CompactCertVotersTotal.Raw = 0x7fffffffffffffff
+	cc.StateProofVotersTotalWeight.Raw = 0x7fffffffffffffff
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
-	proto.CompactCertWeightThreshold = 0x7fffffff
+	proto.StateProofWeightThreshold = 0x7fffffff
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x4cd35a85213a92a2), out)
@@ -160,7 +160,7 @@ func TestCompactCertParams(t *testing.T) {
 
 	votersHdr.CurrentProtocol = "TestCompactCertParams"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
-	proto.CompactCertRounds = 2
+	proto.StateProofInterval = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
 	_, err = GetProvenWeight(votersHdr, hdr)

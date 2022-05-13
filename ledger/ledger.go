@@ -778,7 +778,7 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHea
 // particular firstValid round.  Earlier rounds require a smaller cert.
 // votersHdr specifies the block that contains the Merkle commitment of
 // the voters for this compact cert (and thus the compact cert is for
-// votersHdr.Round() + CompactCertRounds).
+// votersHdr.Round() + StateProofInterval).
 //
 // logger must not be nil; use at least logging.Base()
 func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {

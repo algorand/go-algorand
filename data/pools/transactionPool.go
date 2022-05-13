@@ -334,7 +334,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	// no fee.
 	if len(txgroup) == 1 {
 		t := txgroup[0].Txn
-		if t.Type == protocol.CompactCertTx && t.Sender == transactions.CompactCertSender && t.Fee.IsZero() {
+		if t.Type == protocol.CompactCertTx && t.Sender == transactions.StateProofSender && t.Fee.IsZero() {
 			return nil
 		}
 	}

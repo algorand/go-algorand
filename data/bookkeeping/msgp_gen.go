@@ -1730,15 +1730,15 @@ func (z *CompactCertState) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).CompactCertNextRound.MsgIsZero() {
+	if (*z).StateProofNextRound.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).CompactCertVotersTotal.MsgIsZero() {
+	if (*z).StateProofVotersTotalWeight.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).CompactCertVoters.MsgIsZero() {
+	if (*z).StateProofVotersCommitment.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -1748,17 +1748,17 @@ func (z *CompactCertState) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "n"
 			o = append(o, 0xa1, 0x6e)
-			o = (*z).CompactCertNextRound.MarshalMsg(o)
+			o = (*z).StateProofNextRound.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
-			o = (*z).CompactCertVotersTotal.MarshalMsg(o)
+			o = (*z).StateProofVotersTotalWeight.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "v"
 			o = append(o, 0xa1, 0x76)
-			o = (*z).CompactCertVoters.MarshalMsg(o)
+			o = (*z).StateProofVotersCommitment.MarshalMsg(o)
 		}
 	}
 	return
@@ -1784,25 +1784,25 @@ func (z *CompactCertState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).CompactCertVoters.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofVotersCommitment.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCertVoters")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofVotersCommitment")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).CompactCertVotersTotal.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofVotersTotalWeight.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCertVotersTotal")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofVotersTotalWeight")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).CompactCertNextRound.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofNextRound.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CompactCertNextRound")
+				err = msgp.WrapError(err, "struct-from-array", "StateProofNextRound")
 				return
 			}
 		}
@@ -1830,21 +1830,21 @@ func (z *CompactCertState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "v":
-				bts, err = (*z).CompactCertVoters.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofVotersCommitment.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCertVoters")
+					err = msgp.WrapError(err, "StateProofVotersCommitment")
 					return
 				}
 			case "t":
-				bts, err = (*z).CompactCertVotersTotal.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofVotersTotalWeight.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCertVotersTotal")
+					err = msgp.WrapError(err, "StateProofVotersTotalWeight")
 					return
 				}
 			case "n":
-				bts, err = (*z).CompactCertNextRound.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofNextRound.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "CompactCertNextRound")
+					err = msgp.WrapError(err, "StateProofNextRound")
 					return
 				}
 			default:
@@ -1867,13 +1867,13 @@ func (_ *CompactCertState) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CompactCertState) Msgsize() (s int) {
-	s = 1 + 2 + (*z).CompactCertVoters.Msgsize() + 2 + (*z).CompactCertVotersTotal.Msgsize() + 2 + (*z).CompactCertNextRound.Msgsize()
+	s = 1 + 2 + (*z).StateProofVotersCommitment.Msgsize() + 2 + (*z).StateProofVotersTotalWeight.Msgsize() + 2 + (*z).StateProofNextRound.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CompactCertState) MsgIsZero() bool {
-	return ((*z).CompactCertVoters.MsgIsZero()) && ((*z).CompactCertVotersTotal.MsgIsZero()) && ((*z).CompactCertNextRound.MsgIsZero())
+	return ((*z).StateProofVotersCommitment.MsgIsZero()) && ((*z).StateProofVotersTotalWeight.MsgIsZero()) && ((*z).StateProofNextRound.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
