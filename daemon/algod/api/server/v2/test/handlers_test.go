@@ -41,7 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproof"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
@@ -1029,7 +1029,7 @@ func TestStateProof200(t *testing.T) {
 					StateProofTxnFields: transactions.StateProofTxnFields{
 						StateProofIntervalLatestRound: basics.Round(i + 1),
 						StateProofType:                0,
-						StateProofMessage: stateproof.Message{
+						StateProofMessage: stateproofmsg.Message{
 							BlockHeadersCommitment: []byte("blockheaderscommitment"),
 						},
 					},
@@ -1047,7 +1047,7 @@ func TestStateProof200(t *testing.T) {
 	stprfResp := generated.StateProofResponse{}
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
 
-	msg := stateproof.Message{}
+	msg := stateproofmsg.Message{}
 	a.NoError(protocol.Decode(stprfResp.StateProofMessage, &msg))
 	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
 }

@@ -28,12 +28,12 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproof"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // sigFromAddr encapsulates a signature on a block header, which
-// will eventually be used to form a compact certificate for that
+// will eventually be used to form a state proof for that
 // block.
 type sigFromAddr struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -110,9 +110,9 @@ restart:
 // GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
 // This is the message the Compact Certificate will attest to.
-func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (stateproof.Message, error) {
+func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (stateproofmsg.Message, error) {
 	if compactCertRound < basics.Round(compactCertInterval) {
-		return stateproof.Message{}, fmt.Errorf("GenerateStateProofMessage compactCertRound must be >= than compactCertInterval (%w)", errInvalidParams)
+		return stateproofmsg.Message{}, fmt.Errorf("GenerateStateProofMessage stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 	var blkHdrArr blockHeadersArray
 	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, compactCertInterval)
@@ -121,7 +121,7 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 		rnd := firstRound + basics.Round(i)
 		hdr, err := ledger.BlockHdr(rnd)
 		if err != nil {
-			return stateproof.Message{}, err
+			return stateproofmsg.Message{}, err
 		}
 		blkHdrArr.blockHeaders[i] = hdr
 	}
@@ -129,10 +129,10 @@ func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, com
 	// Build merkle tree from encoded headers
 	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
 	if err != nil {
-		return stateproof.Message{}, err
+		return stateproofmsg.Message{}, err
 	}
 
-	return stateproof.Message{
+	return stateproofmsg.Message{
 		BlockHeadersCommitment: tree.Root().ToSlice(),
 	}, nil
 }

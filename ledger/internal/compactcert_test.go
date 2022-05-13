@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproof"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -39,7 +39,7 @@ func TestValidateCompactCert(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var nextCertRnd basics.Round
 	var atRound basics.Round
-	msg := stateproof.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
+	msg := stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
 	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)

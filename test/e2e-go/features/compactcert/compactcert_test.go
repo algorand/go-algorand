@@ -27,7 +27,7 @@ import (
 	cc "github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/stateproof"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -125,7 +125,7 @@ func TestCompactCerts(t *testing.T) {
 			r.NoError(err)
 
 			var compactCert cc.Cert
-			var certMessage stateproof.Message
+			var certMessage stateproofmsg.Message
 			compactCertFound := false
 			for _, txn := range res.Transactions {
 				r.Equal(txn.Type, string(protocol.CompactCertTx))
