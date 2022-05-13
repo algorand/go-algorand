@@ -1396,6 +1396,12 @@
               "type": "string",
               "format": "binary"
             }
+          }, 
+          {
+            "name": "sourcemap",
+            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
+            "in": "query",
+            "type": "boolean"
           }
         ],
         "responses": {
@@ -3105,6 +3111,10 @@
           "result": {
             "description": "base64 encoded program bytes",
             "type": "string"
+          },
+          "sourcemap": {
+            "description": "JSON of the source map",
+            "type": "object"
           }
         }
       }
