@@ -1396,6 +1396,12 @@
               "type": "string",
               "format": "binary"
             }
+          }, 
+          {
+            "name": "sourcemap",
+            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
+            "in": "query",
+            "type": "boolean"
           }
         ],
         "responses": {
@@ -1432,7 +1438,7 @@
     },
     "/v2/teal/disassemble": {
       "post": {
-        "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "description": "Given the program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "consumes": [
           "application/x-binary"
         ],
@@ -3105,6 +3111,10 @@
           "result": {
             "description": "base64 encoded program bytes",
             "type": "string"
+          },
+          "sourcemap": {
+            "description": "JSON of the source map",
+            "type": "object"
           }
         }
       }
