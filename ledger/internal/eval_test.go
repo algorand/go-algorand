@@ -24,17 +24,17 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproof"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -199,15 +199,15 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
 
-func TestCowCompactCert(t *testing.T) {
+func TestCowStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var certRnd basics.Round
-	var certType protocol.CompactCertType
-	var cert compactcert.Cert
+	var spRnd basics.Round
+	var spType protocol.StateProofType
+	var stateProof stateproof.StateProof
 	var atRound basics.Round
 	var validate bool
-	msg := stateproof.Message{}
+	msg := stateproofmsg.Message{}
 
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
@@ -217,45 +217,45 @@ func TestCowCompactCert(t *testing.T) {
 		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
 		0, ledgercore.AccountTotals{}, 0)
 
-	certType = protocol.CompactCertType(1234) // bad cert type
-	err := c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	spType = protocol.StateProofType(1234) // bad stateproof type
+	err := c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
-	// no certRnd block
-	certType = protocol.CompactCertBasic
+	// no spRnd block
+	spType = protocol.StateProofBasic
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
-	certRnd = 3
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	spRnd = 3
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no votersRnd block
 	// this is slightly a mess of things that don't quite line up with likely usage
 	validate = true
-	var certHdr bookkeeping.BlockHeader
-	certHdr.CurrentProtocol = "TestCowCompactCert"
-	certHdr.Round = 1
-	proto := config.Consensus[certHdr.CurrentProtocol]
-	proto.CompactCertRounds = 2
-	config.Consensus[certHdr.CurrentProtocol] = proto
-	blocks[certHdr.Round] = certHdr
+	var spHdr bookkeeping.BlockHeader
+	spHdr.CurrentProtocol = "TestCowStateProof"
+	spHdr.Round = 1
+	proto := config.Consensus[spHdr.CurrentProtocol]
+	proto.StateProofInterval = 2
+	config.Consensus[spHdr.CurrentProtocol] = proto
+	blocks[spHdr.Round] = spHdr
 
-	certHdr.Round = 15
-	blocks[certHdr.Round] = certHdr
-	certRnd = certHdr.Round
+	spHdr.Round = 15
+	blocks[spHdr.Round] = spHdr
+	spRnd = spHdr.Round
 	blockErr[13] = noBlockErr
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
 	// validate fail
-	certHdr.Round = 1
-	certRnd = certHdr.Round
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	spHdr.Round = 1
+	spRnd = spHdr.Round
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
 	// fall through to no err
 	validate = false
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.NoError(t, err)
 
 	// 100% coverage
@@ -626,7 +626,7 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 	return block.BlockHeader, nil
 }
 
-func (ledger *evalTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, errors.New("untested code path")
 }
 

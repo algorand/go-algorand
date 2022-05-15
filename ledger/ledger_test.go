@@ -80,15 +80,15 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 		correctHeader.TxnCounter = lastBlock.TxnCounter
 	}
 
-	if proto.CompactCertRounds > 0 {
-		var ccBasic bookkeeping.CompactCertState
-		if lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
-			ccBasic.CompactCertNextRound = (correctHeader.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds)) + basics.Round(proto.CompactCertRounds)
+	if proto.StateProofInterval > 0 {
+		var ccBasic bookkeeping.StateProofTrackingData
+		if lastBlock.StateProofTracking[protocol.StateProofBasic].StateProofNextRound == 0 {
+			ccBasic.StateProofNextRound = (correctHeader.Round + basics.Round(proto.StateProofVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.StateProofInterval)) + basics.Round(proto.StateProofInterval)
 		} else {
-			ccBasic.CompactCertNextRound = lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
+			ccBasic.StateProofNextRound = lastBlock.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 		}
-		correctHeader.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
-			protocol.CompactCertBasic: ccBasic,
+		correctHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+			protocol.StateProofBasic: ccBasic,
 		}
 	}
 }

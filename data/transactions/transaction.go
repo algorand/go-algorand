@@ -97,7 +97,7 @@ type Transaction struct {
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
 	ApplicationCallTxnFields
-	CompactCertTxnFields
+	StateProofTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -471,17 +471,17 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
 		}
 
-	case protocol.CompactCertTx:
-		if proto.CompactCertRounds == 0 {
-			return fmt.Errorf("compact certs not supported")
+	case protocol.StateProofTx:
+		if proto.StateProofInterval == 0 {
+			return fmt.Errorf("state proofs not supported")
 		}
 
-		// This is a placeholder transaction used to store compact certs
+		// This is a placeholder transaction used to store state proofs
 		// on the ledger, and ensure they are broadly available.  Most of
 		// the fields must be empty.  It must be issued from a special
 		// sender address.
-		if tx.Sender != CompactCertSender {
-			return fmt.Errorf("sender must be the compact-cert sender")
+		if tx.Sender != StateProofSender {
+			return fmt.Errorf("sender must be the state-proof sender")
 		}
 		if !tx.Fee.IsZero() {
 			return fmt.Errorf("fee must be zero")
@@ -528,8 +528,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
-	if !tx.CompactCertTxnFields.Empty() {
-		nonZeroFields[protocol.CompactCertTx] = true
+	if !tx.StateProofTxnFields.Empty() {
+		nonZeroFields[protocol.StateProofTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -539,8 +539,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	}
 
 	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
-		if tx.Type == protocol.CompactCertTx {
-			// Zero fee allowed for compact cert txn.
+		if tx.Type == protocol.StateProofTx {
+			// Zero fee allowed for stateProof txn.
 		} else {
 			return makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", tx.Fee.Raw, proto.MinTxnFee)
 		}

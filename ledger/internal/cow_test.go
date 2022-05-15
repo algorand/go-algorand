@@ -89,7 +89,7 @@ func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
 
-func (ml *mockLedger) compactCertNext() basics.Round {
+func (ml *mockLedger) stateProofNext() basics.Round {
 	return 0
 }
 

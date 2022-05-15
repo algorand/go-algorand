@@ -329,12 +329,12 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
-	// Special case: the compact cert transaction, if issued from the
-	// special compact-cert-sender address, in a singleton group, pays
+	// Special case: the state proof transaction, if issued from the
+	// special state-proof-sender address, in a singleton group, pays
 	// no fee.
 	if len(txgroup) == 1 {
 		t := txgroup[0].Txn
-		if t.Type == protocol.CompactCertTx && t.Sender == transactions.CompactCertSender && t.Fee.IsZero() {
+		if t.Type == protocol.StateProofTx && t.Sender == transactions.StateProofSender && t.Fee.IsZero() {
 			return nil
 		}
 	}

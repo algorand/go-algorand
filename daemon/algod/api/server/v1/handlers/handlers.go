@@ -93,8 +93,8 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res = assetFreezeTxEncode(tx, ad)
 	case protocol.ApplicationCallTx:
 		res = applicationCallTxEncode(tx, ad)
-	case protocol.CompactCertTx:
-		res = compactCertTxEncode(tx, ad)
+	case protocol.StateProofTx:
+		res = stateProofTxEncode(tx)
 	default:
 		return res, errors.New(errUnknownTransactionType)
 	}
@@ -351,15 +351,15 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	cc := v1.CompactCertTransactionType{
-		CertIntervalLatestRound: uint64(tx.CompactCertTxnFields.CertIntervalLatestRound),
-		Cert:                    protocol.Encode(&tx.CompactCertTxnFields.Cert),
-		CertMsg:                 protocol.Encode(&tx.CertMsg),
+func stateProofTxEncode(tx transactions.Transaction) v1.Transaction {
+	sp := v1.StateProofTransactionType{
+		StateProofIntervalLatestRound: uint64(tx.StateProofTxnFields.StateProofIntervalLatestRound),
+		StateProof:                    protocol.Encode(&tx.StateProofTxnFields.StateProof),
+		StateProofMessage:             protocol.Encode(&tx.StateProofMessage),
 	}
 
 	return v1.Transaction{
-		CompactCert: &cc,
+		StateProof: &sp,
 	}
 }
 
@@ -505,13 +505,6 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
-		CompactCertVotersTotal: b.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64(),
-		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
-	}
-
-	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
-		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
-		block.CompactCertVoters = voters[:]
 	}
 
 	// Transactions
