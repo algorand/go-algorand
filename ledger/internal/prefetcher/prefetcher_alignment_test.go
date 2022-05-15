@@ -162,7 +162,7 @@ func (l *prefetcherAlignmentTestLedger) GenesisProto() config.ConsensusParams {
 func (l *prefetcherAlignmentTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	return 0, ledgercore.AccountTotals{}, nil
 }
-func (l *prefetcherAlignmentTestLedger) CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error) {
+func (l *prefetcherAlignmentTestLedger) VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, nil
 }
 

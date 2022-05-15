@@ -559,34 +559,34 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.StateProofType, cert cc.Cert, certMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
-	if certType != protocol.StateProofBasic {
-		return fmt.Errorf("compact cert type %d not supported", certType)
+func (cs *roundCowState) stateProof(latestRoundInInterval basics.Round, spType protocol.StateProofType, stateProof cc.Cert, stateProofMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
+	if spType != protocol.StateProofBasic {
+		return fmt.Errorf("stateProof type %d not supported", spType)
 	}
 
-	nextCertRnd := cs.stateProofNext()
+	nextStateProofRnd := cs.stateProofNext()
 
-	certHdr, err := cs.blockHdr(certRnd)
+	latestRoundHdr, err := cs.blockHdr(latestRoundInInterval)
 	if err != nil {
 		return err
 	}
 
-	proto := config.Consensus[certHdr.CurrentProtocol]
+	proto := config.Consensus[latestRoundHdr.CurrentProtocol]
 
 	if validate {
-		votersRnd := certRnd.SubSaturate(basics.Round(proto.StateProofInterval))
+		votersRnd := latestRoundInInterval.SubSaturate(basics.Round(proto.StateProofInterval))
 		votersHdr, err := cs.blockHdr(votersRnd)
 		if err != nil {
 			return err
 		}
 
-		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, certMsg)
+		err = validateStateProof(latestRoundHdr, stateProof, votersHdr, nextStateProofRnd, atRound, stateProofMsg)
 		if err != nil {
 			return err
 		}
 	}
 
-	cs.setStateProofNext(certRnd + basics.Round(proto.StateProofInterval))
+	cs.setStateProofNext(latestRoundInInterval + basics.Round(proto.StateProofInterval))
 	return nil
 }
 
@@ -618,7 +618,7 @@ type LedgerForEvaluator interface {
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
-	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
+	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
 }
 
 // EvaluatorOptions defines the evaluator creation options
@@ -1164,10 +1164,10 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNext depending on
 		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
 		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
-		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
+		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.compactCert(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.StateProofMessage, tx.Header.FirstValid, eval.validate)
+			err = balances.stateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.StateProofMessage, tx.Header.FirstValid, eval.validate)
 		}
 
 	default:
@@ -1198,9 +1198,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 	return
 }
 
-// compactCertVotersAndTotal returns the expected values of StateProofVotersCommitment
+// stateProofVotersAndTotal returns the expected values of StateProofVotersCommitment
 // and StateProofVotersTotalWeight for a block.
-func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.GenericDigest, total basics.MicroAlgos, err error) {
+func (eval *BlockEvaluator) stateProofVotersAndTotal() (root crypto.GenericDigest, total basics.MicroAlgos, err error) {
 	if eval.proto.StateProofInterval == 0 {
 		return
 	}
@@ -1210,7 +1210,7 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.GenericDige
 	}
 
 	lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.StateProofVotersLookback))
-	voters, err := eval.l.CompactCertVoters(lookback)
+	voters, err := eval.l.VotersForStateProof(lookback)
 	if err != nil {
 		return
 	}
@@ -1246,7 +1246,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 		if eval.proto.StateProofInterval > 0 {
 			var basicCompactCert bookkeeping.StateProofTrackingData
-			basicCompactCert.StateProofVotersCommitment, basicCompactCert.StateProofVotersTotalWeight, err = eval.compactCertVotersAndTotal()
+			basicCompactCert.StateProofVotersCommitment, basicCompactCert.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
 			if err != nil {
 				return err
 			}
@@ -1288,7 +1288,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
+		expectedVoters, expectedVotersWeight, err := eval.stateProofVotersAndTotal()
 		if err != nil {
 			return err
 		}

@@ -219,7 +219,7 @@ func TestCowCompactCert(t *testing.T) {
 		0, ledgercore.AccountTotals{}, 0)
 
 	certType = protocol.StateProofType(1234) // bad stateproof type
-	err := c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	err := c0.stateProof(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no certRnd block
@@ -227,7 +227,7 @@ func TestCowCompactCert(t *testing.T) {
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
 	certRnd = 3
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	err = c0.stateProof(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no votersRnd block
@@ -245,18 +245,18 @@ func TestCowCompactCert(t *testing.T) {
 	blocks[certHdr.Round] = certHdr
 	certRnd = certHdr.Round
 	blockErr[13] = noBlockErr
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	err = c0.stateProof(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// validate fail
 	certHdr.Round = 1
 	certRnd = certHdr.Round
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	err = c0.stateProof(certRnd, certType, cert, msg, atRound, validate)
 	require.Error(t, err)
 
 	// fall through to no err
 	validate = false
-	err = c0.compactCert(certRnd, certType, cert, msg, atRound, validate)
+	err = c0.stateProof(certRnd, certType, cert, msg, atRound, validate)
 	require.NoError(t, err)
 
 	// 100% coverage
@@ -627,7 +627,7 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 	return block.BlockHeader, nil
 }
 
-func (ledger *evalTestLedger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, errors.New("untested code path")
 }
 

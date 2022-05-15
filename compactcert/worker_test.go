@@ -155,7 +155,7 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 	return hdr, nil
 }
 
-func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
+func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
 	voters := &ledgercore.VotersForRound{
 		Proto:       config.Consensus[protocol.ConsensusFuture],
 		AddrToPos:   make(map[basics.Address]uint64),
@@ -294,7 +294,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 			require.False(t, overflowed)
 
-			voters, err := s.CompactCertVoters(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+			voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 			require.NoError(t, err)
 
 			verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
@@ -353,7 +353,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.StateProofWeightThreshold), 1<<32)
 	require.False(t, overflowed)
 
-	voters, err := s.CompactCertVoters(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
+	voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 	require.NoError(t, err)
 
 	verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)

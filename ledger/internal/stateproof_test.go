@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestValidateCompactCert(t *testing.T) {
+func TestValidateStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var certHdr bookkeeping.BlockHeader
@@ -42,11 +42,11 @@ func TestValidateCompactCert(t *testing.T) {
 	msg := stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
-	err := validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err := validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	t.Log(err)
-	require.ErrorIs(t, err, errCompCertNotEnabled)
+	require.ErrorIs(t, err, errStateProofNotEnabled)
 
-	certHdr.CurrentProtocol = "TestValidateCompactCert"
+	certHdr.CurrentProtocol = "TestValidateStateProof"
 	certHdr.Round = 1
 	proto := config.Consensus[certHdr.CurrentProtocol]
 	proto.StateProofInterval = 2
@@ -54,32 +54,32 @@ func TestValidateCompactCert(t *testing.T) {
 	proto.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	config.Consensus[certHdr.CurrentProtocol] = proto
 
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errNotAtRightMultiple)
 
 	certHdr.Round = 4
 	votersHdr.Round = 4
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errInvalidVotersRound)
 
 	votersHdr.Round = 2
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.ErrorIs(t, err, errExpectedDifferentCertRound)
+	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
 	nextCertRnd = 4
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.ErrorIs(t, err, errCompactCertParamCreation)
+	require.ErrorIs(t, err, errStateProofParamCreation)
 
 	votersHdr.CurrentProtocol = certHdr.CurrentProtocol
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	t.Log(err)
 	// since proven weight is zero, we cann't create the verifier
 	require.ErrorIs(t, err, compactcert.ErrIllegalInputForLnApprox)
@@ -88,51 +88,51 @@ func TestValidateCompactCert(t *testing.T) {
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofVotersTotalWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errInsufficientWeight)
 
 	cert.SignedWeight = 101
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
-	require.ErrorIs(t, err, errCompCertCrypto)
+	require.ErrorIs(t, err, errStateProofCrypto)
 
-	// Above cases leave validateCompactCert() with 100% coverage.
+	// Above cases leave validateStateProof() with 100% coverage.
 	// crypto/compactcert.Verify has its own tests
 }
 
-func TestAcceptableCompactCertWeight(t *testing.T) {
+func TestAcceptableStateProofWeight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var votersHdr bookkeeping.BlockHeader
 	var firstValid basics.Round
 	logger := logging.TestingLog(t)
 
-	votersHdr.CurrentProtocol = "TestAcceptableCompactCertWeight"
+	votersHdr.CurrentProtocol = "TestAcceptableStateProofWeight"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	proto.StateProofInterval = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out := AcceptableCompactCertWeight(votersHdr, firstValid, logger)
+	out := AcceptableStateProofWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0), out)
 
 	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofVotersTotalWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
-	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
 	// this should exercise the second return case
 	firstValid = basics.Round(3)
-	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
 	firstValid = basics.Round(6)
 	proto.StateProofWeightThreshold = 999999999
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x17), out)
 
 	proto.StateProofInterval = 10000
@@ -143,13 +143,13 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
 	proto.StateProofWeightThreshold = 0x7fffffff
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
+	out = AcceptableStateProofWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x4cd35a85213a92a2), out)
 
 	// Covers everything except "overflow that shouldn't happen" branches
 }
 
-func TestCompactCertParams(t *testing.T) {
+func TestStateProofParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var votersHdr bookkeeping.BlockHeader
@@ -158,7 +158,7 @@ func TestCompactCertParams(t *testing.T) {
 	_, err := GetProvenWeight(votersHdr, hdr)
 	require.Error(t, err) // not enabled
 
-	votersHdr.CurrentProtocol = "TestCompactCertParams"
+	votersHdr.CurrentProtocol = "TestStateProofParams"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	proto.StateProofInterval = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto

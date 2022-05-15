@@ -82,11 +82,11 @@ func MakeVotersForRound() *VotersForRound {
 func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
 
-	// certRound is the block that we expect to form a state proof for,
+	// stateProofRound is the block that we expect to form a state proof for,
 	// using the balances from round r.
-	certRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
+	stateProofRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, err := onlineTop(r, certRound, tr.Proto.StateProofTopVoters)
+	top, err := onlineTop(r, stateProofRound, tr.Proto.StateProofTopVoters)
 	if err != nil {
 		return err
 	}

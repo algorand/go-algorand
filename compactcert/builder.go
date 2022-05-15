@@ -47,7 +47,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	}
 
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
-	voters, err := ccw.ledger.CompactCertVoters(lookback)
+	voters, err := ccw.ledger.VotersForStateProof(lookback)
 	if err != nil {
 		return builder{}, err
 	}
@@ -351,7 +351,7 @@ func (ccw *Worker) tryBuilding() {
 
 	for rnd, b := range ccw.builders {
 		firstValid := ccw.ledger.Latest()
-		acceptableWeight := ledger.AcceptableCompactCertWeight(b.votersHdr, firstValid, logging.Base())
+		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the cert at this time..
 			continue
