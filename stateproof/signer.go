@@ -117,7 +117,7 @@ func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	sigs := make([]sigFromAddr, 0, len(keys))
 	ids := make([]account.ParticipationID, 0, len(keys))
 
-	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, votersHdr, hdr, proto.StateProofInterval)
+	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
 	if err != nil {
 		spw.log.Warnf("spw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 		return

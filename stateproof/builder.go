@@ -58,7 +58,7 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
-	msg, err := GenerateStateProofMessage(spw.ledger, votersHdr, hdr, hdrProto.StateProofInterval)
+	msg, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
 	if err != nil {
 		return builder{}, err
 	}

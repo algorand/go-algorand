@@ -290,10 +290,9 @@ func TestWorkerAllSigs(t *testing.T) {
 			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
 			require.NoError(t, err)
 
-			votersRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval)))
-			require.NoError(t, err)
+			votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
-			msg, err := GenerateStateProofMessage(s, votersRound, stateProofLatestRound, proto.StateProofInterval)
+			msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 			require.NoError(t, err)
 			require.Equal(t, msg, tx.Txn.StateProofMessage)
 
@@ -355,10 +354,9 @@ func TestWorkerPartialSigs(t *testing.T) {
 	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
 	require.NoError(t, err)
 
-	votersRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval)))
-	require.NoError(t, err)
+	votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
 
-	msg, err := GenerateStateProofMessage(s, votersRound, stateProofLatestRound, proto.StateProofInterval)
+	msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 	require.NoError(t, err)
 	require.Equal(t, msg, tx.Txn.StateProofMessage)
 

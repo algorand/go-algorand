@@ -64,7 +64,7 @@ type Builder struct {
 // MkBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a stateproof.
 func MkBuilder(data MessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {
 	npart := len(part)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	if err != nil {
 		return nil, err
 	}
