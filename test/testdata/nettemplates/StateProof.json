@@ -1,7 +1,7 @@
 {
     "Genesis": {
         "NetworkName": "tbd",
-        "ConsensusProtocol": "test-fast-compactcert",
+        "ConsensusProtocol": "test-fast-stateproofs",
         "LastPartKeyRound": 100,
         "Wallets": [
             { "Name": "Wallet0", "Stake": 20, "Online": true },
