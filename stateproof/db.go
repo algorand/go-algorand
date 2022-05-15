@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"database/sql"
@@ -26,21 +26,21 @@ import (
 )
 
 var schema = []string{
-	// sigs tracks signatures used to build a compact certificate, for
-	// rounds that have not formed a compact certificate yet.
+	// sigs tracks signatures used to build a state proofs, for
+	// rounds that have not formed a state proofs yet.
 	//
-	// There can be at most one signature for a given (certrnd, signer):
+	// There can be at most one signature for a given (sprnd, signer):
 	// that is, a signer (account address) can produce at most one signature
-	// for a given certrnd (the round of the block being signed).
+	// for a given sprnd (the round of the block being signed).
 	//
 	// Signatures produced by this node are special because we broadcast
 	// them early; other signatures are retransmitted later on.
 	`CREATE TABLE IF NOT EXISTS sigs (
-		certrnd integer,
+		sprnd integer,
 		signer blob,
 		sig blob,
 		from_this_node integer,
-		UNIQUE (certrnd, signer))`,
+		UNIQUE (sprnd, signer))`,
 
 	`CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`,
 }
@@ -55,7 +55,7 @@ func initDB(tx *sql.Tx) error {
 	for i, tableCreate := range schema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
-			return fmt.Errorf("could not create compactcert table %d: %v", i, err)
+			return fmt.Errorf("could not state proof table %d: %v", i, err)
 		}
 	}
 
@@ -63,7 +63,7 @@ func initDB(tx *sql.Tx) error {
 }
 
 func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
-	_, err := tx.Exec("INSERT INTO sigs (certrnd, signer, sig, from_this_node) VALUES (?, ?, ?, ?)",
+	_, err := tx.Exec("INSERT INTO sigs (sprnd, signer, sig, from_this_node) VALUES (?, ?, ?, ?)",
 		rnd,
 		psig.signer[:],
 		protocol.Encode(&psig.sig),
@@ -72,12 +72,12 @@ func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
 }
 
 func deletePendingSigsBeforeRound(tx *sql.Tx, rnd basics.Round) error {
-	_, err := tx.Exec("DELETE FROM sigs WHERE certrnd<?", rnd)
+	_, err := tx.Exec("DELETE FROM sigs WHERE sprnd<?", rnd)
 	return err
 }
 
 func getPendingSigs(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
-	rows, err := tx.Query("SELECT certrnd, signer, sig, from_this_node FROM sigs")
+	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs")
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func getPendingSigs(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
 }
 
 func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
-	rows, err := tx.Query("SELECT certrnd, signer, sig, from_this_node FROM sigs WHERE from_this_node=1")
+	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE from_this_node=1")
 	if err != nil {
 		return nil, err
 	}

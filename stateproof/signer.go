@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"errors"
@@ -78,7 +78,7 @@ restart:
 
 		nextrnd = latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 		if nextrnd == 0 {
-			// Compact certs not enabled yet.  Keep monitoring new blocks.
+			// State proofs are not enabled yet.  Keep monitoring new blocks.
 			nextrnd = latest + 1
 		}
 		break
@@ -107,17 +107,17 @@ restart:
 	}
 }
 
-// GenerateStateProofMessage builds a merkle tree from the block headers of the entire interval (up until current round), and returns the root
+// GenerateStateProofMessage builds a vector commitment from the block headers of the entire interval (up until current round), and returns the root
 // for the account to sign upon. The tree can be stored for performance but does not have to be since it can always be rebuilt from scratch.
-// This is the message the Compact Certificate will attest to.
-func GenerateStateProofMessage(ledger Ledger, compactCertRound basics.Round, compactCertInterval uint64) (stateproofmsg.Message, error) {
-	if compactCertRound < basics.Round(compactCertInterval) {
+// This is the message that state proofs will attest to.
+func GenerateStateProofMessage(ledger Ledger, latestRoundInInterval basics.Round, stateProofInterval uint64) (stateproofmsg.Message, error) {
+	if latestRoundInInterval < basics.Round(stateProofInterval) {
 		return stateproofmsg.Message{}, fmt.Errorf("GenerateStateProofMessage stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 	var blkHdrArr blockHeadersArray
-	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, compactCertInterval)
-	firstRound := compactCertRound - basics.Round(compactCertInterval) + 1
-	for i := uint64(0); i < compactCertInterval; i++ {
+	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, stateProofInterval)
+	firstRound := latestRoundInInterval - basics.Round(stateProofInterval) + 1
+	for i := uint64(0); i < stateProofInterval; i++ {
 		rnd := firstRound + basics.Round(i)
 		hdr, err := ledger.BlockHdr(rnd)
 		if err != nil {
@@ -164,7 +164,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	}
 
 	if votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEmpty() {
-		// No voter commitment, perhaps because compact certs were
+		// No voter commitment, perhaps because state proofs were
 		// just enabled.
 		return
 	}

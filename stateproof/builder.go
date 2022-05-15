@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"context"
@@ -54,7 +54,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 
 	if voters == nil {
 		// Voters not tracked for that round.  Might not be a valid
-		// compact cert round; compact certs might not be enabled; etc.
+		// state proof round; state proofs might not be enabled; etc.
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
@@ -96,7 +96,7 @@ func (ccw *Worker) initBuilders() {
 		return
 	})
 	if err != nil {
-		ccw.log.Warnf("initBuilders: getPendingSigs: %v", err)
+		ccw.log.Warnf("initBuilders: getPendingSigs: %w", err)
 		return
 	}
 
@@ -216,12 +216,12 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 }
 
 func (ccw *Worker) builder(latest basics.Round) {
-	// We clock the building of compact certificates based on new
-	// blocks.  This is because the acceptable compact certificate
+	// We clock the building of state proofs based on new
+	// blocks.  This is because the acceptable state proof
 	// size grows over time, so that we aim to construct an extremely
-	// compact certificate upfront, but if that doesn't work out, we
-	// will settle for a larger certificate.  New blocks also tell us
-	// if a compact cert has been committed, so that we can stop trying
+	// small state proof upfront, but if that doesn't work out, we
+	// will settle for a larger proof.  New blocks also tell us
+	// if a state proof has been committed, so that we can stop trying
 	// to build it.
 	for {
 		ccw.tryBuilding()
@@ -236,7 +236,7 @@ func (ccw *Worker) builder(latest basics.Round) {
 			// Continue on
 		}
 
-		// See if any new compact certificates were formed, according to
+		// See if any new state proofs were formed, according to
 		// the new block, which would mean we can clean up some builders.
 		hdr, err := ccw.ledger.BlockHdr(nextrnd)
 		if err != nil {
@@ -263,7 +263,7 @@ func (ccw *Worker) builder(latest basics.Round) {
 }
 
 // broadcastSigs periodically broadcasts pending signatures for rounds
-// that have not been able to form a compact certificate.
+// that have not been able to form a state proof.
 //
 // Signature re-broadcasting happens in periods of proto.StateProofInterval
 // rounds.
@@ -318,7 +318,7 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 				Round:  rnd,
 				Sig:    sig.sig,
 			}
-			err = ccw.net.Broadcast(context.Background(), protocol.CompactCertSigTag,
+			err = ccw.net.Broadcast(context.Background(), protocol.StateProofSigTag,
 				protocol.Encode(&sfa), false, nil)
 			if err != nil {
 				ccw.log.Warnf("broadcastSigs: Broadcast for %d: %v", rnd, err)
@@ -327,19 +327,19 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func (ccw *Worker) deleteOldSigs(nextCert basics.Round) {
+func (ccw *Worker) deleteOldSigs(nextStateProof basics.Round) {
 	ccw.mu.Lock()
 	defer ccw.mu.Unlock()
 
 	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deletePendingSigsBeforeRound(tx, nextCert)
+		return deletePendingSigsBeforeRound(tx, nextStateProof)
 	})
 	if err != nil {
-		ccw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextCert, err)
+		ccw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextStateProof, err)
 	}
 
 	for rnd := range ccw.builders {
-		if rnd < nextCert {
+		if rnd < nextStateProof {
 			delete(ccw.builders, rnd)
 		}
 	}

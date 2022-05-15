@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"context"
@@ -41,10 +41,10 @@ type builder struct {
 	votersHdr bookkeeping.BlockHeader
 }
 
-// Worker builds compact certificates, by broadcasting
+// Worker builds state proofs, by broadcasting
 // signatures using this node's participation keys, by collecting
 // signatures sent by others, and by sending out the resulting
-// compact certs in a transaction.
+// state proof in a transaction.
 type Worker struct {
 	// The mutex serializes concurrent message handler invocations
 	// from the network stack.
@@ -100,7 +100,7 @@ func (ccw *Worker) Start() {
 	ccw.initBuilders()
 
 	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.CompactCertSigTag, MessageHandler: network.HandlerFunc(ccw.handleSigMessage)},
+		{Tag: protocol.StateProofSigTag, MessageHandler: network.HandlerFunc(ccw.handleSigMessage)},
 	}
 	ccw.net.RegisterHandlers(handlers)
 

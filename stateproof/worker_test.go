@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"context"
@@ -202,7 +202,7 @@ func (s *testWorkerStubs) Wait(r basics.Round) chan struct{} {
 }
 
 func (s *testWorkerStubs) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	require.Equal(s.t, tag, protocol.CompactCertSigTag)
+	require.Equal(s.t, tag, protocol.StateProofSigTag)
 	s.sigmsg <- data
 	return nil
 }
