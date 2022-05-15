@@ -120,7 +120,7 @@ type (
 		TxnCounter uint64 `codec:"tc"`
 
 		// StateProofTracking tracks the status of the state proofs, potentially
-		// for multiple types of ASP.
+		// for multiple types of ASPs (Algorand's State Proofs).
 		//msgp:sort protocol.StateProofType protocol.SortStateProofType
 		StateProofTracking map[protocol.StateProofType]StateProofTrackingData `codec:"spt,allocbound=protocol.NumStateProofTypes"`
 
@@ -214,7 +214,7 @@ type (
 		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
 	}
 
-	// StateProofTrackingData tracks the state of state proofs.
+	// StateProofTrackingData tracks the status of state proofs.
 	StateProofTrackingData struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 

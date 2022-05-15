@@ -193,7 +193,7 @@ func (l indexerLedgerConnector) LatestTotals() (rnd basics.Round, totals ledgerc
 // VotersForStateProof is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore.VotersForRound, error) {
 	// This function is not used by evaluator.
-	return nil, errors.New("StateProofVotersCommitment() not implemented")
+	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {

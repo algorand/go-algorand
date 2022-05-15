@@ -33,21 +33,21 @@ import (
 )
 
 // builderForRound not threadsafe, should be called in a lock environment
-func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
-	hdr, err := ccw.ledger.BlockHdr(rnd)
+func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
+	hdr, err := spw.ledger.BlockHdr(rnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
 	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.StateProofInterval))
-	votersHdr, err := ccw.ledger.BlockHdr(votersRnd)
+	votersHdr, err := spw.ledger.BlockHdr(votersRnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
-	voters, err := ccw.ledger.VotersForStateProof(lookback)
+	voters, err := spw.ledger.VotersForStateProof(lookback)
 	if err != nil {
 		return builder{}, err
 	}
@@ -58,11 +58,11 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
-	msg, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, hdrProto.StateProofInterval)
+	msg, err := GenerateStateProofMessage(spw.ledger, hdr.Round, hdrProto.StateProofInterval)
 	if err != nil {
 		return builder{}, err
 	}
-	ccw.Message = msg
+	spw.Message = msg
 
 	provenWeight, err := ledger.GetProvenWeight(votersHdr, hdr)
 	if err != nil {
@@ -82,92 +82,92 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	ccw.builders[rnd] = res
+	spw.builders[rnd] = res
 	return res, nil
 }
 
-func (ccw *Worker) initBuilders() {
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
+func (spw *Worker) initBuilders() {
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
 
 	var roundSigs map[basics.Round][]pendingSig
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx)
 		return
 	})
 	if err != nil {
-		ccw.log.Warnf("initBuilders: getPendingSigs: %w", err)
+		spw.log.Warnf("initBuilders: getPendingSigs: %w", err)
 		return
 	}
 
 	for rnd, sigs := range roundSigs {
-		if _, ok := ccw.builders[rnd]; ok {
-			ccw.log.Warnf("initBuilders: round %d already present", rnd)
+		if _, ok := spw.builders[rnd]; ok {
+			spw.log.Warnf("initBuilders: round %d already present", rnd)
 			continue
 		}
-		ccw.addSigsToBuilder(sigs, rnd)
+		spw.addSigsToBuilder(sigs, rnd)
 	}
 }
 
-func (ccw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
-	builderForRound, err := ccw.builderForRound(rnd)
+func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
+	builderForRound, err := spw.builderForRound(rnd)
 	if err != nil {
-		ccw.log.Warnf("addSigsToBuilder: builderForRound(%d): %v", rnd, err)
+		spw.log.Warnf("addSigsToBuilder: builderForRound(%d): %v", rnd, err)
 		return
 	}
 
 	for _, sig := range sigs {
 		pos, ok := builderForRound.voters.AddrToPos[sig.signer]
 		if !ok {
-			ccw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
+			spw.log.Warnf("addSigsToBuilder: cannot find %v in round %d", sig.signer, rnd)
 			continue
 		}
 
 		isPresent, err := builderForRound.Present(pos)
 		if err != nil {
-			ccw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+			spw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
 			continue
 		}
 		if isPresent {
-			ccw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
+			spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
 			continue
 		}
 
 		if err := builderForRound.IsValid(pos, sig.sig, false); err != nil {
-			ccw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
+			spw.log.Warnf("addSigsToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
 			continue
 		}
 		if err := builderForRound.Add(pos, sig.sig); err != nil {
-			ccw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
+			spw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
 			continue
 		}
 	}
 }
 
-func (ccw *Worker) handleSigMessage(msg network.IncomingMessage) network.OutgoingMessage {
+func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.OutgoingMessage {
 	var ssig sigFromAddr
 	err := protocol.Decode(msg.Data, &ssig)
 	if err != nil {
-		ccw.log.Warnf("ccw.handleSigMessage(): decode: %v", err)
+		spw.log.Warnf("spw.handleSigMessage(): decode: %v", err)
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
-	fwd, err := ccw.handleSig(ssig, msg.Sender)
+	fwd, err := spw.handleSig(ssig, msg.Sender)
 	if err != nil {
-		ccw.log.Warnf("ccw.handleSigMessage(): %v", err)
+		spw.log.Warnf("spw.handleSigMessage(): %v", err)
 	}
 
 	return network.OutgoingMessage{Action: fwd}
 }
 
-func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
+func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
 
-	builderForRound, ok := ccw.builders[sfa.Round]
+	builderForRound, ok := spw.builders[sfa.Round]
 	if !ok {
-		latest := ccw.ledger.Latest()
-		latestHdr, err := ccw.ledger.BlockHdr(latest)
+		latest := spw.ledger.Latest()
+		latestHdr, err := spw.ledger.BlockHdr(latest)
 		if err != nil {
 			return network.Disconnect, err
 		}
@@ -178,7 +178,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, nil
 		}
 
-		builderForRound, err = ccw.builderForRound(sfa.Round)
+		builderForRound, err = spw.builderForRound(sfa.Round)
 		if err != nil {
 			return network.Disconnect, err
 		}
@@ -198,7 +198,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		return network.Disconnect, err
 	}
 
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return addPendingSig(tx, sfa.Round, pendingSig{
 			signer:       sfa.Signer,
 			sig:          sfa.Sig,
@@ -215,7 +215,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
-func (ccw *Worker) builder(latest basics.Round) {
+func (spw *Worker) builder(latest basics.Round) {
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
 	// size grows over time, so that we aim to construct an extremely
@@ -224,26 +224,26 @@ func (ccw *Worker) builder(latest basics.Round) {
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
 	for {
-		ccw.tryBuilding()
+		spw.tryBuilding()
 
 		nextrnd := latest + 1
 		select {
-		case <-ccw.ctx.Done():
-			ccw.wg.Done()
+		case <-spw.ctx.Done():
+			spw.wg.Done()
 			return
 
-		case <-ccw.ledger.Wait(nextrnd):
+		case <-spw.ledger.Wait(nextrnd):
 			// Continue on
 		}
 
 		// See if any new state proofs were formed, according to
 		// the new block, which would mean we can clean up some builders.
-		hdr, err := ccw.ledger.BlockHdr(nextrnd)
+		hdr, err := spw.ledger.BlockHdr(nextrnd)
 		if err != nil {
-			ccw.log.Warnf("ccw.builder: BlockHdr(%d): %v", nextrnd, err)
+			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
 		} else {
-			ccw.deleteOldSigs(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+			spw.deleteOldSigs(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 		}
 
 		// Broadcast signatures based on the previous block(s) that
@@ -251,12 +251,12 @@ func (ccw *Worker) builder(latest basics.Round) {
 		// for block R, nodes will have already verified block R, because
 		// block R+1 has been formed.
 		proto := config.Consensus[hdr.CurrentProtocol]
-		newLatest := ccw.ledger.Latest()
+		newLatest := spw.ledger.Latest()
 		for r := latest; r < newLatest; r++ {
 			// Wait for the signer to catch up; mostly relevant in tests.
-			ccw.waitForSignedBlock(r)
+			spw.waitForSignedBlock(r)
 
-			ccw.broadcastSigs(r, proto)
+			spw.broadcastSigs(r, proto)
 		}
 		latest = newLatest
 	}
@@ -276,16 +276,16 @@ func (ccw *Worker) builder(latest basics.Round) {
 //
 // The broadcast schedule is randomized by the address of the block signer,
 // for load-balancing over time.
-func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams) {
+func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams) {
 	if proto.StateProofInterval == 0 {
 		return
 	}
 
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
 
 	var roundSigs map[basics.Round][]pendingSig
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if brnd%basics.Round(proto.StateProofInterval) < basics.Round(proto.StateProofInterval/2) {
 			roundSigs, err = getPendingSigsFromThisNode(tx)
 		} else {
@@ -294,7 +294,7 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 		return
 	})
 	if err != nil {
-		ccw.log.Warnf("broadcastSigs: getPendingSigs: %v", err)
+		spw.log.Warnf("broadcastSigs: getPendingSigs: %v", err)
 		return
 	}
 
@@ -318,39 +318,39 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 				Round:  rnd,
 				Sig:    sig.sig,
 			}
-			err = ccw.net.Broadcast(context.Background(), protocol.StateProofSigTag,
+			err = spw.net.Broadcast(context.Background(), protocol.StateProofSigTag,
 				protocol.Encode(&sfa), false, nil)
 			if err != nil {
-				ccw.log.Warnf("broadcastSigs: Broadcast for %d: %v", rnd, err)
+				spw.log.Warnf("broadcastSigs: Broadcast for %d: %v", rnd, err)
 			}
 		}
 	}
 }
 
-func (ccw *Worker) deleteOldSigs(nextStateProof basics.Round) {
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
+func (spw *Worker) deleteOldSigs(nextStateProof basics.Round) {
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
 
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deletePendingSigsBeforeRound(tx, nextStateProof)
 	})
 	if err != nil {
-		ccw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextStateProof, err)
+		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextStateProof, err)
 	}
 
-	for rnd := range ccw.builders {
+	for rnd := range spw.builders {
 		if rnd < nextStateProof {
-			delete(ccw.builders, rnd)
+			delete(spw.builders, rnd)
 		}
 	}
 }
 
-func (ccw *Worker) tryBuilding() {
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
+func (spw *Worker) tryBuilding() {
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
 
-	for rnd, b := range ccw.builders {
-		firstValid := ccw.ledger.Latest()
+	for rnd, b := range spw.builders {
+		firstValid := spw.ledger.Latest()
 		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the cert at this time..
@@ -364,7 +364,7 @@ func (ccw *Worker) tryBuilding() {
 
 		cert, err := b.Build()
 		if err != nil {
-			ccw.log.Warnf("ccw.tryBuilding: building state proof for %d: %v", rnd, err)
+			spw.log.Warnf("spw.tryBuilding: building state proof for %d: %v", rnd, err)
 			continue
 		}
 
@@ -373,44 +373,45 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid
 		stxn.Txn.LastValid = firstValid + basics.Round(b.voters.Proto.MaxTxnLife)
-		stxn.Txn.GenesisHash = ccw.ledger.GenesisHash()
+		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
+		stxn.Txn.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofIntervalLatestRound = rnd
 		stxn.Txn.StateProof = *cert
-		stxn.Txn.StateProofMessage = ccw.Message
-		err = ccw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
+		stxn.Txn.StateProofMessage = spw.Message
+		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
-			ccw.log.Warnf("ccw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)
+			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)
 		}
 	}
 }
 
-func (ccw *Worker) signedBlock(r basics.Round) {
-	ccw.mu.Lock()
-	ccw.signed = r
-	ccw.mu.Unlock()
+func (spw *Worker) signedBlock(r basics.Round) {
+	spw.mu.Lock()
+	spw.signed = r
+	spw.mu.Unlock()
 
 	select {
-	case ccw.signedCh <- struct{}{}:
+	case spw.signedCh <- struct{}{}:
 	default:
 	}
 }
 
-func (ccw *Worker) lastSignedBlock() basics.Round {
-	ccw.mu.Lock()
-	defer ccw.mu.Unlock()
-	return ccw.signed
+func (spw *Worker) lastSignedBlock() basics.Round {
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
+	return spw.signed
 }
 
-func (ccw *Worker) waitForSignedBlock(r basics.Round) {
+func (spw *Worker) waitForSignedBlock(r basics.Round) {
 	for {
-		if r <= ccw.lastSignedBlock() {
+		if r <= spw.lastSignedBlock() {
 			return
 		}
 
 		select {
-		case <-ccw.ctx.Done():
+		case <-spw.ctx.Done():
 			return
-		case <-ccw.signedCh:
+		case <-spw.signedCh:
 		}
 	}
 }

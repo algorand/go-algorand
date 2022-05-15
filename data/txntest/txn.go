@@ -101,10 +101,10 @@ type Txn struct {
 	ClearStateProgram interface{} // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
-	CertIntervalLatestRound basics.Round
-	CertType                protocol.StateProofType
-	StateProof              stateproof.StateProof
-	StateProofMsg           stateproofmsg.Message
+	StateProofIntervalLatestRound basics.Round
+	StateProofType                protocol.StateProofType
+	StateProof                    stateproof.StateProof
+	StateProofMsg                 stateproofmsg.Message
 }
 
 // Noted returns a new Txn with the given note field.
@@ -243,8 +243,8 @@ func (tx Txn) Txn() transactions.Transaction {
 			ExtraProgramPages: tx.ExtraProgramPages,
 		},
 		StateProofTxnFields: transactions.StateProofTxnFields{
-			StateProofIntervalLatestRound: tx.CertIntervalLatestRound,
-			StateProofType:                tx.CertType,
+			StateProofIntervalLatestRound: tx.StateProofIntervalLatestRound,
+			StateProofType:                tx.StateProofType,
 			StateProof:                    tx.StateProof,
 			StateProofMessage:             tx.StateProofMsg,
 		},

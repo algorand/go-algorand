@@ -21,11 +21,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/stateproof"
-
 	"math/rand"
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -219,7 +218,7 @@ func TestCowStateProof(t *testing.T) {
 		0, ledgercore.AccountTotals{}, 0)
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
-	err := c0.stateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	err := c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no spRnd block
@@ -227,7 +226,7 @@ func TestCowStateProof(t *testing.T) {
 	noBlockErr := errors.New("no block")
 	blockErr[3] = noBlockErr
 	spRnd = 3
-	err = c0.stateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
 	// no votersRnd block
@@ -245,18 +244,18 @@ func TestCowStateProof(t *testing.T) {
 	blocks[spHdr.Round] = spHdr
 	spRnd = spHdr.Round
 	blockErr[13] = noBlockErr
-	err = c0.stateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
 	// validate fail
 	spHdr.Round = 1
 	spRnd = spHdr.Round
-	err = c0.stateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.Error(t, err)
 
 	// fall through to no err
 	validate = false
-	err = c0.stateProof(spRnd, spType, stateProof, msg, atRound, validate)
+	err = c0.applyStateProof(spRnd, spType, stateProof, msg, atRound, validate)
 	require.NoError(t, err)
 
 	// 100% coverage

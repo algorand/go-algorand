@@ -26,6 +26,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// Errors for the StateProof builder
+var (
+	ErrPositionOutOfBound     = errors.New("requested position is out of bounds")
+	ErrPositionAlreadyPresent = errors.New("requested position is already present")
+	ErrPositionWithZeroWeight = errors.New("position has zero weight")
+	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
+)
+
 //msgp:ignore sigslot
 type sigslot struct {
 	// Weight is the weight of the participant signing this message.
@@ -40,7 +48,7 @@ type sigslot struct {
 }
 
 // Builder keeps track of signatures on a message and eventually produces
-// a stater poof for that message.
+// a stater proof for that message.
 type Builder struct {
 	data           MessageHash
 	round          uint64
@@ -52,14 +60,6 @@ type Builder struct {
 	provenWeight   uint64
 	strengthTarget uint64
 }
-
-// Errors for the StateProof builder
-var (
-	ErrPositionOutOfBound     = errors.New("requested position is out of bounds")
-	ErrPositionAlreadyPresent = errors.New("requested position is already present")
-	ErrPositionWithZeroWeight = errors.New("position has zero weight")
-	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
-)
 
 // MkBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a stateproof.
 func MkBuilder(data MessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {

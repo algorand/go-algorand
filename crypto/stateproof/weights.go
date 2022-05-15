@@ -26,11 +26,11 @@ import (
 // errors for the weights verification
 var (
 	ErrSignedWeightLessThanProvenWeight = errors.New("signed weight is less than or equal to proven weight")
-	ErrTooManyReveals                   = errors.New("too many reveals in stateproof")
+	ErrTooManyReveals                   = errors.New("too many reveals in state proof")
 	ErrZeroSignedWeight                 = errors.New("signed weight cannot be zero")
 	ErrIllegalInputForLnApprox          = errors.New("cannot calculate a ln integer value for 0")
 	ErrInsufficientSingedWeight         = errors.New("the number of reveals is not large enough to prove that the desired weight signed, with the desired security level")
-	ErrNegativeNumOfRevealsEquation     = errors.New("stateproof creation failed: weights will not be able to satisfy the verification equation")
+	ErrNegativeNumOfRevealsEquation     = errors.New("state proof creation failed: weights will not be able to satisfy the verification equation")
 )
 
 func bigInt(num uint64) *big.Int {

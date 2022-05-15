@@ -105,7 +105,7 @@ func AcceptableStateProofWeight(votersHdr bookkeeping.BlockHeader, firstValid ba
 }
 
 // GetProvenWeight computes the parameters for building or verifying
-// a state proof for block hdr, using voters from block votersHdr.
+// a state proof for the interval (votersHdr, latestRoundInProofHdr], using voters from block votersHdr.
 func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bookkeeping.BlockHeader) (uint64, error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 
@@ -145,17 +145,17 @@ func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateP
 	}
 
 	if latestRoundInIntervalHdr.Round%basics.Round(proto.StateProofInterval) != 0 {
-		return fmt.Errorf("stateProof at %d for non-multiple of %d: %w", latestRoundInIntervalHdr.Round, proto.StateProofInterval, errNotAtRightMultiple)
+		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", latestRoundInIntervalHdr.Round, proto.StateProofInterval, errNotAtRightMultiple)
 	}
 
 	votersRound := latestRoundInIntervalHdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
 	if votersRound != votersHdr.Round {
-		return fmt.Errorf("new stateProof is for %d (voters %d), but votersHdr from %d: %w",
+		return fmt.Errorf("new state proof is for %d (voters %d), but votersHdr from %d: %w",
 			latestRoundInIntervalHdr.Round, votersRound, votersHdr.Round, errInvalidVotersRound)
 	}
 
 	if nextStateProofRnd == 0 || nextStateProofRnd != latestRoundInIntervalHdr.Round {
-		return fmt.Errorf("expecting stateProof for %d, but new stateProof is for %d (voters %d):%w",
+		return fmt.Errorf("expecting state proof for %d, but new state proof is for %d (voters %d):%w",
 			nextStateProofRnd, latestRoundInIntervalHdr.Round, votersRound, errExpectedDifferentStateProofRound)
 	}
 

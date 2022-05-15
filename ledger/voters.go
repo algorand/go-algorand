@@ -70,10 +70,10 @@ type votersTracker struct {
 }
 
 // votersRoundForStateProofRound computes the round number whose voting participants
-// will be used to sign the state proof for certRnd.
+// will be used to sign the state proof for stateProofRnd.
 func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.ConsensusParams) basics.Round {
 	// To form a state proof on period that ends on stateProofRnd,
-	// we need a commitment to the voters StateProofInterval
+	// we need a commitment to the voters StateProofInterval rounds
 	// before that, and the voters information from
 	// StateProofVotersLookback before that.
 	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))

@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// MessageHash represents any message that we want to have a proof over.
+// MessageHash represents the message that a state proof will attest to.
 type MessageHash [32]byte
 
 // MessageHashType is the type of hash used to generate MessageHash

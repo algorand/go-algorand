@@ -88,34 +88,34 @@ func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger
 }
 
 // Start starts the goroutines for the worker.
-func (ccw *Worker) Start() {
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+func (spw *Worker) Start() {
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initDB(tx)
 	})
 	if err != nil {
-		ccw.log.Warnf("ccw.Start(): initDB: %v", err)
+		spw.log.Warnf("spw.Start(): initDB: %v", err)
 		return
 	}
 
-	ccw.initBuilders()
+	spw.initBuilders()
 
 	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.StateProofSigTag, MessageHandler: network.HandlerFunc(ccw.handleSigMessage)},
+		{Tag: protocol.StateProofSigTag, MessageHandler: network.HandlerFunc(spw.handleSigMessage)},
 	}
-	ccw.net.RegisterHandlers(handlers)
+	spw.net.RegisterHandlers(handlers)
 
-	latest := ccw.ledger.Latest()
+	latest := spw.ledger.Latest()
 
-	ccw.wg.Add(1)
-	go ccw.signer(latest)
+	spw.wg.Add(1)
+	go spw.signer(latest)
 
-	ccw.wg.Add(1)
-	go ccw.builder(latest)
+	spw.wg.Add(1)
+	go spw.builder(latest)
 }
 
 // Shutdown stops any goroutines associated with this worker.
-func (ccw *Worker) Shutdown() {
-	ccw.shutdown()
-	ccw.wg.Wait()
-	ccw.db.Close()
+func (spw *Worker) Shutdown() {
+	spw.shutdown()
+	spw.wg.Wait()
+	spw.db.Close()
 }

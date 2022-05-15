@@ -63,16 +63,16 @@ func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return b.blockHeaders[pos], nil
 }
 
-func (ccw *Worker) signer(latest basics.Round) {
+func (spw *Worker) signer(latest basics.Round) {
 	var nextrnd basics.Round
 
 restart:
 	for {
-		latestHdr, err := ccw.ledger.BlockHdr(latest)
+		latestHdr, err := spw.ledger.BlockHdr(latest)
 		if err != nil {
-			ccw.log.Warnf("ccw.signer(): BlockHdr(latest %d): %v", latest, err)
+			spw.log.Warnf("spw.signer(): BlockHdr(latest %d): %v", latest, err)
 			time.Sleep(1 * time.Second)
-			latest = ccw.ledger.Latest()
+			latest = spw.ledger.Latest()
 			continue
 		}
 
@@ -86,22 +86,22 @@ restart:
 
 	for {
 		select {
-		case <-ccw.ledger.Wait(nextrnd):
-			hdr, err := ccw.ledger.BlockHdr(nextrnd)
+		case <-spw.ledger.Wait(nextrnd):
+			hdr, err := spw.ledger.BlockHdr(nextrnd)
 			if err != nil {
-				ccw.log.Warnf("ccw.signer(): BlockHdr(next %d): %v", nextrnd, err)
+				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextrnd, err)
 				time.Sleep(1 * time.Second)
-				latest = ccw.ledger.Latest()
+				latest = spw.ledger.Latest()
 				goto restart
 			}
 
-			ccw.signBlock(hdr)
-			ccw.signedBlock(nextrnd)
+			spw.signBlock(hdr)
+			spw.signedBlock(nextrnd)
 
 			nextrnd++
 
-		case <-ccw.ctx.Done():
-			ccw.wg.Done()
+		case <-spw.ctx.Done():
+			spw.wg.Done()
 			return
 		}
 	}
@@ -137,7 +137,7 @@ func GenerateStateProofMessage(ledger Ledger, latestRoundInInterval basics.Round
 	}, nil
 }
 
-func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
+func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
 		return
@@ -148,7 +148,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	keys := ccw.accts.StateProofKeys(hdr.Round)
+	keys := spw.accts.StateProofKeys(hdr.Round)
 	if len(keys) == 0 {
 		// No keys, nothing to do.
 		return
@@ -157,9 +157,9 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	// votersRound is the round containing the merkle root commitment
 	// for the voters that are going to sign this block.
 	votersRound := hdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersHdr, err := ccw.ledger.BlockHdr(votersRound)
+	votersHdr, err := spw.ledger.BlockHdr(votersRound)
 	if err != nil {
-		ccw.log.Warnf("ccw.signBlock(%d): BlockHdr(%d): %v", hdr.Round, votersRound, err)
+		spw.log.Warnf("spw.signBlock(%d): BlockHdr(%d): %v", hdr.Round, votersRound, err)
 		return
 	}
 
@@ -172,9 +172,9 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 	sigs := make([]sigFromAddr, 0, len(keys))
 	ids := make([]account.ParticipationID, 0, len(keys))
 
-	stateproofMessage, err := GenerateStateProofMessage(ccw.ledger, hdr.Round, proto.StateProofInterval)
+	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, hdr.Round, proto.StateProofInterval)
 	if err != nil {
-		ccw.log.Warnf("ccw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
+		spw.log.Warnf("spw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
 		return
 	}
 	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
@@ -185,13 +185,13 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		}
 
 		if key.StateProofSecrets == nil {
-			ccw.log.Warnf("ccw.signBlock(%d): empty state proof secrets for round", hdr.Round)
+			spw.log.Warnf("spw.signBlock(%d): empty state proof secrets for round", hdr.Round)
 			continue
 		}
 
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
+			spw.log.Warnf("spw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
 			continue
 		}
 
@@ -205,14 +205,14 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
 	for i, sfa := range sigs {
-		if _, err := ccw.handleSig(sfa, nil); err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): handleSig: %v", hdr.Round, err)
+		if _, err := spw.handleSig(sfa, nil); err != nil {
+			spw.log.Warnf("spw.signBlock(%d): handleSig: %v", hdr.Round, err)
 			continue
 		}
 
 		// Safe to delete key for sfa.Round because the signature is now stored in the disk.
-		if err := ccw.accts.DeleteStateProofKey(ids[i], sfa.Round); err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
+		if err := spw.accts.DeleteStateProofKey(ids[i], sfa.Round); err != nil {
+			spw.log.Warnf("spw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
 		}
 	}
 }

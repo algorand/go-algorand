@@ -52,7 +52,7 @@ func MkVerifier(partcom crypto.GenericDigest, provenWeight uint64, strengthTarge
 	}, nil
 }
 
-// Verify checks if c is a valid state proof for the data on a round.
+// Verify checks if s is a valid state proof for the data on a round.
 // it uses the trusted data from the Verifier struct
 func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
 	nr := uint64(len(s.PositionsToReveal))

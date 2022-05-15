@@ -350,7 +350,7 @@ type ConsensusParams struct {
 	// commitment to the set of online accounts (that can vote after
 	// another StateProofInterval rounds), and that block will be signed
 	// (forming a state proof) by the voters from the previous
-	// such Merkle tree commitment.  A value of zero means no state proof.
+	// such vector commitment.  A value of zero means no state proof.
 	StateProofInterval uint64
 
 	// StateProofTopVoters is a bound on how many online accounts get to
@@ -366,7 +366,7 @@ type ConsensusParams struct {
 	// then the balances reflected in that commitment must come from
 	// block N-StateProofVotersLookback.  This gives each node some
 	// time (StateProofVotersLookback blocks worth of time) to
-	// construct this Merkle tree, so as to avoid placing the
+	// construct this vector commitment, so as to avoid placing the
 	// construction of this vector commitment (and obtaining the requisite
 	// accounts and balances) in the critical path.
 	StateProofVotersLookback uint64

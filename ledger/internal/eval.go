@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -560,9 +559,9 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) stateProof(latestRoundInInterval basics.Round, spType protocol.StateProofType, stateProof sp.StateProof, stateProofMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
+func (cs *roundCowState) applyStateProof(latestRoundInInterval basics.Round, spType protocol.StateProofType, stateProof sp.StateProof, stateProofMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
 	if spType != protocol.StateProofBasic {
-		return fmt.Errorf("stateProof type %d not supported", spType)
+		return fmt.Errorf("applyStateProof type %d not supported", spType)
 	}
 
 	nextStateProofRnd := cs.stateProofNext()
@@ -1168,7 +1167,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.stateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.StateProofMessage, tx.Header.FirstValid, eval.validate)
+			err = balances.applyStateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.StateProofMessage, tx.Header.FirstValid, eval.validate)
 		}
 
 	default:

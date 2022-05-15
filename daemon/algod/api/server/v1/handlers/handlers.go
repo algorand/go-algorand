@@ -94,7 +94,7 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 	case protocol.ApplicationCallTx:
 		res = applicationCallTxEncode(tx, ad)
 	case protocol.StateProofTx:
-		res = stateProofTxEncode(tx, ad)
+		res = stateProofTxEncode(tx)
 	default:
 		return res, errors.New(errUnknownTransactionType)
 	}
@@ -351,7 +351,7 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
-func stateProofTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+func stateProofTxEncode(tx transactions.Transaction) v1.Transaction {
 	sp := v1.StateProofTransactionType{
 		StateProofIntervalLatestRound: uint64(tx.StateProofTxnFields.StateProofIntervalLatestRound),
 		StateProof:                    protocol.Encode(&tx.StateProofTxnFields.StateProof),
