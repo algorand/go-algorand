@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"testing"
@@ -30,27 +30,27 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateCertForTesting(a)
-	cert := p.cc
+	p := generateProofForTesting(a)
+	sProof := p.sp
 
-	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
 	a.NoError(err)
 
 	for i := uint64(0); i < p.numberOfParticipnets; i++ {
-		_, ok := cert.Reveals[i]
+		_, ok := sProof.Reveals[i]
 		if !ok {
-			cert.PositionsToReveal[0] = i
+			sProof.PositionsToReveal[0] = i
 			break
 		}
 	}
 
-	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
+	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
 	a.ErrorIs(err, ErrNoRevealInPos)
 
 }
@@ -61,42 +61,42 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateCertForTesting(a)
-	cert := p.cc
-	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
+	p := generateProofForTesting(a)
+	sProof := p.sp
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
 	a.NoError(err)
 
 	// we need to find a reveal that will not match the first coin.
 	// In order to accomplish that we will extract the first coin and find a reveals ( > 1, since index 0 will satisfy the verifier)
 	// that doesn't match
-	coinAt0 := cert.PositionsToReveal[0]
+	coinAt0 := sProof.PositionsToReveal[0]
 	choice := coinChoiceSeed{
 		partCommitment: verifier.participantsCommitment,
 		lnProvenWeight: verifier.lnProvenWeight,
-		sigCommitment:  cert.SigCommit,
-		signedWeight:   cert.SignedWeight,
+		sigCommitment:  sProof.SigCommit,
+		signedWeight:   sProof.SignedWeight,
 		data:           p.data,
 	}
 	coinHash := makeCoinGenerator(&choice)
 	coin := coinHash.getNextCoin()
 	j := 1
-	for ; j < len(cert.PositionsToReveal); j++ {
-		reveal := cert.Reveals[cert.PositionsToReveal[j]]
+	for ; j < len(sProof.PositionsToReveal); j++ {
+		reveal := sProof.Reveals[sProof.PositionsToReveal[j]]
 		if !(reveal.SigSlot.L <= coin && coin < reveal.SigSlot.L+reveal.Part.Weight) {
 			break
 		}
 	}
 
-	cert.PositionsToReveal[0] = cert.PositionsToReveal[j]
-	cert.PositionsToReveal[j] = coinAt0
+	sProof.PositionsToReveal[0] = sProof.PositionsToReveal[j]
+	sProof.PositionsToReveal[j] = coinAt0
 
-	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
+	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
 	a.ErrorIs(err, ErrCoinNotInRange)
 
 }
@@ -105,26 +105,26 @@ func TestVerifyBadSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateCertForTesting(a)
-	cert := p.cc
+	p := generateProofForTesting(a)
+	sProof := p.sp
 
-	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
-	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
 	a.NoError(err)
 
-	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
-	signerInRound := key.GetSigner(compactCertRoundsForTests)
+	key := generateTestSigner(0, uint64(stateProofIntervalForTests)*20+1, stateProofIntervalForTests, a)
+	signerInRound := key.GetSigner(stateProofIntervalForTests)
 	newSig, err := signerInRound.SignBytes([]byte{0x1, 0x2})
 	a.NoError(err)
 
-	rev := cert.Reveals[0]
+	rev := sProof.Reveals[0]
 	rev.SigSlot.Sig = newSig
-	cert.Reveals[0] = rev
+	sProof.Reveals[0] = rev
 
-	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
+	verifier, err = MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
-	err = verifier.Verify(compactCertRoundsForTests, p.data, &cert)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
 
 }
@@ -134,6 +134,6 @@ func TestVerifyZeroProvenWeight(t *testing.T) {
 	a := require.New(t)
 
 	partcommit := crypto.GenericDigest{}
-	_, err := MkVerifier(partcommit, 0, compactCertStrengthTargetForTests)
+	_, err := MkVerifier(partcommit, 0, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 }

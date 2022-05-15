@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"encoding/binary"
@@ -34,7 +34,7 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	a := require.New(t)
 	sigs := make([]sigslot, 2)
 
-	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
+	key := generateTestSigner(0, uint64(stateProofIntervalForTests)*20+1, stateProofIntervalForTests, a)
 
 	message := testMessage("hello world")
 	sig, err := key.GetSigner(uint64(256)).SignBytes(message)

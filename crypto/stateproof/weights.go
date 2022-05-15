@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"errors"
@@ -26,11 +26,11 @@ import (
 // errors for the weights verification
 var (
 	ErrSignedWeightLessThanProvenWeight = errors.New("signed weight is less than or equal to proven weight")
-	ErrTooManyReveals                   = errors.New("too many reveals in cert")
+	ErrTooManyReveals                   = errors.New("too many reveals in stateproof")
 	ErrZeroSignedWeight                 = errors.New("signed weight cannot be zero")
 	ErrIllegalInputForLnApprox          = errors.New("cannot calculate a ln integer value for 0")
 	ErrInsufficientSingedWeight         = errors.New("the number of reveals is not large enough to prove that the desired weight signed, with the desired security level")
-	ErrNegativeNumOfRevealsEquation     = errors.New("cert creation failed: weights will not be able to satisfy the verification equation")
+	ErrNegativeNumOfRevealsEquation     = errors.New("stateproof creation failed: weights will not be able to satisfy the verification equation")
 )
 
 func bigInt(num uint64) *big.Int {
@@ -49,7 +49,7 @@ func lnIntApproximation(x uint64) (uint64, error) {
 
 }
 
-// verifyWeights makes sure that the number of reveals in the cert is correct with respect
+// verifyWeights makes sure that the number of reveals in the state proof is correct with respect
 // to the signedWeight and a provenWeight upper bound.
 // This function checks that the following inequality is satisfied
 //

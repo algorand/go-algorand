@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"encoding/binary"
@@ -34,9 +34,9 @@ type committableSignatureSlot struct {
 // ErrIndexOutOfBound returned when an index is out of the array's bound
 var ErrIndexOutOfBound = errors.New("index is out of bound")
 
-// committableSignatureSlotArray is used to create a merkle tree on the compact cert's
+// committableSignatureSlotArray is used to create a merkle tree on the stateproof's
 // signature array. it serializes the MSS signatures using a specific format
-// compact cert signature array.
+// state proof signature array.
 //msgp:ignore committableSignatureSlotArray
 type committableSignatureSlotArray []sigslot
 

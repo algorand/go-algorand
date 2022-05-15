@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"github.com/algorand/go-algorand/crypto"
@@ -29,7 +29,7 @@ type StateProofMessageHash [32]byte
 // StateProofMessageHashType is the type of hash used to generate StateProofMessageHash
 const StateProofMessageHashType = crypto.Sha256
 
-// A sigslotCommit is a single slot in the sigs array that forms the certificate.
+// A sigslotCommit is a single slot in the sigs array that forms the state proof.
 type sigslotCommit struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -42,8 +42,8 @@ type sigslotCommit struct {
 	L uint64 `codec:"l"`
 }
 
-// Reveal is a single array position revealed as part of a compact
-// certificate.  It reveals an element of the signature array and
+// Reveal is a single array position revealed as part of a state
+// proof.  It reveals an element of the signature array and
 // the corresponding element of the participants array.
 type Reveal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -52,8 +52,8 @@ type Reveal struct {
 	Part    basics.Participant `codec:"p"`
 }
 
-// Cert represents a compact certificate.
-type Cert struct {
+// StateProof represents a proof on Algorand's state.
+type StateProof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	SigCommit                  crypto.GenericDigest `codec:"c"`

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"errors"
@@ -40,7 +40,7 @@ type sigslot struct {
 }
 
 // Builder keeps track of signatures on a message and eventually produces
-// a compact certificate for that message.
+// a stater poof for that message.
 type Builder struct {
 	data           StateProofMessageHash
 	round          uint64
@@ -53,7 +53,7 @@ type Builder struct {
 	strengthTarget uint64
 }
 
-// Errors for the CompactCert builder
+// Errors for the StateProof builder
 var (
 	ErrPositionOutOfBound     = errors.New("requested position is out of bounds")
 	ErrPositionAlreadyPresent = errors.New("requested position is already present")
@@ -61,7 +61,7 @@ var (
 	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
 )
 
-// MkBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a compact cert.
+// MkBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a stateproof.
 func MkBuilder(data StateProofMessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {
 	npart := len(part)
 	lnProvenWt, err := lnIntApproximation(provenWeight)
@@ -122,7 +122,7 @@ func (b *Builder) IsValid(pos uint64, sig merklesignature.Signature, verifySig b
 	return nil
 }
 
-// Add a signature to the set of signatures available for building a certificate.
+// Add a signature to the set of signatures available for building a proof.
 func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
 	isPresent, err := b.Present(pos)
 	if err != nil {
@@ -141,7 +141,7 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
 	return nil
 }
 
-// Ready returns whether the certificate is ready to be built.
+// Ready returns whether the state proof is ready to be built.
 func (b *Builder) Ready() bool {
 	return b.signedWeight > b.provenWeight
 }
@@ -180,9 +180,9 @@ again:
 	goto again
 }
 
-// Build returns a compact certificate, if the builder has accumulated
+// Build returns a state proof, if the builder has accumulated
 // enough signatures to construct it.
-func (b *Builder) Build() (*Cert, error) {
+func (b *Builder) Build() (*StateProof, error) {
 	if !b.Ready() {
 		return nil, fmt.Errorf("%w: %d <= %d", ErrSignedWeightLessThanProvenWeight, b.signedWeight, b.provenWeight)
 	}
@@ -199,7 +199,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	// Reveal sufficient number of signatures
-	c := &Cert{
+	c := &StateProof{
 		SigCommit:                  sigtree.Root(),
 		SignedWeight:               b.signedWeight,
 		Reveals:                    make(map[uint64]Reveal),

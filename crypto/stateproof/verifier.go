@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"errors"
@@ -24,20 +24,20 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
-// Errors for the CompactCert verifier
+// Errors for the StateProof verifier
 var (
 	ErrCoinNotInRange = errors.New("coin is not within slot weight range")
 	ErrNoRevealInPos  = errors.New("no reveal for position")
 )
 
-// Verifier is used to verify a compact certificate. those fields represent all the verifier's trusted data
+// Verifier is used to verify a state proof. those fields represent all the verifier's trusted data
 type Verifier struct {
 	strengthTarget         uint64
 	lnProvenWeight         uint64 // ln(provenWeight) as integer with 16 bits of precision
 	participantsCommitment crypto.GenericDigest
 }
 
-// MkVerifier constructs a verifier to check the compact certificate. the arguments for this function
+// MkVerifier constructs a verifier to check the state proof. the arguments for this function
 // represent all the verifier's trusted data
 func MkVerifier(partcom crypto.GenericDigest, provenWeight uint64, strengthTarget uint64) (*Verifier, error) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
@@ -52,16 +52,16 @@ func MkVerifier(partcom crypto.GenericDigest, provenWeight uint64, strengthTarge
 	}, nil
 }
 
-// Verify checks if c is a valid compact certificate for the data on a round.
+// Verify checks if c is a valid state proof for the data on a round.
 // it uses the trusted data from the Verifier struct
-func (v *Verifier) Verify(round uint64, data StateProofMessageHash, c *Cert) error {
-	nr := uint64(len(c.PositionsToReveal))
-	if err := verifyWeights(c.SignedWeight, v.lnProvenWeight, nr, v.strengthTarget); err != nil {
+func (v *Verifier) Verify(round uint64, data StateProofMessageHash, s *StateProof) error {
+	nr := uint64(len(s.PositionsToReveal))
+	if err := verifyWeights(s.SignedWeight, v.lnProvenWeight, nr, v.strengthTarget); err != nil {
 		return err
 	}
 
-	version := c.MerkleSignatureSaltVersion
-	for _, reveal := range c.Reveals {
+	version := s.MerkleSignatureSaltVersion
+	for _, reveal := range s.Reveals {
 		if err := reveal.SigSlot.Sig.IsSaltVersionEqual(version); err != nil {
 			return err
 		}
@@ -70,7 +70,7 @@ func (v *Verifier) Verify(round uint64, data StateProofMessageHash, c *Cert) err
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 
-	for pos, r := range c.Reveals {
+	for pos, r := range s.Reveals {
 		sig, err := buildCommittableSignature(r.SigSlot)
 		if err != nil {
 			return err
@@ -92,27 +92,27 @@ func (v *Verifier) Verify(round uint64, data StateProofMessageHash, c *Cert) err
 	}
 
 	// verify all the reveals proofs on the signature commitment.
-	if err := merklearray.VerifyVectorCommitment(c.SigCommit[:], sigs, &c.SigProofs); err != nil {
+	if err := merklearray.VerifyVectorCommitment(s.SigCommit[:], sigs, &s.SigProofs); err != nil {
 		return err
 	}
 
 	// verify all the reveals proofs on the participant commitment.
-	if err := merklearray.VerifyVectorCommitment(v.participantsCommitment[:], parts, &c.PartProofs); err != nil {
+	if err := merklearray.VerifyVectorCommitment(v.participantsCommitment[:], parts, &s.PartProofs); err != nil {
 		return err
 	}
 
 	choice := coinChoiceSeed{
 		partCommitment: v.participantsCommitment,
 		lnProvenWeight: v.lnProvenWeight,
-		sigCommitment:  c.SigCommit,
-		signedWeight:   c.SignedWeight,
+		sigCommitment:  s.SigCommit,
+		signedWeight:   s.SignedWeight,
 		data:           data,
 	}
 
 	coinHash := makeCoinGenerator(&choice)
 	for j := uint64(0); j < nr; j++ {
-		pos := c.PositionsToReveal[j]
-		reveal, exists := c.Reveals[pos]
+		pos := s.PositionsToReveal[j]
+		reveal, exists := s.Reveals[pos]
 		if !exists {
 			return fmt.Errorf("%w: %d", ErrNoRevealInPos, pos)
 		}

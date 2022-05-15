@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"math"
@@ -33,7 +33,7 @@ func TestMaxNumberOfRevealsInVerify(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals+1, compactCertStrengthTargetForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals+1, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
@@ -46,7 +46,7 @@ func TestMaxNumberOfReveals(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	_, err = numReveals(signedWeight, lnProvenWt, compactCertStrengthTargetForTests)
+	_, err = numReveals(signedWeight, lnProvenWt, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrTooManyReveals)
 }
 
@@ -59,13 +59,13 @@ func TestVerifyProvenWeight(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	numOfReveals, err := numReveals(signedWeight, lnProvenWt, compactCertStrengthTargetForTests)
+	numOfReveals, err := numReveals(signedWeight, lnProvenWt, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals, compactCertStrengthTargetForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, compactCertStrengthTargetForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, numOfReveals-1, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrInsufficientSingedWeight)
 }
 
@@ -78,7 +78,7 @@ func TestVerifyZeroNumberOfRevealsEquation(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	_, err = numReveals(signedWeight, lnProvenWt, compactCertStrengthTargetForTests)
+	_, err = numReveals(signedWeight, lnProvenWt, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrNegativeNumOfRevealsEquation)
 }
 
@@ -110,7 +110,7 @@ func TestVerifyLimits(t *testing.T) {
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
-	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals-1, compactCertStrengthTargetForTests)
+	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals-1, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrZeroSignedWeight)
 }
 
@@ -124,10 +124,10 @@ func TestNumRevealsApproxBound(t *testing.T) {
 		// ratio 1.1 (i==19) will exceed the max number of reveals (signed and proven wt are too close) -
 		// so we lower the Strength param for testing
 		for i := 0; i < 19; i++ {
-			checkRatio(i, sigWt, compactCertStrengthTargetForTests, a)
+			checkRatio(i, sigWt, stateProofStrengthTargetForTests, a)
 		}
 
-		checkRatio(19, sigWt, compactCertStrengthTargetForTests/2, a)
+		checkRatio(19, sigWt, stateProofStrengthTargetForTests/2, a)
 
 	}
 }
@@ -158,7 +158,7 @@ func TestNumReveals(t *testing.T) {
 	billion := uint64(1000 * 1000 * 1000)
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 2 * billion * microalgo
-	strengthTarget := uint64(compactCertStrengthTargetForTests)
+	strengthTarget := uint64(stateProofStrengthTargetForTests)
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	a.NoError(err)
 
@@ -171,7 +171,7 @@ func TestNumReveals(t *testing.T) {
 				signedWeight, provenWeight, strengthTarget, n)
 		}
 
-		err = verifyWeights(signedWeight, lnProvenWt, n, compactCertStrengthTargetForTests)
+		err = verifyWeights(signedWeight, lnProvenWt, n, stateProofStrengthTargetForTests)
 		a.NoError(err)
 	}
 }
@@ -181,7 +181,7 @@ func BenchmarkVerifyWeights(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	strengthTarget := uint64(compactCertStrengthTargetForTests)
+	strengthTarget := uint64(stateProofStrengthTargetForTests)
 
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	require.NoError(b, err)
@@ -202,7 +202,7 @@ func BenchmarkNumReveals(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	strengthTarget := uint64(compactCertStrengthTargetForTests)
+	strengthTarget := uint64(stateProofStrengthTargetForTests)
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	require.NoError(b, err)
 

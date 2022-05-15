@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"bytes"
@@ -45,15 +45,15 @@ func (m testMessage) IntoStateProofMessageHash() StateProofMessageHash {
 }
 
 type paramsForTest struct {
-	cc                   Cert
+	sp                   StateProof
 	provenWeight         uint64
 	partCommitment       crypto.GenericDigest
 	numberOfParticipnets uint64
 	data                 StateProofMessageHash
 }
 
-const compactCertRoundsForTests = 256
-const compactCertStrengthTargetForTests = 256
+const stateProofIntervalForTests = 256
+const stateProofStrengthTargetForTests = 256
 
 func hashBytes(hash hash.Hash, m []byte) []byte {
 	hash.Reset()
@@ -83,7 +83,7 @@ func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a 
 	return signer
 }
 
-func generateCertForTesting(a *require.Assertions) paramsForTest {
+func generateProofForTesting(a *require.Assertions) paramsForTest {
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
@@ -102,13 +102,13 @@ func generateCertForTesting(a *require.Assertions) paramsForTest {
 	provenWt := uint64(totalWeight / 2)
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
+	key := generateTestSigner(0, uint64(stateProofIntervalForTests)*20+1, stateProofIntervalForTests, a)
 	var parts []basics.Participant
 	var sigs []merklesignature.Signature
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
 
-	signerInRound := key.GetSigner(compactCertRoundsForTests)
+	signerInRound := key.GetSigner(stateProofIntervalForTests)
 	sig, err := signerInRound.SignBytes(data[:])
 	a.NoError(err, "failed to create keys")
 
@@ -119,7 +119,7 @@ func generateCertForTesting(a *require.Assertions) paramsForTest {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
+	b, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := uint64(0); i < uint64(npart); i++ {
@@ -133,11 +133,11 @@ func generateCertForTesting(a *require.Assertions) paramsForTest {
 		a.True(isPresent)
 	}
 
-	cert, err := b.Build()
+	proof, err := b.Build()
 	a.NoError(err)
 
 	p := paramsForTest{
-		cc:                   *cert,
+		sp:                   *proof,
 		provenWeight:         provenWt,
 		partCommitment:       partcom.Root(),
 		numberOfParticipnets: uint64(npart),
@@ -151,32 +151,32 @@ func TestBuildVerify(t *testing.T) {
 
 	a := require.New(t)
 
-	p := generateCertForTesting(a)
-	cert := p.cc
+	p := generateProofForTesting(a)
+	sProof := p.sp
 
 	var someReveal Reveal
-	for _, rev := range cert.Reveals {
+	for _, rev := range sProof.Reveals {
 		someReveal = rev
 		break
 	}
 
-	certenc := protocol.Encode(&cert)
+	proofEnc := protocol.Encode(&sProof)
 	fmt.Printf("StateProof size:\n")
-	fmt.Printf("  %6d elems sigproofs\n", len(cert.SigProofs.Path))
-	fmt.Printf("  %6d bytes sigproofs\n", len(protocol.EncodeReflect(cert.SigProofs)))
-	fmt.Printf("  %6d bytes partproofs\n", len(protocol.EncodeReflect(cert.PartProofs)))
-	fmt.Printf("  %6d bytes sigproof per reveal\n", len(protocol.EncodeReflect(cert.SigProofs))/len(cert.Reveals))
-	fmt.Printf("  %6d reveals:\n", len(cert.Reveals))
+	fmt.Printf("  %6d elems sigproofs\n", len(sProof.SigProofs.Path))
+	fmt.Printf("  %6d bytes sigproofs\n", len(protocol.EncodeReflect(sProof.SigProofs)))
+	fmt.Printf("  %6d bytes partproofs\n", len(protocol.EncodeReflect(sProof.PartProofs)))
+	fmt.Printf("  %6d bytes sigproof per reveal\n", len(protocol.EncodeReflect(sProof.SigProofs))/len(sProof.Reveals))
+	fmt.Printf("  %6d reveals:\n", len(sProof.Reveals))
 	fmt.Printf("    %6d bytes reveals[*] participant\n", len(protocol.Encode(&someReveal.Part)))
 	fmt.Printf("    %6d bytes reveals[*] sigslot\n", len(protocol.Encode(&someReveal.SigSlot)))
 	fmt.Printf("    %6d bytes reveals[*] total\n", len(protocol.Encode(&someReveal)))
-	fmt.Printf("  %6d bytes total\n", len(certenc))
+	fmt.Printf("  %6d bytes total\n", len(proofEnc))
 
-	verif, err := MkVerifier(p.partCommitment, p.provenWeight, compactCertStrengthTargetForTests)
+	verif, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	err = verif.Verify(compactCertRoundsForTests, p.data, &cert)
-	a.NoError(err, "failed to verify the compact cert")
+	err = verif.Verify(stateProofIntervalForTests, p.data, &sProof)
+	a.NoError(err, "failed to verify the compact sProof")
 }
 
 func generateRandomParticipant(a *require.Assertions) basics.Participant {
@@ -259,7 +259,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	var sigs []merklesignature.Signature
 
 	for i := 0; i < numPart; i++ {
-		key := generateTestSigner(0, uint64(compactCertRoundsForTests)*8, compactCertRoundsForTests, a)
+		key := generateTestSigner(0, uint64(stateProofIntervalForTests)*8, stateProofIntervalForTests, a)
 
 		part := basics.Participant{
 			PK:     *key.GetVerifier(),
@@ -267,7 +267,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		}
 		parts = append(parts, part)
 
-		sig, err := key.GetSigner(compactCertRoundsForTests).SignBytes(data[:])
+		sig, err := key.GetSigner(stateProofIntervalForTests).SignBytes(data[:])
 		require.NoError(t, err, "failed to create keys")
 		sigs = append(sigs, sig)
 
@@ -276,7 +276,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/(2*numPart)), parts, partcom, compactCertStrengthTargetForTests)
+	b, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/(2*numPart)), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := 0; i < numPart; i++ {
@@ -285,13 +285,13 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		b.Add(uint64(i), sigs[i])
 	}
 
-	cert, err := b.Build()
+	sProof, err := b.Build()
 	a.NoError(err)
 
-	leaf0 := calculateHashOnSigLeaf(t, sigs[0], findLInCert(a, sigs[0], cert))
-	leaf1 := calculateHashOnSigLeaf(t, sigs[1], findLInCert(a, sigs[1], cert))
-	leaf2 := calculateHashOnSigLeaf(t, sigs[2], findLInCert(a, sigs[2], cert))
-	leaf3 := calculateHashOnSigLeaf(t, sigs[3], findLInCert(a, sigs[3], cert))
+	leaf0 := calculateHashOnSigLeaf(t, sigs[0], findLInProof(a, sigs[0], sProof))
+	leaf1 := calculateHashOnSigLeaf(t, sigs[1], findLInProof(a, sigs[1], sProof))
+	leaf2 := calculateHashOnSigLeaf(t, sigs[2], findLInProof(a, sigs[2], sProof))
+	leaf3 := calculateHashOnSigLeaf(t, sigs[3], findLInProof(a, sigs[3], sProof))
 
 	// hash internal node according to the vector commitment indices
 	inner1 := calculateHashOnInternalNode(leaf0, leaf2)
@@ -299,11 +299,11 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 
 	calcRoot := calculateHashOnInternalNode(inner1, inner2)
 
-	a.Equal(cert.SigCommit, crypto.GenericDigest(calcRoot))
+	a.Equal(sProof.SigCommit, crypto.GenericDigest(calcRoot))
 
 }
 
-// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall compcatcert verification)
+// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall stateproof verification)
 // it includes parsing the signature's format (according to Algorand's spec) and binds it to a specific length.
 // here we also expect the scheme to use Falcon signatures and nothing else.
 func TestSimulateSignatureVerification(t *testing.T) {
@@ -322,7 +322,7 @@ func TestSimulateSignatureVerification(t *testing.T) {
 	checkSignature(a, sigBytes, genericKey, sigRound, msg, 5, 6)
 }
 
-// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall compcatcert verification)
+// The aim of this test is to simulate how a SNARK circuit will verify a signature.(part of the overall stateproof verification)
 // it includes parsing the signature's format (according to Algorand's spec) and binds it to a specific length.
 // here we also expect the scheme to use Falcon signatures and nothing else.
 func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
@@ -330,9 +330,9 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	a := require.New(t)
 
 	// we create one ephemeral key so the signature's proof should be with len 0
-	signer := generateTestSigner(1, compactCertRoundsForTests, compactCertRoundsForTests, a)
+	signer := generateTestSigner(1, stateProofIntervalForTests, stateProofIntervalForTests, a)
 
-	sigRound := uint64(compactCertRoundsForTests)
+	sigRound := uint64(stateProofIntervalForTests)
 	msg := testMessage("testMessage")
 	sig, err := signer.GetSigner(sigRound).SignBytes(msg)
 	a.NoError(err)
@@ -427,8 +427,8 @@ func verifyFalconSignature(a *require.Assertions, sigBytes []byte, parsedBytes i
 	return parsedBytes, falconPK
 }
 
-func findLInCert(a *require.Assertions, signature merklesignature.Signature, cert *Cert) uint64 {
-	for _, t := range cert.Reveals {
+func findLInProof(a *require.Assertions, signature merklesignature.Signature, proof *StateProof) uint64 {
+	for _, t := range proof.Reveals {
 		if bytes.Compare(t.SigSlot.Sig.Signature, signature.Signature) == 0 {
 			return t.SigSlot.L
 		}
@@ -449,7 +449,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 
 	data := testMessage("hello world").IntoStateProofMessageHash()
 
-	key := generateTestSigner(0, uint64(compactCertRoundsForTests)*20+1, compactCertRoundsForTests, a)
+	key := generateTestSigner(0, uint64(stateProofIntervalForTests)*20+1, stateProofIntervalForTests, a)
 	var parts []basics.Participant
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
@@ -457,11 +457,11 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
+	builder, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	// actual test:
-	signerInRound := key.GetSigner(compactCertRoundsForTests)
+	signerInRound := key.GetSigner(stateProofIntervalForTests)
 	sig, err := signerInRound.SignBytes(data[:])
 	require.NoError(t, err, "failed to create keys")
 	// Corrupting the version of the signature:
@@ -481,7 +481,7 @@ func TestBuildAndReady(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MkBuilder(data, compactCertRoundsForTests, uint64(totalWeight/2), parts, partcom, compactCertStrengthTargetForTests)
+	builder, err := MkBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	a.False(builder.Ready())
@@ -592,7 +592,7 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 
 	data := testMessage("hello world").IntoStateProofMessageHash()
 
-	_, err := MkBuilder(data, compactCertRoundsForTests, 0, nil, nil, compactCertStrengthTargetForTests)
+	_, err := MkBuilder(data, stateProofIntervalForTests, 0, nil, nil, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 
 }
@@ -610,13 +610,13 @@ func BenchmarkBuildVerify(b *testing.B) {
 	var partkeys []*merklesignature.Secrets
 	var sigs []merklesignature.Signature
 	for i := 0; i < npart; i++ {
-		signer := generateTestSigner(0, compactCertRoundsForTests+1, compactCertRoundsForTests, a)
+		signer := generateTestSigner(0, stateProofIntervalForTests+1, stateProofIntervalForTests, a)
 		part := basics.Participant{
 			PK:     *signer.GetVerifier(),
 			Weight: uint64(totalWeight / npart),
 		}
 
-		signerInRound := signer.GetSigner(compactCertRoundsForTests)
+		signerInRound := signer.GetSigner(stateProofIntervalForTests)
 		sig, err := signerInRound.SignBytes(data[:])
 		require.NoError(b, err, "failed to create keys")
 
@@ -625,7 +625,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		parts = append(parts, part)
 	}
 
-	var cert *Cert
+	var sp *StateProof
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	if err != nil {
 		b.Error(err)
@@ -633,7 +633,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("AddBuild", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			builder, err := MkBuilder(data, compactCertRoundsForTests, provenWeight, parts, partcom, compactCertStrengthTargetForTests)
+			builder, err := MkBuilder(data, stateProofIntervalForTests, provenWeight, parts, partcom, stateProofStrengthTargetForTests)
 			if err != nil {
 				b.Error(err)
 			}
@@ -644,7 +644,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 				builder.Add(uint64(i), sigs[i])
 			}
 
-			cert, err = builder.Build()
+			sp, err = builder.Build()
 			if err != nil {
 				b.Error(err)
 			}
@@ -653,8 +653,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("Verify", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			verif, _ := MkVerifier(partcom.Root(), provenWeight, compactCertStrengthTargetForTests)
-			if err = verif.Verify(compactCertRoundsForTests, data, cert); err != nil {
+			verif, _ := MkVerifier(partcom.Root(), provenWeight, stateProofStrengthTargetForTests)
+			if err = verif.Verify(stateProofIntervalForTests, data, sp); err != nil {
 				b.Error(err)
 			}
 		}

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package compactcert
+package stateproof
 
 import (
 	"encoding/binary"
@@ -26,7 +26,7 @@ import (
 )
 
 // The coinChoiceSeed defines the randomness seed that will be given to an XOF function. This will be used for choosing
-// the index of the coin to reveal as part of the compact certificate.
+// the index of the coin to reveal as part of the state proof.
 type coinChoiceSeed struct {
 	// the ToBeHashed function should be updated when fields are added to this structure
 

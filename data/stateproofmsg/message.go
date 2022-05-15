@@ -18,7 +18,7 @@ package stateproofmsg
 
 import (
 	"github.com/algorand/go-algorand/crypto"
-	cc "github.com/algorand/go-algorand/crypto/compactcert"
+	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -35,9 +35,9 @@ func (m Message) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // IntoStateProofMessageHash returns a hashed representation fitting the compact certificate messages.
-func (m Message) IntoStateProofMessageHash() cc.StateProofMessageHash {
-	digest := crypto.GenericHashObj(crypto.HashFactory{HashType: cc.StateProofMessageHashType}.NewHash(), m)
-	result := cc.StateProofMessageHash{}
+func (m Message) IntoStateProofMessageHash() sp.StateProofMessageHash {
+	digest := crypto.GenericHashObj(crypto.HashFactory{HashType: sp.StateProofMessageHashType}.NewHash(), m)
+	result := sp.StateProofMessageHash{}
 	copy(result[:], digest)
 	return result
 }
