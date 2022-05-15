@@ -1422,28 +1422,28 @@
       "description": "CompactCertTransactionType contains the additional fields for a compact cert transaction",
       "type": "object",
       "required": [
-        "rnd",
-        "cert",
-        "certmsg"
+        "sprnd",
+        "sp",
+        "spmsg"
       ],
       "properties": {
-        "cert": {
-          "description": "Cert is the msgpack encoding of the compact cert.",
+        "sp": {
+          "description": "StateProof is the msgpack encoding of the state proof.",
           "type": "string",
           "format": "byte",
-          "x-go-name": "Cert"
+          "x-go-name": "StateProof"
         },
-        "certmsg": {
-          "description": "CertMsg is the msgpack encoding of the state proof message.",
+        "spmsg": {
+          "description": "StateProofMessage is the msgpack encoding of the state proof message.",
           "type": "string",
           "format": "byte",
-          "x-go-name": "CertMsg"
+          "x-go-name": "StateProofMessage"
         },
-        "rnd": {
-          "description": "CertIntervalLatestRound is the latest round in the interval this compact cert attests to.",
+        "sprnd": {
+          "description": "StateProofIntervalLatestRound is the latest round in the interval this state proof attests to.",
           "type": "integer",
           "format": "uint64",
-          "x-go-name": "CertIntervalLatestRound"
+          "x-go-name": "StateProofIntervalLatestRound"
         }
       },
       "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"

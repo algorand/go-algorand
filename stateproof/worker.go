@@ -23,7 +23,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -35,7 +35,7 @@ import (
 )
 
 type builder struct {
-	*compactcert.Builder
+	*stateproof.Builder
 
 	voters    *ledgercore.VotersForRound
 	votersHdr bookkeeping.BlockHeader

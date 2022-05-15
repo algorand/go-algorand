@@ -28,8 +28,8 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -84,7 +84,7 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
 	var ccBasic = bookkeeping.StateProofTrackingData{
-		StateProofVotersCommitment:  make([]byte, compactcert.HashSize),
+		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
 		StateProofVotersTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
@@ -170,7 +170,7 @@ func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.Voter
 		})
 	}
 
-	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: stateproof.HashType})
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +297,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 			require.NoError(t, err)
 
-			verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
+			verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 			require.NoError(t, err)
 
 			err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
@@ -356,7 +356,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	voters, err := s.VotersForStateProof(tx.Txn.StateProofIntervalLatestRound - basics.Round(proto.StateProofInterval) - basics.Round(proto.StateProofVotersLookback))
 	require.NoError(t, err)
 
-	verif, err := compactcert.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
+	verif, err := stateproof.MkVerifier(voters.Tree.Root(), provenWeight, proto.StateProofStrengthTarget)
 	require.NoError(t, err)
 	err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), msg.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 	require.NoError(t, err)

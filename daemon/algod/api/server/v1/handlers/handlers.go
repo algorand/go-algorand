@@ -352,14 +352,14 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 }
 
 func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
-	cc := v1.CompactCertTransactionType{
-		CertIntervalLatestRound: uint64(tx.StateProofTxnFields.StateProofIntervalLatestRound),
-		Cert:                    protocol.Encode(&tx.StateProofTxnFields.StateProof),
-		CertMsg:                 protocol.Encode(&tx.StateProofMessage),
+	sp := v1.StateProofTransactionType{
+		StateProofIntervalLatestRound: uint64(tx.StateProofTxnFields.StateProofIntervalLatestRound),
+		StateProof:                    protocol.Encode(&tx.StateProofTxnFields.StateProof),
+		StateProofMessage:             protocol.Encode(&tx.StateProofMessage),
 	}
 
 	return v1.Transaction{
-		CompactCert: &cc,
+		StateProof: &sp,
 	}
 }
 
@@ -505,13 +505,6 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
-		CompactCertVotersTotal: b.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64(),
-		CompactCertNextRound:   uint64(b.StateProofTracking[protocol.StateProofBasic].StateProofNextRound),
-	}
-
-	if !b.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEmpty() {
-		voters := b.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment
-		block.CompactCertVoters = voters[:]
 	}
 
 	// Transactions

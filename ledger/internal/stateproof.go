@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -36,7 +36,7 @@ var (
 	errNotAtRightMultiple               = errors.New("state proof is not in a valid round multiple")
 	errInvalidVotersRound               = errors.New("invalid voters round")
 	errExpectedDifferentStateProofRound = errors.New("expected different state proof round")
-	errInsufficientWeight               = errors.New("insufficient cert weight")
+	errInsufficientWeight               = errors.New("insufficient state proof weight")
 )
 
 // AcceptableStateProofWeight computes the acceptable signed weight
@@ -137,7 +137,7 @@ func GetProvenWeight(votersHdr bookkeeping.BlockHeader, latestRoundInProofHdr bo
 }
 
 // validateStateProof checks that a state proof is valid.
-func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateProof compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg stateproofmsg.Message) error {
+func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateProof stateproof.StateProof, votersHdr bookkeeping.BlockHeader, nextStateProofRnd basics.Round, atRound basics.Round, msg stateproofmsg.Message) error {
 	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
 
 	if proto.StateProofInterval == 0 {
@@ -170,7 +170,7 @@ func validateStateProof(latestRoundInIntervalHdr bookkeeping.BlockHeader, stateP
 		return fmt.Errorf("%v: %w", err, errStateProofParamCreation)
 	}
 
-	verifier, err := compactcert.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+	verifier, err := stateproof.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		provenWeight,
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {

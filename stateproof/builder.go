@@ -23,7 +23,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
@@ -72,7 +72,7 @@ func (ccw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	var res builder
 	res.votersHdr = votersHdr
 	res.voters = voters
-	res.Builder, err = compactcert.MkBuilder(msg.IntoStateProofMessageHash(),
+	res.Builder, err = stateproof.MkBuilder(msg.IntoStateProofMessageHash(),
 		uint64(hdr.Round),
 		provenWeight,
 		voters.Participants,

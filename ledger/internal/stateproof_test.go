@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -34,73 +34,73 @@ import (
 func TestValidateStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var certHdr bookkeeping.BlockHeader
-	var cert compactcert.Cert
+	var spHdr bookkeeping.BlockHeader
+	var sp stateproof.StateProof
 	var votersHdr bookkeeping.BlockHeader
-	var nextCertRnd basics.Round
+	var nextSPRnd basics.Round
 	var atRound basics.Round
 	msg := stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
-	err := validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err := validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	t.Log(err)
 	require.ErrorIs(t, err, errStateProofNotEnabled)
 
-	certHdr.CurrentProtocol = "TestValidateStateProof"
-	certHdr.Round = 1
-	proto := config.Consensus[certHdr.CurrentProtocol]
+	spHdr.CurrentProtocol = "TestValidateStateProof"
+	spHdr.Round = 1
+	proto := config.Consensus[spHdr.CurrentProtocol]
 	proto.StateProofInterval = 2
 	proto.StateProofStrengthTarget = 256
 	proto.StateProofWeightThreshold = (1 << 32) * 30 / 100
-	config.Consensus[certHdr.CurrentProtocol] = proto
+	config.Consensus[spHdr.CurrentProtocol] = proto
 
-	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errNotAtRightMultiple)
 
-	certHdr.Round = 4
+	spHdr.Round = 4
 	votersHdr.Round = 4
-	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errInvalidVotersRound)
 
 	votersHdr.Round = 2
-	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
-	nextCertRnd = 4
-	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	nextSPRnd = 4
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errStateProofParamCreation)
 
-	votersHdr.CurrentProtocol = certHdr.CurrentProtocol
-	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	votersHdr.CurrentProtocol = spHdr.CurrentProtocol
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	t.Log(err)
 	// since proven weight is zero, we cann't create the verifier
-	require.ErrorIs(t, err, compactcert.ErrIllegalInputForLnApprox)
+	require.ErrorIs(t, err, stateproof.ErrIllegalInputForLnApprox)
 
 	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofVotersTotalWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
-	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errInsufficientWeight)
 
-	cert.SignedWeight = 101
-	err = validateStateProof(certHdr, cert, votersHdr, nextCertRnd, atRound, msg)
+	sp.SignedWeight = 101
+	err = validateStateProof(spHdr, sp, votersHdr, nextSPRnd, atRound, msg)
 	// still err, but a different err case to cover
 	t.Log(err)
 	require.ErrorIs(t, err, errStateProofCrypto)
 
 	// Above cases leave validateStateProof() with 100% coverage.
-	// crypto/compactcert.Verify has its own tests
+	// crypto/stateproof.Verify has its own tests
 }
 
 func TestAcceptableStateProofWeight(t *testing.T) {
