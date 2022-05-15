@@ -27,6 +27,10 @@ type Message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// Commitment over the sha256 of the block headers in the interval between two state proofs.
 	BlockHeadersCommitment []byte `codec:"b,allocbound=crypto.Sha256Size"`
+	VotersCommitment       []byte `codec:"v,allocbound=crypto.SumhashDigestSize"`
+	LnProvenWeight         uint64 `codec:"P"`
+	FirstAttestedRound     uint64 `codec:"f"`
+	LastAttestedRound      uint64 `codec:"l"`
 }
 
 // ToBeHashed returns the bytes of the message.

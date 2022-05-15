@@ -16,16 +16,10 @@
 
 package stateproof
 
-import (
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"testing"
-)
-
-func TestGenerateStateProofMessage(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	_, err := GenerateStateProofMessage(nil, 240, 256)
-	a.Error(err)
-}
+//func TestGenerateStateProofMessage(t *testing.T) {
+//	partitiontest.PartitionTest(t)
+//	a := require.New(t)
+//
+//	_, err := GenerateStateProofMessage(nil, 240, 256)
+//	a.Error(err)
+//}

@@ -287,7 +287,13 @@ func TestWorkerAllSigs(t *testing.T) {
 
 			require.Equal(t, tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			msg, err := GenerateStateProofMessage(s, tx.Txn.StateProofIntervalLatestRound, proto.StateProofInterval)
+			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+			require.NoError(t, err)
+
+			votersRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval)))
+			require.NoError(t, err)
+
+			msg, err := GenerateStateProofMessage(s, votersRound, stateProofLatestRound, proto.StateProofInterval)
 			require.NoError(t, err)
 			require.Equal(t, msg, tx.Txn.StateProofMessage)
 
@@ -346,7 +352,13 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
 
-	msg, err := GenerateStateProofMessage(s, tx.Txn.StateProofIntervalLatestRound, proto.StateProofInterval)
+	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+	require.NoError(t, err)
+
+	votersRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval)))
+	require.NoError(t, err)
+
+	msg, err := GenerateStateProofMessage(s, votersRound, stateProofLatestRound, proto.StateProofInterval)
 	require.NoError(t, err)
 	require.Equal(t, msg, tx.Txn.StateProofMessage)
 
