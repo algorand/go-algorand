@@ -214,10 +214,9 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 	}
 	if numSigs == 0 {
 		// Special case: special sender address can issue special transaction
-		// types (compact cert txn) without any signature.  The well-formed
+		// types (state proof txn) without any signature.  The well-formed
 		// check ensures that this transaction cannot pay any fee, and
-		// cannot have any other interesting fields, except for the compact
-		// cert payload.
+		// cannot have any other interesting fields, except for the state proof payload.
 		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.StateProofTx {
 			return nil
 		}

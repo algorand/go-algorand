@@ -57,7 +57,7 @@ func (sp StateProofTxnFields) Empty() bool {
 }
 
 //msgp:ignore specialAddr
-// specialAddr is used to form a unique address that will send out compact certs.
+// specialAddr is used to form a unique address that will send out state proofs.
 type specialAddr string
 
 // ToBeHashed implements the crypto.Hashable interface
@@ -65,7 +65,7 @@ func (a specialAddr) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.SpecialAddr, []byte(a)
 }
 
-// StateProofSender is the computed address for sending out compact certs.
+// StateProofSender is the computed address for sending out state proofs.
 var StateProofSender basics.Address
 
 func init() {

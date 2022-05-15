@@ -626,7 +626,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 
 		var lastVote sql.NullInt64
 		var lastBlockProposal sql.NullInt64
-		var lastCompactCertificate sql.NullInt64
+		var lastStateProof sql.NullInt64
 		var effectiveFirst sql.NullInt64
 		var effectiveLast sql.NullInt64
 
@@ -640,7 +640,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			&rawStateProof,
 			&lastVote,
 			&lastBlockProposal,
-			&lastCompactCertificate,
+			&lastStateProof,
 			&effectiveFirst,
 			&effectiveLast,
 			&rawVoting,
@@ -688,8 +688,8 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			record.LastBlockProposal = basics.Round(lastBlockProposal.Int64)
 		}
 
-		if lastCompactCertificate.Valid {
-			record.LastStateProof = basics.Round(lastCompactCertificate.Int64)
+		if lastStateProof.Valid {
+			record.LastStateProof = basics.Round(lastStateProof.Int64)
 		}
 
 		if effectiveFirst.Valid {
@@ -747,7 +747,7 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 	return results
 }
 
-// GetStateProofForRound returns the state proof data required to sign the compact certificate for this round
+// GetStateProofForRound returns the state proof data required to sign the state proof for this round
 func (db *participationDB) GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error) {
 	partRecord, err := db.GetForRound(id, round)
 	if err != nil {

@@ -524,10 +524,10 @@ type Transaction struct {
 	// required: true
 	ApplicationCall *ApplicationCallTransactionType `json:"app,omitempty"`
 
-	// CompactCert
+	// StateProof
 	//
 	// required: true
-	StateProof *StateProofTransactionType `json:"compactcert,omitempty"`
+	StateProof *StateProofTransactionType `json:"sp,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.

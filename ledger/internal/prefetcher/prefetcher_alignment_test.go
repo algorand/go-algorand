@@ -1245,7 +1245,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 	require.Equal(t, requested, prefetched)
 }
 
-func TestEvaluatorPrefetcherAlignmentCompactCert(t *testing.T) {
+func TestEvaluatorPrefetcherAlignmentStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	addr := makeAddress(1)

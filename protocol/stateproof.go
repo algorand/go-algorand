@@ -20,7 +20,7 @@ package protocol
 // reflecting different hash functions, signature schemes, and frequency
 // parameters.
 
-// StateProofType identifies a particular configuration of compact certs.
+// StateProofType identifies a particular configuration of state proofs.
 type StateProofType uint64
 
 const (

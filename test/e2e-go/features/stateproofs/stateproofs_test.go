@@ -42,7 +42,7 @@ func TestStateProofs(t *testing.T) {
 	// cause problem since we change the global future param to use 16 cc round.
 	//t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
-	expectedNumberOfCert := uint64(4)
+	expectedNumberOfStateProofs := uint64(4)
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
@@ -85,9 +85,9 @@ func TestStateProofs(t *testing.T) {
 	r.NoError(err)
 	node1Account := node1AccountList[0]
 
-	var lastCertBlock bookkeeping.Block
+	var lastStateProofBlock bookkeeping.Block
 	libgoal := fixture.LibGoalClient
-	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfCert+1); rnd++ {
+	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// send a dummy payment transaction.
 		minTxnFee, _, err := fixture.CurrentMinFeeAndBalance()
 		r.NoError(err)
@@ -110,54 +110,54 @@ func TestStateProofs(t *testing.T) {
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
-			if lastCertBlock.Round() == 0 {
-				lastCertBlock = blk
+			if lastStateProofBlock.Round() == 0 {
+				lastStateProofBlock = blk
 			}
 		}
 
-		for lastCertBlock.Round() != 0 && lastCertBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
-			nextCertRound := uint64(lastCertBlock.Round()) + consensusParams.StateProofInterval
+		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
 
-			t.Logf("found a cert for round %d at round %d", nextCertRound, blk.Round())
+			t.Logf("found a cert for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the cert transaction
-			res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, rnd, expectedNumberOfCert+1)
+			res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, rnd, expectedNumberOfStateProofs+1)
 			r.NoError(err)
 
 			var stateProof sp.StateProof
-			var certMessage stateproofmsg.Message
-			compactCertFound := false
+			var stateProofMessage stateproofmsg.Message
+			stateProofFound := false
 			for _, txn := range res.Transactions {
 				r.Equal(txn.Type, string(protocol.StateProofTx))
 				r.True(txn.StateProof != nil)
-				if txn.StateProof.StateProofIntervalLatestRound == nextCertRound {
+				if txn.StateProof.StateProofIntervalLatestRound == nextStateProofRound {
 					err = protocol.Decode(txn.StateProof.StateProof, &stateProof)
 					r.NoError(err)
-					err = protocol.Decode(txn.StateProof.StateProofMessage, &certMessage)
+					err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
 					r.NoError(err)
-					compactCertFound = true
+					stateProofFound = true
 				}
 			}
-			r.True(compactCertFound)
+			r.True(stateProofFound)
 
-			nextCertBlock, err := libgoal.BookkeepingBlock(nextCertRound)
+			nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
 			r.NoError(err)
 
 			var votersRoot = make([]byte, sp.HashSize)
 
-			copy(votersRoot[:], lastCertBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment)
+			copy(votersRoot[:], lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment)
 
-			provenWeight, overflowed := basics.Muldiv(lastCertBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
+			provenWeight, overflowed := basics.Muldiv(lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
 			r.False(overflowed)
 
 			verifier, err := sp.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
 			r.NoError(err)
 
-			err = verifier.Verify(uint64(nextCertBlock.Round()), certMessage.IntoStateProofMessageHash(), &stateProof)
+			err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
 			r.NoError(err)
 
-			lastCertBlock = nextCertBlock
+			lastStateProofBlock = nextStateProofBlock
 		}
 	}
 
-	r.Equalf(consensusParams.StateProofInterval*expectedNumberOfCert, uint64(lastCertBlock.Round()), "the expected last certificate block wasn't the one that was observed")
+	r.Equalf(consensusParams.StateProofInterval*expectedNumberOfStateProofs, uint64(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }

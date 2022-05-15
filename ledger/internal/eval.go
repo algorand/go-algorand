@@ -1246,16 +1246,16 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		eval.generateExpiredOnlineAccountsList()
 
 		if eval.proto.StateProofInterval > 0 {
-			var basicCompactCert bookkeeping.StateProofTrackingData
-			basicCompactCert.StateProofVotersCommitment, basicCompactCert.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
+			var basicStateProof bookkeeping.StateProofTrackingData
+			basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
 			if err != nil {
 				return err
 			}
 
-			basicCompactCert.StateProofNextRound = eval.state.stateProofNext()
+			basicStateProof.StateProofNextRound = eval.state.stateProofNext()
 
 			eval.block.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
-			eval.block.StateProofTracking[protocol.StateProofBasic] = basicCompactCert
+			eval.block.StateProofTracking[protocol.StateProofBasic] = basicStateProof
 		}
 	}
 

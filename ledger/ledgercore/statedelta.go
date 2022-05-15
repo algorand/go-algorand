@@ -89,7 +89,7 @@ type StateDelta struct {
 	Hdr *bookkeeping.BlockHeader
 
 	// next round for which we expect a state proof.
-	// zero if no compact cert is expected.
+	// zero if no state proof is expected.
 	StateProofNext basics.Round
 
 	// previous block timestamp
@@ -173,7 +173,7 @@ type AccountDeltas struct {
 // MakeStateDelta creates a new instance of StateDelta.
 // hint is amount of transactions for evaluation, 2 * hint is for sender and receiver balance records.
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts:    MakeAccountDeltas(hint),
 		Txids:    make(map[transactions.Txid]basics.Round, hint),
@@ -181,7 +181,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
 		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
 		Hdr:                      hdr,
-		StateProofNext:           compactCertNext,
+		StateProofNext:           stateProofNext,
 		PrevTimestamp:            prevTimestamp,
 		initialTransactionsCount: hint,
 	}

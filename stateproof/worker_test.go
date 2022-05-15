@@ -277,7 +277,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			_ = <-s.sigmsg
 		}
 
-		// Expect a compact cert to be formed.
+		// Expect a state proof to be formed.
 		for {
 			tx := <-s.txmsg
 			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
@@ -333,14 +333,14 @@ func TestWorkerPartialSigs(t *testing.T) {
 		_ = <-s.sigmsg
 	}
 
-	// No compact cert should be formed yet: not enough sigs for a cert this early.
+	// No state proof should be formed yet: not enough sigs for a stateproof this early.
 	select {
 	case <-s.txmsg:
-		t.Fatal("compact cert formed too early")
+		t.Fatal("state proof formed too early")
 	case <-time.After(time.Second):
 	}
 
-	// Expect a compact cert to be formed in the next StateProofInterval/2.
+	// Expect a state proof to be formed in the next StateProofInterval/2.
 	s.advanceLatest(proto.StateProofInterval / 2)
 	tx := <-s.txmsg
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
@@ -387,10 +387,10 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 		_ = <-s.sigmsg
 	}
 
-	// No compact cert should be formed: not enough sigs.
+	// No state proof should be formed: not enough sigs.
 	select {
 	case <-s.txmsg:
-		t.Fatal("compact cert formed without enough sigs")
+		t.Fatal("state proof formed without enough sigs")
 	case <-time.After(time.Second):
 	}
 }

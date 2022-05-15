@@ -27,12 +27,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// The votersTracker maintains the Merkle tree for the most recent
-// commitments to online accounts for compact certificates.
+// The votersTracker maintains the vector commitment for the most recent
+// commitments to online accounts for state proofs.
 //
-// We maintain multiple Merkle trees: we might commit to a new Merkle tree in
-// block X, but we need the Merkle tree from block X-params.CompactCertBlocks
-// to build the compact certificate for block X.
+// We maintain multiple vector commitment: we might commit to a new VC in
+// block X, but we need the VC from block X-params.StateProofBlocks
+// to build the state proof for block X.
 //
 // votersTracker is kind-of like a tracker, but hangs off the acctupdates
 // rather than a direct ledger tracker.  We don't have an explicit interface
@@ -40,10 +40,10 @@ import (
 type votersTracker struct {
 	// round contains the top online accounts in a given round.
 	//
-	// To avoid increasing block latency, we include a Merkle commitment
+	// To avoid increasing block latency, we include a vector commitment
 	// to the top online accounts as of block X in the block header of
 	// block X+StateProofVotersLookback.  This gives each node some time
-	// to construct this Merkle tree, before its root is needed in a block.
+	// to construct this vector commitment, before its root is needed in a block.
 	//
 	// This round map is indexed by the block X, using the terminology from
 	// the above example, to be used in X+StateProofVotersLookback.
@@ -54,10 +54,10 @@ type votersTracker struct {
 	// if X+Loookback<Latest.  The block evaluator can ask for the root of
 	// the tree to propose and validate a block.
 	//
-	// The second is to construct compact certificates.  Compact certificates
+	// The second is to construct state proof.  State proofs
 	// are formed for blocks that are a multiple of StateProofInterval, using
-	// the Merkle commitment to online accounts from the previous such block.
-	// Thus, we maintain X in the round map until we form a compact certificate
+	// the vector commitment to online accounts from the previous such block.
+	// Thus, we maintain X in the round map until we form a stateproof
 	// for round X+StateProofVotersLookback+StateProofInterval.
 	round map[basics.Round]*ledgercore.VotersForRound
 
@@ -69,14 +69,14 @@ type votersTracker struct {
 	loadWaitGroup sync.WaitGroup
 }
 
-// votersRoundForCertRound computes the round number whose voting participants
-// will be used to sign the compact cert for certRnd.
-func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams) basics.Round {
-	// To form a compact certificate for round certRnd,
+// votersRoundForStateProofRound computes the round number whose voting participants
+// will be used to sign the state proof for certRnd.
+func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.ConsensusParams) basics.Round {
+	// To form a state proof on period that ends on stateProofRnd,
 	// we need a commitment to the voters StateProofInterval
 	// before that, and the voters information from
 	// StateProofVotersLookback before that.
-	return certRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
+	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
@@ -96,7 +96,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 		return nil
 	}
 
-	startR := votersRoundForCertRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
+	startR := votersRoundForStateProofRound(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
@@ -127,7 +127,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
-		// No compact certs.
+		// No StateProofs.
 		return
 	}
 
@@ -159,21 +159,21 @@ func (vt *votersTracker) close() {
 func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.StateProofInterval == 0 {
-		// No compact certs.
+		// No StateProofs
 		return
 	}
 
-	// Check if any blocks can be forgotten because the compact cert is available.
+	// Check if any blocks can be forgotten because state proofs are available.
 	for r, tr := range vt.round {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
-		certRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
-		if certRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
+		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
 			delete(vt.round, r)
 		}
 	}
 
 	// This might be a block where we snapshot the online participants,
-	// to eventually construct a merkle tree for commitment in a later
+	// to eventually construct a vector commitment in a later
 	// block.
 	r := uint64(hdr.Round)
 	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval == 0 {

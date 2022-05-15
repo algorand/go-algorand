@@ -173,7 +173,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		}
 
 		if sfa.Round < latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
-			// Already have a complete compact cert in ledger.
+			// Already have a complete state proof in ledger.
 			// Ignore this sig.
 			return network.Ignore, nil
 		}
@@ -364,7 +364,7 @@ func (ccw *Worker) tryBuilding() {
 
 		cert, err := b.Build()
 		if err != nil {
-			ccw.log.Warnf("ccw.tryBuilding: building compact cert for %d: %v", rnd, err)
+			ccw.log.Warnf("ccw.tryBuilding: building state proof for %d: %v", rnd, err)
 			continue
 		}
 
@@ -379,7 +379,7 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.StateProofMessage = ccw.Message
 		err = ccw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
-			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)
+			ccw.log.Warnf("ccw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)
 		}
 	}
 }

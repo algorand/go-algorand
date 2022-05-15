@@ -9,6 +9,14 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
+// MessageHash
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
 // Reveal
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
@@ -25,14 +33,6 @@ import (
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
 //
-// StateProofMessageHash
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
-//
 // sigslotCommit
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -41,6 +41,45 @@ import (
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
 //
+
+// MarshalMsg implements msgp.Marshaler
+func (z *MessageHash) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *MessageHash) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MessageHash)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MessageHash) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (_ *MessageHash) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MessageHash)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *MessageHash) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *MessageHash) MsgIsZero() bool {
+	return (*z) == (MessageHash{})
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Reveal) MarshalMsg(b []byte) (o []byte) {
@@ -691,45 +730,6 @@ func (z *StateProof) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *StateProof) MsgIsZero() bool {
 	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && ((*z).SigProofs.MsgIsZero()) && ((*z).PartProofs.MsgIsZero()) && ((*z).MerkleSignatureSaltVersion == 0) && (len((*z).Reveals) == 0) && (len((*z).PositionsToReveal) == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *StateProofMessageHash) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *StateProofMessageHash) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofMessageHash)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofMessageHash) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (_ *StateProofMessageHash) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofMessageHash)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *StateProofMessageHash) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *StateProofMessageHash) MsgIsZero() bool {
-	return (*z) == (StateProofMessageHash{})
 }
 
 // MarshalMsg implements msgp.Marshaler

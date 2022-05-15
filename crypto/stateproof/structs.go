@@ -23,11 +23,11 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// StateProofMessageHash represents any message that we want to have a certification over.
-type StateProofMessageHash [32]byte
+// MessageHash represents any message that we want to have a proof over.
+type MessageHash [32]byte
 
-// StateProofMessageHashType is the type of hash used to generate StateProofMessageHash
-const StateProofMessageHashType = crypto.Sha256
+// MessageHashType is the type of hash used to generate MessageHash
+const MessageHashType = crypto.Sha256
 
 // A sigslotCommit is a single slot in the sigs array that forms the state proof.
 type sigslotCommit struct {

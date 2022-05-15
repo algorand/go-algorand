@@ -34,7 +34,7 @@ type coinChoiceSeed struct {
 	lnProvenWeight uint64
 	sigCommitment  crypto.GenericDigest
 	signedWeight   uint64
-	data           StateProofMessageHash
+	data           MessageHash
 }
 
 // ToBeHashed returns a binary representation of the coinChoiceSeed structure.

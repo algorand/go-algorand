@@ -42,7 +42,7 @@ type sigslot struct {
 // Builder keeps track of signatures on a message and eventually produces
 // a stater poof for that message.
 type Builder struct {
-	data           StateProofMessageHash
+	data           MessageHash
 	round          uint64
 	sigs           []sigslot // Indexed by pos in participants
 	signedWeight   uint64    // Total weight of signatures so far
@@ -62,7 +62,7 @@ var (
 )
 
 // MkBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a stateproof.
-func MkBuilder(data StateProofMessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {
+func MkBuilder(data MessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {
 	npart := len(part)
 	lnProvenWt, err := lnIntApproximation(provenWeight)
 	if err != nil {

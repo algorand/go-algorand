@@ -38,8 +38,8 @@ import (
 
 type testMessage []byte
 
-func (m testMessage) IntoStateProofMessageHash() StateProofMessageHash {
-	hsh := StateProofMessageHash{}
+func (m testMessage) IntoStateProofMessageHash() MessageHash {
+	hsh := MessageHash{}
 	copy(hsh[:], m)
 	return hsh
 }
@@ -49,7 +49,7 @@ type paramsForTest struct {
 	provenWeight         uint64
 	partCommitment       crypto.GenericDigest
 	numberOfParticipnets uint64
-	data                 StateProofMessageHash
+	data                 MessageHash
 }
 
 const stateProofIntervalForTests = 256
@@ -176,7 +176,7 @@ func TestBuildVerify(t *testing.T) {
 	a.NoError(err)
 
 	err = verif.Verify(stateProofIntervalForTests, p.data, &sProof)
-	a.NoError(err, "failed to verify the compact sProof")
+	a.NoError(err, "failed to verify the state proof")
 }
 
 func generateRandomParticipant(a *require.Assertions) basics.Participant {

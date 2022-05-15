@@ -172,14 +172,14 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	}
 }
 
-const ccProto = protocol.ConsensusVersion("test-compact-cert-enabled")
+const aspProto = protocol.ConsensusVersion("test-state-proof-enabled")
 
-func TestTxnValidationCompactCert(t *testing.T) {
+func TestTxnValidationStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.StateProofInterval = 256
-	config.Consensus[ccProto] = proto
+	config.Consensus[aspProto] = proto
 
 	stxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
@@ -198,7 +198,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 			RewardsPool: poolAddr,
 		},
 		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: ccProto,
+			CurrentProtocol: aspProto,
 		},
 	}
 
@@ -206,7 +206,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	require.NoError(t, err)
 
 	err = Txn(&stxn, 0, groupCtx)
-	require.NoError(t, err, "compact cert txn %#v did not verify", stxn)
+	require.NoError(t, err, "state proof txn %#v did not verify", stxn)
 
 	stxn2 := stxn
 	stxn2.Txn.Type = protocol.PaymentTx
@@ -220,28 +220,28 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	stxn2 = stxn2.Txn.Sign(secret)
 	err = Txn(&stxn2, 0, groupCtx)
-	require.Error(t, err, "compact cert txn %#v verified from non-StateProofSender", stxn2)
+	require.Error(t, err, "state proof txn %#v verified from non-StateProofSender", stxn2)
 
-	// Compact cert txns are not allowed to have non-zero values for many fields
+	// state proof txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	err = Txn(&stxn2, 0, groupCtx)
-	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
 	err = Txn(&stxn2, 0, groupCtx)
-	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
 	err = Txn(&stxn2, 0, groupCtx)
-	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
 	err = Txn(&stxn2, 0, groupCtx)
-	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+	require.Error(t, err, "state proof txn %#v verified", stxn2)
 }
 
 func TestDecodeNil(t *testing.T) {
