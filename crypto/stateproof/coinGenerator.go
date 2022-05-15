@@ -55,7 +55,7 @@ func (cc *coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
 	coinChoiceBytes = append(coinChoiceBytes, signedWtAsBytes...)
 	coinChoiceBytes = append(coinChoiceBytes, cc.data[:]...)
 
-	return protocol.CompactCertCoin, coinChoiceBytes
+	return protocol.StateProofCoin, coinChoiceBytes
 }
 
 // coinGenerator is used for extracting "randomized" 64 bits for coin flips

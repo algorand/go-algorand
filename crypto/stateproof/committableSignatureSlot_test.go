@@ -49,14 +49,14 @@ func TestSignatureArrayWithEmptySlot(t *testing.T) {
 	tree, err := merklearray.BuildVectorCommitmentTree(committableSignatureSlotArray(sigs), hfactory)
 
 	leftLeafHash := calculateHashOnSigLeaf(t, sig, 60)
-	rightLeafHash := hashBytes(hfactory.NewHash(), []byte(protocol.CompactCertSig))
+	rightLeafHash := hashBytes(hfactory.NewHash(), []byte(protocol.StateProofSig))
 
 	a.Equal([]byte(tree.Root()), calculateHashOnInternalNode(leftLeafHash, rightLeafHash))
 }
 
 func calculateHashOnSigLeaf(t *testing.T, sig merklesignature.Signature, lValue uint64) []byte {
 	var sigCommitment []byte
-	sigCommitment = append(sigCommitment, protocol.CompactCertSig...)
+	sigCommitment = append(sigCommitment, protocol.StateProofSig...)
 
 	binaryL := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryL, lValue)

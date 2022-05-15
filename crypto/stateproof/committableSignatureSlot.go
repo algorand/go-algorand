@@ -74,7 +74,7 @@ func buildCommittableSignature(sigCommit sigslotCommit) (*committableSignatureSl
 // be bad for creating SNARK
 func (cs *committableSignatureSlot) ToBeHashed() (protocol.HashID, []byte) {
 	if cs.isEmptySlot {
-		return protocol.CompactCertSig, []byte{}
+		return protocol.StateProofSig, []byte{}
 	}
 	binaryLValue := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryLValue, cs.sigCommit.L)
@@ -83,5 +83,5 @@ func (cs *committableSignatureSlot) ToBeHashed() (protocol.HashID, []byte) {
 	sigSlotByteRepresentation = append(sigSlotByteRepresentation, binaryLValue...)
 	sigSlotByteRepresentation = append(sigSlotByteRepresentation, cs.serializedSignature...)
 
-	return protocol.CompactCertSig, sigSlotByteRepresentation
+	return protocol.StateProofSig, sigSlotByteRepresentation
 }

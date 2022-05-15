@@ -194,8 +194,8 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	binary.LittleEndian.PutUint64(binaryWeight, part.Weight)
 
 	publicKeyBytes := part.PK
-	partCommitment := make([]byte, 0, len(protocol.CompactCertPart)+len(binaryWeight)+len(publicKeyBytes))
-	partCommitment = append(partCommitment, protocol.CompactCertPart...)
+	partCommitment := make([]byte, 0, len(protocol.StateProofPart)+len(binaryWeight)+len(publicKeyBytes))
+	partCommitment = append(partCommitment, protocol.StateProofPart...)
 	partCommitment = append(partCommitment, binaryWeight...)
 	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 

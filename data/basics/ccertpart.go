@@ -64,7 +64,7 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 	partCommitment = append(partCommitment, weightAsBytes...)
 	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 
-	return protocol.CompactCertPart, partCommitment
+	return protocol.StateProofPart, partCommitment
 }
 
 // ParticipantsArray implements merklearray.Array and is used to commit

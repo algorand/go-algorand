@@ -31,7 +31,7 @@ type Message struct {
 
 // ToBeHashed returns the bytes of the message.
 func (m Message) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.CompactCertMessage, protocol.Encode(&m)
+	return protocol.StateProofMessage, protocol.Encode(&m)
 }
 
 // IntoStateProofMessageHash returns a hashed representation fitting the compact certificate messages.
