@@ -33,12 +33,12 @@ const (
 	NumStateProofTypes int = 1
 )
 
-// SortCompactCertType implements sorting by StateProofType keys for
+// SortStateProofType implements sorting by StateProofType keys for
 // canonical encoding of maps in msgpack format.
-//msgp:ignore SortCompactCertType
-//msgp:sort StateProofType SortCompactCertType
-type SortCompactCertType []StateProofType
+//msgp:ignore SortStateProofType
+//msgp:sort StateProofType SortStateProofType
+type SortStateProofType []StateProofType
 
-func (a SortCompactCertType) Len() int           { return len(a) }
-func (a SortCompactCertType) Less(i, j int) bool { return a[i] < a[j] }
-func (a SortCompactCertType) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a SortStateProofType) Len() int           { return len(a) }
+func (a SortStateProofType) Less(i, j int) bool { return a[i] < a[j] }
+func (a SortStateProofType) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }

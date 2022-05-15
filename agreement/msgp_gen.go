@@ -1488,7 +1488,7 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
+			sort.Sort(protocol.SortStateProofType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002
@@ -3254,7 +3254,7 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
+			sort.Sort(protocol.SortStateProofType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002
@@ -4826,7 +4826,7 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).Block.BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
+			sort.Sort(protocol.SortStateProofType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).Block.BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002

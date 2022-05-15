@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// StateProofTxnFields captures the fields used for compact cert transactions.
+// StateProofTxnFields captures the fields used for stateproof transactions.
 type StateProofTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

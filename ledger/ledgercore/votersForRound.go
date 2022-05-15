@@ -82,7 +82,7 @@ func MakeVotersForRound() *VotersForRound {
 func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
 
-	// certRound is the block that we expect to form a compact certificate for,
+	// certRound is the block that we expect to form a state proof for,
 	// using the balances from round r.
 	certRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 

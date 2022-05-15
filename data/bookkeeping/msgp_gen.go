@@ -219,7 +219,7 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).BlockHeader.StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
+			sort.Sort(protocol.SortStateProofType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).BlockHeader.StateProofTracking[zb0001]
 				_ = zb0002
@@ -1056,7 +1056,7 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).StateProofTracking {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort(protocol.SortCompactCertType(zb0001_keys))
+			sort.Sort(protocol.SortStateProofType(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).StateProofTracking[zb0001]
 				_ = zb0002
