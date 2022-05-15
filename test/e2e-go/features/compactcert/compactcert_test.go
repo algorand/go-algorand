@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	cc "github.com/algorand/go-algorand/crypto/compactcert"
+	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestCompactCerts(t *testing.T) {
+func TestStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -124,14 +124,14 @@ func TestCompactCerts(t *testing.T) {
 			res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, rnd, expectedNumberOfCert+1)
 			r.NoError(err)
 
-			var compactCert cc.Cert
+			var stateProof sp.StateProof
 			var certMessage stateproofmsg.Message
 			compactCertFound := false
 			for _, txn := range res.Transactions {
 				r.Equal(txn.Type, string(protocol.StateProofTx))
 				r.True(txn.CompactCert != nil)
 				if txn.CompactCert.CertIntervalLatestRound == nextCertRound {
-					err = protocol.Decode(txn.CompactCert.Cert, &compactCert)
+					err = protocol.Decode(txn.CompactCert.Cert, &stateProof)
 					r.NoError(err)
 					err = protocol.Decode(txn.CompactCert.CertMsg, &certMessage)
 					r.NoError(err)
@@ -150,16 +150,16 @@ func TestCompactCerts(t *testing.T) {
 			err = protocol.Decode(nextCertBlockRaw, &nextCertBlockDecoded)
 			r.NoError(err)
 
-			var votersRoot = make([]byte, cc.HashSize)
+			var votersRoot = make([]byte, sp.HashSize)
 			copy(votersRoot[:], lastCertBlock.CompactCertVoters)
 
 			provenWeight, overflowed := basics.Muldiv(lastCertBlock.CompactCertVotersTotal, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
 			r.False(overflowed)
 
-			verifier, err := cc.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
+			verifier, err := sp.MkVerifier(votersRoot, provenWeight, consensusParams.StateProofStrengthTarget)
 			r.NoError(err)
 
-			err = verifier.Verify(nextCertBlock.Round, certMessage.IntoStateProofMessageHash(), &compactCert)
+			err = verifier.Verify(nextCertBlock.Round, certMessage.IntoStateProofMessageHash(), &stateProof)
 			r.NoError(err)
 
 			lastCertBlock = nextCertBlock

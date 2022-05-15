@@ -88,7 +88,7 @@ type StateDelta struct {
 	// new block header; read-only
 	Hdr *bookkeeping.BlockHeader
 
-	// next round for which we expect a compact cert.
+	// next round for which we expect a state proof.
 	// zero if no compact cert is expected.
 	StateProofNext basics.Round
 

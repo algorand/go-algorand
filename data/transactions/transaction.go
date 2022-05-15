@@ -473,15 +473,15 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	case protocol.StateProofTx:
 		if proto.StateProofInterval == 0 {
-			return fmt.Errorf("compact certs not supported")
+			return fmt.Errorf("state proofs not supported")
 		}
 
-		// This is a placeholder transaction used to store compact certs
+		// This is a placeholder transaction used to store state proofs
 		// on the ledger, and ensure they are broadly available.  Most of
 		// the fields must be empty.  It must be issued from a special
 		// sender address.
 		if tx.Sender != StateProofSender {
-			return fmt.Errorf("sender must be the compact-cert sender")
+			return fmt.Errorf("sender must be the state-proof sender")
 		}
 		if !tx.Fee.IsZero() {
 			return fmt.Errorf("fee must be zero")
@@ -540,7 +540,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
 		if tx.Type == protocol.StateProofTx {
-			// Zero fee allowed for compact cert txn.
+			// Zero fee allowed for stateProof txn.
 		} else {
 			return makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", tx.Fee.Raw, proto.MinTxnFee)
 		}

@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	cc "github.com/algorand/go-algorand/crypto/compactcert"
+	sp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -108,11 +109,11 @@ type roundCowBase struct {
 	// TxnCounter from previous block header.
 	txnCount uint64
 
-	// Round of the next expected compact cert.  In the common case this
+	// Round of the next expected state proof.  In the common case this
 	// is StateProofNextRound from previous block header, except when
-	// compact certs are first enabled, in which case this gets set
-	// appropriately at the first block where compact certs are enabled.
-	compactCertNextRnd basics.Round
+	// state proofs are first enabled, in which case this gets set
+	// appropriately at the first block where state proofs are enabled.
+	stateProofNextRnd basics.Round
 
 	// The current protocol consensus params.
 	proto config.ConsensusParams
@@ -135,19 +136,19 @@ type roundCowBase struct {
 	creators map[creatable]foundAddress
 }
 
-func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, compactCertNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
+func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, stateProofNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
 	return &roundCowBase{
-		l:                  l,
-		rnd:                rnd,
-		txnCount:           txnCount,
-		compactCertNextRnd: compactCertNextRnd,
-		proto:              proto,
-		accounts:           make(map[basics.Address]ledgercore.AccountData),
-		appParams:          make(map[ledgercore.AccountApp]cachedAppParams),
-		assetParams:        make(map[ledgercore.AccountAsset]cachedAssetParams),
-		appLocalStates:     make(map[ledgercore.AccountApp]cachedAppLocalState),
-		assets:             make(map[ledgercore.AccountAsset]cachedAssetHolding),
-		creators:           make(map[creatable]foundAddress),
+		l:                 l,
+		rnd:               rnd,
+		txnCount:          txnCount,
+		stateProofNextRnd: stateProofNextRnd,
+		proto:             proto,
+		accounts:          make(map[basics.Address]ledgercore.AccountData),
+		appParams:         make(map[ledgercore.AccountApp]cachedAppParams),
+		assetParams:       make(map[ledgercore.AccountAsset]cachedAssetParams),
+		appLocalStates:    make(map[ledgercore.AccountApp]cachedAppLocalState),
+		assets:            make(map[ledgercore.AccountAsset]cachedAssetHolding),
+		creators:          make(map[creatable]foundAddress),
 	}
 }
 
@@ -326,7 +327,7 @@ func (x *roundCowBase) txnCounter() uint64 {
 }
 
 func (x *roundCowBase) stateProofNext() basics.Round {
-	return x.compactCertNextRnd
+	return x.stateProofNextRnd
 }
 
 func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -559,7 +560,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) stateProof(latestRoundInInterval basics.Round, spType protocol.StateProofType, stateProof cc.Cert, stateProofMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
+func (cs *roundCowState) stateProof(latestRoundInInterval basics.Round, spType protocol.StateProofType, stateProof sp.StateProof, stateProofMsg stateproofmsg.Message, atRound basics.Round, validate bool) error {
 	if spType != protocol.StateProofBasic {
 		return fmt.Errorf("stateProof type %d not supported", spType)
 	}
@@ -698,18 +699,18 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, evalOpts.PaysetHint)
 	}
 
-	base.compactCertNextRnd = eval.prevHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	base.stateProofNextRnd = eval.prevHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
-	// Check if compact certs are being enabled as of this block.
-	if base.compactCertNextRnd == 0 && proto.StateProofInterval != 0 {
-		// Determine the first block that will contain a Merkle
+	// Check if state proofs are being enabled as of this block.
+	if base.stateProofNextRnd == 0 && proto.StateProofInterval != 0 {
+		// Determine the first block that will contain a Vector
 		// commitment to the voters.  We need to account for the
 		// fact that the voters come from StateProofVotersLookback
 		// rounds ago.
 		votersRound := (hdr.Round + basics.Round(proto.StateProofVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.StateProofInterval))
 
-		// The first compact cert will appear StateProofInterval after that.
-		base.compactCertNextRnd = votersRound + basics.Round(proto.StateProofInterval)
+		// The first state proof will appear StateProofInterval after that.
+		base.stateProofNextRnd = votersRound + basics.Round(proto.StateProofInterval)
 	}
 
 	latestRound, prevTotals, err := l.LatestTotals()
