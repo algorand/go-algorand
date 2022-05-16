@@ -2176,43 +2176,34 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 	if err != nil {
 		return err
 	}
-	if newDatabase {
-		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
-			{
-				OnlineSupply:    totals.Online.Money.Raw,
-				RewardsLevel:    totals.RewardsLevel,
-				CurrentProtocol: initProto,
-			},
-		}
-
-		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 0)
+	rnd, err := accountsRound(tx)
+	if err != nil {
 		return err
 	}
-
-	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		rnd, err := accountsRound(tx)
-		if err != nil {
+	var currentProto protocol.ConsensusVersion
+	if newDatabase {
+		currentProto = initProto
+	} else {
+		err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
+			hdr, err := blockGetHdr(blockTx, rnd)
+			if err != nil {
+				return err
+			}
+			currentProto = hdr.CurrentProtocol
 			return nil
-		}
-
-		hdr, err := blockGetHdr(blockTx, rnd)
+		})
 		if err != nil {
-			return nil
+			return err
 		}
-
-		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
-			{
-				OnlineSupply:    totals.Online.Money.Raw,
-				RewardsLevel:    totals.RewardsLevel,
-				CurrentProtocol: hdr.CurrentProtocol,
-			},
-		}
-
-		err = accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
-		return err
-	})
-
-	return err
+	}
+	onlineRoundParams := []ledgercore.OnlineRoundParamsData{
+		{
+			OnlineSupply:    totals.Online.Money.Raw,
+			RewardsLevel:    totals.RewardsLevel,
+			CurrentProtocol: currentProto,
+		},
+	}
+	return accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
 }
 
 func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
@@ -3036,25 +3027,24 @@ func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.O
 	return
 }
 
-func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, round basics.Round) error {
+func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
 	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (round, data) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}
 
-	for _, onlineRoundParams := range onlineRoundParamsData {
-		_, err = insertStmt.Exec(round, protocol.Encode(&onlineRoundParams))
+	for i, onlineRoundParams := range onlineRoundParamsData {
+		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParams))
 		if err != nil {
 			return err
 		}
-		round++
 	}
 	return nil
 }
 
-func accountsPruneOnlineRoundParams(tx *sql.Tx, retainRound basics.Round) error {
+func accountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) error {
 	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE round<?",
-		retainRound,
+		deleteBeforeRound,
 	)
 	return err
 }
