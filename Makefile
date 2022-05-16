@@ -124,17 +124,18 @@ msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 %/msgp_gen.go: deps ALWAYS
 		@set +e; \
 		printf "msgp: $(@D)..."; \
-		$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
-		cat ./$@.out; \
+		cd $(@D); \
+		$(GOPATH1)/bin/msgp -file . -o $(@F) -warnmask github.com/algorand/go-algorand > ./$(@F).out 2>&1; \
+		cat ./$(@F).out; \
 		if [ "$$?" != "0" ]; then \
 			printf "failed:\n$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
-			cat ./$@.out; \
-			rm ./$@.out; \
+			cat ./$(@F).out; \
+			rm ./$(@F).out; \
 			exit 1; \
 		else \
 			echo " done."; \
 		fi; \
-		rm -f ./$@.out
+		rm -f ./$(@F).out
 ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
