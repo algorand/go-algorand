@@ -1792,6 +1792,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	}
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
+	incomingMsgSync.Lock()
 	for tag, count := range msgCounters {
 		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
 			require.Equal(t, 5, count)
@@ -1799,6 +1800,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 			require.Equal(t, 0, count)
 		}
 	}
+	incomingMsgSync.Unlock()
 }
 
 // Set up two nodes, have one of them work through TX gossip message-of-interest logic
