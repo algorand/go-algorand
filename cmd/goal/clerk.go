@@ -1211,11 +1211,11 @@ var dryrunRemoteCmd = &cobra.Command{
 						trace = *txnResult.LogicSigTrace
 					}
 				}
-				if txnResult.BudgetCredit != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget credit: %d\n", i, *txnResult.BudgetCredit)
+				if txnResult.BudgetConsumed != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget credit: %d\n", i, *txnResult.BudgetConsumed)
 				}
-				if txnResult.BudgetDebit != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget debit: %d\n", i, *txnResult.BudgetDebit)
+				if txnResult.BudgetAdded != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget debit: %d\n", i, *txnResult.BudgetAdded)
 				}
 
 				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)
