@@ -1883,9 +1883,11 @@ func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	}
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
+	incomingMsgSync.Lock()
 	for _, count := range msgCounters {
 		require.Equal(t, 5, count)
 	}
+	incomingMsgSync.Unlock()
 }
 
 func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
@@ -1962,9 +1964,11 @@ func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
 	}
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
+	incomingMsgSync.Lock()
 	for _, count := range msgCounters {
 		require.Equal(t, 5, count)
 	}
+	incomingMsgSync.Unlock()
 }
 func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	// Tests that A->B follows MOI
@@ -2044,6 +2048,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	}
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
+	incomingMsgSync.Lock()
 	for tag, count := range msgCounters {
 		if tag == protocol.TxnTag {
 			require.Equal(t, 0, count)
@@ -2051,6 +2056,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 			require.Equal(t, 5, count)
 		}
 	}
+	incomingMsgSync.Unlock()
 }
 
 type participatingNodeInfo struct {
@@ -2139,6 +2145,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	}
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
+	incomingMsgSync.Lock()
 	for tag, count := range msgCounters {
 		if tag == protocol.TxnTag {
 			require.Equal(t, 5, count)
@@ -2146,6 +2153,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 			require.Equal(t, 5, count)
 		}
 	}
+	incomingMsgSync.Unlock()
 }
 
 // Set up two nodes, have one of them disconnect from the other, and monitor disconnection error on the side that did not issue the disconnection.
