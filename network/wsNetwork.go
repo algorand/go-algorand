@@ -1726,18 +1726,13 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvance = time.Now().UTC()
 	if !wn.relayMessages && !wn.config.ForceFetchTransactions {
 		// if we're not a relay, and not participating, we don't need txn pool
-		wantTXGossipPrev := atomic.LoadUint32(&wn.wantTXGossip)
 		wantTXGossip := wn.node.IsParticipating()
-		if wantTXGossip && (wantTXGossipPrev != wantTXGossipYes) {
-			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossipYes)
-			if didChange {
-				wn.RegisterMessageInterest(protocol.TxnTag)
-			}
-		} else if !wantTXGossip && (wantTXGossipPrev != wantTXGossipNo) {
-			didChange := atomic.CompareAndSwapUint32(&wn.wantTXGossip, wantTXGossipPrev, wantTXGossipNo)
-			if didChange {
-				wn.DeregisterMessageInterest(protocol.TxnTag)
-			}
+		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+			wn.RegisterMessageInterest(protocol.TxnTag)
+			wn.wantTXGossip = wantTXGossipYes
+		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+			wn.DeregisterMessageInterest(protocol.TxnTag)
+			wn.wantTXGossip = wantTXGossipNo
 		}
 	}
 }
@@ -2351,12 +2346,6 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) error {
 
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
-	wantTXGossip := atomic.LoadUint32(&wn.wantTXGossip)
-	if wantTXGossip != wantTXGossipNo {
-		wn.messagesOfInterest[protocol.TxnTag] = true
-	} else {
-		delete(wn.messagesOfInterest, protocol.TxnTag)
-	}
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
