@@ -541,7 +541,11 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
 					}
 				}
-				// amount the budget was increased
+				// The cost is broken up into two fields: budgetDebit and budgetCredit.
+				// This is necessary because the fields can only be represented as unsigned
+				// integers, so a negative cost would underflow. The two fields also provide
+				// more information, which can be useful for testing purposes.
+				// cost = budgetCredit - budgetDebit
 				budgetDebit := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
 				budgetCredit := uint64(cost) + budgetDebit
 				result.BudgetDebit = &budgetDebit
