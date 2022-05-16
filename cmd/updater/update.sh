@@ -190,8 +190,8 @@ function get_updater_url() {
         echo "This operation system ${UNAME} is not supported by updater."
         exit 1
     fi
-    UPDATER_FILENAME="install_master_${OS}-${ARCH}.tar.gz"
-    UPDATER_URL="https://github.com/algorand/go-algorand-doc/raw/master/downloads/installers/${OS}_${ARCH}/${UPDATER_FILENAME}"
+    UPDATER_FILENAME="install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
+    UPDATER_URL="https://github.com/algorand/go-algorand/releases/download/v3.6.2-stable/install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
 }
 
 # check to see if the binary updater exists. if not, it will automatically the correct updater binary for the current platform
@@ -214,35 +214,34 @@ function check_for_updater() {
         exit 1
     fi
 
-    # intitialize temporary directory for updater 
-    local updater_tempdir="" \
-        updater_archive="${updater_tempdir}/${UPDATER_FILENAME}"
+    # create temporary directory for updater archive
+    local UPDATER_TEMPDIR=""
+    UPDATER_TEMPDIR="$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")"
 
-    # create temporary directory for updater archive 
-    updater_tempdir=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
+    local UPDATER_ARCHIVE="${UPDATER_TEMPDIR}/${UPDATER_FILENAME}"
 
-    CURL_OUT=$(curl -sSL ${UPDATER_URL} -o "$updater_archive")
+    CURL_OUT=$(curl -sSL ${UPDATER_URL} -o "$UPDATER_ARCHIVE")
     if [ "$?" != "0" ]; then
         echo "failed to download updater binary from ${UPDATER_URL} using curl."
         echo "${CURL_OUT}"
         exit 1
     fi
 
-    if [ ! -f "${updater_archive}" ]; then
-        echo "downloaded file ${updater_archive} is missing."
+    if [ ! -f "${UPDATER_ARCHIVE}" ]; then
+        echo "downloaded file ${UPDATER_ARCHIVE} is missing."
         exit
     fi
 
-    # extract and install updater 
-    tar -zxf "$updater_archive" -C "$updater_tempdir" updater
-    mv "${updater_tempdir}/updater" "${SCRIPTPATH}"
+    # extract and install updater
+    tar -zxf "$UPDATER_ARCHIVE" -C "$UPDATER_TEMPDIR" updater
+    mv "${UPDATER_TEMPDIR}/updater" "${SCRIPTPATH}"
     if [ "$?" != "0" ]; then
-        echo "failed to extract updater binary from ${updater_archive}"
+        echo "failed to extract updater binary from ${UPDATER_ARCHIVE}"
         exit 1
     fi
 
     # clean up temp directory
-    rm -rf "$updater_tempdir"
+    rm -rf "$UPDATER_TEMPDIR"
     echo "updater binary was installed at ${SCRIPTPATH}/updater"
 }
 
