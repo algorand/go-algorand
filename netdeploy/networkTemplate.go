@@ -74,7 +74,16 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		nodeDir := filepath.Join(targetFolder, cfg.Name)
 		err = os.Mkdir(nodeDir, os.ModePerm)
 		if err != nil {
-			return
+			if !os.IsExist(err) {
+				return
+			}
+
+			// allow some flexibility around pre-existing directories to
+			// support docker and pre-mounted volumes.
+			if !util.IsEmpty(nodeDir) {
+				err = fmt.Errorf("duplicate node directory detected: %w", err)
+				return
+			}
 		}
 
 		_, err = util.CopyFile(genesisFile, filepath.Join(nodeDir, genesisFileName))
@@ -212,6 +221,11 @@ func (t NetworkTemplate) Validate() error {
 	if len(t.Nodes) > 1 && countRelayNodes(t.Nodes) == 0 {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
+
+	if t.Genesis.DevMode && len(t.Nodes) != 1 {
+		return fmt.Errorf("invalid template: DevMode should only have a single node")
+	}
+
 	return nil
 }
 

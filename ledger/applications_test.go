@@ -33,12 +33,18 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// commitRound schedules a commit for known offset and dbRound
+// and waits for completion
 func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
+	commitRoundLookback(dbRound+basics.Round(offset), l)
+}
+
+func commitRoundLookback(lookback basics.Round, l *Ledger) {
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	l.trackers.scheduleCommit(l.Latest(), l.Latest()-(dbRound+basics.Round(offset)))
+	l.trackers.scheduleCommit(l.Latest(), l.Latest()-lookback)
 	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
 	// use that as an indicator.
 	for {
@@ -49,7 +55,6 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 			break
 		}
 		time.Sleep(time.Millisecond)
-
 	}
 }
 
@@ -580,7 +585,7 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -725,7 +730,7 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -862,7 +867,7 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)

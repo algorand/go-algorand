@@ -612,6 +612,13 @@ type CompileResponse struct {
 	Result string `json:"result"`
 }
 
+// DisassembleResponse defines model for DisassembleResponse.
+type DisassembleResponse struct {
+
+	// disassembled Teal code
+	Result string `json:"result"`
+}
+
 // DryrunResponse defines model for DryrunResponse.
 type DryrunResponse struct {
 	Error string `json:"error"`
@@ -704,8 +711,8 @@ type PostTransactionsResponse struct {
 type ProofResponse struct {
 
 	// The type of hash function used to create the proof, must be one of:
-	// * sumhash
 	// * sha512_256
+	// * sha256
 	Hashtype string `json:"hashtype"`
 
 	// Index of the transaction in the block's payset.

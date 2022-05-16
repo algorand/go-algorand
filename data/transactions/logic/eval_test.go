@@ -98,7 +98,11 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		EnableAppCostPooling:          true,
 		EnableInnerTransactionPooling: true,
 
+		MinInnerApplVersion: 4,
+
 		SupportBecomeNonParticipatingTransactions: true,
+
+		UnifyInnerTxIDs: true,
 	}
 }
 
@@ -3749,7 +3753,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(cse.group)
 
 			// Computed MinTealVersion should be == validFromVersion
-			calc := ComputeMinTealVersion(ep.TxnGroup, false)
+			calc := ComputeMinTealVersion(ep.TxnGroup)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion

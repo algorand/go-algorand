@@ -301,6 +301,9 @@ type ConsensusParams struct {
 	// provide greater isolation for clear state programs
 	IsolateClearState bool
 
+	// The minimum app version that can be called in an inner transaction
+	MinInnerApplVersion uint64
+
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
 	MaxAppsCreated int
@@ -429,6 +432,14 @@ type ConsensusParams struct {
 	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
+
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
+
+	// EnableSHA256TxnCommitmentHeader enables the creation of a transaction vector commitment tree using SHA256 hash function. (vector commitment extends Merkle tree by having a position binding property).
+	// This new header is in addition to the existing SHA512_256 merkle root.
+	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
+	EnableSHA256TxnCommitmentHeader bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1079,6 +1090,7 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
+	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true
@@ -1133,6 +1145,11 @@ func initConsensusProtocols() {
 	vFuture.CompactCertSecKQ = 128
 
 	vFuture.LogicSigVersion = 7
+	vFuture.MinInnerApplVersion = 4
+
+	vFuture.UnifyInnerTxIDs = true
+
+	vFuture.EnableSHA256TxnCommitmentHeader = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
