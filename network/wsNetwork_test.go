@@ -1793,6 +1793,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
+	require.Equal(t, 2, len(msgCounters))
 	for tag, count := range msgCounters {
 		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
 			require.Equal(t, 5, count)
@@ -1808,7 +1809,6 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 // * wn.config.ForceFetchTransactions
 // * wn.config.ForceRelayMessages
 // * NodeInfo.IsParticipating() + WebsocketNetwork.OnNetworkAdvance()
-// TODO WRITEME
 func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	// Tests that A->B follows MOI
 	partitiontest.PartitionTest(t)
@@ -1884,6 +1884,7 @@ func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
+	require.Equal(t, 4, len(msgCounters))
 	for _, count := range msgCounters {
 		require.Equal(t, 5, count)
 	}
@@ -1965,6 +1966,7 @@ func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
+	require.Equal(t, 4, len(msgCounters))
 	for _, count := range msgCounters {
 		require.Equal(t, 5, count)
 	}
@@ -2049,6 +2051,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
+	require.Equal(t, 3, len(msgCounters))
 	for tag, count := range msgCounters {
 		if tag == protocol.TxnTag {
 			require.Equal(t, 0, count)
@@ -2146,6 +2149,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
+	require.Equal(t, 4, len(msgCounters))
 	for tag, count := range msgCounters {
 		if tag == protocol.TxnTag {
 			require.Equal(t, 5, count)
