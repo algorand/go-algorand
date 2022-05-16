@@ -1211,6 +1211,9 @@ var dryrunRemoteCmd = &cobra.Command{
 						trace = *txnResult.LogicSigTrace
 					}
 				}
+				if txnResult.Cost != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] cost: %d\n", i, *txnResult.Cost)
+				}
 				if txnResult.BudgetConsumed != nil {
 					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)
 				}

@@ -1336,6 +1336,10 @@
             "description": "Budget consumed during execution of app call transaction.",
             "type": "integer"
           },
+          "cost": {
+            "description": "Net cost of app execution. Will be DEPRECATED.",
+            "type": "integer"
+          },
           "disassembly": {
             "description": "Disassembled program line by line.",
             "items": {

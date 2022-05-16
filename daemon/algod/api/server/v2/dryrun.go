@@ -546,8 +546,10 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				// integers, so a negative cost would underflow. The two fields also provide
 				// more information, which can be useful for testing purposes.
 				// cost = budgetConsumed - budgetAdded
+				netCost := uint64(cost)
 				budgetAdded := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
 				budgetConsumed := uint64(cost) + budgetAdded
+				result.Cost = &netCost
 				result.BudgetAdded = &budgetAdded
 				result.BudgetConsumed = &budgetConsumed
 				maxCurrentBudget = pooledAppBudget
