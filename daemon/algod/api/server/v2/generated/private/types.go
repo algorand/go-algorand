@@ -316,11 +316,11 @@ type DryrunTxnResult struct {
 	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
-	// Budget consumed during execution of app call transaction.
-	BudgetCredit *uint64 `json:"budget-credit,omitempty"`
-
 	// Budget added during execution of app call transaction.
-	BudgetDebit *uint64 `json:"budget-debit,omitempty"`
+	BudgetAdded *uint64 `json:"budget-added,omitempty"`
+
+	// Budget consumed during execution of app call transaction.
+	BudgetConsumed *uint64 `json:"budget-consumed,omitempty"`
 
 	// Disassembled program line by line.
 	Disassembly []string `json:"disassembly"`

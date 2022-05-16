@@ -1328,12 +1328,12 @@
             },
             "type": "array"
           },
-          "budget-credit": {
-            "description": "Budget consumed during execution of app call transaction.",
+          "budget-added": {
+            "description": "Budget added during execution of app call transaction.",
             "type": "integer"
           },
-          "budget-debit": {
-            "description": "Budget added during execution of app call transaction.",
+          "budget-consumed": {
+            "description": "Budget consumed during execution of app call transaction.",
             "type": "integer"
           },
           "disassembly": {

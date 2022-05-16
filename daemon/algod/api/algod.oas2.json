@@ -2295,11 +2295,11 @@
             "format": "byte"
           }
         },
-        "budget-debit": {
+        "budget-added": {
           "description": "Budget added during execution of app call transaction.",
           "type": "integer"
         },
-        "budget-credit": {
+        "budget-consumed": {
           "description": "Budget consumed during execution of app call transaction.",
           "type": "integer"
         }
