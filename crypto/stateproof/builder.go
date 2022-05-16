@@ -199,7 +199,7 @@ func (b *Builder) Build() (*StateProof, error) {
 	}
 
 	// Reveal sufficient number of signatures
-	c := &StateProof{
+	s := &StateProof{
 		SigCommit:                  sigtree.Root(),
 		SignedWeight:               b.signedWeight,
 		Reveals:                    make(map[uint64]Reveal),
@@ -214,8 +214,8 @@ func (b *Builder) Build() (*StateProof, error) {
 	choice := coinChoiceSeed{
 		partCommitment: b.parttree.Root(),
 		lnProvenWeight: b.lnProvenWeight,
-		sigCommitment:  c.SigCommit,
-		signedWeight:   c.SignedWeight,
+		sigCommitment:  s.SigCommit,
+		signedWeight:   s.SignedWeight,
 		data:           b.data,
 	}
 
@@ -237,13 +237,13 @@ func (b *Builder) Build() (*StateProof, error) {
 		revealsSequence[j] = pos
 
 		// If we already revealed pos, no need to do it again
-		_, alreadyRevealed := c.Reveals[pos]
+		_, alreadyRevealed := s.Reveals[pos]
 		if alreadyRevealed {
 			continue
 		}
 
 		// Generate the reveal for pos
-		c.Reveals[pos] = Reveal{
+		s.Reveals[pos] = Reveal{
 			SigSlot: b.sigs[pos].sigslotCommit,
 			Part:    b.participants[pos],
 		}
@@ -261,9 +261,9 @@ func (b *Builder) Build() (*StateProof, error) {
 		return nil, err
 	}
 
-	c.SigProofs = *sigProofs
-	c.PartProofs = *partProofs
-	c.PositionsToReveal = revealsSequence
+	s.SigProofs = *sigProofs
+	s.PartProofs = *partProofs
+	s.PositionsToReveal = revealsSequence
 
-	return c, nil
+	return s, nil
 }
