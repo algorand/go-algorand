@@ -1212,10 +1212,10 @@ var dryrunRemoteCmd = &cobra.Command{
 					}
 				}
 				if txnResult.BudgetConsumed != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget credit: %d\n", i, *txnResult.BudgetConsumed)
+					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)
 				}
 				if txnResult.BudgetAdded != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget debit: %d\n", i, *txnResult.BudgetAdded)
+					fmt.Fprintf(os.Stdout, "tx[%d] budget added: %d\n", i, *txnResult.BudgetAdded)
 				}
 
 				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)
