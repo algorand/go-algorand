@@ -16,10 +16,208 @@
 
 package stateproof
 
-//func TestGenerateStateProofMessage(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//	a := require.New(t)
-//
-//	_, err := GenerateStateProofMessage(nil, 240, 256)
-//	a.Error(err)
-//}
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
+)
+
+type workerForStateProofMessageTests struct {
+	w *testWorkerStubs
+}
+
+func (s *workerForStateProofMessageTests) StateProofKeys(round basics.Round) []account.StateProofRecordForRound {
+	return s.w.StateProofKeys(round)
+}
+
+func (s *workerForStateProofMessageTests) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
+	return s.w.DeleteStateProofKey(id, round)
+}
+
+func (s *workerForStateProofMessageTests) Latest() basics.Round {
+	return s.w.Latest()
+}
+
+func (s *workerForStateProofMessageTests) Wait(round basics.Round) chan struct{} {
+	return s.w.Wait(round)
+}
+
+func (s *workerForStateProofMessageTests) GenesisHash() crypto.Digest {
+	return s.w.GenesisHash()
+}
+
+func (s *workerForStateProofMessageTests) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return s.w.BlockHdr(round)
+}
+
+func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round) (*ledgercore.VotersForRound, error) {
+	voters := &ledgercore.VotersForRound{
+		Proto:     config.Consensus[protocol.ConsensusFuture],
+		AddrToPos: make(map[basics.Address]uint64),
+	}
+
+	wt := uint64(0)
+	for i, k := range s.w.keysForVoters {
+		partWe := uint64((len(s.w.keysForVoters) + int(round) - i) * 10000)
+		voters.AddrToPos[k.Parent] = uint64(i)
+		voters.Participants = append(voters.Participants, basics.Participant{
+			PK:     *k.StateProofSecrets.GetVerifier(),
+			Weight: partWe,
+		})
+		wt += partWe
+	}
+
+	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: stateproof.HashType})
+	if err != nil {
+		return nil, err
+	}
+
+	voters.Tree = tree
+	voters.TotalWeight = basics.MicroAlgos{Raw: wt}
+	return voters, nil
+}
+
+func (s *workerForStateProofMessageTests) Broadcast(ctx context.Context, tag protocol.Tag, bytes []byte, b bool, peer network.Peer) error {
+	return s.w.Broadcast(ctx, tag, bytes, b, peer)
+}
+
+func (s *workerForStateProofMessageTests) RegisterHandlers(handlers []network.TaggedMessageHandler) {
+	s.w.RegisterHandlers(handlers)
+}
+
+func (s *workerForStateProofMessageTests) BroadcastInternalSignedTxGroup(txns []transactions.SignedTxn) error {
+	return s.w.BroadcastInternalSignedTxGroup(txns)
+}
+
+func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRound basics.Round) {
+
+	s.w.latest++
+
+	hdr := bookkeeping.BlockHeader{}
+	hdr.Round = s.w.latest
+	hdr.CurrentProtocol = protocol.ConsensusFuture
+
+	var ccBasic = bookkeeping.StateProofTrackingData{
+		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
+		StateProofVotersTotalWeight: basics.MicroAlgos{},
+		StateProofNextRound:         0,
+	}
+
+	if uint64(hdr.Round)%config.Consensus[hdr.CurrentProtocol].StateProofInterval == 0 {
+		voters, _ := s.VotersForStateProof(hdr.Round.SubSaturate(basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofVotersLookback)))
+		ccBasic.StateProofVotersCommitment = voters.Tree.Root()
+		ccBasic.StateProofVotersTotalWeight = voters.TotalWeight
+
+	}
+
+	ccBasic.StateProofNextRound = ccNextRound
+	hdr.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: ccBasic,
+	}
+
+	s.w.blocks[s.w.latest] = hdr
+	if s.w.waiters[s.w.latest] != nil {
+		close(s.w.waiters[s.w.latest])
+	}
+}
+
+func newWorkerForStateProofMessageStubs(keys []account.Participation, totalWeight int) *workerForStateProofMessageTests {
+	s := &testWorkerStubs{
+		t:                     nil,
+		mu:                    deadlock.Mutex{},
+		latest:                0,
+		waiters:               make(map[basics.Round]chan struct{}),
+		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
+		keys:                  keys,
+		keysForVoters:         keys,
+		sigmsg:                make(chan []byte, 1024),
+		txmsg:                 make(chan transactions.SignedTxn, 1024),
+		totalWeight:           totalWeight,
+		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
+	}
+	sm := workerForStateProofMessageTests{w: s}
+	return &sm
+}
+
+func (s *workerForStateProofMessageTests) advanceLatest(delta uint64) {
+	s.w.mu.Lock()
+	defer s.w.mu.Unlock()
+
+	for r := uint64(0); r < delta; r++ {
+		s.addBlockWithStateProofHeaders(s.w.blocks[s.w.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	}
+}
+
+func TestTrustedDataInStateProofMessage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys, len(keys))
+	dbs, _ := dbOpenTest(t, true)
+	w := NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
+
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	var lastMessage stateproofmsg.Message
+
+	for iter := uint64(0); iter < 5; iter++ {
+		s.advanceLatest(proto.StateProofInterval)
+
+		for {
+			tx := <-s.w.txmsg
+			a.Equal(tx.Txn.Type, protocol.StateProofTx)
+			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
+				continue
+			}
+
+			a.Equal(tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
+			a.Equal(tx.Txn.StateProofMessage.LastAttestedRound, (iter+2)*proto.StateProofInterval)
+			a.Equal(tx.Txn.StateProofMessage.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
+
+			if !lastMessage.MsgIsZero() {
+				verif, err := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
+				a.NoError(err)
+
+				err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				a.NoError(err)
+			}
+
+			lastMessage = tx.Txn.StateProofMessage
+			break
+		}
+	}
+}
