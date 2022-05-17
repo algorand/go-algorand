@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -374,7 +375,7 @@ func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
-func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
+func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, msg string) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
@@ -387,10 +388,18 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 			if response.Txns[idx].AppCallMessages != nil {
 				messages := *response.Txns[idx].AppCallMessages
 				assert.GreaterOrEqual(t, len(messages), 1)
-				assert.Equal(t, "PASS", messages[len(messages)-1])
+				assert.Equal(t, msg, messages[len(messages)-1])
 			}
 		}
 	}
+}
+
+func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
+	checkAppCallResponse(t, response, "PASS")
+}
+
+func checkAppCallReject(t *testing.T, response *generated.DryrunResponse) {
+	checkAppCallResponse(t, response, "REJECT")
 }
 
 type expectedSlotType struct {
@@ -1633,4 +1642,125 @@ int 1`)
 	if t.Failed() {
 		logResponse(t, &response)
 	}
+}
+
+func checkEvalDelta(t *testing.T,
+	response generated.DryrunResponse,
+	expectedGlobalDelta generated.StateDelta,
+	expectedLocalDelta generated.AccountStateDelta,
+) {
+	for _, rt := range response.Txns {
+		if rt.GlobalDelta != nil && len(*rt.GlobalDelta) > 0 {
+			assert.Equal(t, expectedGlobalDelta, *rt.GlobalDelta)
+		} else {
+			assert.Nil(t, expectedGlobalDelta)
+		}
+
+		if rt.LocalDeltas != nil {
+			for _, ld := range *rt.LocalDeltas {
+				assert.Equal(t, expectedLocalDelta.Address, ld.Address)
+				assert.Equal(t, expectedLocalDelta.Delta, ld.Delta)
+			}
+		} else {
+			assert.Nil(t, expectedLocalDelta)
+		}
+	}
+}
+
+func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var dr DryrunRequest
+	var response generated.DryrunResponse
+
+	// Expected responses.
+	expectedByte := b64("val")
+	expectedUint := uint64(1)
+	expectedGlobalDelta := generated.StateDelta{
+		{
+			Key: b64("key"),
+			Value: generated.EvalDelta{
+				Action: uint64(basics.SetBytesAction),
+				Bytes:  &expectedByte,
+			},
+		},
+	}
+	expectedLocalDelta := generated.AccountStateDelta{
+		Address: basics.Address{}.String(),
+		Delta: generated.StateDelta{
+			{
+				Key: b64("key"),
+				Value: generated.EvalDelta{
+					Action: uint64(basics.SetUintAction),
+					Uint:   &expectedUint,
+				},
+			},
+		},
+	}
+
+	// Test that a PASS and REJECT dryrun both return the dryrun evaldelta.
+	for i := range []int{0, 1} {
+		ops, _ := logic.AssembleString(fmt.Sprintf(`
+#pragma version 6
+txna ApplicationArgs 0
+txna ApplicationArgs 1
+app_global_put
+int 0
+txna ApplicationArgs 0
+int %d
+app_local_put
+int %d`, expectedUint, i))
+		dr.ProtocolVersion = string(dryrunProtoVersion)
+
+		dr.Txns = []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: 1,
+						ApplicationArgs: [][]byte{
+							[]byte("key"),
+							[]byte("val"),
+						},
+					},
+				},
+			},
+		}
+		dr.Apps = []generated.Application{
+			{
+				Id: 1,
+				Params: generated.ApplicationParams{
+					ApprovalProgram: ops.Program,
+					GlobalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: 1,
+						NumUint:      1,
+					},
+					LocalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: 1,
+						NumUint:      1,
+					},
+				},
+			},
+		}
+		dr.Accounts = []generated.Account{
+			{
+				Status:         "Online",
+				Address:        basics.Address{}.String(),
+				AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
+			},
+		}
+
+		doDryrunRequest(&dr, &response)
+		if i == 0 {
+			checkAppCallReject(t, &response)
+		} else {
+			checkAppCallPass(t, &response)
+		}
+		checkEvalDelta(t, response, expectedGlobalDelta, expectedLocalDelta)
+		if t.Failed() {
+			logResponse(t, &response)
+		}
+	}
+
 }

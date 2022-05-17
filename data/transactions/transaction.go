@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -161,6 +162,7 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
+	// These are all `Txid` which is equivalent to `crypto.Digest`
 	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=config.MaxTxGroupSize"`
 }
 
@@ -179,6 +181,13 @@ func (tx Transaction) ID() Txid {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
+}
+
+// IDSha256 returns the digest (i.e., hash) of the transaction.
+func (tx Transaction) IDSha256() crypto.Digest {
+	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
+	defer protocol.PutEncodingBuf(enc)
+	return sha256.Sum256(enc)
 }
 
 // InnerID returns something akin to Txid, but folds in the parent Txid and the
