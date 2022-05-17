@@ -67,9 +67,6 @@ runGoLint
 echo "Running check_license..."
 ./scripts/check_license.sh
 
-echo "Regenerate msgp files"
-make msgp
-
 echo "Rebuild swagger.json files"
 make rebuild_swagger
 
@@ -86,6 +83,9 @@ make -C data/transactions/logic
 echo "Regenerate REST server"
 touch daemon/algod/api/algod.oas2.json
 make -C daemon/algod/api generate
+
+echo "Regenerate msgp files"
+make msgp
 
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
