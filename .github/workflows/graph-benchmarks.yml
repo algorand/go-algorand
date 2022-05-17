@@ -1,4 +1,3 @@
-
 name: "Benchmark performance graph on master branch"
 on:
   # Push and update benchmarks when a commit is merged into master.
