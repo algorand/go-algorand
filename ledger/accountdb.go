@@ -2130,11 +2130,16 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		return nil
 	}
 
+	latest, err := accountsRound(tx)
+	if err != nil {
+		return fmt.Errorf("latest block number cannot be retrieved : %w", err)
+	}
+
 	// load the latest MaxTxnLife rounds in the txtail and store these in the txtail.
 	// when migrating there is only MaxTxnLife blocks in the block DB
 	// since the original txTail.commmittedUpTo preserved only (rnd+1)-MaxTxnLife = 1000 blocks back
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		latest, err := blockLatest(blockTx)
+		latestBlockRound, err := blockLatest(blockTx)
 		if err != nil {
 			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 		}
@@ -2144,7 +2149,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 
 		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife)
-		firstRound := (latest + 1).SubSaturate(maxTxnLife)
+		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife)
 		// we don't need to have the txtail for round 0.
 		if firstRound == basics.Round(0) {
 			firstRound++
