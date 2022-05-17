@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -3352,6 +3353,14 @@ func evalLoop(b *testing.B, runs int, program []byte) {
 func benchmarkBasicProgram(b *testing.B, source string) {
 	ops := testProg(b, source, AssemblerMaxVersion)
 	evalLoop(b, b.N, ops.Program)
+}
+
+// A baseline benchmark to detect any variance between CI machines for each
+// benchmark run.
+func BenchmarkUintMathBaseline(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // Rather than run b.N times, build a program that runs the operation
