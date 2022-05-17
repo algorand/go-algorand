@@ -1842,6 +1842,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 			}
 
 			stxns[j] = sign(initKeys, tx)
+			curAddressIdx = (curAddressIdx + 1) % len(addresses)
 		}
 		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
 		require.NoError(t, err)
@@ -1958,4 +1959,136 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 
 	_, err = l.BlockHdrCached(start - 1)
 	require.Error(t, err)
+}
+
+// TestLedgerKeyregFlip generates keyreg transactions for flipping genesis accounts state.
+// It checks 1) lookup returns correct values 2) lookup agreement returns correct values
+func TestLedgerKeyregFlip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		os.Remove(dbName + ".tracker.sqlite")
+	}()
+
+	const numFullBlocks = 1000
+	const numEmptyBlocks = 500
+
+	require.Equal(t, len(genesisInitState.Accounts), 12)
+	const numAccounts = 10 // 12 - pool and sink
+
+	// preallocate data for saving account info
+	var accounts [numFullBlocks][numAccounts]ledgercore.AccountData
+
+	lastBlock, err := l.Block(l.Latest())
+	require.NoError(t, err)
+	proto := config.Consensus[lastBlock.CurrentProtocol]
+
+	// regular addresses: all init accounts minus pools
+	addresses := make([]basics.Address, numAccounts)
+	i := 0
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			addresses[i] = addr
+			i++
+		}
+	}
+
+	isOnline := func(rndIdx, acctIdx, seed int) bool {
+		return (rndIdx+acctIdx+seed)%4 == 1
+	}
+	// run for numFullBlocks rounds
+	// generate 10 txn per block
+	for i := 0; i < numFullBlocks; i++ {
+		stxns := make([]transactions.SignedTxn, numAccounts)
+		latest := l.Latest()
+		require.Equal(t, basics.Round(i), latest)
+		seed := int(crypto.RandUint63() % 1_000_000)
+		for j := 0; j < numAccounts; j++ {
+			txHeader := transactions.Header{
+				Sender:      addresses[j],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				FirstValid:  latest + 1,
+				LastValid:   latest + 10,
+				GenesisID:   t.Name(),
+				GenesisHash: crypto.Hash([]byte(t.Name())),
+			}
+
+			keyregFields := transactions.KeyregTxnFields{
+				VoteFirst: latest + 1,
+				VoteLast:  latest + 100_000,
+			}
+			if isOnline(i, j, seed) {
+				var votepk crypto.OneTimeSignatureVerifier
+				votepk[0] = byte(j % 256)
+				votepk[1] = byte(i % 256)
+				votepk[2] = byte(254)
+				var selpk crypto.VRFVerifier
+				selpk[0] = byte(j % 256)
+				selpk[1] = byte(i % 256)
+				selpk[2] = byte(255)
+
+				keyregFields.VotePK = votepk
+				keyregFields.SelectionPK = selpk
+			}
+
+			tx := transactions.Transaction{
+				Type:            protocol.KeyRegistrationTx,
+				Header:          txHeader,
+				KeyregTxnFields: keyregFields,
+			}
+			stxns[j] = sign(initKeys, tx)
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+		require.NoError(t, err)
+		for k := 0; k < numAccounts; k++ {
+			data, rnd, _, err := l.LookupAccount(basics.Round(i+1), addresses[k])
+			require.NoError(t, err)
+			require.Equal(t, rnd, basics.Round(i+1))
+			online := isOnline(i, k, seed)
+			require.Equal(t, online, data.Status == basics.Online)
+			if online {
+				require.Equal(t, byte(k%256), data.VoteID[0])
+				require.Equal(t, byte(i%256), data.VoteID[1])
+				require.Equal(t, byte(254), data.VoteID[2])
+				require.Equal(t, byte(k%256), data.SelectionID[0])
+				require.Equal(t, byte(i%256), data.SelectionID[1])
+				require.Equal(t, byte(255), data.SelectionID[2])
+				accounts[i][k] = data
+			}
+		}
+	}
+	l.WaitForCommit(l.Latest())
+	require.Equal(t, basics.Round(numFullBlocks), l.Latest())
+
+	for i := 0; i < numEmptyBlocks; i++ {
+		nextRound := basics.Round(numFullBlocks + i + 1)
+		balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
+		acctRoundIdx := int(balancesRound) - 1
+		if acctRoundIdx >= len(accounts) {
+			// checked all saved history, stop
+			break
+		}
+		for k := 0; k < numAccounts; k++ {
+			od, err := l.LookupAgreement(balancesRound, addresses[k])
+			require.NoError(t, err)
+			data := accounts[acctRoundIdx][k]
+			require.Equal(t, data.MicroAlgos, od.MicroAlgosWithRewards)
+			require.Equal(t, data.VoteFirstValid, od.VoteFirstValid)
+			require.Equal(t, data.VoteLastValid, od.VoteLastValid)
+			require.Equal(t, data.VoteID, od.VoteID)
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(l.Latest())
 }
