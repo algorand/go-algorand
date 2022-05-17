@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
@@ -521,7 +522,13 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	}
 
 	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
+	dbs, _ := dbOpenTest(t, true)
+
+	logger := logging.NewLogger()
+	logger.SetOutput(ioutil.Discard)
+
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+
 	w.Start()
 	defer w.Shutdown()
 	proto := config.Consensus[protocol.ConsensusFuture]

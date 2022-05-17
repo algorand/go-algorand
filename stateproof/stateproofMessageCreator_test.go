@@ -166,7 +166,7 @@ func (s *workerForStateProofMessageTests) advanceLatest(delta uint64) {
 	}
 }
 
-func TestTrustedDataInStateProofMessage(t *testing.T) {
+func TestStateProofMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -208,16 +208,33 @@ func TestTrustedDataInStateProofMessage(t *testing.T) {
 			a.Equal(tx.Txn.StateProofMessage.LastAttestedRound, (iter+2)*proto.StateProofInterval)
 			a.Equal(tx.Txn.StateProofMessage.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
 
+			verifySha256BlockHeadersCommitments(a, tx.Txn.StateProofMessage, s.w.blocks)
+
 			if !lastMessage.MsgIsZero() {
-				verif, err := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
+				verifier, err := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 				a.NoError(err)
 
-				err = verif.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				err = verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 				a.NoError(err)
+
 			}
 
 			lastMessage = tx.Txn.StateProofMessage
 			break
 		}
 	}
+}
+
+func verifySha256BlockHeadersCommitments(a *require.Assertions, message stateproofmsg.Message, blocks map[basics.Round]bookkeeping.BlockHeader) {
+	var blkHdrArr blockHeadersArray
+	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, message.LastAttestedRound-message.FirstAttestedRound+1)
+	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
+		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
+		blkHdrArr.blockHeaders[i] = hdr
+	}
+
+	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
+	a.NoError(err)
+
+	a.Equal(tree.Root(), crypto.GenericDigest(message.BlockHeadersCommitment))
 }
