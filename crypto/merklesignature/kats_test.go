@@ -77,7 +77,7 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 		return mssKat{}, fmt.Errorf("error while formating mss signature %w", err)
 	}
 
-	return mssKat{PublicKey: verifier[:],
+	return mssKat{PublicKey: verifier.Commitment[:],
 		CtSignature:        ctSignature,
 		EphemeralKey:       pk,
 		VcIndex:            signature.VectorCommitmentIndex,

@@ -58,9 +58,9 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 	weightAsBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(weightAsBytes, p.Weight)
 
-	publicKeyBytes := p.PK
+	publicKeyBytes := p.PK.Commitment
 
-	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes))
+	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes)+8) // 8 is size of p.PK.KeyLifetime
 	partCommitment = append(partCommitment, weightAsBytes...)
 	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 

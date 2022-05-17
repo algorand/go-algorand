@@ -194,10 +194,10 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	binary.LittleEndian.PutUint64(binaryWeight, part.Weight)
 
 	publicKeyBytes := part.PK
-	partCommitment := make([]byte, 0, len(protocol.StateProofPart)+len(binaryWeight)+len(publicKeyBytes))
+	partCommitment := make([]byte, 0, len(protocol.StateProofPart)+len(binaryWeight)+len(publicKeyBytes.Commitment))
 	partCommitment = append(partCommitment, protocol.StateProofPart...)
 	partCommitment = append(partCommitment, binaryWeight...)
-	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+	partCommitment = append(partCommitment, publicKeyBytes.Commitment[:]...)
 
 	factory := crypto.HashFactory{HashType: HashType}
 	hashValue := hashBytes(factory.NewHash(), partCommitment)
@@ -369,7 +369,7 @@ func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesign
 
 	leafHash = verifyMerklePath(idx, pathLe, sigBytes, parsedBytes, leafHash)
 
-	a.Equal(leafHash, verifier[:])
+	a.Equal(leafHash, verifier.Commitment[:])
 }
 
 func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int, leafHash []byte) []byte {

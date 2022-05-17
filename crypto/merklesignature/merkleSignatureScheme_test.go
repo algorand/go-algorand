@@ -95,7 +95,7 @@ func TestEmptyVerifier(t *testing.T) {
 	signer := generateTestSigner(8, 9, 5, a)
 	// even if there are no keys for that period, the root is not empty
 	// (part of the vector commitment property).
-	a.Equal(false, signer.GetVerifier().IsEmpty())
+	a.False(signer.GetVerifier().MsgIsZero())
 }
 
 func TestEmptySigner(t *testing.T) {
@@ -501,5 +501,5 @@ func TestTreeRootHashLength(t *testing.T) {
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
 	a.Equal(MerkleSignatureSchemeRootSize, len(s.Tree.Root()))
-	a.Equal(MerkleSignatureSchemeRootSize, len(Verifier{}))
+	a.Equal(MerkleSignatureSchemeRootSize, len(Verifier{}.Commitment))
 }

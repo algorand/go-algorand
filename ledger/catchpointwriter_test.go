@@ -57,7 +57,7 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
 	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID[:])
+	crypto.RandBytes(stateProofID.Commitment[:])
 
 	ad := basics.AccountData{
 		Status:             basics.NotParticipating,
@@ -66,7 +66,7 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 		RewardedMicroAlgos: basics.MicroAlgos{},
 		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
 		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID,
+		StateProofID:       stateProofID.Commitment,
 		VoteFirstValid:     basics.Round(0x1234123412341234),
 		VoteLastValid:      basics.Round(0x1234123412341234),
 		VoteKeyDilution:    0x1234123412341234,

@@ -1083,7 +1083,7 @@ type baseOnlineAccountData struct {
 	VoteFirstValid  basics.Round                    `codec:"C"`
 	VoteLastValid   basics.Round                    `codec:"D"`
 	VoteKeyDilution uint64                          `codec:"E"`
-	StateProofID    merklesignature.Verifier        `codec:"F"`
+	StateProofID    merklesignature.Commitment      `codec:"F"`
 }
 
 type baseAccountData struct {
@@ -1127,7 +1127,7 @@ func (ba *baseAccountData) IsEmpty() bool {
 		ba.TotalAppLocalStates == 0 &&
 		ba.VoteID.MsgIsZero() &&
 		ba.SelectionID.MsgIsZero() &&
-		ba.StateProofID.MsgIsZero() &&
+		ba.StateProofID.IsEmpty() &&
 		ba.VoteFirstValid == 0 &&
 		ba.VoteLastValid == 0 &&
 		ba.VoteKeyDilution == 0
@@ -1808,7 +1808,7 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
-		StateProofID:            ad.StateProofID,
+		StateProofID:            merklesignature.Verifier{Commitment: ad.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
 	}
 }
 

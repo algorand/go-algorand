@@ -1091,7 +1091,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		signer := p.Participation.StateProofSecrets
 		require.NoError(t, err)
 
-		correctKeyregFields.StateProofPK = *(signer.GetVerifier())
+		correctKeyregFields.StateProofPK = signer.GetVerifier().Commitment
 	}
 
 	correctKeyreg := transactions.Transaction{

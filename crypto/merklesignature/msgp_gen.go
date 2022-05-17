@@ -8,6 +8,14 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
+// Commitment
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
 // KeyRoundPair
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -48,6 +56,45 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Commitment) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *Commitment) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Commitment)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Commitment) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (_ *Commitment) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Commitment)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Commitment) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (MerkleSignatureSchemeRootSize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Commitment) MsgIsZero() bool {
+	return (*z) == (Commitment{})
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *KeyRoundPair) MarshalMsg(b []byte) (o []byte) {
@@ -219,7 +266,7 @@ func (z *Secrets) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x8
 	}
-	if (*z).SignerContext.Interval == 0 {
+	if (*z).SignerContext.KeyLifetime == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x10
 	}
@@ -238,7 +285,7 @@ func (z *Secrets) MarshalMsg(b []byte) (o []byte) {
 		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "iv"
 			o = append(o, 0xa2, 0x69, 0x76)
-			o = msgp.AppendUint64(o, (*z).SignerContext.Interval)
+			o = msgp.AppendUint64(o, (*z).SignerContext.KeyLifetime)
 		}
 		if (zb0002Mask & 0x20) == 0 { // if not empty
 			// string "tree"
@@ -277,9 +324,9 @@ func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).SignerContext.Interval, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).SignerContext.KeyLifetime, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Interval")
+				err = msgp.WrapError(err, "struct-from-array", "KeyLifetime")
 				return
 			}
 		}
@@ -321,9 +368,9 @@ func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "iv":
-				(*z).SignerContext.Interval, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).SignerContext.KeyLifetime, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Interval")
+					err = msgp.WrapError(err, "KeyLifetime")
 					return
 				}
 			case "tree":
@@ -358,7 +405,7 @@ func (z *Secrets) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Secrets) MsgIsZero() bool {
-	return ((*z).SignerContext.FirstValid == 0) && ((*z).SignerContext.Interval == 0) && ((*z).SignerContext.Tree.MsgIsZero())
+	return ((*z).SignerContext.FirstValid == 0) && ((*z).SignerContext.KeyLifetime == 0) && ((*z).SignerContext.Tree.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -546,7 +593,7 @@ func (z *SignerContext) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).Interval == 0 {
+	if (*z).KeyLifetime == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -565,7 +612,7 @@ func (z *SignerContext) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "iv"
 			o = append(o, 0xa2, 0x69, 0x76)
-			o = msgp.AppendUint64(o, (*z).Interval)
+			o = msgp.AppendUint64(o, (*z).KeyLifetime)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "tree"
@@ -604,9 +651,9 @@ func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).KeyLifetime, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Interval")
+				err = msgp.WrapError(err, "struct-from-array", "KeyLifetime")
 				return
 			}
 		}
@@ -648,9 +695,9 @@ func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "iv":
-				(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).KeyLifetime, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Interval")
+					err = msgp.WrapError(err, "KeyLifetime")
 					return
 				}
 			case "tree":
@@ -685,13 +732,37 @@ func (z *SignerContext) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignerContext) MsgIsZero() bool {
-	return ((*z).FirstValid == 0) && ((*z).Interval == 0) && ((*z).Tree.MsgIsZero())
+	return ((*z).FirstValid == 0) && ((*z).KeyLifetime == 0) && ((*z).Tree.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
+	// omitempty: check for empty values
+	zb0002Len := uint32(2)
+	var zb0002Mask uint8 /* 3 bits */
+	if (*z).Commitment == (Commitment{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	if (*z).KeyLifetime == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x4
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "cmt"
+			o = append(o, 0xa3, 0x63, 0x6d, 0x74)
+			o = msgp.AppendBytes(o, ((*z).Commitment)[:])
+		}
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "lf"
+			o = append(o, 0xa2, 0x6c, 0x66)
+			o = msgp.AppendUint64(o, (*z).KeyLifetime)
+		}
+	}
 	return
 }
 
@@ -702,10 +773,76 @@ func (_ *Verifier) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Commitment)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Commitment")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).KeyLifetime, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "KeyLifetime")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = Verifier{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "cmt":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Commitment)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Commitment")
+					return
+				}
+			case "lf":
+				(*z).KeyLifetime, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "KeyLifetime")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
 	}
 	o = bts
 	return
@@ -718,11 +855,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (MerkleSignatureSchemeRootSize * (msgp.ByteSize))
+	s = 1 + 4 + msgp.ArrayHeaderSize + (MerkleSignatureSchemeRootSize * (msgp.ByteSize)) + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return (*z) == (Verifier{})
+	return ((*z).Commitment == (Commitment{})) && ((*z).KeyLifetime == 0)
 }

@@ -565,7 +565,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID[:])
+	crypto.RandBytes(stateProofID.Commitment[:])
 	updates = make(map[basics.Address]basics.AccountData, numAccounts)
 
 	for i := 0; i < numAccounts; i++ {
@@ -577,7 +577,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 			RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
 			VoteID:             secrets.OneTimeSignatureVerifier,
 			SelectionID:        pubVrfKey,
-			StateProofID:       stateProofID,
+			StateProofID:       stateProofID.Commitment,
 			VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 			VoteLastValid:      basics.Round(0x000ffffffffffffff),
 			VoteKeyDilution:    0x000ffffffffffffff,
@@ -833,7 +833,7 @@ func TestAccountsReencoding(t *testing.T) {
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID[:])
+	crypto.RandBytes(stateProofID.Commitment[:])
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
@@ -854,7 +854,7 @@ func TestAccountsReencoding(t *testing.T) {
 				RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
 				VoteID:             secrets.OneTimeSignatureVerifier,
 				SelectionID:        pubVrfKey,
-				StateProofID:       stateProofID,
+				StateProofID:       stateProofID.Commitment,
 				VoteFirstValid:     basics.Round(0x000ffffffffffffff),
 				VoteLastValid:      basics.Round(0x000ffffffffffffff),
 				VoteKeyDilution:    0x000ffffffffffffff,

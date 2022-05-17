@@ -149,7 +149,8 @@ func (r ParticipationRecord) Duplicate() ParticipationRecord {
 	var stateProof *StateProofVerifier
 	if r.StateProof != nil {
 		stateProof = &StateProofVerifier{}
-		copy(stateProof[:], r.StateProof[:])
+		copy(stateProof.Commitment[:], r.StateProof.Commitment[:])
+		stateProof.KeyLifetime = r.StateProof.KeyLifetime
 	}
 
 	dupParticipation := ParticipationRecord{
@@ -520,11 +521,11 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		*voting = record.Voting.Snapshot()
 	}
 
-	var stateProofVeriferPtr *StateProofVerifier
+	var stateProofVerifierPtr *StateProofVerifier
 	if record.StateProofSecrets != nil {
-		stateProofVeriferPtr = &StateProofVerifier{}
-		copy(stateProofVeriferPtr[:], record.StateProofSecrets.GetVerifier()[:])
-
+		stateProofVerifierPtr = &StateProofVerifier{}
+		copy(stateProofVerifierPtr.Commitment[:], record.StateProofSecrets.GetVerifier().Commitment[:])
+		stateProofVerifierPtr.KeyLifetime = record.StateProofSecrets.GetVerifier().KeyLifetime
 	}
 
 	// update cache.
@@ -539,7 +540,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		LastStateProof:    0,
 		EffectiveFirst:    0,
 		EffectiveLast:     0,
-		StateProof:        stateProofVeriferPtr,
+		StateProof:        stateProofVerifierPtr,
 		Voting:            voting,
 		VRF:               vrf,
 	}
@@ -667,7 +668,8 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 				return nil, fmt.Errorf("unable to decode stateproof: %w", err)
 			}
 			var stateProofVerifer StateProofVerifier
-			copy(stateProofVerifer[:], stateProof.GetVerifier()[:])
+			copy(stateProofVerifer.Commitment[:], stateProof.GetVerifier().Commitment[:])
+			stateProofVerifer.KeyLifetime = stateProof.GetVerifier().KeyLifetime
 			record.StateProof = &stateProofVerifer
 		}
 

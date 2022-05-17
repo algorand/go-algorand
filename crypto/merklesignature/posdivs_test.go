@@ -73,12 +73,6 @@ func TestErrors(t *testing.T) {
 	round := uint64(0)
 	require.Equal(t, errRoundNotZero, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 
-	round = interval - 1
-	require.Equal(t, errRoundMultipleOfInterval, checkMerkleSignatureSchemeParams(firstValid, round, interval))
-
-	round = interval + 1
-	require.Equal(t, errRoundMultipleOfInterval, checkMerkleSignatureSchemeParams(firstValid, round, interval))
-
 	firstValid = uint64(101)
 	round = firstValid - 1
 	interval = round / 2

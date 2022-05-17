@@ -80,7 +80,8 @@ func assertParticipation(t testing.TB, p Participation, pr ParticipationRecord) 
 	require.Equal(t, p.KeyDilution, pr.KeyDilution)
 	require.Equal(t, p.Parent, pr.Account)
 	if p.StateProofSecrets != nil {
-		require.Equal(t, p.StateProofSecrets.GetVerifier()[:], pr.StateProof[:])
+		require.Equal(t, p.StateProofSecrets.GetVerifier().Commitment[:], pr.StateProof.Commitment[:])
+		require.Equal(t, p.StateProofSecrets.GetVerifier().KeyLifetime, pr.StateProof.KeyLifetime)
 	}
 
 }
