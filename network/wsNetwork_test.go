@@ -2082,7 +2082,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	bConfig := defaultConfig
 	bConfig.NetAddress = ""
 	netB := makeTestWebsocketNodeWithConfig(t, bConfig)
-	netB.node = &participatingNodeInfo{}
+	netB.nodeInfo = &participatingNodeInfo{}
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
 	addrA, postListen := netA.Address()

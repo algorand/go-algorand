@@ -426,7 +426,7 @@ type WebsocketNetwork struct {
 	// Start(), and being shut down when Stop() is called.
 	peersConnectivityCheckTicker *time.Ticker
 
-	node NodeInfo
+	nodeInfo NodeInfo
 
 	// atomic {0:unknown, 1:yes, 2:no}
 	wantTXGossip uint32
@@ -687,8 +687,8 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.config.DNSSecurityRelayAddrEnforced() {
 		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
 	}
-	if wn.node == nil {
-		wn.node = &nopeNodeInfo{}
+	if wn.nodeInfo == nil {
+		wn.nodeInfo = &nopeNodeInfo{}
 	}
 	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
@@ -1726,7 +1726,7 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvance = time.Now().UTC()
 	if !wn.relayMessages && !wn.config.ForceFetchTransactions {
 		// if we're not a relay, and not participating, we don't need txn pool
-		wantTXGossip := wn.node.IsParticipating()
+		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
 			wn.RegisterMessageInterest(protocol.TxnTag)
 			wn.wantTXGossip = wantTXGossipYes
@@ -2155,7 +2155,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		phonebook: phonebook,
 		GenesisID: genesisID,
 		NetworkID: networkID,
-		node:      node,
+		nodeInfo:  node,
 	}
 
 	wn.setup()
