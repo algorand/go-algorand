@@ -719,24 +719,13 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	}
 
 	if ct.catchpointInterval != 0 {
-		ct.catchpointsMu.Lock()
-		accountDataResourceSeparationRound := ct.accountDataResourceSeparationRound
-		ct.catchpointsMu.Unlock()
-
-		if accountDataResourceSeparationRound > 0 {
-			minCatchpointRound := dcc.oldBase + 1
-			if accountDataResourceSeparationRound > minCatchpointRound {
-				minCatchpointRound = accountDataResourceSeparationRound
-			}
-
-			// Generate catchpoints for rounds in [minCatchpointRound, dcc.newBase].
-			err := ct.createCatchpoints(
-				minCatchpointRound, dcc.newBase, dcc.oldBase, dcc.catchpointLookback)
-			if err != nil {
-				ct.log.Warnf(
-					"error creating catchpoints dcc.oldBase: %d dcc.newBase: %d err: %v",
-					dcc.oldBase, dcc.newBase, err)
-			}
+		// Generate catchpoints for rounds in [minCatchpointRound, dcc.newBase].
+		err := ct.createCatchpoints(
+			dcc.oldBase + 1, dcc.newBase, dcc.oldBase, dcc.catchpointLookback)
+		if err != nil {
+			ct.log.Warnf(
+				"error creating catchpoints dcc.oldBase: %d dcc.newBase: %d err: %v",
+				dcc.oldBase, dcc.newBase, err)
 		}
 	}
 
