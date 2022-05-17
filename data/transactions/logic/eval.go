@@ -3548,8 +3548,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
 
 	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
-	// Allow an address for an app that was created in group or provided
-	// in the foreign apps array.
+	// Allow an address for an app that was created in group
 	if err != nil && cx.version >= createdResourcesVersion {
 		for _, appID := range cx.created.apps {
 			createdAddress := cx.getApplicationAddress(appID)
@@ -3557,7 +3556,10 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 				return addr, invalidIndex, nil
 			}
 		}
+	}
 
+	// Allow an address for an app that was provided in the foreign apps array.
+	if err != nil && cx.version >= appAddressAvailableVersion {
 		for _, appID := range cx.txn.Txn.ForeignApps {
 			foreignAddress := cx.getApplicationAddress(appID)
 			if addr == foreignAddress {

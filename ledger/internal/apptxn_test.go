@@ -3063,60 +3063,72 @@ func TestForeignAppAccountsAccessible(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
-	defer l.Close()
+	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	appA := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
-  int 3
-  int 3
-  ==
-  assert
+		appA := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+int 3
+int 3
+==
+assert
 `),
-	}
+		}
 
-	appB := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
-			itxn_begin
-			int pay;                itxn_field TypeEnum
-			int 100;     		    itxn_field Amount
-			txn Applications 1
-            app_params_get AppAddress
-			assert
-			itxn_field Receiver
-			itxn_submit
+		appB := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+itxn_begin
+int pay;                itxn_field TypeEnum
+int 100;     		    itxn_field Amount
+txn Applications 1
+app_params_get AppAddress
+assert
+itxn_field Receiver
+itxn_submit
 `),
-	}
+		}
 
-	eval := nextBlock(t, l)
-	txns(t, l, eval, &appA, &appB)
-	vb := endBlock(t, l, eval)
-	index0 := vb.Block().Payset[0].ApplicationID
-	index1 := vb.Block().Payset[1].ApplicationID
+		dl.beginBlock()
+		dl.txgroup("", &appA, &appB)
+		vb := dl.endBlock()
+		index0 := vb.Block().Payset[0].ApplicationID
+		index1 := vb.Block().Payset[1].ApplicationID
 
-	fund1 := txntest.Txn{
-		Type:     "pay",
-		Sender:   addrs[0],
-		Receiver: index1.Address(),
-		Amount:   1_000_000_000,
-	}
-	fund0 := fund1
-	fund0.Receiver = index0.Address()
-	fund1.Receiver = index1.Address()
+		fund1 := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: index1.Address(),
+			Amount:   1_000_000_000,
+		}
+		fund0 := fund1
+		fund0.Receiver = index0.Address()
+		fund1.Receiver = index1.Address()
 
-	callTx := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[2],
-		ApplicationID: index1,
-		ForeignApps:   []basics.AppIndex{index0},
-	}
-	eval = nextBlock(t, l)
-	txns(t, l, eval, &fund0, &fund1, &callTx)
-	endBlock(t, l, eval)
+		callTx := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{index0},
+		}
+
+		dl.beginBlock()
+		if ver <= 32 {
+			dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
+			dl.endBlock()
+			return
+		}
+
+		dl.txgroup("", &fund0, &fund1, &callTx)
+		vb = dl.endBlock()
+
+		require.Equal(t, index0.Address(), vb.Block().Payset[2].EvalDelta.InnerTxns[0].Txn.Receiver)
+		require.Equal(t, uint64(100), vb.Block().Payset[2].EvalDelta.InnerTxns[0].Txn.Amount.Raw)
+	})
 }
 
 func TestForeignAppAccountsImmutable(t *testing.T) {
