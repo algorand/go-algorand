@@ -1787,6 +1787,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
@@ -1813,10 +1814,14 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	onlineTotals := make([]basics.MicroAlgos, maxBlocks+1)
 	curAddressIdx := 0
+	maxValidity := basics.Round(20) // some number different from number of txns in blocks
+	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
 	// run for maxBlocks rounds with random payment transactions
 	// generate 1000 txn per block
 	for i := 0; i < maxBlocks; i++ {
 		stxns := make([]transactions.SignedTxn, 10)
+		latest := l.Latest()
+		txnIDs[latest+1] = make(map[transactions.Txid]struct{})
 		for j := 0; j < 10; j++ {
 			feeMult := rand.Intn(5) + 1
 			amountMult := rand.Intn(1000) + 1
@@ -1824,8 +1829,8 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 			txHeader := transactions.Header{
 				Sender:      addresses[curAddressIdx],
 				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * uint64(feeMult)},
-				FirstValid:  l.Latest() + 1,
-				LastValid:   l.Latest() + 10,
+				FirstValid:  latest + 1,
+				LastValid:   latest + maxValidity,
 				GenesisID:   t.Name(),
 				GenesisHash: crypto.Hash([]byte(t.Name())),
 			}
@@ -1843,11 +1848,12 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 			stxns[j] = sign(initKeys, tx)
 			curAddressIdx = (curAddressIdx + 1) % len(addresses)
+			txnIDs[latest+1][tx.ID()] = struct{}{}
 		}
 		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
 		require.NoError(t, err)
 		if i%100 == 0 || i == maxBlocks-1 {
-			l.WaitForCommit(l.Latest())
+			l.WaitForCommit(latest + 1)
 		}
 		onlineTotals[i+1], err = l.accts.onlineTotals(basics.Round(i + 1))
 		require.NoError(t, err)
@@ -1875,6 +1881,18 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 		oad, err := l.LookupAgreement(balancesRound, addr)
 		require.NoError(t, err)
 		origAgreementBalances[i] = oad.MicroAlgosWithRewards
+	}
+
+	// at round "maxBlocks" the ledger must have maxValidity blocks of transactions
+	for i := latest; i <= latest+maxValidity; i++ {
+		for txid := range txnIDs[i] {
+			require.NoError(t, l.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
+		}
+	}
+
+	// check an error latest-1
+	for txid := range txnIDs[latest-1] {
+		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -1911,6 +1929,18 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 		// add a test checking all committed pre-reload entries are gone
 		// add as a tracker test
 	}
+
+	// at round maxBlocks the ledger must have maxValidity blocks of transactions, check
+	for i := latest; i <= latest+maxValidity; i++ {
+		for txid := range txnIDs[i] {
+			require.NoError(t, l.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
+		}
+	}
+
+	// check an error latest-1
+	for txid := range txnIDs[latest-1] {
+		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+	}
 }
 
 // TestLedgerTxTailCachedBlockHeaders checks [Latest - MaxTxnLife...Latest] block headers
@@ -1922,6 +1952,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -1971,7 +2002,7 @@ func TestLedgerKeyregFlip(t *testing.T) {
 	const inMem = false
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
+	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
