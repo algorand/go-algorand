@@ -17,6 +17,8 @@
 package ledger
 
 import (
+	"container/list"
+
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -24,18 +26,22 @@ import (
 const onlineAccountsCacheMaxSize = 2500
 
 type onlineAccountsCache struct {
-	// each persistedOnlineAccountDataList stores online account data with newest
+	// each List stores online account data with newest
 	// at the front, and oldest at the back.
-	accounts map[basics.Address]*persistedOnlineAccountDataList
+	accounts map[basics.Address]*list.List
 }
 
 // init initializes the onlineAccountsCache for use.
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) init(accts []persistedOnlineAccountData) {
-	o.accounts = make(map[basics.Address]*persistedOnlineAccountDataList)
+	o.accounts = make(map[basics.Address]*list.List)
 	for _, acct := range accts {
 		// if cache full, stop writing
-		if !o.writeFront(acct) {
+		cachedAcct := cachedOnlineAccount{
+			baseOnlineAccountData: acct.accountData,
+			updRound:              acct.updRound,
+		}
+		if !o.writeFront(acct.addr, cachedAcct) {
 			break
 		}
 	}
@@ -45,63 +51,66 @@ func (o *onlineAccountsCache) full() bool {
 	return len(o.accounts) >= onlineAccountsCacheMaxSize
 }
 
-// read the persistedAccountData object that the cache has for the given address.
+// read the cachedOnlineAccount object that the cache has for the given address.
 // thread locking semantics : read lock
-func (o *onlineAccountsCache) read(addr basics.Address, rnd basics.Round) (persistedOnlineAccountData, bool) {
+func (o *onlineAccountsCache) read(addr basics.Address, rnd basics.Round) (cachedOnlineAccount, bool) {
 	if list := o.accounts[addr]; list != nil {
-		node := list.back()
-		if node.Value.updRound > rnd {
-			return persistedOnlineAccountData{}, false
+		node := list.Back()
+		prevValue := node.Value.(*cachedOnlineAccount)
+		if prevValue.updRound > rnd {
+			return cachedOnlineAccount{}, false
 		}
-		for node.prev != &list.root {
-			node = node.prev
+		for node.Prev() != nil {
+			node = node.Prev()
 			// only need one entry that is targetRound or older
-			if node.Value.updRound > rnd {
-				return *node.next.Value, true
+			currentValue := node.Value.(*cachedOnlineAccount)
+			if currentValue.updRound > rnd {
+				return *prevValue, true
 			}
+			prevValue = currentValue
 		}
-		return *node.Value, true
+		return *prevValue, true
 	}
-	return persistedOnlineAccountData{}, false
+	return cachedOnlineAccount{}, false
 }
 
-// write a single persistedAccountData to the cache
+// write a single cachedOnlineAccount to the cache
 // thread locking semantics : write lock
-func (o *onlineAccountsCache) writeFront(acctData persistedOnlineAccountData) bool {
-	if _, ok := o.accounts[acctData.addr]; !ok {
+func (o *onlineAccountsCache) writeFront(addr basics.Address, acctData cachedOnlineAccount) bool {
+	if _, ok := o.accounts[addr]; !ok {
 		if o.full() {
 			return false
 		}
-		o.accounts[acctData.addr] = newPersistedOnlineAccountList()
+		o.accounts[addr] = list.New()
 	}
-	list := o.accounts[acctData.addr]
+	list := o.accounts[addr]
 	// do not insert if acctData would not be the newest entry in the cache
-	if list.root.next != &list.root && acctData.updRound <= list.root.next.Value.updRound {
+	if list.Front() != nil && acctData.updRound <= list.Front().Value.(*cachedOnlineAccount).updRound {
 		return false
 	}
-	o.accounts[acctData.addr].pushFront(&acctData)
+	o.accounts[addr].PushFront(&acctData)
 	return true
 }
 
-// prune trims the onlineaccountscache by only keeping entries that would give account state
+// prune trims the onlineAccountsCache by only keeping entries that would give account state
 // of rounds targetRound and later
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 	for addr, list := range o.accounts {
-		node := list.back()
-		for node.prev != &list.root {
-			node = node.prev
+		node := list.Back()
+		for node.Prev() != nil {
+			node = node.Prev()
 			// keep only one entry that is targetRound or older
 			// discard all entries older than targetRound other than the current entry
-			if node.Value.updRound <= targetRound {
-				list.remove(node.next)
+			if node.Value.(*cachedOnlineAccount).updRound <= targetRound {
+				list.Remove(node.Next())
 			} else {
 				break
 			}
 		}
 		// only one item left in cache
-		if node.prev == &list.root && node.next == &list.root {
-			if node.Value.accountData.IsVotingEmpty() {
+		if node.Prev() == nil && node.Next() == nil {
+			if node.Value.(*cachedOnlineAccount).IsVotingEmpty() {
 				delete(o.accounts, addr)
 			}
 		}

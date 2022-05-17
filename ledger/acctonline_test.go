@@ -468,13 +468,12 @@ func TestAcctOnlineCache(t *testing.T) {
 				require.NotEmpty(t, data.accountData)
 			}
 
-			data, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
+			cachedData, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
 			require.True(t, has)
-			require.NotEmpty(t, data.rowid)
 			if (rnd-1)%(numAccts*2) >= numAccts {
-				require.Empty(t, data.accountData)
+				require.Empty(t, cachedData.baseOnlineAccountData)
 			} else {
-				require.NotEmpty(t, data.accountData)
+				require.NotEmpty(t, cachedData.baseOnlineAccountData)
 			}
 
 			oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
@@ -503,13 +502,12 @@ func TestAcctOnlineCache(t *testing.T) {
 				require.NotEmpty(t, data.accountData)
 			}
 
-			data, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
+			cachedData, has := oa.onlineAccountsCache.read(bal.Addr, rnd)
 			require.True(t, has)
-			require.NotEmpty(t, data.rowid)
 			if (rnd-1)%(numAccts*2) >= numAccts {
-				require.Empty(t, data.accountData)
+				require.Empty(t, cachedData.baseOnlineAccountData)
 			} else {
-				require.NotEmpty(t, data.accountData)
+				require.NotEmpty(t, cachedData.baseOnlineAccountData)
 			}
 
 			// committed round i => dbRound = i - maxDeltaLookback
@@ -532,22 +530,20 @@ func TestAcctOnlineCache(t *testing.T) {
 
 	// cache should be repopulated on this command
 	oa.lookupOnlineAccountData(oldRound, bal.Addr)
-	data, has := oa.onlineAccountsCache.read(bal.Addr, oldRound)
+	cachedData, has := oa.onlineAccountsCache.read(bal.Addr, oldRound)
 	require.True(t, has)
-	require.NotEmpty(t, data.rowid)
 	// next entry is at targetRound - 25, oldround = targetRound-22
-	require.Equal(t, oldRound-3, data.updRound)
-	require.NotEmpty(t, data.accountData)
+	require.Equal(t, oldRound-3, cachedData.updRound)
+	require.NotEmpty(t, cachedData.baseOnlineAccountData)
 
 	// cache should contain data for new rounds
 	// (the last entry should be offline)
 	// check at targetRound - 10 because that is the latest round written to db
 	newRound := targetRound - basics.Round(10)
-	data, has = oa.onlineAccountsCache.read(bal.Addr, newRound)
+	cachedData, has = oa.onlineAccountsCache.read(bal.Addr, newRound)
 	require.True(t, has)
-	require.NotEmpty(t, data.rowid)
-	require.Equal(t, newRound, data.updRound)
-	require.Empty(t, data.accountData)
+	require.Equal(t, newRound, cachedData.updRound)
+	require.Empty(t, cachedData.baseOnlineAccountData)
 }
 
 // TestAcctOnlineRoundParamsOffset checks that roundParamsOffset return the correct indices.

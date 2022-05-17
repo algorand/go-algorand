@@ -50,6 +50,12 @@ type modifiedOnlineAccount struct {
 	ndeltas int
 }
 
+// cachedOnlineAccount is a light-weight version of persistedOnlineAccountData suitable for in-memory caching
+type cachedOnlineAccount struct {
+	baseOnlineAccountData
+	updRound basics.Round
+}
+
 // onlineAccounts tracks history of online accounts
 type onlineAccounts struct {
 	// Connection to the database.
@@ -476,7 +482,12 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
 		ao.baseOnlineAccounts.write(persistedAcct)
-		ao.onlineAccountsCache.writeFront(persistedAcct)
+		ao.onlineAccountsCache.writeFront(
+			persistedAcct.addr,
+			cachedOnlineAccount{
+				baseOnlineAccountData: persistedAcct.accountData,
+				updRound:              persistedAcct.updRound,
+			})
 	}
 
 	ao.deltas = ao.deltas[offset:]
@@ -638,7 +649,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		}
 
 		if macct, has := ao.onlineAccountsCache.read(addr, rnd); has {
-			return macct.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			return macct.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		}
 
 		ao.accountsMu.RUnlock()
@@ -660,7 +671,12 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 					persistedDataHistory, _ := ao.accountsq.lookupOnlineHistory(addr)
 					ao.accountsMu.Lock()
 					for _, data := range persistedDataHistory {
-						ao.onlineAccountsCache.writeFront(data)
+						ao.onlineAccountsCache.writeFront(
+							data.addr,
+							cachedOnlineAccount{
+								baseOnlineAccountData: data.accountData,
+								updRound:              data.updRound,
+							})
 					}
 				}
 				ao.accountsMu.Unlock()

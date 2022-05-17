@@ -40,13 +40,11 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 
 	roundsNum := 50
 	for i := 0; i < roundsNum; i++ {
-		acct := persistedOnlineAccountData{
-			addr:        addr,
-			updRound:    basics.Round(i),
-			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+		acct := cachedOnlineAccount{
+			updRound:              basics.Round(i),
+			baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
 		}
-		oac.writeFront(acct)
+		oac.writeFront(addr, acct)
 	}
 
 	// verify that all these onlineaccounts are truly there.
@@ -54,19 +52,15 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 		acct, has := oac.read(addr, basics.Round(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.updRound)
-		require.Equal(t, addr, acct.addr)
-		require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.rowid)
+		require.Equal(t, uint64(i), acct.MicroAlgos.Raw)
 	}
 
 	for i := proto.MaxBalLookback; i < uint64(roundsNum)+proto.MaxBalLookback; i++ {
-		acct := persistedOnlineAccountData{
-			addr:        addr,
-			updRound:    basics.Round(i),
-			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+		acct := cachedOnlineAccount{
+			updRound:              basics.Round(i),
+			baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
 		}
-		oac.writeFront(acct)
+		oac.writeFront(addr, acct)
 	}
 
 	oac.prune(basics.Round(proto.MaxBalLookback - 1))
@@ -75,17 +69,13 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	acct, has := oac.read(addr, basics.Round(proto.MaxBalLookback-1))
 	require.True(t, has)
 	require.Equal(t, basics.Round(roundsNum-1), acct.updRound)
-	require.Equal(t, addr, acct.addr)
-	require.Equal(t, uint64(roundsNum-1), acct.accountData.MicroAlgos.Raw)
-	require.Equal(t, int64(roundsNum-1), acct.rowid)
+	require.Equal(t, uint64(roundsNum-1), acct.MicroAlgos.Raw)
 
 	for i := proto.MaxBalLookback; i < uint64(roundsNum)+proto.MaxBalLookback; i++ {
 		acct, has := oac.read(addr, basics.Round(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.updRound)
-		require.Equal(t, addr, acct.addr)
-		require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.rowid)
+		require.Equal(t, uint64(i), acct.MicroAlgos.Raw)
 	}
 
 	_, has = oac.read(addr, basics.Round(0))
@@ -104,21 +94,17 @@ func TestOnlineAccountsCachePruneOffline(t *testing.T) {
 
 	roundsNum := 50
 	for i := 0; i < roundsNum; i++ {
-		acct := persistedOnlineAccountData{
-			addr:        addr,
-			updRound:    basics.Round(i),
-			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
+		acct := cachedOnlineAccount{
+			updRound:              basics.Round(i),
+			baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
 		}
-		oac.writeFront(acct)
+		oac.writeFront(addr, acct)
 	}
-	acct := persistedOnlineAccountData{
-		addr:        addr,
-		updRound:    basics.Round(roundsNum),
-		rowid:       int64(roundsNum),
-		accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(roundsNum)}},
+	acct := cachedOnlineAccount{
+		updRound:              basics.Round(roundsNum),
+		baseOnlineAccountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(roundsNum)}},
 	}
-	oac.writeFront(acct)
+	oac.writeFront(addr, acct)
 
 	_, has := oac.read(addr, basics.Round(proto.MaxBalLookback))
 	require.True(t, has)
