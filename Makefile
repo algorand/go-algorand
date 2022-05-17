@@ -125,7 +125,6 @@ msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 		@set +e; \
 		printf "msgp: $(@D)..."; \
 		cd $(@D); \
-		touch $(@F); \
 		$(GOPATH1)/bin/msgp -file . -o $(@F) -warnmask github.com/algorand/go-algorand > ./$(@F).out 2>&1; \
 		cat ./$(@F).out; \
 		if [ "$$?" != "0" ]; then \

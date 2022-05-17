@@ -70,16 +70,6 @@ echo "Running check_license..."
 echo "Regenerate msgp files"
 make msgp
 
-echo Checking Enlistment...
-if [[ -n $(git status --porcelain) ]]; then
-   echo Enlistment is dirty - did you forget to run make?
-   git status -s
-   git --no-pager diff
-   exit 1
-else
-   echo Enlistment is clean
-fi
-
 echo "Rebuild swagger.json files"
 make rebuild_swagger
 
