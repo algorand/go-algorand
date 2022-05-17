@@ -899,17 +899,6 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 	defer partkey.Close()
 
-	// We want to make sure that the state proof keys are included in the participation key
-
-	if partkey.StateProofSecrets == nil {
-		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing state proof keys")
-	}
-
-	// A slightly different error message to help with debugging
-	if len(partkey.StateProofSecrets.GetAllKeys()) == 0 {
-		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with no state proof keys")
-	}
-
 	if partkey.Parent == (basics.Address{}) {
 		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
 	}
