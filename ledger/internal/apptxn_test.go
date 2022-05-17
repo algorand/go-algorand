@@ -3083,12 +3083,12 @@ assert
 			Sender: addrs[0],
 			ApprovalProgram: main(`
 itxn_begin
-int pay;                itxn_field TypeEnum
-int 100;     		    itxn_field Amount
-txn Applications 1
-app_params_get AppAddress
-assert
-itxn_field Receiver
+	int pay;                itxn_field TypeEnum
+	int 100;     		    itxn_field Amount
+	txn Applications 1
+	app_params_get AppAddress
+	assert
+	itxn_field Receiver
 itxn_submit
 `),
 		}
@@ -3145,10 +3145,10 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 		Type:   "appl",
 		Sender: addrs[0],
 		ApprovalProgram: main(`
-  int 3
-  int 3
-  ==
-  assert
+int 3
+int 3
+==
+assert
 `),
 	}
 
@@ -3156,12 +3156,12 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 		Type:   "appl",
 		Sender: addrs[0],
 		ApprovalProgram: main(`
-		txn Applications 1
-		app_params_get AppAddress
-		byte "X"
-		byte "ABC"
-		app_local_put
-		int 1
+txn Applications 1
+app_params_get AppAddress
+byte "X"
+byte "ABC"
+app_local_put
+int 1
 `),
 	}
 
@@ -3191,4 +3191,89 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 	txns(t, l, eval, &fund0, &fund1)
 	txn(t, l, eval, &callTx, "invalid Account reference")
 	endBlock(t, l, eval)
+}
+
+// In the case where the foreign app account is also provided in the
+// transaction's account field, mutable references should be allowed.
+func TestForeignAppAccountsMutable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		appA := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+itxn_begin
+	int appl
+	itxn_field TypeEnum
+	txn Applications 1
+	itxn_field ApplicationID
+	int OptIn
+	itxn_field OnCompletion
+itxn_submit
+`),
+		}
+
+		appB := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+txn OnCompletion
+int OptIn
+==
+bnz done
+txn Applications 1
+app_params_get AppAddress
+assert
+byte "X"
+byte "Y"
+app_local_put
+done:
+`),
+			LocalStateSchema: basics.StateSchema{
+				NumByteSlice: 1,
+			},
+		}
+
+		dl.beginBlock()
+		dl.txgroup("", &appA, &appB)
+		vb := dl.endBlock()
+		index0 := vb.Block().Payset[0].ApplicationID
+		index1 := vb.Block().Payset[1].ApplicationID
+
+		fund1 := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: index1.Address(),
+			Amount:   1_000_000_000,
+		}
+		fund0 := fund1
+		fund0.Receiver = index0.Address()
+		fund1.Receiver = index1.Address()
+
+		callA := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index0,
+			ForeignApps:   []basics.AppIndex{index1},
+		}
+
+		callB := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{index0},
+			Accounts:      []basics.Address{index0.Address()},
+		}
+
+		dl.beginBlock()
+		dl.txgroup("", &fund0, &fund1, &callA, &callB)
+		vb = dl.endBlock()
+
+		require.Equal(t, "Y", vb.Block().Payset[3].EvalDelta.LocalDeltas[1]["X"].Bytes)
+	})
 }
