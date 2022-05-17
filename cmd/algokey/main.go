@@ -43,13 +43,13 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(importCmd)
 	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(signCmd)
 	rootCmd.AddCommand(multisigCmd)
 	rootCmd.AddCommand(partCmd)
-	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 }
 
 func main() {
