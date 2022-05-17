@@ -871,7 +871,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
@@ -981,7 +981,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			txWithoutGroup := txad.SignedTxn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
