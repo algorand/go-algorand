@@ -44,7 +44,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 			addr:        addr,
 			updRound:    basics.Round(i),
 			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, VoteLastValid: 1000},
+			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
 		}
 		oac.writeFront(acct)
 	}
@@ -64,7 +64,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 			addr:        addr,
 			updRound:    basics.Round(i),
 			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, VoteLastValid: 1000},
+			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: i}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
 		}
 		oac.writeFront(acct)
 	}
@@ -108,7 +108,7 @@ func TestOnlineAccountsCachePruneOffline(t *testing.T) {
 			addr:        addr,
 			updRound:    basics.Round(i),
 			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, VoteLastValid: 1000},
+			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, baseVotingData: baseVotingData{VoteLastValid: 1000}},
 		}
 		oac.writeFront(acct)
 	}
