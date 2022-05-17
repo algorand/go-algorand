@@ -18,7 +18,7 @@ jobs:
       - name: Build go-algorand
         run: scripts/travis/build.sh
       - name: Run benchmark
-        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
+        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' -benchtime 3s | tee benchmark_output.txt
       - name: Download previous benchmark data
         uses: actions/cache@v1
         with:
