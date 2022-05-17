@@ -3131,6 +3131,9 @@ itxn_submit
 	})
 }
 
+// While accounts of foreign apps are available in most context, they still
+// cannot be used as mutable references; ie the accounts cannot be used by
+// opcodes that modify local storage.
 func TestForeignAppAccountsImmutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
