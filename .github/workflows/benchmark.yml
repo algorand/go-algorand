@@ -1,9 +1,6 @@
 name: "Benchmark workflow"
 on:
   pull_request:
-# permissions:
-#   contents: write
-#   deployments: write
 jobs:
   benchmark:
     name: Performance regression check
