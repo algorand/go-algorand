@@ -3525,7 +3525,7 @@ func opExtract64Bits(cx *EvalContext) error {
 
 // accountReference yields the address and Accounts offset designated by a
 // stackValue. If the stackValue is the app account or an account of an app in
-// created.apps, and it is not be in the Accounts array, then len(Accounts) + 1
+// created.apps, and it is not in the Accounts array, then len(Accounts) + 1
 // is returned as the index. This would let us catch the mistake if the index is
 // used for set/del. If the txn somehow "psychically" predicted the address, and
 // therefore it IS in txn.Accounts, then happy day, we can set/del it.  Return
@@ -3548,11 +3548,19 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
 
 	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
-	// Allow an address for an app that was created in group
+	// Allow an address for an app that was created in group or provided
+	// in the foreign apps array.
 	if err != nil && cx.version >= createdResourcesVersion {
 		for _, appID := range cx.created.apps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
+				return addr, invalidIndex, nil
+			}
+		}
+
+		for _, appID := range cx.txn.Txn.ForeignApps {
+			foreignAddress := cx.getApplicationAddress(appID)
+			if addr == foreignAddress {
 				return addr, invalidIndex, nil
 			}
 		}
