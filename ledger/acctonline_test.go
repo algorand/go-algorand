@@ -198,8 +198,8 @@ func TestAcctOnline(t *testing.T) {
 
 		// check data gets expired and removed from the DB
 		// account 0 is set to Offline at round 1
-		// and set expired at X = 1 + MaxBalLookback (= 3)
-		// actual removal happens when X is committed i.e. at round X + maxDeltaLookback (= 5)
+		// and set expired at X = 1 + MaxBalLookback (= 13)
+		// actual removal happens when X is committed i.e. at round X + maxDeltaLookback (= 21)
 		if i > basics.Round(maxBalLookback+maxDeltaLookback) {
 			rnd := i - basics.Round(maxBalLookback+maxDeltaLookback)
 			acctIdx := int(rnd) - 1
@@ -216,11 +216,61 @@ func TestAcctOnline(t *testing.T) {
 			require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.accountData)
 
-			// committed round i => dbRound = i - maxDeltaLookback
-			// lookup should correctly return data for earlist round dbRound - maxBalLookback + 1
+			// committed round i => dbRound = i - maxDeltaLookback (= 13 for the account 0)
+			// dbRound - maxBalLookback (= 1) is the "set offline" round for account 0
+			// lookup should correctly return empty data round dbRound - maxBalLookback + 1 (simulate the latest +1)
 			oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
 			require.NoError(t, err)
 			require.Empty(t, oad)
+
+			// check next account
+			// for the account 1, it set to Offline at round 2
+			// and set expired at X = 2 + MaxBalLookback (= 14)
+			nextAcctIdx := acctIdx + 1
+			if nextAcctIdx < int(targetRound) {
+				bal := allAccts[nextAcctIdx]
+				data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
+				require.NoError(t, err)
+				require.Equal(t, bal.Addr, data.addr)
+				require.NotEmpty(t, data.rowid)
+				require.Equal(t, oa.cachedDBRoundOnline, data.round)
+				require.NotEmpty(t, data.accountData)
+
+				// the most recent value is empty because the account is scheduled for removal
+				data, has := oa.baseOnlineAccounts.read(bal.Addr)
+				require.True(t, has)
+				require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
+				require.Empty(t, data.accountData)
+
+				// account 1 went offline at round 2 => it offline at requested round 1+1=2
+				oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
+				require.NoError(t, err)
+				require.Empty(t, oad)
+			}
+			// check next next account
+			// for the account 2, it set to Offline at round 3
+			// at round 1 + 1 = 2 it online and should te correctly retrieved from DB and lookup
+			nextNextAcctIdx := nextAcctIdx + 1
+			if nextNextAcctIdx < int(targetRound) {
+				bal := allAccts[nextNextAcctIdx]
+				data, err := oa.accountsq.lookupOnline(bal.Addr, rnd)
+				require.NoError(t, err)
+				require.Equal(t, bal.Addr, data.addr)
+				require.NotEmpty(t, data.rowid)
+				require.Equal(t, oa.cachedDBRoundOnline, data.round)
+				require.NotEmpty(t, data.accountData)
+
+				// the most recent value is empty because the account is scheduled for removal
+				data, has := oa.baseOnlineAccounts.read(bal.Addr)
+				require.True(t, has)
+				require.NotEmpty(t, data.rowid) // TODO: FIXME: set rowid to empty for these items
+				require.Empty(t, data.accountData)
+
+				// account 2 went offline at round 3 => it online at requested round 1+1=2
+				oad, err := oa.lookupOnlineAccountData(rnd+1, bal.Addr)
+				require.NoError(t, err)
+				require.NotEmpty(t, oad)
+			}
 		}
 	}
 
@@ -548,8 +598,20 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 // trimmed properly to hold only proto.MaxBalLookback entries.
 func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	proto := config.Consensus[protocol.ConsensusV30]
+	const maxBalLookback = 100
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = maxBalLookback
+	testProtocolVersion1 := protocol.ConsensusVersion("test-protocol-TestAcctOnline1")
+	config.Consensus[testProtocolVersion1] = protoParams
+	testProtocolVersion2 := protocol.ConsensusVersion("test-protocol-TestAcctOnline2")
+	config.Consensus[testProtocolVersion2] = protoParams
+	testProtocolVersion3 := protocol.ConsensusVersion("test-protocol-TestAcctOnline3")
+	config.Consensus[testProtocolVersion3] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion1)
+		delete(config.Consensus, testProtocolVersion2)
+		delete(config.Consensus, testProtocolVersion3)
+	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
@@ -563,7 +625,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusV30, accts)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion1, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -580,14 +642,14 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	allTotals := make(map[basics.Round]ledgercore.AccountTotals)
 
 	start := basics.Round(10)
-	end := basics.Round(2*proto.MaxBalLookback + 15)
+	end := basics.Round(2*maxBalLookback + 15)
 	for i := start; i < end; i++ {
-		consensusVersion := protocol.ConsensusV30
-		if i > basics.Round(proto.MaxBalLookback) {
-			consensusVersion = protocol.ConsensusCurrentVersion
+		consensusVersion := testProtocolVersion1
+		if i > basics.Round(maxBalLookback) {
+			consensusVersion = testProtocolVersion2
 		}
-		if i > 2*basics.Round(proto.MaxBalLookback) {
-			consensusVersion = protocol.ConsensusFuture
+		if i > 2*basics.Round(maxBalLookback) {
+			consensusVersion = testProtocolVersion3
 		}
 		rewardLevelDelta := crypto.RandUint64() % 3
 		rewardLevel += rewardLevelDelta
@@ -621,20 +683,20 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		ml.trackers.newBlock(blk, delta)
 		accts = append(accts, newAccts)
 
-		if i > basics.Round(proto.MaxBalLookback) && i%10 == 0 {
-			onlineTotal, err := ao.OnlineTotals(i - basics.Round(proto.MaxBalLookback))
+		if i > basics.Round(maxBalLookback) && i%10 == 0 {
+			onlineTotal, err := ao.OnlineTotals(i - basics.Round(maxBalLookback))
 			require.NoError(t, err)
-			require.Equal(t, allTotals[i-basics.Round(proto.MaxBalLookback)].Online.Money, onlineTotal)
-			expectedConsensusVersion := protocol.ConsensusV30
-			if i > 2*basics.Round(proto.MaxBalLookback) {
-				expectedConsensusVersion = protocol.ConsensusCurrentVersion
+			require.Equal(t, allTotals[i-basics.Round(maxBalLookback)].Online.Money, onlineTotal)
+			expectedConsensusVersion := testProtocolVersion1
+			if i > 2*basics.Round(maxBalLookback) {
+				expectedConsensusVersion = testProtocolVersion2
 			}
-			roundParamsOffset, err := ao.roundParamsOffset(i - basics.Round(proto.MaxBalLookback))
+			roundParamsOffset, err := ao.roundParamsOffset(i - basics.Round(maxBalLookback))
 			require.NoError(t, err)
 			require.Equal(t, expectedConsensusVersion, ao.onlineRoundParamsData[roundParamsOffset].CurrentProtocol)
-			expectedConsensusVersion = protocol.ConsensusCurrentVersion
-			if i > 2*basics.Round(proto.MaxBalLookback) {
-				expectedConsensusVersion = protocol.ConsensusFuture
+			expectedConsensusVersion = testProtocolVersion2
+			if i > 2*basics.Round(maxBalLookback) {
+				expectedConsensusVersion = testProtocolVersion3
 			}
 			roundParamsOffset, err = ao.roundParamsOffset(i)
 			require.NoError(t, err)
@@ -644,7 +706,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 	ml.trackers.lastFlushTime = time.Time{}
 
-	ml.trackers.committedUpTo(2*basics.Round(proto.MaxBalLookback) + 14)
+	ml.trackers.committedUpTo(2*basics.Round(maxBalLookback) + 14)
 	ml.trackers.waitAccountsWriting()
 
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
@@ -655,9 +717,9 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, ao.cachedDBRoundOnline, endRound)
-	require.Equal(t, ao.onlineRoundParamsData[:basics.Round(proto.MaxBalLookback)], dbOnlineRoundParams)
+	require.Equal(t, ao.onlineRoundParamsData[:basics.Round(maxBalLookback)], dbOnlineRoundParams)
 
-	for i := ml.Latest() - basics.Round(proto.MaxBalLookback); i < ml.Latest(); i++ {
+	for i := ml.Latest() - basics.Round(maxBalLookback); i < ml.Latest(); i++ {
 		onlineTotal, err := ao.OnlineTotals(i)
 		require.NoError(t, err)
 		require.Equal(t, allTotals[i].Online.Money, onlineTotal)

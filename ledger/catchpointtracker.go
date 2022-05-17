@@ -423,20 +423,18 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 		}
 	}
 
+	ct.catchpointsMu.Lock()
+	ct.roundDigest = ct.roundDigest[dcc.offset:]
 	if dcc.isCatchpointRound && dcc.catchpointLabel != "" {
 		ct.lastCatchpointLabel = dcc.catchpointLabel
 	}
+	ct.catchpointsMu.Unlock()
+
 	dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
 
 	if dcc.updateStats {
 		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
 	}
-
-	ct.catchpointsMu.Lock()
-
-	ct.roundDigest = ct.roundDigest[dcc.offset:]
-
-	ct.catchpointsMu.Unlock()
 }
 
 func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {

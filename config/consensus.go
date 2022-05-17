@@ -433,9 +433,17 @@ type ConsensusParams struct {
 	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
 	MaxKeyregValidPeriod uint64
 
-	// CatchpointLookback specified a round lookback to take catchpoints at.
+	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
+	UnifyInnerTxIDs bool
+
+	// CatchpointLookback specifies a round lookback to take catchpoints at.
 	// Accounts snapshot for round X will be taken at X-CatchpointLookback
 	CatchpointLookback uint64
+
+	// DeeperBlockHeaderHistory defines number of rounds in addition to MaxTxnLife
+	// available for lookup for smart conttracts and smart signatures.
+	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
+	DeeperBlockHeaderHistory uint64
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1136,6 +1144,9 @@ func initConsensusProtocols() {
 	// Make the accounts snapshot for round X at X-CatchpointLookback
 	vFuture.CatchpointLookback = 320
 
+	// Require MaxTxnLife + 1 blocks and headers preserved by a node
+	vFuture.DeeperBlockHeaderHistory = 1
+
 	// Enable compact certificates.
 	vFuture.CompactCertRounds = 256
 	vFuture.CompactCertTopVoters = 1024 * 1024
@@ -1145,6 +1156,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4
+
+	vFuture.UnifyInnerTxIDs = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

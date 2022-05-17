@@ -472,8 +472,6 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}
 
-	// TODO: remove normalized balance from accountbase
-
 	// update version
 	return tu.setVersion(ctx, tx, 7)
 }

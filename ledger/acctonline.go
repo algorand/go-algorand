@@ -322,6 +322,7 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 }
 
 func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
+	// Index that corresponds to the oldest round still in deltas
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
 	// consensus version.
@@ -368,6 +369,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	}
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
+	// Index that corresponds to the oldest round still in deltas
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		ao.accountsMu.RUnlock()
@@ -399,6 +401,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	if err != nil {
 		return err
 	}
+	// write for rounds oldbase+1 up to and including newbase
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1 : end+1]
 	maxOnlineLookback := basics.Round(ao.maxBalLookback())
 	dcc.onlineTotalsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
@@ -434,7 +437,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound+1)
+	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dcc.oldBase+1)
 	if err != nil {
 		return err
 	}
@@ -556,6 +559,7 @@ func (ao *onlineAccounts) roundOffset(rnd basics.Round) (offset uint64, err erro
 
 // roundParamsOffset calculates the offset of the given round compared to the onlineRoundParams cache. Requires that the lock would be taken.
 func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, err error) {
+	// the invariant is that the last element of ao.onlineRoundParamsData is for round ao.latest()
 	startRound := ao.latest() + 1 - basics.Round(len(ao.onlineRoundParamsData))
 	if rnd < startRound {
 		err = &RoundOffsetError{
