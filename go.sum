@@ -9,8 +9,8 @@ github.com/algorand/go-sumhash v0.1.0 h1:b/QRhyLuF//vOcicBIxBXYW8bERNoeLxieht/dU
 github.com/algorand/go-sumhash v0.1.0/go.mod h1:OOe7jdDWUhLkuP1XytkK5gnLu9entAviN5DfDZh6XAc=
 github.com/algorand/graphtrace v0.1.0 h1:QemP1iT0W56SExD0NfiU6rsG34/v0Je6bg5UZnptEUM=
 github.com/algorand/graphtrace v0.1.0/go.mod h1:HscLQrzBdH1BH+5oehs3ICd8SYcXvnSL9BjfTu8WHCc=
-github.com/algorand/msgp v1.1.51 h1:0Z8qXlSPMPmODjpqzvIhBENrbLcrf1eJPRnKgLlrcxM=
-github.com/algorand/msgp v1.1.51/go.mod h1:5K3d58/poT5fPmtiwuQft6GjgSrVEM46KoXdLrID8ZU=
+github.com/algorand/msgp v1.1.52 h1:Tw2OCCikKy0jaTWEIHwIfvThYHlJf9moviyKw+7PVVM=
+github.com/algorand/msgp v1.1.52/go.mod h1:5K3d58/poT5fPmtiwuQft6GjgSrVEM46KoXdLrID8ZU=
 github.com/algorand/oapi-codegen v1.3.7 h1:TdXeGljgrnLXSCGPdeY6g6+i/G0Rr5CkjBgUJY6ht48=
 github.com/algorand/oapi-codegen v1.3.7/go.mod h1:UvOtAiP3hc0M2GUKBnZVTjLe3HKGDKh6y9rs3e3JyOg=
 github.com/algorand/websocket v1.4.5 h1:Cs6UTaCReAl02evYxmN8k57cNHmBILRcspfSxYg4AJE=
