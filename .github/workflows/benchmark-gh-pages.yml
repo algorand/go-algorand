@@ -1,9 +1,12 @@
-name: "Benchmark workflow"
+
+name: "Benchmark performance graph"
 on:
-  pull_request:
-# permissions:
-#   contents: write
-#   deployments: write
+  push:
+    branches:
+      - master
+permissions:
+  contents: write
+  deployments: write
 jobs:
   benchmark:
     name: Performance regression check
@@ -32,8 +35,4 @@ jobs:
           output-file-path: benchmark_output.txt
           # Where the previous data file is stored
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # auto-push: true
-          # Show alert with commit comment on detecting possible performance regression
-          alert-threshold: '90%' # Test -> default is 200%
-          comment-on-alert: true
-          # fail-on-alert: false # Test -> true
+          auto-push: true
