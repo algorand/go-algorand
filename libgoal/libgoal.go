@@ -978,8 +978,6 @@ func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostPartici
 	}
 
 	return algod.PostParticipationKey(data)
-
-	// PKI TODO: Install state proof keys here.
 }
 
 // GetParticipationKeys gets the currently installed participation keys.
