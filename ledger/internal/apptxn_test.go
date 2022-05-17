@@ -3084,7 +3084,7 @@ func TestForeignAppAccountsAccessible(t *testing.T) {
 			itxn_begin
 			int pay;                itxn_field TypeEnum
 			int 100;     		    itxn_field Amount
-			txn Applications 1;
+			txn Applications 1
             app_params_get AppAddress
 			assert
 			itxn_field Receiver
@@ -3116,5 +3116,64 @@ func TestForeignAppAccountsAccessible(t *testing.T) {
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund0, &fund1, &callTx)
+	endBlock(t, l, eval)
+}
+
+func TestForeignAppAccountsImmutable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	l := newTestLedger(t, genBalances)
+	defer l.Close()
+
+	appA := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+  int 3
+  int 3
+  ==
+  assert
+`),
+	}
+
+	appB := txntest.Txn{
+		Type:   "appl",
+		Sender: addrs[0],
+		ApprovalProgram: main(`
+		txn Applications 1
+		app_params_get AppAddress
+		byte "X"
+		byte "ABC"
+		app_local_put
+		int 1
+`),
+	}
+
+	eval := nextBlock(t, l)
+	txns(t, l, eval, &appA, &appB)
+	vb := endBlock(t, l, eval)
+	index0 := vb.Block().Payset[0].ApplicationID
+	index1 := vb.Block().Payset[1].ApplicationID
+
+	fund1 := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: index1.Address(),
+		Amount:   1_000_000_000,
+	}
+	fund0 := fund1
+	fund0.Receiver = index0.Address()
+	fund1.Receiver = index1.Address()
+
+	callTx := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[2],
+		ApplicationID: index1,
+		ForeignApps:   []basics.AppIndex{index0},
+	}
+	eval = nextBlock(t, l)
+	txns(t, l, eval, &fund0, &fund1)
+	txn(t, l, eval, &callTx, "invalid Account reference")
 	endBlock(t, l, eval)
 }
