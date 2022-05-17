@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	model "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
@@ -574,6 +575,10 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
 	}
 
+	if params.Hashtype != nil && *params.Hashtype != "sha512_256" && *params.Hashtype != "sha256" {
+		return badRequest(ctx, nil, errInvalidHashType, v2.Log)
+	}
+
 	ledger := v2.Node.LedgerForAPI()
 	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
@@ -585,35 +590,57 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
 	}
 
+	hashtype := "sha512_256" // default hash type for proof
+	if params.Hashtype != nil {
+		hashtype = *params.Hashtype
+	}
+	if hashtype == "sha256" && !proto.EnableSHA256TxnCommitmentHeader {
+		return badRequest(ctx, err, "protocol does not support sha256 vector commitment proofs", v2.Log)
+	}
+
 	txns, err := block.DecodePaysetFlat()
 	if err != nil {
 		return internalError(ctx, err, "decoding transactions", v2.Log)
 	}
 
 	for idx := range txns {
-		if txns[idx].Txn.ID() == txID {
-			tree, err := block.TxnMerkleTree()
+		if txns[idx].ID() != txID {
+			continue // skip
+		}
+
+		var tree *merklearray.Tree
+		var stibhash crypto.Digest
+
+		switch hashtype {
+		case "sha256":
+			tree, err = block.TxnMerkleTreeSHA256()
+			if err != nil {
+				return internalError(ctx, err, "building Vector Commitment (SHA256)", v2.Log)
+			}
+			stibhash = block.Payset[idx].HashSHA256()
+		case "sha512_256":
+			tree, err = block.TxnMerkleTree()
 			if err != nil {
 				return internalError(ctx, err, "building Merkle tree", v2.Log)
 			}
-
-			proof, err := tree.ProveSingleLeaf(uint64(idx))
-			if err != nil {
-				return internalError(ctx, err, "generating proof", v2.Log)
-			}
-
-			stibhash := block.Payset[idx].Hash()
-
-			response := generated.ProofResponse{
-				Proof:     proof.GetConcatenatedProof(),
-				Stibhash:  stibhash[:],
-				Idx:       uint64(idx),
-				Treedepth: uint64(proof.TreeDepth),
-				Hashtype:  proof.HashFactory.HashType.String(),
-			}
-
-			return ctx.JSON(http.StatusOK, response)
+			stibhash = block.Payset[idx].Hash()
+		default:
+			return badRequest(ctx, err, "unsupported hash type", v2.Log)
 		}
+
+		proof, err := tree.ProveSingleLeaf(uint64(idx))
+		if err != nil {
+			return internalError(ctx, err, "generating proof", v2.Log)
+		}
+
+		response := generated.ProofResponse{
+			Proof:     proof.GetConcatenatedProof(),
+			Stibhash:  stibhash[:],
+			Idx:       uint64(idx),
+			Treedepth: uint64(proof.TreeDepth),
+		}
+
+		return ctx.JSON(http.StatusOK, response)
 	}
 
 	err = errors.New(errTransactionNotFound)
@@ -1130,16 +1157,29 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 	return v2.abortCatchup(ctx, catchpoint)
 }
 
+// CompileResponseWithSourceMap overrides the sourcemap field in
+// the CompileResponse for JSON marshalling.
+type CompileResponseWithSourceMap struct {
+	generated.CompileResponse
+	Sourcemap *logic.SourceMap `json:"sourcemap,omitempty"`
+}
+
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
-func (v2 *Handlers) TealCompile(ctx echo.Context) error {
-	// return early if teal compile is not allowed in node config
+func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompileParams) (err error) {
+	// Return early if teal compile is not allowed in node config.
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
+	if params.Sourcemap == nil {
+		// Backwards compatibility: set sourcemap flag to default false value.
+		defaultValue := false
+		params.Sourcemap = &defaultValue
+	}
+
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
-	_, err := buf.ReadFrom(ctx.Request().Body)
+	_, err = buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -1152,9 +1192,20 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	}
 	pd := logic.HashProgram(ops.Program)
 	addr := basics.Address(pd)
-	response := generated.CompileResponse{
-		Hash:   addr.String(),
-		Result: base64.StdEncoding.EncodeToString(ops.Program),
+
+	// If source map flag is enabled, then return the map.
+	var sourcemap *logic.SourceMap
+	if *params.Sourcemap {
+		rawmap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+		sourcemap = &rawmap
+	}
+
+	response := CompileResponseWithSourceMap{
+		generated.CompileResponse{
+			Hash:   addr.String(),
+			Result: base64.StdEncoding.EncodeToString(ops.Program),
+		},
+		sourcemap,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
