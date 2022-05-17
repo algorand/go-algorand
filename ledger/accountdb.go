@@ -3012,14 +3012,16 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 	return result, nil
 }
 
-func onlineAccountsAll(tx *sql.Tx) ([]persistedOnlineAccountData, error) {
+func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccountData, error) {
 	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := make([]persistedOnlineAccountData, 0)
+	result := make([]persistedOnlineAccountData, 0, maxAccounts)
+	var numAccounts uint64
+	var seenAddr []byte
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
@@ -3028,15 +3030,23 @@ func onlineAccountsAll(tx *sql.Tx) ([]persistedOnlineAccountData, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = protocol.Decode(buf, &data.accountData)
-		if err != nil {
-			return nil, err
-		}
 		if len(addrbuf) != len(data.addr) {
 			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.addr))
 			return nil, err
 		}
+		if maxAccounts > 0 {
+			if !bytes.Equal(seenAddr, addrbuf) {
+				numAccounts++
+				if numAccounts > maxAccounts {
+					break
+				}
+			}
+		}
 		copy(data.addr[:], addrbuf)
+		err = protocol.Decode(buf, &data.accountData)
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, data)
 	}
 	return result, nil

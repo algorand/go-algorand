@@ -161,7 +161,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
 		}
 
-		onlineAccounts, err0 := onlineAccountsAll(tx)
+		onlineAccounts, err0 := onlineAccountsAll(tx, onlineAccountsCacheMaxSize)
 		if err0 != nil {
 			return err0
 		}

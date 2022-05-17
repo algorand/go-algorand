@@ -3057,7 +3057,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, paod.accountData.MicroAlgos)
 	require.Equal(t, voteIDC, paod.accountData.VoteID)
 
-	paods, err := onlineAccountsAll(tx)
+	paods, err := onlineAccountsAll(tx, 0)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(paods))
 
