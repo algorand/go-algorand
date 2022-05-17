@@ -3,7 +3,7 @@ name: "Benchmark performance graph"
 on:
   push:
     branches:
-      - master
+      - ci-master
 permissions:
   contents: write
   deployments: write
