@@ -137,3 +137,21 @@ func TestVerifyZeroProvenWeight(t *testing.T) {
 	_, err := MkVerifier(partcommit, 0, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 }
+
+func TestEqualVerifiers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	p := generateProofForTesting(a)
+	sProof := p.sp
+
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
+	a.NoError(err)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
+	a.NoError(err)
+
+	lnProvenWeight, err := LnIntApproximation(p.provenWeight)
+	verifierLnP := MkVerifierWithLnProvenWeight(p.partCommitment, lnProvenWeight, stateProofStrengthTargetForTests)
+
+	a.Equal(verifierLnP, verifier)
+}
