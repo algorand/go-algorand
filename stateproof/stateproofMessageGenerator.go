@@ -55,10 +55,46 @@ func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 // In addition, it also includes the trusted data for the next stateproof verification
 func GenerateStateProofMessage(l Ledger, votersRound uint64, latestRoundInInterval bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
 	proto := config.Consensus[latestRoundInInterval.CurrentProtocol]
+	commitment, err := createHeaderCommitment(l, proto, latestRoundInInterval)
+	if err != nil {
+		return stateproofmsg.Message{}, err
+	}
+
+	lnProvenWeight, err := calculateLnProvenWeight(latestRoundInInterval, proto, err)
+	if err != nil {
+		return stateproofmsg.Message{}, err
+	}
+
+	return stateproofmsg.Message{
+		BlockHeadersCommitment: commitment.ToSlice(),
+		VotersCommitment:       latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		LnProvenWeight:         lnProvenWeight,
+		FirstAttestedRound:     votersRound + 1,
+		LastAttestedRound:      uint64(latestRoundInInterval.Round),
+	}, nil
+}
+
+func calculateLnProvenWeight(latestRoundInInterval bookkeeping.BlockHeader, proto config.ConsensusParams, err error) (uint64, error) {
+	totalWeight := latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
+	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
+	if overflowed {
+		err := fmt.Errorf("GenerateStateProofMessage err: %w -  %d %d * %d / (1<<32)",
+			errProvenWeightOverflow, latestRoundInInterval.Round, totalWeight, proto.StateProofWeightThreshold)
+		return 0, err
+	}
+
+	lnProvenWeight, err := stateproof.LnIntApproximation(provenWeight)
+	if err != nil {
+		return 0, err
+	}
+	return lnProvenWeight, nil
+}
+
+func createHeaderCommitment(l Ledger, proto config.ConsensusParams, latestRoundInInterval bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
 	stateProofInterval := proto.StateProofInterval
 
 	if latestRoundInInterval.Round < basics.Round(stateProofInterval) {
-		return stateproofmsg.Message{}, fmt.Errorf("GenerateStateProofMessage stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
+		return nil, fmt.Errorf("GenerateStateProofMessage stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
 	var blkHdrArr blockHeadersArray
@@ -68,7 +104,7 @@ func GenerateStateProofMessage(l Ledger, votersRound uint64, latestRoundInInterv
 		rnd := firstRound + basics.Round(i)
 		hdr, err := l.BlockHdr(rnd)
 		if err != nil {
-			return stateproofmsg.Message{}, err
+			return nil, err
 		}
 		blkHdrArr.blockHeaders[i] = hdr
 	}
@@ -76,27 +112,7 @@ func GenerateStateProofMessage(l Ledger, votersRound uint64, latestRoundInInterv
 	// Build merkle tree from encoded headers
 	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
 	if err != nil {
-		return stateproofmsg.Message{}, err
+		return nil, err
 	}
-
-	totalWeight := latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
-	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
-	if overflowed {
-		err := fmt.Errorf("GenerateStateProofMessage err: %w -  %d %d * %d / (1<<32)",
-			errProvenWeightOverflow, latestRoundInInterval.Round, totalWeight, proto.StateProofWeightThreshold)
-		return stateproofmsg.Message{}, err
-	}
-
-	lnProvenWeight, err := stateproof.LnIntApproximation(provenWeight)
-	if err != nil {
-		return stateproofmsg.Message{}, err
-	}
-
-	return stateproofmsg.Message{
-		BlockHeadersCommitment: tree.Root().ToSlice(),
-		VotersCommitment:       latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		LnProvenWeight:         lnProvenWeight,
-		FirstAttestedRound:     votersRound + 1,
-		LastAttestedRound:      uint64(latestRoundInInterval.Round),
-	}, nil
+	return tree.Root(), nil
 }

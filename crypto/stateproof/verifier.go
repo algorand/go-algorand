@@ -54,12 +54,12 @@ func MkVerifier(partcom crypto.GenericDigest, provenWeight uint64, strengthTarge
 
 // MkVerifierWithLnProvenWeight constructs a verifier to check the state proof. the arguments for this function
 // represent all the verifier's trusted data. This function uses the Ln(provenWeight) approximation value
-func MkVerifierWithLnProvenWeight(partcom crypto.GenericDigest, lnProvenWt uint64, strengthTarget uint64) (*Verifier, error) {
+func MkVerifierWithLnProvenWeight(partcom crypto.GenericDigest, lnProvenWt uint64, strengthTarget uint64) *Verifier {
 	return &Verifier{
 		strengthTarget:         strengthTarget,
 		lnProvenWeight:         lnProvenWt,
 		participantsCommitment: partcom,
-	}, nil
+	}
 }
 
 // Verify checks if s is a valid state proof for the data on a round.

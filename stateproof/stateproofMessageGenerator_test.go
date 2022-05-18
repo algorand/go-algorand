@@ -211,10 +211,9 @@ func TestStateProofMessage(t *testing.T) {
 			verifySha256BlockHeadersCommitments(a, tx.Txn.StateProofMessage, s.w.blocks)
 
 			if !lastMessage.MsgIsZero() {
-				verifier, err := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
-				a.NoError(err)
+				verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
-				err = verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 				a.NoError(err)
 
 			}
@@ -237,4 +236,25 @@ func verifySha256BlockHeadersCommitments(a *require.Assertions, message statepro
 	a.NoError(err)
 
 	a.Equal(tree.Root(), crypto.GenericDigest(message.BlockHeadersCommitment))
+}
+
+func TestGenerateStateProofMessageForSmallRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys[:], len(keys))
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	_, err := GenerateStateProofMessage(s, 240, s.w.blocks[s.w.latest])
+	a.ErrorIs(err, errInvalidParams)
 }

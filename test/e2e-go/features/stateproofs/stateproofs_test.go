@@ -145,9 +145,7 @@ func TestStateProofs(t *testing.T) {
 
 			if !prevStateProofMessage.MsgIsZero() {
 				//if we have a previous stateproof message we can verify the current stateproof using data from it
-				verifier, err := sp.MkVerifierWithLnProvenWeight(prevStateProofMessage.VotersCommitment, prevStateProofMessage.LnProvenWeight, consensusParams.StateProofStrengthTarget)
-				r.NoError(err)
-
+				verifier := sp.MkVerifierWithLnProvenWeight(prevStateProofMessage.VotersCommitment, prevStateProofMessage.LnProvenWeight, consensusParams.StateProofStrengthTarget)
 				err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
 				r.NoError(err)
 			}
