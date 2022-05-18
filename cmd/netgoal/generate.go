@@ -51,6 +51,7 @@ var accountsCount uint64
 var assetsCount uint64
 var applicationCount uint64
 var balRange []string
+var lastPartKeyRound uint64
 var deterministicKeys bool
 
 func init() {
@@ -77,6 +78,7 @@ func init() {
 	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
 	generateCmd.Flags().StringArrayVar(&balRange, "bal", []string{}, "Application Count")
 	generateCmd.Flags().BoolVarP(&deterministicKeys, "deterministic", "", false, "Whether to generate deterministic keys")
+	generateCmd.Flags().Uint64VarP(&lastPartKeyRound, "last-part-key-round", "", gen.DefaultGenesis.LastPartKeyRound, "LastPartKeyRound in genesis.json")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -514,6 +516,9 @@ func generateWalletGenesis(filename string, wallets, npnHosts int) error {
 }
 
 func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
+	if lastPartKeyRound != 0 {
+		genesisData.LastPartKeyRound = lastPartKeyRound
+	}
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
