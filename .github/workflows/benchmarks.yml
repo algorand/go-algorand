@@ -38,7 +38,6 @@ jobs:
           name: Go Benchmark
           tool: 'go'
           output-file-path: benchmark_output.txt
-          # Where the previous data file is stored
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
       - name: Store benchmark result
@@ -48,8 +47,6 @@ jobs:
           name: Go Benchmark
           tool: 'go'
           output-file-path: benchmark_output.txt
-          # Where the previous data file is stored
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # Show alert with commit comment on detecting possible performance regression
           alert-threshold: '200%'
           comment-on-alert: true
