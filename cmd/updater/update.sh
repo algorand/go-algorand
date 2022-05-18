@@ -190,6 +190,8 @@ function get_updater_url() {
         echo "This operation system ${UNAME} is not supported by updater."
         exit 1
     fi
+    # the updater will auto-update itself to the latest version, this means that the version of updater that is downloaded
+    # can be arbitrary as long as the self-updating functionality is working, hence the hard-coded version
     UPDATER_FILENAME="install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
     UPDATER_URL="https://github.com/algorand/go-algorand/releases/download/v3.6.2-stable/install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
 }
