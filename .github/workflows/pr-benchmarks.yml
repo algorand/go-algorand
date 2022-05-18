@@ -8,6 +8,10 @@ on:
     pull_request:
       branches:
         - master
+permissions:
+  # Push benchmark performance graph to gh-pages branch.
+  contents: write
+  deployments: write
 jobs:
   benchmark:
     name: Performance regression check
