@@ -65,7 +65,14 @@ func (s *workerForStateProofMessageTests) GenesisHash() crypto.Digest {
 }
 
 func (s *workerForStateProofMessageTests) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return s.w.BlockHdr(round)
+	s.w.mu.Lock()
+	defer s.w.mu.Unlock()
+
+	element, ok := s.w.blocks[round]
+	if !ok {
+		return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{Round: round}
+	}
+	return element, nil
 }
 
 func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round) (*ledgercore.VotersForRound, error) {
@@ -257,4 +264,55 @@ func TestGenerateStateProofMessageForSmallRound(t *testing.T) {
 
 	_, err := GenerateStateProofMessage(s, 240, s.w.blocks[s.w.latest])
 	a.ErrorIs(err, errInvalidParams)
+}
+
+func TestMessageLnApproxError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys[:], len(keys))
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	s.advanceLatest(2*config.Consensus[protocol.ConsensusFuture].StateProofInterval + config.Consensus[protocol.ConsensusFuture].StateProofInterval/2)
+	tracking := s.w.blocks[512].StateProofTracking[protocol.StateProofBasic]
+	tracking.StateProofVotersTotalWeight = basics.MicroAlgos{}
+	newtracking := tracking
+	s.w.blocks[512].StateProofTracking[protocol.StateProofBasic] = newtracking
+
+	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
+	a.ErrorIs(err, stateproof.ErrIllegalInputForLnApprox)
+}
+
+func TestMessageMissingHeaderOnInterval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys[:], len(keys))
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	s.advanceLatest(2*config.Consensus[protocol.ConsensusFuture].StateProofInterval + config.Consensus[protocol.ConsensusFuture].StateProofInterval/2)
+	delete(s.w.blocks, 510)
+
+	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
+	a.ErrorIs(err, ledgercore.ErrNoEntry{Round: 510})
 }
