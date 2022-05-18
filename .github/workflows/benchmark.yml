@@ -5,9 +5,9 @@ on:
     branches:
       - ci-master
   # Trigger benchmark test on this PR's commit against master.
-  pull_request:
-    branches:
-      - ci-master
+  # pull_request:
+  #   branches:
+  #     - ci-master
 permissions:
   # Push benchmark performance graph to gh-pages branch.
   contents: write
