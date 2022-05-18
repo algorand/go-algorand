@@ -26,7 +26,7 @@ jobs:
         run: scripts/travis/build.sh
       - name: Run benchmark
         run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
-      - name: Push benchmark result
+      - name: Push benchmark result to gh-pages branch
         if: github.event_name == 'push'
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -35,7 +35,7 @@ jobs:
           output-file-path: benchmark_output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-      - name: Store benchmark result
+      - name: Evaluate benchmark on PR branch
         if: github.event.pull_request
         uses: benchmark-action/github-action-benchmark@v1
         with:
