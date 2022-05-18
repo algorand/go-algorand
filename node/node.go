@@ -1381,6 +1381,17 @@ func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round,
 }
 
 // IsParticipating implements network.NodeInfo
+//
+// This function is not fully precise. node.ledger and
+// node.accountManager might move relative to each other and there is
+// no synchronization. This is good-enough for current uses of
+// IsParticipating() which is used in networking code to determine if
+// the node should ask for transaction gossip (or skip it to save
+// bandwidth). The current transaction pool size is about 3
+// rounds. Starting to receive transaction gossip 10 rounds in the
+// future when we might propose or vote on blocks in that future is a
+// little extra buffer but seems reasonable at this time. -- bolson
+// 2022-05-18
 func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round+10)

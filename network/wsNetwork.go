@@ -2145,7 +2145,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
@@ -2155,7 +2155,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		phonebook: phonebook,
 		GenesisID: genesisID,
 		NetworkID: networkID,
-		nodeInfo:  node,
+		nodeInfo:  nodeInfo,
 	}
 
 	wn.setup()
