@@ -1,13 +1,13 @@
 name: "PR Benchmark workflow"
 on:
   # Push and update benchmarks when a commit is merged into master.
-    push:
-      branches:
-        - master
+  push:
+    branches:
+      - master
   # Trigger benchmark test on this PR's commit against master.
-    pull_request:
-      branches:
-        - master
+  pull_request:
+    branches:
+      - master
 permissions:
   # Push benchmark performance graph to gh-pages branch.
   contents: write
@@ -32,7 +32,7 @@ jobs:
           path: ./cache
           key: ${{ runner.os }}-benchmark
       - name: Push benchmark result
-        if: github.event.push
+        if: github.event_name == 'push'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Go Benchmark
