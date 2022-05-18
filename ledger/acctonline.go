@@ -503,6 +503,15 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
 	}
 
+	// online accounts defines deletion round as (see onlineAccountsNewRoundImpl)
+	// targetRound := basics.Round(updRound + proto.MaxBalLookback)
+	// and deletes these entries at round newBase (see ao.prepareCommit)
+	// and the original condition
+	// if ao.expirations[i].rnd <= dcc.oldBase+basics.Round(offset)
+	// becomes
+	// targetRound <= newBase
+	// ==> basics.Round(updRound + proto.MaxBalLookback) <= newBase
+	// ==> updRound <= newBase - proto.MaxBalLookback
 	ao.onlineAccountsCache.prune(newBase.SubSaturate(basics.Round(ao.maxBalLookback())))
 
 	ao.accountsMu.Unlock()

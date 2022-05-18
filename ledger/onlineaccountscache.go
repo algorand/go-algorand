@@ -93,7 +93,7 @@ func (o *onlineAccountsCache) writeFront(addr basics.Address, acctData cachedOnl
 }
 
 // prune trims the onlineAccountsCache by only keeping entries that would give account state
-// of rounds targetRound and later
+// of rounds targetRound and later, repeating the deletion logic from the history DB
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 	for addr, list := range o.accounts {
