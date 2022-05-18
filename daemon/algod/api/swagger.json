@@ -1356,7 +1356,7 @@
           "x-go-name": "Timestamp"
         },
         "txnRoot": {
-          "description": "TransactionsRoot authenticates the set of transactions appearing in the block.\nMore specifically, it's the root of a merkle tree whose leaves are the block's Txids, in lexicographic order.\nFor the empty block, it's 0.\nNote that the TxnRoot does not authenticate the signatures on the transactions, only the transactions themselves.\nTwo blocks with the same transactions but in a different order and with different signatures will have the same TxnRoot.",
+          "description": "TransactionsRoot authenticates the set of transactions appearing in the block.\nMore specifically, it's the root of a merkle tree whose leaves are the block's Txids, in lexicographic order.\nFor the empty block, it's 0.\nNote that the TxnCommitments does not authenticate the signatures on the transactions, only the transactions themselves.\nTwo blocks with the same transactions but in a different order and with different signatures will have the same TxnCommitments.",
           "type": "string",
           "x-go-name": "TransactionsRoot"
         },

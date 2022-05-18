@@ -273,7 +273,8 @@ type EvalParams struct {
 
 	// Cache the txid hashing, but do *not* share this into inner EvalParams, as
 	// the key is just the index in the txgroup.
-	txidCache map[int]transactions.Txid
+	txidCache      map[int]transactions.Txid
+	innerTxidCache map[int]transactions.Txid
 
 	// The calling context, if this is an inner app call
 	caller *EvalContext
@@ -2278,9 +2279,68 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	return sv.toTealValue(), err
 }
 
-func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+// currentTxID is a convenience method to get the Txid for the txn being evaluated
+func (cx *EvalContext) currentTxID() transactions.Txid {
+	if cx.Proto.UnifyInnerTxIDs {
+		// can't just return cx.txn.ID() because I might be an inner txn
+		return cx.getTxID(&cx.txn.Txn, cx.groupIndex, false)
+	}
+
+	// original behavior, for backwards comatability
+	return cx.txn.ID()
+}
+
+// getTxIDNotUnified is a backwards-compatible getTxID used when the consensus param UnifyInnerTxIDs
+// is false. DO NOT call directly, and DO NOT change its behavior
+func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+	if cx.EvalParams.txidCache == nil {
+		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	}
+
+	txid, ok := cx.EvalParams.txidCache[groupIndex]
+	if !ok {
+		if cx.caller != nil {
+			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns)
+			txid = txn.InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
+		} else {
+			txid = txn.ID()
+		}
+		cx.EvalParams.txidCache[groupIndex] = txid
+	}
+
+	return txid
+}
+
+func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, inner bool) transactions.Txid {
+	// inner indicates that groupIndex is an index into the most recent inner txn group
+
 	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
 		return txn.ID()
+	}
+
+	if !cx.Proto.UnifyInnerTxIDs {
+		// original behavior, for backwards comatability
+		return cx.getTxIDNotUnified(txn, groupIndex)
+	}
+
+	if inner {
+		// Initialize innerTxidCache if necessary
+		if cx.EvalParams.innerTxidCache == nil {
+			cx.EvalParams.innerTxidCache = make(map[int]transactions.Txid)
+		}
+
+		txid, ok := cx.EvalParams.innerTxidCache[groupIndex]
+		if !ok {
+			// We're referencing an inner and the current txn is the parent
+			myTxid := cx.currentTxID()
+			lastGroupLen := len(cx.getLastInnerGroup())
+			// innerIndex is the referenced inner txn's index in cx.txn.EvalDelta.InnerTxns
+			innerIndex := len(cx.txn.EvalDelta.InnerTxns) - lastGroupLen + groupIndex
+			txid = txn.InnerID(myTxid, innerIndex)
+			cx.EvalParams.innerTxidCache[groupIndex] = txid
+		}
+
+		return txid
 	}
 
 	// Initialize txidCache if necessary
@@ -2288,13 +2348,15 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 		cx.EvalParams.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
 	}
 
-	// Hashes are expensive, so we cache computed TxIDs
 	txid, ok := cx.EvalParams.txidCache[groupIndex]
 	if !ok {
 		if cx.caller != nil {
-			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns)
-			txid = txn.InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
+			// We're referencing a peer txn, not my inner, but I am an inner
+			parentTxid := cx.caller.currentTxID()
+			innerIndex := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
+			txid = txn.InnerID(parentTxid, innerIndex)
 		} else {
+			// We're referencing a peer txn and I am not an inner
 			txid = txn.ID()
 		}
 		cx.EvalParams.txidCache[groupIndex] = txid
@@ -2369,7 +2431,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case GroupIndex:
 		sv.Uint = uint64(groupIndex)
 	case TxID:
-		txid := cx.getTxID(txn, groupIndex)
+		txid := cx.getTxID(txn, groupIndex, inner)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
@@ -4588,7 +4650,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	var parent transactions.Txid
 	isGroup := len(cx.subtxns) > 1
 	if isGroup {
-		parent = cx.txn.ID()
+		parent = cx.currentTxID()
 	}
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the
@@ -4672,6 +4734,9 @@ func opItxnSubmit(cx *EvalContext) error {
 
 		if isGroup {
 			innerOffset := len(cx.txn.EvalDelta.InnerTxns)
+			if cx.Proto.UnifyInnerTxIDs {
+				innerOffset += itx
+			}
 			group.TxGroupHashes = append(group.TxGroupHashes,
 				crypto.Digest(cx.subtxns[itx].Txn.InnerID(parent, innerOffset)))
 		}
@@ -4702,6 +4767,8 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
+	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
+	cx.innerTxidCache = nil
 	return nil
 }
 
