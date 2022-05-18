@@ -1,4 +1,4 @@
-name: "PR Benchmark workflow"
+name: "Benchmark workflow"
 on:
   # Push and update benchmarks when a commit is merged into master.
   push:
