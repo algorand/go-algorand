@@ -50,8 +50,8 @@ func roundOfFirstIndex(firstValid, interval uint64) uint64 {
 	return ((firstValid + interval - 1) / interval) * interval
 }
 
-// roundOfValidKey calculates the round of the valid key for a given round by lowering to the closest KeyLiftime divisor.
-func roundOfValidKey(round, keyLifetime uint64) uint64 {
+// RoundOfValidKey calculates the round of the valid key for a given round by lowering to the closest KeyLiftime divisor.
+func RoundOfValidKey(round, keyLifetime uint64) uint64 {
 	return round - (round % keyLifetime)
 	// return keyLifetime * (round / keyLifetime)
 }

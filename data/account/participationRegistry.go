@@ -761,7 +761,8 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 	var rawStateProofKey []byte
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch secret key
-		row := tx.QueryRow(selectStateProofKey, round, id[:])
+		keyFirstValidRound := merklesignature.RoundOfValidKey(uint64(round), partRecord.StateProof.KeyLifetime)
+		row := tx.QueryRow(selectStateProofKey, keyFirstValidRound, id[:])
 		err := row.Scan(&rawStateProofKey)
 		if err == sql.ErrNoRows {
 			return ErrSecretNotFound

@@ -196,7 +196,7 @@ func (s *Signer) SignBytes(msg []byte) (Signature, error) {
 
 // expects valid rounds, i.e round that are bigger than FirstValid.
 func (s *Signer) getMerkleTreeIndex() uint64 {
-	round := roundOfValidKey(s.Round, s.KeyLifetime) // the key's round (firstValid value) that corresponds to the specified round to sign
+	round := RoundOfValidKey(s.Round, s.KeyLifetime) // the key's round (firstValid value) that corresponds to the specified round to sign
 	return roundToIndex(s.FirstValid, round, s.KeyLifetime)
 }
 
@@ -256,7 +256,7 @@ func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
 
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
-		Round:        roundOfValidKey(round, v.KeyLifetime),
+		Round:        RoundOfValidKey(round, v.KeyLifetime),
 	}
 
 	// verify the merkle tree verification path using the ephemeral public key, the
