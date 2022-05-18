@@ -1,5 +1,9 @@
 name: "PR Benchmark workflow"
 on:
+  # Push and update benchmarks when a commit is merged into master.
+    push:
+      branches:
+        - master
   # Trigger benchmark test on this PR's commit against master.
   pull_request:
 jobs:
@@ -22,7 +26,18 @@ jobs:
         with:
           path: ./cache
           key: ${{ runner.os }}-benchmark
+      - name: Push benchmark result
+        if: github.event.push
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: benchmark_output.txt
+          # Where the previous data file is stored
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
       - name: Store benchmark result
+        if: github.event.pull_request
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Go Benchmark
