@@ -190,26 +190,39 @@ function get_updater_url() {
         echo "This operation system ${UNAME} is not supported by updater."
         exit 1
     fi
+
     # the updater will auto-update itself to the latest version, this means that the version of updater that is downloaded
     # can be arbitrary as long as the self-updating functionality is working, hence the hard-coded version
+    UPDATER_URL="http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/releases/stable/f9d842778_3.6.2/install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
     UPDATER_FILENAME="install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
-    UPDATER_URL="https://github.com/algorand/go-algorand/releases/download/v3.6.2-stable/install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
+
+    # if on linux, also set variables for signature and checksum validation
+    if [ "$OS" = "linux" ]; then
+        UPDATER_PUBKEYURL="https://releases.algorand.com/key.pub"
+        UPDATER_SIGURL="http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/releases/stable/f9d842778_3.6.2/install_stable_${OS}-${ARCH}_3.6.2.tar.gz.sig"
+        UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/stable/hashes_stable_${OS}_${ARCH}_3.6.2"
+    fi
 }
 
 # check to see if the binary updater exists. if not, it will automatically the correct updater binary for the current platform
 function check_for_updater() {
+    local UNAME
+    UNAME="$(uname)"
+
     # check if the updater binary exist and is not empty.
     if [[ -s "${SCRIPTPATH}/updater" && -f "${SCRIPTPATH}/updater" ]]; then
         return 0
     fi
+
+    # set UPDATER_URL and UPDATER_ARCHIVE as a global that can be referenced here
+    # if linux, UPDATER_PUBKEYURL, UPDATER_SIGURL, UPDATER_CHECKSUMURL will be set to try verification
     get_updater_url
 
-    # check the curl is available.
-    CURL_VER=$(curl -V 2>/dev/null || true)
-    if [ "${CURL_VER}" = "" ]; then
+    # check if curl is available
+    if ! type curl &>/dev/null; then
         # no curl is installed.
         echo "updater binary is missing and cannot be downloaded since curl is missing."
-        if [[ "$(uname)" = "Linux" ]]; then
+        if [ "$UNAME" = "Linux" ]; then
             echo "To install curl, run the following command:"
             echo "apt-get update; apt-get install -y curl"
         fi
@@ -217,29 +230,83 @@ function check_for_updater() {
     fi
 
     # create temporary directory for updater archive
-    local UPDATER_TEMPDIR=""
+    local UPDATER_TEMPDIR="" UPDATER_ARCHIVE=""
     UPDATER_TEMPDIR="$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")"
+    UPDATER_ARCHIVE="${UPDATER_TEMPDIR}/${UPDATER_FILENAME}"
 
-    local UPDATER_ARCHIVE="${UPDATER_TEMPDIR}/${UPDATER_FILENAME}"
-
-    CURL_OUT=$(curl -sSL ${UPDATER_URL} -o "$UPDATER_ARCHIVE")
-    if [ "$?" != "0" ]; then
-        echo "failed to download updater binary from ${UPDATER_URL} using curl."
-        echo "${CURL_OUT}"
+    # download updater archive
+    if ! curl -sSL "$UPDATER_URL" -o "$UPDATER_ARCHIVE"; then
+        echo "failed to download updater archive from ${UPDATER_URL} using curl."
         exit 1
     fi
 
-    if [ ! -f "${UPDATER_ARCHIVE}" ]; then
+    if [ ! -f "$UPDATER_ARCHIVE" ]; then
         echo "downloaded file ${UPDATER_ARCHIVE} is missing."
         exit
     fi
 
+     # if linux, check for checksum and signature validation dependencies
+    local GPG_VERIFY="0" CHECKSUM_VERIFY="0"
+    if [ "$UNAME" = "Linux" ]; then
+        if type gpg >&/dev/null; then
+            GPG_VERIFY="1"
+        else
+            echo "gpg is not available to perform signature validation."
+        fi
+
+        if type sha256sum &>/dev/null; then
+            CHECKSUM_VERIFY="1"
+        else
+            echo "sha256sum is not available to perform checksum validation."
+        fi
+    fi
+
+    # try signature validation
+    if [ "$GPG_VERIFY" = "1" ]; then
+        local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="key.pub"
+        # try downloading public key
+        if curl -sSL "$UPDATER_PUBKEYURL" -o "$UPDATER_PUBKEYFILE"; then
+            if gpg --import "$UPDATER_PUBKEYFILE"; then
+                if curl -sSL "$UPDATER_SIGURL" -o "$UPDATER_SIGFILE"; then
+                    if ! gpg --verify "$UPDATER_SIGFILE" "$UPDATER_ARCHIVE"; then
+                        echo "failed to verify signature of updater archive."
+                        exit 1
+                    fi
+                else
+                    echo "failed download signature file, cannot perform signature validation."
+                fi
+            else
+                echo "failed importing GPG public key, cannot perform signature validation."
+            fi
+        else
+            echo "failed downloading GPG public key, cannot perform signature validation."
+        fi
+    fi
+
+    # try checksum validation
+    if [ "$CHECKSUM_VERIFY" = "1" ]; then
+        local UPDATER_CHECKSUMFILE="$UPDATER_TEMPDIR/updater.checksum"
+        # try downloading checksum file
+        if curl -sSL "$UPDATER_CHECKSUMURL" -o "$UPDATER_CHECKSUMFILE"; then
+            # have to be in same directory as archive
+            pushd "$UPDATER_TEMPDIR"
+            if ! sha256sum --quiet --ignore-missing -c "$UPDATER_CHECKSUMFILE"; then
+                echo "failed to verify checksum of updater archive."
+                popd
+                exit 1
+            fi
+            popd
+        else
+            echo "failed downloading checksum file, cannot perform checksum validation."
+        fi
+    fi
+
     # extract and install updater
-    tar -zxf "$UPDATER_ARCHIVE" -C "$UPDATER_TEMPDIR" updater
-    mv "${UPDATER_TEMPDIR}/updater" "${SCRIPTPATH}"
-    if [ "$?" != "0" ]; then
+    if ! tar -zxf "$UPDATER_ARCHIVE" -C "$UPDATER_TEMPDIR" updater; then
         echo "failed to extract updater binary from ${UPDATER_ARCHIVE}"
         exit 1
+    else
+        mv "${UPDATER_TEMPDIR}/updater" "$SCRIPTPATH"
     fi
 
     # clean up temp directory
