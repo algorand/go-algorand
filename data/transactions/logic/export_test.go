@@ -32,6 +32,7 @@ func (ep *EvalParams) Reset() {
 
 var MakeSampleEnv = makeSampleEnv
 var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
+var MakeSampleAppEnv = makeSampleAppEnv
 var MakeSampleTxn = makeSampleTxn
 var MakeSampleTxnGroup = makeSampleTxnGroup
 var MakeTestProto = makeTestProto

@@ -59,7 +59,7 @@ func TestGlobalFieldsVersions(t *testing.T) {
 		if preLogicVersion < appsEnabledVersion {
 			require.False(t, proto.Application)
 		}
-		ep := defaultEvalParams(nil)
+		ep := defaultEvalParams()
 		ep.Proto = proto
 		ep.Ledger = ledger
 
@@ -137,7 +137,7 @@ func TestTxnFieldVersions(t *testing.T) {
 			if preLogicVersion < appsEnabledVersion {
 				require.False(t, proto.Application)
 			}
-			ep := defaultEvalParams(nil)
+			ep := defaultEvalParams()
 			ep.Proto = proto
 			ep.Ledger = ledger
 			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)

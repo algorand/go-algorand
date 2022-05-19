@@ -782,6 +782,8 @@ func TestInnerGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ep, tx, ledger := MakeSampleEnv()
+	ep.FeeCredit = nil // default sample env starts at 401
+
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Need both fees and both payments
 	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee)
@@ -802,6 +804,8 @@ func TestInnerFeePooling(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ep, tx, ledger := MakeSampleEnv()
+	ep.FeeCredit = nil // default sample env starts at 401
+
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
 	pay := `
@@ -1708,7 +1712,9 @@ int 1
 			// Whenever MakeSampleEnv() is changed to create a different
 			// transaction, we must reverse those changes here, so that the
 			// historic test is correct.
+			parentTx.Type = protocol.PaymentTx
 			parentTx.Boxes = nil
+			ep.FeeCredit = nil // else inner's fee will change
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -2026,7 +2032,7 @@ int 1
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel() NO! unified variable is actually shared
 
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
@@ -2034,7 +2040,9 @@ int 1
 			// Whenever MakeSampleEnv() is changed to create a different
 			// transaction, we must reverse those changes here, so that the
 			// historic test is correct.
+			parentTx.Type = protocol.PaymentTx
 			parentTx.Boxes = nil
+			ep.FeeCredit = nil // else inner's fee will change
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -2887,6 +2895,7 @@ done:
 
 func TestInfiniteRecursion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	source := `
