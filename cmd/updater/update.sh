@@ -266,6 +266,7 @@ function check_for_updater() {
         local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="key.pub"
         # try downloading public key
         if curl -sSL "$UPDATER_PUBKEYURL" -o "$UPDATER_PUBKEYFILE"; then
+            GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
             if gpg --import "$UPDATER_PUBKEYFILE"; then
                 if curl -sSL "$UPDATER_SIGURL" -o "$UPDATER_SIGFILE"; then
                     if ! gpg --verify "$UPDATER_SIGFILE" "$UPDATER_ARCHIVE"; then
@@ -278,6 +279,8 @@ function check_for_updater() {
             else
                 echo "failed importing GPG public key, cannot perform signature validation."
             fi
+            # clean up temporary directory used for signature validation
+            rm -rf "$GNUPGHOME"; unset GNUPGHOME
         else
             echo "failed downloading GPG public key, cannot perform signature validation."
         fi
