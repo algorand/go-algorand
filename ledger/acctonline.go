@@ -683,16 +683,22 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 				ao.accountsMu.Lock()
 				ao.onlineAccountsCache.clear(addr)
 				if !ao.onlineAccountsCache.full() {
-					ao.accountsMu.Unlock()
-					persistedDataHistory, _ := ao.accountsq.lookupOnlineHistory(addr)
-					ao.accountsMu.Lock()
+					persistedDataHistory, err := ao.accountsq.lookupOnlineHistory(addr)
+					if err != nil {
+						ao.accountsMu.Unlock()
+						return ledgercore.OnlineAccountData{}, err
+					}
 					for _, data := range persistedDataHistory {
-						ao.onlineAccountsCache.writeFront(
+						written := ao.onlineAccountsCache.writeFront(
 							data.addr,
 							cachedOnlineAccount{
 								baseOnlineAccountData: data.accountData,
 								updRound:              data.updRound,
 							})
+						if !written {
+							err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.addr.String(), data.updRound)
+							return ledgercore.OnlineAccountData{}, err
+						}
 					}
 				}
 				ao.accountsMu.Unlock()
