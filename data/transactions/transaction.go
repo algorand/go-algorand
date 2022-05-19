@@ -371,12 +371,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		// Ensure requested action is valid
 		switch tx.OnCompletion {
-		case NoOpOC:
-		case OptInOC:
-		case CloseOutOC:
-		case ClearStateOC:
-		case UpdateApplicationOC:
-		case DeleteApplicationOC:
+		case NoOpOC, OptInOC, CloseOutOC, ClearStateOC, UpdateApplicationOC, DeleteApplicationOC:
+			/* ok */
 		default:
 			return fmt.Errorf("invalid application OnCompletion")
 		}
@@ -462,6 +458,17 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
 			return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+		}
+
+		if len(tx.Boxes) > int(proto.MaxAppBoxReferences) {
+			return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
+		}
+
+		for i, br := range tx.Boxes {
+			// recall 0 is the current app so indexes are shifted, thus test is for greater than, not gte.
+			if br.Index > uint64(len(tx.ForeignApps)) {
+				return fmt.Errorf("tx.Boxes[%d].Index is %d. Exceeds len(tx.ForeignApps)", i, br.Index)
+			}
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
