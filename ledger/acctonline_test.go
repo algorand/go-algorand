@@ -55,6 +55,60 @@ func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd 
 	}
 }
 
+// commitSyncPartial does not call postCommit
+func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd basics.Round) *deferredCommitContext {
+	_, maxLookback := oa.committedUpTo(rnd)
+	dcc := &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
+	}
+	cdr := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, &dcc.deferredCommitRange)
+	if cdr != nil {
+		func() {
+			dcc.deferredCommitRange = *cdr
+			ml.trackers.accountsWriting.Add(1)
+
+			// do not take any locks since all operations are synchronous
+			newBase := basics.Round(dcc.offset) + dcc.oldBase
+			dcc.newBase = newBase
+			dcc.flushTime = time.Now()
+
+			for _, lt := range ml.trackers.trackers {
+				err := lt.prepareCommit(dcc)
+				require.NoError(t, err)
+			}
+			err := ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				for _, lt := range ml.trackers.trackers {
+					err0 := lt.commitRound(ctx, tx, dcc)
+					if err0 != nil {
+						return err0
+					}
+				}
+
+				return updateAccountsRound(tx, newBase)
+			})
+			require.NoError(t, err)
+		}()
+	}
+
+	return dcc
+}
+
+func commitSyncPartialComplete(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, dcc *deferredCommitContext) {
+	defer ml.trackers.accountsWriting.Done()
+
+	ml.trackers.dbRound = dcc.newBase
+	for _, lt := range ml.trackers.trackers {
+		lt.postCommit(ml.trackers.ctx, dcc)
+	}
+	ml.trackers.lastFlushTime = dcc.flushTime
+
+	for _, lt := range ml.trackers.trackers {
+		lt.postCommitUnlocked(ml.trackers.ctx, dcc)
+	}
+}
+
 func newBlock(t *testing.T, ml *mockLedgerForTracker, totals ledgercore.AccountTotals, testProtocolVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, prevTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
 	rewardLevel := uint64(0)
 	newTotals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
@@ -720,4 +774,281 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, allTotals[i].Online.Money, onlineTotal)
 	}
+}
+
+// TestAcctOnlineCacheDBSync checks if lookup happens in between db commit and the cache update
+// the online account tracker returns correct data
+func TestAcctOnlineCacheDBSync(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const seedLookback = 2
+	const seedInteval = 3
+	const maxBalLookback = 2 * seedLookback * seedInteval
+
+	const numAccts = maxBalLookback * 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+	for i := 0; i < numAccts; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr:        ledgertesting.RandomAddress(),
+			AccountData: ledgertesting.RandomOnlineAccountData(0),
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	genesisAccts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	genesisAccts[0][testSinkAddr] = sinkdata
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctOnline")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = maxBalLookback
+	protoParams.SeedLookback = seedLookback
+	protoParams.SeedRefreshInterval = seedInteval
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	addrA := allAccts[0].Addr
+
+	copyGenesisAccts := func() []map[basics.Address]basics.AccountData {
+		accounts := []map[basics.Address]basics.AccountData{{}}
+		accounts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+		for addr, ad := range genesisAccts[0] {
+			accounts[0][addr] = ad
+		}
+		return accounts
+	}
+
+	// test 1: large deltas, have addrA offline in deltas, ensure it works
+	t.Run("large-delta-go-offline", func(t *testing.T) {
+		ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, genesisAccts)
+		defer ml.Close()
+		conf := config.GetDefaultLocal()
+		conf.MaxAcctLookback = maxBalLookback
+
+		au, oa := newAcctUpdates(t, ml, conf, ".")
+		defer oa.close()
+		_, totals, err := au.LatestTotals()
+		require.NoError(t, err)
+
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+
+		// copy genesisAccts for the test
+		accounts := copyGenesisAccts()
+		base := accounts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accounts = append(accounts, newAccts)
+
+		// prepare block
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, 1, base, updates, totals)
+		// commit changes synchroniously
+		commitSync(t, oa, ml, 1)
+
+		// add maxBalLookback empty blocks
+		for i := 2; i <= maxBalLookback; i++ {
+			var updates ledgercore.AccountDeltas
+			base := accounts[i-1]
+			totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
+			accounts = append(accounts, newAccts)
+			commitSync(t, oa, ml, basics.Round(i))
+		}
+		// ensure addrA is in deltas
+		macct, has := oa.accounts[addrA]
+		require.True(t, has)
+		require.Equal(t, 1, macct.ndeltas)
+		// and the cache has the prev value
+		cachedData, has := oa.onlineAccountsCache.read(addrA, 1)
+		require.True(t, has)
+		require.NotEmpty(t, cachedData.VoteLastValid)
+		// lookup and check the value returned is offline
+		data, err := oa.lookupOnlineAccountData(1, addrA)
+		require.NoError(t, err)
+		require.Empty(t, data.VotingData.VoteLastValid)
+
+		// commit the next block
+		// and simulate lookup in between committing the db and updating the cache
+		updates = ledgercore.AccountDeltas{}
+		rnd := maxBalLookback + 1
+		base = accounts[rnd-1]
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(rnd), base, updates, totals)
+		dcc := commitSyncPartial(t, oa, ml, basics.Round(rnd))
+		// defer in order to recover from ml.trackers.accountsWriting.Wait()
+		defer func() {
+			// complete the commit and check lookup again
+			commitSyncPartialComplete(t, oa, ml, dcc)
+			_, has = oa.accounts[addrA]
+			require.False(t, has)
+			cachedData, has = oa.onlineAccountsCache.read(addrA, 1)
+			require.True(t, has)
+			require.Empty(t, cachedData.VoteLastValid)
+			data, err = oa.lookupOnlineAccountData(1, addrA)
+			require.NoError(t, err)
+			require.Empty(t, data.VotingData.VoteLastValid)
+		}()
+
+		// ensure the data still in deltas, not in the cache and lookupOnlineAccountData still return a correct value
+		macct, has = oa.accounts[addrA]
+		require.True(t, has)
+		require.Equal(t, 1, macct.ndeltas)
+		cachedData, has = oa.onlineAccountsCache.read(addrA, 1)
+		require.True(t, has)
+		require.NotEmpty(t, cachedData.VoteLastValid)
+		data, err = oa.lookupOnlineAccountData(1, addrA)
+		require.NoError(t, err)
+		require.Empty(t, data.VotingData.VoteLastValid)
+	})
+
+	// test 2: small deltas, have addrA offline in DB and in the cache, ensure it works
+	t.Run("small-delta-go-offline", func(t *testing.T) {
+		ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, genesisAccts)
+		defer ml.Close()
+		conf := config.GetDefaultLocal()
+		conf.MaxAcctLookback = 4
+
+		au, oa := newAcctUpdates(t, ml, conf, ".")
+		defer oa.close()
+		_, totals, err := au.LatestTotals()
+		require.NoError(t, err)
+
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+
+		// copy genesisAccts for the test
+		accounts := copyGenesisAccts()
+		base := accounts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accounts = append(accounts, newAccts)
+
+		// prepare block
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, 1, base, updates, totals)
+		// commit changes synchroniously
+		commitSync(t, oa, ml, 1)
+
+		// add maxBalLookback empty blocks
+		for i := 2; i <= maxBalLookback; i++ {
+			var updates ledgercore.AccountDeltas
+			base := accounts[i-1]
+			totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
+			accounts = append(accounts, newAccts)
+			commitSync(t, oa, ml, basics.Round(i))
+		}
+		// ensure addrA not in deltas, in the cache and lookupOnlineAccountData returns a correct value
+		_, has := oa.accounts[addrA]
+		require.False(t, has)
+		cachedData, has := oa.onlineAccountsCache.read(addrA, 1)
+		require.True(t, has)
+		require.Empty(t, cachedData.VoteLastValid)
+		data, err := oa.lookupOnlineAccountData(1, addrA)
+		require.NoError(t, err)
+		require.Empty(t, data.VotingData.VoteLastValid)
+	})
+
+	// test 3: max deltas size = 1 => all deltas committed but not written to the cache
+	// addrA does offline, both online and offline entries gets removed from the DB but the cache
+	// must returns a correct value
+	t.Run("no-delta-go-offline-delete", func(t *testing.T) {
+		ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, genesisAccts)
+		defer ml.Close()
+		conf := config.GetDefaultLocal()
+		const maxDeltaLookback = 1
+		conf.MaxAcctLookback = maxDeltaLookback
+
+		au, oa := newAcctUpdates(t, ml, conf, ".")
+		defer oa.close()
+		_, totals, err := au.LatestTotals()
+		require.NoError(t, err)
+
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+
+		// copy genesisAccts for the test
+		accounts := copyGenesisAccts()
+		base := accounts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accounts = append(accounts, newAccts)
+
+		// prepare block
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, 1, base, updates, totals)
+		// commit changes synchroniously
+		commitSync(t, oa, ml, 1)
+
+		// add maxDeltaLookback empty blocks
+		for i := 2; i <= maxBalLookback; i++ {
+			var updates ledgercore.AccountDeltas
+			base := accounts[i-1]
+			totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
+			accounts = append(accounts, newAccts)
+			commitSync(t, oa, ml, basics.Round(i))
+		}
+		// ensure addrA not in deltas, in the cache and lookupOnlineAccountData returns a correct value
+		_, has := oa.accounts[addrA]
+		require.False(t, has)
+		cachedData, has := oa.onlineAccountsCache.read(addrA, 1)
+		require.True(t, has)
+		require.Empty(t, cachedData.VoteLastValid)
+		data, err := oa.lookupOnlineAccountData(1, addrA)
+		require.NoError(t, err)
+		require.Empty(t, data.VotingData.VoteLastValid)
+		// ensure offline entry is in DB as well
+		pad, err := oa.accountsq.lookupOnline(addrA, 1)
+		require.NoError(t, err)
+		require.Equal(t, addrA, pad.addr)
+		require.NotEmpty(t, pad.rowid)
+		require.Empty(t, pad.accountData.VoteLastValid)
+
+		// commit couple blocks to get these entries removed
+		// ensure the DB entry gone, the cache has it and lookupOnlineAccountData works as expected
+		updates = ledgercore.AccountDeltas{}
+		rnd := maxBalLookback + 1
+		base = accounts[rnd-1]
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(rnd), base, updates, totals)
+		accounts = append(accounts, newAccts)
+		commitSync(t, oa, ml, basics.Round(rnd))
+		updates = ledgercore.AccountDeltas{}
+		rnd = maxBalLookback + 2
+		base = accounts[rnd-1]
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(rnd), base, updates, totals)
+		dcc := commitSyncPartial(t, oa, ml, basics.Round(rnd))
+		// defer in order to recover from ml.trackers.accountsWriting.Wait()
+		defer func() {
+			// complete the commit and check lookup again
+			commitSyncPartialComplete(t, oa, ml, dcc)
+			_, has = oa.accounts[addrA]
+			require.False(t, has)
+			cachedData, has = oa.onlineAccountsCache.read(addrA, 1)
+			require.False(t, has)
+			require.Empty(t, cachedData.VoteLastValid)
+			// round 1 is out of max history
+			data, err = oa.lookupOnlineAccountData(1, addrA)
+			require.Error(t, err)
+			data, err = oa.lookupOnlineAccountData(2, addrA)
+			require.NoError(t, err)
+			require.Empty(t, data.VotingData.VoteLastValid)
+		}()
+
+		// ensure the data still in deltas, not in the cache and lookupOnlineAccountData still return a correct value
+		_, has = oa.accounts[addrA]
+		require.False(t, has)
+		cachedData, has = oa.onlineAccountsCache.read(addrA, 1)
+		require.True(t, has)
+		require.Empty(t, cachedData.VoteLastValid)
+		data, err = oa.lookupOnlineAccountData(1, addrA)
+		require.NoError(t, err)
+		require.Empty(t, data.VotingData.VoteLastValid)
+		pad, err = oa.accountsq.lookupOnline(addrA, 1)
+		require.NoError(t, err)
+		require.Equal(t, addrA, pad.addr)
+		require.Empty(t, pad.rowid)
+		require.Empty(t, pad.accountData.VoteLastValid)
+	})
 }
