@@ -51,6 +51,7 @@ type modifiedOnlineAccount struct {
 }
 
 // cachedOnlineAccount is a light-weight version of persistedOnlineAccountData suitable for in-memory caching
+//msgp:ignore cachedOnlineAccount
 type cachedOnlineAccount struct {
 	baseOnlineAccountData
 	updRound basics.Round
