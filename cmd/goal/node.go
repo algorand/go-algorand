@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,6 +120,26 @@ var nodeCmd = &cobra.Command{
 	},
 }
 
+func getMissingCatchPointLabel(dataDir string) []string {
+	client := ensureAlgodClient(dataDir)
+	vers, err := client.AlgodVersions()
+	if err != nil {
+		reportErrorf(errorNodeStatus, err)
+	}
+	genesis := strings.Split(vers.GenesisID, "-")
+	resp, err := http.Get("https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/"+genesis[0]+"/latest.catchpoint")
+	if err != nil {
+		fmt.Println(errorCatchpointLabelMissing)
+		os.Exit(1)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println(errorCatchpointLabelMissing)
+		os.Exit(1)
+	}
+	return []string{string(body)}
+}
+
 var catchupCmd = &cobra.Command{
 	Use:     "catchup",
 	Short:   "Catchup the Algorand node to a specific catchpoint",
@@ -127,10 +148,10 @@ var catchupCmd = &cobra.Command{
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
 		if abortCatchup == false && len(args) == 0 {
-			fmt.Println(errorCatchpointLabelMissing)
-			os.Exit(1)
+			onDataDirs(func(datadir string) { catchup(datadir, getMissingCatchPointLabel(datadir)) })
+		} else {
+			onDataDirs(func(datadir string) { catchup(datadir, args) })
 		}
-		onDataDirs(func(datadir string) { catchup(datadir, args) })
 	},
 }
 
