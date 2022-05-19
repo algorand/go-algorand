@@ -34,15 +34,20 @@ func TestBoxNewDel(t *testing.T) {
 	ep, txn, ledger := logic.MakeSampleEnv()
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
-	logic.TestApp(t, "int 24; byte 0x11; box_create; int 1", ep)
-	logic.TestApp(t, "int 24; byte 0x12; box_create; int 24; byte 0x12; box_create; int 1", ep,
-		"already exists")
-	logic.TestApp(t, "int 24; byte 0x13; box_create; int 24; byte 0x14; box_create; int 1", ep)
+	logic.TestApp(t, `int 24; byte "self"; box_create; int 1`, ep)
+	ledger.DelBox(888, "self")
+	logic.TestApp(t, `int 24; byte "self"; box_create; int 1`, ep)
+	ledger.DelBox(888, "self")
+	logic.TestApp(t, `int 24; byte "self"; box_create; int 24; byte "self"; box_create; int 1`, ep,
+		`already exists`)
+	ledger.DelBox(888, "self")
+	logic.TestApp(t, `int 24; byte "self"; box_create; int 24; byte "other"; box_create; int 1`, ep)
+	ledger.DelBox(888, "self")
 
-	logic.TestApp(t, "int 24; byte 0x15; box_create; byte 0x15; box_del; int 1", ep)
-	logic.TestApp(t, "int 24; byte 0x17; box_del; int 1", ep, "no such box")
-	logic.TestApp(t, "int 24; byte 0x18; box_create; byte 0x18; box_del; byte 0x18; box_del; int 1", ep,
-		"no such box")
+	logic.TestApp(t, `int 24; byte "self"; box_create; byte "self"; box_del; int 1`, ep)
+	logic.TestApp(t, `int 24; byte "self"; box_del; int 1`, ep, `no such box`)
+	logic.TestApp(t, `int 24; byte "self"; box_create; byte "self"; box_del; byte "self"; box_del; int 1`, ep,
+		`no such box`)
 }
 
 func TestBoxReadWrite(t *testing.T) {
@@ -54,32 +59,28 @@ func TestBoxReadWrite(t *testing.T) {
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	// extract some bytes until past the end, confirm the begin as zeros, and
 	// when it fails.
-	logic.TestApp(t, `int 4; byte 0x11; box_create;
-                byte 0x11; int 1; int 2; box_extract;
-                byte 0x0000; ==`, ep)
-	logic.TestApp(t, `int 4; byte 0x12; box_create;
-                byte 0x12; int 1; int 3; box_extract;
-                byte 0x000000; ==`, ep)
-	logic.TestApp(t, `int 4; byte 0x13; box_create;
-                byte 0x13; int 1; int 4; box_extract;
+	logic.TestApp(t, `int 4; byte "self"; box_create;
+                byte "self"; int 1; int 2; box_extract;
+                byte 0x0000; ==; assert;
+                byte "self"; int 1; int 3; box_extract;
+                byte 0x000000; ==; assert;
+                byte "self"; int 0; int 4; box_extract;
+                byte 0x00000000; ==; assert;
+                int 1`, ep)
+
+	logic.TestApp(t, `byte "self"; int 1; int 4; box_extract;
                 byte 0x00000000; ==`, ep, "extract range")
-	logic.TestApp(t, `int 4; byte 0x14; box_create;
-                byte 0x14; int 0; int 4; box_extract;
-                byte 0x00000000; ==`, ep)
 
 	// Replace some bytes until past the end, confirm when it fails.
-	logic.TestApp(t, `int 4; byte 0x15; box_create;
-                byte 0x15; int 1; byte 0x3031; box_replace;
-                byte 0x15; int 0; int 4; box_extract;
-                byte 0x00303100; ==`, ep)
-	logic.TestApp(t, `int 4; byte 0x16; box_create;
-                byte 0x16; int 1; byte 0x303132; box_replace;
-                byte 0x16; int 0; int 4; box_extract;
-                byte 0x00303132; ==`, ep)
-	logic.TestApp(t, `int 4; byte 0x17; box_create;
-                byte 0x17; int 1; byte 0x30313233; box_replace;
-                byte 0x17; int 0; int 4; box_extract;
-                byte 0x0030313233; ==`, ep, "replace range")
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3031; box_replace;
+                      byte "self"; int 0; int 4; box_extract;
+                      byte 0x00303100; ==`, ep)
+	logic.TestApp(t, `byte "self"; int 1; byte 0x303132; box_replace;
+                      byte "self"; int 0; int 4; box_extract;
+                      byte 0x00303132; ==`, ep)
+	logic.TestApp(t, `byte "self"; int 1; byte 0x30313233; box_replace;
+                      byte "self"; int 0; int 4; box_extract;
+                      byte 0x0030313233; ==`, ep, "replace range")
 }
 
 func TestBoxAcrossTxns(t *testing.T) {

@@ -119,18 +119,18 @@ ed25519verify`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
 		})
 	}
 }
@@ -159,18 +159,18 @@ ed25519verify_bare`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
 		})
 	}
 }
@@ -365,7 +365,7 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, 5)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, 5))
+	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(5, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -475,7 +475,7 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, fidoVersion)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, fidoVersion))
+	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(fidoVersion, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -614,7 +614,7 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = programs[i]
 		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
-		ep := defaultEvalParams(&txn)
+		ep := defaultEvalParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(programs[i]))
@@ -699,7 +699,7 @@ func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].msg[:], data[i].r, data[i].s, data[i].x, data[i].y, data[i].pk, {uint8(data[i].v)}}
-		ep := defaultEvalParams(&txn)
+		ep := defaultEvalParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))

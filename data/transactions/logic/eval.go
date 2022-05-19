@@ -304,7 +304,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
-			if allBoxes == nil {
+			if allBoxes == nil && len(tx.Txn.Boxes) > 0 {
 				allBoxes = make(map[basics.AppIndex][]string)
 			}
 			for _, br := range tx.Txn.Boxes {
@@ -316,10 +316,9 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 					}
 					app = tx.Txn.ApplicationID
 				} else {
-					// Bounds check will already have been done by WellFormed
-					if br.Index > uint64(len(tx.Txn.ForeignApps)) {
-						return nil
-					}
+					// Bounds check will already have been done by
+					// WellFormed. For testing purposes, it's better to panic
+					// now than after returning a nil.
 					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
 				}
 				appBoxes := allBoxes[app]
@@ -371,8 +370,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
 // to required minfee.  It can make assumptions about overflow because the group
-// is known OK according to TxnGroupBatchVerify. (In essence the group is
-// "WellFormed")
+// is known OK according to TxnGroupBatchVerify. (The group is "WellFormed")
 func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
@@ -384,8 +382,7 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 	}
 	// Overflow is impossible, because TxnGroupBatchVerify checked.
 	feeNeeded := minFee * minFeeCount
-
-	return feesPaid - feeNeeded
+	return basics.SubSaturate(feesPaid, feeNeeded)
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
