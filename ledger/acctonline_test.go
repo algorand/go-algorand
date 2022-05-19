@@ -968,8 +968,10 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		_, totals, err := au.LatestTotals()
 		require.NoError(t, err)
 
+		addrB := ledgertesting.RandomAddress()
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		updates.Upsert(addrB, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: 10000}})
 
 		// copy genesisAccts for the test
 		accounts := copyGenesisAccts()
@@ -1006,7 +1008,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		require.NotEmpty(t, pad.rowid)
 		require.Empty(t, pad.accountData.VoteLastValid)
 
-		// commit couple blocks to get these entries removed
+		// commit a block to get these entries removed
 		// ensure the DB entry gone, the cache has it and lookupOnlineAccountData works as expected
 		updates = ledgercore.AccountDeltas{}
 		rnd := maxBalLookback + 1
@@ -1028,6 +1030,17 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 			data, err = oa.lookupOnlineAccountData(2, addrA)
 			require.NoError(t, err)
 			require.Empty(t, data.VotingData.VoteLastValid)
+
+			cachedData, has = oa.onlineAccountsCache.read(addrB, 1)
+			require.True(t, has)
+			require.NotEmpty(t, cachedData.VoteLastValid)
+			_, err = oa.lookupOnlineAccountData(1, addrB)
+			require.Error(t, err)
+			pad, err = oa.accountsq.lookupOnline(addrB, 1)
+			require.NoError(t, err)
+			require.Equal(t, addrB, pad.addr)
+			require.NotEmpty(t, pad.rowid)
+			require.NotEmpty(t, pad.accountData.VoteLastValid)
 		}()
 
 		// ensure the data not in deltas, in the cache and lookupOnlineAccountData still return a correct value
@@ -1044,5 +1057,19 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		require.Equal(t, addrA, pad.addr)
 		require.Empty(t, pad.rowid)
 		require.Empty(t, pad.accountData.VoteLastValid)
+
+		_, has = oa.accounts[addrB]
+		require.False(t, has)
+		cachedData, has = oa.onlineAccountsCache.read(addrB, 1)
+		require.True(t, has)
+		require.NotEmpty(t, cachedData.VoteLastValid)
+		data, err = oa.lookupOnlineAccountData(1, addrB)
+		require.NoError(t, err)
+		require.NotEmpty(t, data.VotingData.VoteLastValid)
+		pad, err = oa.accountsq.lookupOnline(addrB, 1)
+		require.NoError(t, err)
+		require.Equal(t, addrB, pad.addr)
+		require.NotEmpty(t, pad.rowid)
+		require.NotEmpty(t, pad.accountData.VoteLastValid)
 	})
 }

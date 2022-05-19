@@ -106,6 +106,12 @@ type onlineAccounts struct {
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseOnlineAccounts lruOnlineAccounts
 
+	// onlineAccountsCache contains up to onlineAccountsCacheMaxSize accounts with their complete history
+	// for the range [Lastest - MaxBalLookback, Latest - lookback]
+	// The invariant is held by
+	// 1) loading a full history when new accounts get added
+	// 2) adding online accounts state changes when flushing to disk
+	// 3) pruning the history by removing older than Lastest - MaxBalLookback non-online entries
 	onlineAccountsCache onlineAccountsCache
 
 	// maxAcctLookback sets the minimim deltas size to keep in memory
