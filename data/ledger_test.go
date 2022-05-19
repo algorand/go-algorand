@@ -103,7 +103,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 		},
 	}
 	var err error
-	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	initBlock.TxnCommitments, err = initBlock.PaysetCommit()
 	require.NoError(tb, err)
 	if params.SupportGenesisHash {
 		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(tb.Name()))
@@ -658,7 +658,7 @@ func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, 
 	blk.FeeSink = testSinkAddr
 	blk.CurrentProtocol = lastBlock.CurrentProtocol
 
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	if err != nil {
 		return
 	}

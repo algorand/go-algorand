@@ -131,7 +131,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		// UpgradeVote: empty,
 	}
 
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	if proto.SupportGenesisHash {
@@ -157,7 +157,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
 	blk.Payset = append(blk.Payset, txib)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 	return l.appendUnvalidated(blk)
 }
@@ -176,7 +176,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 		blk.Payset = append(blk.Payset, txib)
 	}
 	var err error
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 	return l.AddBlock(blk, agreement.Certificate{})
 }
@@ -233,7 +233,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	emptyBlock := bookkeeping.Block{
 		BlockHeader: correctHeader,
 	}
-	correctHeader.TxnRoot, err = emptyBlock.PaysetCommit()
+	correctHeader.TxnCommitments, err = emptyBlock.PaysetCommit()
 	require.NoError(t, err)
 
 	correctHeader.RewardsPool = testPoolAddr
@@ -326,11 +326,11 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot = crypto.Hash([]byte{0})
+	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
 	a.Error(l.appendUnvalidated(badBlock), "added block header with empty transaction root")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot[0]++
+	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
 	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid transaction root")
 
 	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
@@ -998,7 +998,7 @@ int 1                   // [1]
 			a.NoError(err)
 			blk.TxnCounter = blk.TxnCounter + 2
 			blk.Payset = append(blk.Payset, txib1, txib2)
-			blk.TxnRoot, err = blk.PaysetCommit()
+			blk.TxnCommitments, err = blk.PaysetCommit()
 			a.NoError(err)
 			err = l.appendUnvalidated(blk)
 			a.NoError(err)
@@ -1247,7 +1247,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-			correctBlock.TxnRoot, err = correctBlock.PaysetCommit()
+			correctBlock.TxnCommitments, err = correctBlock.PaysetCommit()
 			a.NoError(err)
 
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")

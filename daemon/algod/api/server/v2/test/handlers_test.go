@@ -20,16 +20,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -117,12 +120,8 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
-func TestGetBlockJsonEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
+func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
-	defer releasefunc()
 
 	l := handler.Node.LedgerForAPI()
 
@@ -193,24 +192,34 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	blk.Payset = append(blk.Payset, txib)
 	blk.BlockHeader.TxnCounter++
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	err = l.(*data.Ledger).AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 
+	return handler, c, rec, stx, releasefunc
+}
+
+func TestGetBlockJsonEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, releasefunc := addBlockHelper(t)
+	defer releasefunc()
+
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
 	format := "json"
-	err = handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
-	data := rec.Body.Bytes()
+	body := rec.Body.Bytes()
 
 	response := struct {
 		Block bookkeeping.Block `codec:"block"`
 	}{}
 
-	err = json.Unmarshal(data, &response)
+	err = json.Unmarshal(body, &response)
 	require.NoError(t, err)
 }
 
@@ -514,7 +523,10 @@ func TestAbortCatchup(t *testing.T) {
 	abortCatchupTest(t, badCatchPoint, 400)
 }
 
-func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDeveloperAPI bool) {
+func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
+	enableDeveloperAPI bool, params generated.TealCompileParams,
+	expectedSourcemap *logic.SourceMap,
+) (response v2.CompileResponseWithSourceMap) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -532,23 +544,55 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(bytesToUse))
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.TealCompile(c)
+	err := handler.TealCompile(c, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+
+	// Check compiled response.
+	if rec.Code == 200 {
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		if expectedSourcemap != nil {
+			require.Equal(t, *expectedSourcemap, *response.Sourcemap)
+		} else {
+			require.Nil(t, response.Sourcemap)
+		}
+	}
+	return
 }
 
 func TestTealCompile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	tealCompileTest(t, nil, 200, true) // nil program should work
-	goodProgram := `int 1`
+	params := generated.TealCompileParams{}
+	tealCompileTest(t, nil, 200, true, params, nil) // nil program should work
+
+	goodProgram := fmt.Sprintf(`#pragma version %d
+int 1
+assert
+int 1`, logic.AssemblerMaxVersion)
+	ops, _ := logic.AssembleString(goodProgram)
+	expectedSourcemap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
 	goodProgramBytes := []byte(goodProgram)
-	tealCompileTest(t, goodProgramBytes, 200, true)
-	tealCompileTest(t, goodProgramBytes, 404, false)
+
+	// Test good program with params
+	tealCompileTest(t, goodProgramBytes, 200, true, params, nil)
+	paramValue := true
+	params = generated.TealCompileParams{Sourcemap: &paramValue}
+	tealCompileTest(t, goodProgramBytes, 200, true, params, &expectedSourcemap)
+	paramValue = false
+	params = generated.TealCompileParams{Sourcemap: &paramValue}
+	tealCompileTest(t, goodProgramBytes, 200, true, params, nil)
+
+	// Test a program without the developer API flag.
+	tealCompileTest(t, goodProgramBytes, 404, false, params, nil)
+
+	// Test bad program.
 	badProgram := "bad program"
 	badProgramBytes := []byte(badProgram)
-	tealCompileTest(t, badProgramBytes, 400, true)
+	tealCompileTest(t, badProgramBytes, 400, true, params, nil)
 }
 
 func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
@@ -599,7 +643,7 @@ func TestTealDisassemble(t *testing.T) {
 	tealDisassembleTest(t, testProgram, 200, "// invalid version\n", true)
 
 	// Test a valid program.
-	for ver := 1; ver < logic.AssemblerMaxVersion; ver++ {
+	for ver := 1; ver <= logic.AssemblerMaxVersion; ver++ {
 		goodProgram := `int 1`
 		ops, _ := logic.AssembleStringWithVersion(goodProgram, uint64(ver))
 		disassembledProgram, _ := logic.Disassemble(ops.Program)
@@ -608,7 +652,7 @@ func TestTealDisassemble(t *testing.T) {
 	// Test a nil program without the developer API flag.
 	tealDisassembleTest(t, testProgram, 404, "", false)
 
-	// Test bad program
+	// Test bad program.
 	badProgram := []byte{1, 99}
 	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
 }
@@ -858,4 +902,64 @@ func TestAppendParticipationKeys(t *testing.T) {
 		require.Equal(t, http.StatusInternalServerError, rec.Code)
 		require.Contains(t, rec.Body.String(), expectedErr.Error())
 	})
+}
+
+// TxnMerkleElemRaw this struct helps creates a hashable struct from the bytes
+type TxnMerkleElemRaw struct {
+	Txn  crypto.Digest // txn id
+	Stib crypto.Digest // hash value of transactions.SignedTxnInBlock
+}
+
+func txnMerkleToRaw(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) (buf []byte) {
+	buf = make([]byte, 2*crypto.DigestSize)
+	copy(buf[:], txid[:])
+	copy(buf[crypto.DigestSize:], stib[:])
+	return
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (tme *TxnMerkleElemRaw) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TxnMerkleLeaf, txnMerkleToRaw(tme.Txn, tme.Stib)
+}
+
+func TestGetProofDefault(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+
+	handler, c, rec, stx, releasefunc := addBlockHelper(t)
+	defer releasefunc()
+
+	txid := stx.ID()
+	err := handler.GetProof(c, 1, txid.String(), generated.GetProofParams{})
+	a.NoError(err)
+
+	var resp generatedV2.ProofResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	a.NoError(err)
+
+	l := handler.Node.LedgerForAPI()
+	blkHdr, err := l.BlockHdr(1)
+	a.NoError(err)
+
+	// Build merklearray.Proof from ProofResponse
+	var proof merklearray.Proof
+	proof.HashFactory = crypto.HashFactory{HashType: crypto.Sha512_256}
+	proof.TreeDepth = uint8(resp.Treedepth)
+	a.NotEqual(proof.TreeDepth, 0)
+	proofconcat := resp.Proof
+	for len(proofconcat) > 0 {
+		var d crypto.Digest
+		copy(d[:], proofconcat)
+		proof.Path = append(proof.Path, d[:])
+		proofconcat = proofconcat[len(d):]
+	}
+
+	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
+	copy(element.Stib[:], resp.Stibhash[:])
+	elems := make(map[uint64]crypto.Hashable)
+	elems[0] = &element
+
+	// Verifies that the default proof is using SHA512_256
+	err = merklearray.Verify(blkHdr.TxnCommitments.NativeSha512_256Commitment.ToSlice(), elems, &proof)
+	a.NoError(err)
 }

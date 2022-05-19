@@ -17,6 +17,7 @@
 package merklearray
 
 import (
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"runtime"
@@ -29,9 +30,10 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// Hex encoded strings representing the byte arrays
 type KATElement struct {
-	expectedRoot []byte
-	elements     [][]byte
+	expectedRoot string
+	elements     []string
 }
 
 type TestMessage string
@@ -589,84 +591,174 @@ func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, p
 	return tree, proof
 }
 
-var KATs = []KATElement{
+var KATsSHA256 = []KATElement{
 	{
-		[]byte{223, 165, 76, 43, 118, 131, 205, 83, 151, 176, 50, 187, 236, 17, 236, 27, 119, 185, 251, 236, 90, 86, 201, 233, 66, 15, 107, 153, 128, 120, 64, 52},
-		[][]byte{{212, 60, 103, 72, 82, 10, 118, 248, 31, 184, 37, 10, 169, 225, 166, 86, 240, 115, 255, 241, 229, 81, 86, 47, 173, 67, 233, 255, 251, 26, 184, 139}},
-	},
-	{
-		[]byte{117, 207, 58, 54, 89, 80, 47, 147, 38, 223, 250, 114, 218, 81, 102, 235, 222, 29, 19, 246, 82, 156, 146, 35, 36, 135, 70, 68, 244, 183, 97, 110},
-		[][]byte{
-			{39, 169, 1, 19, 53, 252, 150, 220, 9, 95, 52, 138, 108, 147, 71, 211, 199, 205, 213, 108, 87, 198, 80, 41, 125, 135, 223, 149, 209, 63, 119, 11},
-			{88, 120, 69, 62, 77, 91, 206, 2, 75, 78, 224, 127, 108, 87, 24, 104, 104, 243, 65, 3, 72, 245, 167, 214, 1, 192, 217, 206, 30, 254, 210, 57},
+		"5a7fb9d3fb8976d942feac36d762b8d0530476c022c297582123eca18ad8c7b8",
+		[]string{
+			"d43c6748520a76f81fb8250aa9e1a656f073fff1e551562fad43e9fffb1ab88b",
 		},
 	},
 	{
-		[]byte{7, 177, 51, 83, 39, 122, 156, 203, 107, 66, 79, 87, 58, 180, 252, 158, 38, 138, 1, 39, 206, 188, 73, 150, 82, 146, 64, 181, 226, 155, 109, 233},
-		[][]byte{
-			{68, 181, 96, 106, 228, 157, 129, 188, 127, 52, 81, 196, 255, 128, 57, 152, 168, 254, 0, 87, 226, 45, 99, 103, 8, 14, 90, 21, 91, 102, 16, 8},
-			{112, 206, 125, 248, 189, 164, 41, 32, 245, 231, 90, 231, 136, 238, 123, 152, 9, 130, 106, 146, 112, 26, 78, 14, 73, 1, 56, 56, 14, 166, 15, 68},
-			{119, 180, 57, 233, 159, 118, 74, 31, 103, 73, 230, 105, 177, 54, 31, 227, 187, 92, 228, 27, 234, 196, 181, 205, 85, 254, 81, 170, 158, 254, 60, 103},
+		"c9bc24bd5fc8961a8721458fd93044871c9009fe4c66b9614744dd6e9216d93f",
+		[]string{
+			"27a9011335fc96dc095f348a6c9347d3c7cdd56c57c650297d87df95d13f770b",
+			"5878453e4d5bce024b4ee07f6c57186868f3410348f5a7d601c0d9ce1efed239",
 		},
 	},
 	{
-		[]byte{50, 251, 85, 206, 75, 56, 190, 244, 154, 96, 138, 178, 226, 117, 12, 255, 22, 50, 26, 246, 34, 43, 225, 20, 151, 233, 26, 249, 252, 146, 165, 63},
-		[][]byte{
-			{250, 174, 33, 61, 215, 33, 81, 114, 138, 36, 195, 111, 154, 163, 224, 126, 251, 227, 38, 192, 88, 248, 95, 104, 34, 193, 220, 33, 117, 224, 157, 153},
-			{41, 233, 15, 204, 75, 28, 149, 19, 188, 21, 92, 1, 141, 183, 150, 208, 126, 151, 199, 165, 0, 155, 215, 165, 238, 212, 40, 30, 147, 222, 148, 19},
-			{249, 60, 52, 8, 71, 52, 73, 153, 101, 28, 27, 215, 25, 73, 203, 151, 76, 124, 173, 123, 212, 33, 204, 198, 119, 103, 15, 104, 106, 229, 32, 204},
-			{118, 168, 235, 254, 38, 163, 53, 60, 39, 2, 147, 113, 145, 221, 118, 98, 21, 104, 158, 90, 7, 189, 166, 15, 255, 212, 142, 207, 194, 32, 132, 212},
+		"ad1828b8460ec541fdbeee2eb4f9d37cfad9da54c0c3a98b1eb20d24de9af6ce",
+		[]string{
+			"44b5606ae49d81bc7f3451c4ff803998a8fe0057e22d6367080e5a155b661008",
+			"70ce7df8bda42920f5e75ae788ee7b9809826a92701a4e0e490138380ea60f44",
+			"77b439e99f764a1f6749e669b1361fe3bb5ce41beac4b5cd55fe51aa9efe3c67",
 		},
 	},
 	{
-		[]byte{23, 88, 226, 198, 37, 223, 43, 60, 98, 133, 183, 139, 102, 123, 221, 123, 0, 86, 205, 53, 28, 245, 228, 182, 120, 52, 206, 148, 27, 1, 84, 194},
-		[][]byte{
-			{252, 45, 96, 11, 46, 67, 69, 114, 33, 227, 95, 207, 66, 117, 34, 31, 102, 214, 206, 37, 11, 134, 150, 135, 157, 124, 231, 164, 151, 79, 151, 93},
-			{163, 250, 12, 46, 19, 21, 31, 211, 195, 208, 2, 165, 69, 8, 25, 174, 113, 80, 161, 23, 45, 236, 173, 69, 226, 170, 147, 5, 106, 178, 69, 182},
-			{235, 14, 67, 121, 148, 161, 107, 28, 59, 141, 254, 233, 155, 110, 134, 48, 199, 187, 177, 47, 136, 117, 158, 183, 116, 180, 227, 147, 92, 85, 17, 6},
-			{58, 68, 220, 226, 251, 163, 242, 111, 14, 10, 226, 196, 116, 131, 232, 203, 29, 129, 95, 157, 153, 129, 240, 48, 237, 195, 128, 212, 239, 172, 79, 87},
-			{82, 196, 7, 144, 85, 233, 108, 62, 243, 17, 76, 169, 49, 136, 65, 14, 138, 138, 8, 170, 126, 83, 223, 178, 187, 24, 195, 1, 117, 111, 175, 158},
+		"d78b0c411d1360bd6d49c755a60f9ada519942911411269637287bd0b5c19bab",
+		[]string{
+			"faae213dd72151728a24c36f9aa3e07efbe326c058f85f6822c1dc2175e09d99",
+			"29e90fcc4b1c9513bc155c018db796d07e97c7a5009bd7a5eed4281e93de9413",
+			"f93c340847344999651c1bd71949cb974c7cad7bd421ccc677670f686ae520cc",
+			"76a8ebfe26a3353c2702937191dd766215689e5a07bda60fffd48ecfc22084d4",
+		},
+	},
+	{
+		"f8744f4648d1974c38fca858873006126d93f1a150f0eb7da1072fef83e66341",
+		[]string{
+			"fc2d600b2e43457221e35fcf4275221f66d6ce250b8696879d7ce7a4974f975d",
+			"a3fa0c2e13151fd3c3d002a5450819ae7150a1172decad45e2aa93056ab245b6",
+			"eb0e437994a16b1c3b8dfee99b6e8630c7bbb12f88759eb774b4e3935c551106",
+			"3a44dce2fba3f26f0e0ae2c47483e8cb1d815f9d9981f030edc380d4efac4f57",
+			"52c4079055e96c3ef3114ca93188410e8a8a08aa7e53dfb2bb18c301756faf9e",
+		},
+	},
+}
+
+var KATsSUMHASH = []KATElement{
+	{
+		"a1951e9ec9d630a975fbbdf5fa290f66bf2c55fbf5ec5ad5de08d281a971d97a64a0475d6d93ddda4480b1dbaaf33f7d72f79f9076da029e148fca0ba354b58c",
+		[]string{
+			"d43c6748520a76f81fb8250aa9e1a656f073fff1e551562fad43e9fffb1ab88b",
+		},
+	},
+	{
+		"8b60182211195e366021236b8bd26b004f0773f41de837dff8c483357d26aff1c06c8692b96df11fe30b2c87e6400a005d7f6e71e9b3b1f39207fe4525719cd2",
+		[]string{
+			"27a9011335fc96dc095f348a6c9347d3c7cdd56c57c650297d87df95d13f770b",
+			"5878453e4d5bce024b4ee07f6c57186868f3410348f5a7d601c0d9ce1efed239",
+		},
+	},
+	{
+		"8c427bfa1723d733b20ac58e2ce6c9791a25e9bdd57e1dc252e98b6b909a089e1c9077cea3852df6495cacbe750f41a777c593e5ce5d132d49b354b2790ae9a8",
+		[]string{
+			"44b5606ae49d81bc7f3451c4ff803998a8fe0057e22d6367080e5a155b661008",
+			"70ce7df8bda42920f5e75ae788ee7b9809826a92701a4e0e490138380ea60f44",
+			"77b439e99f764a1f6749e669b1361fe3bb5ce41beac4b5cd55fe51aa9efe3c67",
+		},
+	},
+	{
+		"09b34fb15d43b16a22e7830ede8df4f84f4b63f46af2f6843aaf36a08c5652bcdf033162e2002c658265f4395058af1b4cef13dee70ebef4ca2cd8e870bd50c6",
+		[]string{
+			"faae213dd72151728a24c36f9aa3e07efbe326c058f85f6822c1dc2175e09d99",
+			"29e90fcc4b1c9513bc155c018db796d07e97c7a5009bd7a5eed4281e93de9413",
+			"f93c340847344999651c1bd71949cb974c7cad7bd421ccc677670f686ae520cc",
+			"76a8ebfe26a3353c2702937191dd766215689e5a07bda60fffd48ecfc22084d4",
+		},
+	},
+	{
+		"6a55c0f451c211e1c961871cc0bb640c103768f0d25ddfa0b1c1d054e92adcd1480cdca21af805da887540d343fe78a3a515c761becc7e66371b740f6ff13b6b",
+		[]string{
+			"fc2d600b2e43457221e35fcf4275221f66d6ce250b8696879d7ce7a4974f975d",
+			"a3fa0c2e13151fd3c3d002a5450819ae7150a1172decad45e2aa93056ab245b6",
+			"eb0e437994a16b1c3b8dfee99b6e8630c7bbb12f88759eb774b4e3935c551106",
+			"3a44dce2fba3f26f0e0ae2c47483e8cb1d815f9d9981f030edc380d4efac4f57",
+			"52c4079055e96c3ef3114ca93188410e8a8a08aa7e53dfb2bb18c301756faf9e",
+		},
+	},
+}
+
+var KATsSHA512_256 = []KATElement{
+	{
+		"dfa54c2b7683cd5397b032bbec11ec1b77b9fbec5a56c9e9420f6b9980784034",
+		[]string{
+			"d43c6748520a76f81fb8250aa9e1a656f073fff1e551562fad43e9fffb1ab88b",
+		},
+	},
+	{
+		"75cf3a3659502f9326dffa72da5166ebde1d13f6529c922324874644f4b7616e",
+		[]string{
+			"27a9011335fc96dc095f348a6c9347d3c7cdd56c57c650297d87df95d13f770b",
+			"5878453e4d5bce024b4ee07f6c57186868f3410348f5a7d601c0d9ce1efed239",
+		},
+	},
+	{
+		"07b13353277a9ccb6b424f573ab4fc9e268a0127cebc4996529240b5e29b6de9",
+		[]string{
+			"44b5606ae49d81bc7f3451c4ff803998a8fe0057e22d6367080e5a155b661008",
+			"70ce7df8bda42920f5e75ae788ee7b9809826a92701a4e0e490138380ea60f44",
+			"77b439e99f764a1f6749e669b1361fe3bb5ce41beac4b5cd55fe51aa9efe3c67",
+		},
+	},
+	{
+		"32fb55ce4b38bef49a608ab2e2750cff16321af6222be11497e91af9fc92a53f",
+		[]string{
+			"faae213dd72151728a24c36f9aa3e07efbe326c058f85f6822c1dc2175e09d99",
+			"29e90fcc4b1c9513bc155c018db796d07e97c7a5009bd7a5eed4281e93de9413",
+			"f93c340847344999651c1bd71949cb974c7cad7bd421ccc677670f686ae520cc",
+			"76a8ebfe26a3353c2702937191dd766215689e5a07bda60fffd48ecfc22084d4",
+		},
+	},
+	{
+		"1758e2c625df2b3c6285b78b667bdd7b0056cd351cf5e4b67834ce941b0154c2",
+		[]string{
+			"fc2d600b2e43457221e35fcf4275221f66d6ce250b8696879d7ce7a4974f975d",
+			"a3fa0c2e13151fd3c3d002a5450819ae7150a1172decad45e2aa93056ab245b6",
+			"eb0e437994a16b1c3b8dfee99b6e8630c7bbb12f88759eb774b4e3935c551106",
+			"3a44dce2fba3f26f0e0ae2c47483e8cb1d815f9d9981f030edc380d4efac4f57",
+			"52c4079055e96c3ef3114ca93188410e8a8a08aa7e53dfb2bb18c301756faf9e",
 		},
 	},
 }
 
 var VCKATs = []KATElement{
 	{
-		[]byte{223, 165, 76, 43, 118, 131, 205, 83, 151, 176, 50, 187, 236, 17, 236, 27, 119, 185, 251, 236, 90, 86, 201, 233, 66, 15, 107, 153, 128, 120, 64, 52},
-		[][]byte{{212, 60, 103, 72, 82, 10, 118, 248, 31, 184, 37, 10, 169, 225, 166, 86, 240, 115, 255, 241, 229, 81, 86, 47, 173, 67, 233, 255, 251, 26, 184, 139}},
-	},
-	{
-		[]byte{117, 207, 58, 54, 89, 80, 47, 147, 38, 223, 250, 114, 218, 81, 102, 235, 222, 29, 19, 246, 82, 156, 146, 35, 36, 135, 70, 68, 244, 183, 97, 110},
-		[][]byte{
-			{39, 169, 1, 19, 53, 252, 150, 220, 9, 95, 52, 138, 108, 147, 71, 211, 199, 205, 213, 108, 87, 198, 80, 41, 125, 135, 223, 149, 209, 63, 119, 11},
-			{88, 120, 69, 62, 77, 91, 206, 2, 75, 78, 224, 127, 108, 87, 24, 104, 104, 243, 65, 3, 72, 245, 167, 214, 1, 192, 217, 206, 30, 254, 210, 57},
+		"dfa54c2b7683cd5397b032bbec11ec1b77b9fbec5a56c9e9420f6b9980784034",
+		[]string{
+			"d43c6748520a76f81fb8250aa9e1a656f073fff1e551562fad43e9fffb1ab88b",
 		},
 	},
 	{
-		[]byte{56, 245, 10, 65, 222, 10, 236, 127, 224, 228, 244, 247, 143, 31, 84, 13, 93, 198, 17, 209, 144, 160, 206, 206, 111, 1, 40, 234, 42, 2, 127, 94},
-		[][]byte{
-			{68, 181, 96, 106, 228, 157, 129, 188, 127, 52, 81, 196, 255, 128, 57, 152, 168, 254, 0, 87, 226, 45, 99, 103, 8, 14, 90, 21, 91, 102, 16, 8},
-			{112, 206, 125, 248, 189, 164, 41, 32, 245, 231, 90, 231, 136, 238, 123, 152, 9, 130, 106, 146, 112, 26, 78, 14, 73, 1, 56, 56, 14, 166, 15, 68},
-			{119, 180, 57, 233, 159, 118, 74, 31, 103, 73, 230, 105, 177, 54, 31, 227, 187, 92, 228, 27, 234, 196, 181, 205, 85, 254, 81, 170, 158, 254, 60, 103},
+		"75cf3a3659502f9326dffa72da5166ebde1d13f6529c922324874644f4b7616e",
+		[]string{
+			"27a9011335fc96dc095f348a6c9347d3c7cdd56c57c650297d87df95d13f770b",
+			"5878453e4d5bce024b4ee07f6c57186868f3410348f5a7d601c0d9ce1efed239",
 		},
 	},
 	{
-		[]byte{149, 179, 79, 29, 252, 65, 254, 212, 129, 21, 202, 49, 189, 67, 34, 93, 255, 147, 245, 64, 56, 124, 35, 10, 207, 166, 67, 226, 103, 248, 141, 120},
-		[][]byte{
-			{250, 174, 33, 61, 215, 33, 81, 114, 138, 36, 195, 111, 154, 163, 224, 126, 251, 227, 38, 192, 88, 248, 95, 104, 34, 193, 220, 33, 117, 224, 157, 153},
-			{41, 233, 15, 204, 75, 28, 149, 19, 188, 21, 92, 1, 141, 183, 150, 208, 126, 151, 199, 165, 0, 155, 215, 165, 238, 212, 40, 30, 147, 222, 148, 19},
-			{249, 60, 52, 8, 71, 52, 73, 153, 101, 28, 27, 215, 25, 73, 203, 151, 76, 124, 173, 123, 212, 33, 204, 198, 119, 103, 15, 104, 106, 229, 32, 204},
-			{118, 168, 235, 254, 38, 163, 53, 60, 39, 2, 147, 113, 145, 221, 118, 98, 21, 104, 158, 90, 7, 189, 166, 15, 255, 212, 142, 207, 194, 32, 132, 212},
+		"38f50a41de0aec7fe0e4f4f78f1f540d5dc611d190a0cece6f0128ea2a027f5e",
+		[]string{
+			"44b5606ae49d81bc7f3451c4ff803998a8fe0057e22d6367080e5a155b661008",
+			"70ce7df8bda42920f5e75ae788ee7b9809826a92701a4e0e490138380ea60f44",
+			"77b439e99f764a1f6749e669b1361fe3bb5ce41beac4b5cd55fe51aa9efe3c67",
 		},
 	},
 	{
-		[]byte{151, 119, 38, 117, 253, 236, 112, 179, 1, 14, 240, 139, 87, 243, 203, 241, 230, 247, 178, 63, 65, 17, 80, 118, 188, 195, 74, 221, 141, 140, 10, 27},
-		[][]byte{
-			{252, 45, 96, 11, 46, 67, 69, 114, 33, 227, 95, 207, 66, 117, 34, 31, 102, 214, 206, 37, 11, 134, 150, 135, 157, 124, 231, 164, 151, 79, 151, 93},
-			{163, 250, 12, 46, 19, 21, 31, 211, 195, 208, 2, 165, 69, 8, 25, 174, 113, 80, 161, 23, 45, 236, 173, 69, 226, 170, 147, 5, 106, 178, 69, 182},
-			{235, 14, 67, 121, 148, 161, 107, 28, 59, 141, 254, 233, 155, 110, 134, 48, 199, 187, 177, 47, 136, 117, 158, 183, 116, 180, 227, 147, 92, 85, 17, 6},
-			{58, 68, 220, 226, 251, 163, 242, 111, 14, 10, 226, 196, 116, 131, 232, 203, 29, 129, 95, 157, 153, 129, 240, 48, 237, 195, 128, 212, 239, 172, 79, 87},
-			{82, 196, 7, 144, 85, 233, 108, 62, 243, 17, 76, 169, 49, 136, 65, 14, 138, 138, 8, 170, 126, 83, 223, 178, 187, 24, 195, 1, 117, 111, 175, 158},
+		"95b34f1dfc41fed48115ca31bd43225dff93f540387c230acfa643e267f88d78",
+		[]string{
+			"faae213dd72151728a24c36f9aa3e07efbe326c058f85f6822c1dc2175e09d99",
+			"29e90fcc4b1c9513bc155c018db796d07e97c7a5009bd7a5eed4281e93de9413",
+			"f93c340847344999651c1bd71949cb974c7cad7bd421ccc677670f686ae520cc",
+			"76a8ebfe26a3353c2702937191dd766215689e5a07bda60fffd48ecfc22084d4",
+		},
+	},
+	{
+		"97772675fdec70b3010ef08b57f3cbf1e6f7b23f41115076bcc34add8d8c0a1b",
+		[]string{
+			"fc2d600b2e43457221e35fcf4275221f66d6ce250b8696879d7ce7a4974f975d",
+			"a3fa0c2e13151fd3c3d002a5450819ae7150a1172decad45e2aa93056ab245b6",
+			"eb0e437994a16b1c3b8dfee99b6e8630c7bbb12f88759eb774b4e3935c551106",
+			"3a44dce2fba3f26f0e0ae2c47483e8cb1d815f9d9981f030edc380d4efac4f57",
+			"52c4079055e96c3ef3114ca93188410e8a8a08aa7e53dfb2bb18c301756faf9e",
 		},
 	},
 }
@@ -674,16 +766,24 @@ var VCKATs = []KATElement{
 func TestMerkleTreeKATs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	testMerkleTreeKATsAux(t, KATsSHA512_256, crypto.Sha512_256)
+	testMerkleTreeKATsAux(t, KATsSUMHASH, crypto.Sumhash)
+	testMerkleTreeKATsAux(t, KATsSHA256, crypto.Sha256)
+}
+
+func testMerkleTreeKATsAux(t *testing.T, KATs []KATElement, hashType crypto.HashType) {
 	for j := 0; j < len(KATs); j++ {
 		a := make(TestArray, len(KATs[j].elements))
 		for i := 0; i < len(KATs[j].elements); i++ {
-			copy(a[i][:], KATs[j].elements[i])
+			decodedBytes, err := hex.DecodeString(KATs[j].elements[i])
+			require.NoError(t, err)
+			copy(a[i][:], decodedBytes)
 		}
 		root := KATs[j].expectedRoot
-		tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha512_256})
+		tree, err := Build(a, crypto.HashFactory{HashType: hashType})
 		require.NoError(t, err)
-		root2 := tree.Root()
-		require.Equal(t, root, []byte(root2), "mismatched roots on KATs index %d", j)
+		root2 := hex.EncodeToString(tree.Root())
+		require.Equal(t, root, root2, "mismatched roots on KATs %s index %d", hashType.String(), j)
 	}
 }
 
@@ -693,13 +793,15 @@ func TestVCKATs(t *testing.T) {
 	for j := 0; j < len(VCKATs); j++ {
 		a := make(TestArray, len(VCKATs[j].elements))
 		for i := 0; i < len(VCKATs[j].elements); i++ {
-			copy(a[i][:], VCKATs[j].elements[i])
+			decodedBytes, err := hex.DecodeString(VCKATs[j].elements[i])
+			require.NoError(t, err)
+			copy(a[i][:], decodedBytes)
 		}
 		root := VCKATs[j].expectedRoot
 		tree, err := BuildVectorCommitmentTree(a, crypto.HashFactory{HashType: crypto.Sha512_256})
 		require.NoError(t, err)
-		root2 := tree.Root()
-		require.Equal(t, root, []byte(root2), "mismatched roots on KATs index %d", j)
+		root2 := hex.EncodeToString(tree.Root())
+		require.Equal(t, root, root2, "mismatched roots on VCKATs index %d", j)
 	}
 }
 
@@ -1062,6 +1164,7 @@ func TestVCProveSingleLeaf(t *testing.T) {
 func BenchmarkMerkleCommit(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { merkleCommitBench(b, crypto.Sumhash) })
+	b.Run("sha256", func(b *testing.B) { merkleCommitBench(b, crypto.Sha256) })
 }
 
 func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
@@ -1088,6 +1191,7 @@ func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
 func BenchmarkMerkleProve1M(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sumhash) })
+	b.Run("sha256", func(b *testing.B) { benchmarkMerkleProve1M(b, crypto.Sha256) })
 }
 
 func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
@@ -1113,6 +1217,7 @@ func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
 func BenchmarkMerkleVerify1M(b *testing.B) {
 	b.Run("sha512_256", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sha512_256) })
 	b.Run("sumhash", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sumhash) })
+	b.Run("sha256", func(b *testing.B) { benchmarkMerkleVerify1M(b, crypto.Sha256) })
 }
 
 func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
