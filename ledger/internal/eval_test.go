@@ -873,7 +873,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
 
-	require.Equal(t, merklesignature.Verifier{}, acctData.StateProofID)
+	require.Equal(t, merklesignature.Verifier{}.Commitment, acctData.StateProofID)
 	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
 
 	badBlock := *validatedBlock
@@ -1115,11 +1115,11 @@ func TestExpiredAccountGeneration(t *testing.T) {
 
 	recvAcct, err := eval.state.lookup(recvAddr)
 	require.NoError(t, err)
-	require.Equal(t, recvAcct.Status, basics.Offline)
-	require.Equal(t, recvAcct.VoteFirstValid, basics.Round(0))
-	require.Equal(t, recvAcct.VoteLastValid, basics.Round(0))
-	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
-	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
-	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
-	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
+	require.Equal(t, basics.Offline, recvAcct.Status)
+	require.Equal(t, basics.Round(0), recvAcct.VoteFirstValid)
+	require.Equal(t, basics.Round(0), recvAcct.VoteLastValid)
+	require.Equal(t, uint64(0), recvAcct.VoteKeyDilution)
+	require.Equal(t, crypto.OneTimeSignatureVerifier{}, recvAcct.VoteID)
+	require.Equal(t, crypto.VRFVerifier{}, recvAcct.SelectionID)
+	require.Equal(t, merklesignature.Verifier{}.Commitment, recvAcct.StateProofID)
 }
