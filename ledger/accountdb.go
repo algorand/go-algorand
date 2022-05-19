@@ -2130,7 +2130,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		return nil
 	}
 
-	latest, err := accountsRound(tx)
+	dbRound, err := accountsRound(tx)
 	if err != nil {
 		return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 	}
@@ -2143,9 +2143,9 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		if err != nil {
 			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 		}
-		latestHdr, err := blockGetHdr(blockTx, latest)
+		latestHdr, err := blockGetHdr(blockTx, dbRound)
 		if err != nil {
-			return fmt.Errorf("latest block header %d cannot be retrieved : %w", latest, err)
+			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
 		}
 
 		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife)
@@ -2155,10 +2155,10 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 			firstRound++
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
-		for rnd := firstRound; rnd <= latest; rnd++ {
+		for rnd := firstRound; rnd <= dbRound; rnd++ {
 			blk, err := blockGet(blockTx, rnd)
 			if err != nil {
-				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, latest, err)
+				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
 			}
 
 			tail, err := txTailRoundFromBlock(blk)
