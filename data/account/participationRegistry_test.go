@@ -974,13 +974,10 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	partPerRound, err := registry.GetStateProofForRound(id, 1)
-	a.NoError(err)
-	a.Nil(partPerRound.StateProofSecrets)
+	a.Error(err)
 
-	// Should return nil as well since no state proof keys were added
 	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests))
-	a.NoError(err)
-	a.Nil(partPerRound.StateProofSecrets)
+	a.Error(err)
 
 	// Append key
 	keys := make(StateProofKeys, 1)
@@ -992,8 +989,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests)-1)
-	a.NoError(err)
-	a.Nil(partPerRound.StateProofSecrets)
+	a.Error(err)
 
 	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests))
 	a.NoError(err)

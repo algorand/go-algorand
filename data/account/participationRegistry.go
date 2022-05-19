@@ -773,12 +773,7 @@ func (db *participationDB) GetStateProofForRound(id ParticipationID, round basic
 
 		return nil
 	})
-	switch err {
-	case nil:
-		// no error, continue
-	case ErrSecretNotFound: // not considered an error (yet), since some accounts may not have registered state proof yet
-		return result, nil
-	default:
+	if err != nil {
 		return StateProofRecordForRound{}, err
 	}
 
