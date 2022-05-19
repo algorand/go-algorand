@@ -46,10 +46,8 @@ type (
 		// Sortition seed
 		Seed committee.Seed `codec:"seed"`
 
-		// TxnRoot authenticates the set of transactions appearing in the block.
-		// The commitment is computed based on the PaysetCommit type specified
-		// in the block's consensus protocol.
-		TxnRoot crypto.Digest `codec:"txn"`
+		// TxnCommitments authenticates the set of transactions appearing in the block.
+		TxnCommitments
 
 		// TimeStamp in seconds since epoch
 		TimeStamp int64 `codec:"ts"`
@@ -129,6 +127,18 @@ type (
 		// ParticipationUpdates contains the information needed to mark
 		// certain accounts offline because their participation keys expired
 		ParticipationUpdates
+	}
+
+	// TxnCommitments represents the commitments computed from the transactions in the block.
+	// It contains multiple commitments based on different algorithms and hash functions, to support different use cases.
+	TxnCommitments struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+		// Root of transaction merkle tree using SHA512_256 hash function.
+		// This commitment is computed based on the PaysetCommit type specified in the block's consensus protocol.
+		NativeSha512_256Commitment crypto.Digest `codec:"txn"`
+
+		// Root of transaction vector commitment merkle tree using SHA256 hash function
+		Sha256Commitment crypto.Digest `codec:"txn256"`
 	}
 
 	// ParticipationUpdates represents participation account data that
@@ -496,10 +506,11 @@ func MakeBlock(prev BlockHeader) Block {
 			GenesisHash:  prev.GenesisHash,
 		},
 	}
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	if err != nil {
-		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
+		logging.Base().Warnf("MakeBlock: computing empty TxnCommitments: %v", err)
 	}
+
 	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
 	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
 	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
@@ -508,13 +519,29 @@ func MakeBlock(prev BlockHeader) Block {
 
 // PaysetCommit computes the commitment to the payset, using the appropriate
 // commitment plan based on the block's protocol.
-func (block Block) PaysetCommit() (crypto.Digest, error) {
+func (block Block) PaysetCommit() (TxnCommitments, error) {
 	params, ok := config.Consensus[block.CurrentProtocol]
 	if !ok {
-		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
+		return TxnCommitments{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
 	}
 
-	return block.paysetCommit(params.PaysetCommit)
+	digestSHA512_256, err := block.paysetCommit(params.PaysetCommit)
+	if err != nil {
+		return TxnCommitments{}, err
+	}
+
+	var digestSHA256 crypto.Digest
+	if params.EnableSHA256TxnCommitmentHeader {
+		digestSHA256, err = block.paysetCommitSHA256()
+		if err != nil {
+			return TxnCommitments{}, err
+		}
+	}
+
+	return TxnCommitments{
+		Sha256Commitment:           digestSHA256,
+		NativeSha512_256Commitment: digestSHA512_256,
+	}, nil
 }
 
 func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error) {
@@ -537,6 +564,18 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 	default:
 		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}
+}
+
+func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
+	tree, err := block.TxnMerkleTreeSHA256()
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	rootSlice := tree.Root()
+	var rootAsByteArray crypto.Digest
+	copy(rootAsByteArray[:], rootSlice)
+	return rootAsByteArray, nil
 }
 
 // PreCheck checks if the block header bh is a valid successor to
@@ -605,7 +644,7 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	return nil
 }
 
-// ContentsMatchHeader checks that the TxnRoot matches what's in the header,
+// ContentsMatchHeader checks that the TxnCommitments matches what's in the header,
 // as the header is what the block hash authenticates.
 // If we're given an untrusted block and a known-good hash, we can't trust the
 // block's transactions unless we validate this.
@@ -616,7 +655,7 @@ func (block Block) ContentsMatchHeader() bool {
 		return false
 	}
 
-	return expected == block.TxnRoot
+	return expected == block.TxnCommitments
 }
 
 // DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns

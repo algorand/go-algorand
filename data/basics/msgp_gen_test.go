@@ -8,9 +8,10 @@ package basics
 import (
 	"testing"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalAccountData(t *testing.T) {

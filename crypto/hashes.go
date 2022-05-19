@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"crypto/sha256"
 	"crypto/sha512"
 	"errors"
 	"fmt"
@@ -41,7 +42,7 @@ func (h HashType) Validate() error {
 const (
 	Sha512_256 HashType = iota
 	Sumhash
-
+	Sha256
 	MaxHashType
 )
 
@@ -53,6 +54,7 @@ const MaxHashDigestSize = SumhashDigestSize
 const (
 	Sha512_256Size    = sha512.Size256
 	SumhashDigestSize = sumhash.Sumhash512DigestSize
+	Sha256Size        = sha256.Size
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
@@ -71,6 +73,8 @@ func (h HashType) String() string {
 		return "sha512_256"
 	case Sumhash:
 		return "sumhash"
+	case Sha256:
+		return "sha256"
 	default:
 		return ""
 	}
@@ -83,6 +87,8 @@ func UnmarshalHashType(s string) (HashType, error) {
 		return Sha512_256, nil
 	case "sumhash":
 		return Sumhash, nil
+	case "sha256":
+		return Sha256, nil
 	default:
 		return 0, fmt.Errorf("HashType not supported: %s", s)
 	}
@@ -96,6 +102,8 @@ func (z HashFactory) NewHash() hash.Hash {
 		return sha512.New512_256()
 	case Sumhash:
 		return sumhash.New512(nil)
+	case Sha256:
+		return sha256.New()
 	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
 	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:

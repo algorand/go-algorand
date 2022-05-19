@@ -101,7 +101,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 		}
 	}
 
-	t.lowWaterMark = dbRound
+	t.lowWaterMark = l.Latest()
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 	t.recent = make(map[basics.Round]roundLeases)
 
@@ -164,13 +164,11 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 		t.lastValid[lastValid] = lastValueMap
 	}
 
-	t.tailMu.Lock()
 	if enableTxTailHashes {
 		t.roundTailHashes = roundTailHashes
 	}
 	t.blockHeaderData = blockHeaderData
 	t.roundTailSerializedDeltas = make([][]byte, 0)
-	t.tailMu.Unlock()
 
 	return nil
 }
