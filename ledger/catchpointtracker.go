@@ -721,7 +721,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	if ct.catchpointInterval != 0 {
 		// Generate catchpoints for rounds in (dcc.oldBase, dcc.newBase].
 		err := ct.createCatchpoints(
-			dcc.oldBase + 1, dcc.newBase, dcc.oldBase, dcc.catchpointLookback)
+			dcc.oldBase+1, dcc.newBase, dcc.oldBase, dcc.catchpointLookback)
 		if err != nil {
 			ct.log.Warnf(
 				"error creating catchpoints dcc.oldBase: %d dcc.newBase: %d err: %v",
