@@ -1101,11 +1101,11 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Opcode: 0x99
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
-- for (curve point A, B) return the curve point A + B
+- for (curve points A and B) return the curve point A + B
 - **Cost**: 70
 - Availability: v7
 
-A, B is curve point in G1 group. Each point is consists of (X, Y). X and Y are both 256 bit integer, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.
+A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.
 
 ## bn256_scalar_mul
 
@@ -1115,7 +1115,7 @@ A, B is curve point in G1 group. Each point is consists of (X, Y). X and Y are b
 - **Cost**: 970
 - Availability: v7
 
-A is curve point in G1 Group and encoding described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.
+A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.
 
 ## bn256_pairing
 
@@ -1125,7 +1125,7 @@ A is curve point in G1 Group and encoding described in `bn256_add`. Scalar K is 
 - **Cost**: 8700
 - Availability: v7
 
-G1s are encoded by concat each encoded G1, which described in `bn256_add`. G2s are encoded by concat encoded G2. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.
+G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.
 
 ## b+
 
