@@ -24,6 +24,10 @@ jobs:
       - run: go version
       - name: Build go-algorand
         run: scripts/travis/build.sh
+      # BenchmarkUintMath - Serves as a proxy for AVM `eval` performance.
+      # Performance degradations suggest either or both:  (1) op code
+      # degradation, (2) `eval` degradation.  (2) suggests a broader performance
+      # issue. 
       - name: Run benchmark
         run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
       - name: Push benchmark result to gh-pages branch

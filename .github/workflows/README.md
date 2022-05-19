@@ -13,11 +13,14 @@ the `gh-pages` branch (the JSON is visualized into a graph that can be seen at:
 https://algorand.github.io/go-algorand/dev/bench/).
 
 ### Adding benchmark tests
-Currently, the workflow runs the `BenchmarkUintMath` in the `Run benchmark`
-step. Additional benchmarks can be run using the `-bench` flag. 
+Add run steps or extend existing benchmark invocations in the `Run benchmark`
+step. Additional benchmarks can be run using the `-bench` flag. Since there's
+few benchmarks run by the workflow, there are _no_ formal groupings and/or
+naming conventions.
 
 ### CI Variance
 There may be some variance between runs because github actions might spin up a
 different machine each time (e.g. Intel Xeon 8370C vs 8171M; the latter might
 run benchmarks slightly slower). Empirically, the variance seems to be 10~30%
-for the most part. 
+for the most part. Due to this environment variance, the workflow is most
+suitable for finding _large_ performance degradations.
