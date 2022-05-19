@@ -960,7 +960,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, genesisAccts)
 		defer ml.Close()
 		conf := config.GetDefaultLocal()
-		const maxDeltaLookback = 1
+		const maxDeltaLookback = 0
 		conf.MaxAcctLookback = maxDeltaLookback
 
 		au, oa := newAcctUpdates(t, ml, conf, ".")
@@ -1012,12 +1012,6 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		rnd := maxBalLookback + 1
 		base = accounts[rnd-1]
 		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(rnd), base, updates, totals)
-		accounts = append(accounts, newAccts)
-		commitSync(t, oa, ml, basics.Round(rnd))
-		updates = ledgercore.AccountDeltas{}
-		rnd = maxBalLookback + 2
-		base = accounts[rnd-1]
-		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(rnd), base, updates, totals)
 		dcc := commitSyncPartial(t, oa, ml, basics.Round(rnd))
 		// defer in order to recover from ml.trackers.accountsWriting.Wait()
 		defer func() {
@@ -1036,7 +1030,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 			require.Empty(t, data.VotingData.VoteLastValid)
 		}()
 
-		// ensure the data still in deltas, not in the cache and lookupOnlineAccountData still return a correct value
+		// ensure the data not in deltas, in the cache and lookupOnlineAccountData still return a correct value
 		_, has = oa.accounts[addrA]
 		require.False(t, has)
 		cachedData, has = oa.onlineAccountsCache.read(addrA, 1)
