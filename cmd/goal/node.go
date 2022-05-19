@@ -127,7 +127,7 @@ func getMissingCatchPointLabel(dataDir string) []string {
 		reportErrorf(errorNodeStatus, err)
 	}
 	genesis := strings.Split(vers.GenesisID, "-")
-	resp, err := http.Get("https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/"+genesis[0]+"/latest.catchpoint")
+	resp, err := http.Get("https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis[0] + "/latest.catchpoint")
 	if err != nil {
 		fmt.Println(errorCatchpointLabelMissing)
 		os.Exit(1)

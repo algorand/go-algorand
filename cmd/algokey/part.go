@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util"
@@ -97,6 +99,9 @@ var partGenerateCmd = &cobra.Command{
 		fmt.Println("Participation key generation successful")
 
 		printPartkey(partkey.Participation)
+		versList := strings.Split(config.FormatVersionAndLicense(), "\n")[1]
+		vers := strings.Split(versList, " ")[0]
+		fmt.Println("\nGenerated with algokey v" + vers)
 	},
 }
 
