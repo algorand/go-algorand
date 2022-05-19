@@ -30,7 +30,7 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, false)
 	sProof := p.sp
 
 	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
@@ -61,7 +61,7 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, false)
 	sProof := p.sp
 	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
@@ -105,7 +105,7 @@ func TestVerifyBadSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, false)
 	sProof := p.sp
 
 	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
@@ -142,7 +142,7 @@ func TestEqualVerifiers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, false)
 	sProof := p.sp
 
 	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
