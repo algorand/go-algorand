@@ -170,6 +170,7 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 		}
 		buf.WriteString(" 0")
 		buf.WriteString("\n")
+		return
 	}
 	// otherwise iterate through values and write one line per label
 	for _, l := range counter.values {
