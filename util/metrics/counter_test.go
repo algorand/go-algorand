@@ -19,6 +19,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -170,4 +171,30 @@ func TestMetricCounterMixed(t *testing.T) {
 		// ( counters starts at zero )
 		require.Equal(t, "35.5", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 	}
+}
+
+func TestCounterWriteMetric(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+
+	// ensure 0 counters are still logged
+	sbOut := strings.Builder{}
+	c.WriteMetric(&sbOut, `host="myhost"`)
+	expected := `# HELP testname testhelp
+# TYPE testname counter
+testname{host="myhost"} 0
+`
+	require.Equal(t, expected, sbOut.String())
+
+	c.Add(2.3, nil)
+	// ensure non-zero counters are logged
+	sbOut = strings.Builder{}
+	c.WriteMetric(&sbOut, `host="myhost"`)
+	expected = `# HELP testname testhelp
+# TYPE testname counter
+testname{host="myhost"} 2.3
+`
+	require.Equal(t, expected, sbOut.String())
+
 }

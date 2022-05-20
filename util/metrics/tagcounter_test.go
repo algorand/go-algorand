@@ -86,20 +86,20 @@ func TestTagCounterWriteMetric(t *testing.T) {
 	tc := NewTagCounter("count_msgs_{TAG}", "number of {TAG} messages")
 	tc.Add("TX", 100)
 	tc.Add("TX", 1)
-	tc.Add("RX", 2)
-	tc.Add("RX", 202)
+	tc.Add("RX", 0)
 
 	var sbOut strings.Builder
 	tc.WriteMetric(&sbOut, `host="myhost"`)
-	require.Equal(t,
-		`# HELP count_msgs_TX number of TX messages
+	tx_expected := `# HELP count_msgs_TX number of TX messages
 # TYPE count_msgs_TX counter
 count_msgs_TX{host="myhost"} 101
-# HELP count_msgs_RX number of RX messages
+`
+	rx_expected := `# HELP count_msgs_RX number of RX messages
 # TYPE count_msgs_RX counter
-count_msgs_RX{host="myhost"} 204
-`,
-		sbOut.String())
+count_msgs_RX{host="myhost"} 0
+`
+	expfmt := sbOut.String()
+	require.True(t, expfmt == tx_expected+rx_expected || expfmt == rx_expected+tx_expected, "bad fmt: %s", expfmt)
 }
 
 func BenchmarkTagCounter(b *testing.B) {
