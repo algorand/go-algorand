@@ -22,6 +22,7 @@ GENESIS_NETWORK_DIR_SPEC=""
 SKIP_UPDATE=0
 TOOLS_OUTPUT_DIR=""
 DRYRUN=false
+VERIFY_UPDATER_ARCHIVE="0"
 IS_ROOT=false
 if [ $EUID -eq 0 ]; then
     IS_ROOT=true
@@ -99,6 +100,10 @@ while [ "$1" != "" ]; do
         -gettools)
             shift
             TOOLS_OUTPUT_DIR=$1
+            ;;
+        -verify)
+            shift
+            VERIFY_UPDATER_ARCHIVE="1"
             ;;
         -z)
             DRYRUN=true
@@ -197,7 +202,7 @@ function get_updater_url() {
     UPDATER_FILENAME="install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
 
     # if on linux, also set variables for signature and checksum validation
-    if [ "$OS" = "linux" ]; then
+    if [ "$OS" = "linux" ] && [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
         UPDATER_PUBKEYURL="https://releases.algorand.com/key.pub"
         UPDATER_SIGURL="http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/releases/stable/f9d842778_3.6.2/install_stable_${OS}-${ARCH}_3.6.2.tar.gz.sig"
         UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/stable/hashes_stable_${OS}_${ARCH}_3.6.2"
@@ -245,62 +250,65 @@ function check_for_updater() {
         exit
     fi
 
-     # if linux, check for checksum and signature validation dependencies
-    local GPG_VERIFY="0" CHECKSUM_VERIFY="0"
-    if [ "$UNAME" = "Linux" ]; then
-        if type gpg >&/dev/null; then
-            GPG_VERIFY="1"
-        else
-            echo "gpg is not available to perform signature validation."
+    # if -verify command line flag is set, try verifying updater archive
+    if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
+        # if linux, check for checksum and signature validation dependencies
+        local GPG_VERIFY="0" CHECKSUM_VERIFY="0"
+        if [ "$UNAME" = "Linux" ]; then
+            if type gpg >&/dev/null; then
+                GPG_VERIFY="1"
+            else
+                echo "gpg is not available to perform signature validation."
+            fi
+
+            if type sha256sum &>/dev/null; then
+                CHECKSUM_VERIFY="1"
+            else
+                echo "sha256sum is not available to perform checksum validation."
+            fi
         fi
 
-        if type sha256sum &>/dev/null; then
-            CHECKSUM_VERIFY="1"
-        else
-            echo "sha256sum is not available to perform checksum validation."
-        fi
-    fi
-
-    # try signature validation
-    if [ "$GPG_VERIFY" = "1" ]; then
-        local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="key.pub"
-        # try downloading public key
-        if curl -sSL "$UPDATER_PUBKEYURL" -o "$UPDATER_PUBKEYFILE"; then
-            GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
-            if gpg --import "$UPDATER_PUBKEYFILE"; then
-                if curl -sSL "$UPDATER_SIGURL" -o "$UPDATER_SIGFILE"; then
-                    if ! gpg --verify "$UPDATER_SIGFILE" "$UPDATER_ARCHIVE"; then
-                        echo "failed to verify signature of updater archive."
-                        exit 1
+        # try signature validation
+        if [ "$GPG_VERIFY" = "1" ]; then
+            local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="key.pub"
+            # try downloading public key
+            if curl -sSL "$UPDATER_PUBKEYURL" -o "$UPDATER_PUBKEYFILE"; then
+                GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
+                if gpg --import "$UPDATER_PUBKEYFILE"; then
+                    if curl -sSL "$UPDATER_SIGURL" -o "$UPDATER_SIGFILE"; then
+                        if ! gpg --verify "$UPDATER_SIGFILE" "$UPDATER_ARCHIVE"; then
+                            echo "failed to verify signature of updater archive."
+                            exit 1
+                        fi
+                    else
+                        echo "failed download signature file, cannot perform signature validation."
                     fi
                 else
-                    echo "failed download signature file, cannot perform signature validation."
+                    echo "failed importing GPG public key, cannot perform signature validation."
                 fi
+                # clean up temporary directory used for signature validation
+                rm -rf "$GNUPGHOME"; unset GNUPGHOME
             else
-                echo "failed importing GPG public key, cannot perform signature validation."
+                echo "failed downloading GPG public key, cannot perform signature validation."
             fi
-            # clean up temporary directory used for signature validation
-            rm -rf "$GNUPGHOME"; unset GNUPGHOME
-        else
-            echo "failed downloading GPG public key, cannot perform signature validation."
         fi
-    fi
 
-    # try checksum validation
-    if [ "$CHECKSUM_VERIFY" = "1" ]; then
-        local UPDATER_CHECKSUMFILE="$UPDATER_TEMPDIR/updater.checksum"
-        # try downloading checksum file
-        if curl -sSL "$UPDATER_CHECKSUMURL" -o "$UPDATER_CHECKSUMFILE"; then
-            # have to be in same directory as archive
-            pushd "$UPDATER_TEMPDIR"
-            if ! sha256sum --quiet --ignore-missing -c "$UPDATER_CHECKSUMFILE"; then
-                echo "failed to verify checksum of updater archive."
+        # try checksum validation
+        if [ "$CHECKSUM_VERIFY" = "1" ]; then
+            local UPDATER_CHECKSUMFILE="$UPDATER_TEMPDIR/updater.checksum"
+            # try downloading checksum file
+            if curl -sSL "$UPDATER_CHECKSUMURL" -o "$UPDATER_CHECKSUMFILE"; then
+                # have to be in same directory as archive
+                pushd "$UPDATER_TEMPDIR"
+                if ! sha256sum --quiet --ignore-missing -c "$UPDATER_CHECKSUMFILE"; then
+                    echo "failed to verify checksum of updater archive."
+                    popd
+                    exit 1
+                fi
                 popd
-                exit 1
+            else
+                echo "failed downloading checksum file, cannot perform checksum validation."
             fi
-            popd
-        else
-            echo "failed downloading checksum file, cannot perform checksum validation."
         fi
     fi
 
