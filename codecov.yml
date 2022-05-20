@@ -1,7 +1,0 @@
-flags:
-  nightly:
-    joined: false
-
-ignore:
-  - "**/msgp_gen.go" # ignore msgp-generated code
-  - "**/_string.go"  # ignore stringer-generated code
