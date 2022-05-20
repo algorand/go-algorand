@@ -120,14 +120,8 @@ var nodeCmd = &cobra.Command{
 	},
 }
 
-func getMissingCatchPointLabel(dataDir string) (label string, err error) {
-	client := ensureAlgodClient(dataDir)
-	vers, err := client.AlgodVersions()
-	if err != nil {
-		reportErrorf(errorNodeStatus, err)
-	}
-	genesis := strings.Split(vers.GenesisID, "-")
-	URL := "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis[0] + "/latest.catchpoint"
+func getMissingCatchPointLabel(genesis string) (label string, err error) {
+	URL := "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis + "/latest.catchpoint"
 	resp, err := http.Get(URL)
 	if err != nil {
 		return
@@ -149,7 +143,13 @@ var catchupCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
 			if abortCatchup == false && len(args) == 0 {
-				label, err := getMissingCatchPointLabel(dataDir)
+				client := ensureAlgodClient(dataDir)
+				vers, err := client.AlgodVersions()
+				if err != nil {
+					reportErrorf(errorNodeStatus, err)
+				}
+				genesis := strings.Split(vers.GenesisID, "-")
+				label, err := getMissingCatchPointLabel(genesis[0])
 				if err != nil {
 					fmt.Println(errorUnableToLookupCatchpointLabel)
 					os.Exit(1)
