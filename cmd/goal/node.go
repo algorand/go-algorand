@@ -126,11 +126,16 @@ func getMissingCatchPointLabel(genesis string) (label string, err error) {
 	if err != nil {
 		return
 	}
+	if resp.StatusCode != 200 {
+		err = errors.New(resp.Status)
+		return
+	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
 	label = string(body)
+	label = strings.TrimSuffix(label, "\n")
 	return
 }
 
@@ -148,8 +153,8 @@ var catchupCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(errorNodeStatus, err)
 				}
-				genesis := strings.Split(vers.GenesisID, "-")
-				label, err := getMissingCatchPointLabel(genesis[0])
+				genesis := strings.Split(vers.GenesisID, "-")[0]
+				label, err := getMissingCatchPointLabel(genesis)
 				if err != nil {
 					fmt.Println(errorUnableToLookupCatchpointLabel)
 					os.Exit(1)
