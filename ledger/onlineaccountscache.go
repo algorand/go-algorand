@@ -77,19 +77,40 @@ func (o *onlineAccountsCache) read(addr basics.Address, rnd basics.Round) (cache
 // write a single cachedOnlineAccount to the cache
 // thread locking semantics : write lock
 func (o *onlineAccountsCache) writeFront(addr basics.Address, acctData cachedOnlineAccount) bool {
-	if _, ok := o.accounts[addr]; !ok {
+	var l *list.List
+	var ok bool
+	if l, ok = o.accounts[addr]; !ok {
 		if o.full() {
 			return false
 		}
-		o.accounts[addr] = list.New()
+		l = list.New()
 	}
-	list := o.accounts[addr]
 	// do not insert if acctData would not be the newest entry in the cache
-	if list.Front() != nil && acctData.updRound <= list.Front().Value.(*cachedOnlineAccount).updRound {
+	if l.Front() != nil && acctData.updRound <= l.Front().Value.(*cachedOnlineAccount).updRound {
 		return false
 	}
-	o.accounts[addr].PushFront(&acctData)
+	l.PushFront(&acctData)
+	o.accounts[addr] = l
 	return true
+}
+
+// write a single cachedOnlineAccount to the cache only if there are some history entries
+// thread locking semantics : write lock
+func (o *onlineAccountsCache) writeFrontIfExist(addr basics.Address, acctData cachedOnlineAccount) {
+	var l *list.List
+	var ok bool
+	if l, ok = o.accounts[addr]; !ok {
+		return
+	}
+	if l.Len() == 0 {
+		return
+	}
+	// do not insert if acctData would not be the newest entry in the cache
+	if l.Front() != nil && acctData.updRound <= l.Front().Value.(*cachedOnlineAccount).updRound {
+		return
+	}
+	l.PushFront(&acctData)
+	o.accounts[addr] = l
 }
 
 // prune trims the onlineAccountsCache by only keeping entries that would give account state

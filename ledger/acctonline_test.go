@@ -1031,9 +1031,8 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, data.VotingData.VoteLastValid)
 
-			cachedData, has = oa.onlineAccountsCache.read(addrB, 1)
-			require.True(t, has)
-			require.NotEmpty(t, cachedData.VoteLastValid)
+			_, has = oa.onlineAccountsCache.read(addrB, 1)
+			require.True(t, has) // full history loaded when looked up addrB prev time
 			_, err = oa.lookupOnlineAccountData(1, addrB)
 			require.Error(t, err)
 			pad, err = oa.accountsq.lookupOnline(addrB, 1)
@@ -1061,8 +1060,8 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		_, has = oa.accounts[addrB]
 		require.False(t, has)
 		cachedData, has = oa.onlineAccountsCache.read(addrB, 1)
-		require.True(t, has)
-		require.NotEmpty(t, cachedData.VoteLastValid)
+		require.False(t, has) // cache miss, we do not write into the cache non-complete history after updates
+		require.Empty(t, cachedData.VoteLastValid)
 		data, err = oa.lookupOnlineAccountData(1, addrB)
 		require.NoError(t, err)
 		require.NotEmpty(t, data.VotingData.VoteLastValid)

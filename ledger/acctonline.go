@@ -107,7 +107,8 @@ type onlineAccounts struct {
 	baseOnlineAccounts lruOnlineAccounts
 
 	// onlineAccountsCache contains up to onlineAccountsCacheMaxSize accounts with their complete history
-	// for the range [Lastest - MaxBalLookback, Latest - lookback]
+	// for the range [Lastest - MaxBalLookback - X, Latest - lookback], where X = [0, commit range]
+	// and alway containing an entry for Lastest - MaxBalLookback + 1 if some account is cached.
 	// The invariant is held by
 	// 1) loading a full history when new accounts get added
 	// 2) adding online accounts state changes when flushing to disk
@@ -489,7 +490,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
 		ao.baseOnlineAccounts.write(persistedAcct)
-		ao.onlineAccountsCache.writeFront(
+		ao.onlineAccountsCache.writeFrontIfExist(
 			persistedAcct.addr,
 			cachedOnlineAccount{
 				baseOnlineAccountData: persistedAcct.accountData,
@@ -619,105 +620,102 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
 	var persistedData persistedOnlineAccountData
-	for {
-		currentDbRound := ao.cachedDBRoundOnline
-		currentDeltaLen := len(ao.deltas)
-		offset, err = ao.roundOffset(rnd)
-		inHistory := false
-		if err != nil {
-			var roundOffsetError *RoundOffsetError
-			if !errors.As(err, &roundOffsetError) {
-				return
-			}
-			// the round number cannot be found in deltas, it is in history
-			inHistory = true
-			err = nil
-		}
-		paramsOffset, err = ao.roundParamsOffset(rnd)
-		if err != nil {
+
+	offset, err = ao.roundOffset(rnd)
+	inHistory := false
+	if err != nil {
+		var roundOffsetError *RoundOffsetError
+		if !errors.As(err, &roundOffsetError) {
 			return
 		}
+		// the round number cannot be found in deltas, it is in history
+		inHistory = true
+		err = nil
+	}
+	paramsOffset, err = ao.roundParamsOffset(rnd)
+	if err != nil {
+		return
+	}
 
-		rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
-		rewardsLevel = ao.onlineRoundParamsData[paramsOffset].RewardsLevel
+	rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
+	rewardsLevel = ao.onlineRoundParamsData[paramsOffset].RewardsLevel
 
-		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
-		if !inHistory {
-			macct, indeltas := ao.accounts[addr]
-			if indeltas {
-				// Check if this is the most recent round, in which case, we can
-				// use a cache of the most recent account state.
-				if offset == uint64(len(ao.deltas)) {
-					return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
-				}
-				// the account appears in the deltas, but we don't know if it appears in the
-				// delta range of [0..offset], so we'll need to check :
-				// Traverse the deltas backwards to ensure that later updates take
-				// priority if present.
-				for offset > 0 {
-					offset--
-					d, ok := ao.deltas[offset].GetData(addr)
-					if ok {
-						return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
-					}
+	// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
+	if !inHistory {
+		macct, indeltas := ao.accounts[addr]
+		if indeltas {
+			// Check if this is the most recent round, in which case, we can
+			// use a cache of the most recent account state.
+			if offset == uint64(len(ao.deltas)) {
+				return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+			}
+			// the account appears in the deltas, but we don't know if it appears in the
+			// delta range of [0..offset], so we'll need to check :
+			// Traverse the deltas backwards to ensure that later updates take
+			// priority if present.
+			for offset > 0 {
+				offset--
+				d, ok := ao.deltas[offset].GetData(addr)
+				if ok {
+					return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
 				}
 			}
-		}
-
-		if macct, has := ao.onlineAccountsCache.read(addr, rnd); has {
-			return macct.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
-		}
-
-		ao.accountsMu.RUnlock()
-		needUnlock = false
-
-		// No updates of this account in the in-memory deltas; use on-disk DB.
-		// The check in roundOffset() made sure the round is exactly the one
-		// present in the on-disk DB.  As an optimization, we avoid creating
-		// a separate transaction here, and directly use a prepared SQL query
-		// against the database.
-		persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
-		if persistedData.round == currentDbRound {
-			if persistedData.rowid != 0 {
-				// if we read actual data return it
-				ao.accountsMu.Lock()
-				ao.onlineAccountsCache.clear(addr)
-				if !ao.onlineAccountsCache.full() {
-					persistedDataHistory, err := ao.accountsq.lookupOnlineHistory(addr)
-					if err != nil {
-						ao.accountsMu.Unlock()
-						return ledgercore.OnlineAccountData{}, err
-					}
-					for _, data := range persistedDataHistory {
-						written := ao.onlineAccountsCache.writeFront(
-							data.addr,
-							cachedOnlineAccount{
-								baseOnlineAccountData: data.accountData,
-								updRound:              data.updRound,
-							})
-						if !written {
-							err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.addr.String(), data.updRound)
-							return ledgercore.OnlineAccountData{}, err
-						}
-					}
-				}
-				ao.accountsMu.Unlock()
-				return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
-			}
-			// otherwise return empty
-			return ledgercore.OnlineAccountData{}, err
-		}
-
-		if persistedData.round < currentDbRound {
-			ao.log.Errorf("accountUpdates.lookupOnlineAccountData: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-			return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
-		}
-		ao.accountsMu.RLock()
-		needUnlock = true
-		for currentDbRound >= ao.cachedDBRoundOnline && currentDeltaLen == len(ao.deltas) {
-			ao.accountsReadCond.Wait()
 		}
 	}
+
+	if macct, has := ao.onlineAccountsCache.read(addr, rnd); has {
+		return macct.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+	}
+
+	ao.accountsMu.RUnlock()
+	needUnlock = false
+
+	// No updates of this account in the in-memory deltas; use on-disk DB.
+	// As an optimization, we avoid creating
+	// a separate transaction here, and directly use a prepared SQL query
+	// against the database.
+	persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
+	if persistedData.rowid != 0 { // if we read actual data return it
+
+		// lookupOnlineHistory does not fetch the account db round because of the following observation:
+		// 1. ao.onlineAccountsCache update happens with ao.accountsMu taken below and in postCommit
+		// 2. If we started reading the history (lookupOnlineHistory)
+		//   * before commitRound or while it is running => OK, read what is in DB and then add new entries in postCommit
+		//     - if commitRound deletes some history after, the cache has additional entries and updRound comparison gets a right value
+		//   * after commitRound but before postCommit => OK, read full history, ignore the update from postCommit in writeFront's updRound comparison
+		//   * after postCommit => OK, postCommit does not add new entry with writeFrontIfExist, but here all the full history is loaded
+		persistedDataHistory, err := ao.accountsq.lookupOnlineHistory(addr)
+		if err != nil {
+			return ledgercore.OnlineAccountData{}, err
+		}
+		err = func() error {
+			ao.accountsMu.Lock()
+			defer ao.accountsMu.Unlock()
+			ao.onlineAccountsCache.clear(addr)
+			if !ao.onlineAccountsCache.full() {
+				for _, data := range persistedDataHistory {
+					written := ao.onlineAccountsCache.writeFront(
+						data.addr,
+						cachedOnlineAccount{
+							baseOnlineAccountData: data.accountData,
+							updRound:              data.updRound,
+						})
+					if !written {
+						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.addr.String(), data.updRound)
+						return err
+					}
+				}
+			}
+			return nil
+		}()
+		if err != nil {
+			return ledgercore.OnlineAccountData{}, err
+		}
+		return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
+	}
+
+	// otherwise return empty
+	return ledgercore.OnlineAccountData{}, err
 }
 
 // onlineTop returns the top n online accounts, sorted by their normalized
