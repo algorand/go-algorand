@@ -90,24 +90,24 @@ func TestTagCounterWriteMetric(t *testing.T) {
 
 	var sbOut strings.Builder
 	tc.WriteMetric(&sbOut, `host="myhost"`)
-	tx_expected := `# HELP count_msgs_TX number of TX messages
+	txExpected := `# HELP count_msgs_TX number of TX messages
 # TYPE count_msgs_TX counter
 count_msgs_TX{host="myhost"} 101
 `
-	rx_expected := `# HELP count_msgs_RX number of RX messages
+	rxExpected := `# HELP count_msgs_RX number of RX messages
 # TYPE count_msgs_RX counter
 count_msgs_RX{host="myhost"} 0
 `
 	expfmt := sbOut.String()
-	require.True(t, expfmt == tx_expected+rx_expected || expfmt == rx_expected+tx_expected, "bad fmt: %s", expfmt)
+	require.True(t, expfmt == txExpected+rxExpected || expfmt == rxExpected+txExpected, "bad fmt: %s", expfmt)
 
 	tc2 := NewTagCounter("declared", "number of {TAG}s", "A", "B")
-	a_expected := "# HELP declared_A number of As\n# TYPE declared_A counter\ndeclared_A{host=\"h\"} 0\n"
-	b_expected := "# HELP declared_B number of Bs\n# TYPE declared_B counter\ndeclared_B{host=\"h\"} 0\n"
+	aExpected := "# HELP declared_A number of As\n# TYPE declared_A counter\ndeclared_A{host=\"h\"} 0\n"
+	bExpected := "# HELP declared_B number of Bs\n# TYPE declared_B counter\ndeclared_B{host=\"h\"} 0\n"
 	sbOut = strings.Builder{}
 	tc2.WriteMetric(&sbOut, `host="h"`)
 	expfmt = sbOut.String()
-	require.True(t, expfmt == a_expected+b_expected || expfmt == b_expected+a_expected, "bad fmt: %s", expfmt)
+	require.True(t, expfmt == aExpected+bExpected || expfmt == bExpected+aExpected, "bad fmt: %s", expfmt)
 }
 
 func BenchmarkTagCounter(b *testing.B) {
