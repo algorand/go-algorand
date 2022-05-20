@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
@@ -287,7 +288,12 @@ func TestWorkerAllSigs(t *testing.T) {
 
 			require.Equal(t, tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			msg, err := GenerateStateProofMessage(s, tx.Txn.StateProofIntervalLatestRound, proto.StateProofInterval)
+			stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+			require.NoError(t, err)
+
+			votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
+
+			msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 			require.NoError(t, err)
 			require.Equal(t, msg, tx.Txn.StateProofMessage)
 
@@ -346,7 +352,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
 
-	msg, err := GenerateStateProofMessage(s, tx.Txn.StateProofIntervalLatestRound, proto.StateProofInterval)
+	stateProofLatestRound, err := s.BlockHdr(tx.Txn.StateProofIntervalLatestRound)
+	require.NoError(t, err)
+
+	votersRound := tx.Txn.StateProofIntervalLatestRound.SubSaturate(basics.Round(proto.StateProofInterval))
+
+	msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
 	require.NoError(t, err)
 	require.Equal(t, msg, tx.Txn.StateProofMessage)
 
@@ -511,7 +522,13 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	}
 
 	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
+	dbs, _ := dbOpenTest(t, true)
+
+	logger := logging.NewLogger()
+	logger.SetOutput(ioutil.Discard)
+
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+
 	w.Start()
 	defer w.Shutdown()
 	proto := config.Consensus[protocol.ConsensusFuture]

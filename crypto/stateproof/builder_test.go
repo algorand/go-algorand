@@ -83,17 +83,17 @@ func generateTestSigner(firstValid uint64, lastValid uint64, interval uint64, a 
 	return signer
 }
 
-func generateProofForTesting(a *require.Assertions) paramsForTest {
-	// Doing a full test of 1M accounts takes too much CPU time in CI.
-	doLargeTest := false
+func generateProofForTesting(a *require.Assertions, doLargeTest bool) paramsForTest {
 
 	totalWeight := 10000000
-	npartHi := 10
-	npartLo := 9990
+	npartHi := 2
+	npartLo := 100
+	stateproofIntervals := uint64(4) // affects the number of keys that will be generated
 
 	if doLargeTest {
 		npartHi *= 100
 		npartLo *= 100
+		stateproofIntervals = 20
 	}
 
 	npart := npartHi + npartLo
@@ -102,7 +102,7 @@ func generateProofForTesting(a *require.Assertions) paramsForTest {
 	provenWt := uint64(totalWeight / 2)
 
 	// Share the key; we allow the same vote key to appear in multiple accounts..
-	key := generateTestSigner(0, uint64(stateProofIntervalForTests)*20+1, stateProofIntervalForTests, a)
+	key := generateTestSigner(0, uint64(stateProofIntervalForTests)*stateproofIntervals+1, stateProofIntervalForTests, a)
 	var parts []basics.Participant
 	var sigs []merklesignature.Signature
 	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
@@ -151,7 +151,7 @@ func TestBuildVerify(t *testing.T) {
 
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, true)
 	sProof := p.sp
 
 	var someReveal Reveal

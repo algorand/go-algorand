@@ -14,18 +14,29 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package stateproof
+package bookkeeping
 
 import (
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-func TestGenerateStateProofMessage(t *testing.T) {
+func TestConvertSha256Header(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	_, err := GenerateStateProofMessage(nil, 240, 256)
-	a.Error(err)
+	var gh crypto.Digest
+	crypto.RandBytes(gh[:])
+
+	var txnCommit TxnCommitments
+	crypto.RandBytes(txnCommit.Sha256Commitment[:])
+	blockHeader := BlockHeader{Round: 200, GenesisHash: gh, TxnCommitments: txnCommit}
+	sha256Header := blockHeader.ToSha256BlockHeader()
+
+	a.Equal(basics.Round(200), sha256Header.RoundNumber)
+	a.Equal(txnCommit.Sha256Commitment[:], []byte(sha256Header.Sha256TxnCommitment))
+	a.Equal(gh, sha256Header.GenesisHash)
 }

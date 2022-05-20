@@ -115,6 +115,7 @@ func TestStateProofs(t *testing.T) {
 			}
 		}
 
+		var prevStateProofMessage stateproofmsg.Message
 		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
 			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
 
@@ -142,8 +143,13 @@ func TestStateProofs(t *testing.T) {
 			nextStateProofBlock, err := libgoal.BookkeepingBlock(nextStateProofRound)
 			r.NoError(err)
 
+			if !prevStateProofMessage.MsgIsZero() {
+				//if we have a previous stateproof message we can verify the current stateproof using data from it
+				verifier := sp.MkVerifierWithLnProvenWeight(prevStateProofMessage.VotersCommitment, prevStateProofMessage.LnProvenWeight, consensusParams.StateProofStrengthTarget)
+				err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
+				r.NoError(err)
+			}
 			var votersRoot = make([]byte, sp.HashSize)
-
 			copy(votersRoot[:], lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment)
 
 			provenWeight, overflowed := basics.Muldiv(lastStateProofBlock.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw, uint64(consensusParams.StateProofWeightThreshold), 1<<32)
@@ -154,7 +160,7 @@ func TestStateProofs(t *testing.T) {
 
 			err = verifier.Verify(uint64(nextStateProofBlock.Round()), stateProofMessage.IntoStateProofMessageHash(), &stateProof)
 			r.NoError(err)
-
+			prevStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
 	}

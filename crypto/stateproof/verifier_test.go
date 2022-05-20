@@ -30,7 +30,7 @@ func TestVerifyRevelForEachPosition(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, false)
 	sProof := p.sp
 
 	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
@@ -61,7 +61,7 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, false)
 	sProof := p.sp
 	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
 	a.NoError(err)
@@ -105,7 +105,7 @@ func TestVerifyBadSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	p := generateProofForTesting(a)
+	p := generateProofForTesting(a, false)
 	sProof := p.sp
 
 	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
@@ -136,4 +136,22 @@ func TestVerifyZeroProvenWeight(t *testing.T) {
 	partcommit := crypto.GenericDigest{}
 	_, err := MkVerifier(partcommit, 0, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
+}
+
+func TestEqualVerifiers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	p := generateProofForTesting(a, false)
+	sProof := p.sp
+
+	verifier, err := MkVerifier(p.partCommitment, p.provenWeight, stateProofStrengthTargetForTests)
+	a.NoError(err)
+	err = verifier.Verify(stateProofIntervalForTests, p.data, &sProof)
+	a.NoError(err)
+
+	lnProvenWeight, err := LnIntApproximation(p.provenWeight)
+	verifierLnP := MkVerifierWithLnProvenWeight(p.partCommitment, lnProvenWeight, stateProofStrengthTargetForTests)
+
+	a.Equal(verifierLnP, verifier)
 }

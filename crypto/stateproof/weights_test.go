@@ -30,7 +30,7 @@ func TestMaxNumberOfRevealsInVerify(t *testing.T) {
 
 	signedWeight := uint64(10)
 	provenWeight := uint64(10)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	a.NoError(err)
 
 	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals+1, stateProofStrengthTargetForTests)
@@ -43,7 +43,7 @@ func TestMaxNumberOfReveals(t *testing.T) {
 
 	signedWeight := uint64(1<<10 + 1)
 	provenWeight := uint64(1 << 10)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	a.NoError(err)
 
 	_, err = numReveals(signedWeight, lnProvenWt, stateProofStrengthTargetForTests)
@@ -56,7 +56,7 @@ func TestVerifyProvenWeight(t *testing.T) {
 
 	signedWeight := uint64(1 << 11)
 	provenWeight := uint64(1 << 10)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	a.NoError(err)
 
 	numOfReveals, err := numReveals(signedWeight, lnProvenWt, stateProofStrengthTargetForTests)
@@ -75,7 +75,7 @@ func TestVerifyZeroNumberOfRevealsEquation(t *testing.T) {
 
 	signedWeight := uint64(1<<15 + 1)
 	provenWeight := uint64(1 << 15)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	a.NoError(err)
 
 	_, err = numReveals(signedWeight, lnProvenWt, stateProofStrengthTargetForTests)
@@ -86,7 +86,7 @@ func TestLnWithPrecision(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	val, err := lnIntApproximation(2)
+	val, err := LnIntApproximation(2)
 	a.NoError(err)
 
 	// check that precisionBits will not overflow
@@ -96,7 +96,7 @@ func TestLnWithPrecision(t *testing.T) {
 	a.GreaterOrEqual(float64(val)/float64(exp), math.Log(2))
 	a.Greater(math.Log(2), float64(val-1)/float64(exp))
 
-	ln2, err := lnIntApproximation(2)
+	ln2, err := LnIntApproximation(2)
 	a.NoError(err)
 	a.Equal(ln2IntApproximation, ln2)
 }
@@ -107,7 +107,7 @@ func TestVerifyLimits(t *testing.T) {
 
 	signedWeight := uint64(0)
 	provenWeight := uint64(1<<10 - 1)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	a.NoError(err)
 
 	err = verifyWeights(signedWeight, lnProvenWt, MaxReveals-1, stateProofStrengthTargetForTests)
@@ -135,7 +135,7 @@ func TestNumRevealsApproxBound(t *testing.T) {
 func checkRatio(i int, sigWt uint64, secParam uint64, a *require.Assertions) {
 	provenWtRatio := 3 - (float64(i) / 10)
 	provenWt := uint64(float64(sigWt) / (provenWtRatio))
-	lnProvenWt, err := lnIntApproximation(provenWt)
+	lnProvenWt, err := LnIntApproximation(provenWt)
 	a.NoError(err)
 
 	numOfReveals, err := numReveals(sigWt, lnProvenWt, secParam)
@@ -159,7 +159,7 @@ func TestNumReveals(t *testing.T) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 2 * billion * microalgo
 	strengthTarget := uint64(stateProofStrengthTargetForTests)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	a.NoError(err)
 
 	for i := uint64(3); i < 10; i++ {
@@ -183,7 +183,7 @@ func BenchmarkVerifyWeights(b *testing.B) {
 	signedWeight := 110 * billion * microalgo
 	strengthTarget := uint64(stateProofStrengthTargetForTests)
 
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	require.NoError(b, err)
 
 	nr, err := numReveals(signedWeight, lnProvenWt, strengthTarget)
@@ -203,7 +203,7 @@ func BenchmarkNumReveals(b *testing.B) {
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
 	strengthTarget := uint64(stateProofStrengthTargetForTests)
-	lnProvenWt, err := lnIntApproximation(provenWeight)
+	lnProvenWt, err := LnIntApproximation(provenWeight)
 	require.NoError(b, err)
 
 	nr, err := numReveals(signedWeight, lnProvenWt, strengthTarget)
