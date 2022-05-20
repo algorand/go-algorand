@@ -687,6 +687,9 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.config.DNSSecurityRelayAddrEnforced() {
 		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
 	}
+	if wn.nodeInfo == nil {
+		wn.nodeInfo = &nopeNodeInfo{}
+	}
 	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
 	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer, maxIdleConnsPerHost)
