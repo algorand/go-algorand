@@ -627,6 +627,13 @@ func (au *accountUpdates) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, err
 	return au.onlineTotalsImpl(rnd)
 }
 
+// Totals returns the online totals of all accounts at the end of round rnd.
+func (au *accountUpdates) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	return au.totalsImpl(rnd)
+}
+
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
 func (au *accountUpdates) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	au.accountsMu.RLock()
@@ -737,6 +744,17 @@ func (au *accountUpdates) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos,
 
 	totals := au.roundTotals[offset]
 	return totals.Online.Money, nil
+}
+
+// totalsImpl returns the online totals of all accounts at the end of round rnd.
+func (au *accountUpdates) totalsImpl(rnd basics.Round) (ledgercore.AccountTotals, error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return ledgercore.AccountTotals{}, err
+	}
+
+	totals := au.roundTotals[offset]
+	return totals, nil
 }
 
 // latestTotalsImpl returns the totals of all accounts for the most recent round, as well as the round number
@@ -870,7 +888,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 // The rewards are added to the AccountData before returning.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccountData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
+func (au *accountUpdates) lookupLatest(optionalRound basics.Round, addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -951,7 +969,11 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
-		rnd = au.latest()
+		if optionalRound == 0 {
+			rnd = au.latest()
+		} else {
+			rnd = optionalRound
+		}
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return

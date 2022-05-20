@@ -229,7 +229,7 @@ func TestGetSupply(t *testing.T) {
 
 	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	err := handler.GetSupply(c)
+	err := handler.GetSupply(c, generatedV2.GetSupplyParams{})
 	require.NoError(t, err)
 }
 

@@ -176,6 +176,9 @@
             ]
           },
           {
+            "$ref": "#/parameters/round"
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -253,6 +256,9 @@
             "required": true
           },
           {
+            "$ref": "#/parameters/round"
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -328,6 +334,9 @@
             "name": "application-id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/round"
           },
           {
             "$ref": "#/parameters/format"
@@ -622,6 +631,11 @@
         ],
         "summary": "Get the current supply reported by the ledger.",
         "operationId": "GetSupply",
+        "parameters": [
+          {
+            "$ref": "#/parameters/round"
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/responses/SupplyResponse"
@@ -1264,6 +1278,9 @@
             "name": "application-id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/round"
           }
         ],
         "responses": {
@@ -1327,6 +1344,9 @@
             "name": "asset-id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/round"
           }
         ],
         "responses": {
@@ -2669,7 +2689,7 @@
     },
     "round": {
       "type": "integer",
-      "description": "Include results for the specified round.",
+      "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
       "name": "round",
       "in": "query"
     },

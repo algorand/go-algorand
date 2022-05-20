@@ -782,6 +782,9 @@ type AccountInformationParams struct {
 
 	// When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
 	Exclude *string `json:"exclude,omitempty"`
+
+	// Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
@@ -789,6 +792,9 @@ type AccountApplicationInformationParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+
+	// Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // AccountAssetInformationParams defines parameters for AccountAssetInformation.
@@ -796,6 +802,9 @@ type AccountAssetInformationParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+
+	// Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // GetPendingTransactionsByAddressParams defines parameters for GetPendingTransactionsByAddress.
@@ -806,6 +815,20 @@ type GetPendingTransactionsByAddressParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// GetApplicationByIDParams defines parameters for GetApplicationByID.
+type GetApplicationByIDParams struct {
+
+	// Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.
+	Round *uint64 `json:"round,omitempty"`
+}
+
+// GetAssetByIDParams defines parameters for GetAssetByID.
+type GetAssetByIDParams struct {
+
+	// Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.
@@ -825,6 +848,13 @@ type GetProofParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// GetSupplyParams defines parameters for GetSupply.
+type GetSupplyParams struct {
+
+	// Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // TealCompileParams defines parameters for TealCompile.
