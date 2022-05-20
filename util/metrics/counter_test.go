@@ -196,5 +196,5 @@ testname{host="myhost"} 0
 testname{host="myhost"} 2.3
 `
 	require.Equal(t, expected, sbOut.String())
-
+	c.Deregister(nil)
 }
