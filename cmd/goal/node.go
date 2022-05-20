@@ -120,24 +120,24 @@ var nodeCmd = &cobra.Command{
 	},
 }
 
-func getMissingCatchPointLabel(dataDir string) []string {
+func getMissingCatchPointLabel(dataDir string) (label string, err error) {
 	client := ensureAlgodClient(dataDir)
 	vers, err := client.AlgodVersions()
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
 	genesis := strings.Split(vers.GenesisID, "-")
-	resp, err := http.Get("https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis[0] + "/latest.catchpoint")
+	URL := "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis[0] + "/latest.catchpoint"
+	resp, err := http.Get(URL)
 	if err != nil {
-		fmt.Println(errorCatchpointLabelMissing)
-		os.Exit(1)
+		return
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(errorCatchpointLabelMissing)
-		os.Exit(1)
+		return
 	}
-	return []string{string(body)}
+	label = string(body)
+	return
 }
 
 var catchupCmd = &cobra.Command{
@@ -147,11 +147,17 @@ var catchupCmd = &cobra.Command{
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
-		if abortCatchup == false && len(args) == 0 {
-			onDataDirs(func(datadir string) { catchup(datadir, getMissingCatchPointLabel(datadir)) })
-		} else {
-			onDataDirs(func(datadir string) { catchup(datadir, args) })
-		}
+		onDataDirs(func(dataDir string) {
+			if abortCatchup == false && len(args) == 0 {
+				label, err := getMissingCatchPointLabel(dataDir)
+				if err != nil {
+					fmt.Println(errorUnableToLookupCatchpointLabel)
+					os.Exit(1)
+				}
+				args = append(args, label)
+			}
+			catchup(dataDir, args)
+		})
 	},
 }
 
