@@ -16,10 +16,10 @@ fi
 
 OS_LIST=(
     centos:7
-    centos:8
-    fedora:28
-    ubuntu:16.04
+    quay.io/centos/centos:stream8
+    fedora:34
     ubuntu:18.04
+    ubuntu:20.04
 )
 
 BUCKET=algorand-builds

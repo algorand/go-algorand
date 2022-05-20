@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ func TestExtraProgramPages(t *testing.T) {
 	walletHandle, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	accountInfo, err := client.AccountInformationV2(baseAcct)
+	accountInfo, err := client.AccountInformationV2(baseAcct, false)
 	a.NoError(err)
 	if accountInfo.AppsTotalExtraPages != nil {
 		a.Equal(*accountInfo.AppsTotalExtraPages, uint64(0))
@@ -104,7 +104,7 @@ return
 	a.NotNil(app1CreateTxn.ApplicationIndex)
 	app1ID := *app1CreateTxn.ApplicationIndex
 
-	accountInfo, err = client.AccountInformationV2(baseAcct)
+	accountInfo, err = client.AccountInformationV2(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
@@ -123,7 +123,7 @@ return
 	a.NoError(err)
 	a.NotNil(app1CreateTxn.ConfirmedRound)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct)
+	accountInfo, err = client.AccountInformationV2(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
@@ -145,7 +145,7 @@ return
 	a.NotNil(app2CreateTxn.ApplicationIndex)
 	app2ID := *app2CreateTxn.ApplicationIndex
 
-	accountInfo, err = client.AccountInformationV2(baseAcct)
+	accountInfo, err = client.AccountInformationV2(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages+app2ExtraPages))
@@ -164,7 +164,7 @@ return
 	a.NoError(err)
 	a.NotNil(app1DeleteTxn.ConfirmedRound)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct)
+	accountInfo, err = client.AccountInformationV2(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app2ExtraPages))
@@ -179,7 +179,7 @@ return
 	_, err = fixture.WaitForConfirmedTxn(*app1DeleteTxn.ConfirmedRound+5, baseAcct, txid)
 	a.NoError(err)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct)
+	accountInfo, err = client.AccountInformationV2(baseAcct, false)
 	a.NoError(err)
 	if accountInfo.AppsTotalExtraPages != nil {
 		a.Equal(*accountInfo.AppsTotalExtraPages, uint64(0))

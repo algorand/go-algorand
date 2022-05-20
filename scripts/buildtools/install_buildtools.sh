@@ -53,7 +53,7 @@ cd ${SCRIPTPATH}
 
 function get_go_version {
     cd "${SCRIPTPATH}"
-    VERSION=$( grep "$1" 2>/dev/null < ./go.mod | awk -F " " '{print $2}')
+    VERSION=$( grep "$1" 2>/dev/null < ./versions | awk -F " " '{print $2}')
     echo "$VERSION"
     return
 }
@@ -67,19 +67,17 @@ function install_go_module {
         MODULE=$1
     fi
 
-    # Check for version to go.mod version
+    # Check for version
     VERSION=$(get_go_version "$1")
 
-    # TODO: When we switch to 1.16 this should be changed to use 'go install'
-    #       instead of 'go get': https://tip.golang.org/doc/go1.16#modules
     if [ -z "$VERSION" ]; then
-        echo "Unable to install requested package '$1' (${MODULE}): no version listed in ${SCRIPTPATH}/go.mod"
+        echo "Unable to install requested package '$1' (${MODULE}): no version listed in ${SCRIPTPATH}/versions"
         exit 1
     else
-        OUTPUT=$(GO111MODULE=on go get "${MODULE}@${VERSION}" 2>&1)
+        OUTPUT=$(go install "${MODULE}@${VERSION}" 2>&1)
     fi
     if [ $? != 0 ]; then
-        echo "error: executing \"go get ${MODULE}\" failed : ${OUTPUT}"
+        echo "error: executing \"go install ${MODULE}\" failed : ${OUTPUT}"
         exit 1
     fi
 }

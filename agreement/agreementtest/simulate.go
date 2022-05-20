@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -82,6 +82,10 @@ func (i *instant) Zero() timers.Clock {
 	return i
 }
 
+func (i *instant) Since() time.Duration {
+	return 0
+}
+
 func (i *instant) runRound(r basics.Round) {
 	<-i.Z1 // wait until Zero is called
 	<-i.timeoutAtCalled
@@ -153,7 +157,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 		Logger:         log,
 		Accessor:       accessor,
 		Clock:          stopwatch,
-		Network:        gossip.WrapNetwork(new(blackhole), log),
+		Network:        gossip.WrapNetwork(new(blackhole), log, config.GetDefaultLocal()),
 		Ledger:         ledger,
 		BlockFactory:   proposalFactory,
 		BlockValidator: proposalValidator,

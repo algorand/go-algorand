@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ import (
 
 func TestDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Skipf("Skipping flaky test. Re-enable with #3267")
 
 	if testing.Short() {
 		t.Skip()

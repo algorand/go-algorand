@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -57,6 +57,17 @@ func FileExists(filePath string) bool {
 	_, err := os.Stat(filePath)
 	fileExists := err == nil
 	return fileExists
+}
+
+// IsEmpty recursively check path for files and returns true if there are none.
+func IsEmpty(path string) bool {
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		return os.ErrExist
+	})
+	return err == nil
 }
 
 // ExeDir returns the absolute path to the current executing binary (not including the filename)

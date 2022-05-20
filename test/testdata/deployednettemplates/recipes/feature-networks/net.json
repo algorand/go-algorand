@@ -1,0 +1,83 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1",
+      "Nodes": [
+        {
+          "Name": "relay1",
+          "IsRelay": true,
+          "Wallets": [
+            {
+              "Name": "Wallet1-R1",
+              "ParticipationOnly": false
+            },
+            {
+              "Name": "Wallet3-Dispenser",
+              "ParticipationOnly": false
+            }
+          ],
+          "NetAddress": "{{NetworkPort}}",
+          "APIEndpoint": "{{APIEndpoint}}",
+          "APIToken": "{{APIToken}}",
+          "EnableTelemetry": true,
+          "TelemetryURI": "telemetry.feature-networks.algodev.network:9105",
+          "EnableMetrics": true,
+          "MetricsURI": "{{MetricsURI}}",
+          "EnableService": false,
+          "EnableBlockStats": true,
+          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",  \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
+        }
+      ]
+    },
+    {
+      "Name": "R2",
+      "Nodes": [
+        {
+          "Name": "relay2",
+          "IsRelay": true,
+          "Wallets": [
+            {
+              "Name": "Wallet2-R2",
+              "ParticipationOnly": false
+            }
+          ],
+          "NetAddress": "{{NetworkPort}}",
+          "APIEndpoint": "{{APIEndpoint}}",
+          "APIToken": "{{APIToken}}",
+          "EnableTelemetry": true,
+          "TelemetryURI": "telemetry.feature-networks.algodev.network:9105",
+          "EnableMetrics": true,
+          "MetricsURI": "{{MetricsURI}}",
+          "EnableService": false,
+          "EnableBlockStats": true,
+          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
+        }
+      ]
+    },
+    {
+      "Name": "NPN1",
+      "Nodes": [
+        {
+          "Name": "node1",
+          "IsRelay": false,
+          "Wallets": [
+            {
+              "Name": "Wallet4-NPN1",
+              "ParticipationOnly": false
+            }
+          ],
+          "NetAddress": "{{NetworkPort}}",
+          "APIEndpoint": "{{APIEndpoint}}",
+          "APIToken": "{{APIToken}}",
+          "EnableTelemetry": true,
+          "TelemetryURI": "telemetry.feature-networks.algodev.network:9105",
+          "EnableMetrics": true,
+          "MetricsURI": "{{MetricsURI}}",
+          "EnableService": false,
+          "EnableBlockStats": true,
+          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
+        }
+      ]
+    }
+  ]
+}

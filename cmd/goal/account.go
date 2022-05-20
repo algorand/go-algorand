@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,11 +59,12 @@ var (
 	partKeyOutDir      string
 	partKeyFile        string
 	partKeyDeleteInput bool
-	listpartkeyCompat  bool
+	partkeyCompat      bool
 	importDefault      bool
 	mnemonic           string
 	dumpOutFile        string
 	listAccountInfo    bool
+	onlyShowAssetIds   bool
 )
 
 func init() {
@@ -126,6 +127,7 @@ func init() {
 	// Info flags
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
 	infoCmd.MarkFlagRequired("address")
+	infoCmd.Flags().BoolVar(&onlyShowAssetIds, "onlyShowAssetIds", false, "Only show ASA IDs and not pull asset metadata")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -159,7 +161,7 @@ func init() {
 	addParticipationKeyCmd.Flags().Uint64VarP(&roundLastValid, "roundLastValid", "", 0, "The last round for which the generated partkey will be valid")
 	addParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	addParticipationKeyCmd.Flags().StringVarP(&partKeyOutDir, "outdir", "o", "", "Save participation key file to specified output directory to (for offline creation)")
-	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
+	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys (defaults to sqrt of validity window)")
 
 	// installParticipationKey flags
 	installParticipationKeyCmd.Flags().StringVar(&partKeyFile, "partkey", "", "Participation key file to install")
@@ -167,7 +169,10 @@ func init() {
 	installParticipationKeyCmd.Flags().BoolVar(&partKeyDeleteInput, "delete-input", false, "Acknowledge that installpartkey will delete the input key file")
 
 	// listpartkey flags
-	listParticipationKeysCmd.Flags().BoolVarP(&listpartkeyCompat, "compatibility", "c", false, "Print output in compatibility mode. This option will be removed in a future release, please use REST API for tooling.")
+	listParticipationKeysCmd.Flags().BoolVarP(&partkeyCompat, "compatibility", "c", false, "Print output in compatibility mode. This option will be removed in a future release, please use REST API for tooling.")
+
+	// partkeyinfo flags
+	partkeyInfoCmd.Flags().BoolVarP(&partkeyCompat, "compatibility", "c", false, "Print output in compatibility mode. This option will be removed in a future release, please use REST API for tooling.")
 
 	// import flags
 	importCmd.Flags().BoolVarP(&importDefault, "default", "f", false, "Set this account as the default one")
@@ -391,7 +396,7 @@ var newMultisigCmd = &cobra.Command{
 			}
 		}
 		if duplicatesDetected {
-			reportWarnln(warnMultisigDuplicatesDetected)
+			reportWarnRawln(warnMultisigDuplicatesDetected)
 		}
 		// Generate a new address in the default wallet
 		addr, err := client.CreateMultisigAccount(wh, threshold, args)
@@ -480,7 +485,7 @@ var listCmd = &cobra.Command{
 
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
-			response, _ := client.AccountInformationV2(addr.Addr)
+			response, _ := client.AccountInformationV2(addr.Addr, true)
 			// it's okay to proceed without algod info
 
 			// Display this information to the user
@@ -497,7 +502,7 @@ var listCmd = &cobra.Command{
 			}
 
 			if listAccountInfo {
-				hasError := printAccountInfo(client, addr.Addr, response)
+				hasError := printAccountInfo(client, addr.Addr, false, response)
 				accountInfoError = accountInfoError || hasError
 			}
 		}
@@ -516,19 +521,19 @@ var infoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, true)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		hasError := printAccountInfo(client, accountAddress, response)
+		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIds, response)
 		if hasError {
 			os.Exit(1)
 		}
 	},
 }
 
-func printAccountInfo(client libgoal.Client, address string, account generatedV2.Account) bool {
+func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account generatedV2.Account) bool {
 	var createdAssets []generatedV2.Asset
 	if account.CreatedAssets != nil {
 		createdAssets = make([]generatedV2.Asset, len(*account.CreatedAssets))
@@ -608,6 +613,10 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, assetHolding := range heldAssets {
+		if onlyShowAssetIds {
+			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetId)
+			continue
+		}
 		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
 		if err != nil {
 			hasError = true
@@ -693,6 +702,8 @@ func printAccountInfo(client libgoal.Client, address string, account generatedV2
 		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", localState.Id, usedInts, allocatedInts, usedBytes, allocatedBytes)
 	}
 
+	fmt.Fprintf(report, "Minimum Balance:\t%v microAlgos\n", account.MinBalance)
+
 	if hasError {
 		fmt.Fprint(os.Stderr, errorReport.String())
 	}
@@ -708,7 +719,7 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -753,7 +764,7 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		response, err := client.AccountInformationV2(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -872,11 +883,19 @@ var addParticipationKeyCmd = &cobra.Command{
 		// Generate a participation keys database and install it
 		client := ensureFullClient(dataDir)
 
-		_, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+		reportInfof("Please stand by while generating keys. This might take a few minutes...")
+
+		var err error
+		participationGen := func() {
+			_, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+		}
+
+		util.RunFuncWithSpinningCursor(participationGen)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		fmt.Println("Participation key generation successful")
+
+		reportInfof("Participation key generation successful")
 	},
 }
 
@@ -935,6 +954,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 		if roundLastValid <= (currentRound + proto.MaxTxnLife) {
 			reportErrorf(errLastRoundInvalid, currentRound)
 		}
+		txRoundLastValid := currentRound + proto.MaxTxnLife
 
 		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 		parts, err := client.ListParticipationKeyFiles()
@@ -949,25 +969,35 @@ var renewParticipationKeyCmd = &cobra.Command{
 			}
 		}
 
-		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
+		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
 	},
 }
 
-func generateAndRegisterPartKey(address string, currentRound, lastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
+func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
-	part, keyPath, err := client.GenParticipationKeysTo(address, currentRound, lastValidRound, dilution, "")
-	if err != nil {
-		return fmt.Errorf(errorRequestFail, err)
+	var part algodAcct.Participation
+	var keyPath string
+	var err error
+	genFunc := func() {
+		part, keyPath, err = client.GenParticipationKeysTo(address, currentRound, keyLastValidRound, dilution, "")
+		if err != nil {
+			err = fmt.Errorf(errorRequestFail, err)
+		}
+		fmt.Println("Participation key generation successful")
 	}
-	fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, lastValidRound)
+	fmt.Println("Please stand by while generating keys. This might take a few minutes...")
+	util.RunFuncWithSpinningCursor(genFunc)
+	if err != nil {
+		return err
+	}
 
 	// Now register it as our new online participation key
 	goOnline := true
 	txFile := ""
-	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, lastValidRound, fee, leaseBytes, dataDir, client)
+	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
@@ -1024,6 +1054,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	if lastValidRound <= (currentRound + proto.MaxTxnLife) {
 		return fmt.Errorf(errLastRoundInvalid, currentRound)
 	}
+	txLastValidRound := currentRound + proto.MaxTxnLife
 
 	var anyErrors bool
 
@@ -1043,7 +1074,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 		}
 
 		address := renewPart.Address().String()
-		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
+		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, txLastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
 			anyErrors = true
@@ -1069,6 +1100,7 @@ func uintToStr(number uint64) string {
 // legacyListParticipationKeysCommand prints key information in the same
 // format as earlier versions of goal. Some users are using this information
 // in scripts and need some extra time to migrate to the REST API.
+// DEPRECATED
 func legacyListParticipationKeysCommand() {
 	dataDir := ensureSingleDataDir()
 
@@ -1118,7 +1150,7 @@ var listParticipationKeysCmd = &cobra.Command{
 	Long:  `List all participation keys tracked by algod along with summary of additional information. For detailed key information use 'partkeyinfo'.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		if listpartkeyCompat {
+		if partkeyCompat {
 			legacyListParticipationKeysCommand()
 			return
 		}
@@ -1364,12 +1396,57 @@ func strOrNA(value *uint64) string {
 	return uintToStr(*value)
 }
 
+// legacyPartkeyInfoCommand prints key information in the same
+// format as earlier versions of goal. Some users are using this information
+// in scripts and need some extra time to migrate to alternatives.
+// DEPRECATED
+func legacyPartkeyInfoCommand() {
+	type partkeyInfo struct {
+		_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
+		Address         string                          `codec:"acct"`
+		FirstValid      basics.Round                    `codec:"first"`
+		LastValid       basics.Round                    `codec:"last"`
+		VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+		SelectionID     crypto.VRFVerifier              `codec:"sel"`
+		VoteKeyDilution uint64                          `codec:"voteKD"`
+	}
+
+	onDataDirs(func(dataDir string) {
+		fmt.Printf("Dumping participation key info from %s...\n", dataDir)
+		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
+
+		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
+		parts, err := client.ListParticipationKeyFiles()
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		for filename, part := range parts {
+			fmt.Println("------------------------------------------------------------------")
+			info := partkeyInfo{
+				Address:         part.Address().String(),
+				FirstValid:      part.FirstValid,
+				LastValid:       part.LastValid,
+				VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
+				SelectionID:     part.VRFSecrets().PK,
+				VoteKeyDilution: part.KeyDilution,
+			}
+			infoString := protocol.EncodeJSON(&info)
+			fmt.Printf("File: %s\n%s\n", filename, string(infoString))
+		}
+	})
+}
+
 var partkeyInfoCmd = &cobra.Command{
 	Use:   "partkeyinfo",
 	Short: "Output details about all available part keys",
 	Long:  `Output details about all available part keys in the specified data directory(ies), such as key validity period.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
+		if partkeyCompat {
+			legacyPartkeyInfoCommand()
+			return
+		}
 
 		onDataDirs(func(dataDir string) {
 			fmt.Printf("Dumping participation key info from %s...\n", dataDir)
@@ -1396,8 +1473,9 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
 				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
 				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
-				// PKI TODO: enable with state proof support.
-				//fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(part.StateProofKey))
+				if part.Key.StateProofKey != nil {
+					fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+				}
 			}
 		})
 	},

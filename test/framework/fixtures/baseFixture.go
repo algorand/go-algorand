@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
+	"runtime"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -33,6 +35,15 @@ type baseFixture struct {
 	testDir     string
 	testDirTmp  bool
 	instance    Fixture
+}
+
+func getTestDir() string {
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		return path.Join(path.Dir(filename), "..", "..")
+	}
+	// fallback to the legacy GOPATH location.
+	return os.ExpandEnv("${GOPATH}/src/github.com/algorand/go-algorand/test/")
 }
 
 func (f *baseFixture) initialize(instance Fixture) {
@@ -49,7 +60,7 @@ func (f *baseFixture) initialize(instance Fixture) {
 	}
 	f.testDataDir = os.Getenv("TESTDATADIR")
 	if f.testDataDir == "" {
-		f.testDataDir = os.ExpandEnv("${GOPATH}/src/github.com/algorand/go-algorand/test/testdata")
+		f.testDataDir = path.Join(getTestDir(), "testdata")
 	}
 }
 

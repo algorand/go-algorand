@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ func TestTagCounter(t *testing.T) {
 	tc.WriteMetric(&sb, "")
 	require.Equal(t, "", sb.String())
 
-	result := make(map[string]string)
+	result := make(map[string]float64)
 	tc.AddMetric(result)
 	require.Equal(t, 0, len(result))
 

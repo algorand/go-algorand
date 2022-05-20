@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -68,6 +68,7 @@ func TestTxnMerkle(t *testing.T) {
 			b.Payset = append(b.Payset, stib)
 
 			var e txnMerkleElem
+			e.hashType = crypto.Sha512_256
 			e.txn = txn
 			e.stib = stib
 			elems = append(elems, e)
@@ -80,10 +81,60 @@ func TestTxnMerkle(t *testing.T) {
 		for i := uint64(0); i < ntxn; i++ {
 			proof, err := tree.Prove([]uint64{i})
 			require.NoError(t, err)
-
-			elemVerif := make(map[uint64]crypto.Digest)
-			elemVerif[i] = elems[i].Hash()
+			elemVerif := make(map[uint64]crypto.Hashable)
+			elemVerif[i] = &elems[i]
 			err = merklearray.Verify(root, elemVerif, proof)
+			require.NoError(t, err)
+		}
+	}
+}
+
+func TestBlock_TxnMerkleTreeSHA256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for ntxn := uint64(0); ntxn < 128; ntxn++ {
+		var b Block
+		b.CurrentProtocol = protocol.ConsensusFuture
+		crypto.RandBytes(b.BlockHeader.GenesisHash[:])
+
+		var elems []txnMerkleElem
+
+		for i := uint64(0); i < ntxn; i++ {
+			txn := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					GenesisHash: b.BlockHeader.GenesisHash,
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Amount: basics.MicroAlgos{Raw: i},
+				},
+			}
+
+			sigtxn := transactions.SignedTxn{Txn: txn}
+			ad := transactions.ApplyData{}
+
+			stib, err := b.BlockHeader.EncodeSignedTxn(sigtxn, ad)
+			require.NoError(t, err)
+
+			b.Payset = append(b.Payset, stib)
+
+			var e txnMerkleElem
+			e.hashType = crypto.Sha256
+			e.txn = txn
+			e.stib = stib
+			elems = append(elems, e)
+		}
+
+		tree, err := b.TxnMerkleTreeSHA256()
+		require.NoError(t, err)
+
+		root := tree.Root()
+		for i := uint64(0); i < ntxn; i++ {
+			proof, err := tree.Prove([]uint64{i})
+			require.NoError(t, err)
+			elemVerif := make(map[uint64]crypto.Hashable)
+			elemVerif[i] = &elems[i]
+			err = merklearray.VerifyVectorCommitment(root, elemVerif, proof)
 			require.NoError(t, err)
 		}
 	}
@@ -142,4 +193,25 @@ func BenchmarkTxnRoots(b *testing.B) {
 	})
 
 	_ = r
+}
+
+func txnMerkleToRawAppend(txid [crypto.DigestSize]byte, stib [crypto.DigestSize]byte) []byte {
+	buf := make([]byte, 0, 2*crypto.DigestSize)
+	buf = append(buf, txid[:]...)
+	return append(buf, stib[:]...)
+}
+func BenchmarkTxnMerkleToRaw(b *testing.B) {
+	digest1 := crypto.Hash([]byte{1, 2, 3})
+	digest2 := crypto.Hash([]byte{4, 5, 6})
+
+	b.Run("copy", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txnMerkleToRaw(digest1, digest2)
+		}
+	})
+	b.Run("append", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			txnMerkleToRawAppend(digest1, digest2)
+		}
+	})
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -128,7 +128,7 @@ func (v *verifiedTransactionCache) GetUnverifiedTranscationGroups(txnGroups [][]
 	for txnGroupIndex := 0; txnGroupIndex < len(txnGroups); txnGroupIndex++ {
 		signedTxnGroup := txnGroups[txnGroupIndex]
 		verifiedTxn := 0
-		groupCtx.minTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
+		groupCtx.minTealVersion = logic.ComputeMinTealVersion(transactions.WrapSignedTxnsWithAD(signedTxnGroup))
 
 		baseBucket := v.base
 		for txnIdx := 0; txnIdx < len(signedTxnGroup); txnIdx++ {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,12 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
+const (
+	// noPeersAvailableSleepInterval is the sleep interval that the node would wait if no peers are available to download the next block from.
+	// this delay is intended to ensure to give the network package some time to download the list of relays.
+	noPeersAvailableSleepInterval = 50 * time.Millisecond
+)
+
 // CatchpointCatchupNodeServices defines the extenal node support needed
 // for the catchpoint service to switch the node between "regular" operational mode and catchup mode.
 type CatchpointCatchupNodeServices interface {
@@ -41,15 +47,16 @@ type CatchpointCatchupNodeServices interface {
 
 // CatchpointCatchupStats is used for querying and reporting the current state of the catchpoint catchup process
 type CatchpointCatchupStats struct {
-	CatchpointLabel   string
-	TotalAccounts     uint64
-	ProcessedAccounts uint64
-	VerifiedAccounts  uint64
-	TotalBlocks       uint64
-	AcquiredBlocks    uint64
-	VerifiedBlocks    uint64
-	ProcessedBytes    uint64
-	StartTime         time.Time
+	CatchpointLabel    string
+	TotalAccounts      uint64
+	ProcessedAccounts  uint64
+	VerifiedAccounts   uint64
+	TotalBlocks        uint64
+	AcquiredBlocks     uint64
+	VerifiedBlocks     uint64
+	ProcessedBytes     uint64
+	TotalAccountHashes uint64
+	StartTime          time.Time
 }
 
 // CatchpointCatchupService represents the catchpoint catchup service.
@@ -287,10 +294,14 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			return cs.abort(err)
 		}
 		peer := psp.Peer
+		start := time.Now()
 		err = ledgerFetcher.downloadLedger(cs.ctx, peer, round)
 		if err == nil {
+			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
+			start = time.Now()
 			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
 			if err == nil {
+				cs.log.Infof("built merkle trie in %d seconds", time.Since(start)/time.Second)
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
@@ -321,10 +332,12 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 }
 
 // updateVerifiedAccounts update the user's statistics for the given verified accounts
-func (cs *CatchpointCatchupService) updateVerifiedAccounts(verifiedAccounts uint64) {
+func (cs *CatchpointCatchupService) updateVerifiedAccounts(addedTrieHashes uint64) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
-	cs.stats.VerifiedAccounts = verifiedAccounts
+	if cs.stats.TotalAccountHashes > 0 {
+		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * addedTrieHashes / cs.stats.TotalAccountHashes
+	}
 }
 
 // processStageLastestBlockDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
@@ -585,7 +598,13 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount uint64) (blk *bookkeeping.Block, downloadDuration time.Duration, psp *peerSelectorPeer, stop bool, err error) {
 	psp, err = cs.blocksDownloadPeerSelector.getNextPeer()
 	if err != nil {
-		err = fmt.Errorf("fetchBlock: unable to obtain a list of peers to retrieve the latest block from")
+		if err == errPeerSelectorNoPeerPoolsAvailable {
+			cs.log.Infof("fetchBlock: unable to obtain a list of peers to retrieve the latest block from; will retry shortly.")
+			// this is a possible on startup, since the network package might have yet to retrieve the list of peers.
+			time.Sleep(noPeersAvailableSleepInterval)
+			return nil, time.Duration(0), psp, false, nil
+		}
+		err = fmt.Errorf("fetchBlock: unable to obtain a list of peers to retrieve the latest block from : %w", err)
 		return nil, time.Duration(0), psp, true, cs.abort(err)
 	}
 	peer := psp.Peer
@@ -701,6 +720,7 @@ func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *le
 	cs.stats.TotalAccounts = fetcherStats.TotalAccounts
 	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
 	cs.stats.ProcessedBytes = fetcherStats.ProcessedBytes
+	cs.stats.TotalAccountHashes = fetcherStats.TotalAccountHashes
 }
 
 // GetStatistics returns a copy of the current catchpoint catchup statistics

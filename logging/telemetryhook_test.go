@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -62,6 +62,7 @@ func isDefault(cfg TelemetryConfig) bool {
 	cfg.FilePath = "" // Reset to compare the rest
 	cfg.GUID = ""
 	cfg.ChainID = ""
+	cfg.Version = ""
 	defaultCfg.GUID = ""
 	return cfg == defaultCfg
 }
@@ -103,6 +104,7 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 
 	a.Equal(cfg.FilePath, dataDirLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
+	a.NotEmpty(cfg.Version)
 
 	// We got this from the tiny file we wrote to earlier.
 	a.True(cfg.Enable)
@@ -136,6 +138,7 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	defaultCfg := createTelemetryConfig()
 	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
+	a.NotEmpty(cfg.Version)
 
 	a.True(isDefault(cfg))
 
@@ -163,10 +166,14 @@ func TestSaveLoadConfig(t *testing.T) {
 
 	cfgLoad, err := LoadTelemetryConfig(cfg.FilePath)
 
-	// ChainId isn't stored.
+	// ChainId and Version aren't stored.
 	a.NotEmpty(cfg.ChainID)
 	a.Empty(cfgLoad.ChainID)
 	cfg.ChainID = ""
+
+	a.NotEmpty(cfg.Version)
+	a.Empty(cfgLoad.Version)
+	cfg.Version = ""
 
 	a.NoError(err)
 	a.Equal("testname", cfgLoad.Name)
@@ -225,5 +232,10 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	close(filling)
 	hook.Close()
 
-	require.Equal(t, maxDepth, len(testHook.entries()))
+	hookEntries := len(testHook.entries())
+	require.GreaterOrEqual(t, hookEntries, maxDepth)
+	// the anonymous goroutine in createAsyncHookLevels might pull an entry off the pending list before
+	// writing it off to the underlying hook. when that happens, the total number of sent entries could
+	// be one higher then the maxDepth.
+	require.LessOrEqual(t, hookEntries, maxDepth+1)
 }

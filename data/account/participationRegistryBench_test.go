@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
@@ -38,9 +40,10 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 
 	// Insert records so that we can t
 	b.Run(fmt.Sprintf("KeyInsert_%d", numKeys), func(b *testing.B) {
+		a := require.New(b)
 		for n := 0; n < b.N; n++ {
 			for key := 0; key < numKeys; key++ {
-				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
+				p := makeTestParticipation(a, key, basics.Round(0), basics.Round(1000000), 3)
 				registry.Insert(p)
 			}
 		}
@@ -48,9 +51,10 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 
 	// The first call to Register updates the DB.
 	b.Run(fmt.Sprintf("KeyRegistered_%d", numKeys), func(b *testing.B) {
+		a := require.New(b)
 		for n := 0; n < b.N; n++ {
 			for key := 0; key < numKeys; key++ {
-				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
+				p := makeTestParticipation(a, key, basics.Round(0), basics.Round(1000000), 3)
 
 				// Unfortunately we need to repeatedly clear out the registration fields to ensure the
 				// db update runs each time this is called.
@@ -65,9 +69,10 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 
 	// The keys should now be updated, so Register is a no-op.
 	b.Run(fmt.Sprintf("NoOp_%d", numKeys), func(b *testing.B) {
+		a := require.New(b)
 		for n := 0; n < b.N; n++ {
 			for key := 0; key < numKeys; key++ {
-				p := makeTestParticipation(key, basics.Round(0), basics.Round(1000000), 3)
+				p := makeTestParticipation(a, key, basics.Round(0), basics.Round(1000000), 3)
 				registry.Register(p.ID(), 50)
 			}
 		}

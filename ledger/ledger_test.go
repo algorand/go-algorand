@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,9 @@ import (
 	"os"
 	"runtime/pprof"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/util/db"
 
 	"github.com/stretchr/testify/require"
 
@@ -112,7 +115,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		require.Equal(t, l.Latest(), latestRound)
 		totalRewardUnits = totals.RewardUnits()
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	blk.BlockHeader = bookkeeping.BlockHeader{
@@ -120,13 +123,13 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
 		TimeStamp:    0,
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
 	}
 
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	if proto.SupportGenesisHash {
@@ -152,7 +155,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
 	blk.Payset = append(blk.Payset, txib)
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 	return l.appendUnvalidated(blk)
 }
@@ -171,7 +174,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 		blk.Payset = append(blk.Payset, txib)
 	}
 	var err error
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 	return l.AddBlock(blk, agreement.Certificate{})
 }
@@ -211,7 +214,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	for _, acctdata := range genesisInitState.Accounts {
 		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 	}
-	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
 	correctHeader := bookkeeping.BlockHeader{
@@ -219,7 +222,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
 		TimeStamp:    0,
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
@@ -228,7 +231,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	emptyBlock := bookkeeping.Block{
 		BlockHeader: correctHeader,
 	}
-	correctHeader.TxnRoot, err = emptyBlock.PaysetCommit()
+	correctHeader.TxnCommitments, err = emptyBlock.PaysetCommit()
 	require.NoError(t, err)
 
 	correctHeader.RewardsPool = testPoolAddr
@@ -321,11 +324,11 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot = crypto.Hash([]byte{0})
+	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
 	a.Error(l.appendUnvalidated(badBlock), "added block header with empty transaction root")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot[0]++
+	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
 	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid transaction root")
 
 	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
@@ -688,6 +691,10 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	badTx.ApplicationID = 0
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
 	a.Error(err)
+	a.Contains(err.Error(), "ApprovalProgram: invalid program (empty)")
+	badTx.ApprovalProgram = []byte{242}
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
 	a.Contains(err.Error(), "ApprovalProgram: invalid version")
 
 	correctAppCall.ApplicationID = appIdx
@@ -795,9 +802,9 @@ int 1
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 	addEmptyValidatedBlock(t, l, initAccounts)
@@ -826,23 +833,19 @@ int 1
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
 
 	rnd = l.Latest()
-	acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+	acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
-
-	acctwr, err := l.Lookup(rnd, creator)
-	a.NoError(err)
-	a.Equal(acctwor.AppParams[appIdx].GlobalState["counter"], acctwr.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
 	addEmptyValidatedBlock(t, l, initAccounts)
 
-	acctwor, _, err = l.LookupWithoutRewards(l.Latest()-1, creator)
+	acctworRes, err = l.LookupApplication(l.Latest()-1, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctworRes.AppParams.GlobalState["counter"])
 
-	acct, _, err = l.LookupWithoutRewards(rnd, user)
+	acctRes, err = l.LookupApplication(rnd, user, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppLocalStates[appIdx].KeyValue["counter"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acctRes.AppLocalState.KeyValue["counter"])
 }
 
 // TestLedgerAppMultiTxnWrites ensures app state writes in multiple txn are applied
@@ -923,9 +926,9 @@ int 1                   // [1]
 	var appIdx basics.AppIndex = 1
 
 	rnd := l.Latest()
-	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	acctRes, err := l.LookupApplication(rnd, creator, appIdx)
 	a.NoError(err)
-	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acct.AppParams[appIdx].GlobalState["key"])
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acctRes.AppParams.GlobalState["key"])
 
 	// make two app call txns and put into the same block, with and without groupping
 	var tests = []struct {
@@ -993,20 +996,16 @@ int 1                   // [1]
 			a.NoError(err)
 			blk.TxnCounter = blk.TxnCounter + 2
 			blk.Payset = append(blk.Payset, txib1, txib2)
-			blk.TxnRoot, err = blk.PaysetCommit()
+			blk.TxnCommitments, err = blk.PaysetCommit()
 			a.NoError(err)
 			err = l.appendUnvalidated(blk)
 			a.NoError(err)
 
 			expected := uint64(base + value1 + value2)
 			rnd = l.Latest()
-			acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+			acctworRes, err := l.LookupApplication(rnd, creator, appIdx)
 			a.NoError(err)
-			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctwor.AppParams[appIdx].GlobalState["key"])
-
-			acctwr, err := l.Lookup(rnd, creator)
-			a.NoError(err)
-			a.Equal(acctwor.AppParams[appIdx].GlobalState["key"], acctwr.AppParams[appIdx].GlobalState["key"])
+			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctworRes.AppParams.GlobalState["key"])
 		})
 	}
 }
@@ -1078,6 +1077,21 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteKeyDilution: proto.DefaultKeyDilution,
 		VoteFirst:       0,
 		VoteLast:        10000,
+	}
+
+	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	if proto.EnableStateProofKeyregCheck {
+		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
+		store, err := db.MakeAccessor("test-DB", false, true)
+		a.NoError(err)
+		defer store.Close()
+		root, err := account.GenerateRoot(store)
+		a.NoError(err)
+		p, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(frst), basics.Round(lst), config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		signer := p.Participation.StateProofSecrets
+		require.NoError(t, err)
+
+		correctKeyregFields.StateProofPK = *(signer.GetVerifier())
 	}
 
 	correctKeyreg := transactions.Transaction{
@@ -1206,7 +1220,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			for _, acctdata := range initAccounts {
 				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 			}
-			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
+			poolBal, _, _, err := l.LookupLatest(testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")
 			lastBlock, err := l.Block(l.Latest())
 			a.NoError(err, "could not get last block")
@@ -1216,7 +1230,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				Round:        l.Latest() + 1,
 				Branch:       lastBlock.Hash(),
 				TimeStamp:    0,
-				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
 				// Seed:       does not matter,
 				// UpgradeVote: empty,
@@ -1231,7 +1245,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-			correctBlock.TxnRoot, err = correctBlock.PaysetCommit()
+			correctBlock.TxnCommitments, err = correctBlock.PaysetCommit()
 			a.NoError(err)
 
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
@@ -1519,6 +1533,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max asset id limit
 	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
+	require.NoError(t, err)
 	assetCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AssetCreatable &&
@@ -1537,6 +1552,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, 2, len(results))
 	// Check the max application id limit
 	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
+	require.NoError(t, err)
 	appCount := 0
 	for id, ctb := range randomCtbs {
 		if ctb.Ctype == basics.AppCreatable &&
@@ -1645,7 +1661,7 @@ func TestLedgerMemoryLeak(t *testing.T) {
 
 					err = l.appendUnvalidatedTx(t, accounts, keys, correctPay, transactions.ApplyData{})
 					require.NoError(t, err)
-					ad, err := l.Lookup(l.Latest(), addr)
+					ad, _, _, err := l.LookupLatest(addr)
 					require.NoError(t, err)
 
 					addresses = append(addresses, addr)
@@ -1671,6 +1687,52 @@ func TestLedgerMemoryLeak(t *testing.T) {
 			fmt.Printf("Profile %s created\n", memprofile)
 		}
 	}
+}
+
+// TestLookupAgreement ensures LookupAgreement return an empty data for offline accounts
+func TestLookupAgreement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	var addrOnline, addrOffline basics.Address
+	for addr, ad := range genesisInitState.Accounts {
+		if addrOffline.IsZero() {
+			addrOffline = addr
+			ad.Status = basics.Offline
+			crypto.RandBytes(ad.VoteID[:]) // this is invalid but we set VoteID to ensure the account gets cleared
+			genesisInitState.Accounts[addr] = ad
+		} else if ad.Status == basics.Online {
+			addrOnline = addr
+			crypto.RandBytes(ad.VoteID[:])
+			genesisInitState.Accounts[addr] = ad
+			break
+		}
+	}
+
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	oad, err := ledger.LookupAgreement(0, addrOnline)
+	require.NoError(t, err)
+	require.NotEmpty(t, oad)
+	ad, _, _, err := ledger.LookupLatest(addrOnline)
+	require.NoError(t, err)
+	require.NotEmpty(t, ad)
+	require.Equal(t, oad, ad.OnlineAccountData())
+
+	require.NoError(t, err)
+	oad, err = ledger.LookupAgreement(0, addrOffline)
+	require.NoError(t, err)
+	require.Empty(t, oad)
+	ad, _, _, err = ledger.LookupLatest(addrOffline)
+	require.NoError(t, err)
+	require.NotEmpty(t, ad)
+	require.Equal(t, oad, ad.OnlineAccountData())
 }
 
 func BenchmarkLedgerStartup(b *testing.B) {

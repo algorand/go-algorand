@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ var (
 var (
 	// the duration of which we'll keep a metric in-memory and keep reporting it.
 	// when a metric time expires, it would get removed.
+	// TODO: implement or remove
 	maxMetricRetensionDuration = time.Duration(5) * time.Minute
 )
 

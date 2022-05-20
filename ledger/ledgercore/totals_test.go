@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -206,7 +206,7 @@ var uniqueAccountTotals = []AccountTotals{
 func TestAccountTotalsMarshalMsgUnique(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	uniqueAt := make(map[crypto.Digest]bool, 0)
+	uniqueAt := make(map[crypto.Digest]bool, len(uniqueAccountTotals))
 	for _, at := range uniqueAccountTotals {
 		inBuffer := make([]byte, 0, 128)
 		outBuffer := at.MarshalMsg(inBuffer)

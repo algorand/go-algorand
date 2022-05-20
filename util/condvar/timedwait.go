@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // TimedWait waits for sync.Cond c to be signaled, with a timeout.
@@ -33,7 +35,7 @@ func TimedWait(c *sync.Cond, timeout time.Duration) {
 	var done int32
 
 	go func() {
-		<-time.After(timeout)
+		util.NanoSleep(timeout)
 
 		for atomic.LoadInt32(&done) == 0 {
 			c.Broadcast()
@@ -42,7 +44,7 @@ func TimedWait(c *sync.Cond, timeout time.Duration) {
 			// thread hasn't gotten around to calling c.Wait()
 			// yet, so the c.Broadcast() did not wake it up.
 			// Sleep for a second and check again.
-			<-time.After(time.Second)
+			time.Sleep(time.Second)
 		}
 	}()
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -388,10 +388,10 @@ func (n serializedPseudonode) Quit() {
 }
 
 type KeyManagerProxy struct {
-	target func(basics.Round, basics.Round) []account.Participation
+	target func(basics.Round, basics.Round) []account.ParticipationRecordForRound
 }
 
-func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []account.Participation {
+func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []account.ParticipationRecordForRound {
 	return k.target(votingRound, balanceRound)
 }
 
@@ -447,7 +447,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	pb.keys = keyManagerProxy
 	cparams, _ := ledger.ConsensusParams(0)
 	for rnd := basics.Round(3); rnd < 1000; rnd += 43 {
-		keyManagerProxy.target = func(votingRound, balanceRnd basics.Round) []account.Participation {
+		keyManagerProxy.target = func(votingRound, balanceRnd basics.Round) []account.ParticipationRecordForRound {
 			require.Equal(t, rnd, votingRound)
 			require.Equal(t, balanceRound(rnd, cparams), balanceRnd)
 			return keyManager.VotingKeys(votingRound, balanceRnd)
@@ -520,11 +520,12 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
 		ch, err = pb.MakeProposals(context.Background(), startRound, period(i))
 		if err != nil {
-			require.Subset(t, []int{pseudonodeVerificationBacklog, pseudonodeVerificationBacklog + 1}, []int{i})
+			require.ErrorAs(t, errPseudonodeBacklogFull, &err)
 			break
 		}
 		channels = append(channels, ch)
 	}
+	enqueuedProposals := len(channels)
 	require.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
 	require.True(t, errors.Is(err, errPseudonodeBacklogFull))
 
@@ -533,17 +534,17 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
 		ch, err = pb.MakeVotes(context.Background(), startRound, period(i), step(i%5), makeProposalValue(period(i), accounts[0].Address()), persist)
 		if err != nil {
-			require.Subset(t, []int{pseudonodeVerificationBacklog, pseudonodeVerificationBacklog + 1}, []int{i})
+			require.ErrorAs(t, errPseudonodeBacklogFull, &err)
 			break
 		}
 		channels = append(channels, ch)
 	}
 	require.Error(t, err, "MakeVotes did not returned an error when being overflowed with requests")
-
+	enqueuedVotes := len(channels) - enqueuedProposals
 	// drain output channels.
 	for _, ch := range channels {
 		drainChannel(ch)
 	}
-	require.Equal(t, 330, subStrLogger.instancesFound[0])
-	require.Equal(t, 330, subStrLogger.instancesFound[1])
+	require.Equal(t, enqueuedVotes*len(accounts), subStrLogger.instancesFound[0])
+	require.Equal(t, enqueuedProposals*len(accounts), subStrLogger.instancesFound[1])
 }

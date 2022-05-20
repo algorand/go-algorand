@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +26,9 @@ import (
 	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/msgp/msgp"
 )
+
+// ErrInvalidObject is used to state that an object decoding has failed because it's invalid.
+var ErrInvalidObject = errors.New("unmarshalled object is invalid")
 
 // CodecHandle is used to instantiate msgpack encoders and decoders
 // with our settings (canonical, paranoid about decoding errors)

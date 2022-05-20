@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/algorand/go-deadlock"
@@ -25,11 +26,19 @@ import (
 // Metric represent any collectable metric
 type Metric interface {
 	WriteMetric(buf *strings.Builder, parentLabels string)
-	AddMetric(values map[string]string)
+	AddMetric(values map[string]float64)
 }
 
 // Registry represents a single set of metrics registry
 type Registry struct {
 	metrics   []Metric
 	metricsMu deadlock.Mutex
+}
+
+var sanitizeTelemetryCharactersRegexp = regexp.MustCompile("(^[^a-zA-Z_]|[^a-zA-Z0-9_-])")
+
+// sanitizeTelemetryName ensures a metric name reported to telemetry doesn't contain any
+// non-alphanumeric characters (apart from - or _) and doesn't start with a number or a hyphen.
+func sanitizeTelemetryName(name string) string {
+	return sanitizeTelemetryCharactersRegexp.ReplaceAllString(name, "_")
 }

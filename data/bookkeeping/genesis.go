@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -164,13 +164,13 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 
 	blk := Block{
 		BlockHeader: BlockHeader{
-			Round:        0,
-			Branch:       BlockHash{},
-			Seed:         committee.Seed(genesisHash),
-			TxnRoot:      transactions.Payset{}.CommitGenesis(),
-			TimeStamp:    genesisBal.Timestamp,
-			GenesisID:    genesisID,
-			RewardsState: genesisRewardsState,
+			Round:          0,
+			Branch:         BlockHash{},
+			Seed:           committee.Seed(genesisHash),
+			TxnCommitments: TxnCommitments{NativeSha512_256Commitment: transactions.Payset{}.CommitGenesis(), Sha256Commitment: crypto.Digest{}},
+			TimeStamp:      genesisBal.Timestamp,
+			GenesisID:      genesisID,
+			RewardsState:   genesisRewardsState,
 			UpgradeState: UpgradeState{
 				CurrentProtocol: proto,
 			},

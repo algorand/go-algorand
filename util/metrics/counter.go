@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ func (counter *Counter) Deregister(reg *Registry) {
 // Inc increases counter by 1
 // Much faster if labels is nil or empty.
 func (counter *Counter) Inc(labels map[string]string) {
-	if labels == nil || len(labels) == 0 {
+	if len(labels) == 0 {
 		counter.fastAddUint64(1)
 	} else {
 		counter.Add(1.0, labels)
@@ -98,7 +98,7 @@ func (counter *Counter) Add(x float64, labels map[string]string) {
 // If labels is nil this is much faster than Add()
 // Calls through to Add() if labels is not nil.
 func (counter *Counter) AddUint64(x uint64, labels map[string]string) {
-	if labels == nil || len(labels) == 0 {
+	if len(labels) == 0 {
 		counter.fastAddUint64(x)
 	} else {
 		counter.Add(float64(x), labels)
@@ -108,7 +108,7 @@ func (counter *Counter) AddUint64(x uint64, labels map[string]string) {
 // AddMicrosecondsSince increases counter by microseconds between Time t and now.
 // Fastest if labels is nil
 func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]string) {
-	counter.AddUint64(uint64(time.Now().Sub(t).Microseconds()), labels)
+	counter.AddUint64(uint64(time.Since(t).Microseconds()), labels)
 }
 
 func (counter *Counter) fastAddUint64(x uint64) {
@@ -186,7 +186,7 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 }
 
 // AddMetric adds the metric into the map
-func (counter *Counter) AddMetric(values map[string]string) {
+func (counter *Counter) AddMetric(values map[string]float64) {
 	counter.Lock()
 	defer counter.Unlock()
 
@@ -199,7 +199,10 @@ func (counter *Counter) AddMetric(values map[string]string) {
 		if len(l.labels) == 0 {
 			sum += float64(atomic.LoadUint64(&counter.intValue))
 		}
-
-		values[counter.name] = strconv.FormatFloat(sum, 'f', -1, 32)
+		var suffix string
+		if len(l.formattedLabels) > 0 {
+			suffix = ":" + l.formattedLabels
+		}
+		values[sanitizeTelemetryName(counter.name+suffix)] = sum
 	}
 }

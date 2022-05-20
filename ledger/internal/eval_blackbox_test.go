@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -32,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/internal"
@@ -44,8 +42,6 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 var minFee basics.MicroAlgos
 
 func init() {
@@ -55,14 +51,16 @@ func init() {
 
 func TestBlockEvaluator(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
@@ -210,11 +208,11 @@ func TestBlockEvaluator(t *testing.T) {
 
 	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 
-	bal0new, err := l.Lookup(newBlock.Round(), addrs[0])
+	bal0new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[0])
 	require.NoError(t, err)
-	bal1new, err := l.Lookup(newBlock.Round(), addrs[1])
+	bal1new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[1])
 	require.NoError(t, err)
-	bal2new, err := l.Lookup(newBlock.Round(), addrs[2])
+	bal2new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[2])
 	require.NoError(t, err)
 
 	require.Equal(t, bal0new.MicroAlgos.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
@@ -224,6 +222,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 func TestRekeying(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// t.Parallel() NO! This test manipulates []protocol.Consensus
 
 	// Pretend rekeying is supported
 	actual := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -237,7 +236,7 @@ func TestRekeying(t *testing.T) {
 	// Bring up a ledger
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -327,23 +326,26 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*internal.BlockEvaluator, basics.Address, error) {
-	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+// TestEvalAppState ensures txns in a group can't violate app state schema
+// limits the test ensures that commitToParent -> applyChild copies child's cow
+// state usage counts into parent and the usage counts correctly propagated from
+// parent cow to child cow and back. When limits are not violated, the test
+// ensures that the updates are correct.
+func TestEvalAppState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v24 = apps
+	testConsensusRange(t, 24, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	blkHeader, err := l.BlockHdr(basics.Round(0))
-	require.NoError(t, err)
-	newBlock := bookkeeping.MakeBlock(blkHeader)
-
-	eval, err := internal.StartEvaluator(l, newBlock.BlockHeader, internal.EvaluatorOptions{
-		Generate: true,
-		Validate: true})
-	require.NoError(t, err)
-
-	ops, err := logic.AssembleString(`#pragma version 2
+		appcall1 := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[0],
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 2
 	txn ApplicationID
 	bz create
 	byte "caller"
@@ -355,121 +357,50 @@ create:
 	txn Sender
 	app_global_put
 ok:
-	int 1`)
-	require.NoError(t, err, ops.Errors)
-	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 2\nint 1")
-	require.NoError(t, err)
-	clear := ops.Program
+	int 1`,
+			ClearStateProgram: "#pragma version 2\nint 1",
+		}
 
-	genHash := l.GenesisHash()
-	header := transactions.Header{
-		Sender:      addrs[0],
-		Fee:         minFee,
-		FirstValid:  newBlock.Round(),
-		LastValid:   newBlock.Round(),
-		GenesisHash: genHash,
-	}
-	appcall1 := transactions.Transaction{
-		Type:   protocol.ApplicationCallTx,
-		Header: header,
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			GlobalStateSchema: schema,
-			ApprovalProgram:   approval,
-			ClearStateProgram: clear,
-		},
-	}
-
-	appcall2 := transactions.Transaction{
-		Type:   protocol.ApplicationCallTx,
-		Header: header,
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+		appcall2 := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[0],
 			ApplicationID: 1,
-		},
-	}
+		}
 
-	var group transactions.TxGroup
-	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2)}
-	appcall1.Group = crypto.HashObj(group)
-	appcall2.Group = crypto.HashObj(group)
-	stxn1 := appcall1.Sign(keys[0])
-	stxn2 := appcall2.Sign(keys[0])
+		dl.beginBlock()
+		dl.txgroup("store bytes count 2 exceeds schema bytes count 1", &appcall1, &appcall2)
 
-	g := []transactions.SignedTxnWithAD{
-		{
-			SignedTxn: stxn1,
-			ApplyData: transactions.ApplyData{
-				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
-					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
-				},
-				ApplicationID: 1,
-			},
-		},
-		{
-			SignedTxn: stxn2,
-			ApplyData: transactions.ApplyData{
-				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
-					"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
-				}},
-		},
-	}
-	txgroup := []transactions.SignedTxn{stxn1, stxn2}
-	err = eval.TestTransactionGroup(txgroup)
-	if err != nil {
-		return eval, addrs[0], err
-	}
-	err = eval.TransactionGroup(g)
-	return eval, addrs[0], err
-}
+		appcall1.GlobalStateSchema = basics.StateSchema{NumByteSlice: 2}
+		dl.txgroup("", &appcall1, &appcall2)
+		vb := dl.endBlock()
+		deltas := vb.Delta()
 
-// TestEvalAppStateCountsWithTxnGroup ensures txns in a group can't violate app state schema limits
-// the test ensures that
-// commitToParent -> applyChild copies child's cow state usage counts into parent
-// and the usage counts correctly propagated from parent cow to child cow and back
-func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
-}
-
-// TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
-// produce correct results when a txn group has storage allocate and storage update actions
-func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
-	require.NoError(t, err)
-
-	vb, err := eval.GenerateBlock()
-	require.NoError(t, err)
-	deltas := vb.Delta()
-
-	ad, _ := deltas.Accts.Get(addr)
-	state := ad.AppParams[1].GlobalState
-	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
-	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
+		params, ok := deltas.Accts.GetAppParams(addrs[0], 1)
+		require.True(t, ok)
+		state := params.Params.GlobalState
+		require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addrs[0][:])}, state["caller"])
+		require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addrs[0][:])}, state["creator"])
+	})
 }
 
 // nextBlock begins evaluation of a new block, after ledger creation or endBlock()
-func nextBlock(t testing.TB, ledger *ledger.Ledger, generate bool, protoParams *config.ConsensusParams) *internal.BlockEvaluator {
+func nextBlock(t testing.TB, ledger *ledger.Ledger) *internal.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
+	nextHdr.TimeStamp = hdr.TimeStamp + 1 // ensure deterministic tests
 	eval, err := internal.StartEvaluator(ledger, nextHdr, internal.EvaluatorOptions{
-		Generate:    generate,
-		Validate:    false,
-		ProtoParams: protoParams,
+		Generate: true,
+		Validate: true, // Do the complete checks that a new txn would be subject to
 	})
 	require.NoError(t, err)
 	return eval
 }
 
 func fillDefaults(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn) {
-	if txn.GenesisHash.IsZero() {
+	if txn.GenesisHash.IsZero() && ledger.GenesisProto().SupportGenesisHash {
 		txn.GenesisHash = ledger.GenesisHash()
 	}
 	if txn.FirstValid == 0 {
@@ -489,17 +420,7 @@ func txns(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, tx
 func txn(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
-	stxn := txn.SignedTxn()
-	err := eval.TestTransactionGroup([]transactions.SignedTxn{stxn})
-	if err != nil {
-		if len(problem) == 1 {
-			require.Contains(t, err.Error(), problem[0])
-		} else {
-			require.NoError(t, err) // Will obviously fail
-		}
-		return
-	}
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err := eval.Transaction(txn.SignedTxn(), transactions.ApplyData{})
 	if err != nil {
 		if len(problem) == 1 {
 			require.Contains(t, err.Error(), problem[0])
@@ -518,13 +439,7 @@ func txgroup(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator,
 	}
 	txgroup := txntest.SignedTxns(txns...)
 
-	err := eval.TestTransactionGroup(txgroup)
-	if err != nil {
-		return err
-	}
-
-	err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
-	return err
+	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 }
 
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
@@ -534,8 +449,7 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	require.NoError(t, err)
 	defer l.Close()
 
-	protoParams := config.Consensus[consensusVersion]
-	eval := nextBlock(t, l, false, &protoParams)
+	eval := nextBlock(t, l)
 
 	appcall1 := txntest.Txn{
 		Sender:            addrs[0],
@@ -563,6 +477,7 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 // budgets in a group txn and return an error if the budget is exceeded
 func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	source := func(n int, m int) string {
 		return "#pragma version 4\nbyte 0x1337BEEF\n" + strings.Repeat("keccak256\n", n) +
@@ -585,14 +500,14 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			"",
 			""},
 		{source(5, 48), false, true,
-			"pc=157 dynamic cost budget exceeded, executing pushint: remaining budget is 700 but program cost was 701",
+			"pc=157 dynamic cost budget exceeded, executing pushint",
 			""},
 		{source(16, 17), false, true,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
+			"pc= 12 dynamic cost budget exceeded, executing keccak256",
 			""},
 		{source(16, 18), false, false,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256: remaining budget is 700 but program cost was 781",
-			"pc= 78 dynamic cost budget exceeded, executing pushint: remaining budget is 2100 but program cost was 2101"},
+			"pc= 12 dynamic cost budget exceeded, executing keccak256",
+			"pc= 78 dynamic cost budget exceeded, executing pushint"},
 	}
 
 	for i, param := range params {
@@ -620,39 +535,102 @@ func endBlock(t testing.TB, ledger *ledger.Ledger, eval *internal.BlockEvaluator
 	return validatedBlock
 }
 
+// lookup gets the current accountdata for an address
+func lookup(t testing.TB, ledger *ledger.Ledger, addr basics.Address) basics.AccountData {
+	ad, _, _, err := ledger.LookupLatest(addr)
+	require.NoError(t, err)
+	return ad
+}
+
+// micros gets the current microAlgo balance for an address
+func micros(t testing.TB, ledger *ledger.Ledger, addr basics.Address) uint64 {
+	return lookup(t, ledger, addr).MicroAlgos.Raw
+}
+
+// holding gets the current balance and optin status for some asa for an address
+func holding(t testing.TB, ledger *ledger.Ledger, addr basics.Address, asset basics.AssetIndex) (uint64, bool) {
+	if holding, ok := lookup(t, ledger, addr).Assets[asset]; ok {
+		return holding.Amount, true
+	}
+	return 0, false
+}
+
+// asaParams gets the asset params for a given asa index
+func asaParams(t testing.TB, ledger *ledger.Ledger, asset basics.AssetIndex) (basics.AssetParams, error) {
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(asset), basics.AssetCreatable)
+	if err != nil {
+		return basics.AssetParams{}, err
+	}
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("no asset (%d)", asset)
+	}
+	if params, ok := lookup(t, ledger, creator).AssetParams[asset]; ok {
+		return params, nil
+	}
+	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
+}
+
+func TestGarbageClearState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v24 = apps
+	testConsensusRange(t, 24, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		createTxn := txntest.Txn{
+			Type:              "appl",
+			Sender:            addrs[0],
+			ApprovalProgram:   "int 1",
+			ClearStateProgram: []byte{},
+		}
+
+		dl.txn(&createTxn, "invalid program (empty)")
+
+		createTxn.ClearStateProgram = []byte{0xfe} // bad uvarint
+		dl.txn(&createTxn, "invalid version")
+	})
+}
+
 func TestRewardsInAD(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// v15 put rewards into ApplyData
+	testConsensusRange(t, 11, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
+		payTxn := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[1]}
 
-	payTxn := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[1]}
+		// Build up Residue in RewardsState so it's ready to pay
+		for i := 1; i < 10; i++ {
+			dl.fullBlock()
+		}
 
-	// Build up Residue in RewardsState so it's ready to pay
-	for i := 1; i < 10; i++ {
-		eval := nextBlock(t, l, true, nil)
-		endBlock(t, l, eval)
-	}
-
-	eval := nextBlock(t, l, true, nil)
-	txn(t, l, eval, &payTxn)
-	vb, err := eval.GenerateBlock()
-	require.NoError(t, err)
-	payInBlock := vb.Block().Payset[0]
-	require.Greater(t, payInBlock.ApplyData.SenderRewards.Raw, uint64(1000))
-	require.Greater(t, payInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
-	require.Equal(t, payInBlock.ApplyData.SenderRewards, payInBlock.ApplyData.ReceiverRewards)
+		vb := dl.fullBlock(&payTxn)
+		payInBlock := vb.Block().Payset[0]
+		if ver >= 15 {
+			require.Greater(t, payInBlock.ApplyData.SenderRewards.Raw, uint64(1000))
+			require.Greater(t, payInBlock.ApplyData.ReceiverRewards.Raw, uint64(1000))
+			require.Equal(t, payInBlock.ApplyData.SenderRewards, payInBlock.ApplyData.ReceiverRewards)
+		} else {
+			require.EqualValues(t, 0, payInBlock.ApplyData.SenderRewards.Raw)
+			require.EqualValues(t, 0, payInBlock.ApplyData.ReceiverRewards.Raw)
+		}
+	})
 }
 
 func TestMinBalanceChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -676,18 +654,18 @@ func TestMinBalanceChanges(t *testing.T) {
 		AssetReceiver: addrs[5],
 	}
 
-	ad0init, err := l.Lookup(l.Latest(), addrs[0])
+	ad0init, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5init, err := l.Lookup(l.Latest(), addrs[5])
+	ad5init, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
-	eval := nextBlock(t, l, true, nil)
+	eval := nextBlock(t, l)
 	txns(t, l, eval, &createTxn, &optInTxn)
 	endBlock(t, l, eval)
 
-	ad0new, err := l.Lookup(l.Latest(), addrs[0])
+	ad0new, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5new, err := l.Lookup(l.Latest(), addrs[5])
+	ad5new, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 
 	proto := l.GenesisProto()
@@ -711,205 +689,82 @@ func TestMinBalanceChanges(t *testing.T) {
 		ConfigAsset: expectedID,
 	}
 
-	eval = nextBlock(t, l, true, nil)
+	eval = nextBlock(t, l)
 	txns(t, l, eval, &optOutTxn, &closeTxn)
 	endBlock(t, l, eval)
 
-	ad0final, err := l.Lookup(l.Latest(), addrs[0])
+	ad0final, _, _, err := l.LookupLatest(addrs[0])
 	require.NoError(t, err)
-	ad5final, err := l.Lookup(l.Latest(), addrs[5])
+	ad5final, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
 	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
 	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
 }
 
-// Test that ModifiedAssetHoldings in StateDelta is set correctly.
-func TestModifiedAssetHoldings(t *testing.T) {
+// TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
+func TestDeleteNonExistantKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// teal v2 (apps)
+	testConsensusRange(t, 24, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
+		const appid basics.AppIndex = 1
 
-	const assetid basics.AssetIndex = 1
-
-	createTxn := txntest.Txn{
-		Type:   "acfg",
-		Sender: addrs[0],
-		Fee:    2000,
-		AssetParams: basics.AssetParams{
-			Total:    3,
-			Decimals: 0,
-			Manager:  addrs[0],
-			Reserve:  addrs[0],
-			Freeze:   addrs[0],
-			Clawback: addrs[0],
-		},
-	}
-
-	optInTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		Fee:           2000,
-		XferAsset:     assetid,
-		AssetAmount:   0,
-		AssetReceiver: addrs[1],
-	}
-
-	eval := nextBlock(t, l, true, nil)
-	txns(t, l, eval, &createTxn, &optInTxn)
-	vb := endBlock(t, l, eval)
-
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[0],
-			Asset:   assetid,
+		createTxn := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+byte "missing_global"
+app_global_del
+int 0
+byte "missing_local"
+app_local_del
+`),
 		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[1],
-			Asset:   assetid,
+
+		optInTxn := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[1],
+			ApplicationID: appid,
+			OnCompletion:  transactions.OptInOC,
 		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
 
-	optOutTxn := txntest.Txn{
-		Type:          "axfer",
-		Sender:        addrs[1],
-		Fee:           1000,
-		XferAsset:     assetid,
-		AssetReceiver: addrs[0],
-		AssetCloseTo:  addrs[0],
-	}
-
-	closeTxn := txntest.Txn{
-		Type:        "acfg",
-		Sender:      addrs[0],
-		Fee:         1000,
-		ConfigAsset: assetid,
-	}
-
-	eval = nextBlock(t, l, true, nil)
-	txns(t, l, eval, &optOutTxn, &closeTxn)
-	vb = endBlock(t, l, eval)
-
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[0],
-			Asset:   assetid,
+		vb := dl.fullBlock(&createTxn, &optInTxn)
+		require.Len(t, vb.Block().Payset[1].EvalDelta.GlobalDelta, 0)
+		// For a while, we encoded an empty localdelta
+		deltas := 1
+		if ver >= 27 {
+			deltas = 0
 		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
-	{
-		aa := ledgercore.AccountAsset{
-			Address: addrs[1],
-			Asset:   assetid,
-		}
-		created, ok := vb.Delta().ModifiedAssetHoldings[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
-}
-
-// Test that ModifiedAppLocalStates in StateDelta is set correctly.
-func TestModifiedAppLocalStates(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
-
-	const appid basics.AppIndex = 1
-
-	createTxn := txntest.Txn{
-		Type:            "appl",
-		Sender:          addrs[0],
-		ApprovalProgram: "int 1",
-	}
-
-	optInTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: appid,
-		OnCompletion:  transactions.OptInOC,
-	}
-
-	eval := nextBlock(t, l, true, nil)
-	txns(t, l, eval, &createTxn, &optInTxn)
-	vb := endBlock(t, l, eval)
-
-	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
-	{
-		aa := ledgercore.AccountApp{
-			Address: addrs[1],
-			App:     appid,
-		}
-		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
-		require.True(t, ok)
-		assert.True(t, created)
-	}
-
-	optOutTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[1],
-		ApplicationID: appid,
-		OnCompletion:  transactions.CloseOutOC,
-	}
-
-	closeTxn := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[0],
-		ApplicationID: appid,
-		OnCompletion:  transactions.DeleteApplicationOC,
-	}
-
-	eval = nextBlock(t, l, true, nil)
-	txns(t, l, eval, &optOutTxn, &closeTxn)
-	vb = endBlock(t, l, eval)
-
-	assert.Len(t, vb.Delta().ModifiedAppLocalStates, 1)
-	{
-		aa := ledgercore.AccountApp{
-			Address: addrs[1],
-			App:     appid,
-		}
-		created, ok := vb.Delta().ModifiedAppLocalStates[aa]
-		require.True(t, ok)
-		assert.False(t, created)
-	}
+		require.Len(t, vb.Block().Payset[1].EvalDelta.LocalDeltas, deltas)
+	})
 }
 
 // TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator
 // and do not cause any MaximumMinimumBalance problems
 func TestAppInsMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusV30
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
 	const appid basics.AppIndex = 1
 
-	maxAppsOptedIn := config.Consensus[protocol.ConsensusFuture].MaxAppsOptedIn
+	maxAppsOptedIn := config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	require.Greater(t, maxAppsOptedIn, 0)
-	maxAppsCreated := config.Consensus[protocol.ConsensusFuture].MaxAppsCreated
+	maxAppsCreated := config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 	require.Greater(t, maxAppsCreated, 0)
-	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusFuture].MaxLocalSchemaEntries
+	maxLocalSchemaEntries := config.Consensus[protocol.ConsensusV30].MaxLocalSchemaEntries
 	require.Greater(t, maxLocalSchemaEntries, uint64(0))
 
 	txnsCreate := make([]*txntest.Txn, 0, maxAppsOptedIn)
@@ -943,11 +798,185 @@ func TestAppInsMinBalance(t *testing.T) {
 		txnsOptIn = append(txnsOptIn, &optInTxn)
 	}
 
-	eval := nextBlock(t, l, true, nil)
+	eval := nextBlock(t, l)
 	txns1 := append(txnsCreate, txnsOptIn...)
 	txns(t, l, eval, txns1...)
 	vb := endBlock(t, l, eval)
-	require.Len(t, vb.Delta().ModifiedAppLocalStates, 50)
+	mods := vb.Delta()
+	appAppResources := mods.Accts.GetAllAppResources()
+	appParamsCount := 0
+	appLocalStatesCount := 0
+	for _, ap := range appAppResources {
+		if ap.Params.Params != nil {
+			appParamsCount++
+		}
+		if ap.State.LocalState != nil {
+			appLocalStatesCount++
+		}
+	}
+	require.Equal(t, appLocalStatesCount, 50)
+	require.Equal(t, appParamsCount, 50)
+}
+
+func TestDuplicates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	testConsensusRange(t, 11, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		pay := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: addrs[1],
+			Amount:   10,
+		}
+		dl.txn(&pay)
+		dl.txn(&pay, "transaction already in ledger")
+
+		// Test same transaction in a later block
+		dl.txn(&pay, "transaction already in ledger")
+
+		// Change the note so it can go in again
+		pay.Note = []byte("1")
+		dl.txn(&pay)
+
+		// Change note again, but try the txn twice in same group
+		if dl.generator.GenesisProto().MaxTxGroupSize > 1 {
+			pay.Note = []byte("2")
+			dl.txgroup("transaction already in ledger", &pay, &pay)
+		}
+	})
+}
+
+var consensusByNumber = []protocol.ConsensusVersion{
+	"", "", "", "", "", "", "",
+	protocol.ConsensusV7,
+	protocol.ConsensusV8,
+	protocol.ConsensusV9,
+	protocol.ConsensusV10,
+	protocol.ConsensusV11, // first with viable payset commit type
+	protocol.ConsensusV12,
+	protocol.ConsensusV13,
+	protocol.ConsensusV14,
+	protocol.ConsensusV15, // rewards in AD
+	protocol.ConsensusV16,
+	protocol.ConsensusV17,
+	protocol.ConsensusV18,
+	protocol.ConsensusV19,
+	protocol.ConsensusV20,
+	protocol.ConsensusV21,
+	protocol.ConsensusV22,
+	protocol.ConsensusV23,
+	protocol.ConsensusV24, // teal v2 (apps)
+	protocol.ConsensusV25,
+	protocol.ConsensusV26,
+	protocol.ConsensusV27,
+	protocol.ConsensusV28,
+	protocol.ConsensusV29,
+	protocol.ConsensusV30, // teal v5 (inner txs)
+	protocol.ConsensusV31, // teal v6 (inner txs with appls)
+	protocol.ConsensusV32, // unlimited assets and apps
+	protocol.ConsensusFuture,
+}
+
+func TestContainsLatestVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// This confirms that the proto before future has no ApprovedUpgrades.  Once
+	// it does, that new version should be added to consensusByNumber.
+	require.Len(t, config.Consensus[consensusByNumber[len(consensusByNumber)-2]].ApprovedUpgrades, 0)
+	// And no funny business with vFuture
+	require.Equal(t, protocol.ConsensusFuture, consensusByNumber[len(consensusByNumber)-1])
+}
+
+// testConsensusRange allows for running tests against a range of consensus
+// versions. Generally `start` will be the version that introduced the feature,
+// and `stop` will be 0 to indicate it should work right on up through vFuture.
+// `stop` will be an actual version number if we're confirming that something
+// STOPS working as of a particular version.  When writing the test for a new
+// feature that is currently in vFuture, use the expected version number as
+// `start`.  That will correspond to vFuture until a new consensus version is
+// created and inserted in consensusByNumber. At that point, your feature is
+// probably active in that version. (If it's being held in vFuture, just
+// increment your `start`.)
+func testConsensusRange(t *testing.T, start, stop int, test func(t *testing.T, ver int)) {
+	if stop == 0 { // Treat 0 as "future"
+		stop = len(consensusByNumber) - 1
+	}
+	for i := start; i <= stop; i++ {
+		var version string
+		if i == len(consensusByNumber)-1 {
+			version = "vFuture"
+		} else {
+			version = fmt.Sprintf("v%d", i)
+		}
+		t.Run(fmt.Sprintf("cv=%s", version), func(t *testing.T) { test(t, i) })
+	}
+}
+
+func benchConsensusRange(b *testing.B, start, stop int, bench func(t *testing.B, ver int)) {
+	if stop == 0 { // Treat 0 as "future"
+		stop = len(consensusByNumber) - 1
+	}
+	for i := start; i <= stop; i++ {
+		var version string
+		if i == len(consensusByNumber)-1 {
+			version = "vFuture"
+		} else {
+			version = fmt.Sprintf("v%d", i)
+		}
+		b.Run(fmt.Sprintf("cv=%s", version), func(b *testing.B) { bench(b, i) })
+	}
+}
+
+// TestLogsInBlock ensures that logs appear in the block properly
+func TestLogsInBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Run tests from v30 onward
+	testConsensusRange(t, 30, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		createTxn := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: "byte \"APP\"\n log\n int 1",
+			// Fail the clear state
+			ClearStateProgram: "byte \"CLR\"\n log\n int 0",
+		}
+		vb := dl.fullBlock(&createTxn)
+		createInBlock := vb.Block().Payset[0]
+		appId := createInBlock.ApplyData.ApplicationID
+		require.Equal(t, "APP", createInBlock.ApplyData.EvalDelta.Logs[0])
+
+		optInTxn := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: appId,
+			OnCompletion:  transactions.OptInOC,
+		}
+		vb = dl.fullBlock(&optInTxn)
+		optInInBlock := vb.Block().Payset[0]
+		require.Equal(t, "APP", optInInBlock.ApplyData.EvalDelta.Logs[0])
+
+		clearTxn := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: appId,
+			OnCompletion:  transactions.ClearStateOC,
+		}
+		vb = dl.fullBlock(&clearTxn)
+		clearInBlock := vb.Block().Payset[0]
+		// Logs do not appear if the ClearState failed
+		require.Len(t, clearInBlock.ApplyData.EvalDelta.Logs, 0)
+	})
 }
 
 // TestGhostTransactions confirms that accounts that don't even exist
@@ -993,10 +1022,11 @@ func TestGhostTransactions(t *testing.T) {
 	*/
 
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
 
-	l, err := ledger.OpenLedger(logging.TestingLog(t), "", true, genesisInitState, config.GetDefaultLocal())
+	l, err := ledger.OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -1017,7 +1047,7 @@ func TestGhostTransactions(t *testing.T) {
 		},
 	}
 
-	eval := nextBlock(t, l, true, nil)
+	eval := nextBlock(t, l)
 	txn(t, l, eval, &asa)
 	endBlock(t, l, eval)
 
@@ -1073,7 +1103,7 @@ func TestGhostTransactions(t *testing.T) {
 	}
 
 	for i, e := range ephemeral {
-		eval = nextBlock(t, l, true, nil)
+		eval = nextBlock(t, l)
 		err := txgroup(t, l, eval, &benefactor, &e)
 		require.NoError(t, err, "i=%d %s", i, e.Type)
 		endBlock(t, l, eval)

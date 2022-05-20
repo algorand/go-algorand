@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,14 +16,19 @@
 
 package merklearray
 
-import (
-	"github.com/algorand/go-algorand/crypto"
-)
+import "github.com/algorand/go-algorand/crypto"
 
 // An Array represents a dense array of leaf elements that are
-// combined into a Merkle tree.  The GetHash method returns the
-// hash of a particular element in the array.
+// combined into a Merkle tree. The Marshal method returns a byte slice that represents the object
+// that the Tree will use to hash the leaves.
+
+// An Array is an interface that is being using when creating Merkle trees.
+// It represents a dense array of n (n is given by the Length() method) elements,
+// and returns a hash representation for each leaf (in the range)
 type Array interface {
+	// Length returns number of elements in the array.
 	Length() uint64
-	GetHash(pos uint64) (crypto.Digest, error)
+
+	// Marshal Returns a hash representation of the element located in position pos
+	Marshal(pos uint64) (crypto.Hashable, error)
 }

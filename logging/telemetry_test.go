@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -211,6 +212,44 @@ func TestDetails(t *testing.T) {
 	data := f.hookData()
 	a.NotNil(data)
 	a.Equal(details, data[0]["details"])
+}
+
+func TestHeartbeatDetails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	f := makeTelemetryTestFixture(logrus.InfoLevel)
+
+	var hb telemetryspec.HeartbeatEventDetails
+	hb.Info.Version = "v2"
+	hb.Info.VersionNum = "1234"
+	hb.Info.Channel = "alpha"
+	hb.Info.Branch = "br0"
+	hb.Info.CommitHash = "abcd"
+	hb.Metrics = map[string]float64{
+		"Hello": 38.8,
+	}
+	f.telem.logEvent(f.l, telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, hb)
+
+	data := f.hookData()
+	a.NotNil(data)
+	a.Len(data, 1)
+	a.Equal(hb, data[0]["details"])
+
+	// assert JSON serialization is backwards compatible
+	js, err := json.Marshal(data[0])
+	a.NoError(err)
+	var unjs map[string]interface{}
+	a.NoError(json.Unmarshal(js, &unjs))
+	a.Contains(unjs, "details")
+	ev := unjs["details"].(map[string]interface{})
+	Metrics := ev["Metrics"].(map[string]interface{})
+	m := ev["m"].(map[string]interface{})
+	a.Equal("v2", Metrics["version"].(string))
+	a.Equal("1234", Metrics["version-num"].(string))
+	a.Equal("alpha", Metrics["channel"].(string))
+	a.Equal("br0", Metrics["branch"].(string))
+	a.Equal("abcd", Metrics["commit-hash"].(string))
+	a.InDelta(38.8, m["Hello"].(float64), 0.01)
 }
 
 type testMetrics struct {

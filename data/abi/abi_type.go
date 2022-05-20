@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -60,6 +60,15 @@ const (
 	Tuple
 )
 
+const (
+	addressByteSize        = 32
+	checksumByteSize       = 4
+	singleByteSize         = 1
+	singleBoolSize         = 1
+	lengthEncodeByteSize   = 2
+	abiEncodingLengthLimit = 1 << 16
+)
+
 // Type is the struct that stores information about an ABI value's type.
 type Type struct {
 	abiTypeID  BaseType
@@ -73,7 +82,7 @@ type Type struct {
 	// length for static array / tuple
 	/*
 		by ABI spec, len over binary array returns number of bytes
-		the type is uint16, which allows for only lenth in [0, 2^16 - 1]
+		the type is uint16, which allows for only length in [0, 2^16 - 1]
 		representation of static length can only be constrained in uint16 type
 	*/
 	// NOTE may want to change back to uint32/uint64
@@ -127,7 +136,7 @@ func TypeOf(str string) (Type, error) {
 		stringMatches := staticArrayRegexp.FindStringSubmatch(str)
 		// match the string itself, array element type, then array length
 		if len(stringMatches) != 3 {
-			return Type{}, fmt.Errorf("static array ill formated: %s", str)
+			return Type{}, fmt.Errorf(`static array ill formated: "%s"`, str)
 		}
 		// guaranteed that the length of array is existing
 		arrayLengthStr := stringMatches[2]
@@ -145,7 +154,7 @@ func TypeOf(str string) (Type, error) {
 	case strings.HasPrefix(str, "uint"):
 		typeSize, err := strconv.ParseUint(str[4:], 10, 16)
 		if err != nil {
-			return Type{}, fmt.Errorf("ill formed uint type: %s", str)
+			return Type{}, fmt.Errorf(`ill formed uint type: "%s"`, str)
 		}
 		return makeUintType(int(typeSize))
 	case str == "byte":
@@ -154,7 +163,7 @@ func TypeOf(str string) (Type, error) {
 		stringMatches := ufixedRegexp.FindStringSubmatch(str)
 		// match string itself, then type-bitSize, and type-precision
 		if len(stringMatches) != 3 {
-			return Type{}, fmt.Errorf("ill formed ufixed type: %s", str)
+			return Type{}, fmt.Errorf(`ill formed ufixed type: "%s"`, str)
 		}
 		// guaranteed that there are 2 uint strings in ufixed string
 		ufixedSize, err := strconv.ParseUint(stringMatches[1], 10, 16)
@@ -187,7 +196,7 @@ func TypeOf(str string) (Type, error) {
 		}
 		return MakeTupleType(tupleTypes)
 	default:
-		return Type{}, fmt.Errorf("cannot convert a string %s to an ABI type", str)
+		return Type{}, fmt.Errorf(`cannot convert the string "%s" to an ABI type`, str)
 	}
 }
 
@@ -405,13 +414,6 @@ func findBoolLR(typeList []Type, index int, delta int) int {
 	return until
 }
 
-const (
-	addressByteSize      = 32
-	singleByteSize       = 1
-	singleBoolSize       = 1
-	lengthEncodeByteSize = 2
-)
-
 // ByteLen method calculates the byte length of a static ABI type.
 func (t Type) ByteLen() (int, error) {
 	switch t.abiTypeID {
@@ -458,13 +460,39 @@ func (t Type) ByteLen() (int, error) {
 	}
 }
 
+// AnyTransactionType is the ABI argument type string for a nonspecific transaction argument
+const AnyTransactionType = "txn"
+
 // IsTransactionType checks if a type string represents a transaction type
 // argument, such as "txn", "pay", "keyreg", etc.
 func IsTransactionType(s string) bool {
 	switch s {
-	case "txn", "pay", "keyreg", "acfg", "axfer", "afrz", "appl":
+	case AnyTransactionType, "pay", "keyreg", "acfg", "axfer", "afrz", "appl":
 		return true
 	default:
 		return false
 	}
 }
+
+// AccountReferenceType is the ABI argument type string for account references
+const AccountReferenceType = "account"
+
+// AssetReferenceType is the ABI argument type string for asset references
+const AssetReferenceType = "asset"
+
+// ApplicationReferenceType is the ABI argument type string for application references
+const ApplicationReferenceType = "application"
+
+// IsReferenceType checks if a type string represents a reference type argument,
+// such as "account", "asset", or "application".
+func IsReferenceType(s string) bool {
+	switch s {
+	case AccountReferenceType, AssetReferenceType, ApplicationReferenceType:
+		return true
+	default:
+		return false
+	}
+}
+
+// VoidReturnType is the ABI return type string for a method that does not return any value
+const VoidReturnType = "void"

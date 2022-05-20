@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -58,9 +57,7 @@ func (ef *ExpectFixture) initialize(t *testing.T) (err error) {
 	}
 	ef.testDataDir = os.Getenv("TESTDATADIR")
 	if ef.testDataDir == "" {
-		// Default to test/testdata in the source tree being tested
-		_, path, _, _ := runtime.Caller(0)
-		ef.testDataDir = filepath.Join(filepath.Dir(path), "../../testdata")
+		ef.testDataDir = filepath.Join(getTestDir(), "testdata")
 	}
 
 	ef.testFilter = os.Getenv("TESTFILTER")

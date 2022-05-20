@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 // Support all unix system except linux
 // in https://github.com/golang/sys/blob/master/unix/syscall_unix.go
 
+//go:build aix || darwin || dragonfly || freebsd || netbsd || openbsd || solaris
 // +build aix darwin dragonfly freebsd netbsd openbsd solaris
 
 package libgoal

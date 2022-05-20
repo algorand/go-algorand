@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 	}
 
 	var err error
-	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	initBlock.TxnCommitments, err = initBlock.PaysetCommit()
 	require.NoError(t, err)
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())

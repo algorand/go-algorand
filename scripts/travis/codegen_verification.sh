@@ -25,7 +25,7 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 
 "${SCRIPTPATH}"/../buildtools/install_buildtools.sh
 
-make gen
+make gen SHORT_PART_PERIOD=1
 
 function runGoFmt() {
     unformatted=$(gofmt -l .)
@@ -84,11 +84,14 @@ echo "Regenerate REST server"
 touch daemon/algod/api/algod.oas2.json
 make -C daemon/algod/api generate
 
+echo "Regenerate msgp files"
+make msgp
+
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
    echo Enlistment is dirty - did you forget to run make?
    git status -s
-   git diff
+   git --no-pager diff
    exit 1
 else
    echo Enlistment is clean

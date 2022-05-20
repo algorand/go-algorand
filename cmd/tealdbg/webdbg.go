@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -171,11 +171,20 @@ func (a *WebPageFrontend) configHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Extract PC from config
-	line := req.debugConfig.BreakAtLine
-	if line == noBreak {
-		s.debugger.RemoveBreakpoint(int(line))
-	} else {
-		s.debugger.SetBreakpoint(int(line))
+	for line := range req.debugConfig.ActiveBreak {
+		if req.debugConfig.NoBreak {
+			err := s.debugger.RemoveBreakpoint(int(line))
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		} else {
+			err := s.debugger.SetBreakpoint(int(line))
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

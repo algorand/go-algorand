@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -73,7 +73,6 @@ func (m *lruAccounts) flushPendingWrites() {
 			return
 		}
 	}
-	return
 }
 
 // writePending write a single persistedAccountData entry to the pendingAccounts buffer.

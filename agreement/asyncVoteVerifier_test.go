@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	voteVerifier := MakeAsyncVoteVerifier(&expiredExecPool{mainPool})
 	defer voteVerifier.Quit()
 	verifyErr := voteVerifier.verifyVote(context.Background(), nil, unauthenticatedVote{}, 0, message{}, make(chan<- asyncVerifyVoteResponse, 1))
-	require.Error(t, context.Canceled, verifyErr)
+	require.Equal(t, context.Canceled, verifyErr)
 	verifyEqVoteErr := voteVerifier.verifyEqVote(context.Background(), nil, unauthenticatedEquivocationVote{}, 0, message{}, make(chan<- asyncVerifyVoteResponse, 1))
-	require.Error(t, context.Canceled, verifyEqVoteErr)
+	require.Equal(t, context.Canceled, verifyEqVoteErr)
 }

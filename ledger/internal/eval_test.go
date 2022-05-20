@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,11 +31,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -67,109 +67,135 @@ func TestBlockEvaluatorFeeSink(t *testing.T) {
 	l := newTestLedger(t, genesisBalances)
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 }
 
-func TestPrepareEvalParams(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator, basics.Address, error) {
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	eval := BlockEvaluator{
-		prevHeader: bookkeeping.BlockHeader{
-			TimeStamp: 1234,
-			Round:     2345,
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
+
+	blkHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = false
+
+	ops, err := logic.AssembleString(`#pragma version 2
+	txn ApplicationID
+	bz create
+	byte "caller"
+	txn Sender
+	app_global_put
+	b ok
+create:
+	byte "creator"
+	txn Sender
+	app_global_put
+ok:
+	int 1`)
+	require.NoError(t, err, ops.Errors)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 2\nint 1")
+	require.NoError(t, err)
+	clear := ops.Program
+
+	genHash := l.GenesisHash()
+	header := transactions.Header{
+		Sender:      addrs[0],
+		Fee:         minFee,
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round(),
+		GenesisHash: genHash,
+	}
+	appcall1 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			GlobalStateSchema: schema,
+			ApprovalProgram:   approval,
+			ClearStateProgram: clear,
 		},
 	}
 
-	params := []config.ConsensusParams{
-		{Application: true, MaxAppProgramCost: 700},
-		config.Consensus[protocol.ConsensusV29],
-		config.Consensus[protocol.ConsensusFuture],
+	appcall2 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
 	}
 
-	// Create some sample transactions
-	payment := txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   basics.Address{1, 2, 3, 4},
-		Receiver: basics.Address{4, 3, 2, 1},
-		Amount:   100,
-	}.SignedTxnWithAD()
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2)}
+	appcall1.Group = crypto.HashObj(group)
+	appcall2.Group = crypto.HashObj(group)
+	stxn1 := appcall1.Sign(keys[0])
+	stxn2 := appcall2.Sign(keys[0])
 
-	appcall1 := txntest.Txn{
-		Type:          protocol.ApplicationCallTx,
-		Sender:        basics.Address{1, 2, 3, 4},
-		ApplicationID: basics.AppIndex(1),
-	}.SignedTxnWithAD()
-
-	appcall2 := appcall1
-	appcall2.SignedTxn.Txn.ApplicationCallTxnFields.ApplicationID = basics.AppIndex(2)
-
-	type evalTestCase struct {
-		group []transactions.SignedTxnWithAD
-
-		// indicates if prepareAppEvaluators should return a non-nil
-		// appTealEvaluator for the txn at index i
-		expected []bool
-
-		numAppCalls int
-		// Used for checking transitive pointer equality in app calls
-		// If there are no app calls in the group, it is set to -1
-		firstAppCallIndex int
+	g := []transactions.SignedTxnWithAD{
+		{
+			SignedTxn: stxn1,
+			ApplyData: transactions.ApplyData{
+				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
+				},
+				ApplicationID: 1,
+			},
+		},
+		{
+			SignedTxn: stxn2,
+			ApplyData: transactions.ApplyData{
+				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+					"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
+				}},
+		},
 	}
-
-	// Create some groups with these transactions
-	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}, 0, -1},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}, 1, 0},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}, 0, -1},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}, 1, 0},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}, 1, 1},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}, 2, 0},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}, 3, 0},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}, 1, 1},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}, 2, 0},
+	txgroup := []transactions.SignedTxn{stxn1, stxn2}
+	err = eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return eval, addrs[0], err
 	}
+	err = eval.TransactionGroup(g)
+	return eval, addrs[0], err
+}
 
-	for i, param := range params {
-		for j, testCase := range cases {
-			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
-				eval.proto = param
-				res := eval.prepareEvalParams(testCase.group)
-				require.Equal(t, len(res), len(testCase.group))
+// TestEvalAppStateCountsWithTxnGroup ensures txns in a group can't violate app state schema limits
+// the test ensures that
+// commitToParent -> applyChild copies child's cow state usage counts into parent
+// and the usage counts correctly propagated from parent cow to child cow and back
+func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-				// Compute the expected transaction group without ApplyData for
-				// the test case
-				expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
-				for k := range testCase.group {
-					expGroupNoAD[k] = testCase.group[k].SignedTxn
-				}
+	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
+}
 
-				// Ensure non app calls have a nil evaluator, and that non-nil
-				// evaluators point to the right transactions and values
-				for k, present := range testCase.expected {
-					if present {
-						require.NotNil(t, res[k])
-						require.NotNil(t, res[k].PastSideEffects)
-						require.Equal(t, res[k].GroupIndex, uint64(k))
-						require.Equal(t, res[k].TxnGroup, expGroupNoAD)
-						require.Equal(t, *res[k].Proto, eval.proto)
-						require.Equal(t, *res[k].Txn, testCase.group[k].SignedTxn)
-						require.Equal(t, res[k].MinTealVersion, res[testCase.firstAppCallIndex].MinTealVersion)
-						require.Equal(t, res[k].PooledApplicationBudget, res[testCase.firstAppCallIndex].PooledApplicationBudget)
-						if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
-							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost))
-						} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
-							require.Equal(t, *res[k].PooledApplicationBudget, uint64(eval.proto.MaxAppProgramCost*testCase.numAppCalls))
-						}
-					} else {
-						require.Nil(t, res[k])
-					}
-				}
-			})
-		}
-	}
+// TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
+// produce correct results when a txn group has storage allocate and storage update actions
+func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
+	require.NoError(t, err)
+	deltas := eval.state.deltas()
+	ad, _ := deltas.Accts.GetBasicsAccountData(addr)
+	state := ad.AppParams[1].GlobalState
+	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
+	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
 
 func TestCowCompactCert(t *testing.T) {
@@ -270,7 +296,7 @@ func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	eval := &BlockEvaluator{}
-	var rewardPoolBalance basics.AccountData
+	var rewardPoolBalance ledgercore.AccountData
 	rewardPoolBalance.MicroAlgos.Raw = 1234
 	var headerRound basics.Round
 	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
@@ -307,7 +333,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
 	genesisInitState.GenesisHash = testnetGenesisHash
 
-	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
+	rewardPoolBalance := ledgercore.ToAccountData(genesisInitState.Accounts[testPoolAddr])
 	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
@@ -408,6 +434,7 @@ type evalTestLedger struct {
 	blocks        map[basics.Round]bookkeeping.Block
 	roundBalances map[basics.Round]map[basics.Address]basics.AccountData
 	genesisHash   crypto.Digest
+	genesisProto  config.ConsensusParams
 	feeSink       basics.Address
 	rewardsPool   basics.Address
 	latestTotals  ledgercore.AccountTotals
@@ -434,8 +461,9 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 	var ot basics.OverflowTracker
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, acctData := range balances.Balances {
-		l.latestTotals.AddAccount(proto, acctData, &ot)
+		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
+	l.genesisProto = proto
 
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
@@ -495,13 +523,49 @@ func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTo
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
-	return ledger.roundBalances[rnd][addr], rnd, nil
+func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	ad := ledger.roundBalances[rnd][addr]
+	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	res := ledgercore.AppResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if params, ok := ad.AppParams[aidx]; ok {
+		res.AppParams = &params
+	}
+	if ls, ok := ad.AppLocalStates[aidx]; ok {
+		res.AppLocalState = &ls
+	}
+	return res, nil
+}
+
+func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	res := ledgercore.AssetResource{}
+	ad, ok := ledger.roundBalances[rnd][addr]
+	if !ok {
+		return res, fmt.Errorf("no such account %s", addr.String())
+	}
+	if params, ok := ad.AssetParams[aidx]; ok {
+		res.AssetParams = &params
+	}
+	if h, ok := ad.Assets[aidx]; ok {
+		res.AssetHolding = &h
+	}
+	return res, nil
 }
 
 // GenesisHash returns the genesis hash for this ledger.
 func (ledger *evalTestLedger) GenesisHash() crypto.Digest {
 	return ledger.genesisHash
+}
+
+// GenesisProto returns the genesis hash for this ledger.
+func (ledger *evalTestLedger) GenesisProto() config.ConsensusParams {
+	return ledger.genesisProto
 }
 
 // Latest returns the latest known block round added to the ledger.
@@ -523,10 +587,16 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
 		newBalances[k] = v
 	}
+
 	// update
 	deltas := vb.Delta()
-	for _, addr := range deltas.Accts.ModifiedAccounts() {
-		accountData, _ := deltas.Accts.Get(addr)
+	// convert deltas into balance records
+	// the code assumes all modified accounts has entries in NewAccts.accts
+	// to enforce this fact we call ModifiedAccounts() with a panic as a side effect
+	deltas.Accts.ModifiedAccounts()
+	for i := 0; i < deltas.Accts.Len(); i++ {
+		addr, _ := deltas.Accts.GetByIdx(i) // <-- this assumes resources deltas has addr in accts
+		accountData, _ := deltas.Accts.GetBasicsAccountData(addr)
 		newBalances[addr] = accountData
 	}
 	ledger.roundBalances[vb.Block().Round()] = newBalances
@@ -654,8 +724,16 @@ func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basic
 	return errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error) {
-	return basics.AccountData{}, basics.Round(0), errors.New("not implemented")
+func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	return ledgercore.AppResource{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	return ledgercore.AssetResource{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -728,6 +806,8 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 		}
 		tmp := genesisInitState.Accounts[addr]
 		tmp.Status = basics.Online
+		crypto.RandBytes(tmp.StateProofID[:])
+		crypto.RandBytes(tmp.SelectionID[:])
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -788,6 +868,11 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
 	require.NoError(t, err)
 
+	acctData, _ := blkEval.state.lookup(recvAddr)
+
+	require.Equal(t, merklesignature.Verifier{}, acctData.StateProofID)
+	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
+
 	badBlock := *validatedBlock
 
 	// First validate that bad block is fine if we dont touch it...
@@ -839,8 +924,8 @@ type failRoundCowParent struct {
 	roundCowBase
 }
 
-func (p *failRoundCowParent) lookup(basics.Address) (basics.AccountData, error) {
-	return basics.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
+func (p *failRoundCowParent) lookup(basics.Address) (ledgercore.AccountData, error) {
+	return ledgercore.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
 }
 
 // TestExpiredAccountGenerationWithDiskFailure tests edge cases where disk failures can lead to ledger look up failures
@@ -921,9 +1006,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	err = eval.endOfBlock()
 	require.Error(t, err)
 
-	eval.block.ExpiredParticipationAccounts = []basics.Address{
-		basics.Address{},
-	}
+	eval.block.ExpiredParticipationAccounts = []basics.Address{{}}
 	eval.state.mods.Accts = ledgercore.AccountDeltas{}
 	eval.state.lookupParent = &failRoundCowParent{}
 	err = eval.endOfBlock()
@@ -955,7 +1038,16 @@ func TestExpiredAccountGeneration(t *testing.T) {
 			continue
 		}
 		tmp := genesisInitState.Accounts[addr]
+
+		// make up online account data
 		tmp.Status = basics.Online
+		tmp.VoteFirstValid = basics.Round(1)
+		tmp.VoteLastValid = basics.Round(100)
+		tmp.VoteKeyDilution = 0x1234123412341234
+		crypto.RandBytes(tmp.SelectionID[:])
+		crypto.RandBytes(tmp.VoteID[:])
+		crypto.RandBytes(tmp.StateProofID[:])
+
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -1026,5 +1118,5 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, recvAcct.VoteKeyDilution, uint64(0))
 	require.Equal(t, recvAcct.VoteID, crypto.OneTimeSignatureVerifier{})
 	require.Equal(t, recvAcct.SelectionID, crypto.VRFVerifier{})
-
+	require.Equal(t, recvAcct.StateProofID, merklesignature.Verifier{})
 }

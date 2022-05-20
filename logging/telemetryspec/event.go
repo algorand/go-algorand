@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,14 @@ const HeartbeatEvent Event = "Heartbeat"
 
 // HeartbeatEventDetails contains details for the StartupEvent
 type HeartbeatEventDetails struct {
-	Metrics map[string]string
+	Info struct {
+		Version    string `json:"version"`
+		VersionNum string `json:"version-num"`
+		Channel    string `json:"channel"`
+		Branch     string `json:"branch"`
+		CommitHash string `json:"commit-hash"`
+	} `json:"Metrics"` // backwards compatible name
+	Metrics map[string]float64 `json:"m"`
 }
 
 // CatchupStartEvent event
@@ -73,9 +80,13 @@ const BlockAcceptedEvent Event = "BlockAccepted"
 
 // BlockAcceptedEventDetails contains details for the BlockAcceptedEvent
 type BlockAcceptedEventDetails struct {
-	Address string
-	Hash    string
-	Round   uint64
+	Address      string
+	Hash         string
+	Round        uint64
+	ValidatedAt  time.Duration
+	PreValidated bool
+	PropBufLen   uint64
+	VoteBufLen   uint64
 }
 
 // TopAccountsEvent event

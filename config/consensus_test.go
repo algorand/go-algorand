@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,6 +55,17 @@ func TestConsensusUpgradeWindow(t *testing.T) {
 				require.Zerof(t, delay, "From :%v\nTo :%v", proto, toVersion)
 
 			}
+		}
+	}
+}
+
+func TestConsensusCompactCertParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, params := range Consensus {
+		if params.CompactCertRounds != 0 {
+			require.Equal(t, uint64(1<<16), (params.MaxKeyregValidPeriod+1)/params.CompactCertRounds,
+				"Validity period divided by CompactCertRounds should allow for no more than %d generated keys", 1<<16)
 		}
 	}
 }

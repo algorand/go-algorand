@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,11 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var voteVerifierOutFullCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_vote_verifier_responses_dropped", Description: "Number of voteVerifier responses dropped due to full channel"})
 
 // TODO put these in config
 const (
@@ -210,6 +214,7 @@ func (c *poolCryptoVerifier) voteFillWorker(toBundleWait chan<- bundleFuture) {
 				select {
 				case c.votes.out <- asyncVerifyVoteResponse{index: votereq.TaskIndex, err: err, cancelled: true}:
 				default:
+					voteVerifierOutFullCounter.Inc(nil)
 					c.log.Infof("poolCryptoVerifier.voteFillWorker unable to write failed enqueue response to output channel")
 				}
 			}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,10 @@ type Clock interface {
 	// Zero returns a reset Clock. TimeoutAt channels will use the point
 	// at which Zero was called as their reference point.
 	Zero() Clock
+
+	// Since returns the time spent between the last time the clock was zeroed out and the current
+	// wall clock time.
+	Since() time.Duration
 
 	// TimeoutAt returns a channel that fires delta time after Zero was called.
 	// If delta has already passed, it returns a closed channel.

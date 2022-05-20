@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,20 +43,28 @@ type addrApp struct {
 type emptyLedger struct {
 }
 
-func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
-	return basics.AccountData{}, nil
+func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
+	return ledgercore.AccountData{}, nil
+}
+
+func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
+	return ledgercore.AppParamsDelta{}, true, nil
+}
+
+func (ml *emptyLedger) lookupAssetParams(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetParamsDelta, bool, error) {
+	return ledgercore.AssetParamsDelta{}, true, nil
+}
+
+func (ml *emptyLedger) lookupAppLocalState(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppLocalStateDelta, bool, error) {
+	return ledgercore.AppLocalStateDelta{}, true, nil
+}
+
+func (ml *emptyLedger) lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error) {
+	return ledgercore.AssetHoldingDelta{}, true, nil
 }
 
 func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
 	return nil
-}
-
-func (ml *emptyLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
-}
-
-func (ml *emptyLedger) getAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
 }
 
 func (ml *emptyLedger) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -696,7 +704,7 @@ func TestApplyChild(t *testing.T) {
 		a.Empty(delta.action)
 		a.Empty(*delta.counts)
 		a.Empty(*delta.maxCounts)
-		a.Equal(0, len(delta.kvCow))
+		a.Zero(len(delta.kvCow))
 	}
 
 	parent.applyChild(&child)
@@ -808,6 +816,7 @@ func TestApplyStorageDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
+	addr := ledgertesting.RandomAddress()
 
 	created := valueDelta{
 		old:       basics.TealValue{},
@@ -825,29 +834,53 @@ func TestApplyStorageDelta(t *testing.T) {
 		oldExists: true, newExists: false,
 	}
 
-	freshAD := func(kv basics.TealKeyValue) basics.AccountData {
-		ad := basics.AccountData{}
-		ad.AppParams = map[basics.AppIndex]basics.AppParams{
-			1: {GlobalState: make(basics.TealKeyValue)},
-			2: {GlobalState: kv},
-		}
-		ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{
-			1: {KeyValue: make(basics.TealKeyValue)},
-			2: {KeyValue: kv},
-		}
-		return ad
+	freshCow := func(addr basics.Address, kv basics.TealKeyValue) *roundCowState {
+		cow := makeRoundCowState(
+			nil, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
+			0, ledgercore.AccountTotals{}, 0)
+		cow.mods.Accts.Upsert(
+			addr,
+			ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+				TotalAppParams:      2,
+				TotalAppLocalStates: 2,
+			}},
+		)
+
+		params1 := basics.AppParams{GlobalState: make(basics.TealKeyValue)}
+		params2 := basics.AppParams{GlobalState: kv}
+
+		state1 := basics.AppLocalState{KeyValue: make(basics.TealKeyValue)}
+		state2 := basics.AppLocalState{KeyValue: kv}
+
+		cow.mods.Accts.UpsertAppResource(addr, 1, ledgercore.AppParamsDelta{Params: &params1}, ledgercore.AppLocalStateDelta{LocalState: &state1})
+		cow.mods.Accts.UpsertAppResource(addr, 2, ledgercore.AppParamsDelta{Params: &params2}, ledgercore.AppLocalStateDelta{LocalState: &state2})
+
+		return cow
 	}
 
-	applyAll := func(kv basics.TealKeyValue, sd *storageDelta) basics.AccountData {
-		data, err := applyStorageDelta(freshAD(kv), storagePtr{1, true}, sd)
+	applyAll := func(kv basics.TealKeyValue, sd *storageDelta) *roundCowState {
+		cow := freshCow(addr, kv)
+		err := applyStorageDelta(cow, addr, storagePtr{1, true}, sd)
 		a.NoError(err)
-		data, err = applyStorageDelta(data, storagePtr{2, true}, sd)
+		err = applyStorageDelta(cow, addr, storagePtr{2, true}, sd)
 		a.NoError(err)
-		data, err = applyStorageDelta(data, storagePtr{1, false}, sd)
+		err = applyStorageDelta(cow, addr, storagePtr{1, false}, sd)
 		a.NoError(err)
-		data, err = applyStorageDelta(data, storagePtr{2, false}, sd)
+		err = applyStorageDelta(cow, addr, storagePtr{2, false}, sd)
 		a.NoError(err)
-		return data
+		return cow
+	}
+
+	getAllFromCow := func(cow *roundCowState) (*basics.AppParams, *basics.AppParams, *basics.AppLocalState, *basics.AppLocalState) {
+		params1, ok := cow.mods.Accts.GetAppParams(addr, 1)
+		a.True(ok)
+		params2, ok := cow.mods.Accts.GetAppParams(addr, 2)
+		a.True(ok)
+		state1, ok := cow.mods.Accts.GetAppLocalState(addr, 1)
+		a.True(ok)
+		state2, ok := cow.mods.Accts.GetAppLocalState(addr, 2)
+		a.True(ok)
+		return params1.Params, params2.Params, state1.LocalState, state2.LocalState
 	}
 
 	kv := basics.TealKeyValue{
@@ -860,29 +893,32 @@ func TestApplyStorageDelta(t *testing.T) {
 
 	// check no action
 	// no op
-	data := applyAll(kv, &sdu)
-	a.Equal(0, len(data.AppParams[1].GlobalState))
-	a.Equal(len(kv), len(data.AppParams[2].GlobalState))
-	a.Equal(0, len(data.AppLocalStates[1].KeyValue))
-	a.Equal(len(kv), len(data.AppLocalStates[2].KeyValue))
+	cow := applyAll(kv, &sdu)
+	params1, params2, state1, state2 := getAllFromCow(cow)
+	a.Zero(len(params1.GlobalState))
+	a.Equal(len(kv), len(params2.GlobalState))
+	a.Zero(len(state1.KeyValue))
+	a.Equal(len(kv), len(state2.KeyValue))
 
 	// check dealloc action
 	// delete all
 	sdu.action = deallocAction
-	data = applyAll(kv, &sdu)
-	a.Equal(0, len(data.AppParams[1].GlobalState))
-	a.Equal(0, len(data.AppParams[2].GlobalState))
-	a.Equal(0, len(data.AppLocalStates[1].KeyValue))
-	a.Equal(0, len(data.AppLocalStates[2].KeyValue))
+	cow = applyAll(kv, &sdu)
+	params1, params2, state1, state2 = getAllFromCow(cow)
+	a.Nil(params1)
+	a.Nil(params2)
+	a.Nil(state1)
+	a.Nil(state2)
 
 	// check alloc action
 	// re-alloc storage and apply delta
 	sdu.action = allocAction
-	data = applyAll(kv, &sdu)
-	a.Equal(2, len(data.AppParams[1].GlobalState))
-	a.Equal(2, len(data.AppParams[2].GlobalState))
-	a.Equal(2, len(data.AppLocalStates[1].KeyValue))
-	a.Equal(2, len(data.AppLocalStates[2].KeyValue))
+	cow = applyAll(kv, &sdu)
+	params1, params2, state1, state2 = getAllFromCow(cow)
+	a.Equal(2, len(params1.GlobalState))
+	a.Equal(2, len(params2.GlobalState))
+	a.Equal(2, len(state1.KeyValue))
+	a.Equal(2, len(state2.KeyValue))
 
 	// check remain action
 	// unique keys: merge storage and deltas
@@ -900,9 +936,10 @@ func TestApplyStorageDelta(t *testing.T) {
 	}
 
 	sdu.action = remainAllocAction
-	data = applyAll(kv, &sdu)
-	testUniqueKeys(data.AppParams[1].GlobalState, data.AppParams[2].GlobalState)
-	testUniqueKeys(data.AppLocalStates[1].KeyValue, data.AppLocalStates[2].KeyValue)
+	cow = applyAll(kv, &sdu)
+	params1, params2, state1, state2 = getAllFromCow(cow)
+	testUniqueKeys(params1.GlobalState, params2.GlobalState)
+	testUniqueKeys(state1.KeyValue, state2.KeyValue)
 
 	// check remain action
 	// duplicate keys: merge storage and deltas
@@ -917,21 +954,47 @@ func TestApplyStorageDelta(t *testing.T) {
 	}
 
 	sdd.action = remainAllocAction
-	data = applyAll(kv, &sdd)
-	testDuplicateKeys(data.AppParams[1].GlobalState, data.AppParams[2].GlobalState)
-	testDuplicateKeys(data.AppLocalStates[1].KeyValue, data.AppLocalStates[2].KeyValue)
+	cow = applyAll(kv, &sdd)
+	params1, params2, state1, state2 = getAllFromCow(cow)
+	testDuplicateKeys(params1.GlobalState, params2.GlobalState)
+	testDuplicateKeys(state1.KeyValue, state2.KeyValue)
 
 	sd := storageDelta{action: deallocAction, kvCow: map[string]valueDelta{}}
-	data, err := applyStorageDelta(basics.AccountData{}, storagePtr{1, true}, &sd)
+	cow = makeRoundCowState(
+		nil, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
+		0, ledgercore.AccountTotals{}, 0)
+	cow.mods.Accts.Upsert(
+		addr,
+		ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+			TotalAppParams:      1,
+			TotalAppLocalStates: 1,
+		}},
+	)
+	baseCow := makeRoundCowBase(nil, 0, 0, 0, config.ConsensusParams{})
+	baseCow.updateAppResourceCache(ledgercore.AccountApp{Address: addr, App: 1}, ledgercore.AppResource{})
+	cow.lookupParent = baseCow
+
+	err := applyStorageDelta(cow, addr, storagePtr{1, true}, &sd)
 	a.NoError(err)
-	a.Nil(data.AppParams)
-	a.Nil(data.AppLocalStates)
-	a.True(data.IsZero())
-	data, err = applyStorageDelta(basics.AccountData{}, storagePtr{1, false}, &sd)
+	params1d, ok := cow.mods.Accts.GetAppParams(addr, 1)
+	params1 = params1d.Params
+	a.True(ok)
+	state1d, ok := cow.mods.Accts.GetAppLocalState(addr, 1)
+	state1 = state1d.LocalState
+	a.False(ok)
+	a.Nil(params1)
+	a.Nil(state1)
+
+	err = applyStorageDelta(cow, addr, storagePtr{1, false}, &sd)
 	a.NoError(err)
-	a.Nil(data.AppParams)
-	a.Nil(data.AppLocalStates)
-	a.True(data.IsZero())
+	params1d, ok = cow.mods.Accts.GetAppParams(addr, 1)
+	params1 = params1d.Params
+	a.True(ok)
+	state1d, ok = cow.mods.Accts.GetAppLocalState(addr, 1)
+	state1 = state1d.LocalState
+	a.True(ok)
+	a.Nil(params1)
+	a.Nil(state1)
 }
 
 func TestCowAllocated(t *testing.T) {
@@ -1015,15 +1078,15 @@ func TestCowGet(t *testing.T) {
 
 	addr1 := ledgertesting.RandomAddress()
 	bre := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}
-	c.mods.Accts.Upsert(addr1, bre)
+	c.mods.Accts.Upsert(addr1, ledgercore.ToAccountData(bre))
 
 	bra, err := c.Get(addr1, true)
 	a.NoError(err)
-	a.Equal(bre, bra)
+	a.Equal(ledgercore.ToAccountData(bre), bra)
 
 	bra, err = c.Get(addr1, false)
 	a.NoError(err)
-	a.Equal(bre, bra)
+	a.Equal(ledgercore.ToAccountData(bre), bra)
 
 	// ensure other requests go down to roundCowParent
 	a.Panics(func() { c.Get(ledgertesting.RandomAddress(), true) })
