@@ -26,8 +26,12 @@ import (
 
 // NewTagCounter makes a set of metrics under rootName for tagged counting.
 // "{TAG}" in rootName is replaced by the tag, otherwise "_{TAG}" is appended.
-func NewTagCounter(rootName, desc string) *TagCounter {
+// Optionally provided declaredTags counters for these names up front (making them easier to discover).
+func NewTagCounter(rootName, desc string, declaredTags ...string) *TagCounter {
 	tc := &TagCounter{Name: rootName, Description: desc}
+	for _, tag := range declaredTags {
+		tc.Add(tag, 0)
+	}
 	DefaultRegistry().Register(tc)
 	return tc
 }

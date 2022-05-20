@@ -100,6 +100,14 @@ count_msgs_RX{host="myhost"} 0
 `
 	expfmt := sbOut.String()
 	require.True(t, expfmt == tx_expected+rx_expected || expfmt == rx_expected+tx_expected, "bad fmt: %s", expfmt)
+
+	tc2 := NewTagCounter("declared", "number of {TAG}s", "A", "B")
+	a_expected := `# HELP declared_A number of As\n# TYPE declared_A counter\ndeclared_A{host="h"} 0\n`
+	b_expected := `# HELP declared_B number of Bs\n# TYPE declared_B counter\ndeclared_B{host="h"} 0\n`
+	sbOut = strings.Builder{}
+	tc2.WriteMetric(&sbOut, `host="h"`)
+	expfmt = sbOut.String()
+	require.True(t, expfmt == a_expected+b_expected || expfmt == b_expected+a_expected, "bad fmt: %s", expfmt)
 }
 
 func BenchmarkTagCounter(b *testing.B) {
