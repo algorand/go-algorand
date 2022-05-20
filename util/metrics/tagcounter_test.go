@@ -80,6 +80,28 @@ func TestTagCounter(t *testing.T) {
 	}
 }
 
+func TestTagCounterWriteMetric(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tc := NewTagCounter("count_msgs_{TAG}", "number of {TAG} messages")
+	tc.Add("TX", 100)
+	tc.Add("TX", 1)
+	tc.Add("RX", 2)
+	tc.Add("RX", 202)
+
+	var sbOut strings.Builder
+	tc.WriteMetric(&sbOut, `host="myhost"`)
+	require.Equal(t,
+		`# HELP count_msgs_TX number of TX messages
+# TYPE count_msgs_TX counter
+count_msgs_TX{host="myhost"} 101
+# HELP count_msgs_RX number of RX messages
+# TYPE count_msgs_RX counter
+count_msgs_RX{host="myhost"} 204
+`,
+		sbOut.String())
+}
+
 func BenchmarkTagCounter(b *testing.B) {
 	b.Logf("b.N = %d", b.N)
 	t := b
