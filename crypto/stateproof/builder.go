@@ -48,7 +48,7 @@ type sigslot struct {
 }
 
 // Builder keeps track of signatures on a message and eventually produces
-// a stater proof for that message.
+// a state proof for that message.
 type Builder struct {
 	data           MessageHash
 	round          uint64
