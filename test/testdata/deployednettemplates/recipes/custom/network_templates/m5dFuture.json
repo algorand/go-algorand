@@ -8,7 +8,7 @@
     "relays": {
       "config": "./configs/relay.json",
       "type": "m5d.4xl",
-      "count": 1
+      "count": 3
     },
     "participatingNodes": {
       "config": "./configs/node.json",
