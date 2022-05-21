@@ -381,7 +381,6 @@ func (ccw *Worker) tryBuilding() {
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)
 		}
-		ccw.log.Infof("ccw.tryBuilding: broadcasting compact cert txn for %d firstValid %d", rnd, firstValid)
 	}
 }
 

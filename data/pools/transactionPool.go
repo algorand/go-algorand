@@ -816,6 +816,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 						}
 					}
 					stats.TotalLength += uint64(encodedLen)
+					if txib.Txn.Type == protocol.CompactCertTx {
+						stats.HasStateProofNextRound = uint64(assembled.Block().CompactCert[protocol.CompactCertBasic].CompactCertNextRound)
+					}
 				}
 
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
