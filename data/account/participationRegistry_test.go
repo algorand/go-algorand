@@ -46,7 +46,7 @@ import (
 )
 
 // TODO: change to ConsensusCurrentVersion when updated
-var CompactCertRounds = config.Consensus[protocol.ConsensusFuture].CompactCertRounds
+var stateProofIntervalForTests = config.Consensus[protocol.ConsensusFuture].StateProofInterval
 
 func getRegistry(t testing.TB) (registry *participationDB, dbfile string) {
 	return getRegistryImpl(t, true, false)
@@ -924,7 +924,7 @@ func TestAddingSecretTwice(t *testing.T) {
 		panic(err)
 	}
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
 	access.Close()
 	a.NoError(err)
 
@@ -936,7 +936,7 @@ func TestAddingSecretTwice(t *testing.T) {
 	// Append key
 	var keys StateProofKeys
 
-	keysRound := merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keysRound := merklesignature.KeyRoundPair{Round: stateProofIntervalForTests, Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
 	keys = append(keys, keysRound)
 
 	err = registry.AppendKeys(id, keys)
@@ -962,7 +962,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 		panic(err)
 	}
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
 	access.Close()
 	a.NoError(err)
 
@@ -977,29 +977,29 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.Nil(partPerRound.StateProofSecrets)
 
 	// Should return nil as well since no state proof keys were added
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
+	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests))
 	a.NoError(err)
 	a.Nil(partPerRound.StateProofSecrets)
 
 	// Append key
 	keys := make(StateProofKeys, 1)
-	keys[0] = merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keys[0] = merklesignature.KeyRoundPair{Round: stateProofIntervalForTests, Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
 
 	a.NoError(registry.Flush(defaultTimeout))
 
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds)-1)
+	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests)-1)
 	a.NoError(err)
 	a.Nil(partPerRound.StateProofSecrets)
 
-	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(CompactCertRounds))
+	partPerRound, err = registry.GetStateProofForRound(id, basics.Round(stateProofIntervalForTests))
 	a.NoError(err)
 	a.NotNil(partPerRound.StateProofSecrets)
 
 	a.Equal(*partPerRound.StateProofSecrets.SigningKey, *keys[0].Key)
-	a.Equal(CompactCertRounds, keys[0].Round)
+	a.Equal(stateProofIntervalForTests, keys[0].Round)
 }
 
 type keypairs []merklesignature.KeyRoundPair
@@ -1104,7 +1104,7 @@ func TestFlushResetsLastError(t *testing.T) {
 	a.NoError(err)
 
 	root, err := GenerateRoot(access)
-	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(CompactCertRounds*2), 3)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
 	access.Close()
 	a.NoError(err)
 
@@ -1116,7 +1116,7 @@ func TestFlushResetsLastError(t *testing.T) {
 	// Append key
 	var keys StateProofKeys
 
-	keysRound := merklesignature.KeyRoundPair{Round: CompactCertRounds, Key: p.StateProofSecrets.GetKey(CompactCertRounds)}
+	keysRound := merklesignature.KeyRoundPair{Round: stateProofIntervalForTests, Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
 	keys = append(keys, keysRound)
 
 	err = registry.AppendKeys(id, keys)

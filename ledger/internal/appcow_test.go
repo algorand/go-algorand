@@ -95,7 +95,7 @@ func (ml *emptyLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, erro
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (ml *emptyLedger) compactCertNext() basics.Round {
+func (ml *emptyLedger) stateProofNext() basics.Round {
 	return basics.Round(0)
 }
 

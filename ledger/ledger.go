@@ -429,10 +429,10 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
-// CompactCertVoters returns the top online accounts at round rnd.
+// VotersForStateProof returns the top online accounts at round rnd.
 // The result might be nil, even with err=nil, if there are no voters
-// for that round because compact certs were not enabled.
-func (l *Ledger) CompactCertVoters(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+// for that round because state proofs were not enabled.
+func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.voters.getVoters(rnd)
@@ -768,21 +768,21 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 }
 
 // GetProvenWeight computes the provenWeight for building or verifying
-// a compact cert for block hdr, using voters from block votersHdr.
+// a state proof for block hdr, using voters from block votersHdr.
 func GetProvenWeight(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockHeader) (uint64, error) {
 	return internal.GetProvenWeight(votersHdr, hdr)
 }
 
-// AcceptableCompactCertWeight computes the acceptable signed weight
-// of a compact cert if it were to appear in a transaction with a
-// particular firstValid round.  Earlier rounds require a smaller cert.
-// votersHdr specifies the block that contains the Merkle commitment of
-// the voters for this compact cert (and thus the compact cert is for
-// votersHdr.Round() + CompactCertRounds).
+// AcceptableStateProofWeight computes the acceptable signed weight
+// of a state proof if it were to appear in a transaction with a
+// particular firstValid round.  Earlier rounds require a smaller proof.
+// votersHdr specifies the block that contains the vector commitment of
+// the voters for this state proof (and thus the state proof is for
+// votersHdr.Round() + StateProofInterval).
 //
 // logger must not be nil; use at least logging.Base()
-func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
-	return internal.AcceptableCompactCertWeight(votersHdr, firstValid, logger)
+func AcceptableStateProofWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
+	return internal.AcceptableStateProofWeight(votersHdr, firstValid, logger)
 }
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.

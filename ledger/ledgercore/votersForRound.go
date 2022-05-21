@@ -24,8 +24,8 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
@@ -51,7 +51,7 @@ type VotersForRound struct {
 	// in participants.
 	Proto config.ConsensusParams
 
-	// Participants is the array of top #CompactCertVoters online accounts
+	// Participants is the array of top #StateProofVotersCommitment online accounts
 	// in this round, sorted by normalized balance (to make sure heavyweight
 	// accounts are biased to the front).
 	Participants basics.ParticipantsArray
@@ -82,11 +82,11 @@ func MakeVotersForRound() *VotersForRound {
 func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.BlockHeader) error {
 	r := hdr.Round
 
-	// certRound is the block that we expect to form a compact certificate for,
+	// stateProofRound is the block that we expect to form a state proof for,
 	// using the balances from round r.
-	certRound := r + basics.Round(tr.Proto.CompactCertVotersLookback+tr.Proto.CompactCertRounds)
+	stateProofRound := r + basics.Round(tr.Proto.StateProofVotersLookback+tr.Proto.StateProofInterval)
 
-	top, err := onlineTop(r, certRound, tr.Proto.CompactCertTopVoters)
+	top, err := onlineTop(r, stateProofRound, tr.Proto.StateProofTopVoters)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (tr *VotersForRound) LoadTree(onlineTop TopOnlineAccounts, hdr bookkeeping.
 		addrToPos[acct.Address] = uint64(i)
 	}
 
-	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.BuildVectorCommitmentTree(participants, crypto.HashFactory{HashType: stateproof.HashType})
 	if err != nil {
 		return err
 	}

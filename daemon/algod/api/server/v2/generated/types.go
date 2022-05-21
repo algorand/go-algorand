@@ -721,7 +721,6 @@ type PostTransactionsResponse struct {
 type ProofResponse struct {
 
 	// The type of hash function used to create the proof, must be one of:
-	// * sumhash
 	// * sha512_256
 	// * sha256
 	Hashtype string `json:"hashtype"`
@@ -828,6 +827,11 @@ type GetBlockParams struct {
 
 // GetProofParams defines parameters for GetProof.
 type GetProofParams struct {
+
+	// The type of hash function used to create the proof, must be one of:
+	// * sha512_256
+	// * sha256
+	Hashtype *string `json:"hashtype,omitempty"`
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`

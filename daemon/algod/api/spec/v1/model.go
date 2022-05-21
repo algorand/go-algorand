@@ -524,10 +524,10 @@ type Transaction struct {
 	// required: true
 	ApplicationCall *ApplicationCallTransactionType `json:"app,omitempty"`
 
-	// CompactCert
+	// StateProof
 	//
 	// required: true
-	CompactCert *CompactCertTransactionType `json:"compactcert,omitempty"`
+	StateProof *StateProofTransactionType `json:"sp,omitempty"`
 
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
@@ -776,25 +776,25 @@ type ApplicationCallTransactionType struct {
 	OnCompletion string `json:"oncompletion"`
 }
 
-// CompactCertTransactionType contains the additional fields for a compact cert transaction
-// swagger:model CompactCertTransactionType
-type CompactCertTransactionType struct {
-	// CertIntervalLatestRound is the latest round in the interval this compact cert attests to.
+// StateProofTransactionType contains the additional fields for a state proof transaction
+// swagger:model StateProofTransactionType
+type StateProofTransactionType struct {
+	// StateProofIntervalLatestRound is the latest round in the interval this state proof attests to.
 	//
 	// required: true
-	CertIntervalLatestRound uint64 `json:"rnd"`
+	StateProofIntervalLatestRound uint64 `json:"sprnd"`
 
-	// Cert is the msgpack encoding of the compact cert.
+	// StateProof is the msgpack encoding of the state proof.
 	//
 	// required: true
 	// swagger:strfmt byte
-	Cert []byte `json:"cert"`
+	StateProof []byte `json:"sp"`
 
-	// CertMsg is the msgpack encoding of the state proof message.
+	// StateProofMessage is the msgpack encoding of the state proof message.
 	//
 	// required: true
 	// swagger:strfmt byte
-	CertMsg []byte `json:"certmsg"`
+	StateProofMessage []byte `json:"spmsg"`
 }
 
 // TransactionList contains a list of transactions
@@ -919,8 +919,8 @@ type Block struct {
 	// TransactionsRoot authenticates the set of transactions appearing in the block.
 	// More specifically, it's the root of a merkle tree whose leaves are the block's Txids, in lexicographic order.
 	// For the empty block, it's 0.
-	// Note that the TxnRoot does not authenticate the signatures on the transactions, only the transactions themselves.
-	// Two blocks with the same transactions but in a different order and with different signatures will have the same TxnRoot.
+	// Note that the TxnCommitments does not authenticate the signatures on the transactions, only the transactions themselves.
+	// Two blocks with the same transactions but in a different order and with different signatures will have the same TxnCommitments.
 	//
 	// required: true
 	TransactionsRoot string `json:"txnRoot"`
@@ -947,24 +947,6 @@ type Block struct {
 
 	UpgradeState
 	UpgradeVote
-
-	// CompactCertVoters is the root of the merkle tree of voters for compact certs.
-	//
-	// required: true
-	// swagger:strfmt byte
-	CompactCertVoters []byte `json:"compactCertVoters"`
-
-	// CompactCertVotersTotal is the total amount of microalgos held by the voters in
-	// the CompactCertVoters merkle tree.
-	//
-	// required: true
-	CompactCertVotersTotal uint64 `json:"compactCertVotersTotal"`
-
-	// CompactCertNextRound is the next round for which a compact certificate is
-	// expected.
-	//
-	// required: true
-	CompactCertNextRound uint64 `json:"compactCertNextRound"`
 }
 
 // UpgradeState contains the information about a current state of an upgrade

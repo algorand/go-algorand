@@ -409,6 +409,11 @@ func TestAcctUpdates(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -517,6 +522,9 @@ func TestAcctUpdates(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
+
+	// Force memory release to be used for next tests.
+	runtime.GC()
 }
 func TestAcctUpdatesFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -698,7 +706,6 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)
-
 }
 
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {

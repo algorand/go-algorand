@@ -179,7 +179,7 @@ type accountUpdates struct {
 	// accountsReadCond used to synchronize read access to the internal data structures.
 	accountsReadCond *sync.Cond
 
-	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
+	// voters keeps track of vector commitments of online accounts, used for state proofs.
 	voters *votersTracker
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
@@ -682,8 +682,8 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 	return aul.au.ledger.GenesisProto()
 }
 
-// CompactCertVoters returns the top online accounts at round rnd.
-func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
+// VotersForStateProof returns the top online accounts at round rnd.
+func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
 	return aul.au.voters.getVoters(rnd)
 }
 

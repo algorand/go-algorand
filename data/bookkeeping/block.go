@@ -46,10 +46,8 @@ type (
 		// Sortition seed
 		Seed committee.Seed `codec:"seed"`
 
-		// TxnRoot authenticates the set of transactions appearing in the block.
-		// The commitment is computed based on the PaysetCommit type specified
-		// in the block's consensus protocol.
-		TxnRoot crypto.Digest `codec:"txn"`
+		// TxnCommitments authenticates the set of transactions appearing in the block.
+		TxnCommitments
 
 		// TimeStamp in seconds since epoch
 		TimeStamp int64 `codec:"ts"`
@@ -121,14 +119,26 @@ type (
 		// started being supported).
 		TxnCounter uint64 `codec:"tc"`
 
-		// CompactCert tracks the state of compact certs, potentially
-		// for multiple types of certs.
-		//msgp:sort protocol.CompactCertType protocol.SortCompactCertType
-		CompactCert map[protocol.CompactCertType]CompactCertState `codec:"cc,allocbound=protocol.NumCompactCertTypes"`
+		// StateProofTracking tracks the status of the state proofs, potentially
+		// for multiple types of ASPs (Algorand's State Proofs).
+		//msgp:sort protocol.StateProofType protocol.SortStateProofType
+		StateProofTracking map[protocol.StateProofType]StateProofTrackingData `codec:"spt,allocbound=protocol.NumStateProofTypes"`
 
 		// ParticipationUpdates contains the information needed to mark
 		// certain accounts offline because their participation keys expired
 		ParticipationUpdates
+	}
+
+	// TxnCommitments represents the commitments computed from the transactions in the block.
+	// It contains multiple commitments based on different algorithms and hash functions, to support different use cases.
+	TxnCommitments struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+		// Root of transaction merkle tree using SHA512_256 hash function.
+		// This commitment is computed based on the PaysetCommit type specified in the block's consensus protocol.
+		NativeSha512_256Commitment crypto.Digest `codec:"txn"`
+
+		// Root of transaction vector commitment merkle tree using SHA256 hash function
+		Sha256Commitment crypto.Digest `codec:"txn256"`
 	}
 
 	// ParticipationUpdates represents participation account data that
@@ -204,27 +214,27 @@ type (
 		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
 	}
 
-	// CompactCertState tracks the state of compact certificates.
-	CompactCertState struct {
+	// StateProofTrackingData tracks the status of state proofs.
+	StateProofTrackingData struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		// CompactCertVoters is the root of a Merkle tree containing the
-		// online accounts that will help sign a compact certificate.  The
-		// Merkle root, and the compact certificate, happen on blocks that
-		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
-		// that are not a multiple of ConsensusParams.CompactCertRounds,
+		// StateProofVotersCommitment is the root of a vector commitment containing the
+		// online accounts that will help sign a state proof.  The
+		// VC root, and the state proof, happen on blocks that
+		// are a multiple of ConsensusParams.StateProofRounds.  For blocks
+		// that are not a multiple of ConsensusParams.StateProofRounds,
 		// this value is zero.
-		CompactCertVoters crypto.GenericDigest `codec:"v"`
+		StateProofVotersCommitment crypto.GenericDigest `codec:"v"`
 
-		// CompactCertVotersTotal is the total number of microalgos held by
-		// the accounts in CompactCertVoters (or zero, if the merkle root is
+		// StateProofVotersTotalWeight is the total number of microalgos held by
+		// the accounts in StateProofVotersCommitment (or zero, if the merkle root is
 		// zero).  This is intended for computing the threshold of votes to
-		// expect from CompactCertVoters.
-		CompactCertVotersTotal basics.MicroAlgos `codec:"t"`
+		// expect from StateProofVotersCommitment.
+		StateProofVotersTotalWeight basics.MicroAlgos `codec:"t"`
 
-		// CompactCertNextRound is the next round for which we will accept
-		// a CompactCert transaction.
-		CompactCertNextRound basics.Round `codec:"n"`
+		// StateProofNextRound is the next round for which we will accept
+		// a StateProof transaction.
+		StateProofNextRound basics.Round `codec:"n"`
 	}
 
 	// A Block contains the Payset and metadata corresponding to a given Round.
@@ -496,10 +506,11 @@ func MakeBlock(prev BlockHeader) Block {
 			GenesisHash:  prev.GenesisHash,
 		},
 	}
-	blk.TxnRoot, err = blk.PaysetCommit()
+	blk.TxnCommitments, err = blk.PaysetCommit()
 	if err != nil {
-		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
+		logging.Base().Warnf("MakeBlock: computing empty TxnCommitments: %v", err)
 	}
+
 	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
 	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
 	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
@@ -508,13 +519,29 @@ func MakeBlock(prev BlockHeader) Block {
 
 // PaysetCommit computes the commitment to the payset, using the appropriate
 // commitment plan based on the block's protocol.
-func (block Block) PaysetCommit() (crypto.Digest, error) {
+func (block Block) PaysetCommit() (TxnCommitments, error) {
 	params, ok := config.Consensus[block.CurrentProtocol]
 	if !ok {
-		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
+		return TxnCommitments{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
 	}
 
-	return block.paysetCommit(params.PaysetCommit)
+	digestSHA512_256, err := block.paysetCommit(params.PaysetCommit)
+	if err != nil {
+		return TxnCommitments{}, err
+	}
+
+	var digestSHA256 crypto.Digest
+	if params.EnableSHA256TxnCommitmentHeader {
+		digestSHA256, err = block.paysetCommitSHA256()
+		if err != nil {
+			return TxnCommitments{}, err
+		}
+	}
+
+	return TxnCommitments{
+		Sha256Commitment:           digestSHA256,
+		NativeSha512_256Commitment: digestSHA512_256,
+	}, nil
 }
 
 func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error) {
@@ -537,6 +564,18 @@ func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error
 	default:
 		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}
+}
+
+func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
+	tree, err := block.TxnMerkleTreeSHA256()
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	rootSlice := tree.Root()
+	var rootAsByteArray crypto.Digest
+	copy(rootAsByteArray[:], rootSlice)
+	return rootAsByteArray, nil
 }
 
 // PreCheck checks if the block header bh is a valid successor to
@@ -605,7 +644,7 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	return nil
 }
 
-// ContentsMatchHeader checks that the TxnRoot matches what's in the header,
+// ContentsMatchHeader checks that the TxnCommitments matches what's in the header,
 // as the header is what the block hash authenticates.
 // If we're given an untrusted block and a known-good hash, we can't trust the
 // block's transactions unless we validate this.
@@ -616,7 +655,7 @@ func (block Block) ContentsMatchHeader() bool {
 		return false
 	}
 
-	return expected == block.TxnRoot
+	return expected == block.TxnCommitments
 }
 
 // DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns
