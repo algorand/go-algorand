@@ -343,36 +343,6 @@ func TestSimulateSignatureVerificationOneEphemeralKey(t *testing.T) {
 	checkSignature(a, sigBytes, genericKey, sigRound, msg, 0, 0)
 }
 
-func TestErrorCases(t *testing.T) {
-	builder :=  Builder{}
-	_, err := builder.Present(1)
-	require.Error(t, err)
-
-	builder.participants = make([]basics.Participant, 1, 1)
-	builder.sigs = make([]sigslot, 1, 1)
-	err = builder.IsValid(1, merklesignature.Signature{}, false)
-	require.Error(t, err)
-	require.Equal(t, "requested position is out of bounds pos 1 >= len(participants) 1", err.Error())
-
-	err = builder.IsValid(0, merklesignature.Signature{}, false)
-	require.Error(t, err)
-	require.Equal(t, "position has zero weight: position 0", err.Error())
-
-	builder.participants[0].Weight = 1
-	err = builder.IsValid(0, merklesignature.Signature{}, true)
-	require.Error(t, err)
-	require.Equal(t, "merkle signature verification failed - root mismatch", err.Error())
-
-	builder.sigs[0].Weight = 1
-	err = builder.Add(1, merklesignature.Signature{})
-	require.Error(t, err)
-	require.Equal(t, "requested position is out of bounds pos 1 >= len(b.sigs) 1", err.Error())
-
-	err = builder.Add(0, merklesignature.Signature{})
-	require.Error(t, err)
-	require.Equal(t, "requested position is already present", err.Error())
-}
-
 func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesignature.Verifier, round uint64, message []byte, expectedIndex uint64, expectedPathLen uint8) {
 	a.Equal(len(sigBytes), 4366)
 
