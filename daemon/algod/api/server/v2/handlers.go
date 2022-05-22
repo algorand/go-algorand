@@ -1216,7 +1216,7 @@ var errNilLedger = errors.New("could not contact ledger")
 var errNoStateProofInRange = errors.New("no stateproof for that round")
 
 // StateProof returns the state proof for a given round.
-// (GET /v2/transaction/state-proof/{round})
+// (GET /v2/stateproofs/{round})
 func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger == nil {
@@ -1255,8 +1255,8 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 		}
 
 		response := generated.StateProofResponse{
-			StateProofMessage: protocol.Encode(&tx.StateProofMessage),
-			StateProof:        protocol.Encode(&tx.StateProof),
+			Message:    protocol.Encode(&tx.Message),
+			StateProof: protocol.Encode(&tx.StateProof),
 		}
 		return ctx.JSON(http.StatusOK, response)
 	}

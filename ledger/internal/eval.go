@@ -1167,7 +1167,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.applyStateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.StateProofMessage, tx.Header.FirstValid, eval.validate)
+			err = balances.applyStateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.Message, tx.Header.FirstValid, eval.validate)
 		}
 
 	default:

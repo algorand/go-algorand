@@ -377,7 +377,7 @@ func (spw *Worker) tryBuilding() {
 		stxn.Txn.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofIntervalLatestRound = rnd
 		stxn.Txn.StateProof = *cert
-		stxn.Txn.StateProofMessage = spw.Message
+		stxn.Txn.Message = spw.Message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)

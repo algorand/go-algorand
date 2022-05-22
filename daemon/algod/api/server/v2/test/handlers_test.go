@@ -1065,7 +1065,7 @@ func TestStateProof200(t *testing.T) {
 					StateProofTxnFields: transactions.StateProofTxnFields{
 						StateProofIntervalLatestRound: basics.Round(i + 1),
 						StateProofType:                0,
-						StateProofMessage: stateproofmsg.Message{
+						Message: stateproofmsg.Message{
 							BlockHeadersCommitment: []byte("blockheaderscommitment"),
 						},
 					},
@@ -1084,6 +1084,6 @@ func TestStateProof200(t *testing.T) {
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
 
 	msg := stateproofmsg.Message{}
-	a.NoError(protocol.Decode(stprfResp.StateProofMessage, &msg))
+	a.NoError(protocol.Decode(stprfResp.Message, &msg))
 	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
 }

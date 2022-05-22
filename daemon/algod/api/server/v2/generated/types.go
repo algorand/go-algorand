@@ -440,11 +440,11 @@ type StateDelta []EvalDeltaKeyValue
 // StateProof defines model for StateProof.
 type StateProof struct {
 
-	// The encoded StateProof certificate.
-	StateProof []byte `json:"StateProof"`
+	// The encoded message.
+	Message []byte `json:"Message"`
 
-	// The encoded StateProof message.
-	StateProofMessage []byte `json:"StateProofMessage"`
+	// The encoded StateProof for the message.
+	StateProof []byte `json:"StateProof"`
 }
 
 // TealKeyValue defines model for TealKeyValue.

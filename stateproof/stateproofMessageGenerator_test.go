@@ -212,20 +212,20 @@ func TestStateProofMessage(t *testing.T) {
 			}
 
 			a.Equal(tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
-			a.Equal(tx.Txn.StateProofMessage.LastAttestedRound, (iter+2)*proto.StateProofInterval)
-			a.Equal(tx.Txn.StateProofMessage.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
+			a.Equal(tx.Txn.Message.LastAttestedRound, (iter+2)*proto.StateProofInterval)
+			a.Equal(tx.Txn.Message.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
 
-			verifySha256BlockHeadersCommitments(a, tx.Txn.StateProofMessage, s.w.blocks)
+			verifySha256BlockHeadersCommitments(a, tx.Txn.Message, s.w.blocks)
 
 			if !lastMessage.MsgIsZero() {
 				verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
-				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 				a.NoError(err)
 
 			}
 
-			lastMessage = tx.Txn.StateProofMessage
+			lastMessage = tx.Txn.Message
 			break
 		}
 	}
