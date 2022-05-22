@@ -85,7 +85,7 @@ func TestSignerCreationOutOfBounds(t *testing.T) {
 
 	_, err = New(1, 8, 0)
 	a.Error(err)
-	a.ErrorIs(err, ErrDivisorIsZero)
+	a.ErrorIs(err, ErrKeyLifetimeIsZero)
 }
 
 func TestEmptyVerifier(t *testing.T) {
