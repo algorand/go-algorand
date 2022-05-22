@@ -725,7 +725,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		for i := begin; i < end; i++ {
 			var tx transactions.Transaction
 
-			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, 0)
+			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, nil, 0)
 			if err != nil {
 				fmt.Printf("Cannot create app txn\n")
 				panic(err)
@@ -804,7 +804,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 				j := permAppIndices[i]
 				aidx := aidxs[j]
 				var tx transactions.Transaction
-				tx, err = client.MakeUnsignedAppOptInTx(aidx, nil, nil, nil, nil)
+				tx, err = client.MakeUnsignedAppOptInTx(aidx, nil, nil, nil, nil, nil)
 				if err != nil {
 					fmt.Printf("Cannot create app txn\n")
 					panic(err)
