@@ -87,10 +87,14 @@ func assertParticipation(t testing.TB, p Participation, pr ParticipationRecord) 
 }
 
 func makeTestParticipation(a *require.Assertions, addrID int, first, last basics.Round, dilution uint64) Participation {
+	return makeTestParticipationWithLifetime(a, addrID, first, last, dilution, uint64((last+1)/2))
+}
+
+func makeTestParticipationWithLifetime(a *require.Assertions, addrID int, first, last basics.Round, dilution uint64, keyLifetime uint64) Participation {
 	a.True(first < last)
 
 	// Generate sample of stateproof keys. because it might take time we will reduce the number always to get 2 keys
-	stateProofSecrets, err := merklesignature.New(uint64(first), uint64(last), (uint64(last)+1)/2)
+	stateProofSecrets, err := merklesignature.New(uint64(first), uint64(last), keyLifetime)
 	a.NoError(err)
 
 	// Generate part keys like in partGenerateCmd and FillDBWithParticipationKeys
@@ -1018,7 +1022,7 @@ func TestDeleteStateProofKeys(t *testing.T) {
 
 	// Install a key to add StateProof keys.
 	maxRound := uint64(20)
-	p := makeTestParticipation(a, 1, 0, basics.Round(maxRound), 3)
+	p := makeTestParticipationWithLifetime(a, 1, 0, basics.Round(maxRound), 3, 4)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	a.Equal(p.ID(), id)
@@ -1026,14 +1030,10 @@ func TestDeleteStateProofKeys(t *testing.T) {
 	// Wait for async DB operations to finish.
 	a.NoError(registry.Flush(10 * time.Second))
 
-	//each round receives a stateproof key.
-	signer, err := merklesignature.New(1, maxRound, 1)
-	a.NoError(err)
-
 	// Initialize keys array.
 	keys := make(keypairs, 0)
-	for i := uint64(1); i < maxRound; i++ {
-		k := signer.GetKey(i)
+	for i := uint64(4); i <= maxRound; i += 4 {
+		k := p.StateProofSecrets.GetKey(i)
 		if k == nil {
 			continue
 		}
@@ -1046,7 +1046,7 @@ func TestDeleteStateProofKeys(t *testing.T) {
 	a.NoError(registry.Flush(10 * time.Second))
 
 	// Make sure we're able to fetch the same data that was put in.
-	for i := uint64(1); i < maxRound; i++ {
+	for i := uint64(4); i < maxRound; i += 4 {
 		r, err := registry.GetStateProofForRound(id, basics.Round(i))
 		a.NoError(err)
 
@@ -1085,7 +1085,7 @@ func TestDeleteStateProofKeys(t *testing.T) {
 		)
 
 		// includes removeKeysRound
-		a.Equal(int(maxRound)-(int(removeKeysRound)+1), num)
+		a.Equal(int(maxRound)/4-int(removeKeysRound)/4, num) // 1 DELETED 1 NOT
 		return nil
 	})
 }
