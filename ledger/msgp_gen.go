@@ -5,9 +5,10 @@ package ledger
 import (
 	"sort"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/msgp/msgp"
 )
 
 // The following msgp objects are implemented in this file:

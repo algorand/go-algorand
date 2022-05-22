@@ -507,6 +507,9 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					messages[0] = "ApprovalProgram"
 				}
 				pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
+				if !pass {
+					delta = ep.TxnGroup[ti].EvalDelta
+				}
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
