@@ -345,6 +345,14 @@ func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRe
 					break
 				}
 			}
+			// Check appIdx after the foreignApps check. If the user actually
+			// put the appIdx in foreignApps, and then used the appIdx here
+			// (rather than 0), then maybe they really want to use it in the
+			// transaction as the full number. Though it's hard to see why.
+			if !found && tbr.appId == appIdx {
+				index = 0
+				found = true
+			}
 			if !found {
 				reportErrorf("Box ref with appId (%d) not in foreign-apps", tbr.appId)
 			}

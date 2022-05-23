@@ -1704,7 +1704,7 @@ int 1
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel() NO! unified variable is actually shared
 
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
@@ -2170,7 +2170,7 @@ func TestInnerTxIDCaching(t *testing.T) {
 
 	for _, unified := range []bool{true, false} {
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel() NO! unified variable is actually shared
 
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
