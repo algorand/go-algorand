@@ -16,52 +16,85 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetMissingCatchPointLabel(t *testing.T) {
+func TestGetMissingCatchpointLabel(t *testing.T) {
 	tests := []struct {
 		name        string
-		genesis     string
+		URL         string
 		catchpoint  string
 		expectedErr string
+		statusCode  int
 	}{
 		{
-			"empty catchpoint",
+			"bad request",
+			"",
+			"",
+			"400 Bad Request",
+			http.StatusBadRequest,
+		},
+		{
+			"forbidden request",
 			"",
 			"",
 			"403 Forbidden",
+			http.StatusForbidden,
+		},
+		{
+			"page not found",
+			"",
+			"",
+			"404 Not Found",
+			http.StatusNotFound,
+		},
+		{
+			"bad gateway",
+			"",
+			"",
+			"502 Bad Gateway",
+			http.StatusBadGateway,
 		},
 		{
 			"mainnet catchpoint",
-			"mainnet",
-			"21120000#BGASEIK2J7A2AFAZ4DGEZKNKZ6OSKYLDCX4GQRBGKX3LKC5S5DNA",
+			"https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/mainnet/latest.catchpoint",
+			"21170000#2NS7QHOLJDBBR2FBYWZK32M7RYQOMYJ4LMA7ID3CJXWVQVC4JSEA",
 			"",
+			http.StatusAccepted,
 		},
 		{
 			"betanet catchpoint",
-			"betanet",
-			"18170000#XIN4FHWSO4UVK2MY5SZAI74VM3OLFWWLUHIJYONPDKQQ5QG4FZHQ",
+			"https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/betanet/latest.catchpoint",
+			"18230000#XCZXJSBUKVTVP2Q6V4KTGQKDPEXM3JQ3JCAIY66JCDWAAYHCNPXA",
 			"",
+			http.StatusAccepted,
 		},
 		{
 			"testnet catchpoint",
-			"testnet",
-			"21700000#NRZRHIWFFLTOY6UM5YTG7M6XY3QWVGO37UPP66BH2OWHNWNBKOWQ",
+			"https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/testnet/latest.catchpoint",
+			"21760000#3UX4ELEEKZMIXGFUGAGLJOFUDBWIZEJHX37P4YSOD3QE62E63LMQ",
 			"",
+			http.StatusAccepted,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// 	fmt.Fprintln(w, test.catchpoint)
-			// }))
-			// defer ts.Close()
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if test.expectedErr != "" {
+					http.Error(w, test.expectedErr, test.statusCode)
+				} else {
+					fmt.Fprintln(w, test.catchpoint)
+				}
+			}))
+			defer ts.Close()
 
-			label, err := getMissingCatchPointLabel(test.genesis)
+			label, err := getMissingCatchpointLabel(ts.URL)
 
 			if test.expectedErr != "" {
 				require.Error(t, err)

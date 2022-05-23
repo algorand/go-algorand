@@ -120,8 +120,7 @@ var nodeCmd = &cobra.Command{
 	},
 }
 
-func getMissingCatchPointLabel(genesis string) (label string, err error) {
-	URL := "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis + "/latest.catchpoint"
+func getMissingCatchpointLabel(URL string) (label string, err error) {
 	resp, err := http.Get(URL)
 	if err != nil {
 		return
@@ -154,7 +153,8 @@ var catchupCmd = &cobra.Command{
 					reportErrorf(errorNodeStatus, err)
 				}
 				genesis := strings.Split(vers.GenesisID, "-")[0]
-				label, err := getMissingCatchPointLabel(genesis)
+				URL := "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis + "/latest.catchpoint"
+				label, err := getMissingCatchpointLabel(URL)
 				if err != nil {
 					fmt.Println(errorUnableToLookupCatchpointLabel)
 					os.Exit(1)
