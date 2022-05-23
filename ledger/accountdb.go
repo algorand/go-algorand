@@ -199,9 +199,10 @@ type persistedOnlineAccountData struct {
 	accountData baseOnlineAccountData
 	rowid       int64
 	// the round number that is associated with the baseOnlineAccountData. This field is the corresponding one to the round field
-	// in persistedAccountData, and serves the same purpose.
+	// in persistedAccountData, and serves the same purpose. This value comes from account rounds table and correspond to
+	// the last trackers db commit round.
 	round basics.Round
-	// the round number that the online account is for
+	// the round number that the online account is for, i.e. account state change round.
 	updRound basics.Round
 }
 
