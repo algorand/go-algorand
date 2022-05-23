@@ -57,11 +57,17 @@ const txnEffectsVersion = 6
 // the Foreign arrays.
 const createdResourcesVersion = 6
 
+// appAddressAvailableVersion is the first version that allows access to the
+// accounts of applications that were provided in the foreign apps transaction
+// field.
+const appAddressAvailableVersion = 7
+
 // EXPERIMENTAL. These should be revisited whenever a new LogiSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version.
 const fidoVersion = 7    // base64, json, secp256r1
-const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
+
 
 type linearCost struct {
 	baseCost  int
