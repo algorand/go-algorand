@@ -2211,6 +2211,85 @@ func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
 
 }
 
+func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	addr := ledgertesting.RandomAddress()
+	data := ledgertesting.RandomAccountData(1)
+	data.Status = basics.Online
+	crypto.RandBytes(data.VoteID[:])
+	crypto.RandBytes(data.SelectionID[:])
+	crypto.RandBytes(data.StateProofID[:])
+	data.VoteFirstValid = basics.Round(crypto.RandUint64())
+	data.VoteLastValid = basics.Round(crypto.RandUint64()) // int64 is the max sqlite can store
+	data.VoteKeyDilution = crypto.RandUint64()
+
+	var ba baseOnlineAccountData
+	ba.SetCoreAccountData(ledgercore.ToAccountData(data))
+
+	require.Equal(t, data.MicroAlgos, ba.MicroAlgos)
+	require.Equal(t, data.RewardsBase, ba.RewardsBase)
+	require.Equal(t, data.VoteID, ba.VoteID)
+	require.Equal(t, data.SelectionID, ba.SelectionID)
+	require.Equal(t, data.VoteFirstValid, ba.VoteFirstValid)
+	require.Equal(t, data.VoteLastValid, ba.VoteLastValid)
+	require.Equal(t, data.VoteKeyDilution, ba.VoteKeyDilution)
+	require.Equal(t, data.StateProofID, ba.StateProofID)
+
+	normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
+	require.Equal(t, normBalance, ba.NormalizedOnlineBalance(proto))
+	oa := ba.GetOnlineAccount(addr, normBalance)
+
+	require.Equal(t, addr, oa.Address)
+	require.Equal(t, ba.MicroAlgos, oa.MicroAlgos)
+	require.Equal(t, ba.RewardsBase, oa.RewardsBase)
+	require.Equal(t, normBalance, oa.NormalizedOnlineBalance)
+	require.Equal(t, ba.VoteFirstValid, oa.VoteFirstValid)
+	require.Equal(t, ba.VoteLastValid, oa.VoteLastValid)
+	require.Equal(t, ba.StateProofID, oa.StateProofID)
+
+	rewardsLevel := uint64(1)
+	microAlgos, _, _ := basics.WithUpdatedRewards(
+		proto, basics.Online, oa.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
+	)
+	oad := ba.GetOnlineAccountData(proto, rewardsLevel)
+
+	require.Equal(t, microAlgos, oad.MicroAlgosWithRewards)
+	require.Equal(t, ba.VoteID, oad.VoteID)
+	require.Equal(t, ba.SelectionID, oad.SelectionID)
+	require.Equal(t, ba.StateProofID, oad.StateProofID)
+	require.Equal(t, ba.VoteFirstValid, oad.VoteFirstValid)
+	require.Equal(t, ba.VoteLastValid, oad.VoteLastValid)
+	require.Equal(t, ba.VoteKeyDilution, oad.VoteKeyDilution)
+}
+
+func TestVotingDataGettersSetters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	data := ledgertesting.RandomAccountData(1)
+	data.Status = basics.Online
+	crypto.RandBytes(data.VoteID[:])
+	crypto.RandBytes(data.SelectionID[:])
+	crypto.RandBytes(data.StateProofID[:])
+	data.VoteFirstValid = basics.Round(crypto.RandUint64())
+	data.VoteLastValid = basics.Round(crypto.RandUint64()) // int64 is the max sqlite can store
+	data.VoteKeyDilution = crypto.RandUint64()
+
+	var bv baseVotingData
+	require.True(t, bv.IsEmpty())
+
+	bv.SetCoreAccountData(ledgercore.ToAccountData(data))
+
+	require.False(t, bv.IsEmpty())
+	require.Equal(t, data.VoteID, bv.VoteID)
+	require.Equal(t, data.SelectionID, bv.SelectionID)
+	require.Equal(t, data.VoteFirstValid, bv.VoteFirstValid)
+	require.Equal(t, data.VoteLastValid, bv.VoteLastValid)
+	require.Equal(t, data.VoteKeyDilution, bv.VoteKeyDilution)
+	require.Equal(t, data.StateProofID, bv.StateProofID)
+}
+
 func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
