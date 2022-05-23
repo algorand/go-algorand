@@ -2949,7 +2949,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 	addRound(2, delta2)
 	addRound(3, delta3)
 
-	queries, err := accountsInitDbQueries(tx, tx)
+	queries, err := onlineAccountsInitDbQueries(tx, tx)
 	require.NoError(t, err)
 
 	// check round 1
