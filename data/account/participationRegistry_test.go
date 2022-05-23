@@ -852,7 +852,7 @@ func TestAddStateProofKeys(t *testing.T) {
 
 	// Install a key to add StateProof keys.
 	max := uint64(20)
-	p := makeTestParticipation(a, 1, 0, basics.Round(max), 3)
+	p := makeTestParticipationWithLifetime(a, 1, 0, basics.Round(max), 3, 3)
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	a.Equal(p.ID(), id)
@@ -881,18 +881,26 @@ func TestAddStateProofKeys(t *testing.T) {
 	err = registry.Flush(10 * time.Second)
 	a.NoError(err)
 
-	j := 0
+	_, err = registry.GetStateProofForRound(id, basics.Round(1))
+	a.Error(err)
+	_, err = registry.GetStateProofForRound(id, basics.Round(2))
+	a.Error(err)
+
 	// Make sure we're able to fetch the same data that was put in.
-	for i := uint64(1); i < max; i++ {
+	for i := uint64(3); i < max; i++ {
 		r, err := registry.GetStateProofForRound(id, basics.Round(i))
 		a.NoError(err)
 
 		if r.StateProofSecrets != nil {
-			a.Equal(*keys[j].Key, *r.StateProofSecrets.SigningKey)
-			a.Equal(keys[j].Round, i)
-			j++
-		}
+			j := i/3 - 1 // idx in keys array
 
+			a.Equal(*keys[j].Key, *r.StateProofSecrets.SigningKey)
+
+			keyFirstValidRound, err := r.StateProofSecrets.FirstRoundInKeyLifetime()
+			a.NoError(err)
+
+			a.Equal(keys[j].Round, keyFirstValidRound)
+		}
 	}
 }
 
@@ -908,11 +916,8 @@ func TestSecretNotFound(t *testing.T) {
 	a.NoError(err)
 	a.Equal(p.ID(), id)
 
-	r, err := registry.GetStateProofForRound(id, basics.Round(2))
+	_, err = registry.GetForRound(id, basics.Round(2))
 	a.NoError(err)
-
-	// Empty stateproof key
-	a.Nil(r.StateProofSecrets)
 
 	_, err = registry.GetForRound(id, basics.Round(100))
 	a.ErrorIs(err, ErrRequestedRoundOutOfRange)

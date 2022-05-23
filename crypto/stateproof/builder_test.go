@@ -522,6 +522,10 @@ func TestErrorCases(t *testing.T) {
 
 	builder.participants[0].Weight = 1
 	err = builder.IsValid(0, merklesignature.Signature{}, true)
+	a.ErrorIs(err, merklesignature.ErrKeyLifetimeIsZero)
+
+	builder.participants[0].PK.KeyLifetime = 20
+	err = builder.IsValid(0, merklesignature.Signature{}, true)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
 
 	builder.sigs[0].Weight = 1
