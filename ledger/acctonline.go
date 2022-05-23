@@ -675,8 +675,11 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	// a separate transaction here, and directly use a prepared SQL query
 	// against the database.
 	persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
-	if persistedData.rowid != 0 { // if we read actual data return it
+	if err != nil {
+		return ledgercore.OnlineAccountData{}, err
+	}
 
+	if persistedData.rowid != 0 { // if we read actual data return it
 		// lookupOnlineHistory does not fetch the account db round because of the following observation:
 		// 1. ao.onlineAccountsCache update happens with ao.accountsMu taken below and in postCommit
 		// 2. If we started reading the history (lookupOnlineHistory)
@@ -711,11 +714,11 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if err != nil {
 			return ledgercore.OnlineAccountData{}, err
 		}
-		return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), err
+		return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 	}
 
 	// otherwise return empty
-	return ledgercore.OnlineAccountData{}, err
+	return ledgercore.OnlineAccountData{}, nil
 }
 
 // onlineTop returns the top n online accounts, sorted by their normalized
