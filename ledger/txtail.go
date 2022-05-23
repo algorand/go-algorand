@@ -68,9 +68,7 @@ type txTail struct {
 	roundTailHashes []crypto.Digest
 
 	// blockHeaderData contains the recent (MaxTxnLife + DeeperBlockHeaderHistory + len(deltas)) block header data.
-	// The first entry matches that current tracker database round - MaxTxnLife (tail size is MaxTxnLife + DeeperBlockHeaderHistory)
-	// the second to tracker database round - (MaxTxnLife - 1), and so forth, and the last element is for the latest round.
-	// Deltas are in-memory not-committed-yet data.
+	// The oldest entry is lowestBlockHeaderRound = database round - (MaxTxnLife + DeeperBlockHeaderHistory) + 1
 	blockHeaderData map[basics.Round]bookkeeping.BlockHeader
 	// lowestBlockHeaderRound is the lowest round in blockHeaderData, used as a starting point for old entries removal
 	lowestBlockHeaderRound basics.Round
@@ -93,8 +91,8 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	var baseRound basics.Round
 	if dbRound > 0 {
 		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			roundData, roundTailHashes, baseRound, err = loadTxTail(context.Background(), tx, dbRound)
-			return err
+			roundData, roundTailHashes, baseRound, err = loadTxTail(ctx, tx, dbRound)
+			return
 		})
 		if err != nil {
 			return err
@@ -122,13 +120,16 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 		consensusParams := config.Consensus[txTailRound.Hdr.CurrentProtocol]
 
 		t.recent[old] = roundLeases{
-			txleases: make(map[ledgercore.Txlease]basics.Round, len(txTailRound.TxnIDs)),
+			txleases: make(map[ledgercore.Txlease]basics.Round, len(txTailRound.Leases)),
 			proto:    consensusParams,
 		}
 
-		for i := 0; i < len(txTailRound.Leases); i++ {
-			if consensusParams.SupportTransactionLeases && (txTailRound.Leases[i].Lease != [32]byte{}) {
-				t.recent[old].txleases[ledgercore.Txlease{Sender: txTailRound.Leases[i].Sender, Lease: txTailRound.Leases[i].Lease}] = txTailRound.LastValid[txTailRound.Leases[i].TxnIdx]
+		if consensusParams.SupportTransactionLeases {
+			for i := 0; i < len(txTailRound.Leases); i++ {
+				if txTailRound.Leases[i].Lease != [32]byte{} {
+					key := ledgercore.Txlease{Sender: txTailRound.Leases[i].Sender, Lease: txTailRound.Leases[i].Lease}
+					t.recent[old].txleases[key] = txTailRound.LastValid[txTailRound.Leases[i].TxnIdx]
+				}
 			}
 		}
 
@@ -243,7 +244,9 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 		t.tailMu.RLock()
 		proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
 		if !ok {
-			return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, t.lowestBlockHeaderRound, dcc.oldBase)
+			lowest := t.lowestBlockHeaderRound
+			t.tailMu.RUnlock()
+			return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, lowest, dcc.oldBase)
 		}
 		t.tailMu.RUnlock()
 		// update the dcc with the hash we'll need.
@@ -253,7 +256,6 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 }
 
 func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
-	baseRound := dcc.oldBase + 1
 	roundsData := make([][]byte, 0, dcc.offset)
 
 	t.tailMu.RLock()
@@ -265,14 +267,17 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 	rnd := dcc.oldBase + basics.Round(dcc.offset)
 	proto, ok := config.Consensus[t.blockHeaderData[rnd].CurrentProtocol]
 	if !ok {
-		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, t.lowestBlockHeaderRound, dcc.oldBase)
+		lowest := t.lowestBlockHeaderRound
+		t.tailMu.RUnlock()
+		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", rnd, lowest, dcc.oldBase)
 	}
 	retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
 	t.tailMu.RUnlock()
 
 	// determine the round to remove data
 	// This is the similar formula to the committedUpTo: rnd + 1 - retain size
-	forgetBeforeRound := (baseRound + basics.Round(dcc.offset)).SubSaturate(basics.Round(retainSize))
+	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(retainSize))
+	baseRound := dcc.oldBase + 1
 	if err := txtailNewRound(ctx, tx, baseRound, roundsData, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
@@ -289,12 +294,10 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory rounds
 	proto := config.Consensus[t.blockHeaderData[newBase].CurrentProtocol]
 	retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
-	newLowestRound := newBase.SubSaturate(basics.Round(retainSize) - 1)
-	if newLowestRound > t.lowestBlockHeaderRound {
-		for r := t.lowestBlockHeaderRound; r < newLowestRound; r++ {
-			delete(t.blockHeaderData, r)
-		}
-		t.lowestBlockHeaderRound = newLowestRound
+	newLowestRound := (newBase + 1).SubSaturate(basics.Round(retainSize))
+	for t.lowestBlockHeaderRound < newLowestRound {
+		delete(t.blockHeaderData, t.lowestBlockHeaderRound)
+		t.lowestBlockHeaderRound++
 	}
 	if enableTxTailHashes {
 		newDeltaLength := len(t.roundTailSerializedDeltas)
