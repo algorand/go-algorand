@@ -1329,16 +1329,30 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	mismatchingAccountsKeys := make(map[basics.Address]int)
 	const bitMismatchingVotingKey = 1
 	const bitMismatchingSelectionKey = 2
+	const bitAccountOffline = 4
+	const bitAccountIsClosed = 8
 	for _, p := range parts {
 		acctData, hasAccountData := accountsData[p.Account]
 		if !hasAccountData {
 			var err error
+			// LookupAgreement is used to look at the past ~320 rounds of account state
+			// It provides a fast lookup method for online account information
 			acctData, err = node.ledger.LookupAgreement(keysRound, p.Account)
 			if err != nil {
 				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", p.Account, keysRound, err)
 				continue
 			}
 			accountsData[p.Account] = acctData
+		}
+
+		isOffline := acctData.VoteFirstValid == 0 && acctData.VoteLastValid == 0
+		if isOffline {
+			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitAccountOffline
+		}
+
+		isClosed := isOffline && acctData.MicroAlgosWithRewards.Raw == 0
+		if isClosed {
+			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitAccountIsClosed
 		}
 
 		if acctData.VoteID != p.Voting.OneTimeSignatureVerifier {
@@ -1364,11 +1378,28 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 			continue
 		}
 		if warningFlags&bitMismatchingVotingKey == bitMismatchingVotingKey {
-			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
+
+			logStr := fmt.Sprintf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
+
+			// If we are closed, upgrade this to info so we don't spam telemetry reporting
+			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
+				node.log.Info(logStr)
+			} else {
+				node.log.Warnf(logStr)
+			}
+
 			continue
 		}
 		if warningFlags&bitMismatchingSelectionKey == bitMismatchingSelectionKey {
-			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain selection key differ from participation selection key for round %d", mismatchingAddr, votingRound, keysRound)
+
+			logStr := fmt.Sprintf("node.VotingKeys: Account %v not participating on round %d: on chain selection key differ from participation selection key for round %d", mismatchingAddr, votingRound, keysRound)
+
+			// If we are closed, upgrade this to info so we don't spam telemetry reporting
+			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
+				node.log.Info(logStr)
+			} else {
+				node.log.Warn(logStr)
+			}
 			continue
 		}
 	}
