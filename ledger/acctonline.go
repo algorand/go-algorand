@@ -63,7 +63,7 @@ type onlineAccounts struct {
 	dbs db.Pair
 
 	// Prepared SQL statements for fast accounts DB lookups.
-	accountsq *accountsDbQueries
+	accountsq *onlineAccountsDbQueries
 
 	// cachedDBRoundOnline is always exactly tracker DB round (and therefore, onlineAccountsRound()),
 	// cached to use in lookup functions
@@ -181,7 +181,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	ao.accountsq, err = accountsInitDbQueries(ao.dbs.Rdb.Handle, ao.dbs.Wdb.Handle)
+	ao.accountsq, err = onlineAccountsInitDbQueries(ao.dbs.Rdb.Handle, ao.dbs.Wdb.Handle)
 	if err != nil {
 		return
 	}

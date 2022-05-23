@@ -46,8 +46,6 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt          *sql.Stmt
 	lookupStmt                  *sql.Stmt
-	lookupOnlineStmt            *sql.Stmt
-	lookupOnlineHistoryStmt     *sql.Stmt
 	lookupResourcesStmt         *sql.Stmt
 	lookupAllResourcesStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
@@ -59,6 +57,11 @@ type accountsDbQueries struct {
 	insertCatchpointStateUint64 *sql.Stmt
 	selectCatchpointStateString *sql.Stmt
 	insertCatchpointStateString *sql.Stmt
+}
+
+type onlineAccountsDbQueries struct {
+	lookupOnlineStmt        *sql.Stmt
+	lookupOnlineHistoryStmt *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -2414,16 +2417,6 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT rowid, updround, data FROM onlineaccounts WHERE address=? ORDER BY updround ASC")
-	if err != nil {
-		return nil, err
-	}
-
 	qs.lookupResourcesStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid AND resources.aidx = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -2475,6 +2468,22 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 	}
 
 	qs.selectCatchpointStateString, err = r.Prepare("SELECT strval FROM catchpointstate WHERE id=?")
+	if err != nil {
+		return nil, err
+	}
+	return qs, nil
+}
+
+func onlineAccountsInitDbQueries(r db.Queryable, w db.Queryable) (*onlineAccountsDbQueries, error) {
+	var err error
+	qs := &onlineAccountsDbQueries{}
+
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT rowid, updround, data FROM onlineaccounts WHERE address=? ORDER BY updround ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -2649,7 +2658,7 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountD
 	return
 }
 
-func (qs *accountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, err error) {
+func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round) (data persistedOnlineAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -2678,7 +2687,7 @@ func (qs *accountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round)
 	return
 }
 
-func (qs *accountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, err error) {
+func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, err error) {
 	err = db.Retry(func() error {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
 		if err != nil {
@@ -2812,8 +2821,6 @@ func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
 		&qs.lookupStmt,
-		&qs.lookupOnlineStmt,
-		&qs.lookupOnlineHistoryStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupCreatorStmt,
@@ -2825,6 +2832,19 @@ func (qs *accountsDbQueries) close() {
 		&qs.insertCatchpointStateUint64,
 		&qs.selectCatchpointStateString,
 		&qs.insertCatchpointStateString,
+	}
+	for _, preparedQuery := range preparedQueries {
+		if (*preparedQuery) != nil {
+			(*preparedQuery).Close()
+			*preparedQuery = nil
+		}
+	}
+}
+
+func (qs *onlineAccountsDbQueries) close() {
+	preparedQueries := []**sql.Stmt{
+		&qs.lookupOnlineStmt,
+		&qs.lookupOnlineHistoryStmt,
 	}
 	for _, preparedQuery := range preparedQueries {
 		if (*preparedQuery) != nil {
