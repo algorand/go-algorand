@@ -4716,6 +4716,21 @@ func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 	return decoded[:n], err
 }
 
+// base64padded returns true iff `encoded` has padding chars at the end
+func base64padded(encoded []byte) bool {
+	for i := len(encoded) - 1; i > 0; i-- {
+		switch encoded[i] {
+		case '=':
+			return true
+		case '\n', '\r':
+			/* nothing */
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 func opBase64Decode(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	encodingField := Base64Encoding(cx.program[cx.pc+1])
@@ -4728,8 +4743,11 @@ func opBase64Decode(cx *EvalContext) error {
 	if encodingField == StdEncoding {
 		encoding = base64.StdEncoding
 	}
-	encoding = encoding.Strict()
-	bytes, err := base64Decode(cx.stack[last].Bytes, encoding)
+	encoded := cx.stack[last].Bytes
+	if !base64padded(encoded) {
+		encoding = encoding.WithPadding(base64.NoPadding)
+	}
+	bytes, err := base64Decode(encoded, encoding.Strict())
 	if err != nil {
 		return err
 	}

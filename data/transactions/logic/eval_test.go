@@ -4649,12 +4649,12 @@ By Herman Melville`, "",
 		{"cGFk=", "StdEncoding", "pad", "input byte 4"},
 		{"cGFk==", "StdEncoding", "pad", "input byte 4"},
 		{"cGFk===", "StdEncoding", "pad", "input byte 4"},
-		// Ensures that even correct padding is illegal if not needed
+		// Ensures that extra padding, even if 0%4
 		{"cGFk====", "StdEncoding", "pad", "input byte 4"},
 
-		// Test that padding must be present to make len = 0 mod 4.
+		// Test that padding must be correct or absent
 		{"bm9wYWQ=", "StdEncoding", "nopad", ""},
-		{"bm9wYWQ", "StdEncoding", "nopad", "illegal"},
+		{"bm9wYWQ", "StdEncoding", "nopad", ""},
 		{"bm9wYWQ==", "StdEncoding", "nopad", "illegal"},
 
 		{"YWJjMTIzIT8kKiYoKSctPUB+", "StdEncoding", "abc123!?$*&()'-=@~", ""},
@@ -4690,15 +4690,15 @@ By Herman Melville`, "",
 		{"\rS\r\nQ=\n=\r\r\n", "StdEncoding", "I", ""},
 		{"\rS\r\nQ=\n=\r\r\n", "URLEncoding", "I", ""},
 
-		// Padding necessary? - Yes it is! And exactly the expected place and amount.
+		// If padding is there, it must be correct, but if absent, that's fine.
 		{"SQ==", "StdEncoding", "I", ""},
 		{"SQ==", "URLEncoding", "I", ""},
 		{"S=Q=", "StdEncoding", "", "byte 1"},
 		{"S=Q=", "URLEncoding", "", "byte 1"},
 		{"=SQ=", "StdEncoding", "", "byte 0"},
 		{"=SQ=", "URLEncoding", "", "byte 0"},
-		{"SQ", "StdEncoding", "", "byte 0"},
-		{"SQ", "URLEncoding", "", "byte 0"},
+		{"SQ", "StdEncoding", "I", ""},
+		{"SQ", "URLEncoding", "I", ""},
 		{"SQ=", "StdEncoding", "", "byte 3"},
 		{"SQ=", "URLEncoding", "", "byte 3"},
 		{"SQ===", "StdEncoding", "", "byte 4"},
@@ -4721,17 +4721,6 @@ By Herman Melville`, "",
 			if LogicVersion < fidoVersion {
 				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
 			} else {
-				// sanity check - test the helper function first:
-				encoding := base64.URLEncoding
-				if tc.alph == "StdEncoding" {
-					encoding = base64.StdEncoding
-				}
-				encoding = encoding.Strict()
-				decoded, err := base64Decode([]byte(tc.encoded), encoding)
-				require.NoError(t, err)
-				require.Equal(t, string(decoded), tc.decoded)
-
-				// now check eval:
 				testAccepts(t, source, fidoVersion)
 			}
 		} else {
@@ -4739,6 +4728,7 @@ By Herman Melville`, "",
 				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
 			} else {
 				err := testPanics(t, source, fidoVersion)
+				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.error)
 			}
 		}
