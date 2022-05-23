@@ -47,6 +47,7 @@ type accountsDbQueries struct {
 	listCreatablesStmt          *sql.Stmt
 	lookupStmt                  *sql.Stmt
 	lookupOnlineStmt            *sql.Stmt
+	lookupOnlineHistoryStmt     *sql.Stmt
 	lookupResourcesStmt         *sql.Stmt
 	lookupAllResourcesStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
@@ -133,7 +134,7 @@ var createResourcesTable = []string{
 var createOnlineAccountsTable = []string{
 	`CREATE TABLE IF NOT EXISTS onlineaccounts (
 		address BLOB NOT NULL,
-		updround INTEGER,
+		updround INTEGER NOT NULL,
 		normalizedonlinebalance INTEGER NOT NULL,
 		votelastvalid INTEGER NOT NULL,
 		data BLOB NOT NULL,
@@ -198,8 +199,11 @@ type persistedOnlineAccountData struct {
 	accountData baseOnlineAccountData
 	rowid       int64
 	// the round number that is associated with the baseOnlineAccountData. This field is the corresponding one to the round field
-	// in persistedAccountData, and serves the same purpose.
+	// in persistedAccountData, and serves the same purpose. This value comes from account rounds table and correspond to
+	// the last trackers db commit round.
 	round basics.Round
+	// the round number that the online account is for, i.e. account state change round.
+	updRound basics.Round
 }
 
 //msgp:ignore persistedResourcesData
@@ -2410,7 +2414,12 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT rowid, updround, data FROM onlineaccounts WHERE address=? ORDER BY updround ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -2644,11 +2653,13 @@ func (qs *accountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round)
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &data.round, &buf)
+		var updround sql.NullInt64
+		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
-			if len(buf) > 0 && rowid.Valid {
+			if len(buf) > 0 && rowid.Valid && updround.Valid {
 				data.rowid = rowid.Int64
+				data.updRound = basics.Round(updround.Int64)
 				err = protocol.Decode(buf, &data.accountData)
 				return err
 			}
@@ -2662,6 +2673,33 @@ func (qs *accountsDbQueries) lookupOnline(addr basics.Address, rnd basics.Round)
 			return fmt.Errorf("unable to query online account data for address %v : %w", addr, err)
 		}
 
+		return err
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, err error) {
+	err = db.Retry(func() error {
+		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var buf []byte
+			data := persistedOnlineAccountData{}
+			err := rows.Scan(&data.rowid, &data.updRound, &buf)
+			if err != nil {
+				return err
+			}
+			err = protocol.Decode(buf, &data.accountData)
+			if err != nil {
+				return err
+			}
+			data.addr = addr
+			result = append(result, data)
+		}
 		return err
 	})
 	return
@@ -2775,6 +2813,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.listCreatablesStmt,
 		&qs.lookupStmt,
 		&qs.lookupOnlineStmt,
+		&qs.lookupOnlineHistoryStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupCreatorStmt,
@@ -2971,6 +3010,46 @@ func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onli
 		})
 	}
 
+	return result, nil
+}
+
+func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccountData, error) {
+	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]persistedOnlineAccountData, 0, maxAccounts)
+	var numAccounts uint64
+	var seenAddr []byte
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		data := persistedOnlineAccountData{}
+		err := rows.Scan(&data.rowid, &addrbuf, &data.updRound, &buf)
+		if err != nil {
+			return nil, err
+		}
+		if len(addrbuf) != len(data.addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.addr))
+			return nil, err
+		}
+		if maxAccounts > 0 {
+			if !bytes.Equal(seenAddr, addrbuf) {
+				numAccounts++
+				if numAccounts > maxAccounts {
+					break
+				}
+			}
+		}
+		copy(data.addr[:], addrbuf)
+		err = protocol.Decode(buf, &data.accountData)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, data)
+	}
 	return result, nil
 }
 
@@ -3563,6 +3642,7 @@ func onlineAccountsNewRoundImpl(
 									accountData: newAcct,
 									round:       lastUpdateRound,
 									rowid:       rowid,
+									updRound:    basics.Round(updRound),
 								}
 								updatedAccounts = append(updatedAccounts, updated)
 								prevAcct = updated
@@ -3587,6 +3667,7 @@ func onlineAccountsNewRoundImpl(
 								accountData: baseOnlineAccountData{},
 								round:       lastUpdateRound,
 								rowid:       rowid,
+								updRound:    basics.Round(updRound),
 							}
 
 							targetRound := basics.Round(updRound + proto.MaxBalLookback)
@@ -3612,6 +3693,7 @@ func onlineAccountsNewRoundImpl(
 								accountData: newAcct,
 								round:       lastUpdateRound,
 								rowid:       rowid,
+								updRound:    basics.Round(updRound),
 							}
 
 							targetRound := basics.Round(updRound + proto.MaxBalLookback)

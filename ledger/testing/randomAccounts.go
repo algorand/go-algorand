@@ -52,7 +52,7 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	var data basics.AccountData
 
 	// Avoid overflowing totals
-	data.MicroAlgos.Raw = 1 << 32
+	data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
 
 	switch crypto.RandUint64() % 3 {
 	case 0:
