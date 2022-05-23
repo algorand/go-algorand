@@ -359,7 +359,7 @@ func (au *accountUpdates) LookupKv(rnd basics.Round, key string) (*string, error
 		// update the rnd so that it would point to the end of the known delta range.
 		// ( that would give us the best validity range )
 		rnd = currentDbRound + basics.Round(currentDeltaLen)
-		// TODO: THIS IS POINTLESS FOT KV's current interface. I don't know
+		// TODO: THIS IS POINTLESS FOR KV's current interface. I don't know
 		// how the validity window is used yet. -jj
 	}
 
