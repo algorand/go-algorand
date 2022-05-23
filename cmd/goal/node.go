@@ -135,6 +135,12 @@ func getMissingCatchpointLabel(URL string) (label string, err error) {
 	}
 	label = string(body)
 	label = strings.TrimSuffix(label, "\n")
+
+	// check if its a valid checkpoint label
+	_, _, err = ledgercore.ParseCatchpointLabel(label)
+	if err != nil {
+		return
+	}
 	return
 }
 

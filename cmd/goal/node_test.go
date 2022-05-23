@@ -19,8 +19,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -96,8 +98,12 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), test.expectedErr)
 			} else {
-				assert.True(t, isNum.MatchString(label[:8]))
-				assert.True(t, isAlnum.MatchString(label[9:]))
+				_, _, err = ledgercore.ParseCatchpointLabel(label)
+				assert.Equal(t, err, nil)
+				splittedLabel := strings.Split(label, "#")
+				assert.Equal(t, len(splittedLabel), 2)
+				assert.True(t, isNum.MatchString(splittedLabel[0]))
+				assert.True(t, isAlnum.MatchString(splittedLabel[1]))
 			}
 		})
 	}
