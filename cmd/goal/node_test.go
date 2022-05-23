@@ -16,25 +16,27 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var isNum = regexp.MustCompile(`^[0-9]+$`)
+var isAlnum = regexp.MustCompile(`^[a-zA-Z0-9_]*$`)
 
 func TestGetMissingCatchpointLabel(t *testing.T) {
 	tests := []struct {
 		name        string
 		URL         string
-		catchpoint  string
 		expectedErr string
 		statusCode  int
 	}{
 		{
 			"bad request",
-			"",
 			"",
 			"400 Bad Request",
 			http.StatusBadRequest,
@@ -42,13 +44,11 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 		{
 			"forbidden request",
 			"",
-			"",
 			"403 Forbidden",
 			http.StatusForbidden,
 		},
 		{
 			"page not found",
-			"",
 			"",
 			"404 Not Found",
 			http.StatusNotFound,
@@ -56,28 +56,24 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 		{
 			"bad gateway",
 			"",
-			"",
 			"502 Bad Gateway",
 			http.StatusBadGateway,
 		},
 		{
 			"mainnet catchpoint",
 			"https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/mainnet/latest.catchpoint",
-			"21170000#2NS7QHOLJDBBR2FBYWZK32M7RYQOMYJ4LMA7ID3CJXWVQVC4JSEA",
 			"",
 			http.StatusAccepted,
 		},
 		{
 			"betanet catchpoint",
 			"https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/betanet/latest.catchpoint",
-			"18230000#XCZXJSBUKVTVP2Q6V4KTGQKDPEXM3JQ3JCAIY66JCDWAAYHCNPXA",
 			"",
 			http.StatusAccepted,
 		},
 		{
 			"testnet catchpoint",
 			"https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/testnet/latest.catchpoint",
-			"21760000#3UX4ELEEKZMIXGFUGAGLJOFUDBWIZEJHX37P4YSOD3QE62E63LMQ",
 			"",
 			http.StatusAccepted,
 		},
@@ -86,21 +82,22 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if test.expectedErr != "" {
-					http.Error(w, test.expectedErr, test.statusCode)
-				} else {
-					fmt.Fprintln(w, test.catchpoint)
-				}
+				http.Error(w, test.expectedErr, test.statusCode)
 			}))
 			defer ts.Close()
 
-			label, err := getMissingCatchpointLabel(ts.URL)
+			if test.expectedErr != "" {
+				test.URL = ts.URL
+			}
+
+			label, err := getMissingCatchpointLabel(test.URL)
 
 			if test.expectedErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), test.expectedErr)
 			} else {
-				require.Equal(t, test.catchpoint, label)
+				assert.True(t, isNum.MatchString(label[:8]))
+				assert.True(t, isAlnum.MatchString(label[9:]))
 			}
 		})
 	}
