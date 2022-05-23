@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -2226,6 +2227,7 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	data.VoteKeyDilution = crypto.RandUint64()
 
 	var ba baseOnlineAccountData
+	require.Equal(t, 4, reflect.TypeOf(baseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
 	ba.SetCoreAccountData(ledgercore.ToAccountData(data))
 
 	require.Equal(t, data.MicroAlgos, ba.MicroAlgos)
@@ -2277,6 +2279,7 @@ func TestVotingDataGettersSetters(t *testing.T) {
 	data.VoteKeyDilution = crypto.RandUint64()
 
 	var bv baseVotingData
+	require.Equal(t, 7, reflect.TypeOf(baseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
 	require.True(t, bv.IsEmpty())
 
 	bv.SetCoreAccountData(ledgercore.ToAccountData(data))
