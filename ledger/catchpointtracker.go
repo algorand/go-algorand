@@ -270,9 +270,8 @@ func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback
 
 // Calculate whether we have intermediate first stage catchpoint rounds and the
 // new offset.
-func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataResourceSeparationRound basics.Round, catchpointInterval uint64, catchpointLookback uint64) (bool /*hasIntermediateFirstStageRound*/, bool /*hasMultipleIntermediateFirstStageRounds*/, uint64 /*offset*/) {
-	hasIntermediateFirstStageRound := false
-	hasMultipleIntermediateFirstStageRounds := false
+func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataResourceSeparationRound basics.Round, catchpointInterval uint64, catchpointLookback uint64) (hasIntermediateFirstStageRound bool, hasMultipleIntermediateFirstStageRounds bool, newOffset uint64) {
+	newOffset = offset
 
 	if accountDataResourceSeparationRound > 0 {
 		minFirstStageRound := oldBase + 1
@@ -297,7 +296,7 @@ func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataR
 		if first <= last {
 			hasIntermediateFirstStageRound = true
 			// We skip earlier catchpoints if there is more than one to generate.
-			offset = uint64(last) - uint64(oldBase)
+			newOffset = uint64(last) - uint64(oldBase)
 
 			if first < last {
 				hasMultipleIntermediateFirstStageRounds = true
@@ -305,7 +304,7 @@ func calculateFirstStageRounds(oldBase basics.Round, offset uint64, accountDataR
 		}
 	}
 
-	return hasIntermediateFirstStageRound, hasMultipleIntermediateFirstStageRounds, offset
+	return
 }
 
 func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
@@ -364,6 +363,12 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 // prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
 // If an error returned the process is aborted.
 func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
+	ct.catchpointsMu.RLock()
+	defer ct.catchpointsMu.RUnlock()
+
+	dcc.committedRoundDigests = make([]crypto.Digest, dcc.offset)
+	copy(dcc.committedRoundDigests, ct.roundDigest[:dcc.offset])
+
 	return nil
 }
 
@@ -429,6 +434,10 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 			ct.log.Warnf("merkle trie failed to evict: %v", err)
 		}
 	}
+
+	ct.catchpointsMu.Lock()
+	ct.roundDigest = ct.roundDigest[dcc.offset:]
+	ct.catchpointsMu.Unlock()
 
 	dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
 
@@ -566,51 +575,57 @@ func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round 
 		return err
 	}
 
+	if !ct.enableGeneratingCatchpointFiles {
+		return nil
+	}
+
 	catchpointDataFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
 	catchpointDataFilePath =
 		filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
 
 	// Check if the data file exists.
-	if _, err = os.Stat(catchpointDataFilePath); err == nil {
-		// Exists.
-		if ct.enableGeneratingCatchpointFiles {
-			header := CatchpointFileHeader{
-				Version:           CatchpointFileVersionV6,
-				BalancesRound:     accountsRound,
-				BlocksRound:       round,
-				Totals:            dataInfo.Totals,
-				TotalAccounts:     dataInfo.TotalAccounts,
-				TotalChunks:       dataInfo.TotalChunks,
-				Catchpoint:        label,
-				BlockHeaderDigest: blockHash,
-			}
+	_, err = os.Stat(catchpointDataFilePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 
-			relCatchpointFilePath :=
-				filepath.Join(CatchpointDirName, makeCatchpointFilePath(round))
-			absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
+	// Make a catchpoint file.
+	header := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV6,
+		BalancesRound:     accountsRound,
+		BlocksRound:       round,
+		Totals:            dataInfo.Totals,
+		TotalAccounts:     dataInfo.TotalAccounts,
+		TotalChunks:       dataInfo.TotalChunks,
+		Catchpoint:        label,
+		BlockHeaderDigest: blockHash,
+	}
 
-			err = os.MkdirAll(filepath.Dir(absCatchpointFilePath), 0700)
-			if err != nil {
-				return err
-			}
+	relCatchpointFilePath :=
+		filepath.Join(CatchpointDirName, makeCatchpointFilePath(round))
+	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
 
-			err = repackCatchpoint(header, catchpointDataFilePath, absCatchpointFilePath)
-			if err != nil {
-				return err
-			}
+	err = os.MkdirAll(filepath.Dir(absCatchpointFilePath), 0700)
+	if err != nil {
+		return err
+	}
 
-			fileInfo, err := os.Stat(absCatchpointFilePath)
-			if err != nil {
-				return err
-			}
+	err = repackCatchpoint(header, catchpointDataFilePath, absCatchpointFilePath)
+	if err != nil {
+		return err
+	}
 
-			err = ct.recordCatchpointFile(
-				round, relCatchpointFilePath, fileInfo.Size())
-			if err != nil {
-				return err
-			}
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
+	fileInfo, err := os.Stat(absCatchpointFilePath)
+	if err != nil {
+		return err
+	}
+
+	err = ct.recordCatchpointFile(
+		round, relCatchpointFilePath, fileInfo.Size())
+	if err != nil {
 		return err
 	}
 
@@ -636,8 +651,9 @@ func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInt
 }
 
 // Generate catchpoints (labels and possibly files with db records) for rounds in
-// [first, last]. `ct.catchpointInterval` must be non-zero.
-func (ct *catchpointTracker) createCatchpoints(first basics.Round, last basics.Round, oldBase basics.Round, catchpointLookback uint64) error {
+// [first, last]. `blockHashes` must contain block digests for rounds [first, last].
+// `ct.catchpointInterval` must be non-zero.
+func (ct *catchpointTracker) createCatchpoints(first basics.Round, last basics.Round, blockHashes []crypto.Digest, catchpointLookback uint64) error {
 	if catchpointLookback+1 > uint64(first) {
 		first = basics.Round(catchpointLookback) + 1
 	}
@@ -653,11 +669,7 @@ func (ct *catchpointTracker) createCatchpoints(first basics.Round, last basics.R
 		}
 
 		if exists {
-			ct.catchpointsMu.Lock()
-			blockHash := ct.roundDigest[round-oldBase-1]
-			ct.catchpointsMu.Unlock()
-
-			err := ct.createCatchpoint(accountsRound, round, dataInfo, blockHash)
+			err := ct.createCatchpoint(accountsRound, round, dataInfo, blockHashes[round-first])
 			if err != nil {
 				return err
 			}
@@ -721,7 +733,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	if ct.catchpointInterval != 0 {
 		// Generate catchpoints for rounds in (dcc.oldBase, dcc.newBase].
 		err := ct.createCatchpoints(
-			dcc.oldBase+1, dcc.newBase, dcc.oldBase, dcc.catchpointLookback)
+			dcc.oldBase+1, dcc.newBase, dcc.committedRoundDigests, dcc.catchpointLookback)
 		if err != nil {
 			ct.log.Warnf(
 				"error creating catchpoints dcc.oldBase: %d dcc.newBase: %d err: %v",
@@ -739,10 +751,6 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 				dcc.newBase, err)
 		}
 	}
-
-	ct.catchpointsMu.Lock()
-	ct.roundDigest = ct.roundDigest[dcc.offset:]
-	ct.catchpointsMu.Unlock()
 }
 
 // handleUnorderedCommit is a special method for handling deferred commits that are out of order.

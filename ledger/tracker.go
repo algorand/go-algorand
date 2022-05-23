@@ -189,10 +189,6 @@ type trackerRegistry struct {
 	lastFlushTime time.Time
 
 	cfg config.Local
-
-	// When set to true, we never omit commits because there are not enough accumulated
-	// deltas.
-	alwaysCommit bool
 }
 
 // deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
@@ -255,6 +251,7 @@ type deferredCommitContext struct {
 
 	updatingBalancesDuration time.Duration
 
+	committedRoundDigests     []crypto.Digest
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
 	txTailHash crypto.Digest
@@ -265,7 +262,7 @@ type deferredCommitContext struct {
 
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
 
-func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local, alwaysCommit bool) (err error) {
+func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
@@ -300,8 +297,6 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 			tr.txtail = txtail
 		}
 	}
-
-	tr.alwaysCommit = alwaysCommit
 
 	return
 }
@@ -395,7 +390,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
-	if !tr.alwaysCommit && dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
+	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
 		dcc = nil
 	}
 	tr.mu.RUnlock()

@@ -70,7 +70,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
 
-	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao}, conf, true)
+	err = l.trackers.initialize(l, []ledgerTracker{au, ct, ao}, conf)
 	require.NoError(tb, err)
 	err = l.trackers.loadFromDisk(l)
 	require.NoError(tb, err)
@@ -486,6 +486,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
+		ml.trackers.lastFlushTime = time.Time{}
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
@@ -528,6 +529,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			blk.RewardsLevel = rewardsLevels[i]
 			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
+
+			ml2.trackers.lastFlushTime = time.Time{}
 			ml2.trackers.newBlock(blk, delta)
 			ml2.trackers.committedUpTo(i)
 
@@ -835,6 +838,7 @@ func TestCalculateCatchpointRounds(t *testing.T) {
 		{11, 20, []basics.Round{20}},
 		{11, 29, []basics.Round{20}},
 		{11, 30, []basics.Round{20, 30}},
+		{10, 20, []basics.Round{10, 20}},
 	}
 
 	for i, testCase := range testCases {
@@ -900,6 +904,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		}
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 
+		ml.trackers.lastFlushTime = time.Time{}
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
