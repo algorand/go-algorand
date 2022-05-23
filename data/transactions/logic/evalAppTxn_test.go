@@ -2907,3 +2907,30 @@ itxn_submit
 
 	TestApp(t, source, ep, "appl depth (8) exceeded")
 }
+
+func TestForeignAppAccountAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ep, tx, ledger := MakeSampleEnv()
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(111)}
+
+	ledger.NewApp(tx.Sender, 111, basics.AppParams{
+		ApprovalProgram:   TestProg(t, "int 1", AssemblerMaxVersion).Program,
+		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
+	})
+
+	TestApp(t, `
+itxn_begin
+int pay
+itxn_field TypeEnum
+int 100
+itxn_field Amount
+txn Applications 1
+app_params_get AppAddress
+assert
+itxn_field Receiver
+itxn_submit
+int 1
+`, ep)
+}

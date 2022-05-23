@@ -180,6 +180,9 @@ _available_.
    associated account of a contract that was created earlier in the
    group is _available_.
 
+ * Since v7, the account associated with any contract present in the
+   `txn.ForeignApplications` field is _available_.
+
 ## Constants
 
 Constants can be pushed onto the stack in two different ways:

@@ -3524,12 +3524,12 @@ func opExtract64Bits(cx *EvalContext) error {
 }
 
 // accountReference yields the address and Accounts offset designated by a
-// stackValue. If the stackValue is the app account or an account of an app in
-// created.apps, and it is not be in the Accounts array, then len(Accounts) + 1
-// is returned as the index. This would let us catch the mistake if the index is
-// used for set/del. If the txn somehow "psychically" predicted the address, and
-// therefore it IS in txn.Accounts, then happy day, we can set/del it.  Return
-// the proper index.
+// stackValue. If the stackValue is the app account, an account of an app in
+// created.apps, or an account of an app in foreignApps, and it is not in the
+// Accounts array, then len(Accounts) + 1 is returned as the index. This would
+// let us catch the mistake if the index is used for set/del. If the txn somehow
+// "psychically" predicted the address, and therefore it IS in txn.Accounts,
+// then happy day, we can set/del it. Return the proper index.
 
 // If we ever want apps to be able to change local state on these accounts
 // (which includes this app's own account!), we will need a change to
@@ -3553,6 +3553,16 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 		for _, appID := range cx.created.apps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
+				return addr, invalidIndex, nil
+			}
+		}
+	}
+
+	// Allow an address for an app that was provided in the foreign apps array.
+	if err != nil && cx.version >= appAddressAvailableVersion {
+		for _, appID := range cx.txn.Txn.ForeignApps {
+			foreignAddress := cx.getApplicationAddress(appID)
+			if addr == foreignAddress {
 				return addr, invalidIndex, nil
 			}
 		}

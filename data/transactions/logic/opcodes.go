@@ -57,6 +57,11 @@ const txnEffectsVersion = 6
 // the Foreign arrays.
 const createdResourcesVersion = 6
 
+// appAddressAvailableVersion is the first version that allows access to the
+// accounts of applications that were provided in the foreign apps transaction
+// field.
+const appAddressAvailableVersion = 7
+
 // experimental-
 const fidoVersion = 7 // base64, json, secp256r1
 
