@@ -1168,7 +1168,8 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOfInterestEnc []byte) {
 	messagesOfInterestGeneration := atomic.LoadUint32(&wn.messagesOfInterestGeneration)
-	if peer.messagesOfInterestGeneration != messagesOfInterestGeneration {
+	peerMessagesOfInterestGeneration := atomic.LoadUint32(&peer.messagesOfInterestGeneration)
+	if peerMessagesOfInterestGeneration != messagesOfInterestGeneration {
 		if messagesOfInterestEnc == nil {
 			wn.messagesOfInterestMu.Lock()
 			messagesOfInterestEnc = wn.messagesOfInterestEnc

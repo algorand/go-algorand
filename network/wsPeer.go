@@ -886,6 +886,6 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	if err != nil {
 		wp.net.log.Errorf("ws send msgOfInterest: %v", err)
 	} else {
-		wp.messagesOfInterestGeneration = messagesOfInterestGeneration
+		atomic.StoreUint32(&wp.messagesOfInterestGeneration, messagesOfInterestGeneration)
 	}
 }
