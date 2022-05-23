@@ -61,6 +61,8 @@ var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
 
+const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
+
 func init() {
 	nodeCmd.AddCommand(startCmd)
 	nodeCmd.AddCommand(stopCmd)
@@ -136,7 +138,7 @@ func getMissingCatchpointLabel(URL string) (label string, err error) {
 	label = string(body)
 	label = strings.TrimSuffix(label, "\n")
 
-	// check if its a valid checkpoint label
+	// check if label is a valid catchpoint label
 	_, _, err = ledgercore.ParseCatchpointLabel(label)
 	if err != nil {
 		return
@@ -159,7 +161,7 @@ var catchupCmd = &cobra.Command{
 					reportErrorf(errorNodeStatus, err)
 				}
 				genesis := strings.Split(vers.GenesisID, "-")[0]
-				URL := "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/" + genesis + "/latest.catchpoint"
+				URL := fmt.Sprintf(catchpointURL, genesis)
 				label, err := getMissingCatchpointLabel(URL)
 				if err != nil {
 					fmt.Println(errorUnableToLookupCatchpointLabel)
