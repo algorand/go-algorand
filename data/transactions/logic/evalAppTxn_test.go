@@ -2913,10 +2913,9 @@ func TestForeignAppAccountAccess(t *testing.T) {
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(2)}
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(111)}
 
-	// This app looks itself up in the ledger, so we need to put it in there.
-	ledger.NewApp(tx.Sender, 2, basics.AppParams{
+	ledger.NewApp(tx.Sender, 111, basics.AppParams{
 		ApprovalProgram:   TestProg(t, "int 1", AssemblerMaxVersion).Program,
 		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
 	})

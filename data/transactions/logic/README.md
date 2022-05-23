@@ -181,7 +181,7 @@ _available_.
    group is _available_.
 
  * Since v7, the account associated with any contract present in the
-   `txn.ForeignApplications` is _available_.
+   `txn.ForeignApplications` field is _available_.
 
 ## Constants
 

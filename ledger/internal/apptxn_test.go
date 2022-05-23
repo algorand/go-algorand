@@ -3070,12 +3070,6 @@ func TestForeignAppAccountsAccessible(t *testing.T) {
 		appA := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
-			ApprovalProgram: main(`
-int 3
-int 3
-==
-assert
-`),
 		}
 
 		appB := txntest.Txn{
@@ -3093,9 +3087,7 @@ itxn_submit
 `),
 		}
 
-		dl.beginBlock()
-		dl.txgroup("", &appA, &appB)
-		vb := dl.endBlock()
+		vb := dl.fullBlock(&appA, &appB)
 		index0 := vb.Block().Payset[0].ApplicationID
 		index1 := vb.Block().Payset[1].ApplicationID
 
@@ -3107,7 +3099,6 @@ itxn_submit
 		}
 		fund0 := fund1
 		fund0.Receiver = index0.Address()
-		fund1.Receiver = index1.Address()
 
 		callTx := txntest.Txn{
 			Type:          "appl",
@@ -3131,31 +3122,26 @@ itxn_submit
 	})
 }
 
-// While accounts of foreign apps are available in most context, they still
+// While accounts of foreign apps are available in most contexts, they still
 // cannot be used as mutable references; ie the accounts cannot be used by
 // opcodes that modify local storage.
 func TestForeignAppAccountsImmutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
-	defer l.Close()
+	testConsensusRange(t, 32, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
 
-	appA := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
-int 3
-int 3
-==
-assert
-`),
-	}
+		appA := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+		}
 
-	appB := txntest.Txn{
-		Type:   "appl",
-		Sender: addrs[0],
-		ApprovalProgram: main(`
+		appB := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
 txn Applications 1
 app_params_get AppAddress
 byte "X"
@@ -3163,34 +3149,32 @@ byte "ABC"
 app_local_put
 int 1
 `),
-	}
+		}
 
-	eval := nextBlock(t, l)
-	txns(t, l, eval, &appA, &appB)
-	vb := endBlock(t, l, eval)
-	index0 := vb.Block().Payset[0].ApplicationID
-	index1 := vb.Block().Payset[1].ApplicationID
+		vb := dl.fullBlock(&appA, &appB)
+		index0 := vb.Block().Payset[0].ApplicationID
+		index1 := vb.Block().Payset[1].ApplicationID
 
-	fund1 := txntest.Txn{
-		Type:     "pay",
-		Sender:   addrs[0],
-		Receiver: index1.Address(),
-		Amount:   1_000_000_000,
-	}
-	fund0 := fund1
-	fund0.Receiver = index0.Address()
-	fund1.Receiver = index1.Address()
+		fund1 := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: index1.Address(),
+			Amount:   1_000_000_000,
+		}
+		fund0 := fund1
+		fund0.Receiver = index0.Address()
 
-	callTx := txntest.Txn{
-		Type:          "appl",
-		Sender:        addrs[2],
-		ApplicationID: index1,
-		ForeignApps:   []basics.AppIndex{index0},
-	}
-	eval = nextBlock(t, l)
-	txns(t, l, eval, &fund0, &fund1)
-	txn(t, l, eval, &callTx, "invalid Account reference")
-	endBlock(t, l, eval)
+		callTx := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index1,
+			ForeignApps:   []basics.AppIndex{index0},
+		}
+
+		dl.beginBlock()
+		dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
+		dl.endBlock()
+	})
 }
 
 // In the case where the foreign app account is also provided in the
@@ -3239,9 +3223,7 @@ done:
 			},
 		}
 
-		dl.beginBlock()
-		dl.txgroup("", &appA, &appB)
-		vb := dl.endBlock()
+		vb := dl.fullBlock(&appA, &appB)
 		index0 := vb.Block().Payset[0].ApplicationID
 		index1 := vb.Block().Payset[1].ApplicationID
 
@@ -3270,9 +3252,7 @@ done:
 			Accounts:      []basics.Address{index0.Address()},
 		}
 
-		dl.beginBlock()
-		dl.txgroup("", &fund0, &fund1, &callA, &callB)
-		vb = dl.endBlock()
+		vb = dl.fullBlock(&fund0, &fund1, &callA, &callB)
 
 		require.Equal(t, "Y", vb.Block().Payset[3].EvalDelta.LocalDeltas[1]["X"].Bytes)
 	})
