@@ -28,13 +28,16 @@ const onlineAccountsCacheMaxSize = 2500
 type onlineAccountsCache struct {
 	// each List stores online account data with newest
 	// at the front, and oldest at the back.
-	accounts map[basics.Address]*list.List
+	accounts     map[basics.Address]*list.List
+	maxCacheSize int
 }
 
 // init initializes the onlineAccountsCache for use.
 // thread locking semantics : write lock
-func (o *onlineAccountsCache) init(accts []persistedOnlineAccountData) {
+func (o *onlineAccountsCache) init(accts []persistedOnlineAccountData, maxCacheSize int) {
 	o.accounts = make(map[basics.Address]*list.List)
+	o.maxCacheSize = maxCacheSize
+
 	for _, acct := range accts {
 		// if cache full, stop writing
 		cachedAcct := cachedOnlineAccount{
@@ -48,7 +51,11 @@ func (o *onlineAccountsCache) init(accts []persistedOnlineAccountData) {
 }
 
 func (o *onlineAccountsCache) full() bool {
-	return len(o.accounts) >= onlineAccountsCacheMaxSize
+	return len(o.accounts) >= o.maxCacheSize
+}
+
+func (o *onlineAccountsCache) maxSize() int {
+	return o.maxCacheSize
 }
 
 // read the cachedOnlineAccount object that the cache has for the given address.

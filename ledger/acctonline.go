@@ -173,7 +173,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		if err0 != nil {
 			return err0
 		}
-		ao.onlineAccountsCache.init(onlineAccounts)
+		ao.onlineAccountsCache.init(onlineAccounts, onlineAccountsCacheMaxSize)
 
 		return nil
 	})
