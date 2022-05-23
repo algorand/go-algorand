@@ -177,6 +177,7 @@ func TestCounterWriteMetric(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	c.Deregister(nil)
 
 	// ensure 0 counters are still logged
 	sbOut := strings.Builder{}
@@ -196,5 +197,4 @@ testname{host="myhost"} 0
 testname{host="myhost"} 2.3
 `
 	require.Equal(t, expected, sbOut.String())
-	c.Deregister(nil)
 }
