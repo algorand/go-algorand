@@ -251,7 +251,7 @@ type deferredCommitContext struct {
 
 	updatingBalancesDuration time.Duration
 
-	committedRoundDigests     []crypto.Digest
+	committedRoundDigests []crypto.Digest
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
 	txTailHash crypto.Digest
