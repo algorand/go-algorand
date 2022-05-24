@@ -1720,6 +1720,15 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 	assert.Equal(t, 5, int(sum[0]))
 }
 
+var (
+	ft1 = protocol.Tag("F1")
+	ft2 = protocol.Tag("F2")
+	ft3 = protocol.Tag("F3")
+	ft4 = protocol.Tag("F4")
+
+	testTags = []protocol.Tag{ft1, ft2, ft3, ft4}
+)
+
 // Set up two nodes, have one of them request a certain message tag mask, and verify the other follow that.
 func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1742,10 +1751,21 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
+	expectedCounts := make(map[protocol.Tag]int)
+	expectedCounts[ft1] = 5
+	expectedCounts[ft2] = 5
+	var failed uint32
 	messageArriveWg := sync.WaitGroup{}
 	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		t.Logf("A->B %s", msg.Tag)
 		incomingMsgSync.Lock()
 		defer incomingMsgSync.Unlock()
+		expected := expectedCounts[msg.Tag]
+		if expected < 1 {
+			atomic.StoreUint32(&failed, 1)
+			t.Logf("UNEXPECTED A->B %s", msg.Tag)
+			return
+		}
 		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
 		messageArriveWg.Done()
 		return
@@ -1759,7 +1779,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 
 	// register all the handlers.
 	taggedHandlers := []TaggedMessageHandler{}
-	for tag := range defaultSendMessageTags {
+	for _, tag := range testTags {
 		taggedHandlers = append(taggedHandlers, TaggedMessageHandler{
 			Tag:            tag,
 			MessageHandler: HandlerFunc(msgHandler),
@@ -1768,7 +1788,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	netB.RegisterHandlers(taggedHandlers)
 	netA.RegisterHandlers([]TaggedMessageHandler{
 		{
-			Tag:            protocol.AgreementVoteTag,
+			Tag:            protocol.VoteBundleTag,
 			MessageHandler: HandlerFunc(waitMessageArriveHandler),
 		}})
 
@@ -1777,31 +1797,65 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
-	netB.Broadcast(context.Background(), protocol.MsgOfInterestTag, MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}), true, nil)
+	require.NoError(t, netB.RegisterMessageInterest(ft1))
+	require.NoError(t, netB.RegisterMessageInterest(ft2))
 	// send another message which we can track, so that we'll know that the first message was delivered.
-	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
+	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
+	// okay, but now we need to wait for asynchronous thread within netA to _apply_ the MOI to its peer for netB...
+	timeout := time.Now().Add(100 * time.Millisecond)
+	waiting := true
+	for waiting {
+		time.Sleep(1 * time.Millisecond)
+		peers := netA.GetPeers(PeersConnectedIn)
+		for _, pg := range peers {
+			wp := pg.(*wsPeer)
+			if len(wp.sendBufferHighPrio)+len(wp.sendBufferBulk) == 0 {
+				waiting = false
+				break
+			}
+		}
+		if time.Now().After(timeout) {
+			for _, pg := range peers {
+				wp := pg.(*wsPeer)
+				if len(wp.sendBufferHighPrio)+len(wp.sendBufferBulk) == 0 {
+					t.Fatalf("netA peer buff empty timeout len(high)=%d, len(bulk)=%d", len(wp.sendBufferHighPrio), len(wp.sendBufferBulk))
+				}
+			}
+		}
+	}
 
 	messageArriveWg.Add(5 * 2) // we're expecting exactly 10 messages.
 	// send 5 messages of few types.
 	for i := 0; i < 5; i++ {
-		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
-		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
-		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
-		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		if atomic.LoadUint32(&failed) != 0 {
+			t.Errorf("failed")
+			break
+		}
+		netA.Broadcast(context.Background(), ft1, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), ft3, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
+		netA.Broadcast(context.Background(), ft2, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), ft4, []byte{0, 1, 2, 3, 4}, true, nil) // NOT in MOI
+	}
+	if atomic.LoadUint32(&failed) != 0 {
+		t.Errorf("failed")
 	}
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
+	defer incomingMsgSync.Unlock()
 	require.Equal(t, 2, len(msgCounters))
 	for tag, count := range msgCounters {
-		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
+		if atomic.LoadUint32(&failed) != 0 {
+			t.Errorf("failed")
+			break
+		}
+		if tag == ft1 || tag == ft2 {
 			require.Equal(t, 5, count)
 		} else {
 			require.Equal(t, 0, count)
 		}
 	}
-	incomingMsgSync.Unlock()
 }
 
 // Set up two nodes, have one of them work through TX gossip message-of-interest logic
