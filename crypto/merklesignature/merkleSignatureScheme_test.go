@@ -47,8 +47,8 @@ func TestSignerCreation(t *testing.T) {
 		a.Equal(expectedLen, length(signer, a))
 	}
 
-	testSignerNumKeysLimits(0, 0, 1, 0)
-	testSignerNumKeysLimits(0, 1, 1, 1)
+	testSignerNumKeysLimits(0, 0, 1, 1)
+	testSignerNumKeysLimits(0, 1, 1, 2)
 	testSignerNumKeysLimits(2, 2, 2, 1)
 	testSignerNumKeysLimits(8, 21, 10, 2)
 	testSignerNumKeysLimits(8, 20, 10, 2)
@@ -409,7 +409,7 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 	lastValid = validPeriod
 	s, err = New(firstValid, lastValid, interval)
 	a.NoError(err)
-	a.Equal(numberOfKeys-1, uint64(length(s, a)))
+	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(1000)
 	lastValid = validPeriod + 1000 - (interval * 50)

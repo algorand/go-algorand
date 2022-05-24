@@ -123,13 +123,12 @@ func New(firstValid, lastValid, keyLifetime uint64) (*Secrets, error) {
 		return nil, ErrKeyLifetimeIsZero
 	}
 
-	if firstValid == 0 {
-		firstValid = 1
-	}
-
 	// calculates the number of indices from first valid round and up to lastValid.
 	// writing this explicit calculation to avoid overflow.
 	numberOfKeys := lastValid/keyLifetime - ((firstValid - 1) / keyLifetime)
+	if firstValid == 0 {
+		numberOfKeys = lastValid/keyLifetime + 1 // add 1 for round zero
+	}
 
 	keys, err := KeysBuilder(numberOfKeys)
 	if err != nil {
