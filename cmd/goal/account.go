@@ -897,9 +897,8 @@ var addParticipationKeyCmd = &cobra.Command{
 
 		reportInfof("Participation key generation successful")
 
-		versList := strings.Split(config.FormatVersionAndLicense(), "\n")[1]
-		vers := strings.Split(versList, " ")[0]
-		fmt.Println("\nGenerated with goal v" + vers)
+		version := config.GetCurrentVersion()
+		fmt.Println("\nGenerated with goal v" + version.String())
 	},
 }
 
@@ -977,9 +976,9 @@ var renewParticipationKeyCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(err.Error())
 		}
-		versList := strings.Split(config.FormatVersionAndLicense(), "\n")[1]
-		vers := strings.Split(versList, " ")[0]
-		fmt.Println("\nGenerated with goal v" + vers)
+
+		version := config.GetCurrentVersion()
+		fmt.Println("\nGenerated with goal v" + version.String())
 	},
 }
 

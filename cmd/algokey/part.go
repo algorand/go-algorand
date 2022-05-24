@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -99,9 +98,9 @@ var partGenerateCmd = &cobra.Command{
 		fmt.Println("Participation key generation successful")
 
 		printPartkey(partkey.Participation)
-		versList := strings.Split(config.FormatVersionAndLicense(), "\n")[1]
-		vers := strings.Split(versList, " ")[0]
-		fmt.Println("\nGenerated with algokey v" + vers)
+
+		version := config.GetCurrentVersion()
+		fmt.Println("\nGenerated with algokey v" + version.String())
 	},
 }
 
