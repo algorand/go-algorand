@@ -42,3 +42,11 @@ var sanitizeTelemetryCharactersRegexp = regexp.MustCompile("(^[^a-zA-Z_]|[^a-zA-
 func sanitizeTelemetryName(name string) string {
 	return sanitizeTelemetryCharactersRegexp.ReplaceAllString(name, "_")
 }
+
+var sanitizePrometheusCharactersRegexp = regexp.MustCompile("(^[^a-zA-Z_]|[^a-zA-Z0-9_])")
+
+// sanitizePrometheusName ensures a metric name reported to telemetry doesn't contain any
+// non-alphanumeric characters (apart from _) and doesn't start with a number.
+func sanitizePrometheusName(name string) string {
+	return sanitizePrometheusCharactersRegexp.ReplaceAllString(name, "_")
+}
