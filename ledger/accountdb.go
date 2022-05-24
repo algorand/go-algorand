@@ -3799,7 +3799,7 @@ func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
 	return chunks
 }
 
-func onlineAccountsDeleteExpired(tx *sql.Tx, rowids []int64) (err error) {
+func onlineAccountsDeleteByRowIDs(tx *sql.Tx, rowids []int64) (err error) {
 	if len(rowids) == 0 {
 		return
 	}
@@ -3815,6 +3815,66 @@ func onlineAccountsDeleteExpired(tx *sql.Tx, rowids []int64) (err error) {
 		}
 	}
 	return
+}
+
+// onlineAccountsDelete deleted entries with updRound <= expRound
+func onlineAccountsDelete(tx *sql.Tx, expRound uint64) (err error) {
+	rows, err := tx.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound <= ? ORDER BY address, updRound DESC", expRound)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var rowids []int64
+	var rowid sql.NullInt64
+	var updRound sql.NullInt64
+	var buf []byte
+	var addrbuf []byte
+
+	var prevAddr []byte
+
+	for rows.Next() {
+		err = rows.Scan(&rowid, &addrbuf, &updRound, &buf)
+		if err != nil {
+			return err
+		}
+		if !rowid.Valid || !updRound.Valid {
+			return fmt.Errorf("onlineAccountsDelete: invalid rowid or updRound")
+		}
+		if len(addrbuf) != len(basics.Address{}) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(basics.Address{}))
+			return
+		}
+
+		if !bytes.Equal(addrbuf, prevAddr) {
+			// new address
+			// if the first (latest) entry is
+			//  - offline then delete all
+			//  - online then safe to delete all previous except this first (latest)
+
+			// reset the state
+			prevAddr = addrbuf
+
+			var oad baseOnlineAccountData
+			err = protocol.Decode(buf, &oad)
+			if err != nil {
+				return
+			}
+			if oad.IsVotingEmpty() {
+				// delete this and all subsequent
+				rowids = append(rowids, rowid.Int64)
+			}
+
+			// restart the loop
+			// if there are some subsequent entries, they will deleted on the next iteration
+			// if no subsequent entries, the loop will reset the state and the latest entry does not get deleted
+			continue
+		}
+		// delete all subsequent entries
+		rowids = append(rowids, rowid.Int64)
+	}
+
+	return onlineAccountsDeleteByRowIDs(tx, rowids)
 }
 
 // updates the round number associated with the current account data.

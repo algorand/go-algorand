@@ -446,7 +446,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = onlineAccountsDeleteExpired(tx, dcc.onlineAccountExpiredRowids)
+	err = onlineAccountsDeleteByRowIDs(tx, dcc.onlineAccountExpiredRowids)
 	if err != nil {
 		return err
 	}
