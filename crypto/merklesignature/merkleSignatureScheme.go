@@ -73,6 +73,7 @@ type (
 		Tree        merklearray.Tree `codec:"tree"`
 	}
 
+	// Commitment represents the root of the vector commitment tree built upon the MSS keys.
 	Commitment [MerkleSignatureSchemeRootSize]byte
 
 	// Verifier is used to verify a merklesignature.Signature produced by merklesignature.Secrets.
