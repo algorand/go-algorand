@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,6 +32,7 @@ var isNum = regexp.MustCompile(`^[0-9]+$`)
 var isAlnum = regexp.MustCompile(`^[a-zA-Z0-9_]*$`)
 
 func TestGetMissingCatchpointLabel(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	tests := []struct {
 		name        string
 		URL         string

@@ -154,7 +154,7 @@ var catchupCmd = &cobra.Command{
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
-			if abortCatchup == false && len(args) == 0 {
+			if !abortCatchup && len(args) == 0 {
 				client := ensureAlgodClient(dataDir)
 				vers, err := client.AlgodVersions()
 				if err != nil {

@@ -86,7 +86,6 @@ const (
 	errLoadingConfig                   = "Error loading Config file from '%s': %v"
 	errorNodeFailedToShutdown          = "Unable to shut down node: %v"
 	errorCatchpointLabelParsingFailed  = "The provided catchpoint is not a valid one"
-	errorCatchpointLabelMissing        = "A catchpoint argument is needed"
 	errorUnableToLookupCatchpointLabel = "Unable to fetch catchpoint lable"
 	errorTooManyCatchpointLabels       = "The catchup command expect a single catchpoint"
 
