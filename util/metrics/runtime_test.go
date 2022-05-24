@@ -45,4 +45,5 @@ func TestRuntimeMetrics(t *testing.T) {
 		cur++
 	}
 	require.NoError(t, scanner.Err())
+	require.Len(t, defaultRuntimeMetrics, cur)
 }
