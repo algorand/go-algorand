@@ -1062,9 +1062,11 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		cachedData, has = oa.onlineAccountsCache.read(addrB, 1)
 		require.False(t, has) // cache miss, we do not write into the cache non-complete history after updates
 		require.Empty(t, cachedData.VoteLastValid)
+
 		data, err = oa.lookupOnlineAccountData(1, addrB)
 		require.NoError(t, err)
 		require.NotEmpty(t, data.VotingData.VoteLastValid)
+
 		pad, err = oa.accountsq.lookupOnline(addrB, 1)
 		require.NoError(t, err)
 		require.Equal(t, addrB, pad.addr)
