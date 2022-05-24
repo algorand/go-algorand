@@ -58,7 +58,7 @@ type (
 	Signer struct {
 		SigningKey *crypto.FalconSigner
 
-		// The round for which this SigningKey is related to
+		// The requested round to be signed by this Signer. Use FirstRoundInKeyLifetime in order to calculate the actual round of the key.
 		Round uint64
 
 		SignerContext
