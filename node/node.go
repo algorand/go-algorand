@@ -1327,10 +1327,12 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(parts))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)
-	const bitMismatchingVotingKey = 1
-	const bitMismatchingSelectionKey = 2
-	const bitAccountOffline = 4
-	const bitAccountIsClosed = 8
+	const (
+		bitMismatchingVotingKey = 1 << iota
+		bitMismatchingSelectionKey
+		bitAccountOffline
+		bitAccountIsClosed
+	)
 	for _, p := range parts {
 		acctData, hasAccountData := accountsData[p.Account]
 		if !hasAccountData {
