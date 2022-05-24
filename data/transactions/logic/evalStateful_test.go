@@ -376,15 +376,15 @@ func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...
 	require.Equal(t, len(programs), len(ep.TxnGroup))
 	for i := range ep.TxnGroup {
 		if programs[i] != nil {
-			appId := ep.TxnGroup[i].Txn.ApplicationID
-			if appId == 0 {
-				appId = basics.AppIndex(888)
+			appID := ep.TxnGroup[i].Txn.ApplicationID
+			if appID == 0 {
+				appID = basics.AppIndex(888)
 			}
 			if len(expected) > 0 && expected[0].l == i {
-				testAppFull(t, programs[i], i, appId, ep, expected[0].s)
+				testAppFull(t, programs[i], i, appID, ep, expected[0].s)
 				break // Stop after first failure
 			} else {
-				testAppFull(t, programs[i], i, appId, ep)
+				testAppFull(t, programs[i], i, appID, ep)
 			}
 		}
 	}
