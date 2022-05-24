@@ -2227,7 +2227,6 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	data.VoteKeyDilution = crypto.RandUint64()
 
 	var ba baseOnlineAccountData
-	require.Equal(t, 4, reflect.TypeOf(baseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
 	ba.SetCoreAccountData(ledgercore.ToAccountData(data))
 
 	require.Equal(t, data.MicroAlgos, ba.MicroAlgos)
@@ -2266,7 +2265,7 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	require.Equal(t, ba.VoteKeyDilution, oad.VoteKeyDilution)
 }
 
-func TestVotingDataGettersSetters(t *testing.T) {
+func TestBaseVotingDataGettersSetters(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	data := ledgertesting.RandomAccountData(1)
@@ -2279,7 +2278,6 @@ func TestVotingDataGettersSetters(t *testing.T) {
 	data.VoteKeyDilution = crypto.RandUint64()
 
 	var bv baseVotingData
-	require.Equal(t, 7, reflect.TypeOf(baseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
 	require.True(t, bv.IsEmpty())
 
 	bv.SetCoreAccountData(ledgercore.ToAccountData(data))
@@ -2291,6 +2289,18 @@ func TestVotingDataGettersSetters(t *testing.T) {
 	require.Equal(t, data.VoteLastValid, bv.VoteLastValid)
 	require.Equal(t, data.VoteKeyDilution, bv.VoteKeyDilution)
 	require.Equal(t, data.StateProofID, bv.StateProofID)
+}
+
+func TestBaseOnlineAccountDataReflect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, 4, reflect.TypeOf(baseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
+}
+
+func TestBaseVotingDataReflect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, 7, reflect.TypeOf(baseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
 }
 
 func TestLookupAccountAddressFromAddressID(t *testing.T) {
