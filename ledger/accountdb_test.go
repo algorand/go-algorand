@@ -3041,7 +3041,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 	addRound(2, delta2)
 	addRound(3, delta3)
 
-	queries, err := onlineAccountsInitDbQueries(tx, tx)
+	queries, err := onlineAccountsInitDbQueries(tx)
 	require.NoError(t, err)
 
 	// check round 1
@@ -3597,6 +3597,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 }
 
 func TestRowidsToChunkedArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	res := rowidsToChunkedArgs([]int64{1})
 	require.Equal(t, 1, cap(res))
 	require.Equal(t, 1, len(res))
@@ -3660,6 +3662,8 @@ func TestRowidsToChunkedArgs(t *testing.T) {
 
 // TestAccountDBTxTailLoad checks txtailNewRound and loadTxTail delete and load right data
 func TestAccountDBTxTailLoad(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	const inMem = true
 	dbs, _ := dbOpenTest(t, inMem)
 	setDbLogging(t, dbs)
@@ -3692,6 +3696,144 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 
 	for i, entry := range data {
 		require.Equal(t, int64(i+int(baseRound)), entry.Hdr.TimeStamp)
+	}
+}
+
+// TestOnlineAccountsDeletion checks the onlineAccountsDelete preseves online accounts entries
+// and deleted only expired offline and online rows
+// Round    1   2   3   4   5   6   7
+// Acct A  On     Off          On
+// Acct B          On              On
+// Expectations:
+// onlineAccountsDelete(1): A online
+// onlineAccountsDelete(2): A online
+// onlineAccountsDelete(3): A offline, B online
+// etc
+func TestOnlineAccountsDeletion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	var accts map[basics.Address]basics.AccountData
+	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+
+	updates := compactOnlineAccountDeltas{}
+	addrA := ledgertesting.RandomAddress()
+	addrB := ledgertesting.RandomAddress()
+
+	deltaA := onlineAccountDelta{
+		address: addrA,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				baseVotingData: baseVotingData{VoteFirstValid: 100},
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			},
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				baseVotingData: baseVotingData{VoteFirstValid: 600},
+			},
+		},
+		updRound:  []uint64{1, 3, 6},
+		newStatus: []basics.Status{basics.Online, basics.Offline, basics.Online},
+	}
+	// acct B is new and online and then offline
+	deltaB := onlineAccountDelta{
+		address: addrB,
+		newAcct: []baseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
+				baseVotingData: baseVotingData{VoteFirstValid: 300},
+			},
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 200_000_000},
+				baseVotingData: baseVotingData{VoteFirstValid: 700},
+			},
+		},
+		updRound:  []uint64{3, 7},
+		newStatus: []basics.Status{basics.Online, basics.Online},
+	}
+
+	updates.deltas = append(updates.deltas, deltaA, deltaB)
+	writer, err := makeOnlineAccountsSQLWriter(tx, updates.len() > 0)
+	if err != nil {
+		return
+	}
+	defer writer.close()
+
+	lastUpdateRound := basics.Round(10)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+	require.Len(t, expired, 3)
+	require.Len(t, updated, 5)
+
+	queries, err := onlineAccountsInitDbQueries(tx)
+	require.NoError(t, err)
+
+	var count int64
+	var history []persistedOnlineAccountData
+	var validThrough basics.Round
+	for _, rnd := range []basics.Round{1, 2, 3} {
+		err = onlineAccountsDelete(tx, rnd)
+		require.NoError(t, err)
+
+		err = tx.QueryRow("SELECT COUNT(1) FROM onlineaccounts").Scan(&count)
+		require.NoError(t, err)
+		require.Equal(t, int64(5), count)
+
+		history, validThrough, err = queries.lookupOnlineHistory(addrA)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), validThrough) // not set
+		require.Len(t, history, 3)
+		history, validThrough, err = queries.lookupOnlineHistory(addrB)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), validThrough)
+		require.Len(t, history, 2)
+	}
+
+	for _, rnd := range []uint64{3, 4, 5, 6} {
+		err = onlineAccountsDelete(tx, rnd)
+		require.NoError(t, err)
+
+		err = tx.QueryRow("SELECT COUNT(1) FROM onlineaccounts").Scan(&count)
+		require.NoError(t, err)
+		require.Equal(t, int64(3), count)
+
+		history, validThrough, err = queries.lookupOnlineHistory(addrA)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), validThrough)
+		require.Len(t, history, 1)
+		history, validThrough, err = queries.lookupOnlineHistory(addrB)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), validThrough)
+		require.Len(t, history, 2)
+	}
+
+	for _, rnd := range []uint64{7, 8, 9} {
+		err = onlineAccountsDelete(tx, rnd)
+		require.NoError(t, err)
+
+		err = tx.QueryRow("SELECT COUNT(1) FROM onlineaccounts").Scan(&count)
+		require.NoError(t, err)
+		require.Equal(t, int64(2), count)
+
+		history, validThrough, err = queries.lookupOnlineHistory(addrA)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), validThrough)
+		require.Len(t, history, 1)
+		history, validThrough, err = queries.lookupOnlineHistory(addrB)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(0), validThrough)
+		require.Len(t, history, 1)
 	}
 }
 

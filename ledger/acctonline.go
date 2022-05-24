@@ -181,7 +181,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	ao.accountsq, err = onlineAccountsInitDbQueries(ao.dbs.Rdb.Handle, ao.dbs.Wdb.Handle)
+	ao.accountsq, err = onlineAccountsInitDbQueries(ao.dbs.Rdb.Handle)
 	if err != nil {
 		return
 	}

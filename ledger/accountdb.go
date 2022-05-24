@@ -2493,7 +2493,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 	return qs, nil
 }
 
-func onlineAccountsInitDbQueries(r db.Queryable, w db.Queryable) (*onlineAccountsDbQueries, error) {
+func onlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, error) {
 	var err error
 	qs := &onlineAccountsDbQueries{}
 
