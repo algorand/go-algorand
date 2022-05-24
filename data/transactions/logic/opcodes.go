@@ -68,7 +68,6 @@ const appAddressAvailableVersion = 7
 const fidoVersion = 7    // base64, json, secp256r1
 const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
 
-
 type linearCost struct {
 	baseCost  int
 	chunkCost int
