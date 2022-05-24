@@ -156,12 +156,45 @@ func (ep *EvalParams) reset() {
 	if ep.available != nil {
 		ep.available.apps = nil
 		ep.available.asas = nil
-		// leave ep.available.boxes alone, as it is not affected by evaluations
+		// reinitialize boxes because evaluation can add box refs for app creates.
+		ep.available.boxes = ep.recalcBoxRefs()
 	}
 	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
 	if ep.Trace != nil {
 		ep.Trace = &strings.Builder{}
 	}
+}
+
+// reinitializeBoxRefs is nearly a copy of what happens in NewEvalParams, but is
+// in _test.go because it never needs to happen in normal operation.
+func (ep *EvalParams) recalcBoxRefs() map[basics.AppIndex][]string {
+	var allBoxes map[basics.AppIndex][]string
+	for _, tx := range ep.TxnGroup {
+		if tx.Txn.Type == protocol.ApplicationCallTx {
+			if allBoxes == nil && len(tx.Txn.Boxes) > 0 {
+				allBoxes = make(map[basics.AppIndex][]string)
+			}
+			for _, br := range tx.Txn.Boxes {
+				var app basics.AppIndex
+				if br.Index == 0 {
+					// 0 is the "current app". Ignore if this is a create, else use ApplicationID
+					if tx.Txn.ApplicationID == 0 {
+						// When the create actually happens, and we learn the appID, we'll make it _available_.
+						continue
+					}
+					app = tx.Txn.ApplicationID
+				} else {
+					// Bounds check will already have been done by
+					// WellFormed. For testing purposes, it's better to panic
+					// now than after returning a nil.
+					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
+				}
+				appBoxes := allBoxes[app]
+				allBoxes[app] = append(appBoxes, br.Name)
+			}
+		}
+	}
+	return allBoxes
 }
 
 func TestTooManyArgs(t *testing.T) {

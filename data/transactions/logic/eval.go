@@ -227,8 +227,12 @@ type LedgerForLogic interface {
 // apps, assets, and boxes that are available to a transaction, outside the
 // direct foreign array mechanism.
 type resources struct {
-	asas  []basics.AssetIndex
-	apps  []basics.AppIndex
+	asas []basics.AssetIndex
+	apps []basics.AppIndex
+
+	// boxes are all of the top-level box refs from the txgroup. Most are added
+	// during NewEvalParams(). refs using 0 on an appl create are resolved and
+	// added when the appl executes.
 	boxes map[basics.AppIndex][]string
 }
 
@@ -312,6 +316,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 				if br.Index == 0 {
 					// 0 is the "current app". Ignore if this is a create, else use ApplicationID
 					if tx.Txn.ApplicationID == 0 {
+						// When the create actually happens, and we learn the appID, we'll make it _available_.
 						continue
 					}
 					app = tx.Txn.ApplicationID
@@ -322,8 +327,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
 				}
 				appBoxes := allBoxes[app]
-				appBoxes = append(appBoxes, br.Name)
-				allBoxes[app] = appBoxes
+				allBoxes[app] = append(appBoxes, br.Name)
 			}
 		}
 	}
@@ -652,6 +656,17 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
 			return false, nil, ClearStateBudgetError{*cx.PooledApplicationBudget}
+		}
+	}
+
+	// If this is a creation, make any "0 index" box refs available now that we
+	// have an appID.
+	if cx.txn.Txn.ApplicationID == 0 {
+		for _, br := range cx.txn.Txn.Boxes {
+			if br.Index == 0 {
+				appBoxes := cx.EvalParams.available.boxes[cx.appID]
+				cx.EvalParams.available.boxes[cx.appID] = append(appBoxes, br.Name)
+			}
 		}
 	}
 

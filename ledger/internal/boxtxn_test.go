@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -138,9 +139,110 @@ func TestBoxCreate(t *testing.T) {
 		dl.txn(empty, "invalid Box reference")
 		empty.Boxes = []transactions.BoxRef{{}}
 		dl.txn(empty)
-
 	})
+}
 
+func TestBoxCreateAvailability(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// boxes begin in 33
+	testConsensusRange(t, 33, 0, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		accessInCreate := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: 0, // This is a create
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: "hello"}},
+			ApprovalProgram: `
+              int 10
+              byte "hello"
+              box_create
+              int 1
+`,
+		}
+
+		// We know box_create worked because we finished and checked MBR
+		dl.txn(&accessInCreate, "balance 0 below min")
+
+		// But let's fund it and be sure. This is "psychic". We're going to fund
+		// the app address that we know the app will get. So this is a nice
+		// test, but unrealistic way to actual create a box.
+		psychic := basics.AppIndex(2)
+		dl.txn(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: psychic.Address(),
+			Amount:   108501,
+		})
+		dl.txn(&accessInCreate)
+
+		// Now, a more realistic, though tricky, way to get a box created during
+		// the app's first txgroup in existence is to create it in tx0, and then
+		// in tx1 fund it using an inner tx, then invoke it with an inner
+		// transaction. During that invocation, the app will have access to the
+		// boxes supplied as "0 refs", since they were resolved to the app ID
+		// during creation.
+
+		accessWhenCalled := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: 0, // This is a create
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: "hello"}},
+			// Note that main() wraps the program so it does not run at creation time.
+			ApprovalProgram: main(`
+              int 10
+              byte "hello"
+              box_create
+              byte "we did it"
+              log
+`),
+		}
+
+		trampoline := dl.fundedApp(addrs[0], 1_000_000, main(`
+            // Fund the app created in the txn behind me.
+			txn GroupIndex
+            int 1
+            -
+            gtxns CreatedApplicationID
+            dup					// copy for use when calling
+            dup					// test copy
+            assert
+            app_params_get AppAddress
+            assert
+
+            itxn_begin
+             itxn_field Receiver
+             int 500000
+             itxn_field Amount
+             int pay
+             itxn_field TypeEnum
+            itxn_submit
+
+            // Now invoke it, so it can intialize (and create the "hello" box)
+            itxn_begin
+             itxn_field ApplicationID
+             int appl
+             itxn_field TypeEnum
+            itxn_submit
+`))
+
+		call := txntest.Txn{
+			Sender:        addrs[0],
+			Type:          "appl",
+			ApplicationID: trampoline,
+		}
+
+		dl.beginBlock()
+		dl.txgroup("", &accessWhenCalled, &call)
+		vb := dl.endBlock()
+
+		// Make sure that we actually did it.
+		require.Equal(t, "we did it", vb.Block().Payset[1].ApplyData.EvalDelta.InnerTxns[1].EvalDelta.Logs[0])
+	})
 }
 
 // TestBoxRW tests reading writing boxes in consecutive transactions
