@@ -220,7 +220,7 @@ type appCallInputs struct {
 }
 
 type boxRef struct {
-	appId uint64       `codec:"app"`
+	appID uint64       `codec:"app"`
 	name  appCallBytes `codec:"name"`
 }
 
@@ -234,18 +234,18 @@ func newBoxRef(arg string) boxRef {
 	encoding := parts[0] // tentative, may be <app>,<encoding>
 	value := parts[1]
 	parts = strings.SplitN(encoding, ",", 2)
-	appId := uint64(0)
+	appID := uint64(0)
 	if len(parts) == 2 {
 		// There was a comma in the part before the ":"
 		encoding = parts[1]
 		var err error
-		appId, err = strconv.ParseUint(parts[0], 10, 64)
+		appID, err = strconv.ParseUint(parts[0], 10, 64)
 		if err != nil {
 			reportErrorf("Could not parse app id in box ref: %v", err)
 		}
 	}
 	return boxRef{
-		appId: appId,
+		appID: appID,
 		name:  newAppCallBytes(encoding + ":" + value),
 	}
 }
@@ -336,10 +336,10 @@ func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRe
 		}
 
 		index := uint64(0)
-		if tbr.appId != 0 {
+		if tbr.appID != 0 {
 			found := false
 			for a, id := range foreignApps {
-				if tbr.appId == id {
+				if tbr.appID == id {
 					index = uint64(a + 1)
 					found = true
 					break
@@ -349,12 +349,12 @@ func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRe
 			// put the appIdx in foreignApps, and then used the appIdx here
 			// (rather than 0), then maybe they really want to use it in the
 			// transaction as the full number. Though it's hard to see why.
-			if !found && tbr.appId == appIdx {
+			if !found && tbr.appID == appIdx {
 				index = 0
 				found = true
 			}
 			if !found {
-				reportErrorf("Box ref with appId (%d) not in foreign-apps", tbr.appId)
+				reportErrorf("Box ref with appId (%d) not in foreign-apps", tbr.appID)
 			}
 		}
 		output[i] = transactions.BoxRef{

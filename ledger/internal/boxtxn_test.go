@@ -18,14 +18,15 @@ package internal_test
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
 var appSource = main(`
@@ -104,27 +105,38 @@ func TestBoxCreate(t *testing.T) {
 		}
 
 		adam := call.Args("create", "adam")
+		dl.txn(adam, "invalid Box reference adam")
+		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: "adam"}}
 		dl.txn(adam)
 		dl.txn(adam.Args("check", "adam", "\x00\x00"))
 		dl.txgroup("exists", adam.Noted("one"), adam.Noted("two"))
 		bobo := call.Args("create", "bobo")
+		dl.txn(bobo, "invalid Box reference bobo")
+		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: "bobo"}}
 		dl.txn(bobo)
 		dl.txgroup("exists", bobo.Noted("one"), bobo.Noted("two"))
 
 		dl.beginBlock()
 		chaz := call.Args("create", "chaz")
+		chaz.Boxes = []transactions.BoxRef{{Index: 0, Name: "chaz"}}
 		dl.txn(chaz)
 		dl.txn(chaz.Noted("again"), "exists")
 		dl.endBlock()
 
 		// new block
 		dl.txn(chaz.Noted("again"), "exists")
-		dl.txn(call.Args("create", "dogg"), "below min")
-		dl.txn(call.Args("delete", "chaz"))
-		dl.txn(call.Args("delete", "chaz"), "does not exist")
-		dl.txn(call.Args("create", "dogg"))
-		dl.txn(call.Args("delete", "bobo"))
+		dogg := call.Args("create", "dogg")
+		dogg.Boxes = []transactions.BoxRef{{Index: 0, Name: "dogg"}}
+		dl.txn(dogg, "below min")
+		dl.txn(chaz.Args("delete", "chaz"))
+		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "does not exist")
+		dl.txn(dogg)
+		dl.txn(bobo.Args("delete", "bobo"))
+
+		// empty name is legal
 		empty := call.Args("create", "")
+		dl.txn(empty, "invalid Box reference")
+		empty.Boxes = []transactions.BoxRef{{}}
 		dl.txn(empty)
 
 	})
@@ -151,6 +163,7 @@ func TestBoxRW(t *testing.T) {
 			Type:          "appl",
 			Sender:        addrs[0],
 			ApplicationID: appIndex,
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: "x"}},
 		}
 
 		dl.txn(call.Args("create", "x", "\x10"))    // 16
@@ -179,9 +192,11 @@ func TestBoxRW(t *testing.T) {
 		time.Sleep(100 * time.Millisecond) // give commit time to run, and prune au caches
 		dl.fullBlock(call.Args("check", "x", "ABCDEFGH"))
 
-		fmt.Printf("LOG %s\n", bufNewLogger.String())
-
-		dl.txn(call.Args("create", "yy"))
-		dl.txn(call.Args("create", "zzz"))
+		dl.txn(call.Args("create", "yy"), "invalid Box reference yy")
+		withBr := call.Args("create", "yy")
+		withBr.Boxes = append(withBr.Boxes, transactions.BoxRef{Index: 1, Name: "yy"})
+		require.Error(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
+		withBr.Boxes[1].Index = 0
+		dl.txn(withBr)
 	})
 }
