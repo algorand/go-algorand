@@ -1380,27 +1380,21 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 			continue
 		}
 		if warningFlags&bitMismatchingVotingKey == bitMismatchingVotingKey {
-
-			logStr := fmt.Sprintf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
-
 			// If we are closed, upgrade this to info so we don't spam telemetry reporting
 			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
-				node.log.Info(logStr)
+				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
 			} else {
-				node.log.Warnf(logStr)
+				node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
 			}
 
 			continue
 		}
 		if warningFlags&bitMismatchingSelectionKey == bitMismatchingSelectionKey {
-
-			logStr := fmt.Sprintf("node.VotingKeys: Account %v not participating on round %d: on chain selection key differ from participation selection key for round %d", mismatchingAddr, votingRound, keysRound)
-
 			// If we are closed, upgrade this to info so we don't spam telemetry reporting
 			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
-				node.log.Info(logStr)
+				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
 			} else {
-				node.log.Warn(logStr)
+				node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
 			}
 			continue
 		}
