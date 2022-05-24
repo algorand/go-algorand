@@ -998,7 +998,7 @@ return
 	lc := basics.StateSchema{}
 
 	// create app
-	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, nil, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, nil, nil, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -1022,7 +1022,7 @@ return
 	a.NoError(err)
 
 	// call app, which will issue an ASA create inner txn
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, nil, nil, nil)
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
 	a.NoError(err)
