@@ -231,7 +231,10 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64)
 	}
 	record.TotalBoxes = basics.AddSaturate(record.TotalBoxes, 1)
 	record.TotalBoxBytes = basics.AddSaturate(record.TotalBoxBytes, uint64(len(key))+size)
-	cs.Put(appIdx.Address(), record)
+	err = cs.Put(appIdx.Address(), record)
+	if err != nil {
+		return err
+	}
 
 	value := string(make([]byte, size))
 	return cs.kvPut(fullKey, value)
@@ -282,7 +285,10 @@ func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string) error {
 	}
 	record.TotalBoxes = basics.SubSaturate(record.TotalBoxes, 1)
 	record.TotalBoxBytes = basics.SubSaturate(record.TotalBoxBytes, uint64(len(key)+len(value)))
-	cs.Put(appIdx.Address(), record)
+	err = cs.Put(appIdx.Address(), record)
+	if err != nil {
+		return err
+	}
 
 	return cs.kvDel(fullKey)
 }

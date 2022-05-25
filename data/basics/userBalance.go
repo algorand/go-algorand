@@ -69,8 +69,8 @@ const (
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
 	EncodedMaxKeyValueEntries = 1024
 
-	// This number is not really meaningful because Boxes were introduced after
-	// the separation of ledgercore.AccountData and basics.AccountData. The
+	// EncodedMaxBoxes is not really meaningful because Boxes were introduced
+	// after the separation of AccountData in ledgercore and basics. The
 	// constant exists only to satisfy the need for an allocbound on
 	// basics.AccountData, even though such structures are not used in protocol
 	// messages or serialized to the DB. It's made particularly small to ferret
