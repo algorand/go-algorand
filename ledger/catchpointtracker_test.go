@@ -111,7 +111,7 @@ func TestGetCatchpointStream(t *testing.T) {
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database
-		err := ct.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fileName, "", int64(len(data)))
+		err := storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), fileName, "", int64(len(data)))
 		require.NoError(t, err)
 	}
 
@@ -138,7 +138,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
-	err = ct.accountsq.storeCatchpoint(context.Background(), basics.Round(3), "", "", 0)
+	err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(3), "", "", 0)
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(3))
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	outData = []byte{3, 4, 5}
 	require.Equal(t, outData, dataRead)
 
-	err = deleteStoredCatchpoints(context.Background(), ct.accountsq, ct.dbDirectory)
+	err = deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
 	require.NoError(t, err)
 }
 
@@ -194,11 +194,11 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		require.NoError(t, err)
 		err = f.Close()
 		require.NoError(t, err)
-		err = ct.accountsq.storeCatchpoint(context.Background(), basics.Round(i), file, "", 0)
+		err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), file, "", 0)
 		require.NoError(t, err)
 	}
 
-	err = deleteStoredCatchpoints(context.Background(), ct.accountsq, ct.dbDirectory)
+	err = deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
 	require.NoError(t, err)
 
 	// ensure that all the files were deleted.
@@ -206,7 +206,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		_, err := os.Open(file)
 		require.True(t, os.IsNotExist(err))
 	}
-	fileNames, err := ct.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
+	fileNames, err := getOldestCatchpointFiles(context.Background(), ml.dbs.Rdb.Handle, dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 }
