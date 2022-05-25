@@ -1808,7 +1808,11 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
-		StateProofID:            merklesignature.Verifier{Commitment: ad.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
+		// KeyLifetime is set as a default value here (256) as the currently registered StateProof keys do not have a KeyLifetime value associated with them.
+		// In order to support changing the KeyLifetime in the future, we would need to update the Keyreg transaction and replace the value here with the one
+		// registered by the Account.
+		// TODO Stateproof: update when supporting different KeyLifetime.
+		StateProofID: merklesignature.Verifier{Commitment: ad.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
 	}
 }
 

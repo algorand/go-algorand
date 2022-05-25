@@ -200,8 +200,8 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	partCommitment := make([]byte, 0, len(protocol.StateProofPart)+len(binaryWeight)+len(publicKeyBytes.Commitment)+len(keyLifetimeBytes))
 	partCommitment = append(partCommitment, protocol.StateProofPart...)
 	partCommitment = append(partCommitment, binaryWeight...)
-	partCommitment = append(partCommitment, publicKeyBytes.Commitment[:]...)
 	partCommitment = append(partCommitment, keyLifetimeBytes...)
+	partCommitment = append(partCommitment, publicKeyBytes.Commitment[:]...)
 
 	factory := crypto.HashFactory{HashType: HashType}
 	hashValue := hashBytes(factory.NewHash(), partCommitment)

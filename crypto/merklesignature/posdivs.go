@@ -22,14 +22,10 @@ import (
 
 var errRoundFirstValid = errors.New("the round cannot be less than firstValid")
 var errIntervalZero = errors.New("the interval should not be zero")
-var errRoundNotZero = errors.New("the round should not be zero")
 
 func checkMerkleSignatureSchemeParams(firstValid, round, keyLifetime uint64) error {
 	if keyLifetime == 0 {
 		return errIntervalZero
-	}
-	if round == 0 {
-		return errRoundNotZero
 	}
 	if round < firstValid {
 		return errRoundFirstValid

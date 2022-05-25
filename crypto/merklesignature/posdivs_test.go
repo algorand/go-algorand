@@ -68,14 +68,9 @@ func TestIndexToRoundToIndex(t *testing.T) {
 func TestErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	firstValid := uint64(100)
-	interval := uint64(101)
-	round := uint64(0)
-	require.Equal(t, errRoundNotZero, checkMerkleSignatureSchemeParams(firstValid, round, interval))
-
-	firstValid = uint64(101)
-	round = firstValid - 1
-	interval = round / 2
+	firstValid := uint64(101)
+	round := firstValid - 1
+	interval := round / 2
 	require.Equal(t, errRoundFirstValid, checkMerkleSignatureSchemeParams(firstValid, round, interval))
 
 	interval = 0

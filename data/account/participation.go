@@ -170,7 +170,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 	}
 	if stateProofSigner := part.StateProofSigner(); stateProofSigner != nil {
 		if includeStateProofKeys { // TODO: remove this check and parameter after the network had enough time to upgrade
-			t.KeyregTxnFields.StateProofPK = stateProofSigner.GetVerifier().Commitment // TODO Stateproof: copy instead?
+			t.KeyregTxnFields.StateProofPK = stateProofSigner.GetVerifier().Commitment
 		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid

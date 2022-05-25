@@ -65,8 +65,8 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 
 	partCommitment := make([]byte, 0, len(weightAsBytes)+len(publicKeyBytes)+len(keyLifetimeBytes))
 	partCommitment = append(partCommitment, weightAsBytes...)
-	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 	partCommitment = append(partCommitment, keyLifetimeBytes...)
+	partCommitment = append(partCommitment, publicKeyBytes[:]...)
 
 	return protocol.StateProofPart, partCommitment
 }

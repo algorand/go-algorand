@@ -74,6 +74,25 @@ func TestSignerCreation(t *testing.T) {
 	_, err = signer.GetSigner(2).SignBytes(genMsgForTest())
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
+
+	// Make sure both rounds 10 and 11 can be signed (as key for round 10 is valid for both)
+	signer = generateTestSigner(0, 19, 10, a)
+
+	sig, err = signer.GetSigner(10).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(10, genMsgForTest(), sig))
+
+	sig, err = signer.GetSigner(11).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(11, genMsgForTest(), sig))
+
+	sig, err = signer.GetSigner(0).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(0, genMsgForTest(), sig))
+
+	sig, err = signer.GetSigner(1).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(1, genMsgForTest(), sig))
 }
 
 func TestSignerCreationOutOfBounds(t *testing.T) {
@@ -96,6 +115,23 @@ func TestEmptyVerifier(t *testing.T) {
 	// even if there are no keys for that period, the root is not empty
 	// (part of the vector commitment property).
 	a.False(signer.GetVerifier().MsgIsZero())
+}
+
+func TestVerifierKeyLifetimeError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer := generateTestSigner(8, 12, 1, a)
+	verifier := signer.GetVerifier()
+
+	verifier.KeyLifetime = 0
+	a.ErrorIs(verifier.VerifyBytes(0, []byte(""), Signature{}), ErrKeyLifetimeIsZero)
+
+	verifier.KeyLifetime = 1
+	sig, err := signer.GetSigner(10).SignBytes([]byte("hello"))
+	a.NoError(err)
+
+	a.NoError(verifier.VerifyBytes(10, []byte("hello"), sig))
 }
 
 func TestEmptySigner(t *testing.T) {
