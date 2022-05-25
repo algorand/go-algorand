@@ -2497,12 +2497,12 @@ func onlineAccountsInitDbQueries(r db.Queryable, w db.Queryable) (*onlineAccount
 	var err error
 	qs := &onlineAccountsDbQueries{}
 
-	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, onlineaccounts.updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
+	qs.lookupOnlineStmt, err = r.Prepare("SELECT onlineaccounts.rowid, updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? AND updround <= ? WHERE id='acctbase' ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT rowid, updround, data FROM onlineaccounts WHERE address=? ORDER BY updround ASC")
+	qs.lookupOnlineHistoryStmt, err = r.Prepare("SELECT onlineaccounts.rowid, updround, rnd, data FROM acctrounds LEFT JOIN onlineaccounts ON address=? WHERE id='acctbase' ORDER BY updround ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -2706,7 +2706,7 @@ func (qs *onlineAccountsDbQueries) lookupOnline(addr basics.Address, rnd basics.
 	return
 }
 
-func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, err error) {
+func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (result []persistedOnlineAccountData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
 		if err != nil {
@@ -2717,7 +2717,7 @@ func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (res
 		for rows.Next() {
 			var buf []byte
 			data := persistedOnlineAccountData{}
-			err := rows.Scan(&data.rowid, &data.updRound, &buf)
+			err := rows.Scan(&data.rowid, &data.updRound, &rnd, &buf)
 			if err != nil {
 				return err
 			}
