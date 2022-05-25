@@ -157,7 +157,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	a := require.New(t)
 
 	signer := generateTestSigner(0, 100, 1, a)
-	for i := uint64(1); i < 100; i++ {
+	for i := uint64(0); i < 100; i++ {
 		k := signer.GetKey(i)
 		a.NotNil(k)
 	}
@@ -174,13 +174,21 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	k = signer.GetKey(999)
 	a.Nil(k)
 
-	signer = generateTestSigner(1000, 1100, 101, a)
-	for i := uint64(1000); i <= 1100; i++ {
-		if i%101 == 0 {
-			a.NotNil(signer.GetKey(i))
-			continue
-		}
+	signer = generateTestSigner(1000, 1100, 105, a)
+	i := uint64(1000)
+	for ; i < 1050; i++ {
 		a.Nil(signer.GetKey(i))
+	}
+
+	k = signer.GetKey(i) // 1050
+	a.NotNil(k)
+	pk := k.PublicKey
+	i++
+
+	for ; i <= 1100; i++ { // same key since it's under the same lifetime period
+		k = signer.GetKey(i)
+		a.NotNil(k)
+		a.Equal(pk, k.PublicKey)
 	}
 }
 
@@ -261,24 +269,25 @@ func TestSigning(t *testing.T) {
 	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, sig))
 
 	sig, err = signer.GetSigner(start + 5).SignBytes(msg)
-	a.Error(err)
+	a.NoError(err)
 
 	err = signer.GetVerifier().VerifyBytes(start+5, msg, sig)
-	a.Error(err)
-	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	a.NoError(err)
+	err = signer.GetVerifier().VerifyBytes(start+7, msg, sig) // same key used since both rounds under same lifetime of key
+	a.NoError(err)
 
 	signer = generateTestSigner(50, 100, 12, a)
 	a.Equal(4, length(signer, a))
 
-	for i := uint64(50); i < 100; i++ {
-		if i%12 != 0 {
-			_, err = signer.GetSigner(i).SignBytes(msg)
-			a.Error(err)
-		} else {
-			sig, err = signer.GetSigner(i).SignBytes(msg)
-			a.NoError(err)
-			a.NoError(signer.GetVerifier().VerifyBytes(i, msg, sig))
-		}
+	i := uint64(50)
+	for ; i < 60; i++ { // no key for these rounds (key for round 48 was not generated)
+		_, err = signer.GetSigner(i).SignBytes(msg)
+		a.Error(err)
+	}
+	for ; i < 100; i++ {
+		sig, err = signer.GetSigner(i).SignBytes(msg)
+		a.NoError(err)
+		a.NoError(signer.GetVerifier().VerifyBytes(i, msg, sig))
 	}
 
 	signer = generateTestSigner(234, 4634, 256, a)
@@ -286,7 +295,7 @@ func TestSigning(t *testing.T) {
 	a.NotNil(key)
 	key = signer.GetKey(4096)
 	a.NotNil(key)
-	key = signer.GetKey(234 + 256)
+	key = signer.GetKey(234) // keys valid only for round > 256
 	a.Nil(key)
 }
 

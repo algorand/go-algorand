@@ -235,7 +235,7 @@ func (s *Secrets) GetAllKeys() []KeyRoundPair {
 func (s *Secrets) GetKey(round uint64) *crypto.FalconSigner {
 	keyRound := firstRoundInKeyLifetime(round, s.KeyLifetime)
 	idx := roundToIndex(s.FirstValid, keyRound, s.KeyLifetime)
-	if idx >= uint64(len(s.ephemeralKeys)) || (keyRound%s.KeyLifetime) != 0 {
+	if idx >= uint64(len(s.ephemeralKeys)) || (keyRound%s.KeyLifetime) != 0 || keyRound < s.FirstValid {
 		return nil
 	}
 

@@ -865,11 +865,8 @@ func TestAddStateProofKeys(t *testing.T) {
 	a.NoError(err)
 	// Initialize keys array.
 	var keys StateProofKeys
-	for i := uint64(1); i < max; i++ {
+	for i := uint64(3); i < max; i += 3 {
 		k := signer.GetKey(i)
-		if k == nil {
-			continue
-		}
 		keysRound := merklesignature.KeyRoundPair{Round: i, Key: k}
 		keys = append(keys, keysRound)
 	}
