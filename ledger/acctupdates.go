@@ -87,10 +87,6 @@ const initializingAccountCachesMessageTimeout = 3 * time.Second
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 
-// forceCatchpointFileGeneration defines the CatchpointTracking mode that would be used to
-// force a node to generate catchpoint files.
-const forceCatchpointFileGenerationTrackingMode = 99
-
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
 // rounds covered by the accountUpdates tracker).
@@ -1281,8 +1277,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
 		// here would prevent us from "forgetting" to update this variable later on.
 		// The same is repeated in commitRound on errors.
-		if dcc.isCatchpointRound && dcc.enableGeneratingCatchpointFiles {
-			atomic.StoreInt32(dcc.catchpointWriting, 0)
+		if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
+			atomic.StoreInt32(dcc.catchpointDataWriting, 0)
 		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
@@ -1316,8 +1312,8 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	defer func() {
 		if err != nil {
-			if dcc.isCatchpointRound && dcc.enableGeneratingCatchpointFiles {
-				atomic.StoreInt32(dcc.catchpointWriting, 0)
+			if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
+				atomic.StoreInt32(dcc.catchpointDataWriting, 0)
 			}
 		}
 	}()

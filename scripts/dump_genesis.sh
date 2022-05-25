@@ -66,6 +66,9 @@ for LEDGER in $LEDGERS; do
       txtail)
         SORT=round
         ;;
+      catchpointfirststageinfo)
+        SORT=round
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

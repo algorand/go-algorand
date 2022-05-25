@@ -286,9 +286,9 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				txtail.committedUpTo(basics.Round(i))
 				dcc := &deferredCommitContext{
 					deferredCommitRange: deferredCommitRange{
-						oldBase:           basics.Round(i - 1),
-						offset:            1,
-						isCatchpointRound: true,
+						oldBase:              basics.Round(i - 1),
+						offset:               1,
+						catchpointFirstStage: true,
 					},
 				}
 				err = txtail.prepareCommit(dcc)
@@ -351,7 +351,6 @@ func BenchmarkTxTailBlockHeaderCache(b *testing.B) {
 		tail.newBlock(blk, ledgercore.StateDelta{})
 
 		if i%10 == 0 || i == numBlocks {
-
 			offset := uint64(i - int(dbRound) - lookback)
 			dcc := &deferredCommitContext{
 				deferredCommitRange: deferredCommitRange{

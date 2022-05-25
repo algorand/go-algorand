@@ -77,6 +77,14 @@ import (
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
 //
+// catchpointFirstStageInfo
+//             |-----> (*) MarshalMsg
+//             |-----> (*) CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> (*) Msgsize
+//             |-----> (*) MsgIsZero
+//
 // catchpointState
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
@@ -2439,6 +2447,181 @@ func (z *catchpointFileBalancesChunkV6) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFileBalancesChunkV6) MsgIsZero() bool {
 	return (len((*z).Balances) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 5 bits */
+	if (*z).Totals.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).TotalAccounts == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).TotalChunks == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).TrieBalancesHash.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "accountTotals"
+			o = append(o, 0xad, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
+			o = (*z).Totals.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "accountsCount"
+			o = append(o, 0xad, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalAccounts)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "chunksCount"
+			o = append(o, 0xab, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalChunks)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "trieBalancesHash"
+			o = append(o, 0xb0, 0x74, 0x72, 0x69, 0x65, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x48, 0x61, 0x73, 0x68)
+			o = (*z).TrieBalancesHash.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *catchpointFirstStageInfo) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointFirstStageInfo)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Totals.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Totals")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).TrieBalancesHash.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TrieBalancesHash")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalAccounts")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalChunks")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = catchpointFirstStageInfo{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "accountTotals":
+				bts, err = (*z).Totals.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Totals")
+					return
+				}
+			case "trieBalancesHash":
+				bts, err = (*z).TrieBalancesHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TrieBalancesHash")
+					return
+				}
+			case "accountsCount":
+				(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalAccounts")
+					return
+				}
+			case "chunksCount":
+				(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalChunks")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *catchpointFirstStageInfo) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointFirstStageInfo)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *catchpointFirstStageInfo) Msgsize() (s int) {
+	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *catchpointFirstStageInfo) MsgIsZero() bool {
+	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

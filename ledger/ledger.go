@@ -755,12 +755,13 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger int
 	return internal.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
-// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
-// to avoid memory pressure until the catchpoint file writing is complete.
-func (l *Ledger) IsWritingCatchpointFile() bool {
+// IsWritingCatchpointDataFile returns true when a catchpoint file is being generated.
+// The function is used by the catchup service to avoid memory pressure until the
+// catchpoint data file writing is complete.
+func (l *Ledger) IsWritingCatchpointDataFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.catchpoint.IsWritingCatchpointFile()
+	return l.catchpoint.IsWritingCatchpointDataFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache

@@ -472,6 +472,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}
 
+	err = accountsCreateCatchpointFirstStageInfoTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+
 	// update version
 	return tu.setVersion(ctx, tx, 7)
 }

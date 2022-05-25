@@ -157,6 +157,13 @@ var createOnlineRoundParamsTable = []string{
 		data blob)`, // contains a msgp encoded OnlineRoundParamsData
 }
 
+// Table containing some metadata for a future catchpoint. The `info` column
+// contains a serialized object of type catchpointFirstStageInfo.
+const createCatchpointFirstStageInfoTable = `
+	CREATE TABLE IF NOT EXISTS catchpointfirststageinfo (
+	round integer primary key NOT NULL,
+	info blob NOT NULL)`
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -169,6 +176,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS onlineaccounts`,
 	`DROP TABLE IF EXISTS txtail`,
 	`DROP TABLE IF EXISTS onlineroundparamstail`,
+	`DROP TABLE IF EXISTS catchpointfirststageinfo`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -1341,6 +1349,11 @@ func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err 
 	return nil
 }
 
+func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createCatchpointFirstStageInfoTable)
+	return err
+}
+
 type baseVotingData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -2389,8 +2402,8 @@ func accountsReset(tx *sql.Tx) error {
 }
 
 // accountsRound returns the tracker balances round number
-func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
-	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
+func accountsRound(q db.Queryable) (rnd basics.Round, err error) {
+	err = q.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
 	if err != nil {
 		return
 	}
@@ -2476,6 +2489,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 	if err != nil {
 		return nil, err
 	}
+
 	return qs, nil
 }
 
@@ -3078,12 +3092,12 @@ func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccount
 	return result, nil
 }
 
-func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
+func accountsTotals(q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
 	}
-	row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
+	row := q.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
 		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
@@ -4810,4 +4824,97 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
 	}
 	return roundData, roundHash, expectedRound + 1, nil
+}
+
+// For the `catchpointfirststageinfo` table.
+type catchpointFirstStageInfo struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
+	TrieBalancesHash crypto.Digest            `codec:"trieBalancesHash"`
+	// Total number of accounts in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalAccounts uint64 `codec:"accountsCount"`
+	// Total number of chunks in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalChunks uint64 `codec:"chunksCount"`
+}
+
+func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
+	infoSerialized := protocol.Encode(info)
+	f := func() error {
+		query := "INSERT INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
+		_, err := e.Exec(query, round, infoSerialized)
+		return err
+	}
+	return db.Retry(f)
+}
+
+func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpointFirstStageInfo, bool /*exists*/, error) {
+	var data []byte
+	f := func() error {
+		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
+		err := q.QueryRow(query, round).Scan(&data)
+		if err == sql.ErrNoRows {
+			data = nil
+			return nil
+		}
+		return err
+	}
+	err := db.Retry(f)
+	if err != nil {
+		return catchpointFirstStageInfo{}, false, err
+	}
+
+	if data == nil {
+		return catchpointFirstStageInfo{}, false, nil
+	}
+
+	var res catchpointFirstStageInfo
+	err = protocol.Decode(data, &res)
+	if err != nil {
+		return catchpointFirstStageInfo{}, false, err
+	}
+
+	return res, true, nil
+}
+
+func selectOldCatchpointFirstStageInfoRounds(q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
+	var res []basics.Round
+
+	f := func() error {
+		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
+		rows, err := q.Query(query, maxRound)
+		if err != nil {
+			return err
+		}
+
+		// Clear `res` in case this function is repeated.
+		res = res[:0]
+		for rows.Next() {
+			var r basics.Round
+			err = rows.Scan(&r)
+			if err != nil {
+				return err
+			}
+			res = append(res, r)
+		}
+
+		return nil
+	}
+	err := db.Retry(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func deleteOldCatchpointFirstStageInfo(e db.Executable, maxRoundToDelete basics.Round) error {
+	f := func() error {
+		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
+		_, err := e.Exec(query, maxRoundToDelete)
+		return err
+	}
+	return db.Retry(f)
 }
