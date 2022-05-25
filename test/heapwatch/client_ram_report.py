@@ -110,13 +110,12 @@ def main():
         whens = sorted(whens)
         nodes = sorted(heap_totals.keys())
         writer.writerow(['when','dt'] + nodes)
-        prevt = None
-        dt = 0
+        first = None
         for ts in whens:
             tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
-            if prevt is not None:
-                dt = tv - prevt
-            row = [ts, dt]
+            if first is None:
+                first = tv
+            row = [ts, tv-first]
             for nick in nodes:
                 for rec in heap_totals[nick]:
                     if rec[0] == ts:
