@@ -486,7 +486,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
+		ml.trackers.mu.Lock()
 		ml.trackers.lastFlushTime = time.Time{}
+		ml.trackers.mu.Unlock()
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
