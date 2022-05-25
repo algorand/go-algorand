@@ -77,7 +77,7 @@ type onlineAccounts struct {
 	accounts map[basics.Address]modifiedOnlineAccount
 
 	// onlineRoundParamsData stores onlineMoney, rewards from rounds
-	// dbRound + 1 - maxBalLookback to current round.
+	// dbRound + 1 - maxLookback to current round, where maxLookback is max(proto.MaxBalLookback, votersLookback)
 	// It behaves as delta storage and a cache.
 	onlineRoundParamsData []ledgercore.OnlineRoundParamsData
 
@@ -100,8 +100,6 @@ type onlineAccounts struct {
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
 	voters *votersTracker
-
-	expirations []onlineAccountExpiration
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseOnlineAccounts lruOnlineAccounts
@@ -146,20 +144,8 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
 
-	latest := l.Latest()
-	hdr, err := l.BlockHdr(latest)
-	if err != nil {
-		return
-	}
-	proto := config.Consensus[hdr.CurrentProtocol]
-
 	err = ao.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		ao.expirations, err0 = onlineAccountsExpirations(tx, proto.MaxBalLookback)
-		if err0 != nil {
-			return err0
-		}
-
 		var endRound basics.Round
 		ao.onlineRoundParamsData, endRound, err0 = accountsOnlineRoundParams(tx)
 		if err0 != nil {
@@ -182,11 +168,6 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	}
 
 	ao.accountsq, err = onlineAccountsInitDbQueries(ao.dbs.Rdb.Handle)
-	if err != nil {
-		return
-	}
-
-	hdr, err = l.BlockHdr(lastBalancesRound)
 	if err != nil {
 		return
 	}
@@ -314,8 +295,9 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 
+	var lowestRound basics.Round
 	if ao.voters != nil {
-		newBase = ao.voters.lowestRound(newBase)
+		lowestRound = ao.voters.lowestRound(newBase)
 	}
 
 	offset = uint64(newBase - dbRound)
@@ -332,14 +314,16 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 		dcr.offset = offset
 	}
 	dcr.oldBase = dbRound
+	dcr.lowestRound = lowestRound
 	return dcr
 }
 
 func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
-	// Index that corresponds to the oldest round still in deltas
+	// Index that corresponds to the data at dbRound,
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
 	// consensus version.
+	// startIndex + 1 is the first delta's data, startIndex+int(offset) is the las delta's index from the commit range
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		// find the tip point.
 		tipPoint := sort.Search(int(offset), func(i int) bool {
@@ -371,16 +355,6 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset)
 	copy(deltas, ao.deltas[:offset])
-	var expirations []int64
-	var expirationOffset uint64
-	for i := 0; i < len(ao.expirations); i++ {
-		if ao.expirations[i].rnd <= dcc.oldBase+basics.Round(offset) {
-			expirations = append(expirations, ao.expirations[i].rowids...)
-			expirationOffset++
-		} else {
-			break
-		}
-	}
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	// Index that corresponds to the oldest round still in deltas
@@ -402,9 +376,6 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, ao.baseOnlineAccounts)
 
-	dcc.onlineAccountExpiredRowids = expirations
-	dcc.expirationOffset = expirationOffset
-
 	dcc.genesisProto = ao.ledger.GenesisProto()
 
 	start, err := ao.roundParamsOffset(dcc.oldBase)
@@ -417,8 +388,13 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	}
 	// write for rounds oldbase+1 up to and including newbase
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1 : end+1]
+
 	maxOnlineLookback := basics.Round(ao.maxBalLookback())
-	dcc.onlineTotalsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
+	dcc.onlineAccountsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
+	if dcc.lowestRound > 0 && dcc.lowestRound < dcc.onlineAccountsForgetBefore {
+		// extend history as needed
+		dcc.onlineAccountsForgetBefore = dcc.lowestRound
+	}
 
 	return nil
 }
@@ -441,12 +417,12 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedOnlineAccounts, dcc.onlineAccountExpirations, err = onlineAccountsNewRound(tx, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedOnlineAccounts, err = onlineAccountsNewRound(tx, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
 
-	err = onlineAccountsDeleteByRowIDs(tx, dcc.onlineAccountExpiredRowids)
+	err = onlineAccountsDelete(tx, dcc.onlineAccountsForgetBefore)
 	if err != nil {
 		return err
 	}
@@ -456,8 +432,8 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	// delete all entries all older than maxBalLookback rounds ago
-	err = accountsPruneOnlineRoundParams(tx, dcc.onlineTotalsForgetBefore)
+	// delete all entries all older than maxBalLookback (or votersLookback) rounds ago
+	err = accountsPruneOnlineRoundParams(tx, dcc.onlineAccountsForgetBefore)
 
 	return
 }
@@ -465,7 +441,6 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	offset := dcc.offset
 	newBase := dcc.newBase
-	expirationOffset := dcc.expirationOffset
 
 	ao.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
@@ -501,14 +476,19 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.deltas = ao.deltas[offset:]
 	ao.deltasAccum = ao.deltasAccum[offset:]
 	ao.cachedDBRoundOnline = newBase
-	ao.expirations = ao.expirations[expirationOffset:]
 
-	// simply contatenate since both sequences are sorted
-	ao.expirations = append(ao.expirations, dcc.onlineAccountExpirations...)
-
-	maxOnlineLookback := int(ao.maxBalLookback()) + len(ao.deltas)
-	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
-		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
+	// convert dcc.lowestRound to votersLookback relative to newBase
+	// onlineRoundParamsData contains data for newBase + 1 - maxOnlineLookback
+	minRound := (newBase + 1).SubSaturate(basics.Round(ao.maxBalLookback()))
+	if dcc.lowestRound > 0 && dcc.lowestRound < minRound {
+		minRound = dcc.lowestRound
+	}
+	// recalculate minRound back to max lookback
+	// minRound is either newBase + 1 - MaxBalLookback or less, so newBase + 1 >= minRound
+	maxLookback := newBase + 1 - minRound
+	onlineRoundParamsLookback := uint64(maxLookback) + uint64(len(ao.deltas))
+	if uint64(len(ao.onlineRoundParamsData)) > onlineRoundParamsLookback {
+		ao.onlineRoundParamsData = ao.onlineRoundParamsData[uint64(len(ao.onlineRoundParamsData))-onlineRoundParamsLookback:]
 	}
 
 	// online accounts defines deletion round as (see onlineAccountsNewRoundImpl)

@@ -317,8 +317,7 @@ func TestAccountDBRound(t *testing.T) {
 		}
 		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
 
-		// TODO: check expirations?
-		updatedOnlineAccts, _, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
+		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
 
 		err = updateAccountsRound(tx, basics.Round(i))
@@ -3029,7 +3028,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 
-		updatedOnlineAccts, _, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
 		require.NoError(t, err)
 		require.NotEmpty(t, updatedOnlineAccts)
 
@@ -3431,7 +3430,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC, deltaD, deltaE)
 	lastUpdateRound := basics.Round(1)
-	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.NoError(t, err)
 
 	require.Len(t, updated, 3)
@@ -3439,32 +3438,24 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	require.Equal(t, updated[1].addr, addrD)
 	require.Equal(t, updated[2].addr, addrE)
 
-	require.Len(t, expired, 2)
-	// deltaD old and new
-	require.Equal(t, proto.MaxBalLookback+3, uint64(expired[0].rnd))
-	require.Equal(t, []int64{1, 102}, expired[0].rowids)
-	// deltaE old
-	require.Equal(t, proto.MaxBalLookback+4, uint64(expired[1].rnd))
-	require.Equal(t, []int64{2}, expired[1].rowids)
-
 	// check errors: new online with empty voting data
 	deltaC.newStatus[0] = basics.Online
 	deltaC.newAcct[0].VoteFirstValid = 0
 	updates.deltas = []onlineAccountDelta{deltaC}
-	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new non-online with non-empty voting data
 	deltaB.newStatus[0] = basics.Offline
 	deltaB.newAcct[0].VoteFirstValid = 1
 	updates.deltas = []onlineAccountDelta{deltaB}
-	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
 	// check errors: new online with empty voting data
 	deltaD.newStatus[0] = basics.Online
 	updates.deltas = []onlineAccountDelta{deltaD}
-	_, _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 }
 
@@ -3533,7 +3524,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB, deltaC)
 	lastUpdateRound := basics.Round(1)
-	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.NoError(t, err)
 
 	require.Len(t, updated, 5)
@@ -3542,17 +3533,6 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 	require.Equal(t, updated[2].addr, addrB)
 	require.Equal(t, updated[3].addr, addrC)
 	require.Equal(t, updated[4].addr, addrC)
-
-	require.Len(t, expired, 3)
-	// deltaB went offline
-	require.Equal(t, proto.MaxBalLookback+4, uint64(expired[0].rnd))
-	require.Equal(t, []int64{102, 103}, expired[0].rowids)
-
-	// deltaC old, new and new
-	require.Equal(t, proto.MaxBalLookback+5, uint64(expired[1].rnd))
-	require.Equal(t, []int64{1}, expired[1].rowids)
-	require.Equal(t, proto.MaxBalLookback+6, uint64(expired[2].rnd))
-	require.Equal(t, []int64{104, 105}, expired[2].rowids)
 }
 
 func TestAccountOnlineRoundParams(t *testing.T) {
@@ -3771,9 +3751,8 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 
 	lastUpdateRound := basics.Round(10)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	updated, expired, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.NoError(t, err)
-	require.Len(t, expired, 3)
 	require.Len(t, updated, 5)
 
 	queries, err := onlineAccountsInitDbQueries(tx)
@@ -3800,7 +3779,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 		require.Len(t, history, 2)
 	}
 
-	for _, rnd := range []uint64{3, 4, 5, 6} {
+	for _, rnd := range []basics.Round{4, 5, 6, 7} {
 		err = onlineAccountsDelete(tx, rnd)
 		require.NoError(t, err)
 
@@ -3818,7 +3797,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 		require.Len(t, history, 2)
 	}
 
-	for _, rnd := range []uint64{7, 8, 9} {
+	for _, rnd := range []basics.Round{8, 9} {
 		err = onlineAccountsDelete(tx, rnd)
 		require.NoError(t, err)
 

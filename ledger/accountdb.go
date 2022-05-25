@@ -3413,7 +3413,7 @@ func onlineAccountsNewRound(
 	tx *sql.Tx,
 	updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
+) (updatedAccounts []persistedOnlineAccountData, err error) {
 	hasAccounts := updates.len() > 0
 
 	writer, err := makeOnlineAccountsSQLWriter(tx, hasAccounts)
@@ -3422,7 +3422,7 @@ func onlineAccountsNewRound(
 	}
 	defer writer.close()
 
-	updatedAccounts, expirations, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	updatedAccounts, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	return
 }
 
@@ -3650,9 +3650,7 @@ func accountsNewRoundImpl(
 func onlineAccountsNewRoundImpl(
 	writer onlineAccountsWriter, updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []persistedOnlineAccountData, expirations []onlineAccountExpiration, err error) {
-
-	expirationMap := make(map[basics.Round][]int64)
+) (updatedAccounts []persistedOnlineAccountData, err error) {
 
 	for i := 0; i < updates.len(); i++ {
 		data := updates.getByIdx(i)
@@ -3709,14 +3707,6 @@ func onlineAccountsNewRoundImpl(
 								updRound:    basics.Round(updRound),
 							}
 
-							targetRound := basics.Round(updRound + proto.MaxBalLookback)
-							if entries, ok := expirationMap[targetRound]; ok {
-								entries = append(entries, prevAcct.rowid, rowid)
-								expirationMap[targetRound] = entries
-							} else {
-								expirationMap[targetRound] = []int64{prevAcct.rowid, rowid}
-							}
-
 							updatedAccounts = append(updatedAccounts, updated)
 							prevAcct = updated
 						}
@@ -3735,14 +3725,6 @@ func onlineAccountsNewRoundImpl(
 								updRound:    basics.Round(updRound),
 							}
 
-							targetRound := basics.Round(updRound + proto.MaxBalLookback)
-							if entries, ok := expirationMap[targetRound]; ok {
-								entries = append(entries, prevAcct.rowid)
-								expirationMap[targetRound] = entries
-							} else {
-								expirationMap[targetRound] = []int64{prevAcct.rowid}
-							}
-
 							updatedAccounts = append(updatedAccounts, updated)
 							prevAcct = updated
 						}
@@ -3755,16 +3737,6 @@ func onlineAccountsNewRoundImpl(
 			}
 		}
 	}
-
-	expirations = make([]onlineAccountExpiration, len(expirationMap))
-	i := 0
-	for rnd, rowids := range expirationMap {
-		expirations[i] = onlineAccountExpiration{rnd: rnd, rowids: rowids}
-		i++
-	}
-	sort.SliceStable(expirations, func(i, j int) bool {
-		return expirations[i].rnd < expirations[j].rnd
-	})
 
 	return
 }
@@ -3818,8 +3790,8 @@ func onlineAccountsDeleteByRowIDs(tx *sql.Tx, rowids []int64) (err error) {
 }
 
 // onlineAccountsDelete deleted entries with updRound <= expRound
-func onlineAccountsDelete(tx *sql.Tx, expRound uint64) (err error) {
-	rows, err := tx.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound <= ? ORDER BY address, updRound DESC", expRound)
+func onlineAccountsDelete(tx *sql.Tx, forgetBefore basics.Round) (err error) {
+	rows, err := tx.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound < ? ORDER BY address, updRound DESC", forgetBefore)
 	if err != nil {
 		return err
 	}
