@@ -206,6 +206,9 @@ type wsPeer struct {
 	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
+	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seent to this peer.
+	messagesOfInterestGeneration uint32
+
 	// connMonitor used to measure the relative performance of the connection
 	// compared to the other outgoing connections. Incoming connections would have this
 	// field set to nil.
@@ -875,5 +878,14 @@ func (wp *wsPeer) setPeerData(key string, value interface{}) {
 		delete(wp.clientDataStore, key)
 	} else {
 		wp.clientDataStore[key] = value
+	}
+}
+
+func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, messagesOfInterestEnc []byte) {
+	err := wp.Unicast(wp.net.ctx, messagesOfInterestEnc, protocol.MsgOfInterestTag)
+	if err != nil {
+		wp.net.log.Errorf("ws send msgOfInterest: %v", err)
+	} else {
+		atomic.StoreUint32(&wp.messagesOfInterestGeneration, messagesOfInterestGeneration)
 	}
 }
