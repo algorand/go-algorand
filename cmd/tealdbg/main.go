@@ -23,11 +23,23 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 )
 
 func main() {
+	// Hidden command to generate docs in a given directory
+	// tealdbg generate-docs [path]
+	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
+		err := doc.GenMarkdownTree(rootCmd, os.Args[2])
+		if err != nil {
+			log.Println(err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Println(err)
 		os.Exit(1)
