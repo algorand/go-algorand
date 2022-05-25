@@ -613,6 +613,27 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(6), offset)
 
+	ao.cachedDBRoundOnline = 3 // latest = 3 + 10 = 13
+	ao.deltas = make([]ledgercore.AccountDeltas, 10)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 11)
+	offset, err = ao.roundParamsOffset(basics.Round(6))
+	require.NoError(t, err)
+	require.Equal(t, uint64(3), offset)
+
+	ao.cachedDBRoundOnline = 7 // latest = 9
+	ao.deltas = make([]ledgercore.AccountDeltas, 2)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 10)
+	offset, err = ao.roundParamsOffset(basics.Round(5))
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), offset)
+
+	ao.cachedDBRoundOnline = 7 // latest = 9
+	ao.deltas = make([]ledgercore.AccountDeltas, 2)
+	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 7)
+	offset, err = ao.roundParamsOffset(basics.Round(5))
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), offset)
+
 	ao.cachedDBRoundOnline = 400
 	ao.deltas = make([]ledgercore.AccountDeltas, 10)
 	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
