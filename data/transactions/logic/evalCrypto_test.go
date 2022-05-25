@@ -822,7 +822,7 @@ func benchmarkBn256(b *testing.B, source string) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].a, data[i].k, data[i].g1, data[i].g2}
-		ep := defaultEvalParams(&txn)
+		ep := defaultEvalParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))
