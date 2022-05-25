@@ -201,85 +201,103 @@ import (
 func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0009Len := uint32(17)
-	var zb0009Mask uint32 /* 18 bits */
-	if (*z).MicroAlgos.MsgIsZero() {
+	zb0009Len := uint32(19)
+	var zb0009Mask uint32 /* 20 bits */
+	if (*z).TotalBoxBytes == 0 {
+		zb0009Len--
+		zb0009Mask |= 0x1
+	}
+	if (*z).TotalBoxes == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x2
 	}
-	if len((*z).AssetParams) == 0 {
-		zb0009Len--
-		zb0009Mask |= 0x4
-	}
-	if len((*z).AppLocalStates) == 0 {
+	if (*z).MicroAlgos.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x8
 	}
-	if len((*z).AppParams) == 0 {
+	if len((*z).AssetParams) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x10
 	}
-	if len((*z).Assets) == 0 {
+	if len((*z).AppLocalStates) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x20
 	}
-	if (*z).RewardsBase == 0 {
+	if len((*z).AppParams) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x40
 	}
-	if (*z).RewardedMicroAlgos.MsgIsZero() {
+	if len((*z).Assets) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x80
 	}
-	if (*z).Status == 0 {
+	if (*z).RewardsBase == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x100
 	}
-	if (*z).SelectionID.MsgIsZero() {
+	if (*z).RewardedMicroAlgos.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x200
 	}
-	if (*z).AuthAddr.MsgIsZero() {
+	if (*z).Status == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x400
 	}
-	if (*z).StateProofID.MsgIsZero() {
+	if (*z).SelectionID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x800
 	}
-	if (*z).TotalExtraAppPages == 0 {
+	if (*z).AuthAddr.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x1000
 	}
-	if ((*z).TotalAppSchema.NumUint == 0) && ((*z).TotalAppSchema.NumByteSlice == 0) {
+	if (*z).StateProofID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x2000
 	}
-	if (*z).VoteID.MsgIsZero() {
+	if (*z).TotalExtraAppPages == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x4000
 	}
-	if (*z).VoteFirstValid == 0 {
+	if ((*z).TotalAppSchema.NumUint == 0) && ((*z).TotalAppSchema.NumByteSlice == 0) {
 		zb0009Len--
 		zb0009Mask |= 0x8000
 	}
-	if (*z).VoteKeyDilution == 0 {
+	if (*z).VoteID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x10000
 	}
-	if (*z).VoteLastValid == 0 {
+	if (*z).VoteFirstValid == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x20000
+	}
+	if (*z).VoteKeyDilution == 0 {
+		zb0009Len--
+		zb0009Mask |= 0x40000
+	}
+	if (*z).VoteLastValid == 0 {
+		zb0009Len--
+		zb0009Mask |= 0x80000
 	}
 	// variable map header, size zb0009Len
 	o = msgp.AppendMapHeader(o, zb0009Len)
 	if zb0009Len != 0 {
+		if (zb0009Mask & 0x1) == 0 { // if not empty
+			// string "TotalBoxBytes"
+			o = append(o, 0xad, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x42, 0x6f, 0x78, 0x42, 0x79, 0x74, 0x65, 0x73)
+			o = msgp.AppendUint64(o, (*z).TotalBoxBytes)
+		}
 		if (zb0009Mask & 0x2) == 0 { // if not empty
+			// string "TotalBoxes"
+			o = append(o, 0xaa, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x42, 0x6f, 0x78, 0x65, 0x73)
+			o = msgp.AppendUint64(o, (*z).TotalBoxes)
+		}
+		if (zb0009Mask & 0x8) == 0 { // if not empty
 			// string "algo"
 			o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
 			o = (*z).MicroAlgos.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x4) == 0 { // if not empty
+		if (zb0009Mask & 0x10) == 0 { // if not empty
 			// string "apar"
 			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
 			if (*z).AssetParams == nil {
@@ -299,7 +317,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 				o = zb0002.MarshalMsg(o)
 			}
 		}
-		if (zb0009Mask & 0x8) == 0 { // if not empty
+		if (zb0009Mask & 0x20) == 0 { // if not empty
 			// string "appl"
 			o = append(o, 0xa4, 0x61, 0x70, 0x70, 0x6c)
 			if (*z).AppLocalStates == nil {
@@ -319,7 +337,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 				o = zb0006.MarshalMsg(o)
 			}
 		}
-		if (zb0009Mask & 0x10) == 0 { // if not empty
+		if (zb0009Mask & 0x40) == 0 { // if not empty
 			// string "appp"
 			o = append(o, 0xa4, 0x61, 0x70, 0x70, 0x70)
 			if (*z).AppParams == nil {
@@ -339,7 +357,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 				o = zb0008.MarshalMsg(o)
 			}
 		}
-		if (zb0009Mask & 0x20) == 0 { // if not empty
+		if (zb0009Mask & 0x80) == 0 { // if not empty
 			// string "asset"
 			o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
 			if (*z).Assets == nil {
@@ -383,42 +401,42 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
-		if (zb0009Mask & 0x40) == 0 { // if not empty
+		if (zb0009Mask & 0x100) == 0 { // if not empty
 			// string "ebase"
 			o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
 			o = msgp.AppendUint64(o, (*z).RewardsBase)
 		}
-		if (zb0009Mask & 0x80) == 0 { // if not empty
+		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "ern"
 			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
 			o = (*z).RewardedMicroAlgos.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x100) == 0 { // if not empty
+		if (zb0009Mask & 0x400) == 0 { // if not empty
 			// string "onl"
 			o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
 			o = msgp.AppendByte(o, byte((*z).Status))
 		}
-		if (zb0009Mask & 0x200) == 0 { // if not empty
+		if (zb0009Mask & 0x800) == 0 { // if not empty
 			// string "sel"
 			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
 			o = (*z).SelectionID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x400) == 0 { // if not empty
+		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "spend"
 			o = append(o, 0xa5, 0x73, 0x70, 0x65, 0x6e, 0x64)
 			o = (*z).AuthAddr.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x800) == 0 { // if not empty
+		if (zb0009Mask & 0x2000) == 0 { // if not empty
 			// string "stprf"
 			o = append(o, 0xa5, 0x73, 0x74, 0x70, 0x72, 0x66)
 			o = (*z).StateProofID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x1000) == 0 { // if not empty
+		if (zb0009Mask & 0x4000) == 0 { // if not empty
 			// string "teap"
 			o = append(o, 0xa4, 0x74, 0x65, 0x61, 0x70)
 			o = msgp.AppendUint32(o, (*z).TotalExtraAppPages)
 		}
-		if (zb0009Mask & 0x2000) == 0 { // if not empty
+		if (zb0009Mask & 0x8000) == 0 { // if not empty
 			// string "tsch"
 			o = append(o, 0xa4, 0x74, 0x73, 0x63, 0x68)
 			// omitempty: check for empty values
@@ -445,22 +463,22 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).TotalAppSchema.NumUint)
 			}
 		}
-		if (zb0009Mask & 0x4000) == 0 { // if not empty
+		if (zb0009Mask & 0x10000) == 0 { // if not empty
 			// string "vote"
 			o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
 			o = (*z).VoteID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x8000) == 0 { // if not empty
+		if (zb0009Mask & 0x20000) == 0 { // if not empty
 			// string "voteFst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x46, 0x73, 0x74)
 			o = msgp.AppendUint64(o, uint64((*z).VoteFirstValid))
 		}
-		if (zb0009Mask & 0x10000) == 0 { // if not empty
+		if (zb0009Mask & 0x40000) == 0 { // if not empty
 			// string "voteKD"
 			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x4b, 0x44)
 			o = msgp.AppendUint64(o, (*z).VoteKeyDilution)
 		}
-		if (zb0009Mask & 0x20000) == 0 { // if not empty
+		if (zb0009Mask & 0x80000) == 0 { // if not empty
 			// string "voteLst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x4c, 0x73, 0x74)
 			o = msgp.AppendUint64(o, uint64((*z).VoteLastValid))
@@ -876,6 +894,22 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0009 > 0 {
+			zb0009--
+			(*z).TotalBoxes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalBoxes")
+				return
+			}
+		}
+		if zb0009 > 0 {
+			zb0009--
+			(*z).TotalBoxBytes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalBoxBytes")
+				return
+			}
+		}
+		if zb0009 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0009)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -1252,6 +1286,18 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TotalExtraAppPages")
 					return
 				}
+			case "TotalBoxes":
+				(*z).TotalBoxes, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalBoxes")
+					return
+				}
+			case "TotalBoxBytes":
+				(*z).TotalBoxBytes, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalBoxBytes")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1304,13 +1350,13 @@ func (z *AccountData) Msgsize() (s int) {
 			s += 0 + zb0007.Msgsize() + zb0008.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 11 + msgp.Uint64Size + 14 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AccountData) MsgIsZero() bool {
-	return ((*z).Status == 0) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).StateProofID.MsgIsZero()) && ((*z).VoteFirstValid == 0) && ((*z).VoteLastValid == 0) && ((*z).VoteKeyDilution == 0) && (len((*z).AssetParams) == 0) && (len((*z).Assets) == 0) && ((*z).AuthAddr.MsgIsZero()) && (len((*z).AppLocalStates) == 0) && (len((*z).AppParams) == 0) && (((*z).TotalAppSchema.NumUint == 0) && ((*z).TotalAppSchema.NumByteSlice == 0)) && ((*z).TotalExtraAppPages == 0)
+	return ((*z).Status == 0) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).StateProofID.MsgIsZero()) && ((*z).VoteFirstValid == 0) && ((*z).VoteLastValid == 0) && ((*z).VoteKeyDilution == 0) && (len((*z).AssetParams) == 0) && (len((*z).Assets) == 0) && ((*z).AuthAddr.MsgIsZero()) && (len((*z).AppLocalStates) == 0) && (len((*z).AppParams) == 0) && (((*z).TotalAppSchema.NumUint == 0) && ((*z).TotalAppSchema.NumByteSlice == 0)) && ((*z).TotalExtraAppPages == 0) && ((*z).TotalBoxes == 0) && ((*z).TotalBoxBytes == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2899,94 +2945,112 @@ func (z *AssetParams) MsgIsZero() bool {
 func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0009Len := uint32(18)
-	var zb0009Mask uint32 /* 20 bits */
+	zb0009Len := uint32(20)
+	var zb0009Mask uint32 /* 22 bits */
+	if (*z).AccountData.TotalBoxBytes == 0 {
+		zb0009Len--
+		zb0009Mask |= 0x1
+	}
+	if (*z).AccountData.TotalBoxes == 0 {
+		zb0009Len--
+		zb0009Mask |= 0x2
+	}
 	if (*z).Addr.MsgIsZero() {
-		zb0009Len--
-		zb0009Mask |= 0x4
-	}
-	if (*z).AccountData.MicroAlgos.MsgIsZero() {
-		zb0009Len--
-		zb0009Mask |= 0x8
-	}
-	if len((*z).AccountData.AssetParams) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x10
 	}
-	if len((*z).AccountData.AppLocalStates) == 0 {
+	if (*z).AccountData.MicroAlgos.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x20
 	}
-	if len((*z).AccountData.AppParams) == 0 {
+	if len((*z).AccountData.AssetParams) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x40
 	}
-	if len((*z).AccountData.Assets) == 0 {
+	if len((*z).AccountData.AppLocalStates) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x80
 	}
-	if (*z).AccountData.RewardsBase == 0 {
+	if len((*z).AccountData.AppParams) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x100
 	}
-	if (*z).AccountData.RewardedMicroAlgos.MsgIsZero() {
+	if len((*z).AccountData.Assets) == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x200
 	}
-	if (*z).AccountData.Status == 0 {
+	if (*z).AccountData.RewardsBase == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x400
 	}
-	if (*z).AccountData.SelectionID.MsgIsZero() {
+	if (*z).AccountData.RewardedMicroAlgos.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x800
 	}
-	if (*z).AccountData.AuthAddr.MsgIsZero() {
+	if (*z).AccountData.Status == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x1000
 	}
-	if (*z).AccountData.StateProofID.MsgIsZero() {
+	if (*z).AccountData.SelectionID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x2000
 	}
-	if (*z).AccountData.TotalExtraAppPages == 0 {
+	if (*z).AccountData.AuthAddr.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x4000
 	}
-	if ((*z).AccountData.TotalAppSchema.NumUint == 0) && ((*z).AccountData.TotalAppSchema.NumByteSlice == 0) {
+	if (*z).AccountData.StateProofID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x8000
 	}
-	if (*z).AccountData.VoteID.MsgIsZero() {
+	if (*z).AccountData.TotalExtraAppPages == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x10000
 	}
-	if (*z).AccountData.VoteFirstValid == 0 {
+	if ((*z).AccountData.TotalAppSchema.NumUint == 0) && ((*z).AccountData.TotalAppSchema.NumByteSlice == 0) {
 		zb0009Len--
 		zb0009Mask |= 0x20000
 	}
-	if (*z).AccountData.VoteKeyDilution == 0 {
+	if (*z).AccountData.VoteID.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x40000
 	}
-	if (*z).AccountData.VoteLastValid == 0 {
+	if (*z).AccountData.VoteFirstValid == 0 {
 		zb0009Len--
 		zb0009Mask |= 0x80000
+	}
+	if (*z).AccountData.VoteKeyDilution == 0 {
+		zb0009Len--
+		zb0009Mask |= 0x100000
+	}
+	if (*z).AccountData.VoteLastValid == 0 {
+		zb0009Len--
+		zb0009Mask |= 0x200000
 	}
 	// variable map header, size zb0009Len
 	o = msgp.AppendMapHeader(o, zb0009Len)
 	if zb0009Len != 0 {
-		if (zb0009Mask & 0x4) == 0 { // if not empty
+		if (zb0009Mask & 0x1) == 0 { // if not empty
+			// string "TotalBoxBytes"
+			o = append(o, 0xad, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x42, 0x6f, 0x78, 0x42, 0x79, 0x74, 0x65, 0x73)
+			o = msgp.AppendUint64(o, (*z).AccountData.TotalBoxBytes)
+		}
+		if (zb0009Mask & 0x2) == 0 { // if not empty
+			// string "TotalBoxes"
+			o = append(o, 0xaa, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x42, 0x6f, 0x78, 0x65, 0x73)
+			o = msgp.AppendUint64(o, (*z).AccountData.TotalBoxes)
+		}
+		if (zb0009Mask & 0x10) == 0 { // if not empty
 			// string "addr"
 			o = append(o, 0xa4, 0x61, 0x64, 0x64, 0x72)
 			o = (*z).Addr.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x8) == 0 { // if not empty
+		if (zb0009Mask & 0x20) == 0 { // if not empty
 			// string "algo"
 			o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
 			o = (*z).AccountData.MicroAlgos.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x10) == 0 { // if not empty
+		if (zb0009Mask & 0x40) == 0 { // if not empty
 			// string "apar"
 			o = append(o, 0xa4, 0x61, 0x70, 0x61, 0x72)
 			if (*z).AccountData.AssetParams == nil {
@@ -3006,7 +3070,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 				o = zb0002.MarshalMsg(o)
 			}
 		}
-		if (zb0009Mask & 0x20) == 0 { // if not empty
+		if (zb0009Mask & 0x80) == 0 { // if not empty
 			// string "appl"
 			o = append(o, 0xa4, 0x61, 0x70, 0x70, 0x6c)
 			if (*z).AccountData.AppLocalStates == nil {
@@ -3026,7 +3090,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 				o = zb0006.MarshalMsg(o)
 			}
 		}
-		if (zb0009Mask & 0x40) == 0 { // if not empty
+		if (zb0009Mask & 0x100) == 0 { // if not empty
 			// string "appp"
 			o = append(o, 0xa4, 0x61, 0x70, 0x70, 0x70)
 			if (*z).AccountData.AppParams == nil {
@@ -3046,7 +3110,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 				o = zb0008.MarshalMsg(o)
 			}
 		}
-		if (zb0009Mask & 0x80) == 0 { // if not empty
+		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "asset"
 			o = append(o, 0xa5, 0x61, 0x73, 0x73, 0x65, 0x74)
 			if (*z).AccountData.Assets == nil {
@@ -3090,42 +3154,42 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
-		if (zb0009Mask & 0x100) == 0 { // if not empty
+		if (zb0009Mask & 0x400) == 0 { // if not empty
 			// string "ebase"
 			o = append(o, 0xa5, 0x65, 0x62, 0x61, 0x73, 0x65)
 			o = msgp.AppendUint64(o, (*z).AccountData.RewardsBase)
 		}
-		if (zb0009Mask & 0x200) == 0 { // if not empty
+		if (zb0009Mask & 0x800) == 0 { // if not empty
 			// string "ern"
 			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
 			o = (*z).AccountData.RewardedMicroAlgos.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x400) == 0 { // if not empty
+		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "onl"
 			o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
 			o = msgp.AppendByte(o, byte((*z).AccountData.Status))
 		}
-		if (zb0009Mask & 0x800) == 0 { // if not empty
+		if (zb0009Mask & 0x2000) == 0 { // if not empty
 			// string "sel"
 			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
 			o = (*z).AccountData.SelectionID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x1000) == 0 { // if not empty
+		if (zb0009Mask & 0x4000) == 0 { // if not empty
 			// string "spend"
 			o = append(o, 0xa5, 0x73, 0x70, 0x65, 0x6e, 0x64)
 			o = (*z).AccountData.AuthAddr.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x2000) == 0 { // if not empty
+		if (zb0009Mask & 0x8000) == 0 { // if not empty
 			// string "stprf"
 			o = append(o, 0xa5, 0x73, 0x74, 0x70, 0x72, 0x66)
 			o = (*z).AccountData.StateProofID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x4000) == 0 { // if not empty
+		if (zb0009Mask & 0x10000) == 0 { // if not empty
 			// string "teap"
 			o = append(o, 0xa4, 0x74, 0x65, 0x61, 0x70)
 			o = msgp.AppendUint32(o, (*z).AccountData.TotalExtraAppPages)
 		}
-		if (zb0009Mask & 0x8000) == 0 { // if not empty
+		if (zb0009Mask & 0x20000) == 0 { // if not empty
 			// string "tsch"
 			o = append(o, 0xa4, 0x74, 0x73, 0x63, 0x68)
 			// omitempty: check for empty values
@@ -3152,22 +3216,22 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).AccountData.TotalAppSchema.NumUint)
 			}
 		}
-		if (zb0009Mask & 0x10000) == 0 { // if not empty
+		if (zb0009Mask & 0x40000) == 0 { // if not empty
 			// string "vote"
 			o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
 			o = (*z).AccountData.VoteID.MarshalMsg(o)
 		}
-		if (zb0009Mask & 0x20000) == 0 { // if not empty
+		if (zb0009Mask & 0x80000) == 0 { // if not empty
 			// string "voteFst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x46, 0x73, 0x74)
 			o = msgp.AppendUint64(o, uint64((*z).AccountData.VoteFirstValid))
 		}
-		if (zb0009Mask & 0x40000) == 0 { // if not empty
+		if (zb0009Mask & 0x100000) == 0 { // if not empty
 			// string "voteKD"
 			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x4b, 0x44)
 			o = msgp.AppendUint64(o, (*z).AccountData.VoteKeyDilution)
 		}
-		if (zb0009Mask & 0x80000) == 0 { // if not empty
+		if (zb0009Mask & 0x200000) == 0 { // if not empty
 			// string "voteLst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x4c, 0x73, 0x74)
 			o = msgp.AppendUint64(o, uint64((*z).AccountData.VoteLastValid))
@@ -3591,6 +3655,22 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0009 > 0 {
+			zb0009--
+			(*z).AccountData.TotalBoxes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalBoxes")
+				return
+			}
+		}
+		if zb0009 > 0 {
+			zb0009--
+			(*z).AccountData.TotalBoxBytes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalBoxBytes")
+				return
+			}
+		}
+		if zb0009 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0009)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -3973,6 +4053,18 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TotalExtraAppPages")
 					return
 				}
+			case "TotalBoxes":
+				(*z).AccountData.TotalBoxes, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalBoxes")
+					return
+				}
+			case "TotalBoxBytes":
+				(*z).AccountData.TotalBoxBytes, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalBoxBytes")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -4025,13 +4117,13 @@ func (z *BalanceRecord) Msgsize() (s int) {
 			s += 0 + zb0007.Msgsize() + zb0008.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 11 + msgp.Uint64Size + 14 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *BalanceRecord) MsgIsZero() bool {
-	return ((*z).Addr.MsgIsZero()) && ((*z).AccountData.Status == 0) && ((*z).AccountData.MicroAlgos.MsgIsZero()) && ((*z).AccountData.RewardsBase == 0) && ((*z).AccountData.RewardedMicroAlgos.MsgIsZero()) && ((*z).AccountData.VoteID.MsgIsZero()) && ((*z).AccountData.SelectionID.MsgIsZero()) && ((*z).AccountData.StateProofID.MsgIsZero()) && ((*z).AccountData.VoteFirstValid == 0) && ((*z).AccountData.VoteLastValid == 0) && ((*z).AccountData.VoteKeyDilution == 0) && (len((*z).AccountData.AssetParams) == 0) && (len((*z).AccountData.Assets) == 0) && ((*z).AccountData.AuthAddr.MsgIsZero()) && (len((*z).AccountData.AppLocalStates) == 0) && (len((*z).AccountData.AppParams) == 0) && (((*z).AccountData.TotalAppSchema.NumUint == 0) && ((*z).AccountData.TotalAppSchema.NumByteSlice == 0)) && ((*z).AccountData.TotalExtraAppPages == 0)
+	return ((*z).Addr.MsgIsZero()) && ((*z).AccountData.Status == 0) && ((*z).AccountData.MicroAlgos.MsgIsZero()) && ((*z).AccountData.RewardsBase == 0) && ((*z).AccountData.RewardedMicroAlgos.MsgIsZero()) && ((*z).AccountData.VoteID.MsgIsZero()) && ((*z).AccountData.SelectionID.MsgIsZero()) && ((*z).AccountData.StateProofID.MsgIsZero()) && ((*z).AccountData.VoteFirstValid == 0) && ((*z).AccountData.VoteLastValid == 0) && ((*z).AccountData.VoteKeyDilution == 0) && (len((*z).AccountData.AssetParams) == 0) && (len((*z).AccountData.Assets) == 0) && ((*z).AccountData.AuthAddr.MsgIsZero()) && (len((*z).AccountData.AppLocalStates) == 0) && (len((*z).AccountData.AppParams) == 0) && (((*z).AccountData.TotalAppSchema.NumUint == 0) && ((*z).AccountData.TotalAppSchema.NumByteSlice == 0)) && ((*z).AccountData.TotalExtraAppPages == 0) && ((*z).AccountData.TotalBoxes == 0) && ((*z).AccountData.TotalBoxBytes == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
