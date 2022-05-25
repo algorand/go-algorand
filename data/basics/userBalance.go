@@ -68,14 +68,6 @@ const (
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries and
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
 	EncodedMaxKeyValueEntries = 1024
-
-	// EncodedMaxBoxes is not really meaningful because Boxes were introduced
-	// after the separation of AccountData in ledgercore and basics. The
-	// constant exists only to satisfy the need for an allocbound on
-	// basics.AccountData, even though such structures are not used in protocol
-	// messages or serialized to the DB. It's made particularly small to ferret
-	// out any possible dependencies.
-	EncodedMaxBoxes = 4.
 )
 
 func (s Status) String() string {
@@ -232,8 +224,8 @@ type AccountData struct {
 	// requested for app program by this account
 	TotalExtraAppPages uint32 `codec:"teap"`
 
-	// Boxes is all of the boxes associated with this account. (This account must be an app account)
-	Boxes map[string][]byte `codec:"apbx,allocbound=EncodedMaxBoxes"`
+	// Total number of boxes associated with this account, which implies it is an app account.
+	TotalBoxes uint64
 
 	// TotalBoxBytes stores the sum of all len(keys) and len(values) of Boxes
 	TotalBoxBytes uint64
@@ -483,7 +475,7 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 		u.TotalAppSchema,
 		uint64(len(u.AppParams)), uint64(len(u.AppLocalStates)),
 		uint64(u.TotalExtraAppPages),
-		uint64(len(u.Boxes)), u.TotalBoxBytes,
+		u.TotalBoxes, u.TotalBoxBytes,
 	)
 }
 
