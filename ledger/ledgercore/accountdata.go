@@ -112,6 +112,8 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.AuthAddr = acct.AuthAddr
 	a.TotalAppSchema = acct.TotalAppSchema
 	a.TotalExtraAppPages = acct.TotalExtraAppPages
+	a.TotalBoxes = acct.TotalBoxes
+	a.TotalBoxBytes = acct.TotalBoxBytes
 }
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
