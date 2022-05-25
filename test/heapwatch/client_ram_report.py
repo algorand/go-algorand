@@ -9,8 +9,7 @@ import os
 import re
 import sys
 import subprocess
-
-from metrics_delta import parse_metrics, gather_metrics_files_by_nick
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +95,6 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    #metrics_files = glob.glob(os.path.join(args.dir, '*.metrics'))
-    #filesByNick = gather_metrics_files_by_nick(metrics_files)
-
     heap_totals = get_heap_inuse_totals(args.dir)
 
     if args.csv:
@@ -113,9 +109,14 @@ def main():
                 whens.add(ts)
         whens = sorted(whens)
         nodes = sorted(heap_totals.keys())
-        writer.writerow(['when'] + nodes)
+        writer.writerow(['when','dt'] + nodes)
+        prevt = None
+        dt = 0
         for ts in whens:
-            row = [ts]
+            tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
+            if prevt is not None:
+                dt = tv - prevt
+            row = [ts, dt]
             for nick in nodes:
                 for rec in heap_totals[nick]:
                     if rec[0] == ts:
