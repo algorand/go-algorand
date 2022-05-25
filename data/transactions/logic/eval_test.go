@@ -165,7 +165,7 @@ func (ep *EvalParams) reset() {
 	}
 }
 
-// reinitializeBoxRefs is nearly a copy of what happens in NewEvalParams, but is
+// recalcBoxRefs is nearly a copy of what happens in NewEvalParams, but is
 // in _test.go because it never needs to happen in normal operation.
 func (ep *EvalParams) recalcBoxRefs() map[basics.AppIndex][]string {
 	var allBoxes map[basics.AppIndex][]string
