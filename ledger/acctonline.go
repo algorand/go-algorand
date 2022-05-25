@@ -77,7 +77,7 @@ type onlineAccounts struct {
 	accounts map[basics.Address]modifiedOnlineAccount
 
 	// onlineRoundParamsData stores onlineMoney, rewards from rounds
-	// dbRound - maxBalLookback to current round.
+	// dbRound + 1 - maxBalLookback to current round.
 	// It behaves as delta storage and a cache.
 	onlineRoundParamsData []ledgercore.OnlineRoundParamsData
 
