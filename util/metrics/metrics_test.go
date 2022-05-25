@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 )
@@ -95,6 +96,8 @@ func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func TestSanitizeTelemetryName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for _, tc := range []struct{ in, out string }{
 		{in: "algod_counter_x", out: "algod_counter_x"},
 		{in: "algod_counter_x{a=b}", out: "algod_counter_x_a_b_"},
@@ -114,6 +117,8 @@ func TestSanitizeTelemetryName(t *testing.T) {
 }
 
 func TestSanitizePrometheusName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for _, tc := range []struct{ in, out string }{
 		{in: "algod_counter_x", out: "algod_counter_x"},
 		{in: "algod_counter_x{a=b}", out: "algod_counter_x_a_b_"},
