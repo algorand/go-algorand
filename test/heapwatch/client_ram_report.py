@@ -113,9 +113,9 @@ def main():
                 whens.add(ts)
         whens = sorted(whens)
         nodes = sorted(heap_totals.keys())
-        writer.writerow(nodes)
+        writer.writerow(['when'] + nodes)
         for ts in whens:
-            row = []
+            row = [ts]
             for nick in nodes:
                 for rec in heap_totals[nick]:
                     if rec[0] == ts:
