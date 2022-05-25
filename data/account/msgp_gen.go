@@ -4,6 +4,8 @@ package account
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 )
 
 // The following msgp objects are implemented in this file:

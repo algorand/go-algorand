@@ -22,11 +22,18 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// Message represents the message to be certified.
+// Message represents the message that the state proofs are attesting to. This message can be
+// used by lightweight client and gives it the ability to verify proofs on the Algorand's state.
+// In addition to that proof, this message also contains fields that
+// are needed in order to verify the next state proofs (VotersCommitment and LnProvenWeight).
 type Message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// Commitment over the sha256 of the block headers in the interval between two state proofs.
 	BlockHeadersCommitment []byte `codec:"b,allocbound=crypto.Sha256Size"`
+	VotersCommitment       []byte `codec:"v,allocbound=crypto.SumhashDigestSize"`
+	LnProvenWeight         uint64 `codec:"P"`
+	FirstAttestedRound     uint64 `codec:"f"`
+	LastAttestedRound      uint64 `codec:"l"`
 }
 
 // ToBeHashed returns the bytes of the message.

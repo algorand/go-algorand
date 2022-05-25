@@ -29,7 +29,7 @@ import (
 // the index of the coin to reveal as part of the state proof.
 type coinChoiceSeed struct {
 	// the ToBeHashed function should be updated when fields are added to this structure
-
+	version        byte
 	partCommitment crypto.GenericDigest
 	lnProvenWeight uint64
 	sigCommitment  crypto.GenericDigest
@@ -48,7 +48,8 @@ func (cc *coinChoiceSeed) ToBeHashed() (protocol.HashID, []byte) {
 	lnProvenWtAsBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(lnProvenWtAsBytes, cc.lnProvenWeight)
 
-	coinChoiceBytes := make([]byte, 0, len(cc.partCommitment)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(signedWtAsBytes)+len(cc.data))
+	coinChoiceBytes := make([]byte, 0, 1+len(cc.partCommitment)+len(lnProvenWtAsBytes)+len(cc.sigCommitment)+len(signedWtAsBytes)+len(cc.data))
+	coinChoiceBytes = append(coinChoiceBytes, cc.version)
 	coinChoiceBytes = append(coinChoiceBytes, cc.partCommitment...)
 	coinChoiceBytes = append(coinChoiceBytes, lnProvenWtAsBytes...)
 	coinChoiceBytes = append(coinChoiceBytes, cc.sigCommitment...)
@@ -71,6 +72,7 @@ type coinGenerator struct {
 // Shake(coinChoiceSeed)
 // we extract 64 bits from shake for each coin flip and divide it by signedWeight
 func makeCoinGenerator(choice *coinChoiceSeed) coinGenerator {
+	choice.version = VersionForCoinGenerator
 	rep := crypto.HashRep(choice)
 	shk := sha3.NewShake256()
 	shk.Write(rep)

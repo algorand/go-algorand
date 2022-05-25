@@ -37,8 +37,8 @@ func bigInt(num uint64) *big.Int {
 	return (&big.Int{}).SetUint64(num)
 }
 
-// lnIntApproximation returns a uint64 approximation
-func lnIntApproximation(x uint64) (uint64, error) {
+// LnIntApproximation returns a uint64 approximation
+func LnIntApproximation(x uint64) (uint64, error) {
 	if x == 0 {
 		return 0, ErrIllegalInputForLnApprox
 	}

@@ -39,6 +39,7 @@ const (
 	AuctionSettlement HashID = "aS"
 
 	AgreementSelector                HashID = "AS"
+	BlockHeader256                   HashID = "B256"
 	BlockHeader                      HashID = "BH"
 	BalanceRecord                    HashID = "BR"
 	Credential                       HashID = "CR"

@@ -620,6 +620,9 @@ type CompileResponse struct {
 
 	// base64 encoded program bytes
 	Result string `json:"result"`
+
+	// JSON of the source map
+	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
 }
 
 // DisassembleResponse defines model for DisassembleResponse.
