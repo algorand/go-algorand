@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -63,6 +64,7 @@ type Handlers struct {
 type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
+	LookupKv(round basics.Round, key string) (*string, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -1108,6 +1110,33 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	appParams := *record.AppParams
 	app := AppParamsToApplication(creator.String(), appIdx, &appParams)
 	response := generated.ApplicationResponse(app)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetApplicationBoxByName returns the value of an application's box
+// (GET /v2/applications/{application-id}/boxes/{box-name})
+func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint64, boxName string) error {
+	appIdx := basics.AppIndex(applicationID)
+	ledger := v2.Node.LedgerForAPI()
+
+	lastRound := ledger.Latest()
+
+	boxName, err := url.PathUnescape(boxName)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, boxName))
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	if value == nil {
+		return notFound(ctx, errors.New(errBoxDoesNotExist), errAppDoesNotExist, v2.Log)
+	}
+	response := generated.BoxResponse{
+		Name:  []byte(boxName),
+		Value: []byte(*value),
+	}
 	return ctx.JSON(http.StatusOK, response)
 }
 

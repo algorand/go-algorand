@@ -164,12 +164,6 @@ func (cs *roundCowState) DelGlobal(appIdx basics.AppIndex, key string) error {
 	return cs.delKey(creator, appIdx, true, key, 0)
 }
 
-func makeBoxKey(appIdx basics.AppIndex, key string) string {
-	// Reconsider this for something faster.  Maybe msgpack encoding of array
-	// ["bk",appIdx,key]?
-	return fmt.Sprintf("bk:%d:%s", appIdx, key)
-}
-
 func (cs *roundCowState) kvGet(key string) (string, bool, error) {
 	value, ok := cs.mods.KvMods[key]
 	if !ok {
@@ -214,7 +208,11 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64)
 		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
 	}
 
-	fullKey := makeBoxKey(appIdx, key)
+	if size > cs.proto.MaxBoxSize {
+		return fmt.Errorf("box size too large: %d, maximum is %d", size, cs.proto.MaxBoxSize)
+	}
+
+	fullKey := logic.MakeBoxKey(appIdx, key)
 	_, ok, err := cs.kvGet(fullKey)
 	if err != nil {
 		return err
@@ -222,8 +220,6 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64)
 	if ok {
 		return fmt.Errorf("book %s exists for %d", key, appIdx)
 	}
-
-	// TODO: Choose and enforce a max size
 
 	record, err := cs.Get(appIdx.Address(), false)
 	if err != nil {
@@ -241,7 +237,7 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64)
 }
 
 func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) (string, error) {
-	fullKey := makeBoxKey(appIdx, key)
+	fullKey := logic.MakeBoxKey(appIdx, key)
 	value, ok, err := cs.kvGet(fullKey)
 	if err != nil {
 		return "", err
@@ -253,7 +249,7 @@ func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) (string, err
 }
 
 func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value string) error {
-	fullKey := makeBoxKey(appIdx, key)
+	fullKey := logic.MakeBoxKey(appIdx, key)
 	old, ok, err := cs.kvGet(fullKey)
 	if err != nil {
 		return err
@@ -269,7 +265,7 @@ func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value string
 }
 
 func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string) error {
-	fullKey := makeBoxKey(appIdx, key)
+	fullKey := logic.MakeBoxKey(appIdx, key)
 
 	value, ok, err := cs.kvGet(fullKey)
 	if err != nil {
