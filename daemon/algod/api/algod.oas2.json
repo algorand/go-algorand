@@ -1309,6 +1309,82 @@
       }
       ]
     },
+    "/v2/applications/{application-id}/boxes/{box-name}": {
+      "get": {
+        "description": "Given an application ID and box name, it returns box information including box name and base64 encoded content.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get box information for a given application.",
+        "operationId": "GetApplicationBoxByName",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "A box name",
+            "name": "box-name",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/BoxResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Box Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "application-id",
+          "in": "path",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "box-name",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
     "/v2/assets/{asset-id}": {
       "get": {
         "description": "Given a asset ID, it returns asset information including creator, name, total supply and special addresses.",
@@ -2406,6 +2482,26 @@
         }
       }
     },
+    "Box": {
+      "description": "Box name and its content.",
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "description": "\\[name\\] box name, base64 encoded",
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "description": "\\[value\\] box value, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
     "Version": {
       "description": "algod version information.",
       "type": "object",
@@ -3095,6 +3191,12 @@
       "description": "Application information",
       "schema": {
         "$ref": "#/definitions/Application"
+      }
+    },
+    "BoxResponse": {
+      "description": "Box information",
+      "schema": {
+        "$ref": "#/definitions/Box"
       }
     },
     "AssetResponse": {

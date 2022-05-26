@@ -19,6 +19,8 @@ package logic
 import (
 	"errors"
 	"fmt"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 func opBoxCreate(cx *EvalContext) error {
@@ -118,4 +120,11 @@ func opBoxDel(cx *EvalContext) error {
 	}
 	cx.stack = cx.stack[:last]
 	return cx.Ledger.DelBox(cx.appID, name)
+}
+
+// MakeBoxKey creates the key that a box named `name` under app `appIdx` should use.
+func MakeBoxKey(appIdx basics.AppIndex, name string) string {
+	// Reconsider this for something faster.  Maybe msgpack encoding of array
+	// ["bx",appIdx,key]?
+	return fmt.Sprintf("bx:%d:%s", appIdx, name)
 }

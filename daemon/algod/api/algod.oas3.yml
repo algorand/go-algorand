@@ -330,6 +330,16 @@
         },
         "description": "Encoded block object."
       },
+      "BoxResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Box"
+            }
+          }
+        },
+        "description": "Box information"
+      },
       "CatchpointAbortResponse": {
         "content": {
           "application/json": {
@@ -1158,6 +1168,28 @@
           "creator",
           "decimals",
           "total"
+        ],
+        "type": "object"
+      },
+      "Box": {
+        "description": "Box name and its content.",
+        "properties": {
+          "name": {
+            "description": "\\[name\\] box name, base64 encoded",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "value": {
+            "description": "\\[value\\] box value, base64 encoded.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
         ],
         "type": "object"
       },
@@ -2375,6 +2407,89 @@
           }
         },
         "summary": "Get application information."
+      }
+    },
+    "/v2/applications/{application-id}/boxes/{box-name}": {
+      "get": {
+        "description": "Given an application ID and box name, it returns box information including box name and base64 encoded content.",
+        "operationId": "GetApplicationBoxByName",
+        "parameters": [
+          {
+            "description": "An application identifier",
+            "in": "path",
+            "name": "application-id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "A box name",
+            "in": "path",
+            "name": "box-name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Box"
+                }
+              }
+            },
+            "description": "Box information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Box Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get box information for a given application."
       }
     },
     "/v2/assets/{asset-id}": {
