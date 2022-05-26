@@ -828,7 +828,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	genesisAccts[0][testSinkAddr] = sinkdata
 
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctOnline")
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctOnlineCacheDBSync")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = maxBalLookback
 	protoParams.SeedLookback = seedLookback
@@ -1094,4 +1094,84 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		require.NotEmpty(t, pad.rowid)
 		require.NotEmpty(t, pad.accountData.VoteLastValid)
 	})
+}
+
+func TestAcctOnlineVotersLongerHistory(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const seedLookback = 3
+	const seedInteval = 4
+	const maxBalLookback = 2 * seedLookback * seedInteval
+	const compactCertRounds = maxBalLookback / 2 // have it less than maxBalLookback but greater than default deltas size (8)
+	const compactCertVotersLookback = 2
+	const compactCertSecKQ = compactCertRounds / 2
+
+	const numAccts = maxBalLookback * 5
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+	var addrA basics.Address
+	for i := 0; i < numAccts; i++ {
+		addr := ledgertesting.RandomAddress()
+		genesisAccts[0][addr] = ledgertesting.RandomOnlineAccountData(0)
+		if addrA.IsZero() {
+			addrA = addr
+		}
+	}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	genesisAccts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	genesisAccts[0][testSinkAddr] = sinkdata
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctOnlineCacheDBSync")
+	protoParams := config.Consensus[protocol.ConsensusFuture]
+	protoParams.MaxBalLookback = maxBalLookback
+	protoParams.SeedLookback = seedLookback
+	protoParams.SeedRefreshInterval = seedInteval
+	protoParams.CompactCertRounds = compactCertRounds
+	protoParams.CompactCertVotersLookback = compactCertVotersLookback
+	protoParams.CompactCertSecKQ = compactCertSecKQ
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, genesisAccts)
+	defer ml.Close()
+	conf := config.GetDefaultLocal()
+
+	au, oa := newAcctUpdates(t, ml, conf, ".")
+	defer oa.close()
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
+	// add maxBalLookback empty blocks
+	maxBlocks := maxBalLookback * 5
+	for i := 1; i <= maxBlocks; i++ {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(100 * i)}})
+		base := genesisAccts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		totals = newBlock(t, ml, totals, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
+		genesisAccts = append(genesisAccts, newAccts)
+		commitSync(t, oa, ml, basics.Round(i))
+	}
+	require.Len(t, oa.deltas, int(conf.MaxAcctLookback))
+	require.Equal(t, basics.Round(maxBlocks-int(conf.MaxAcctLookback)), oa.cachedDBRoundOnline)
+	// voters stalls after the first interval
+	lowest := oa.voters.lowestRound(oa.cachedDBRoundOnline)
+	require.Equal(t, basics.Round(compactCertRounds-compactCertVotersLookback), lowest)
+	require.Equal(t, maxBlocks/compactCertRounds, len(oa.voters.round))
+	// lowestRound is fixed but online accounts tracker successfully decreases the history before the lowestRound
+	// TODO: add max bound check after implementing it for voters tracker
+	require.Greater(t, len(oa.onlineRoundParamsData), maxBlocks-int(lowest))
+
+	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
+	// TODO: figure out/fix maxBalLookback + 1
+	require.Equal(t, maxBalLookback+1, oa.onlineAccountsCache.accounts[addrA].Len())
 }
