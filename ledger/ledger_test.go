@@ -1967,10 +1967,14 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	dbs, _, err := openLedgerDB(dbName, inMem)
+	trackerDB, blockDB, err := openLedgerDB(dbName, inMem)
 	require.NoError(t, err)
+	defer func() {
+		trackerDB.Close()
+		blockDB.Close()
+	}()
 	// create tables so online accounts can still be written
-	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		accountsCreateOnlineAccountsTable(ctx, tx)
 		accountsCreateTxTailTable(ctx, tx)
 		accountsCreateOnlineRoundParamsTable(ctx, tx)
@@ -1982,6 +1986,10 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		l.Close()
 		os.Remove(dbName + ".block.sqlite")
 		os.Remove(dbName + ".tracker.sqlite")
+		os.Remove(dbName + ".block.sqlite-shm")
+		os.Remove(dbName + ".tracker.sqlite-shm")
+		os.Remove(dbName + ".block.sqlite-wal")
+		os.Remove(dbName + ".tracker.sqlite-wal")
 	}()
 
 	maxBlocks := 2000
@@ -2007,7 +2015,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	// run for maxBlocks rounds with random payment transactions
 	// generate 1000 txn per block
 	for i := 0; i < maxBlocks; i++ {
-		numTxns := crypto.RandUint64() % 9 + 7
+		numTxns := crypto.RandUint64()%9 + 7
 		stxns := make([]transactions.SignedTxn, numTxns)
 		latest := l.Latest()
 		txnIDs[latest+1] = make(map[transactions.Txid]struct{})
@@ -2025,14 +2033,14 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 			}
 
 			tx := transactions.Transaction{
-				Header:           txHeader,
+				Header: txHeader,
 			}
 
 			// have one txn be a keyreg txn that flips online to offline
 			// have all other txns be random payment txns
 			if j == 0 {
 				var keyregTxnFields transactions.KeyregTxnFields
-				if i % (len(addresses) * 2) < len(addresses) {
+				if i%(len(addresses)*2) < len(addresses) {
 					keyregTxnFields.VoteLast = 10000
 				}
 				tx.Type = protocol.KeyRegistrationTx
@@ -2099,10 +2107,10 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	require.Less(t, shorterLookback, cfg.MaxAcctLookback)
 	cfg.MaxAcctLookback = shorterLookback
 	l.cfg = cfg
-	accountDBVersion = 7
 	l.Close()
+	accountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
-	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts")
 		tx.ExecContext(ctx, "DROP TABLE IF EXISTS txtail")
 		tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineroundparamstail")
@@ -2112,6 +2120,9 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.genesisProto = config.Consensus[protocol.ConsensusCurrentVersion]
 	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
+	defer func() {
+		l.Close()
+	}()
 
 	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
 	require.Error(t, err)
