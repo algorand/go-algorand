@@ -72,12 +72,15 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 
 		stmt, err := tx.Prepare(deleteStateProofKeysQuery)
 		if err != nil {
-			return fmt.Errorf("unable to prepare state proof insert: %w", err)
+			return fmt.Errorf("unable to prepare state proof delete: %w", err)
 		}
 		defer stmt.Close()
 
 		_, err = stmt.Exec(pk, d.round)
-		return err
+		if err != nil {
+			return fmt.Errorf("unable to exec state proof delete (pk,rnd) == (%d,%d): %w", pk, d.round, err)
+		}
+		return nil
 	})
 
 	if err != nil {

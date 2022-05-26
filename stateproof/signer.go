@@ -162,6 +162,9 @@ func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			spw.log.Warnf("spw.signBlock(%d): Signer.FirstRoundInKeyLifetime: %v", hdr.Round, err)
 			continue
 		}
+		if firstRoundInKeyLifetime == 0 {
+			continue // No previous keys to delete (also underflows when subtracting 1)
+		}
 
 		// Safe to delete key for sfa.Round because the signature is now stored in the disk.
 		if err := spw.accts.DeleteStateProofKey(ids[i], basics.Round(firstRoundInKeyLifetime-1)); err != nil { // Subtract 1 to delete all keys up to this one
