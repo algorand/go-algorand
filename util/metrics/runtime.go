@@ -92,7 +92,7 @@ func (rm *RuntimeMetrics) WriteMetric(buf *strings.Builder, parentLabels string)
 
 	metrics.Read(rm.samples)
 	for i, s := range rm.samples {
-		name := "go" + sanitizePrometheusName(s.Name)
+		name := "algod_go" + sanitizePrometheusName(s.Name)
 		desc := rm.descriptions[i]
 
 		buf.WriteString("# HELP " + name + " " + desc.Description + "\n")

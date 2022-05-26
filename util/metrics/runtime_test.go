@@ -33,7 +33,7 @@ func TestRuntimeMetrics(t *testing.T) {
 	// assert default metrics correctly created
 	cur := 0
 	for scanner.Scan() {
-		curName := "go" + defaultRuntimeMetrics[cur]
+		curName := "algod_go" + defaultRuntimeMetrics[cur]
 		curName = strings.ReplaceAll(curName, ":", "_")
 		curName = strings.ReplaceAll(curName, "-", "_")
 		curName = strings.ReplaceAll(curName, "/", "_")
