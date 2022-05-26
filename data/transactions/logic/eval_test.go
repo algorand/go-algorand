@@ -129,6 +129,7 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 		txns = []transactions.SignedTxn{{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}}
 	}
 	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep.Trace = &strings.Builder{}
 	if empty {
 		// We made an app type in order to get a full ep, but that sets MinTealVersion=2
 		ep.TxnGroup[0].Txn.Type = "" // set it back
@@ -2299,41 +2300,41 @@ func TestExtractFlop(t *testing.T) {
 	err := testPanics(t, `byte 0xf000000000000000
 	extract 1 8
 	len`, 5)
-	require.Contains(t, err.Error(), "extract range beyond length of string")
+	require.Contains(t, err.Error(), "extraction end 9")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	extract 9 0
 	len`, 5)
-	require.Contains(t, err.Error(), "extract range beyond length of string")
+	require.Contains(t, err.Error(), "extraction start 9")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 4
 	int 0xFFFFFFFFFFFFFFFE
 	extract3
 	len`, 5)
-	require.Contains(t, err.Error(), "extract range beyond length of string")
+	require.Contains(t, err.Error(), "extraction end exceeds uint64")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 100
 	int 2
 	extract3
 	len`, 5)
-	require.Contains(t, err.Error(), "extract range beyond length of string")
+	require.Contains(t, err.Error(), "extraction start 100")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 55
 	extract_uint16`, 5)
-	require.Contains(t, err.Error(), "extract range beyond length of string")
+	require.Contains(t, err.Error(), "extraction start 55")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 9
 	extract_uint32`, 5)
-	require.Contains(t, err.Error(), "extract range beyond length of string")
+	require.Contains(t, err.Error(), "extraction start 9")
 
 	err = testPanics(t, `byte 0xf000000000000000
 	int 1
 	extract_uint64`, 5)
-	require.Contains(t, err.Error(), "extract range beyond length of string")
+	require.Contains(t, err.Error(), "extraction end 9")
 }
 
 func TestLoadStore(t *testing.T) {

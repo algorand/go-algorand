@@ -3494,24 +3494,30 @@ func opSetByte(cx *EvalContext) error {
 	return nil
 }
 
-func opExtractImpl(x []byte, start, length int) ([]byte, error) {
+func extractCarefully(x []byte, start, length uint64) ([]byte, error) {
+	if start > uint64(len(x)) {
+		return nil, fmt.Errorf("extraction start %d beyond length: %d", start, len(x))
+	}
 	end := start + length
-	if start > len(x) || end > len(x) {
-		return nil, errors.New("extract range beyond length of string")
+	if end < start {
+		return nil, fmt.Errorf("extraction end exceeds uint64")
+	}
+	if end > uint64(len(x)) {
+		return nil, fmt.Errorf("extraction end %d beyond length: %d", end, len(x))
 	}
 	return x[start:end], nil
 }
 
 func opExtract(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	startIdx := cx.program[cx.pc+1]
-	lengthIdx := cx.program[cx.pc+2]
+	start := uint64(cx.program[cx.pc+1])
+	length := uint64(cx.program[cx.pc+2])
 	// Shortcut: if length is 0, take bytes from start index to the end
-	length := int(lengthIdx)
 	if length == 0 {
-		length = len(cx.stack[last].Bytes) - int(startIdx)
+		// If length has wrapped, it's because start > len(), so extractCarefully will report
+		length = uint64(len(cx.stack[last].Bytes) - int(start))
 	}
-	bytes, err := opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
+	bytes, err := extractCarefully(cx.stack[last].Bytes, start, length)
 	cx.stack[last].Bytes = bytes
 	return err
 }
@@ -3519,14 +3525,12 @@ func opExtract(cx *EvalContext) error {
 func opExtract3(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // length
 	prev := last - 1          // start
-	byteArrayIdx := prev - 1  // bytes
-	startIdx := cx.stack[prev].Uint
-	lengthIdx := cx.stack[last].Uint
-	if startIdx > math.MaxInt32 || lengthIdx > math.MaxInt32 {
-		return errors.New("extract range beyond length of string")
-	}
-	bytes, err := opExtractImpl(cx.stack[byteArrayIdx].Bytes, int(startIdx), int(lengthIdx))
-	cx.stack[byteArrayIdx].Bytes = bytes
+	pprev := prev - 1         // bytes
+
+	start := cx.stack[prev].Uint
+	length := cx.stack[last].Uint
+	bytes, err := extractCarefully(cx.stack[pprev].Bytes, start, length)
+	cx.stack[pprev].Bytes = bytes
 	cx.stack = cx.stack[:prev]
 	return err
 }
@@ -3542,11 +3546,11 @@ func convertBytesToInt(x []byte) uint64 {
 	return out
 }
 
-func opExtractNBytes(cx *EvalContext, n int) error {
+func opExtractNBytes(cx *EvalContext, n uint64) error {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
-	startIdx := cx.stack[last].Uint
-	bytes, err := opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bytes
+	start := cx.stack[last].Uint
+	bytes, err := extractCarefully(cx.stack[prev].Bytes, start, n) // extract n bytes
 	if err != nil {
 		return err
 	}
