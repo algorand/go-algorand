@@ -69,7 +69,7 @@ func TestBoxReadWrite(t *testing.T) {
                 int 1`, ep)
 
 	logic.TestApp(t, `byte "self"; int 1; int 4; box_extract;
-                byte 0x00000000; ==`, ep, "extract range")
+                byte 0x00000000; ==`, ep, "extraction end 5")
 
 	// Replace some bytes until past the end, confirm when it fails.
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3031; box_replace;

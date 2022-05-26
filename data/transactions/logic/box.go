@@ -74,14 +74,10 @@ func opBoxExtract(cx *EvalContext) error {
 		return err
 	}
 
-	end := start + length
-	if start > uint64(len(box)) || end > uint64(len(box)) {
-		return errors.New("extract range beyond box")
-	}
-
-	cx.stack[pprev].Bytes = []byte(box[start:end])
+	bytes, err := extractCarefully([]byte(box), start, length)
+	cx.stack[pprev].Bytes = bytes
 	cx.stack = cx.stack[:prev]
-	return nil
+	return err
 }
 
 func opBoxReplace(cx *EvalContext) error {
