@@ -2170,8 +2170,8 @@ int 0x310
 
 func TestStringOps(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	testAccepts(t, `byte 0x123456789abc
 substring 1 3
 byte 0x3456
@@ -2267,6 +2267,7 @@ len`, 2)
 func TestExtractOp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
 	testAccepts(t, "byte 0x123456789abc; extract 1 2; byte 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 0 6; byte 0x123456789abc; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 3 0; byte 0x789abc; ==", 5)
@@ -2337,10 +2338,33 @@ func TestExtractFlop(t *testing.T) {
 	require.Contains(t, err.Error(), "extraction end 9")
 }
 
+func TestReplace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 0; byte 0x22221111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 1; byte 0x11222211; ==`, 7)
+	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 2; byte 0x11112222; ==`, 7)
+	testPanics(t, `byte 0x11111111; byte 0x2222; replace2 3; byte 0x11112222; ==`, 7)
+
+	testAccepts(t, `byte 0x11111111; int 0; byte 0x2222; replace3; byte 0x22221111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 1; byte 0x2222; replace3; byte 0x11222211; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 2; byte 0x2222; replace3; byte 0x11112222; ==`, 7)
+	testPanics(t, `byte 0x11111111; int 3; byte 0x2222; replace3; byte 0x11112222; ==`, 7)
+
+	testAccepts(t, `byte 0x11111111; int 0; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 1; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 2; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	testAccepts(t, `byte 0x11111111; int 3; byte 0x; replace3; byte 0x11111111; ==`, 7)
+
+	testAccepts(t, `byte 0x; byte 0x; replace2 0; byte 0x; ==`, 7)
+	testAccepts(t, `byte 0x; int 0; byte 0x; replace3; byte 0x; ==`, 7)
+}
+
 func TestLoadStore(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	testAccepts(t, "load 3; int 0; ==;", 1)
 
 	testAccepts(t, `int 37

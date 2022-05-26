@@ -144,6 +144,8 @@ var opDocByName = map[string]string{
 	"extract_uint16": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
 	"extract_uint32": "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
 	"extract_uint64": "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
+	"replace2":       "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+	"replace3":       "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
 	"base64_decode":  "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
 
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
@@ -234,6 +236,7 @@ var opcodeImmediateNotes = map[string]string{
 
 	"substring": "{uint8 start position} {uint8 end position}",
 	"extract":   "{uint8 start position} {uint8 length}",
+	"replace2":  "{uint8 start position}",
 	"dig":       "{uint8 depth}",
 	"cover":     "{uint8 depth}",
 	"uncover":   "{uint8 depth}",
@@ -331,7 +334,7 @@ func OpDocExtra(opName string) string {
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
 	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "bn256_add", "bn256_scalar_mul", "bn256_pairing", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
-	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode", "json_ref"},
+	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode", "replace2", "replace3", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
