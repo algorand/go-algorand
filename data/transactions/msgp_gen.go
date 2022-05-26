@@ -181,6 +181,14 @@ import (
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
 //
+// boxRefStringly
+//        |-----> (*) MarshalMsg
+//        |-----> (*) CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> (*) Msgsize
+//        |-----> (*) MsgIsZero
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte) {
@@ -6367,4 +6375,133 @@ func (z *Txid) Msgsize() int {
 // MsgIsZero returns whether this is a zero value
 func (z *Txid) MsgIsZero() bool {
 	return ((*(crypto.Digest))(z)).MsgIsZero()
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *boxRefStringly) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).Index == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if len((*z).Name) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "i"
+			o = append(o, 0xa1, 0x69)
+			o = msgp.AppendUint64(o, (*z).Index)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "n"
+			o = append(o, 0xa1, 0x6e)
+			o = msgp.AppendBytes(o, (*z).Name)
+		}
+	}
+	return
+}
+
+func (_ *boxRefStringly) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*boxRefStringly)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *boxRefStringly) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Index, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Index")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Name)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Name")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = boxRefStringly{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "i":
+				(*z).Index, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Index")
+					return
+				}
+			case "n":
+				(*z).Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Name)
+				if err != nil {
+					err = msgp.WrapError(err, "Name")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *boxRefStringly) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*boxRefStringly)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *boxRefStringly) Msgsize() (s int) {
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BytesPrefixSize + len((*z).Name)
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *boxRefStringly) MsgIsZero() bool {
+	return ((*z).Index == 0) && (len((*z).Name) == 0)
 }
