@@ -1944,12 +1944,15 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	}
 }
 
-// TestLedgerMigrateV6ShrinkDeltas checks the ledger has correct account state
-// after performing a db migration from V6
+// TestLedgerMigrateV6ShrinkDeltas opens a ledger + dbV6, submits a bunch of txns,
+// then migrates db and reopens ledger, and checks that the state is correct
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	accountDBVersion = 6
+	defer func() {
+		accountDBVersion = 7
+	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
 	proto := config.Consensus[protocol.ConsensusV31]
@@ -1966,6 +1969,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
 	dbs, _, err := openLedgerDB(dbName, inMem)
 	require.NoError(t, err)
+	// create tables so online accounts can still be written
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		accountsCreateOnlineAccountsTable(ctx, tx)
 		accountsCreateTxTailTable(ctx, tx)
@@ -2003,10 +2007,11 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	// run for maxBlocks rounds with random payment transactions
 	// generate 1000 txn per block
 	for i := 0; i < maxBlocks; i++ {
-		stxns := make([]transactions.SignedTxn, 10)
+		numTxns := crypto.RandUint64() % 9 + 7
+		stxns := make([]transactions.SignedTxn, numTxns)
 		latest := l.Latest()
 		txnIDs[latest+1] = make(map[transactions.Txid]struct{})
-		for j := 0; j < 10; j++ {
+		for j := 0; j < int(numTxns); j++ {
 			feeMult := rand.Intn(5) + 1
 			amountMult := rand.Intn(1000) + 1
 			receiver := ledgertesting.RandomAddress()
@@ -2019,15 +2024,26 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 				GenesisHash: crypto.Hash([]byte(t.Name())),
 			}
 
-			correctPayFields := transactions.PaymentTxnFields{
-				Receiver: receiver,
-				Amount:   basics.MicroAlgos{Raw: uint64(100 * amountMult)},
+			tx := transactions.Transaction{
+				Header:           txHeader,
 			}
 
-			tx := transactions.Transaction{
-				Type:             protocol.PaymentTx,
-				Header:           txHeader,
-				PaymentTxnFields: correctPayFields,
+			// have one txn be a keyreg txn that flips online to offline
+			// have all other txns be random payment txns
+			if j == 0 {
+				var keyregTxnFields transactions.KeyregTxnFields
+				if i % (len(addresses) * 2) < len(addresses) {
+					keyregTxnFields.VoteLast = 10000
+				}
+				tx.Type = protocol.KeyRegistrationTx
+				tx.KeyregTxnFields = keyregTxnFields
+			} else {
+				correctPayFields := transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: uint64(100 * amountMult)},
+				}
+				tx.Type = protocol.PaymentTx
+				tx.PaymentTxnFields = correctPayFields
 			}
 
 			stxns[j] = sign(initKeys, tx)
@@ -2084,15 +2100,18 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = shorterLookback
 	l.cfg = cfg
 	accountDBVersion = 7
+	l.Close()
+	// delete tables since we want to check they can be made from other data
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts")
-		//tx.ExecContext(ctx, "DROP TABLE IF EXISTS txtail")
+		tx.ExecContext(ctx, "DROP TABLE IF EXISTS txtail")
 		tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineroundparamstail")
 		return nil
 	})
 	l.genesisProtoVersion = protocol.ConsensusCurrentVersion
 	l.genesisProto = config.Consensus[protocol.ConsensusCurrentVersion]
-	l.reloadLedger()
+	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
 
 	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
 	require.Error(t, err)
@@ -2117,10 +2136,6 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		oad, err := l.LookupAgreement(balancesRound, addr)
 		require.NoError(t, err)
 		require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
-
-		// TODO:
-		// add a test checking all committed pre-reload entries are gone
-		// add as a tracker test
 	}
 
 	// at round maxBlocks the ledger must have maxValidity blocks of transactions, check
