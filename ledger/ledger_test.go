@@ -2105,9 +2105,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
 	require.Less(t, shorterLookback, cfg.MaxAcctLookback)
-	cfg.MaxAcctLookback = shorterLookback
-	l.cfg = cfg
 	l.Close()
+	cfg.MaxAcctLookback = shorterLookback
 	accountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
