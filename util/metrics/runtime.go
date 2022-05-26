@@ -117,5 +117,21 @@ func (rm *RuntimeMetrics) WriteMetric(buf *strings.Builder, parentLabels string)
 	}
 }
 
-// AddMetric does not add runtime metrics to the map used for heartbeat metrics.
-func (rm *RuntimeMetrics) AddMetric(_ map[string]float64) {}
+// AddMetric adds runtime metrics to the map used for heartbeat metrics.
+func (rm *RuntimeMetrics) AddMetric(m map[string]float64) {
+	rm.Lock()
+	defer rm.Unlock()
+
+	metrics.Read(rm.samples)
+	for _, s := range rm.samples {
+		name := "go" + sanitizeTelemetryName(s.Name)
+
+		switch s.Value.Kind() {
+		case metrics.KindUint64:
+			m[name] = float64(s.Value.Uint64())
+		case metrics.KindFloat64:
+			m[name] = s.Value.Float64()
+		default:
+		}
+	}
+}

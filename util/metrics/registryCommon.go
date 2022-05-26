@@ -25,7 +25,9 @@ import (
 
 // Metric represent any collectable metric
 type Metric interface {
+	// WriteMetric adds metrics in Prometheus exposition format to buf, including parentLabels tags if provided.
 	WriteMetric(buf *strings.Builder, parentLabels string)
+	// AddMetric adds metrics to a map, used for reporting in telemetry heartbeat messages.
 	AddMetric(values map[string]float64)
 }
 

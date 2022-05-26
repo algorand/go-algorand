@@ -46,4 +46,11 @@ func TestRuntimeMetrics(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 	require.Len(t, defaultRuntimeMetrics, cur)
+
+	m := make(map[string]float64)
+	rm.AddMetric(m)
+	for _, name := range defaultRuntimeMetrics {
+		tname := strings.ReplaceAll(strings.ReplaceAll("go"+name, ":", "_"), "/", "_")
+		require.Contains(t, m, tname)
+	}
 }
