@@ -118,7 +118,7 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	}
 
 	if record.StateProof != nil {
-		tmp := record.StateProof[:]
+		tmp := record.StateProof.Commitment[:]
 		participationKey.Key.StateProofKey = &tmp
 	}
 
