@@ -246,7 +246,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			StateProofIntervalLatestRound: tx.StateProofIntervalLatestRound,
 			StateProofType:                tx.StateProofType,
 			StateProof:                    tx.StateProof,
-			StateProofMessage:             tx.StateProofMsg,
+			Message:                       tx.StateProofMsg,
 		},
 	}
 }

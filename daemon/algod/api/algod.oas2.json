@@ -1246,7 +1246,7 @@
         }
       ]
     },
-    "/v2/transactions/state-proof/{round}": {
+    "/v2/stateproofs/{round}": {
       "parameters": [
         {
           "type": "integer",
@@ -1263,7 +1263,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get the state proof transaction for a given round",
+        "summary": "get a state proof for a given round",
         "operationId": "StateProof",
         "responses": {
           "200": {
@@ -1276,7 +1276,7 @@
             }
           },
           "404": {
-            "description": "State proof transaction not found",
+            "description": "Could not find state proof for the given round",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1449,7 +1449,7 @@
               "type": "string",
               "format": "binary"
             }
-          }, 
+          },
           {
             "name": "sourcemap",
             "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
@@ -2596,20 +2596,20 @@
       }
     },
     "StateProof": {
-      "description": "StateProof transaction.",
+      "description": "Represents a state proof and its corresponding message",
       "type": "object",
       "required": [
-        "StateProofMessage",
+        "Message",
         "StateProof"
       ],
       "properties": {
-        "StateProofMessage": {
-          "description": "The encoded StateProof message.",
+        "Message": {
+          "description": "The encoded message.",
           "type": "string",
           "format": "byte"
         },
         "StateProof": {
-          "description": "The encoded StateProof certificate.",
+          "description": "The encoded StateProof for the message.",
           "type": "string",
           "format": "byte"
         }
@@ -2788,7 +2788,7 @@
   },
   "responses": {
     "StateProofResponse": {
-      "description": "StateProof transaction.",
+      "description": "StateProofResponse wraps the StateProof type in a response.",
       "schema": {
         "$ref": "#/definitions/StateProof"
       }
