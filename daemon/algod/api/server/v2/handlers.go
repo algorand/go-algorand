@@ -638,6 +638,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			Stibhash:  stibhash[:],
 			Idx:       uint64(idx),
 			Treedepth: uint64(proof.TreeDepth),
+			Hashtype:  hashtype,
 		}
 
 		return ctx.JSON(http.StatusOK, response)
