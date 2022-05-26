@@ -835,7 +835,11 @@ var changeOnlineCmd = &cobra.Command{
 	},
 }
 
-func changeAccountOnlineStatus(acct string, goOnline bool, txFile string, wallet string, firstTxRound, lastTxRound, fee uint64, leaseBytes [32]byte, dataDir string, client libgoal.Client) error {
+func changeAccountOnlineStatus(
+	acct string, goOnline bool, txFile string, wallet string,
+	firstTxRound, lastTxRound, fee uint64, leaseBytes [32]byte,
+	dataDir string, client libgoal.Client,
+) error {
 	// Generate an unsigned online/offline tx
 	var utx transactions.Transaction
 	var err error
@@ -1575,7 +1579,7 @@ func legacyPartkeyInfoCommand() {
 		}
 
 		for filename, part := range parts {
-			fmt.Println("------------------------------------------------------------------")
+			fmt.Println(strings.Repeat("-", 40))
 			info := partkeyInfo{
 				Address:         part.Address().String(),
 				FirstValid:      part.FirstValid,
