@@ -21,10 +21,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRuntimeMetrics(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	rm := NewRuntimeMetrics()
 	var sb strings.Builder
 	rm.WriteMetric(&sb, `host="x"`)
