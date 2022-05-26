@@ -80,7 +80,12 @@ func TestBoxReadWrite(t *testing.T) {
                       byte 0x00303132; ==`, ep)
 	logic.TestApp(t, `byte "self"; int 1; byte 0x30313233; box_replace;
                       byte "self"; int 0; int 4; box_extract;
-                      byte 0x0030313233; ==`, ep, "replace range")
+                      byte 0x0030313233; ==`, ep, "replacement end 5")
+
+	// Replace with different byte in different place.
+	logic.TestApp(t, `byte "self"; int 0; byte 0x4444; box_replace;
+                      byte "self"; int 0; int 4; box_extract;
+                      byte 0x44443132; ==`, ep)
 }
 
 func TestBoxAcrossTxns(t *testing.T) {

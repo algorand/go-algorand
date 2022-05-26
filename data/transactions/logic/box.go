@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -85,9 +84,9 @@ func opBoxReplace(cx *EvalContext) error {
 	prev := last - 1          // start
 	pprev := prev - 1         // name
 
-	name := string(cx.stack[pprev].Bytes)
-	start := cx.stack[prev].Uint
 	replacement := cx.stack[last].Bytes
+	start := cx.stack[prev].Uint
+	name := string(cx.stack[pprev].Bytes)
 
 	if !cx.availableBox(name) {
 		return fmt.Errorf("invalid Box reference %v", name)
@@ -97,14 +96,13 @@ func opBoxReplace(cx *EvalContext) error {
 		return err
 	}
 
-	end := start + uint64(len(replacement))
-	if start > uint64(len(box)) || end > uint64(len(box)) {
-		return errors.New("replace range beyond box")
+	bytes, err := replaceCarefully([]byte(box), replacement, start)
+	if err != nil {
+		return err
 	}
-	clone := []byte(box)
-	copy(clone[start:end], replacement)
+	cx.stack[prev].Bytes = bytes
 	cx.stack = cx.stack[:pprev]
-	return cx.Ledger.SetBox(cx.appID, name, string(clone))
+	return cx.Ledger.SetBox(cx.appID, name, string(bytes))
 }
 
 func opBoxDel(cx *EvalContext) error {
