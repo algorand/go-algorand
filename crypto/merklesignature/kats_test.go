@@ -31,6 +31,7 @@ import (
 
 type mssKat struct {
 	PublicKey          []byte
+	KeyLifetime        uint64
 	CtSignature        []byte
 	EphemeralKey       []byte
 	VcIndex            uint64
@@ -77,7 +78,9 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 		return mssKat{}, fmt.Errorf("error while formating mss signature %w", err)
 	}
 
-	return mssKat{PublicKey: verifier.Commitment[:],
+	return mssKat{
+		PublicKey:          verifier.Commitment[:],
+		KeyLifetime:        KeyLifetimeDefault,
 		CtSignature:        ctSignature,
 		EphemeralKey:       pk,
 		VcIndex:            signature.VectorCommitmentIndex,
@@ -86,8 +89,6 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 		ProofBytes:         proof,
 		Message:            messageToSign}, nil
 }
-
-var shouldGenerateKATs bool
 
 func TestGenerateKat(t *testing.T) {
 	partitiontest.PartitionTest(t)

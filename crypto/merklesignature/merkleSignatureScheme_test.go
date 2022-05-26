@@ -42,8 +42,8 @@ func TestSignerCreation(t *testing.T) {
 		a.NoError(err)
 	}
 
-	testSignerNumKeysLimits := func(firstValid uint64, lastValid uint64, interval uint64, expectedLen int) {
-		signer := generateTestSigner(firstValid, lastValid, interval, a)
+	testSignerNumKeysLimits := func(firstValid uint64, lastValid uint64, keyLifetime uint64, expectedLen int) {
+		signer := generateTestSigner(firstValid, lastValid, keyLifetime, a)
 		a.Equal(expectedLen, length(signer, a))
 	}
 
@@ -283,6 +283,7 @@ func TestSigning(t *testing.T) {
 	for ; i < 60; i++ { // no key for these rounds (key for round 48 was not generated)
 		_, err = signer.GetSigner(i).SignBytes(msg)
 		a.Error(err)
+		a.ErrorIs(err, ErrNoStateProofKeyForRound)
 	}
 	for ; i < 100; i++ {
 		sig, err = signer.GetSigner(i).SignBytes(msg)
@@ -440,25 +441,25 @@ func TestMarshal(t *testing.T) {
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numberOfKeys := uint64(1 << 6)
-	validPeriod := numberOfKeys*interval - 1
+	validPeriod := numberOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(0)
 	lastValid = validPeriod
-	s, err = New(firstValid, lastValid, interval)
+	s, err = New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(1000)
-	lastValid = validPeriod + 1000 - (interval * 50)
-	s, err = New(firstValid, lastValid, interval)
+	lastValid = validPeriod + 1000 - (keyLifetime * 50)
+	s, err = New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 
 	a.Equal(numberOfKeys-50, uint64(length(s, a)))
@@ -467,20 +468,20 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 func TestGetAllKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numOfKeys := uint64(1 << 8)
-	validPeriod := numOfKeys*interval - 1
+	validPeriod := numOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
 	keys := s.GetAllKeys()
 	for i := uint64(0); i < uint64(len(s.ephemeralKeys)); i++ {
 		a.Equal(s.ephemeralKeys[i], *keys[i].Key)
-		a.Equal(indexToRound(firstValid, interval, i), keys[i].Round)
+		a.Equal(indexToRound(firstValid, keyLifetime, i), keys[i].Round)
 	}
 
 	s, err = New(1, 2, 100)
@@ -507,8 +508,8 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {
 	return start, end, signer
 }
 
-func generateTestSigner(firstValid, lastValid, interval uint64, a *require.Assertions) *Secrets {
-	signer, err := New(firstValid, lastValid, interval)
+func generateTestSigner(firstValid, lastValid, keyLifetime uint64, a *require.Assertions) *Secrets {
+	signer, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 
 	return signer
@@ -535,13 +536,13 @@ func copyProof(proof merklearray.SingleLeafProof) merklearray.SingleLeafProof {
 func TestTreeRootHashLength(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numOfKeys := uint64(1 << 8)
-	validPeriod := numOfKeys*interval - 1
+	validPeriod := numOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 

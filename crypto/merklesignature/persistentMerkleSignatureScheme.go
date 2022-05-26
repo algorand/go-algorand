@@ -95,7 +95,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 		return fmt.Errorf("no keys provided (nil)")
 	}
 	if s.KeyLifetime == 0 {
-		return fmt.Errorf("Secrets.Persist: %w", errIntervalZero)
+		return fmt.Errorf("Secrets.Persist: %w", ErrKeyLifetimeIsZero)
 	}
 	round := indexToRound(s.FirstValid, s.KeyLifetime, 0)
 	encodedKey := protocol.GetEncodingBuf()
