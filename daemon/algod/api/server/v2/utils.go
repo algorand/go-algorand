@@ -194,6 +194,16 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
+// getOptionalRound converts an optional round argument into a basics.Round(0) for "latest"
+// or a non-negative integer.
+// TODO: could change this to parse a string argument and allow param to use string value "latest"
+func getOptionalRound(round *uint64) (basics.Round, error) {
+	if round == nil {
+		return basics.Round(0), nil
+	}
+	return basics.Round(*round), nil
+}
+
 // getCodecHandle converts a format string into the encoder + content type
 func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	format := "json"

@@ -30,6 +30,7 @@ var (
 	errFailedToParseExclude                    = "failed to parse exclude"
 	errFailedToParseTransaction                = "failed to parse transaction"
 	errFailedToParseBlock                      = "failed to parse block"
+	errFailedToParseRound                      = "failed to parse round number"
 	errFailedToParseCert                       = "failed to parse cert"
 	errFailedToParseSourcemap                  = "failed to parse sourcemap"
 	errFailedToEncodeResponse                  = "failed to encode response"

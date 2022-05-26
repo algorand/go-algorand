@@ -465,7 +465,23 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, rnd, withoutRewards, err := l.accts.lookupLatest(addr)
+	data, rnd, withoutRewards, err := l.accts.lookupLatest(0, addr)
+	if err != nil {
+		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+	}
+
+	return data, rnd, withoutRewards, nil
+}
+
+// LookupFullAccount uses the accounts tracker to return the account state (including
+// resources) for a given address, for the given round. The returned account values
+// reflect the changes of all blocks up to and including the returned round number.
+func (l *Ledger) LookupFullAccount(round basics.Round, addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// Intentionally apply (pending) rewards up to rnd.
+	data, rnd, withoutRewards, err := l.accts.lookupLatest(round, addr)
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 	}
@@ -554,6 +570,13 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.LatestTotals()
+}
+
+// Totals returns the totals of all accounts for the most recent round, as well as the round number.
+func (l *Ledger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.Totals(rnd)
 }
 
 // OnlineTotals returns the online totals of all accounts at the end of round rnd.

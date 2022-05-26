@@ -165,7 +165,7 @@
         "x-algorand-format": "base64"
       },
       "round": {
-        "description": "Include results for the specified round.",
+        "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
         "in": "query",
         "name": "round",
         "schema": {
@@ -1792,6 +1792,14 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -1895,6 +1903,14 @@
             "in": "path",
             "name": "application-id",
             "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
+            "in": "query",
+            "name": "round",
             "schema": {
               "type": "integer"
             }
@@ -2031,6 +2047,14 @@
             "in": "path",
             "name": "asset-id",
             "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
+            "in": "query",
+            "name": "round",
             "schema": {
               "type": "integer"
             }
@@ -2308,6 +2332,14 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -2379,6 +2411,14 @@
             "in": "path",
             "name": "asset-id",
             "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
+            "in": "query",
+            "name": "round",
             "schema": {
               "type": "integer"
             }
@@ -2912,6 +2952,16 @@
     "/v2/ledger/supply": {
       "get": {
         "operationId": "GetSupply",
+        "parameters": [
+          {
+            "description": "Include results for the specified round, if not provided, will use latest round. If sufficient history is not available to access historical round, will return an error.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
