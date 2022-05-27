@@ -50,7 +50,10 @@ func (br BoxRef) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON makes it so BoxRefs read u64 names
 func (br *BoxRef) UnmarshalJSON(data []byte) error {
 	var x boxRefStringly
-	protocol.DecodeJSON(data, &x)
+	err := protocol.DecodeJSON(data, &x)
+	if err != nil {
+		return err
+	}
 	br.Index = x.Index
 	br.Name = string(x.Name)
 	return nil
