@@ -1,0 +1,2 @@
+accounts:
+	goal account list
