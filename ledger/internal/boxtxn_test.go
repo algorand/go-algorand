@@ -278,12 +278,12 @@ func TestBoxRW(t *testing.T) {
 		dl.txn(call.Args("check", "x", "ABC"), "x does not exist")
 		dl.txn(call.Args("create", "x", "\x08"))
 		dl.txn(call.Args("check", "x", "\x00")) // it was cleared
-		dl.txn(call.Args("set", "x", "ABCDEFGHIJ"), "replace range")
+		dl.txn(call.Args("set", "x", "ABCDEFGHIJ"), "replacement end 10")
 		dl.txn(call.Args("check", "x", "\x00")) // still clear
 		dl.txn(call.Args("set", "x", "ABCDEFGH"))
-		dl.txn(call.Args("check", "x", "ABCDEFGH\x00"), "extract range")
+		dl.txn(call.Args("check", "x", "ABCDEFGH\x00"), "extraction end 9")
 		dl.txn(call.Args("check", "x", "ABCDEFGH"))
-		dl.txn(call.Args("set", "x", "ABCDEFGHI"), "replace range")
+		dl.txn(call.Args("set", "x", "ABCDEFGHI"), "replacement end 9")
 
 		// Advance more than 320 rounds, ensure box is still there
 		for i := 0; i < 330; i++ {

@@ -1132,7 +1132,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	}
 
 	if value == nil {
-		return notFound(ctx, errors.New(errBoxDoesNotExist), errAppDoesNotExist, v2.Log)
+		return notFound(ctx, errors.New(errBoxDoesNotExist), errBoxDoesNotExist, v2.Log)
 	}
 	response := generated.BoxResponse{
 		Name:  []byte(boxName),
