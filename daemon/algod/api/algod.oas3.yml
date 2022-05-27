@@ -1328,8 +1328,16 @@
             },
             "type": "array"
           },
+          "budget-added": {
+            "description": "Budget added during execution of app call transaction.",
+            "type": "integer"
+          },
+          "budget-consumed": {
+            "description": "Budget consumed during execution of app call transaction.",
+            "type": "integer"
+          },
           "cost": {
-            "description": "Execution cost of app call transaction",
+            "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
             "type": "integer"
           },
           "disassembly": {
