@@ -130,7 +130,7 @@ func (o *onlineAccountsCache) prune(targetRound basics.Round) {
 			node = node.Prev()
 			// keep only one entry that is targetRound or older
 			// discard all entries older than targetRound other than the current entry
-			if node.Value.(*cachedOnlineAccount).updRound <= targetRound {
+			if node.Value.(*cachedOnlineAccount).updRound < targetRound {
 				list.Remove(node.Next())
 			} else {
 				break

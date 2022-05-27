@@ -436,7 +436,7 @@ func TestAcctOnlineCache(t *testing.T) {
 
 	allAccts := make([]basics.BalanceRecord, numAccts)
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
-	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts+1)
 	for i := 0; i < numAccts; i++ {
 		allAccts[i] = basics.BalanceRecord{
 			Addr:        ledgertesting.RandomAddress(),
@@ -444,6 +444,10 @@ func TestAcctOnlineCache(t *testing.T) {
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	}
+
+	addrA := ledgertesting.RandomAddress()
+	acctA := ledgertesting.RandomOnlineAccountData(0)
+	genesisAccts[0][addrA] = acctA
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
@@ -494,6 +498,9 @@ func TestAcctOnlineCache(t *testing.T) {
 		} else {
 			updates.Upsert(allAccts[acctIdx].Addr, ledgercore.ToAccountData(allAccts[acctIdx].AccountData))
 		}
+
+		// set acctA online for each round
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(100 * i)}})
 
 		base := genesisAccts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
@@ -574,6 +581,21 @@ func TestAcctOnlineCache(t *testing.T) {
 				require.NotEmpty(t, oad)
 			}
 		}
+	}
+
+	require.Equal(t, targetRound-basics.Round(maxDeltaLookback), oa.cachedDBRoundOnline)
+	res, validThrough, err := oa.accountsq.lookupOnlineHistory(addrA)
+	require.NoError(t, err)
+	require.Equal(t, oa.cachedDBRoundOnline, validThrough)
+	// +1 because of deletion before X, and not checking acct state at X
+	require.Equal(t, int(maxBalLookback)+1, len(res))
+	// ensure the cache length corresponds to DB
+	require.Equal(t, len(res), oa.onlineAccountsCache.accounts[addrA].Len())
+	for _, entry := range res {
+		cached, has := oa.onlineAccountsCache.read(addrA, entry.updRound)
+		require.True(t, has)
+		require.Equal(t, entry.updRound, cached.updRound)
+		require.Equal(t, entry.accountData.VoteLastValid, cached.VoteLastValid)
 	}
 
 	// ensure correct behavior after deleting cache
@@ -1172,6 +1194,6 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	require.Greater(t, len(oa.onlineRoundParamsData), maxBlocks-int(lowest))
 
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
-	// TODO: figure out/fix maxBalLookback + 1
+	// +1 comes from the deletion before X without checking account state at X
 	require.Equal(t, maxBalLookback+1, oa.onlineAccountsCache.accounts[addrA].Len())
 }

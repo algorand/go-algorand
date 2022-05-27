@@ -301,14 +301,8 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	}
 
 	offset = uint64(newBase - dbRound)
-
 	offset = ao.consecutiveVersion(offset)
 
-	// submit committing task only if offset is non-zero in addition to
-	// 1) no pending catchpoint writes
-	// 2) batching requirements meet or catchpoint round
-
-	// TODO: remove
 	// synchronize base and offset with account updates
 	if offset < dcr.offset {
 		dcr.offset = offset
@@ -491,16 +485,12 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 		ao.onlineRoundParamsData = ao.onlineRoundParamsData[uint64(len(ao.onlineRoundParamsData))-onlineRoundParamsLookback:]
 	}
 
-	// online accounts defines deletion round as (see onlineAccountsNewRoundImpl)
-	// targetRound := basics.Round(updRound + proto.MaxBalLookback)
-	// and deletes these entries at round newBase (see ao.prepareCommit)
-	// and the original condition
-	// if ao.expirations[i].rnd <= dcc.oldBase+basics.Round(offset)
-	// becomes
-	// targetRound <= newBase
-	// ==> basics.Round(updRound + proto.MaxBalLookback) <= newBase
-	// ==> updRound <= newBase - proto.MaxBalLookback
-	ao.onlineAccountsCache.prune(newBase.SubSaturate(basics.Round(ao.maxBalLookback())))
+	// online accounts defines deletion round as
+	// dcc.onlineAccountsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
+	// maxOnlineLookback can be greater than proto.MaxBalLookback because of voters
+	// the cache is not used by top accounts (voters) so keep up to proto.MaxBalLookback rounds back
+	forgetBefore := (newBase + 1).SubSaturate(basics.Round(ao.maxBalLookback()))
+	ao.onlineAccountsCache.prune(forgetBefore)
 
 	ao.accountsMu.Unlock()
 

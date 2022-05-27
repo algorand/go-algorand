@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -2940,116 +2939,6 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 type onlineAccountExpiration struct {
 	rnd    basics.Round
 	rowids []int64
-}
-
-// onlineAccountsExpirations scans onlineaccounts table and builds expirations map using the following algorithm
-// 1. Query the table ordred by update round and address.
-// 2. for every address record "online" entries, when encounter "offline" record mark previous "online" for deletion.
-// Set expiration round to the "offline" round + MaxBalLookback
-// 3. If there are multiple "online" entires, mark all except the last one for deletion as well.
-// Expiration round is set to the last online + MaxBalLookback
-func onlineAccountsExpirations(tx *sql.Tx, maxBalLookback uint64) (result []onlineAccountExpiration, err error) {
-	rows, err := tx.Query(`SELECT rowid, address, normalizedonlinebalance, updround FROM onlineaccounts ORDER BY address, updround ASC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	expirations := make(map[basics.Round][]int64)
-
-	addToExpiration := func(targetRound basics.Round, rowids []int64) {
-		if len(rowids) > 0 {
-			var entries []int64
-			var ok bool
-			if entries, ok = expirations[targetRound]; ok {
-				entries = append(entries, rowids...)
-			} else {
-				entries = make([]int64, len(rowids))
-				copy(entries, rowids)
-			}
-			expirations[targetRound] = entries
-		}
-	}
-
-	var lastAddr basics.Address
-	var rowids []int64
-	var rounds []int64
-
-	for rows.Next() {
-		var addrbuf []byte
-		var rowid sql.NullInt64
-		var updround sql.NullInt64
-		var normBal sql.NullInt64
-		err = rows.Scan(&rowid, &addrbuf, &normBal, &updround)
-		if err != nil {
-			return nil, err
-		}
-
-		var addr basics.Address
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return nil, err
-		}
-		copy(addr[:], addrbuf)
-
-		if addr != lastAddr {
-			// when switching from one account to another:
-			// expire older online entries.
-			// offline entries explicitly processed below on a previous iteration
-			if len(rowids) > 1 {
-				if len(rowids) != len(rounds) {
-					return nil, fmt.Errorf("inconsistence: len(rowids) %d != %d len(rounds)", len(rowids), len(rounds))
-				}
-				targetRound := uint64(rounds[len(rounds)-1]) + maxBalLookback
-				prevRowids := rowids[:len(rowids)-1]
-				addToExpiration(basics.Round(targetRound), prevRowids)
-			}
-
-			// reset the state
-			rowids = rowids[:0]
-			rounds = rounds[:0]
-			copy(lastAddr[:], addr[:])
-		}
-
-		if normBal.Valid && normBal.Int64 > 0 {
-			// online account, save rowids and rounds
-			rowids = append(rowids, rowid.Int64)
-			rounds = append(rounds, updround.Int64)
-		} else {
-			// became offline: expire all previous online rowids and this row id
-			rowids = append(rowids, rowid.Int64)
-			targetRound := uint64(updround.Int64) + maxBalLookback
-			addToExpiration(basics.Round(targetRound), rowids)
-
-			rowids = rowids[:0]
-			rounds = rounds[:0]
-		}
-	}
-
-	// process the last address
-	if len(rowids) > 1 {
-		if len(rowids) != len(rounds) {
-			return nil, fmt.Errorf("inconsistence: len(rowids) %d != %d len(rounds)", len(rowids), len(rounds))
-		}
-		targetRound := uint64(rounds[len(rounds)-1]) + maxBalLookback
-		rowids = rowids[:len(rowids)-1]
-		addToExpiration(basics.Round(targetRound), rowids)
-	}
-
-	// convert map to a sorted array
-	if len(expirations) > 0 {
-		result = make([]onlineAccountExpiration, len(expirations))
-		i := 0
-		for rnd, rowids := range expirations {
-			result[i] = onlineAccountExpiration{rnd: rnd, rowids: rowids}
-			i++
-		}
-		sort.SliceStable(result, func(i, j int) bool {
-			return result[i].rnd < result[j].rnd
-		})
-	}
-
-	return result, nil
 }
 
 func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccountData, error) {

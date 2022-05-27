@@ -162,12 +162,12 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	require.True(t, written)
 
 	// prune too old => no effect
-	oac.prune(maxCacheSize - 1)
+	oac.prune(maxCacheSize)
 	require.Equal(t, maxCacheSize, len(oac.accounts))
 	require.True(t, oac.full())
 
 	// remove one online entry that also trigger removal the offline remaining entry as well
-	oac.prune(maxCacheSize)
+	oac.prune(maxCacheSize + 1)
 	require.Equal(t, maxCacheSize-1, len(oac.accounts))
 	require.False(t, oac.full())
 
