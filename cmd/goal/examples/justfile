@@ -9,8 +9,7 @@ NODE_TEMPLATE := GO_ALGORAND + "/test/testdata/nettemplates/OneNodeFuture.json"
 ALGORAND_DATA := TEMP_NETWORK + "/Primary"
 BOXES_TEAL := "boxes.teal"
 
-# STATUS := `goal node status && echo 'running'`
-# FUNDER := `goal account list | awk '{print $2}' || echo ""`
+# --- SUMMARY --- #
 
 # list all available commands
 default:
@@ -26,7 +25,22 @@ default:
     echo ALGORAND_DATA: $ALGORAND_DATA
     echo BOXES_TEAL: $BOXES_TEAL
 
-# pre-reqs
+# --- COMPOUND --- #
+
+# create and then start (error if already created)
+@create_and_start: create start status
+    sleep 5
+    just status
+
+# create an app and then fund it
+@app-create_fund: app-create last-app-fund 
+
+
+# stop and tear down the node network
+@stop_and_nuke: stop nuke
+
+
+# --- PRE-REQUISITES --- #
 
 # calculate an app's address using the python SDK
 app-address *ARGS:
@@ -34,15 +48,7 @@ app-address *ARGS:
     from algosdk import logic
     print(logic.get_application_address({{ ARGS }}))
 
-# networks / node
-
-# create and then start (error if already created)
-@create_and_start: create start status
-    sleep 5
-    just status
-
-# stop and tear down the node network
-@stop_and_nuke: stop nuke
+# --- NETWORKS / NODE --- #
 
 # create a private network with one node (error if already created)
 @create:
@@ -61,11 +67,12 @@ app-address *ARGS:
 @stop:
 	goal node stop
 
+# remove the node's data from the file system
 @nuke:
     echo "deleting $TEMP_NETWORK"
     rm -rf $TEMP_NETWORK
 
-# accounts
+# --- ACCOUNTS --- #
 
 # list all associated accounts
 @list:
@@ -75,59 +82,44 @@ app-address *ARGS:
 @funder:
     just list | awk '{print $2}'
     
-
+# provide information about a given account
 @info $ACCOUNT=`just funder`:
     goal account info --address {{ACCOUNT}}
 
+# provide an account's balance
 @balance $ACCOUNT=`just funder`:
     goal account balance --address {{ACCOUNT}}
 
+# funder's most recently created app-id
 @last-app-id:
     just info | grep ID | tail -n 1 | cut -d "," -f1 | awk '{print $2}'
 
+# the account address of the funders most recently created app-id
 @last-app-address:
     just app-address `just last-app-id`
 
-# apps
+# --- Applications --- #
 
 # print out the boxes teal program
 @boxes_teal:
     cat $BOXES_TEAL
 
+# shortcut for the approval and clear program `goal app create` params
 @programs:
     echo "--approval-prog $BOXES_TEAL --clear-prog clear.teal"
 
+# shortcut for the storage params of `goal app create`
 @app-vars:
     echo "--global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0"
 
+# create an app funded by funder account
 @app-create:
     goal app create --creator `just funder` `just programs` `just app-vars`
 
 
-# clerk
+# --- CLERK --- #
 
-@app-fund $AMOUNT=`echo 1000000`:
+# fund the most recently created app
+@last-app-fund $AMOUNT=`echo 1000000`:
     goal clerk send --from `just funder` --to `just last-app-address`  --amount {{AMOUNT}}
 
-# polyglot: python js perl sh ruby
-
-# python:
-#   #!/usr/bin/env python3
-#   print('Hello from python!')
-
-# js:
-#   #!/usr/bin/env node
-#   console.log('Greetings from JavaScript!')
-
-# perl:
-#   #!/usr/bin/env perl
-#   print "Larry Wall says Hi!\n";
-
-# sh:
-#   #!/usr/bin/env sh
-#   hello='Yo'
-#   echo "$hello from a shell script!"
-
-# ruby:
-#   #!/usr/bin/env ruby
-#   puts "Hello from ruby!"
