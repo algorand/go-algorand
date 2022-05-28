@@ -25,7 +25,7 @@ default:
     echo ALGORAND_DATA: $ALGORAND_DATA
     echo BOXES_TEAL: $BOXES_TEAL
 
-# --- COMPOUND --- #
+# --- HIGHER LEVEL --- #
 
 # create and then start (error if already created)
 @create_and_start: create start status
@@ -34,6 +34,22 @@ default:
 
 # create an app and then fund it
 @app-create_fund: app-create last-app-fund 
+
+# create box[BOX] for last app with provided key variable BOX
+@box-create $BOX:
+    just app-call-last '\"create\", \"{{BOX}}\"'
+
+# set box[BOX]=VAL for last app with key BOX and val VAL
+@box-set $BOX $VAL:
+    just app-call-last '\"set\", \"{{BOX}}\", \"{{VAL}}\"'
+
+# set box[BOX]=VAL for last app with key BOX and val VAL
+@box-test $BOX $VAL:
+    just app-call-last '\"check\", \"{{BOX}}\", \"{{VAL}}\"'
+
+# delete box[BOX] for last app
+@box-delete $BOX:
+    just app-call-last '\"delete\", \"{{BOX}}\"'
 
 
 # stop and tear down the node network
@@ -61,7 +77,7 @@ app-address *ARGS:
 
 # status of network node
 @status:
-	goal node status && echo "running" || echo "not running"
+	goal node status && echo "RUNNING" || echo "NOT RUNNING"
 
 # stop the running node (error if not running)
 @stop:
@@ -112,10 +128,33 @@ app-address *ARGS:
 @app-vars:
     echo "--global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0"
 
+# shortcut for creating the arguments of an app call
+box-app-args *ARGS:
+    #!/usr/bin/env python3
+    args = []
+    box_arg = ""
+    i = 0
+    for arg in {{ARGS}}:
+        try:
+            int(arg)
+            arg = f"int:{arg}"
+        except Exception:
+            arg = f"str:{arg}"
+        args.extend(["--app-arg", arg])
+        if i == 1:
+            box_arg = f"--box {arg}"
+        i += 1
+    if box_arg:
+        args = [box_arg] + args
+    print(*args)
+
 # create an app funded by funder account
 @app-create:
     goal app create --creator `just funder` `just programs` `just app-vars`
 
+# call the last app from the funder address using ARGS
+@app-call-last *ARGS='\"create\", \"mybox\"':
+    (set -x; goal app call --app-id `just last-app-id` --from `just funder` `just box-app-args {{ARGS}}`)
 
 # --- CLERK --- #
 

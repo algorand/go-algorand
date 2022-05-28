@@ -34,7 +34,7 @@ func opBoxCreate(cx *EvalContext) error {
 	// time, but supposing someone uses the "trampoline" technique to fund it in
 	// a later txn, if an even later txn invokes it, can it create any boxes?
 	if !cx.availableBox(name) {
-		return fmt.Errorf("invalid Box reference %v", name)
+		return fmt.Errorf("Z1 - invalid Box reference %v", name)
 	}
 	err := cx.Ledger.NewBox(cx.appID, name, size)
 	if err != nil {
@@ -66,7 +66,7 @@ func opBoxExtract(cx *EvalContext) error {
 	length := cx.stack[last].Uint
 
 	if !cx.availableBox(name) {
-		return fmt.Errorf("invalid Box reference %v", name)
+		return fmt.Errorf("Z2 - invalid Box reference %v", name)
 	}
 	box, err := cx.Ledger.GetBox(cx.appID, name)
 	if err != nil {
@@ -89,7 +89,7 @@ func opBoxReplace(cx *EvalContext) error {
 	name := string(cx.stack[pprev].Bytes)
 
 	if !cx.availableBox(name) {
-		return fmt.Errorf("invalid Box reference %v", name)
+		return fmt.Errorf("Z3 - invalid Box reference %v", name)
 	}
 	box, err := cx.Ledger.GetBox(cx.appID, name)
 	if err != nil {
@@ -110,7 +110,7 @@ func opBoxDel(cx *EvalContext) error {
 	name := string(cx.stack[last].Bytes)
 
 	if !cx.availableBox(name) {
-		return fmt.Errorf("invalid Box reference %v", name)
+		return fmt.Errorf("Z4 - invalid Box reference %v", name)
 	}
 	cx.stack = cx.stack[:last]
 	return cx.Ledger.DelBox(cx.appID, name)
