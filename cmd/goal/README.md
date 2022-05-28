@@ -18,7 +18,7 @@ mkdir -p ~/networks
 NETWORKS=~/networks
 
 # set this to "name" your network:
-NAME=new_network_name
+NAME=niftynetwork
 
 goal network create -n $NAME -r $NETWORKS/$NAME -t ./test/testdata/nettemplates/OneNodeFuture.json
 export ALGORAND_DATA=$NETWORKS/$NAME/Primary

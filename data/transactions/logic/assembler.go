@@ -1356,7 +1356,7 @@ func (ops *OpStream) assemble(text string) error {
 			if !ok {
 				spec, ok = keywords[opstring]
 			}
-			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
+			ops.errorf("%s opcode was introduced in TEAL v%d ZEPH WAS HERE", opstring, spec.Version)
 		}
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
