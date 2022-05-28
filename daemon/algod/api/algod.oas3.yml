@@ -2403,7 +2403,7 @@
     },
     "/v2/applications/{application-id}/boxes/{box-name}": {
       "get": {
-        "description": "Given an application ID and box name, it returns box information including box name and base64 encoded content.",
+        "description": "Given an application ID and box name, it returns the box name and value (each base64 encoded).",
         "operationId": "GetApplicationBoxByName",
         "parameters": [
           {
