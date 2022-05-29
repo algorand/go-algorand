@@ -1299,6 +1299,59 @@
         }
       }
     },
+    "/v2/transactions/state-proof/blockproof/{round}": {
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true,
+          "minimum": 0
+        }
+      ],
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the state proof message for a given round",
+        "operationId": "stateproof-blockproof",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BlockProofResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "State proof transaction not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/applications/{application-id}": {
       "get": {
         "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
@@ -2614,6 +2667,12 @@
           "format": "byte"
         }
       }
+    },
+    "BlockProof": {
+      "description": "Block proof.",
+      "type": "object",
+      "required": [],
+      "properties": {}
     }
   },
   "parameters": {
@@ -2787,6 +2846,12 @@
     }
   },
   "responses": {
+    "BlockProofResponse": {
+      "description": "StateProof transaction.",
+      "schema": {
+        "$ref": "#/definitions/BlockProof"
+      }
+    },
     "StateProofResponse": {
       "description": "StateProofResponse wraps the StateProof type in a response.",
       "schema": {

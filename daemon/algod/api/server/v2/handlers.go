@@ -1212,57 +1212,6 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	return ctx.JSON(http.StatusOK, response)
 }
 
-var errNilLedger = errors.New("could not contact ledger")
-var errNoStateProofInRange = errors.New("no stateproof for that round")
-
-// StateProof returns the state proof for a given round.
-// (GET /v2/stateproofs/{round})
-func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
-	ledger := v2.Node.LedgerForAPI()
-	if ledger == nil {
-		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
-	}
-
-	if basics.Round(round) > ledger.Latest() {
-		return notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
-	}
-
-	txns, err := v2.Node.ListTxns(transactions.StateProofSender, basics.Round(round), ledger.Latest())
-	if err != nil {
-		return internalError(ctx, err, errNilLedger.Error(), v2.Log)
-	}
-
-	compareFunc := func(i, j int) bool {
-		return txns[i].ConfirmedRound < txns[j].ConfirmedRound
-	}
-
-	if !sort.SliceIsSorted(txns, compareFunc) {
-		sort.Slice(txns, compareFunc)
-	}
-
-	for _, txn := range txns {
-		if txn.ConfirmedRound < basics.Round(round) {
-			continue
-		}
-
-		tx := txn.Txn.Txn
-		if tx.Type != protocol.StateProofTx {
-			continue
-		}
-
-		if basics.Round(round) > tx.StateProofTxnFields.StateProofIntervalLatestRound {
-			continue
-		}
-
-		response := generated.StateProofResponse{
-			Message:    protocol.Encode(&tx.Message),
-			StateProof: protocol.Encode(&tx.StateProof),
-		}
-		return ctx.JSON(http.StatusOK, response)
-	}
-	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
-}
-
 // TealDisassemble disassembles the program bytecode in base64 into TEAL code.
 // (POST /v2/teal/disassemble)
 func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
@@ -1285,4 +1234,91 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		Result: program,
 	}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+var errNilLedger = errors.New("could not contact ledger")
+var errNoStateProofInRange = errors.New("no stateproof for that round")
+
+// StateProof returns the state proof for a given round.
+// (GET /v2/stateproofs/{round})
+func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
+	tx, err := v2.findStateProofTxn(ctx, round)
+	if err != nil {
+		return err
+	}
+
+	response := generated.StateProofResponse{
+		Message:    protocol.Encode(&tx.Txn.Txn.Message),
+		StateProof: protocol.Encode(&tx.Txn.Txn.StateProof),
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnWithStatus, error) {
+	ledger := v2.Node.LedgerForAPI()
+	if ledger == nil {
+		return node.TxnWithStatus{}, internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
+	}
+
+	if basics.Round(round) > ledger.Latest() {
+		return node.TxnWithStatus{}, notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
+	}
+
+	txns, err := v2.Node.ListTxns(transactions.StateProofSender, basics.Round(round), ledger.Latest())
+	if err != nil {
+		return node.TxnWithStatus{}, internalError(ctx, err, errNilLedger.Error(), v2.Log)
+	}
+
+	compareFunc := func(i, j int) bool {
+		return txns[i].ConfirmedRound < txns[j].ConfirmedRound
+	}
+
+	if !sort.SliceIsSorted(txns, compareFunc) {
+		sort.Slice(txns, compareFunc)
+	}
+
+	if err != nil {
+		return node.TxnWithStatus{}, err
+	}
+
+	for _, txn := range txns {
+		if txn.ConfirmedRound < basics.Round(round) {
+			continue
+		}
+
+		tx := txn.Txn.Txn
+		if tx.Type != protocol.StateProofTx {
+			continue
+		}
+
+		if basics.Round(round) > tx.StateProofTxnFields.StateProofIntervalLatestRound {
+			continue
+		}
+
+		return txn, nil
+	}
+
+	return node.TxnWithStatus{}, notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
+}
+
+// StateproofBlockproof todo
+func (v2 *Handlers) StateproofBlockproof(ctx echo.Context, round uint64) error {
+	// todo: change should be /v2/LightBlockHeader/proof/{round}
+
+	//TODO implement me
+	// find the txn, then get all relevant block headers.
+	// then produce proof.
+
+	//tx, err := v2.findStateProofTxn(ctx, round)
+	//if err != nil {
+	//	return err
+	//}
+
+	//blockRound := tx.Txn.Txn.StateProofIntervalLatestRound
+	// GrabHeaders.
+	// build tree.
+	// need to return Index, Proof.
+	// look at verifyTransaction.
+	panic("implement me")
 }

@@ -232,11 +232,10 @@ func TestStateProofMessage(t *testing.T) {
 }
 
 func verifySha256BlockHeadersCommitments(a *require.Assertions, message stateproofmsg.Message, blocks map[basics.Round]bookkeeping.BlockHeader) {
-	var blkHdrArr blockHeadersArray
-	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, message.LastAttestedRound-message.FirstAttestedRound+1)
+	blkHdrArr := make(blockHeadersArray, message.LastAttestedRound-message.FirstAttestedRound+1)
 	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
 		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
-		blkHdrArr.blockHeaders[i] = hdr
+		blkHdrArr[i] = hdr
 	}
 
 	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})

@@ -259,6 +259,9 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
+// BlockProof defines model for BlockProof.
+type BlockProof map[string]interface{}
+
 // BuildVersion defines model for BuildVersion.
 type BuildVersion struct {
 	Branch      string `json:"branch"`
@@ -587,6 +590,9 @@ type ApplicationResponse Application
 
 // AssetResponse defines model for AssetResponse.
 type AssetResponse Asset
+
+// BlockProofResponse defines model for BlockProofResponse.
+type BlockProofResponse BlockProof
 
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {

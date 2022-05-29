@@ -22,6 +22,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// todo: change to LightBlockHeader in addition, the endpoint should be v2/lightblockheader/{round}
+
 // SHA256BlockHeader represents a minimal block header. It contains all the necessary fields
 // for verifying proofs on transactions.
 // In addition, this struct is designed to be used on environments where only SHA256 function exists
