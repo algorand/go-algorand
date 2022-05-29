@@ -1299,7 +1299,7 @@
         }
       }
     },
-    "/v2/transactions/state-proof/blockproof/{round}": {
+    "/v2/LightBlockHeader/proof/{round}": {
       "parameters": [
         {
           "type": "integer",
@@ -1316,8 +1316,8 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get the state proof message for a given round",
-        "operationId": "stateproof-blockproof",
+        "summary": "Get the proof over a block for a given round",
+        "operationId": "lightBlockHeader-proof",
         "responses": {
           "200": {
             "$ref": "#/components/responses/BlockProofResponse"

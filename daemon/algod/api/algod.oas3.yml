@@ -1800,6 +1800,72 @@
         ]
       }
     },
+    "/v2/LightBlockHeader/proof/{round}": {
+      "get": {
+        "operationId": "lightBlockHeader-proof",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BlockProofResponse"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State proof transaction not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get the proof over a block for a given round"
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
@@ -4437,141 +4503,6 @@
         "summary": "Get a specific pending transaction."
       }
     },
-<<<<<<< HEAD
-=======
-    "/v2/transactions/state-proof/blockproof/{round}": {
-      "get": {
-        "operationId": "stateproof-blockproof",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "round",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/BlockProofResponse"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "State proof transaction not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Temporarily Unavailable"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Get the state proof message for a given round"
-      }
-    },
-    "/v2/transactions/state-proof/{round}": {
-      "get": {
-        "operationId": "StateProof",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "round",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/StateProofResponse"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "State proof transaction not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Temporarily Unavailable"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Get the state proof transaction for a given round"
-      }
-    },
->>>>>>> block-proof
     "/versions": {
       "get": {
         "description": "Retrieves the supported API versions, binary build versions, and genesis information.",

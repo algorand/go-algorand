@@ -1302,8 +1302,8 @@ func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnW
 	return node.TxnWithStatus{}, notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
 }
 
-// StateproofBlockproof todo
-func (v2 *Handlers) StateproofBlockproof(ctx echo.Context, round uint64) error {
+// LightBlockHeaderProof todo
+func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error {
 	// todo: change should be /v2/LightBlockHeader/proof/{round}
 
 	//TODO implement me
