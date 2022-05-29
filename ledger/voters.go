@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -180,13 +181,25 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 }
 
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
-	//stateProofRecoveryInterval := config.Consensus[hdr.CurrentProtocol].StateProofInterval
+	lowestRound := basics.Round(math.MaxUint64)
+
 	for r, tr := range vt.votersForRound {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
 		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
+
 		if stateProofRound <= hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
 			delete(vt.votersForRound, r)
+			continue
 		}
+
+		if r < lowestRound {
+			lowestRound = r
+		}
+	}
+
+	if lowestRound != basics.Round(math.MaxUint64) &&
+		uint64(len(vt.votersForRound)) > config.Consensus[hdr.CurrentProtocol].StateProofRecoveryInterval {
+		delete(vt.votersForRound, lowestRound)
 	}
 }
 
