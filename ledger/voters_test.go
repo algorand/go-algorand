@@ -28,26 +28,13 @@ import (
 	"testing"
 )
 
-func randomBlocksWithStateproof(currentRound uint64) bookkeeping.Block {
-	interval := config.Consensus[protocol.ConsensusFuture].StateProofInterval
-
-	block := randomBlock(basics.Round(currentRound))
-	block.block.CurrentProtocol = protocol.ConsensusFuture
-	if currentRound%interval != 0 && currentRound%(interval/2) == 0 {
-		var stateTracking bookkeeping.StateProofTrackingData
-		block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
-		block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	}
-	return block.block
-}
-
 func addBlockToAccountsUpdate(blk bookkeeping.Block, au *accountUpdates) {
 	updates := ledgercore.MakeAccountDeltas(1)
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 	au.newBlock(blk, delta)
 }
 
-func TestVoterCleanAfterStateproofCommitted(t *testing.T) {
+func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -111,6 +98,66 @@ func TestVoterCleanAfterStateproofCommitted(t *testing.T) {
 
 	a.Equal(uint64(1), uint64(len(au.voters.votersForRound)))
 	a.Equal(basics.Round(intervalForTest*(numOfIntervals)-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+}
+
+func TestLimitVoterTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	intervalForTest := config.Consensus[protocol.ConsensusFuture].StateProofInterval
+	recoveryIntervalForTests := config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval
+	numOfIntervals := recoveryIntervalForTests
+	lookbackForTest := config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	i := uint64(1)
+	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
+	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
+		block := randomBlock(basics.Round(i))
+		block.block.CurrentProtocol = protocol.ConsensusFuture
+		addBlockToAccountsUpdate(block.block, au)
+	}
+
+	a.Equal(recoveryIntervalForTests, uint64(len(au.voters.votersForRound)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+
+	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
+	for ; i < 2*(numOfIntervals*intervalForTest)+1; i++ {
+		block := randomBlock(basics.Round(i))
+		block.block.CurrentProtocol = protocol.ConsensusFuture
+		addBlockToAccountsUpdate(block.block, au)
+	}
+
+	a.Equal(recoveryIntervalForTests, uint64(len(au.voters.votersForRound)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+
+	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
+	for ; i < 3*(numOfIntervals*intervalForTest)+1; i++ {
+		block := randomBlock(basics.Round(i))
+		block.block.CurrentProtocol = protocol.ConsensusFuture
+		addBlockToAccountsUpdate(block.block, au)
+	}
+
+	a.Equal(recoveryIntervalForTests, uint64(len(au.voters.votersForRound)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
 }
 
 //
