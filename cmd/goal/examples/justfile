@@ -27,6 +27,19 @@ default:
 
 # --- GENERATOR SCRIPT COMMANDS --- #
 
+# generate an arbitrary number of app and box scenarios, each with up to 8 boxes
+gen-mult-app-boxes NUM_APPS="10":
+    #!/usr/bin/env python3
+    import subprocess
+    from subprocess import CalledProcessError
+
+    num_apps = int({{NUM_APPS}})
+    print(f"{num_apps=}")
+    for i in range(num_apps):
+        print("\n", "\n", "\n", f"gen-app-and-box-scenarios #{i+1}" )
+        subprocess.run(["just", "gen-app-and-box-scenarios"]).check_returncode()
+
+
 # create an app and add up to 8 random boxes to it in a multi-threaded fashion
 gen-app-and-box-scenarios:
     #!/usr/bin/env python3
@@ -105,6 +118,11 @@ gen-app-and-box-scenarios:
             results.append(r)
 
     print(json.dumps(results, indent=2))
+    
+    for result in results:
+        for err in result["called_process_errors"].values():
+            if err:
+                raise err
 
 # --- HIGHER LEVEL --- #
 
