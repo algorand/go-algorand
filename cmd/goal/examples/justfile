@@ -25,6 +25,35 @@ default:
     echo ALGORAND_DATA: $ALGORAND_DATA
     echo BOXES_TEAL: $BOXES_TEAL
 
+# --- GENERATOR SCRIPT COMMANDS --- #
+gen-app-and-box-scenarios:
+    #!/usr/bin/env python3
+    import random
+    import string
+    import subprocess
+
+    CHARS = string.digits + string.ascii_letters
+    VAL_SIZE = 24
+    NLS = "\n" * 3
+
+    # subprocess.run(["just", "app-create_fund"])
+
+    rand_key_size = random.randint(4, 64)
+    rand_key = "".join(random.choice(CHARS) for _ in range(rand_key_size))
+    print(f"{NLS}{rand_key=}")
+    subprocess.run(["just", "box-create", rand_key])
+
+    rand_val = "".join(random.choice(CHARS) for _ in range(VAL_SIZE))
+    print(f"{NLS}{rand_val=}")
+    subprocess.run(["just", "box-set", rand_key, rand_val])
+
+    print(f"{NLS}checking {rand_val=}")
+    subprocess.run(["just", "box-test", rand_key, rand_val])
+
+    if random.choice([True, False]):
+        print(f"{NLS}deleting")
+        subprocess.run(["just", "box-delete", rand_key])
+
 # --- HIGHER LEVEL --- #
 
 # create and then start (error if already created)
@@ -51,10 +80,8 @@ default:
 @box-delete $BOX:
     just app-call-last '\"delete\", \"{{BOX}}\"'
 
-
 # stop and tear down the node network
 @stop_and_nuke: stop nuke
-
 
 # --- PRE-REQUISITES --- #
 

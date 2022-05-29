@@ -47,7 +47,7 @@ test:						// fail unless arg[2] is the prefix of box arg[1]
     box_extract             // [ boxes[arg[1]][0:len(arg[2])] ]
     txn ApplicationArgs 2   // [ boxes[arg[1]][0:len(arg[2])], arg[2] ]
     ==                      // [ boxes[arg[1]][0:len(arg[2])]=?=arg[2] ]
-    assert                  // boxes[arg[1]].startwith(arg[1]) ? pop : ERROR
+    assert                  // boxes[arg[1]].startwith(arg[2]) ? pop : ERROR
     b end
 bad:
     err
