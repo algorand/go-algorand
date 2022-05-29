@@ -38,17 +38,17 @@ import (
 // rather than a direct ledger tracker.  We don't have an explicit interface
 // for such an "accounts tracker" yet, however.
 type votersTracker struct {
-	// round contains the top online accounts in a given round.
+	// votersForRound contains the top online accounts in a given Round.
 	//
 	// To avoid increasing block latency, we include a vector commitment
 	// to the top online accounts as of block X in the block header of
 	// block X+StateProofVotersLookback.  This gives each node some time
 	// to construct this vector commitment, before its root is needed in a block.
 	//
-	// This round map is indexed by the block X, using the terminology from
+	// This votersForRound map is indexed by the block X, using the terminology from
 	// the above example, to be used in X+StateProofVotersLookback.
 	//
-	// We maintain round entries for two reasons:
+	// We maintain votersForRound entries for two reasons:
 	//
 	// The first is to maintain the tree for an upcoming block -- that is,
 	// if X+Loookback<Latest.  The block evaluator can ask for the root of
@@ -57,9 +57,9 @@ type votersTracker struct {
 	// The second is to construct state proof.  State proofs
 	// are formed for blocks that are a multiple of StateProofInterval, using
 	// the vector commitment to online accounts from the previous such block.
-	// Thus, we maintain X in the round map until we form a stateproof
-	// for round X+StateProofVotersLookback+StateProofInterval.
-	round map[basics.Round]*ledgercore.VotersForRound
+	// Thus, we maintain X in the votersForRound map until we form a stateproof
+	// for votersForRound X+StateProofVotersLookback+StateProofInterval.
+	votersForRound map[basics.Round]*ledgercore.VotersForRound
 
 	l  ledgerForTracker
 	au *accountUpdates
@@ -69,7 +69,7 @@ type votersTracker struct {
 	loadWaitGroup sync.WaitGroup
 }
 
-// votersRoundForStateProofRound computes the round number whose voting participants
+// votersRoundForStateProofRound computes the votersForRound number whose voting participants
 // will be used to sign the state proof for stateProofRnd.
 func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.ConsensusParams) basics.Round {
 	// To form a state proof on period that ends on stateProofRnd,
@@ -82,7 +82,7 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.Cons
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
 	vt.l = l
 	vt.au = au
-	vt.round = make(map[basics.Round]*ledgercore.VotersForRound)
+	vt.votersForRound = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	latest := l.Latest()
 	hdr, err := l.BlockHdr(latest)
@@ -119,7 +119,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	r := hdr.Round
 
-	_, ok := vt.round[r]
+	_, ok := vt.votersForRound[r]
 	if ok {
 		// Already loaded.
 		return
@@ -134,7 +134,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	tr := ledgercore.MakeVotersForRound()
 	tr.Proto = proto
 
-	vt.round[r] = tr
+	vt.votersForRound[r] = tr
 
 	vt.loadWaitGroup.Add(1)
 	go func() {
@@ -163,37 +163,41 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	// Check if any blocks can be forgotten because state proofs are available.
-	for r, tr := range vt.round {
-		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
-		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
-		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
-			delete(vt.round, r)
-		}
-	}
+	vt.removeOldVoters(hdr)
 
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a vector commitment in a later
 	// block.
 	r := uint64(hdr.Round)
 	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval == 0 {
-		_, ok := vt.round[basics.Round(r)]
+		_, ok := vt.votersForRound[basics.Round(r)]
 		if ok {
-			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
+			vt.l.trackerLog().Errorf("votersTracker.newBlock: votersForRound %d already present", r)
 		} else {
 			vt.loadTree(hdr)
 		}
 	}
 }
 
-// lowestRound() returns the lowest round state (blocks and accounts) needed by
+func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
+	//stateProofRecoveryInterval := config.Consensus[hdr.CurrentProtocol].StateProofInterval
+	for r, tr := range vt.votersForRound {
+		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
+		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
+		if stateProofRound <= hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+			delete(vt.votersForRound, r)
+		}
+	}
+}
+
+// lowestRound() returns the lowest votersForRound state (blocks and accounts) needed by
 // the votersTracker in case of a restart.  The accountUpdates tracker will
-// not delete account state before this round, so that after a restart, it's
+// not delete account state before this votersForRound, so that after a restart, it's
 // possible to reconstruct the votersTracker.  If votersTracker does
 // not need any blocks, it returns base.
 func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	minRound := base
-	for r := range vt.round {
+	for r := range vt.votersForRound {
 		if r < minRound {
 			minRound = r
 		}
@@ -201,9 +205,9 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	return minRound
 }
 
-// getVoters() returns the top online participants from round r.
+// getVoters() returns the top online participants from votersForRound r.
 func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
-	tr, ok := vt.round[r]
+	tr, ok := vt.votersForRound[r]
 	if !ok {
 		// Not tracked: stateproofs not enabled.
 		return nil, nil
