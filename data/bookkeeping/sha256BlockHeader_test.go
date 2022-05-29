@@ -34,7 +34,7 @@ func TestConvertSha256Header(t *testing.T) {
 	var txnCommit TxnCommitments
 	crypto.RandBytes(txnCommit.Sha256Commitment[:])
 	blockHeader := BlockHeader{Round: 200, GenesisHash: gh, TxnCommitments: txnCommit}
-	sha256Header := blockHeader.ToSha256BlockHeader()
+	sha256Header := blockHeader.ToLightBlockHeader()
 
 	a.Equal(basics.Round(200), sha256Header.RoundNumber)
 	a.Equal(txnCommit.Sha256Commitment[:], []byte(sha256Header.Sha256TxnCommitment))

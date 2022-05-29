@@ -24,10 +24,10 @@ import (
 
 // todo: change to LightBlockHeader in addition, the endpoint should be v2/lightblockheader/{round}
 
-// SHA256BlockHeader represents a minimal block header. It contains all the necessary fields
+// LightBlockHeader represents a minimal block header. It contains all the necessary fields
 // for verifying proofs on transactions.
 // In addition, this struct is designed to be used on environments where only SHA256 function exists
-type SHA256BlockHeader struct {
+type LightBlockHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	RoundNumber         basics.Round         `codec:"r"`
@@ -35,9 +35,9 @@ type SHA256BlockHeader struct {
 	Sha256TxnCommitment crypto.GenericDigest `codec:"tc,allocbound=crypto.Sha256Size"`
 }
 
-// ToSha256BlockHeader creates returns a SHA256BlockHeader from a given block header
-func (bh *BlockHeader) ToSha256BlockHeader() SHA256BlockHeader {
-	return SHA256BlockHeader{
+// ToLightBlockHeader creates returns a LightBlockHeader from a given block header
+func (bh *BlockHeader) ToLightBlockHeader() LightBlockHeader {
+	return LightBlockHeader{
 		GenesisHash:         bh.GenesisHash,
 		RoundNumber:         bh.Round,
 		Sha256TxnCommitment: bh.Sha256Commitment[:],
@@ -45,6 +45,6 @@ func (bh *BlockHeader) ToSha256BlockHeader() SHA256BlockHeader {
 }
 
 // ToBeHashed implements the crypto.Hashable interface
-func (bh SHA256BlockHeader) ToBeHashed() (protocol.HashID, []byte) {
+func (bh LightBlockHeader) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.BlockHeader256, protocol.Encode(&bh)
 }
