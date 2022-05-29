@@ -30,45 +30,68 @@ default:
 # create an app and add up to 8 random boxes to it in a multi-threaded fashion
 gen-app-and-box-scenarios:
     #!/usr/bin/env python3
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
     import json
     import logging
     import random
     import string
     import subprocess
+    from subprocess import CalledProcessError
+    import time
 
     CHARS = string.digits + string.ascii_letters
     VAL_SIZE = 24
     BOXES_PER_APP = 8
     NLS = "\n" * 3
 
-    subprocess.run(["just", "app-create_fund"])
+    subprocess.run(["just", "app-create_fund"]).check_returncode()
 
     def worker(thread_number):
         logging.info(f"HELLO from {thread_number}!")
+        
+        create_cpe = set_cpe = test_cpe = del_cpe = None
 
         rand_key_size = random.randint(4, 64)
         rand_key = "".join(random.choice(CHARS) for _ in range(rand_key_size))
-        print(f"{NLS}{rand_key=}")
-        subprocess.run(["just", "box-create", rand_key])
+        print(f"{NLS}{thread_number}: {rand_key=}")
+        try:
+            subprocess.run(["just", "box-create", rand_key]).check_returncode()
+        except CalledProcessError as cpe:
+            create_cpe = str(cpe)
 
         rand_val = "".join(random.choice(CHARS) for _ in range(VAL_SIZE))
-        print(f"{NLS}{rand_val=}")
-        subprocess.run(["just", "box-set", rand_key, rand_val])
+        print(f"{NLS}{thread_number}: {rand_val=}")
+        try:
+            subprocess.run(["just", "box-set", rand_key, rand_val]).check_returncode()
+        except CalledProcessError as cpe:
+            set_cpe = str(cpe)
 
-        print(f"{NLS}checking {rand_val=}")
-        subprocess.run(["just", "box-test", rand_key, rand_val])
+        print(f"{NLS}{thread_number}: checking {rand_val=}")
+        try:
+            subprocess.run(["just", "box-test", rand_key, rand_val]).check_returncode()
+        except CalledProcessError as cpe:
+            test_cpe = str(cpe)
 
         delete = random.choice([True, False])
         if delete:
-            print(f"{NLS}deleting")
-            subprocess.run(["just", "box-delete", rand_key])
+            print(f"{NLS}{thread_number}: deleting")
+            try:
+                subprocess.run(["just", "box-delete", rand_key]).check_returncode()
+            except CalledProcessError as cpe:
+                del_cpe = str(cpe)
 
         return {
+            "thread_number": thread_number,
             "key_size": rand_key_size,
             "key": rand_key,
             "val": rand_val,
             "deleted": delete,
+            "called_process_errors": {
+                "create_cpe": create_cpe,
+                "set_cpe": set_cpe,
+                "test_cpe": test_cpe,
+                "del_cpe": del_cpe,
+            },
         }
 
     format = "%(asctime)s: %(message)s"
@@ -76,7 +99,8 @@ gen-app-and-box-scenarios:
                         datefmt="%H:%M:%S")
 
     results = []
-    with ThreadPoolExecutor(max_workers=BOXES_PER_APP+1) as executor:
+    # with ThreadPoolExecutor(max_workers=2*BOXES_PER_APP) as executor:
+    with ThreadPoolExecutor() as executor:
         for r in executor.map(worker, range(BOXES_PER_APP)):
             results.append(r)
 
@@ -214,6 +238,6 @@ box-app-args *ARGS:
 # --- CLERK --- #
 
 # fund the most recently created app
-@last-app-fund $AMOUNT=`echo 1000000`:
+@last-app-fund $AMOUNT=`echo 100000000`:
     goal clerk send --from `just funder` --to `just last-app-address`  --amount {{AMOUNT}}
 
