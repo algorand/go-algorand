@@ -26,33 +26,61 @@ default:
     echo BOXES_TEAL: $BOXES_TEAL
 
 # --- GENERATOR SCRIPT COMMANDS --- #
+
+# create an app and add up to 8 random boxes to it in a multi-threaded fashion
 gen-app-and-box-scenarios:
     #!/usr/bin/env python3
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import json
+    import logging
     import random
     import string
     import subprocess
 
     CHARS = string.digits + string.ascii_letters
     VAL_SIZE = 24
+    BOXES_PER_APP = 8
     NLS = "\n" * 3
 
-    # subprocess.run(["just", "app-create_fund"])
+    subprocess.run(["just", "app-create_fund"])
 
-    rand_key_size = random.randint(4, 64)
-    rand_key = "".join(random.choice(CHARS) for _ in range(rand_key_size))
-    print(f"{NLS}{rand_key=}")
-    subprocess.run(["just", "box-create", rand_key])
+    def worker(thread_number):
+        logging.info(f"HELLO from {thread_number}!")
 
-    rand_val = "".join(random.choice(CHARS) for _ in range(VAL_SIZE))
-    print(f"{NLS}{rand_val=}")
-    subprocess.run(["just", "box-set", rand_key, rand_val])
+        rand_key_size = random.randint(4, 64)
+        rand_key = "".join(random.choice(CHARS) for _ in range(rand_key_size))
+        print(f"{NLS}{rand_key=}")
+        subprocess.run(["just", "box-create", rand_key])
 
-    print(f"{NLS}checking {rand_val=}")
-    subprocess.run(["just", "box-test", rand_key, rand_val])
+        rand_val = "".join(random.choice(CHARS) for _ in range(VAL_SIZE))
+        print(f"{NLS}{rand_val=}")
+        subprocess.run(["just", "box-set", rand_key, rand_val])
 
-    if random.choice([True, False]):
-        print(f"{NLS}deleting")
-        subprocess.run(["just", "box-delete", rand_key])
+        print(f"{NLS}checking {rand_val=}")
+        subprocess.run(["just", "box-test", rand_key, rand_val])
+
+        delete = random.choice([True, False])
+        if delete:
+            print(f"{NLS}deleting")
+            subprocess.run(["just", "box-delete", rand_key])
+
+        return {
+            "key_size": rand_key_size,
+            "key": rand_key,
+            "val": rand_val,
+            "deleted": delete,
+        }
+
+    format = "%(asctime)s: %(message)s"
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
+
+    results = []
+    with ThreadPoolExecutor(max_workers=BOXES_PER_APP+1) as executor:
+        for r in executor.map(worker, range(BOXES_PER_APP)):
+            results.append(r)
+
+    print(json.dumps(results, indent=2))
 
 # --- HIGHER LEVEL --- #
 
