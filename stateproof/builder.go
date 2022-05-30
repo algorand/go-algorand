@@ -21,10 +21,10 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
@@ -244,7 +244,7 @@ func (spw *Worker) builder(latest basics.Round) {
 			continue
 		} else {
 			spw.deleteOldSigs(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
-			spw.deleteOldBuilders(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+			spw.deleteOldBuilders(hdr)
 		}
 
 		// Broadcast signatures based on the previous block(s) that
@@ -340,12 +340,22 @@ func (spw *Worker) deleteOldSigs(nextStateProof basics.Round) {
 	}
 }
 
-func (spw *Worker) deleteOldBuilders(nextStateProof basics.Round) {
+func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
+	proto := config.Consensus[currentHdr.CurrentProtocol]
+
+	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+
+	nextStateProofRnd := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 	for rnd := range spw.builders {
-		if rnd < nextStateProof {
+		if rnd < nextStateProofRnd {
+			delete(spw.builders, rnd)
+		}
+		if rnd <= oldestRoundOnRecoveryPeriod {
 			delete(spw.builders, rnd)
 		}
 	}
+
 }
 
 func (spw *Worker) tryBuilding() {

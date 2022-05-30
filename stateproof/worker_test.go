@@ -49,6 +49,7 @@ type testWorkerStubs struct {
 	mu                    deadlock.Mutex
 	latest                basics.Round
 	waiters               map[basics.Round]chan struct{}
+	waitersCount          map[basics.Round]int
 	blocks                map[basics.Round]bookkeeping.BlockHeader
 	keys                  []account.Participation
 	keysForVoters         []account.Participation
@@ -64,10 +65,11 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 		mu:                    deadlock.Mutex{},
 		latest:                0,
 		waiters:               make(map[basics.Round]chan struct{}),
+		waitersCount:          make(map[basics.Round]int),
 		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
 		keys:                  keys,
 		keysForVoters:         keys,
-		sigmsg:                make(chan []byte, 1024),
+		sigmsg:                make(chan []byte, 1024*1024),
 		txmsg:                 make(chan transactions.SignedTxn, 1024),
 		totalWeight:           totalWeight,
 		deletedStateProofKeys: map[account.ParticipationID]basics.Round{},
@@ -196,10 +198,12 @@ func (s *testWorkerStubs) Wait(r basics.Round) chan struct{} {
 	defer s.mu.Unlock()
 	if s.waiters[r] == nil {
 		s.waiters[r] = make(chan struct{})
+		s.waitersCount[r] = 0
 		if r <= s.latest {
 			close(s.waiters[r])
 		}
 	}
+	s.waitersCount[r] = s.waitersCount[r] + 1
 	return s.waiters[r]
 }
 
@@ -571,18 +575,15 @@ func TestWorkerRemoveBuilders(t *testing.T) {
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
 	for iter := 0; iter < expectedStateProofs; iter++ {
-		s.advanceLatest(proto.StateProofInterval - 1)
+		s.advanceLatest(proto.StateProofInterval)
 		for {
 			tx := <-s.txmsg
 			a.Equal(tx.Txn.Type, protocol.StateProofTx)
-			//s.mu.Lock()
-			//s.addBlock(tx.Txn.StateProofIntervalLatestRound)
-			//s.mu.Unlock()
 			break
 		}
 	}
 
-	err := waitForBuildToWaitOnRound(s, s.latest+1)
+	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, len(w.builders))
 
@@ -591,26 +592,73 @@ func TestWorkerRemoveBuilders(t *testing.T) {
 	s.addBlock(basics.Round((expectedStateProofs - 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval))
 	s.mu.Unlock()
 
-	err = waitForBuildToWaitOnRound(s, s.latest+1)
+	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
 	a.NoError(err)
 	a.Equal(3, len(w.builders))
 }
 
-func waitForBuildToWaitOnRound(s *testWorkerStubs, r basics.Round) error {
-	const maxRetries = 100
+func TestWorkerBuildersRecoveryLimit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	expectedStateProofs := proto.StateProofRecoveryInterval + 1
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	for iter := uint64(0); iter < expectedStateProofs; iter++ {
+		s.advanceLatest(proto.StateProofInterval)
+		for {
+			tx := <-s.txmsg
+			a.Equal(tx.Txn.Type, protocol.StateProofTx)
+			break
+		}
+	}
+	
+	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+
+	s.mu.Lock()
+	s.addBlock(basics.Round(proto.StateProofInterval * 2))
+	s.mu.Unlock()
+
+	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+	a.Equal(proto.StateProofRecoveryInterval, uint64(len(w.builders)))
+}
+
+func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) error {
+	const maxRetries = 10000
 	i := 0
 	for {
 		s.mu.Lock()
-		ise := s.waiters[r] != nil && s.waiters[r+1] == nil
+		// in order to make sure the builder and the signer are waiting for a round we need to make sure
+		// that round r has c channel and r +1 doesn't have.
+		// we also want to make sure that the builder and the singer are waitting
+		isWaitingForRound := s.waiters[r] != nil && s.waiters[r+1] == nil
+		isWaitingForRound = isWaitingForRound && (s.waitersCount[r] == 2)
 		s.mu.Unlock()
-		if ise {
+		if isWaitingForRound {
 			return nil
 		} else {
 			if i == maxRetries {
 				return fmt.Errorf("timeout while waiting for round")
 			}
 			i++
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(time.Millisecond)
 			continue
 		}
 	}

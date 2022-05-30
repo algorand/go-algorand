@@ -52,6 +52,7 @@ func TestStateProofs(t *testing.T) {
 	consensusParams.StateProofVotersLookback = 2
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.StateProofStrengthTarget = 256
+	consensusParams.StateProofRecoveryInterval = 10
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
