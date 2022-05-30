@@ -1245,7 +1245,7 @@ var errNoStateProofInRange = errors.New("no stateproof for that round")
 func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	tx, err := v2.findStateProofTxn(ctx, round)
 	if err != nil {
-		return err
+		return v2.wrapError(ctx, err)
 	}
 
 	response := generated.StateProofResponse{
@@ -1256,31 +1256,35 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+func (v2 *Handlers) wrapError(ctx echo.Context, err error) error {
+	switch err {
+	case errNilLedger:
+		return internalError(ctx, err, "could not contact ledger", v2.Log)
+	case errNoStateProofInRange:
+		return notFound(ctx, err, "could not find state-proof for given round", v2.Log)
+	default:
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+}
+
 func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnWithStatus, error) {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger == nil {
-		return node.TxnWithStatus{}, internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
+		return node.TxnWithStatus{}, errNilLedger
 	}
 
 	if basics.Round(round) > ledger.Latest() {
-		return node.TxnWithStatus{}, notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
+		return node.TxnWithStatus{}, errNoStateProofInRange // not found
 	}
 
 	txns, err := v2.Node.ListTxns(transactions.StateProofSender, basics.Round(round), ledger.Latest())
 	if err != nil {
-		return node.TxnWithStatus{}, internalError(ctx, err, errNilLedger.Error(), v2.Log)
+		return node.TxnWithStatus{}, err
 	}
 
-	compareFunc := func(i, j int) bool {
-		return txns[i].ConfirmedRound < txns[j].ConfirmedRound
-	}
-
+	compareFunc := func(i, j int) bool { return txns[i].ConfirmedRound < txns[j].ConfirmedRound }
 	if !sort.SliceIsSorted(txns, compareFunc) {
 		sort.Slice(txns, compareFunc)
-	}
-
-	if err != nil {
-		return node.TxnWithStatus{}, err
 	}
 
 	for _, txn := range txns {
@@ -1300,23 +1304,23 @@ func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnW
 		return txn, nil
 	}
 
-	return node.TxnWithStatus{}, notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
+	return node.TxnWithStatus{}, errNoStateProofInRange
 }
 
 // LightBlockHeaderProof todo
 func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error {
-	ledger := v2.Node.LedgerForAPI()
-	if ledger == nil {
-		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
-	}
-
 	tx, err := v2.findStateProofTxn(ctx, round)
 	if err != nil {
 		return err
 	}
 
 	lastAttestedround := tx.Txn.Txn.Message.LastAttestedRound
-	consensusParams, err := ledger.ConsensusParams(basics.Round(lastAttestedround)) // todo verify this is the correct parameters we want.
+
+	ledger := v2.Node.LedgerForAPI()
+	if ledger == nil {
+		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
+	}
+	consensusParams, err := ledger.ConsensusParams(basics.Round(lastAttestedround))
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
