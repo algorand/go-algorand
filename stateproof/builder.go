@@ -244,6 +244,7 @@ func (spw *Worker) builder(latest basics.Round) {
 			continue
 		} else {
 			spw.deleteOldSigs(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+			spw.deleteOldBuilders(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 		}
 
 		// Broadcast signatures based on the previous block(s) that
@@ -337,7 +338,9 @@ func (spw *Worker) deleteOldSigs(nextStateProof basics.Round) {
 	if err != nil {
 		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextStateProof, err)
 	}
+}
 
+func (spw *Worker) deleteOldBuilders(nextStateProof basics.Round) {
 	for rnd := range spw.builders {
 		if rnd < nextStateProof {
 			delete(spw.builders, rnd)

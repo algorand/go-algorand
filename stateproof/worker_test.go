@@ -77,31 +77,32 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 	return s
 }
 
-func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
+func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 	s.latest++
 
 	hdr := bookkeeping.BlockHeader{}
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
-	var ccBasic = bookkeeping.StateProofTrackingData{
+	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
 		StateProofVotersTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
-	ccBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
+	stateProofBasic.StateProofVotersTotalWeight.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
 		// Just so it's not zero, since the signer logic checks for all-zeroes
-		ccBasic.StateProofVotersCommitment[1] = 0x12
+		stateProofBasic.StateProofVotersCommitment[1] = 0x12
 	}
 
-	ccBasic.StateProofNextRound = ccNextRound
+	stateProofBasic.StateProofNextRound = spNextRound
 	hdr.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
-		protocol.StateProofBasic: ccBasic,
+		protocol.StateProofBasic: stateProofBasic,
 	}
 
 	s.blocks[s.latest] = hdr
+
 	if s.waiters[s.latest] != nil {
 		close(s.waiters[s.latest])
 	}
@@ -242,7 +243,7 @@ func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipat
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].StateProofInterval), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(15*config.Consensus[protocol.ConsensusFuture].StateProofInterval), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
 
 	return part
@@ -545,4 +546,73 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	s.deletedStateProofKeys = map[account.ParticipationID]basics.Round{}
 	w.signBlock(s.blocks[3*basics.Round(proto.StateProofInterval)])
 	require.Zero(t, len(s.deletedStateProofKeys))
+}
+
+func TestWorkerRemoveBuilders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const expectedStateProofs = 8
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	for iter := 0; iter < expectedStateProofs; iter++ {
+		s.advanceLatest(proto.StateProofInterval - 1)
+		for {
+			tx := <-s.txmsg
+			a.Equal(tx.Txn.Type, protocol.StateProofTx)
+			//s.mu.Lock()
+			//s.addBlock(tx.Txn.StateProofIntervalLatestRound)
+			//s.mu.Unlock()
+			break
+		}
+	}
+
+	err := waitForBuildToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+	a.Equal(expectedStateProofs, len(w.builders))
+
+	// add block that confirm a state proof for interval: expectedStateProofs - 1
+	s.mu.Lock()
+	s.addBlock(basics.Round((expectedStateProofs - 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+	s.mu.Unlock()
+
+	err = waitForBuildToWaitOnRound(s, s.latest+1)
+	a.NoError(err)
+	a.Equal(3, len(w.builders))
+}
+
+func waitForBuildToWaitOnRound(s *testWorkerStubs, r basics.Round) error {
+	const maxRetries = 100
+	i := 0
+	for {
+		s.mu.Lock()
+		ise := s.waiters[r] != nil && s.waiters[r+1] == nil
+		s.mu.Unlock()
+		if ise {
+			return nil
+		} else {
+			if i == maxRetries {
+				return fmt.Errorf("timeout while waiting for round")
+			}
+			i++
+			time.Sleep(5 * time.Millisecond)
+			continue
+		}
+	}
+
 }
