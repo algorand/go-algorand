@@ -673,9 +673,7 @@ func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) er
 		isWaitingForRound := s.waiters[r] != nil && s.waiters[r+1] == nil
 		isWaitingForRound = isWaitingForRound && (s.waitersCount[r] == 2)
 		s.mu.Unlock()
-		if isWaitingForRound {
-			return nil
-		} else {
+		if !isWaitingForRound {
 			if i == maxRetries {
 				return fmt.Errorf("timeout while waiting for round")
 			}
@@ -683,5 +681,6 @@ func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) er
 			time.Sleep(time.Millisecond)
 			continue
 		}
+		return nil
 	}
 }

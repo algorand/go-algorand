@@ -38,17 +38,17 @@ import (
 // rather than a direct ledger tracker.  We don't have an explicit interface
 // for such an "accounts tracker" yet, however.
 type votersTracker struct {
-	// votersForRound contains the top online accounts in a given Round.
+	// votersForRoundCache contains the top online accounts in a given Round.
 	//
 	// To avoid increasing block latency, we include a vector commitment
 	// to the top online accounts as of block X in the block header of
 	// block X+StateProofVotersLookback.  This gives each node some time
 	// to construct this vector commitment, before its root is needed in a block.
 	//
-	// This votersForRound map is indexed by the block X, using the terminology from
+	// This votersForRoundCache map is indexed by the block X, using the terminology from
 	// the above example, to be used in X+StateProofVotersLookback.
 	//
-	// We maintain votersForRound entries for two reasons:
+	// We maintain votersForRoundCache entries for two reasons:
 	//
 	// The first is to maintain the tree for an upcoming block -- that is,
 	// if X+Loookback<Latest.  The block evaluator can ask for the root of
@@ -57,9 +57,9 @@ type votersTracker struct {
 	// The second is to construct state proof.  State proofs
 	// are formed for blocks that are a multiple of StateProofInterval, using
 	// the vector commitment to online accounts from the previous such block.
-	// Thus, we maintain X in the votersForRound map until we form a stateproof
+	// Thus, we maintain X in the votersForRoundCache map until we form a stateproof
 	// for round X+StateProofVotersLookback+StateProofInterval.
-	votersForRound map[basics.Round]*ledgercore.VotersForRound
+	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
 	l  ledgerForTracker
 	au *accountUpdates
@@ -82,7 +82,7 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.Cons
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
 	vt.l = l
 	vt.au = au
-	vt.votersForRound = make(map[basics.Round]*ledgercore.VotersForRound)
+	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	latest := l.Latest()
 	hdr, err := l.BlockHdr(latest)
@@ -119,7 +119,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	r := hdr.Round
 
-	_, ok := vt.votersForRound[r]
+	_, ok := vt.votersForRoundCache[r]
 	if ok {
 		// Already loaded.
 		return
@@ -134,7 +134,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	tr := ledgercore.MakeVotersForRound()
 	tr.Proto = proto
 
-	vt.votersForRound[r] = tr
+	vt.votersForRoundCache[r] = tr
 
 	vt.loadWaitGroup.Add(1)
 	go func() {
@@ -170,7 +170,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	// block.
 	r := uint64(hdr.Round)
 	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval == 0 {
-		_, ok := vt.votersForRound[basics.Round(r)]
+		_, ok := vt.votersForRoundCache[basics.Round(r)]
 		if ok {
 			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
@@ -181,36 +181,37 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 
 // removeOldVoters removes voters data form the tracker and allows the database to commit previous rounds.
 // voters would be removed if one of the two condition is met
-// 1 - Voters are for round which was already confirmed by stateproof
-// 2 - Voters are for needed for stateproof round which is older than the allowed recovery interval.
-// notice that if state proof chain is delayed votersForRound will not be larger than
-// StateProofRecoveryInterval + 1 (in order to create StateProofRecoveryInterval back - we need StateProofRecoveryInterval + 1 voters )
+// 1 - Voters are for a round which was already been confirmed by stateproof
+// 2 - Voters are for a round which is older than the allowed recovery interval.
+// notice that if state proof chain is delayed, votersForRoundCache will not be larger than
+// StateProofRecoveryInterval + 1
+// ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	// we calculate the lowest round for recovery according to the newest round (might be different from the rounds on cache)
 	proto := config.Consensus[hdr.CurrentProtocol]
 	recentRoundOnRecoveryPeriod := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
 	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
 
-	for r, tr := range vt.votersForRound {
+	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
 		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
 
 		// we remove voters that are no longer needed (i.e StateProofNextRound is larger )
 		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound ||
 			stateProofRound <= oldestRoundOnRecoveryPeriod {
-			delete(vt.votersForRound, r)
+			delete(vt.votersForRoundCache, r)
 		}
 	}
 }
 
-// lowestRound() returns the lowest votersForRound state (blocks and accounts) needed by
+// lowestRound() returns the lowest votersForRoundCache state (blocks and accounts) needed by
 // the votersTracker in case of a restart.  The accountUpdates tracker will
 // not delete account state before this round, so that after a restart, it's
 // possible to reconstruct the votersTracker.  If votersTracker does
 // not need any blocks, it returns base.
 func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	minRound := base
-	for r := range vt.votersForRound {
+	for r := range vt.votersForRoundCache {
 		if r < minRound {
 			minRound = r
 		}
@@ -220,7 +221,7 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 
 // getVoters() returns the top online participants from round r.
 func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
-	tr, ok := vt.votersForRound[r]
+	tr, ok := vt.votersForRoundCache[r]
 	if !ok {
 		// Not tracked: stateproofs not enabled.
 		return nil, nil
