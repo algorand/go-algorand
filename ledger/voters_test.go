@@ -83,11 +83,12 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
 	addBlockToAccountsUpdate(block.block, au)
 
-	// the tracker should have two entries
+	// the tracker should have 3 entries
+	//  - voters to confirm the numOfIntervals - 1 th interval
 	//  - voters to confirm the numOfIntervals th interval
 	//  - voters to confirm the numOfIntervals + 1  th interval
-	a.Equal(uint64(2), uint64(len(au.voters.votersForRound)))
-	a.Equal(basics.Round(intervalForTest*(numOfIntervals-1)-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(uint64(3), uint64(len(au.voters.votersForRound)))
+	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
 
 	block = randomBlock(basics.Round(i))
 	block.block.CurrentProtocol = protocol.ConsensusFuture
@@ -96,8 +97,8 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
 	addBlockToAccountsUpdate(block.block, au)
 
-	a.Equal(uint64(1), uint64(len(au.voters.votersForRound)))
-	a.Equal(basics.Round(intervalForTest*(numOfIntervals)-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(uint64(2), uint64(len(au.voters.votersForRound)))
+	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
 }
 
 func TestLimitVoterTracker(t *testing.T) {
