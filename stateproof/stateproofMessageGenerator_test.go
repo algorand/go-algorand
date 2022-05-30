@@ -350,25 +350,51 @@ func TestGenerateBlockProof(t *testing.T) {
 		firstAttestedRound := tx.Txn.Message.FirstAttestedRound
 		lastAttestedRound := tx.Txn.Message.LastAttestedRound
 
-		headers, err := GetIntervalHeaders(s, proto.StateProofInterval, basics.Round(lastAttestedRound))
+		headers, err := FetchIntervalHeaders(s, proto.StateProofInterval, basics.Round(lastAttestedRound))
 		a.NoError(err)
 		a.Equal(proto.StateProofInterval, uint64(len(headers)))
 
 		// attempting to get block proof for every block in the interval
 		for i := firstAttestedRound; i < lastAttestedRound; i++ {
 			headerIndex := i - firstAttestedRound
-			proof, err := GenerateProofOverBlocks(proto, headers, headerIndex)
+			proof, err := GenerateProofOfLightBlockHeaders(proto, headers, headerIndex)
 			a.NoError(err)
 			a.NotNil(proof)
 
 			lightheader := headers[headerIndex].ToLightBlockHeader()
-			a.NoError(
-				merklearray.VerifyVectorCommitment(
-					tx.Txn.Message.BlockHeadersCommitment,
-					map[uint64]crypto.Hashable{headerIndex: lightheader},
-					proof.ToProof(),
-				),
-			)
+			err = merklearray.VerifyVectorCommitment(
+				tx.Txn.Message.BlockHeadersCommitment,
+				map[uint64]crypto.Hashable{headerIndex: lightheader},
+				proof.ToProof())
+
+			a.NoError(err)
 		}
 	}
+}
+
+func TestGenerateBlockProofOnSmallArray(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys, len(keys))
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(2 * proto.StateProofInterval)
+	headers, err := FetchIntervalHeaders(s, proto.StateProofInterval, basics.Round(2*proto.StateProofInterval))
+	a.NoError(err)
+	headers = headers[1:]
+
+	_, err = GenerateProofOfLightBlockHeaders(proto, headers, 1)
+	a.ErrorIs(err, errInvalidParams)
 }

@@ -1299,7 +1299,7 @@
         }
       }
     },
-    "/v2/LightBlockHeader/proof/{round}": {
+    "/v2/lightblockheader/{round}/proof": {
       "parameters": [
         {
           "type": "integer",
@@ -1316,11 +1316,11 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get the proof over a block for a given round",
-        "operationId": "lightBlockHeader-proof",
+        "summary": "Gets a proof of a light block header for a given round",
+        "operationId": "GetLightBlockHeaderProof",
         "responses": {
           "200": {
-            "$ref": "#/components/responses/BlockProofResponse"
+            "$ref": "#/components/responses/LightBlockHeaderProofResponse"
           },
           "401": {
             "description": "Invalid API Token",
@@ -1329,7 +1329,7 @@
             }
           },
           "404": {
-            "description": "State proof transaction not found",
+            "description": "Could not create proof since data is missing",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2668,23 +2668,22 @@
         }
       }
     },
-    "BlockProof": {
-      "description": "Block proof.",
+    "LightBlockHeaderProof": {
+      "description": "Proof of membership and position of a light block header.",
       "type": "object",
       "required": [
         "index",
-        "header",
+        "treedepth",
         "proof"
       ],
       "properties": {
         "index": {
-          "description": "The index of the block in the commitment vector of the tree.",
+          "description": "The index of the light block header in the vector commitment tree",
           "type": "integer"
         },
-        "header": {
-          "description": "light header.",
-          "type": "string",
-          "format": "byte"
+        "treedepth": {
+          "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+          "type": "integer"
         },
         "proof": {
           "description": "The encoded proof.",
@@ -2865,10 +2864,10 @@
     }
   },
   "responses": {
-    "BlockProofResponse": {
-      "description": "StateProof transaction.",
+    "LightBlockHeaderProofResponse": {
+      "description": "Proof of a light block header.",
       "schema": {
-        "$ref": "#/definitions/BlockProof"
+        "$ref": "#/definitions/LightBlockHeaderProof"
       }
     },
     "StateProofResponse": {

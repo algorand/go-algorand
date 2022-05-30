@@ -57,3 +57,8 @@ type Accounts interface {
 	StateProofKeys(basics.Round) []account.StateProofRecordForRound
 	DeleteStateProofKey(id account.ParticipationID, round basics.Round) error
 }
+
+// BlockHeaderFetcher captures the aspects of the Ledger that is used to fetch block headers
+type BlockHeaderFetcher interface {
+	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+}

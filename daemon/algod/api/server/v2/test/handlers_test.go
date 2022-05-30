@@ -1095,7 +1095,7 @@ func TestBlockProofNotFound(t *testing.T) {
 	handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = []node.TxnWithStatus{} // adding to the mock the knowledge of a state proof txn... so it can state - none.
 
 	// we didn't add any certificate
-	a.NoError(handler.LightBlockHeaderProof(ctx, 1000))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 1000))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -1116,7 +1116,7 @@ func TestUnkownStateProofSender500(t *testing.T) {
 	defer releasefunc()
 
 	// we didn't add any certificate
-	a.NoError(handler.LightBlockHeaderProof(ctx, 0))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 0))
 	a.Equal(500, responseRecorder.Code)
 }
 
@@ -1130,6 +1130,6 @@ func TestGetBlockProof200(t *testing.T) {
 	insertRounds(a, handler, 300)
 	generateStateProofTxns(handler, 300)
 
-	a.NoError(handler.LightBlockHeaderProof(ctx, 5))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, 5))
 	a.Equal(200, responseRecorder.Code)
 }

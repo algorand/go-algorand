@@ -1214,14 +1214,14 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 }
 
 var errNilLedger = errors.New("could not contact ledger")
-var errNoStateProofInRange = errors.New("no stateproof for that round")
+var errNoStateProofInRange = errors.New("no state proof for that round")
 
 // StateProof returns the state proof for a given round.
 // (GET /v2/stateproofs/{round})
 func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	tx, err := v2.findStateProofTxn(round)
 	if err != nil {
-		return v2.wrapError(ctx, err)
+		return v2.wrapFindStateProofError(ctx, err)
 	}
 
 	response := generated.StateProofResponse{
@@ -1232,12 +1232,12 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-func (v2 *Handlers) wrapError(ctx echo.Context, err error) error {
+func (v2 *Handlers) wrapFindStateProofError(ctx echo.Context, err error) error {
 	switch err {
 	case errNilLedger:
-		return internalError(ctx, err, "could not contact ledger", v2.Log)
+		return internalError(ctx, err, err.Error(), v2.Log)
 	case errNoStateProofInRange:
-		return notFound(ctx, err, "could not find state-proof for given round", v2.Log)
+		return notFound(ctx, err, err.Error(), v2.Log)
 	default:
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
@@ -1283,12 +1283,12 @@ func (v2 *Handlers) findStateProofTxn(round uint64) (node.TxnWithStatus, error) 
 	return node.TxnWithStatus{}, errNoStateProofInRange
 }
 
-// LightBlockHeaderProof Get the proof over a block for a given round
-// (GET /v2/LightBlockHeader/proof/{round})
-func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error {
+// GetLightBlockHeaderProof Gets a proof of a light block header for a given round
+// (GET /v2/lightblockheader/{round}/proof)
+func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) error {
 	tx, err := v2.findStateProofTxn(round)
 	if err != nil {
-		return v2.wrapError(ctx, err)
+		return v2.wrapFindStateProofError(ctx, err)
 	}
 
 	lastAttestedround := tx.Txn.Txn.Message.LastAttestedRound
@@ -1303,22 +1303,21 @@ func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error 
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
-	blkHdrArr, err := stateproof.GetIntervalHeaders(ledger, consensusParams.StateProofInterval, basics.Round(lastAttestedround))
+	blkHdrArr, err := stateproof.FetchIntervalHeaders(ledger, consensusParams.StateProofInterval, basics.Round(lastAttestedround))
 	if err != nil {
-		return internalError(ctx, err, err.Error(), v2.Log)
+		return notFound(ctx, err, err.Error(), v2.Log)
 	}
 
 	blockIndex := round - firstAttestedRound
-	leafproof, err := stateproof.GenerateProofOverBlocks(consensusParams, blkHdrArr, blockIndex)
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(consensusParams, blkHdrArr, blockIndex)
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
-	lightHeader := blkHdrArr[blockIndex].ToLightBlockHeader()
-	response := generated.BlockProofResponse{
-		Index:  blockIndex,
-		Header: protocol.Encode(&lightHeader),
-		Proof:  protocol.Encode(leafproof),
+	response := generated.LightBlockHeaderProofResponse{
+		Index:     blockIndex,
+		Proof:     protocol.Encode(leafproof),
+		Treedepth: uint64(leafproof.TreeDepth),
 	}
 	return ctx.JSON(http.StatusOK, response)
 }

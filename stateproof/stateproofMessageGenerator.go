@@ -49,21 +49,16 @@ func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return b[pos].ToLightBlockHeader(), nil
 }
 
-// BlockHeaderFetcher is an abstraction for fetching block headers.
-type BlockHeaderFetcher interface {
-	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
-}
-
 // GenerateStateProofMessage returns a stateproof message that contains all the necessary data for proving on Algorand's state.
 // In addition, it also includes the trusted data for the next stateproof verification
 func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestRoundHeader bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
 	proto := config.Consensus[latestRoundHeader.CurrentProtocol]
-	commitment, err := createHeaderCommitment(l, proto, latestRoundHeader)
+	commitment, err := createHeaderCommitment(l, &proto, &latestRoundHeader)
 	if err != nil {
 		return stateproofmsg.Message{}, err
 	}
 
-	lnProvenWeight, err := calculateLnProvenWeight(latestRoundHeader, proto)
+	lnProvenWeight, err := calculateLnProvenWeight(&latestRoundHeader, &proto)
 	if err != nil {
 		return stateproofmsg.Message{}, err
 	}
@@ -77,7 +72,7 @@ func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestR
 	}, nil
 }
 
-func calculateLnProvenWeight(latestRoundInInterval bookkeeping.BlockHeader, proto config.ConsensusParams) (uint64, error) {
+func calculateLnProvenWeight(latestRoundInInterval *bookkeeping.BlockHeader, proto *config.ConsensusParams) (uint64, error) {
 	totalWeight := latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
@@ -93,14 +88,14 @@ func calculateLnProvenWeight(latestRoundInInterval bookkeeping.BlockHeader, prot
 	return lnProvenWeight, nil
 }
 
-func createHeaderCommitment(l BlockHeaderFetcher, proto config.ConsensusParams, latestRoundHeader bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
+func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams, latestRoundHeader *bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
 	stateProofInterval := proto.StateProofInterval
 
 	if latestRoundHeader.Round < basics.Round(stateProofInterval) {
 		return nil, fmt.Errorf("createHeaderCommitment stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
-	blkHdrArr, err := GetIntervalHeaders(l, stateProofInterval, latestRoundHeader.Round)
+	blkHdrArr, err := FetchIntervalHeaders(l, stateProofInterval, latestRoundHeader.Round)
 	if err != nil {
 		return crypto.GenericDigest{}, err
 	}
@@ -116,8 +111,8 @@ func createHeaderCommitment(l BlockHeaderFetcher, proto config.ConsensusParams, 
 	return tree.Root(), nil
 }
 
-// GetIntervalHeaders returns the headers of the blocks in the interval
-func GetIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.BlockHeader, error) {
+// FetchIntervalHeaders returns the headers of the blocks in the interval
+func FetchIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.BlockHeader, error) {
 	blkHdrArr := make(blockHeadersArray, stateProofInterval)
 	firstRound := latestRound - basics.Round(stateProofInterval) + 1
 
@@ -132,8 +127,8 @@ func GetIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestR
 	return blkHdrArr, nil
 }
 
-// GenerateProofOverBlocks sets up a tree over the blkHdrArr and returns merkle proof over one of the blocks.
-func GenerateProofOverBlocks(proto config.ConsensusParams, blkHdrArr blockHeadersArray, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
+// GenerateProofOfLightBlockHeaders sets up a tree over the blkHdrArr and returns merkle proof over one of the blocks.
+func GenerateProofOfLightBlockHeaders(proto config.ConsensusParams, blkHdrArr blockHeadersArray, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
 	if blkHdrArr.Length() != proto.StateProofInterval {
 		return nil, fmt.Errorf("received wrong amount of block headers. err: %w - %d != %d", errInvalidParams, blkHdrArr.Length(), proto.StateProofInterval)
 	}

@@ -28,7 +28,7 @@ import (
 // are needed in order to verify the next state proofs (VotersCommitment and LnProvenWeight).
 type Message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	// Commitment over the sha256 of the block headers in the interval between two state proofs.
+	// BlockHeadersCommitment contains a commitment on all light block headers within a state proof interval.
 	BlockHeadersCommitment []byte `codec:"b,allocbound=crypto.Sha256Size"`
 	VotersCommitment       []byte `codec:"v,allocbound=crypto.SumhashDigestSize"`
 	LnProvenWeight         uint64 `codec:"P"`
