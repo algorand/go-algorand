@@ -187,7 +187,7 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
 		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
 
-		if stateProofRound <= hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
 			delete(vt.votersForRound, r)
 			continue
 		}
