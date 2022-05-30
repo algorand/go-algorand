@@ -1338,9 +1338,11 @@ func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error 
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
+	lightHeader := blkHdrArr[blockIndex].ToLightBlockHeader()
 	response := generated.BlockProofResponse{
-		Index: blockIndex,
-		Proof: protocol.Encode(leafproof),
+		Index:  blockIndex,
+		Header: protocol.Encode(&lightHeader),
+		Proof:  protocol.Encode(leafproof),
 	}
 	return ctx.JSON(http.StatusOK, response)
 }

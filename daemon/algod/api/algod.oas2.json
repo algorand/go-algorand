@@ -2673,12 +2673,18 @@
       "type": "object",
       "required": [
         "index",
+        "header",
         "proof"
       ],
       "properties": {
         "index": {
           "description": "The index of the block in the commitment vector of the tree.",
           "type": "integer"
+        },
+        "header": {
+          "description": "light header.",
+          "type": "string",
+          "format": "byte"
         },
         "proof": {
           "description": "The encoded proof.",

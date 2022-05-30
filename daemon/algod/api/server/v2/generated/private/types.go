@@ -262,6 +262,9 @@ type AssetParams struct {
 // BlockProof defines model for BlockProof.
 type BlockProof struct {
 
+	// light header.
+	Header []byte `json:"header"`
+
 	// The index of the block in the commitment vector of the tree.
 	Index uint64 `json:"index"`
 
