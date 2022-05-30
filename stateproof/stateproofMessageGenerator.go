@@ -49,9 +49,14 @@ func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	return b[pos].ToLightBlockHeader(), nil
 }
 
+// BlockHeaderFetcher is an abstraction for fetching block headers.
+type BlockHeaderFetcher interface {
+	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+}
+
 // GenerateStateProofMessage returns a stateproof message that contains all the necessary data for proving on Algorand's state.
 // In addition, it also includes the trusted data for the next stateproof verification
-func GenerateStateProofMessage(l Ledger, votersRound uint64, latestRoundHeader bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
+func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestRoundHeader bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
 	proto := config.Consensus[latestRoundHeader.CurrentProtocol]
 	commitment, err := createHeaderCommitment(l, proto, latestRoundHeader)
 	if err != nil {
@@ -88,29 +93,33 @@ func calculateLnProvenWeight(latestRoundInInterval bookkeeping.BlockHeader, prot
 	return lnProvenWeight, nil
 }
 
-func createHeaderCommitment(l Ledger, proto config.ConsensusParams, latestRoundHeader bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
+func createHeaderCommitment(l BlockHeaderFetcher, proto config.ConsensusParams, latestRoundHeader bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
 	stateProofInterval := proto.StateProofInterval
 
 	if latestRoundHeader.Round < basics.Round(stateProofInterval) {
 		return nil, fmt.Errorf("createHeaderCommitment stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
-	blkHdrArr, err := getStateProofIntervalHeaders(l, stateProofInterval, latestRoundHeader)
+	blkHdrArr, err := GetStateIntervalHeaders(l, stateProofInterval, latestRoundHeader.Round)
 	if err != nil {
 		return crypto.GenericDigest{}, err
 	}
 
 	// Build merkle tree from encoded headers
-	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
+	tree, err := merklearray.BuildVectorCommitmentTree(
+		blockHeadersArray(blkHdrArr),
+		crypto.HashFactory{HashType: crypto.Sha256},
+	)
 	if err != nil {
 		return nil, err
 	}
 	return tree.Root(), nil
 }
 
-func getStateProofIntervalHeaders(l Ledger, stateProofInterval uint64, latestRoundHeader bookkeeping.BlockHeader) (blockHeadersArray, error) {
+// GetStateIntervalHeaders returns the headers of the blocks in the interval
+func GetStateIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.BlockHeader, error) {
 	blkHdrArr := make(blockHeadersArray, stateProofInterval)
-	firstRound := latestRoundHeader.Round - basics.Round(stateProofInterval) + 1
+	firstRound := latestRound - basics.Round(stateProofInterval) + 1
 
 	for i := uint64(0); i < stateProofInterval; i++ {
 		rnd := firstRound + basics.Round(i)
@@ -128,7 +137,11 @@ func GenerateProofOverBlocks(proto config.ConsensusParams, blkHdrArr blockHeader
 	if blkHdrArr.Length() != proto.StateProofInterval {
 		return nil, fmt.Errorf("received wrong amount of block headers. err: %w - %d != %d", errInvalidParams, blkHdrArr.Length(), proto.StateProofInterval)
 	}
-	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
+
+	tree, err := merklearray.BuildVectorCommitmentTree(
+		blkHdrArr,
+		crypto.HashFactory{HashType: crypto.Sha256},
+	)
 	if err != nil {
 		return nil, err
 	}
