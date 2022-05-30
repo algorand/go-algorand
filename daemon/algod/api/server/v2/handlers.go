@@ -1316,6 +1316,7 @@ func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error 
 	}
 
 	lastAttestedround := tx.Txn.Txn.Message.LastAttestedRound
+	firstAttestedRound := tx.Txn.Txn.Message.FirstAttestedRound
 
 	ledger := v2.Node.LedgerForAPI()
 	if ledger == nil {
@@ -1326,14 +1327,12 @@ func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error 
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
-	blkHdrArr, err := stateproof.GetStateIntervalHeaders(ledger, consensusParams.StateProofInterval, basics.Round(round))
+	blkHdrArr, err := stateproof.GetStateIntervalHeaders(ledger, consensusParams.StateProofInterval, basics.Round(lastAttestedround))
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
-	// round - firstRound
-	blockIndex := round - uint64(blkHdrArr[0].Round)
-
+	blockIndex := round - firstAttestedRound
 	leafproof, err := stateproof.GenerateProofOverBlocks(consensusParams, blkHdrArr, blockIndex)
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)

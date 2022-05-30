@@ -1013,13 +1013,7 @@ func TestStateProofNotFound(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	ldger := handler.Node.LedgerForAPI()
-
-	for i := 0; i < 5; i++ {
-		blk := newEmptyBlock(a, ldger)
-		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
-		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
-	}
+	insertRounds(a, handler, 5)
 
 	handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = []node.TxnWithStatus{}
 
@@ -1048,13 +1042,7 @@ func TestStateProof200(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	ldger := handler.Node.LedgerForAPI()
-
-	for i := 0; i < 5; i++ {
-		blk := newEmptyBlock(a, ldger)
-		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
-		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
-	}
+	insertRounds(a, handler, 5)
 
 	//setting
 	generateStateProofTxns(handler, 300)
@@ -1072,7 +1060,9 @@ func TestStateProof200(t *testing.T) {
 }
 
 func generateStateProofTxns(handler v2.Handlers, maxRound int) {
-	for i := 0; i < maxRound; i += int(config.Consensus[protocol.ConsensusFuture].StateProofInterval) {
+	interval := config.Consensus[protocol.ConsensusFuture].StateProofInterval
+	frstStateProofRound := interval
+	for i := frstStateProofRound; int(i) < maxRound; i += interval {
 		tx := node.TxnWithStatus{
 			Txn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
@@ -1082,6 +1072,8 @@ func generateStateProofTxns(handler v2.Handlers, maxRound int) {
 						StateProofType:                0,
 						Message: stateproofmsg.Message{
 							BlockHeadersCommitment: []byte("blockheaderscommitment"),
+							FirstAttestedRound:     i - interval,
+							LastAttestedRound:      uint64(i),
 						},
 					},
 				},
@@ -1099,18 +1091,21 @@ func TestBlockProofNotFound(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	ldger := handler.Node.LedgerForAPI()
-
-	for i := 0; i < 5; i++ {
-		blk := newEmptyBlock(a, ldger)
-		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
-		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
-	}
+	insertRounds(a, handler, 5)
 	handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = []node.TxnWithStatus{} // adding to the mock the knowledge of a state proof txn... so it can state - none.
 
 	// we didn't add any certificate
 	a.NoError(handler.LightBlockHeaderProof(ctx, 1000))
 	a.Equal(404, responseRecorder.Code)
+}
+
+func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
+	ldger := h.Node.LedgerForAPI()
+	for i := 0; i < numRounds; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+	}
 }
 
 func TestUnkownStateProofSender500(t *testing.T) {
@@ -1123,4 +1118,18 @@ func TestUnkownStateProofSender500(t *testing.T) {
 	// we didn't add any certificate
 	a.NoError(handler.LightBlockHeaderProof(ctx, 0))
 	a.Equal(500, responseRecorder.Code)
+}
+
+func TestGetBlockProof200(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 300)
+	generateStateProofTxns(handler, 300)
+
+	a.NoError(handler.LightBlockHeaderProof(ctx, 5))
+	a.Equal(200, responseRecorder.Code)
 }
