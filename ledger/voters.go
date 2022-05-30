@@ -179,7 +179,14 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	}
 }
 
+// removeOldVoters removes voters data form the tracker and allows the database to commit previous rounds.
+// voters would be removed if one of the two condition is met
+// 1 - Voters are for round which was already confirmed by stateproof
+// 2 - Voters are for needed for stateproof round which is older than the allowed recovery interval.
+// notice that if state proof chain is delayed votersForRound will not be larger than
+// StateProofRecoveryInterval + 1 (in order to create StateProofRecoveryInterval back - we need StateProofRecoveryInterval + 1 voters )
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
+	// we calculate the lowest round for recovery according to the newest round (might be different from the rounds on cache)
 	proto := config.Consensus[hdr.CurrentProtocol]
 	recentRoundOnRecoveryPeriod := basics.Round(uint64(hdr.Round) - uint64(hdr.Round)%proto.StateProofInterval)
 	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
@@ -188,12 +195,9 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
 		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
 
-		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
-			delete(vt.votersForRound, r)
-			continue
-		}
-
-		if r <= oldestRoundOnRecoveryPeriod {
+		// we remove voters that are no longer needed (i.e StateProofNextRound is larger )
+		if stateProofRound < hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound ||
+			stateProofRound <= oldestRoundOnRecoveryPeriod {
 			delete(vt.votersForRound, r)
 		}
 	}

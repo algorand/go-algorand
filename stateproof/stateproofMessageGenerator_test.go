@@ -152,6 +152,7 @@ func newWorkerForStateProofMessageStubs(keys []account.Participation, totalWeigh
 		mu:                    deadlock.Mutex{},
 		latest:                0,
 		waiters:               make(map[basics.Round]chan struct{}),
+		waitersCount:          make(map[basics.Round]int),
 		blocks:                make(map[basics.Round]bookkeeping.BlockHeader),
 		keys:                  keys,
 		keysForVoters:         keys,

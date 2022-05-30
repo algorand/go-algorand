@@ -552,7 +552,7 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	require.Zero(t, len(s.deletedStateProofKeys))
 }
 
-func TestWorkerRemoveBuilders(t *testing.T) {
+func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -587,6 +587,14 @@ func TestWorkerRemoveBuilders(t *testing.T) {
 	a.NoError(err)
 	a.Equal(expectedStateProofs, len(w.builders))
 
+	var roundSigs map[basics.Round][]pendingSig
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		roundSigs, err = getPendingSigs(tx)
+		return
+	})
+
+	a.Equal(expectedStateProofs, len(roundSigs))
+
 	// add block that confirm a state proof for interval: expectedStateProofs - 1
 	s.mu.Lock()
 	s.addBlock(basics.Round((expectedStateProofs - 1) * config.Consensus[protocol.ConsensusFuture].StateProofInterval))
@@ -595,6 +603,13 @@ func TestWorkerRemoveBuilders(t *testing.T) {
 	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
 	a.NoError(err)
 	a.Equal(3, len(w.builders))
+
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		roundSigs, err = getPendingSigs(tx)
+		return
+	})
+
+	a.Equal(3, len(roundSigs))
 }
 
 func TestWorkerBuildersRecoveryLimit(t *testing.T) {
@@ -627,7 +642,7 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 			break
 		}
 	}
-	
+
 	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
 	a.NoError(err)
 
@@ -638,6 +653,13 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 	err = waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
 	a.NoError(err)
 	a.Equal(proto.StateProofRecoveryInterval, uint64(len(w.builders)))
+
+	var roundSigs map[basics.Round][]pendingSig
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		roundSigs, err = getPendingSigs(tx)
+		return
+	})
+	a.Equal(proto.StateProofRecoveryInterval, uint64(len(roundSigs)))
 }
 
 func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) error {
@@ -662,5 +684,4 @@ func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) er
 			continue
 		}
 	}
-
 }

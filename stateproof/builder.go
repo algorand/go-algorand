@@ -243,7 +243,7 @@ func (spw *Worker) builder(latest basics.Round) {
 			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
 		} else {
-			spw.deleteOldSigs(hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+			spw.deleteOldSigs(hdr)
 			spw.deleteOldBuilders(hdr)
 		}
 
@@ -328,34 +328,45 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func (spw *Worker) deleteOldSigs(nextStateProof basics.Round) {
+func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
+	proto := config.Consensus[currentHdr.CurrentProtocol]
+	nextStateProofRnd := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
+	// we add +1 to this number since we want exactly StateProofRecoveryInterval elements in the history
+	oldestRoundOnRecoveryPeriod += 1
+
+	var oldestRoundToRemove basics.Round
+	if oldestRoundOnRecoveryPeriod > nextStateProofRnd {
+		oldestRoundToRemove = oldestRoundOnRecoveryPeriod
+	} else {
+		oldestRoundToRemove = nextStateProofRnd
+	}
+	return oldestRoundToRemove
+}
+
+func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
+	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deletePendingSigsBeforeRound(tx, nextStateProof)
+		return deletePendingSigsBeforeRound(tx, oldestRoundToRemove)
 	})
 	if err != nil {
-		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextStateProof, err)
+		spw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", oldestRoundToRemove, err)
 	}
 }
 
 func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
-	proto := config.Consensus[currentHdr.CurrentProtocol]
-
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
-
-	nextStateProofRnd := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
 	for rnd := range spw.builders {
-		if rnd < nextStateProofRnd {
-			delete(spw.builders, rnd)
-		}
-		if rnd <= oldestRoundOnRecoveryPeriod {
+		if rnd < oldestRoundToRemove {
 			delete(spw.builders, rnd)
 		}
 	}
-
 }
 
 func (spw *Worker) tryBuilding() {

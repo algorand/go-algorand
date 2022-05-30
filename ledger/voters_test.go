@@ -147,8 +147,8 @@ func TestLimitVoterTracker(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, au)
 	}
 
-	a.Equal(recoveryIntervalForTests, uint64(len(au.voters.votersForRound)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests+1, uint64(len(au.voters.votersForRound)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
 
 	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
 	for ; i < 3*(numOfIntervals*intervalForTest)+1; i++ {
@@ -157,8 +157,8 @@ func TestLimitVoterTracker(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, au)
 	}
 
-	a.Equal(recoveryIntervalForTests, uint64(len(au.voters.votersForRound)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests+1, uint64(len(au.voters.votersForRound)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
 }
 
 //
