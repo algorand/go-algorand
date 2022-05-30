@@ -100,7 +100,7 @@ func createHeaderCommitment(l BlockHeaderFetcher, proto config.ConsensusParams, 
 		return nil, fmt.Errorf("createHeaderCommitment stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
-	blkHdrArr, err := GetStateIntervalHeaders(l, stateProofInterval, latestRoundHeader.Round)
+	blkHdrArr, err := GetIntervalHeaders(l, stateProofInterval, latestRoundHeader.Round)
 	if err != nil {
 		return crypto.GenericDigest{}, err
 	}
@@ -116,8 +116,8 @@ func createHeaderCommitment(l BlockHeaderFetcher, proto config.ConsensusParams, 
 	return tree.Root(), nil
 }
 
-// GetStateIntervalHeaders returns the headers of the blocks in the interval
-func GetStateIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.BlockHeader, error) {
+// GetIntervalHeaders returns the headers of the blocks in the interval
+func GetIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.BlockHeader, error) {
 	blkHdrArr := make(blockHeadersArray, stateProofInterval)
 	firstRound := latestRound - basics.Round(stateProofInterval) + 1
 

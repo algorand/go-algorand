@@ -315,3 +315,56 @@ func TestMessageMissingHeaderOnInterval(t *testing.T) {
 	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
 	a.ErrorIs(err, ledgercore.ErrNoEntry{Round: 510})
 }
+
+func TestGenerateBlockProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys, len(keys))
+	dbs, _ := dbOpenTest(t, true)
+	w := NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
+
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	for iter := uint64(0); iter < 5; iter++ {
+		s.advanceLatest(proto.StateProofInterval)
+
+		tx := <-s.w.txmsg
+		// we have a new tx. now attempt to fetch a block proof.
+		firstAttestedRound := tx.Txn.Message.FirstAttestedRound
+		lastAttestedRound := tx.Txn.Message.LastAttestedRound
+
+		headers, err := GetIntervalHeaders(s, proto.StateProofInterval, basics.Round(lastAttestedRound))
+		a.NoError(err)
+		a.Equal(proto.StateProofInterval, uint64(len(headers)))
+
+		// attempting to get block proof for every block in the interval
+		for i := firstAttestedRound; i < lastAttestedRound; i++ {
+			proof, err := GenerateProofOverBlocks(proto, headers, i-firstAttestedRound)
+			a.NoError(err)
+			a.NotNil(proof)
+
+			a.NoError(
+				merklearray.VerifyVectorCommitment(
+					tx.Txn.Message.BlockHeadersCommitment,
+					map[uint64]crypto.Hashable{i - firstAttestedRound: headers[i-firstAttestedRound].ToLightBlockHeader()},
+					proof.ToProof()))
+		}
+	}
+}

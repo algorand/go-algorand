@@ -1327,7 +1327,7 @@ func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error 
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
-	blkHdrArr, err := stateproof.GetStateIntervalHeaders(ledger, consensusParams.StateProofInterval, basics.Round(lastAttestedround))
+	blkHdrArr, err := stateproof.GetIntervalHeaders(ledger, consensusParams.StateProofInterval, basics.Round(lastAttestedround))
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)
 	}
