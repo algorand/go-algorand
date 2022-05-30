@@ -2671,8 +2671,21 @@
     "BlockProof": {
       "description": "Block proof.",
       "type": "object",
-      "required": [],
-      "properties": {}
+      "required": [
+        "index",
+        "proof"
+      ],
+      "properties": {
+        "index": {
+          "description": "The index of the block in the commitment vector of the tree.",
+          "type": "integer"
+        },
+        "proof": {
+          "description": "The encoded proof.",
+          "type": "string",
+          "format": "byte"
+        }
+      }
     }
   },
   "parameters": {

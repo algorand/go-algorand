@@ -260,7 +260,14 @@ type AssetParams struct {
 }
 
 // BlockProof defines model for BlockProof.
-type BlockProof map[string]interface{}
+type BlockProof struct {
+
+	// The index of the block in the commitment vector of the tree.
+	Index uint64 `json:"index"`
+
+	// The encoded proof.
+	Proof []byte `json:"proof"`
+}
 
 // BuildVersion defines model for BuildVersion.
 type BuildVersion struct {

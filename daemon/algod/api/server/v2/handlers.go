@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/stateproof"
 	"io"
 	"math"
 	"net/http"
@@ -1304,21 +1305,38 @@ func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnW
 
 // LightBlockHeaderProof todo
 func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error {
-	// todo: change should be /v2/LightBlockHeader/proof/{round}
+	ledger := v2.Node.LedgerForAPI()
+	if ledger == nil {
+		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
+	}
 
-	//TODO implement me
-	// find the txn, then get all relevant block headers.
-	// then produce proof.
+	tx, err := v2.findStateProofTxn(ctx, round)
+	if err != nil {
+		return err
+	}
 
-	//tx, err := v2.findStateProofTxn(ctx, round)
-	//if err != nil {
-	//	return err
-	//}
+	lastAttestedround := tx.Txn.Txn.Message.LastAttestedRound
+	consensusParams, err := ledger.ConsensusParams(basics.Round(lastAttestedround)) // todo verify this is the correct parameters we want.
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
 
-	//blockRound := tx.Txn.Txn.StateProofIntervalLatestRound
-	// GrabHeaders.
-	// build tree.
-	// need to return Index, Proof.
-	// look at verifyTransaction.
-	panic("implement me")
+	blkHdrArr, err := stateproof.GetStateIntervalHeaders(ledger, consensusParams.StateProofInterval, basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	// round - firstRound
+	blockIndex := round - uint64(blkHdrArr[0].Round)
+
+	leafproof, err := stateproof.GenerateProofOverBlocks(consensusParams, blkHdrArr, blockIndex)
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := generated.BlockProofResponse{
+		Index: blockIndex,
+		Proof: protocol.Encode(leafproof),
+	}
+	return ctx.JSON(http.StatusOK, response)
 }
