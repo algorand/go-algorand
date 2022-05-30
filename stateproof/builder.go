@@ -335,7 +335,7 @@ func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
 	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
 	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
 	// we add +1 to this number since we want exactly StateProofRecoveryInterval elements in the history
-	oldestRoundOnRecoveryPeriod += 1
+	oldestRoundOnRecoveryPeriod++
 
 	var oldestRoundToRemove basics.Round
 	if oldestRoundOnRecoveryPeriod > nextStateProofRnd {
