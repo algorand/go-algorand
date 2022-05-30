@@ -1311,7 +1311,7 @@ func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnW
 func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error {
 	tx, err := v2.findStateProofTxn(ctx, round)
 	if err != nil {
-		return err
+		return v2.wrapError(ctx, err)
 	}
 
 	lastAttestedround := tx.Txn.Txn.Message.LastAttestedRound

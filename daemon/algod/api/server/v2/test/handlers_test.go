@@ -1057,7 +1057,22 @@ func TestStateProof200(t *testing.T) {
 	}
 
 	//setting
-	for i := 0; i < 300; i += int(config.Consensus[protocol.ConsensusFuture].StateProofInterval) {
+	generateStateProofTxns(handler, 300)
+
+	// we didn't add any certificate
+	a.NoError(handler.StateProof(ctx, 2))
+	a.Equal(200, responseRecorder.Code)
+
+	stprfResp := generated.StateProofResponse{}
+	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
+
+	msg := stateproofmsg.Message{}
+	a.NoError(protocol.Decode(stprfResp.Message, &msg))
+	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
+}
+
+func generateStateProofTxns(handler v2.Handlers, maxRound int) {
+	for i := 0; i < maxRound; i += int(config.Consensus[protocol.ConsensusFuture].StateProofInterval) {
 		tx := node.TxnWithStatus{
 			Txn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
@@ -1075,15 +1090,37 @@ func TestStateProof200(t *testing.T) {
 		}
 		handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = append(handler.Node.(*mockNode).usertxns[transactions.StateProofSender], tx)
 	}
+}
+
+func TestBlockProofNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	ldger := handler.Node.LedgerForAPI()
+
+	for i := 0; i < 5; i++ {
+		blk := newEmptyBlock(a, ldger)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+	}
+	handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = []node.TxnWithStatus{} // adding to the mock the knowledge of a state proof txn... so it can state - none.
 
 	// we didn't add any certificate
-	a.NoError(handler.StateProof(ctx, 2))
-	a.Equal(200, responseRecorder.Code)
+	a.NoError(handler.LightBlockHeaderProof(ctx, 1000))
+	a.Equal(404, responseRecorder.Code)
+}
 
-	stprfResp := generated.StateProofResponse{}
-	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
+func TestUnkownStateProofSender500(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-	msg := stateproofmsg.Message{}
-	a.NoError(protocol.Decode(stprfResp.Message, &msg))
-	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	// we didn't add any certificate
+	a.NoError(handler.LightBlockHeaderProof(ctx, 0))
+	a.Equal(500, responseRecorder.Code)
 }
