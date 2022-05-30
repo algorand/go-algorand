@@ -21,7 +21,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/stateproof"
 	"io"
 	"math"
 	"net/http"
@@ -48,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-codec/codec"
 )
 
@@ -1213,30 +1213,6 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// TealDisassemble disassembles the program bytecode in base64 into TEAL code.
-// (POST /v2/teal/disassemble)
-func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
-	// return early if teal compile is not allowed in node config
-	if !v2.Node.Config().EnableDeveloperAPI {
-		return ctx.String(http.StatusNotFound, "/teal/disassemble was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
-	}
-	buf := new(bytes.Buffer)
-	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
-	_, err := buf.ReadFrom(ctx.Request().Body)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	sourceProgram := buf.Bytes()
-	program, err := logic.Disassemble(sourceProgram)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	response := generated.DisassembleResponse{
-		Result: program,
-	}
-	return ctx.JSON(http.StatusOK, response)
-}
-
 var errNilLedger = errors.New("could not contact ledger")
 var errNoStateProofInRange = errors.New("no stateproof for that round")
 
@@ -1343,6 +1319,30 @@ func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error 
 		Index:  blockIndex,
 		Header: protocol.Encode(&lightHeader),
 		Proof:  protocol.Encode(leafproof),
+	}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// TealDisassemble disassembles the program bytecode in base64 into TEAL code.
+// (POST /v2/teal/disassemble)
+func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
+	// return early if teal compile is not allowed in node config
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/teal/disassemble was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
+	buf := new(bytes.Buffer)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	sourceProgram := buf.Bytes()
+	program, err := logic.Disassemble(sourceProgram)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	response := generated.DisassembleResponse{
+		Result: program,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
