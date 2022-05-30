@@ -242,10 +242,10 @@ func (spw *Worker) builder(latest basics.Round) {
 		if err != nil {
 			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
-		} else {
-			spw.deleteOldSigs(hdr)
-			spw.deleteOldBuilders(hdr)
 		}
+
+		spw.deleteOldSigs(hdr)
+		spw.deleteOldBuilders(hdr)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -331,6 +331,9 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
 	proto := config.Consensus[currentHdr.CurrentProtocol]
 	nextStateProofRnd := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+	if proto.StateProofInterval == 0 {
+		return nextStateProofRnd
+	}
 
 	recentRoundOnRecoveryPeriod := basics.Round(uint64(currentHdr.Round) - uint64(currentHdr.Round)%proto.StateProofInterval)
 	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * proto.StateProofRecoveryInterval))
