@@ -1307,7 +1307,8 @@ func (v2 *Handlers) findStateProofTxn(round uint64) (node.TxnWithStatus, error) 
 	return node.TxnWithStatus{}, errNoStateProofInRange
 }
 
-// LightBlockHeaderProof todo
+// LightBlockHeaderProof Get the proof over a block for a given round
+// (GET /v2/LightBlockHeader/proof/{round})
 func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error {
 	tx, err := v2.findStateProofTxn(round)
 	if err != nil {
