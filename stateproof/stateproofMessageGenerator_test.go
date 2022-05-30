@@ -356,15 +356,19 @@ func TestGenerateBlockProof(t *testing.T) {
 
 		// attempting to get block proof for every block in the interval
 		for i := firstAttestedRound; i < lastAttestedRound; i++ {
-			proof, err := GenerateProofOverBlocks(proto, headers, i-firstAttestedRound)
+			headerIndex := i - firstAttestedRound
+			proof, err := GenerateProofOverBlocks(proto, headers, headerIndex)
 			a.NoError(err)
 			a.NotNil(proof)
 
+			lightheader := headers[headerIndex].ToLightBlockHeader()
 			a.NoError(
 				merklearray.VerifyVectorCommitment(
 					tx.Txn.Message.BlockHeadersCommitment,
-					map[uint64]crypto.Hashable{i - firstAttestedRound: headers[i-firstAttestedRound].ToLightBlockHeader()},
-					proof.ToProof()))
+					map[uint64]crypto.Hashable{headerIndex: lightheader},
+					proof.ToProof(),
+				),
+			)
 		}
 	}
 }
