@@ -58,7 +58,7 @@ type votersTracker struct {
 	// are formed for blocks that are a multiple of StateProofInterval, using
 	// the vector commitment to online accounts from the previous such block.
 	// Thus, we maintain X in the votersForRound map until we form a stateproof
-	// for votersForRound X+StateProofVotersLookback+StateProofInterval.
+	// for round X+StateProofVotersLookback+StateProofInterval.
 	votersForRound map[basics.Round]*ledgercore.VotersForRound
 
 	l  ledgerForTracker
@@ -69,7 +69,7 @@ type votersTracker struct {
 	loadWaitGroup sync.WaitGroup
 }
 
-// votersRoundForStateProofRound computes the votersForRound number whose voting participants
+// votersRoundForStateProofRound computes the round number whose voting participants
 // will be used to sign the state proof for stateProofRnd.
 func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.ConsensusParams) basics.Round {
 	// To form a state proof on period that ends on stateProofRnd,
@@ -172,7 +172,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval == 0 {
 		_, ok := vt.votersForRound[basics.Round(r)]
 		if ok {
-			vt.l.trackerLog().Errorf("votersTracker.newBlock: votersForRound %d already present", r)
+			vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
 			vt.loadTree(hdr)
 		}
@@ -205,7 +205,7 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 
 // lowestRound() returns the lowest votersForRound state (blocks and accounts) needed by
 // the votersTracker in case of a restart.  The accountUpdates tracker will
-// not delete account state before this votersForRound, so that after a restart, it's
+// not delete account state before this round, so that after a restart, it's
 // possible to reconstruct the votersTracker.  If votersTracker does
 // not need any blocks, it returns base.
 func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
@@ -218,7 +218,7 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	return minRound
 }
 
-// getVoters() returns the top online participants from votersForRound r.
+// getVoters() returns the top online participants from round r.
 func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
 	tr, ok := vt.votersForRound[r]
 	if !ok {
