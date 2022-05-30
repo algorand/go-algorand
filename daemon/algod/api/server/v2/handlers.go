@@ -1243,7 +1243,7 @@ var errNoStateProofInRange = errors.New("no stateproof for that round")
 // StateProof returns the state proof for a given round.
 // (GET /v2/stateproofs/{round})
 func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
-	tx, err := v2.findStateProofTxn(ctx, round)
+	tx, err := v2.findStateProofTxn(round)
 	if err != nil {
 		return v2.wrapError(ctx, err)
 	}
@@ -1267,7 +1267,7 @@ func (v2 *Handlers) wrapError(ctx echo.Context, err error) error {
 	}
 }
 
-func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnWithStatus, error) {
+func (v2 *Handlers) findStateProofTxn(round uint64) (node.TxnWithStatus, error) {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger == nil {
 		return node.TxnWithStatus{}, errNilLedger
@@ -1309,7 +1309,7 @@ func (v2 *Handlers) findStateProofTxn(ctx echo.Context, round uint64) (node.TxnW
 
 // LightBlockHeaderProof todo
 func (v2 *Handlers) LightBlockHeaderProof(ctx echo.Context, round uint64) error {
-	tx, err := v2.findStateProofTxn(ctx, round)
+	tx, err := v2.findStateProofTxn(round)
 	if err != nil {
 		return v2.wrapError(ctx, err)
 	}
