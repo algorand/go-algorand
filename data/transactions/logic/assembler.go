@@ -1143,6 +1143,18 @@ func typeStore(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	return nil, nil
 }
 
+func typeStores(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	second := len(pgm.stack) - 2
+	if second >= 0 {
+		for i, _ := range pgm.scratchSpace {
+			if pgm.scratchSpace[i] != pgm.stack[second] {
+				pgm.scratchSpace[i] = StackAny
+			}
+		}
+	}
+	return nil, nil
+}
+
 func typeLoad(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	if len(args) == 0 {
 		return nil, nil
@@ -1156,6 +1168,16 @@ func typeLoad(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 		return nil, nil
 	}
 	return nil, StackTypes{pgm.scratchSpace[scratchIndex]}
+}
+
+func typeLoads(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	scratchType := pgm.scratchSpace[0]
+	for _, item := range pgm.scratchSpace {
+		if item != scratchType {
+			return nil, nil
+		}
+	}
+	return nil, StackTypes{scratchType}
 }
 
 // keywords or "pseudo-ops" handle parsing and assembling special asm language
@@ -1335,6 +1357,9 @@ func (ops *OpStream) assemble(text string) error {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
 	scanner := bufio.NewScanner(fin)
+	for i, _ := range ops.known.scratchSpace {
+		ops.known.scratchSpace[i] = StackAny
+	}
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()

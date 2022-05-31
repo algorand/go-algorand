@@ -2400,6 +2400,12 @@ func TestSetBitTypeCheck(t *testing.T) {
 	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
 }
 
+func TestScratchTypeCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{5, "+ arg 0..."})
+}
+
 func TestCoverAsm(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
