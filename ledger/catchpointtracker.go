@@ -69,7 +69,9 @@ const (
 
 	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
 	CatchpointFileVersionV5 = uint64(0200)
-	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6
+	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6.
+	// This version introduced accounts and resources separation. The first catchpoint
+	// round of this version is >= `accountDataResourceSeparationRound`.
 	CatchpointFileVersionV6 = uint64(0201)
 )
 
@@ -480,14 +482,8 @@ func doRepackCatchpoint(header CatchpointFileHeader, in *tar.Reader, out *tar.Wr
 			return err
 		}
 
-		buf := make([]byte, header.Size)
-		bytesRead := int64(0)
-		for (err == nil) && (bytesRead < header.Size) {
-			var x int
-			x, err = in.Read(buf[bytesRead:])
-			bytesRead += int64(x)
-		}
-		if (err != nil) && (err != io.EOF) {
+		buf, err := io.ReadAll(in)
+		if err != nil {
 			return err
 		}
 

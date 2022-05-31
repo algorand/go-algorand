@@ -165,21 +165,9 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		if header.Size > maxCatchpointFileChunkSize || header.Size < 1 {
 			return fmt.Errorf("getPeerLedger received a tar header with data size of %d", header.Size)
 		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					err = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
-				}
-				return err
-			}
+		balancesBlockBytes, err := io.ReadAll(tarReader)
+		if err != nil {
+			return err
 		}
 		start := time.Now()
 		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes, &downloadProgress)
