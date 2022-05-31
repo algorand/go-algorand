@@ -186,6 +186,9 @@ func TestParseKeys(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "1", string(parsed["\u0061"]))
 	require.Equal(t, "1", string(parsed["a"]))
+	text = `{"key0": 1,"key0": 2}`
+	_, err = parseJSON([]byte(text))
+	require.Error(t, err)
 	text = `{"key0": 1,"key1": {"key2":2,"key2":"10"}}`
 	_, err = parseJSON([]byte(text))
 	require.NoError(t, err)

@@ -4792,10 +4792,12 @@ func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 	err = protocol.DecodeJSON(jsonText, &parsed)
 
 	if err != nil {
-		// confirm that the error was not a "duplicate key found" error before throwing
-		if !strings.Contains(err.Error(), "cannot decode into a non-pointer value") {
-			return nil, fmt.Errorf("invalid json text")
+		// if the error was caused by duplicate keys
+		if strings.Contains(err.Error(), "cannot decode into a non-pointer value") {
+			return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
 		}
+
+		return nil, fmt.Errorf("invalid json text")
 	}
 
 	return parsed, nil

@@ -22,6 +22,24 @@ Additional specifications used by **json_ref** that are extensions to the RFC715
 {"key0": "\uFF"}
 ```
 
+### Object
+
+#### duplicate key
+
+Duplicate keys at the top level result in an error; however, duplicate keys nested at a lower level are ignored.
+
+#### Invalid JSON text
+
+```json
+{"key0": 1,"key0": 2}
+```
+
+#### Acceptable JSON text
+
+```json
+{"key0": 1,"key1": {"key2":2,"key2":"10"}}
+```
+
 ### Numbers
 
 #### Range
