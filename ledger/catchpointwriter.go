@@ -99,7 +99,10 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 	if err != nil {
 		return nil, err
 	}
-	gzip := gzip.NewWriter(file)
+	gzip, err := gzip.NewWriterLevel(file, gzip.NoCompression)
+	if err != nil {
+		return nil, err
+	}
 	tar := tar.NewWriter(gzip)
 
 	res := &catchpointWriter{
