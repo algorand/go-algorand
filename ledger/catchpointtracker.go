@@ -500,13 +500,7 @@ func repackCatchpoint(header CatchpointFileHeader, dataPath string, outPath stri
 	}
 	defer fin.Close()
 
-	gzipIn, err := gzip.NewReader(fin)
-	if err != nil {
-		return err
-	}
-	defer gzipIn.Close()
-
-	tarIn := tar.NewReader(gzipIn)
+	tarIn := tar.NewReader(fin)
 
 	fout, err := os.OpenFile(outPath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
@@ -514,7 +508,10 @@ func repackCatchpoint(header CatchpointFileHeader, dataPath string, outPath stri
 	}
 	defer fout.Close()
 
-	gzipOut := gzip.NewWriter(fout)
+	gzipOut, err := gzip.NewWriterLevel(fout, gzip.BestSpeed)
+	if err != nil {
+		return err
+	}
 	defer gzipOut.Close()
 
 	tarOut := tar.NewWriter(gzipOut)
@@ -538,11 +535,6 @@ func repackCatchpoint(header CatchpointFileHeader, dataPath string, outPath stri
 	}
 
 	err = fout.Close()
-	if err != nil {
-		return err
-	}
-
-	err = gzipIn.Close()
 	if err != nil {
 		return err
 	}
