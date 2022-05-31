@@ -769,6 +769,7 @@ Decodes A using the base64 encoding E. Specify the encoding with an immediate ar
 - Opcode: 0x5d {string return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
+- **Cost**: 25 + 2 per 7 bytes
 - Availability: v7
 
 `json_ref` Types:

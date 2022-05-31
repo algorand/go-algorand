@@ -491,7 +491,7 @@ var OpSpecs = []OpSpec{
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
 	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16)},
-	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes)},
+	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7)},
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
