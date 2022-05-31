@@ -4764,56 +4764,43 @@ func opBase64Decode(cx *EvalContext) error {
 	cx.stack[last].Bytes = bytes
 	return nil
 }
-func hasDuplicateKeys(jsonText []byte) (bool, map[string]json.RawMessage, error) {
+
+func isPrimitiveJSON(jsonText []byte) (bool, error) {
 	dec := json.NewDecoder(bytes.NewReader(jsonText))
-	parsed := make(map[string]json.RawMessage)
 	t, err := dec.Token()
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 	t, ok := t.(json.Delim)
 	if !ok || t.(json.Delim).String() != "{" {
-		return false, nil, fmt.Errorf("only json object is allowed")
+		return true, nil
 	}
-	for dec.More() {
-		var value json.RawMessage
-		// get JSON key
-		key, err := dec.Token()
-		if err != nil {
-			return false, nil, err
-		}
-		// end of json
-		if key == '}' {
-			break
-		}
-		// decode value
-		err = dec.Decode(&value)
-		if err != nil {
-			return false, nil, err
-		}
-		// check for duplicates
-		if _, ok := parsed[key.(string)]; ok {
-			return true, nil, nil
-		}
-		parsed[key.(string)] = value
-	}
-	return false, parsed, nil
+	return false, nil
 }
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
-	if !json.Valid(jsonText) {
-		return nil, fmt.Errorf("invalid json text")
-	}
-	// parse json text and check for duplicate keys
-	hasDuplicates, parsed, err := hasDuplicateKeys(jsonText)
-	if hasDuplicates {
-		return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
-	}
+	// guard against primitives
+	isPrimitive, err := isPrimitiveJSON(jsonText)
 	if err != nil {
-		return nil, fmt.Errorf("invalid json text, %v", err)
+		return nil, err
+	} else if isPrimitive {
+		return nil, fmt.Errorf("invalid json text, only json object is allowed")
 	}
+
+	// parse JSON with Algorand's standard JSON library
+	var parsed map[string]json.RawMessage
+	err = protocol.DecodeJSON(jsonText, &parsed)
+
+	if err != nil {
+		// confirm that the error was not a "duplicate key found" error before throwing
+		if !strings.Contains(err.Error(), "cannot decode into a non-pointer value") {
+			return nil, fmt.Errorf("invalid json text")
+		}
+	}
+
 	return parsed, nil
 }
+
 func opJSONRef(cx *EvalContext) error {
 	// get json key
 	last := len(cx.stack) - 1

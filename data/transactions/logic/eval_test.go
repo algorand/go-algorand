@@ -4861,39 +4861,42 @@ int ` + fmt.Sprintf("%d", 20_000-3-6) + ` // base64_decode cost = 6 (68 bytes ->
 	testAccepts(t, source, fidoVersion)
 }
 
-func TestHasDuplicateKeys(t *testing.T) {
+func TestIsPrimitive(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testCases := []struct {
 		text []byte
 	}{
 		{
-			text: []byte(`{"key0": "1","key0": "2", "key1":1}`),
+			text: []byte(`null`),
 		},
 		{
-			text: []byte(`{"key0": "1","key1": [1], "key0":{"key2": "a"}}`),
+			text: []byte(`[1, 2, 3]`),
+		},
+		{
+			text: []byte(`2`),
 		},
 	}
 	for _, s := range testCases {
-		hasDuplicates, _, err := hasDuplicateKeys(s.text)
+		isPrimitive, err := isPrimitiveJSON(s.text)
 		require.Nil(t, err)
-		require.True(t, hasDuplicates)
+		require.True(t, isPrimitive)
 	}
 
-	noDuplicates := []struct {
+	notPrimitive := []struct {
 		text []byte
 	}{
 		{
 			text: []byte(`{"key0": "1","key1": "2", "key2":3}`),
 		},
 		{
-			text: []byte(`{"key0": "1","key1": [{"key0":1,"key0":2},{"key0":1,"key0":2}], "key2":{"key5": "a","key5": "b"}}`),
+			text: []byte(`{}`),
 		},
 	}
-	for _, s := range noDuplicates {
-		hasDuplicates, _, err := hasDuplicateKeys(s.text)
+	for _, s := range notPrimitive {
+		primitive, err := isPrimitiveJSON(s.text)
 		require.Nil(t, err)
-		require.False(t, hasDuplicates)
+		require.False(t, primitive)
 	}
 }
 
@@ -5034,6 +5037,44 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
+		// verify that the first key dominates
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"string val\"}}}";
+			byte "key2";
+			json_ref JSONObject;
+			byte "key4";
+			json_ref JSONObject;
+			byte "key40";
+			json_ref JSONUint64;
+			int 10;
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}, {13, "unknown opcode: json_ref"}},
+		},
+		{
+			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": \"string val\", \"key40\": 10}}}";
+			byte "key2";
+			json_ref JSONObject;
+			byte "key4";
+			json_ref JSONObject;
+			byte "key40";
+			json_ref JSONString;
+			byte "string val";
+			==
+			`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}, {13, "unknown opcode: json_ref"}},
+		},
+		// verify that maps work as expected
+		{
+			source: `byte  "{\"key0\": {\"key1\": 1}, \"key0\": {\"key2\": 2}}";
+			byte "key0";
+			json_ref JSONObject;
+			byte "key1";
+			json_ref JSONUint64;
+			int 1;
+			==
+			`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
 	}
 
 	for _, s := range testCases {
@@ -5166,22 +5207,18 @@ func TestOpJSONRef(t *testing.T) {
 			error:              "error while parsing JSON text, invalid json text",
 			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
 		},
+		// verify that keys are not merged (which is default Go behavior)
 		{
-			source:             `byte  "{\"key0\": 1, \"key0\": \"3\"}"; byte "key0"; json_ref JSONString;`,
-			error:              "error while parsing JSON text, invalid json text, duplicate keys not allowed",
-			previousVersErrors: []Expect{{3, "unknown opcode: json_ref"}},
-		},
-		{
-			source: `byte  "{\"key0\": 0,\"key1\": \"algo\",\"key2\":{\"key3\": \"teal\", \"key4\": {\"key40\": 10, \"key40\": \"should fail!\"}}}";
+			source: `byte  "{\"key0\": {\"key1\": 1}, \"key0\": {\"key2\": 2}}";
+			byte "key0";
+			json_ref JSONObject;
 			byte "key2";
-			json_ref JSONObject;
-			byte "key4";
-			json_ref JSONObject;
-			byte "key40"
-			json_ref JSONString
+			json_ref JSONUint64;
+			int 2;
+			==
 			`,
-			error:              "error while parsing JSON text, invalid json text, duplicate keys not allowed",
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}, {9, "unknown opcode: json_ref"}, {12, "unknown opcode: json_ref"}},
+			error:              "key key2 not found in JSON text",
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
 		{
 			source: `byte  "[1,2,3]";
