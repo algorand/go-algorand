@@ -3564,6 +3564,87 @@ func BenchmarkCheckx5(b *testing.B) {
 	}
 }
 
+func makeNestedKeys(depth int) string {
+	if depth <= 0 {
+		return `{\"key0\":\"value0\"}`
+	}
+	return fmt.Sprintf(`{\"key0\":%s}`, makeNestedKeys(depth-1))
+}
+
+func BenchmarkJsonRef(b *testing.B) {
+	// base case
+	oneKey := `{\"key0\":\"value0\"}`
+
+	// many keys
+	sb := &strings.Builder{}
+	sb.WriteString(`{`)
+	for i := 0; i < 100; i++ {
+		sb.WriteString(fmt.Sprintf(`\"key%d\":\"value%d\",`, i, i))
+	}
+	sb.WriteString(`\"key100\":\"value100\"}`) // so there is no trailing comma
+	manyKeys := sb.String()
+
+	lenOfManyKeys := len(manyKeys)
+	longTextLen := lenOfManyKeys - 36 // subtract the difference
+	mediumText := strings.Repeat("a", longTextLen/2)
+	longText := strings.Repeat("a", longTextLen)
+
+	// medium key
+	mediumKey := fmt.Sprintf(`{\"%s\":\"value\",\"key1\":\"value2\"}`, mediumText)
+
+	// long key
+	longKey := fmt.Sprintf(`{\"%s\":\"value\",\"key1\":\"value2\"}`, longText)
+
+	// long value
+	longValue := fmt.Sprintf(`{\"key0\":\"%s\",\"key1\":\"value2\"}`, longText)
+
+	// nested keys
+	nestedKeys := makeNestedKeys(200)
+
+	jsonLabels := []string{"one key", "many keys", "medium key", "long key", "long val", "nested keys"}
+	jsonSamples := []string{oneKey, manyKeys, mediumKey, longKey, longValue, nestedKeys}
+	keys := [][]string{
+		{"key0"},
+		{"key0", "key100"},
+		{mediumText, "key1"},
+		{longText, "key1"},
+		{"key0", "key1"},
+		{"key0"},
+	}
+	value_fmt := [][]string{
+		{"JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONString", "JSONString"},
+		{"JSONObject"},
+	}
+	benches := [][]string{}
+	for i, label := range jsonLabels {
+		for j, key := range keys[i] {
+			prog := fmt.Sprintf(`byte "%s"; byte "%s"; json_ref %s; pop;`, jsonSamples[i], key, value_fmt[i][j])
+
+			// indicate long key
+			keyLabel := key
+			if len(key) > 50 {
+				keyLabel = fmt.Sprintf("long_key_%d", len(key))
+			}
+
+			benches = append(benches, []string{
+				fmt.Sprintf("%s_%s", label, keyLabel), // label
+				"",                                    // prefix
+				prog,                                  // operation
+				"int 1",                               // suffix
+			})
+		}
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
 func TestEvalVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
