@@ -279,6 +279,8 @@ type ProgramKnowledge struct {
 	// deadcode indicates that the program is in deadcode, so no type checking
 	// errors should be reported.
 	deadcode bool
+
+	scratchSpace [256]StackType
 }
 
 func (pgm *ProgramKnowledge) pop() StackType {
@@ -1123,6 +1125,37 @@ func typeTxField(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 		return nil, nil
 	}
 	return StackTypes{fs.ftype}, nil
+}
+
+func typeStore(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return nil, nil
+	}
+	scratchIndex := int(n)
+	top := len(pgm.stack) - 1
+	if top >= scratchIndex && scratchIndex < 256 && scratchIndex >= 0 {
+		pgm.scratchSpace[top-scratchIndex] = pgm.stack[top]
+	}
+	return nil, nil
+}
+
+func typeLoad(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return nil, nil
+	}
+	scratchIndex := int(n)
+	if scratchIndex < 0 || scratchIndex > 255 {
+		return nil, nil
+	}
+	return nil, StackTypes{pgm.scratchSpace[scratchIndex]}
 }
 
 // keywords or "pseudo-ops" handle parsing and assembling special asm language
