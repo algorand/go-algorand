@@ -61,6 +61,8 @@ const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
 )
 
+var StopAtRound uint64
+
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
 	LastRound                          basics.Round
@@ -168,6 +170,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
 	node.devMode = genesis.DevMode
+	catchup.StopAtRound = StopAtRound
 
 	if node.devMode {
 		cfg.DisableNetworking = true

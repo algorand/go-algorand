@@ -56,6 +56,7 @@ var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST liste
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
+var stopAtRound = flag.String("round", "", "Stop catchup at this block number")
 
 func main() {
 	flag.Parse()
@@ -67,6 +68,10 @@ func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
 	config.UpdateVersionDataDir(absolutePath)
+	if stopAtRound != nil {
+		rnd, _ := strconv.Atoi(*stopAtRound)
+		algod.StopAtRound = uint64(rnd)
+	}
 
 	if *seed != "" {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)

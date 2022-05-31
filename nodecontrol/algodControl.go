@@ -121,6 +121,10 @@ func (nc NodeController) buildAlgodCommand(args AlgodStartArgs) *exec.Cmd {
 		startArgs = append(startArgs, listenIP)
 	}
 
+	stopAtRound := args.StopAtRound
+	startArgs = append(startArgs, "-round")
+	startArgs = append(startArgs, stopAtRound)
+
 	// Check if we should be using algoh
 	var cmd string
 	if args.RunUnderHost {

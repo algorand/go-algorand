@@ -40,6 +40,8 @@ import (
 const catchupPeersForSync = 10
 const blockQueryPeerLimit = 10
 
+var StopAtRound uint64
+
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
@@ -394,6 +396,9 @@ type task func() basics.Round
 
 func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool, peerSelector *peerSelector) func() basics.Round {
 	return func() basics.Round {
+		if StopAtRound != uint64(0) && uint64(r) > StopAtRound {
+			return 0
+		}
 		fetchResult := s.fetchAndWrite(r, prevFetchCompleteChan, lookbackChan, peerSelector)
 
 		// the fetch result will be read at most twice (once as the lookback block and once as the prev block, so we write the result twice)

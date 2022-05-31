@@ -49,6 +49,7 @@ import (
 )
 
 var server http.Server
+var StopAtRound uint64
 
 // Server represents an instance of the REST API HTTP server
 type Server struct {
@@ -70,6 +71,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	s.log = logging.Base()
 
 	lib.GenesisJSONText = genesisText
+	node.StopAtRound = StopAtRound
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)

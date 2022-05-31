@@ -63,6 +63,7 @@ type AlgodStartArgs struct {
 	RunUnderHost      bool
 	TelemetryOverride string
 	ExitErrorCallback AlgodExitErrorCallback
+	StopAtRound       string
 }
 
 // KMDStartArgs are the possible arguments for starting kmd
