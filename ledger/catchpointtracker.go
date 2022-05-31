@@ -475,12 +475,7 @@ func doRepackCatchpoint(header CatchpointFileHeader, in *tar.Reader, out *tar.Wr
 		}
 
 		buf := make([]byte, header.Size)
-		bytesRead := int64(0)
-		for (err == nil) && (bytesRead < header.Size) {
-			var x int
-			x, err = in.Read(buf[bytesRead:])
-			bytesRead += int64(x)
-		}
+		_, err = io.ReadFull(in, buf)
 		if (err != nil) && (err != io.EOF) {
 			return err
 		}
