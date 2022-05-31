@@ -51,6 +51,7 @@ type catchpointWriter struct {
 	balancesChunk    catchpointFileBalancesChunkV6
 	balancesChunkNum uint64
 	writtenBytes     int64
+	biggestChunkLen  uint64
 	accountsIterator encodedAccountsBatchIter
 }
 
@@ -214,6 +215,9 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 			response <- err
 			break
 		}
+		if chunkLen := uint64(len(encodedChunk)); cw.biggestChunkLen < chunkLen {
+			cw.biggestChunkLen = chunkLen
+		}
 
 		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.totalChunks {
 			cw.tar.Close()
@@ -247,6 +251,10 @@ func (cw *catchpointWriter) GetTotalAccounts() uint64 {
 
 func (cw *catchpointWriter) GetTotalChunks() uint64 {
 	return cw.totalChunks
+}
+
+func (cw *catchpointWriter) GetBiggestChunkLen() uint64 {
+	return cw.biggestChunkLen
 }
 
 // hasContextDeadlineExceeded examine the given context and see if it was canceled or timed-out.

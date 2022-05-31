@@ -4842,6 +4842,8 @@ type catchpointFirstStageInfo struct {
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalChunks uint64 `codec:"chunksCount"`
+	// BiggestChunkLen is used when re-packing.
+	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }
 
 func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {

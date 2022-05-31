@@ -315,7 +315,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
 
-		_, _, err := ct.generateCatchpointData(
+		_, _, _, err := ct.generateCatchpointData(
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 

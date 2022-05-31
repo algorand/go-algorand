@@ -446,7 +446,7 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	}
 }
 
-func doRepackCatchpoint(header CatchpointFileHeader, in *tar.Reader, out *tar.Writer) error {
+func doRepackCatchpoint(header CatchpointFileHeader, dataInfo catchpointFirstStageInfo, in *tar.Reader, out *tar.Writer) error {
 	{
 		bytes := protocol.Encode(&header)
 
@@ -465,6 +465,8 @@ func doRepackCatchpoint(header CatchpointFileHeader, in *tar.Reader, out *tar.Wr
 		}
 	}
 
+	// make buffer for re-use that can fit biggest chunk
+	buf := make([]byte, dataInfo.BiggestChunkLen)
 	for {
 		header, err := in.Next()
 		if err != nil {
@@ -474,10 +476,12 @@ func doRepackCatchpoint(header CatchpointFileHeader, in *tar.Reader, out *tar.Wr
 			return err
 		}
 
-		buf := make([]byte, header.Size)
-		_, err = io.ReadFull(in, buf)
+		n, err := io.ReadAtLeast(in, buf, int(header.Size))
 		if (err != nil) && (err != io.EOF) {
 			return err
+		}
+		if int64(n) != header.Size { // should not happen
+			return fmt.Errorf("read too many bytes from chunk %+v", header)
 		}
 
 		err = out.WriteHeader(header)
@@ -485,14 +489,14 @@ func doRepackCatchpoint(header CatchpointFileHeader, in *tar.Reader, out *tar.Wr
 			return err
 		}
 
-		_, err = out.Write(buf)
+		_, err = out.Write(buf[:header.Size])
 		if err != nil {
 			return err
 		}
 	}
 }
 
-func repackCatchpoint(header CatchpointFileHeader, dataPath string, outPath string) error {
+func repackCatchpoint(header CatchpointFileHeader, dataInfo catchpointFirstStageInfo, dataPath string, outPath string) error {
 	// Initialize streams.
 	fin, err := os.OpenFile(dataPath, os.O_RDONLY, 0666)
 	if err != nil {
@@ -518,7 +522,7 @@ func repackCatchpoint(header CatchpointFileHeader, dataPath string, outPath stri
 	defer tarOut.Close()
 
 	// Repack.
-	err = doRepackCatchpoint(header, tarIn, tarOut)
+	err = doRepackCatchpoint(header, dataInfo, tarIn, tarOut)
 	if err != nil {
 		return err
 	}
@@ -601,7 +605,7 @@ func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round 
 		return err
 	}
 
-	err = repackCatchpoint(header, catchpointDataFilePath, absCatchpointFilePath)
+	err = repackCatchpoint(header, dataInfo, catchpointDataFilePath, absCatchpointFilePath)
 	if err != nil {
 		return err
 	}
@@ -698,8 +702,7 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(maxRoundToDelete basics.
 
 func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 	if dcc.catchpointFirstStage {
-		var totalAccounts uint64
-		var totalChunks uint64
+		var totalAccounts, totalChunks, biggestChunkLen uint64
 
 		if ct.enableGeneratingCatchpointFiles {
 			// Generate the catchpoint file. This need to be done inline so that it will
@@ -707,7 +710,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 			// expects that the accounts data would not be modified in the background during
 			// it's execution.
 			var err error
-			totalAccounts, totalChunks, err = ct.generateCatchpointData(
+			totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
 				ctx, dcc.newBase, dcc.updatingBalancesDuration)
 			atomic.StoreInt32(dcc.catchpointDataWriting, 0)
 			if err != nil {
@@ -717,7 +720,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 			}
 		}
 
-		err := ct.recordFirstStageInfo(dcc.newBase, totalAccounts, totalChunks)
+		err := ct.recordFirstStageInfo(dcc.newBase, totalAccounts, totalChunks, biggestChunkLen)
 		if err != nil {
 			ct.log.Warnf(
 				"error recording first stage catchpoint info dcc.newBase: %d err: %v",
@@ -875,7 +878,7 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 }
 
 // Generates a (first stage) catchpoint data file.
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (uint64 /*totalAccounts*/, uint64 /*totalChunks*/, error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, error) {
 	startTime := time.Now()
 	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
 		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
@@ -976,7 +979,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
@@ -992,10 +995,10 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
 		Infof("Catchpoint data file was generated")
 
-	return catchpointWriter.GetTotalAccounts(), catchpointWriter.GetTotalChunks(), nil
+	return catchpointWriter.GetTotalAccounts(), catchpointWriter.GetTotalChunks(), catchpointWriter.GetBiggestChunkLen(), nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(accountsRound basics.Round, totalAccounts uint64, totalChunks uint64) error {
+func (ct *catchpointTracker) recordFirstStageInfo(accountsRound basics.Round, totalAccounts, totalChunks, biggestChunkLen uint64) error {
 	accountTotals, err := accountsTotals(ct.dbs.Rdb.Handle, false)
 	if err != nil {
 		return err
@@ -1030,6 +1033,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(accountsRound basics.Round, to
 		Totals:           accountTotals,
 		TotalAccounts:    totalAccounts,
 		TotalChunks:      totalChunks,
+		BiggestChunkLen:  biggestChunkLen,
 		TrieBalancesHash: trieBalancesHash,
 	}
 	return insertCatchpointFirstStageInfo(ct.dbs.Wdb.Handle, accountsRound, &info)
