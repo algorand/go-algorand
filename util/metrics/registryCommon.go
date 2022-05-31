@@ -25,7 +25,9 @@ import (
 
 // Metric represent any collectable metric
 type Metric interface {
+	// WriteMetric adds metrics in Prometheus exposition format to buf, including parentLabels tags if provided.
 	WriteMetric(buf *strings.Builder, parentLabels string)
+	// AddMetric adds metrics to a map, used for reporting in telemetry heartbeat messages.
 	AddMetric(values map[string]float64)
 }
 
@@ -41,4 +43,10 @@ var sanitizeTelemetryCharactersRegexp = regexp.MustCompile("(^[^a-zA-Z_]|[^a-zA-
 // non-alphanumeric characters (apart from - or _) and doesn't start with a number or a hyphen.
 func sanitizeTelemetryName(name string) string {
 	return sanitizeTelemetryCharactersRegexp.ReplaceAllString(name, "_")
+}
+
+// sanitizePrometheusName ensures a metric name reported to telemetry doesn't contain any
+// non-alphanumeric characters (apart from _) and doesn't start with a number.
+func sanitizePrometheusName(name string) string {
+	return strings.ReplaceAll(sanitizeTelemetryName(name), "-", "_")
 }
