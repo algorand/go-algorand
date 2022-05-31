@@ -320,65 +320,100 @@ func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, 
 }
 
 func (au *accountUpdates) LookupKv(rnd basics.Round, key string) (*string, error) {
-	// TODO: Learn how locking discipline works in lookupResource /
-	// LookupWithoutRewards, particularly the optional lock taking.
+	return au.lookupKv(rnd, key, true /* take lock */)
+}
 
-	// TODO lookupResource / lookupWithoutRewards uses a loop and round checking
-	// here. It _looks_ like that only loops in case of programming error?
-	// Maybe it has to do with outstanding writes that haven't hit db yet. Is
-	// that possible, since we don't trim delta until it happens?
-	currentDbRound := au.cachedDBRound
-	currentDeltaLen := len(au.deltas)
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return nil, err
+func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bool) (*string, error) {
+	needUnlock := false
+	if synchronized {
+		au.accountsMu.RLock()
+		needUnlock = true
 	}
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
 
-	// check if we have this key in `kvStore`, as that means the change we
-	// care about is in kvDeltas (and maybe just kvStore itself)
-	mval, indeltas := au.kvStore[key]
-	if indeltas {
-		// Check if this is the most recent round, in which case, we can
-		// use a cache of the most recent kvStore state
-		if offset == uint64(len(au.kvDeltas)) {
-			return mval.data, nil
+	// TODO: This loop and round handling is copied from other routines like
+	// lookupResource. I believe that it is overly cautious, as it always reruns
+	// the lookup if the DB round does not match the expected round. However, as
+	// long as the db round has not advanced too far (greater than `rnd`), I
+	// believe it would be valid to use. In the interest of minimizing changes,
+	// I'm not doing that now.
+
+	for {
+		currentDbRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, err := au.roundOffset(rnd)
+		if err != nil {
+			return nil, err
 		}
 
-		// the key is in the deltas, but we don't know if it appears in the
-		// delta range of [0..offset], so we'll need to check. Walk deltas
-		// backwards so later updates take priority.
-		for i := offset - 1; i > 0; i-- {
-			mval, ok := au.kvDeltas[i][key]
-			if ok {
-				return mval, nil
+		// check if we have this key in `kvStore`, as that means the change we
+		// care about is in kvDeltas (and maybe just kvStore itself)
+		mval, indeltas := au.kvStore[key]
+		if indeltas {
+			// Check if this is the most recent round, in which case, we can
+			// use a cache of the most recent kvStore state
+			if offset == uint64(len(au.kvDeltas)) {
+				return mval.data, nil
 			}
+
+			// the key is in the deltas, but we don't know if it appears in the
+			// delta range of [0..offset], so we'll need to check. Walk deltas
+			// backwards so later updates take priority.
+			for i := offset - 1; i > 0; i-- {
+				mval, ok := au.kvDeltas[i][key]
+				if ok {
+					return mval, nil
+				}
+			}
+		} else {
+			// we know that the key in not in kvDeltas - so there is no point in scanning it.
+			// we've going to fall back to search in the database, but before doing so, we should
+			// update the rnd so that it would point to the end of the known delta range.
+			// ( that would give us the best validity range )
+			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
-	} else {
-		// we know that the key in not in kvDeltas - so there is no point in scanning it.
-		// we've going to fall back to search in the database, but before doing so, we should
-		// update the rnd so that it would point to the end of the known delta range.
-		// ( that would give us the best validity range )
-		rnd = currentDbRound + basics.Round(currentDeltaLen)
-		// TODO: THIS IS POINTLESS FOR KV's current interface. I don't know
-		// how the validity window is used yet. -jj
-	}
 
-	// OTHER LOOKUPS USE "base" caches here.
+		// OTHER LOOKUPS USE "base" caches here.
 
-	// No updates of this account in kvDeltas; use on-disk DB.  The check in
-	// roundOffset() made sure the round is exactly the one present in the
-	// on-disk DB.  As an optimization, we avoid creating a separate
-	// transaction here, and directly use a prepared SQL query against the
-	// database.
+		if synchronized {
+			au.accountsMu.RUnlock()
+			needUnlock = false
+		}
 
-	persistedValue, ok, err := au.accountsq.lookupKvPair(key)
-	if err != nil {
-		return nil, err
+		// No updates of this account in kvDeltas; use on-disk DB.  The check in
+		// roundOffset() made sure the round is exactly the one present in the
+		// on-disk DB.
+
+		persistedData, err := au.accountsq.lookupKeyValue(key)
+		if persistedData.round == currentDbRound {
+			return persistedData.value, nil
+		}
+
+		// The db round is unepxected...
+		if synchronized {
+			if persistedData.round < currentDbRound {
+				// Somehow the db is LOWER than it should be.
+				au.log.Errorf("accountUpdates.lookupKvPair: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+				return nil, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			}
+			// The db is higher, so a write must have happened.  Try again.
+			au.accountsMu.RLock()
+			needUnlock = true
+			// WHY BOTH - seems the goal is just to wait until the au is aware of progress. au.cachedDBRound should be enough?
+			for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+				au.accountsReadCond.Wait()
+			}
+		} else {
+			// in non-sync mode, we don't wait since we already assume that we're synchronized.
+			au.log.Errorf("accountUpdates.lookupKvPair: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
+			return nil, &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+		}
+
 	}
-	if !ok {
-		return nil, nil
-	}
-	return &persistedValue, nil
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
