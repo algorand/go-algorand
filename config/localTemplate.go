@@ -162,7 +162,7 @@ type Local struct {
 	SuggestedFeeBlockHistory int `version[0]:"3"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
-	TxPoolSize int `version[0]:"50000" version[5]:"15000"`
+	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[22]:"75000"`
 
 	// number of seconds allowed for syncing transactions
 	TxSyncTimeoutSeconds int64 `version[0]:"30"`
@@ -425,7 +425,7 @@ type Local struct {
 	TransactionSyncSignificantMessageThreshold uint64 `version[17]:"0"`
 
 	// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block.
-	ProposalAssemblyTime time.Duration `version[19]:"250000000"`
+	ProposalAssemblyTime time.Duration `version[19]:"250000000" version[22]:"500000000"`
 
 	// When the number of http connections to the REST layer exceeds the soft limit,
 	// we start returning http code 429 Too Many Requests.
