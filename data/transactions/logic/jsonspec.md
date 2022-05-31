@@ -12,7 +12,7 @@ Additional specifications used by **json_ref** that are extensions to the RFC715
 - The byte order mark (BOM), "\uFEFF", is not allowed at the beginning of a JSON text
 - Raw non-unicode characters not accepted
 
-## Invalid JSON text
+### Invalid JSON text
 
 ```json
 \uFEFF{"key0": 1}
@@ -20,24 +20,6 @@ Additional specifications used by **json_ref** that are extensions to the RFC715
 
 ```json
 {"key0": "\uFF"}
-```
-
-### Object
-
-#### duplicate key
-
-Duplicate keys at the top level result in an error; however, duplicate keys nested at a lower level are ignored.
-
-#### Invalid JSON text
-
-```json
-{"key0": 1,"key0": 2}
-```
-
-#### Acceptable JSON text
-
-```json
-{"key0": 1,"key1": {"key2":2,"key2":"10"}}
 ```
 
 ### Numbers
@@ -105,10 +87,6 @@ Comment blocks are not accepted.
 ```
 
 ```json
-{"key0": "algo"}/*comment*/
-```
-
-```json
 {"key0": [1,/*comment*/,3]}
 ```
 
@@ -135,4 +113,23 @@ replaced by U+FFFD
 
 ```json
 {"key0": "\uD800\uD800n"}
+```
+
+### Keys
+
+- keys can be strings or numbers
+- strings must be quoted
+- number keys behave as quoted strings
+
+#### Example
+  
+```json
+{"key0": "value0"}
+```
+
+The following are interpreted equivalently
+
+```json
+{1: 1}
+{"1": 1}
 ```
