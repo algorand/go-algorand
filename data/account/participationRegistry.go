@@ -250,6 +250,9 @@ type ParticipationRegistry interface {
 	// GetStateProofForRound fetches a record with stateproof secrets for a particular round.
 	GetStateProofForRound(id ParticipationID, round basics.Round) (StateProofRecordForRound, error)
 
+	// HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds
+	HasLiveKeys(from, to basics.Round) bool
+
 	// Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 	// then it is possible for multiple records to be updated.
 	Register(id ParticipationID, on basics.Round) error
@@ -724,6 +727,18 @@ func (db *participationDB) GetAll() []ParticipationRecord {
 		results = append(results, record.Duplicate())
 	}
 	return results
+}
+
+func (db *participationDB) HasLiveKeys(from, to basics.Round) bool {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	for _, record := range db.cache {
+		if record.OverlapsInterval(from, to) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetStateProofForRound returns the state proof data required to sign the compact certificate for this round

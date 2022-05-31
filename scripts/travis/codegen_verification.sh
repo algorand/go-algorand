@@ -84,11 +84,14 @@ echo "Regenerate REST server"
 touch daemon/algod/api/algod.oas2.json
 make -C daemon/algod/api generate
 
+echo "Regenerate msgp files"
+make msgp
+
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
    echo Enlistment is dirty - did you forget to run make?
    git status -s
-   git diff
+   git --no-pager diff
    exit 1
 else
    echo Enlistment is clean

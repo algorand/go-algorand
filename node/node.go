@@ -175,7 +175,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -407,11 +407,11 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 
 	// PKI TODO: Remove this with #2596
 	// Periodically check for new participation keys
-	go node.checkForParticipationKeys()
+	go node.checkForParticipationKeys(node.ctx.Done())
 
-	go node.txPoolGaugeThread()
+	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
-	go node.oldKeyDeletionThread()
+	go node.oldKeyDeletionThread(node.ctx.Done())
 
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
@@ -782,7 +782,7 @@ func ensureParticipationDB(genesisDir string, log logging.Logger) (account.Parti
 }
 
 // Reload participation keys from disk periodically
-func (node *AlgorandFullNode) checkForParticipationKeys() {
+func (node *AlgorandFullNode) checkForParticipationKeys(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
 	for {
@@ -792,7 +792,7 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 			if err != nil {
 				node.log.Errorf("Could not refresh participation keys: %v", err)
 			}
-		case <-node.ctx.Done():
+		case <-done:
 			ticker.Stop()
 			return
 		}
@@ -1032,7 +1032,7 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 
 var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
 
-func (node *AlgorandFullNode) txPoolGaugeThread() {
+func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -1040,7 +1040,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread() {
 		select {
 		case <-ticker.C:
 			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
-		case <-node.ctx.Done():
+		case <-done:
 			return
 		}
 	}
@@ -1071,11 +1071,11 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // oldKeyDeletionThread keeps deleting old participation keys.
 // It runs in a separate thread so that, during catchup, we
 // don't have to delete key for each block we received.
-func (node *AlgorandFullNode) oldKeyDeletionThread() {
+func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
 		select {
-		case <-node.ctx.Done():
+		case <-done:
 			return
 		case <-node.oldKeyDeletionNotify:
 		}
@@ -1378,4 +1378,21 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 // Record forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
 	node.accountManager.Record(account, round, participationType)
+}
+
+// IsParticipating implements network.NodeInfo
+//
+// This function is not fully precise. node.ledger and
+// node.accountManager might move relative to each other and there is
+// no synchronization. This is good-enough for current uses of
+// IsParticipating() which is used in networking code to determine if
+// the node should ask for transaction gossip (or skip it to save
+// bandwidth). The current transaction pool size is about 3
+// rounds. Starting to receive transaction gossip 10 rounds in the
+// future when we might propose or vote on blocks in that future is a
+// little extra buffer but seems reasonable at this time. -- bolson
+// 2022-05-18
+func (node *AlgorandFullNode) IsParticipating() bool {
+	round := node.ledger.Latest() + 1
+	return node.accountManager.HasLiveKeys(round, round+10)
 }

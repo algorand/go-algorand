@@ -1,3 +1,4 @@
+//go:build !skip_msgp_testing
 // +build !skip_msgp_testing
 
 package v2
@@ -7,9 +8,10 @@ package v2
 import (
 	"testing"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalAccountApplicationModel(t *testing.T) {
