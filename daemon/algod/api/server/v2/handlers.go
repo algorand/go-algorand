@@ -1316,7 +1316,7 @@ func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) err
 
 	response := generated.LightBlockHeaderProofResponse{
 		Index:     blockIndex,
-		Proof:     protocol.Encode(leafproof),
+		Proof:     leafproof.GetConcatenatedProof(),
 		Treedepth: uint64(leafproof.TreeDepth),
 	}
 	return ctx.JSON(http.StatusOK, response)
