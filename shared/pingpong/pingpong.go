@@ -269,8 +269,7 @@ func schedule(tps uint64, nextSendTime *time.Time) {
 		time.Sleep(dur)
 	}
 
-	*nextSendTime = nextSendTime.Add(
-		time.Duration((1.0 / float64(tps)) * float64(time.Second)))
+	*nextSendTime = nextSendTime.Add(time.Second / time.Duration(tps))
 }
 
 func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
