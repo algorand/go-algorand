@@ -4114,6 +4114,10 @@ func (iterator *encodedAccountsBatchIter) Close() {
 		iterator.accountsRows.Close()
 		iterator.accountsRows = nil
 	}
+	if iterator.resourcesRows != nil {
+		iterator.resourcesRows.Close()
+		iterator.resourcesRows = nil
+	}
 }
 
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
