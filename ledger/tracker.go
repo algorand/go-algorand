@@ -219,6 +219,9 @@ type deferredCommitRange struct {
 
 	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
 	enableGeneratingCatchpointFiles bool
+
+	// True iff the commit range includes a catchpoint round.
+	catchpointSecondStage bool
 }
 
 // deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
@@ -390,7 +393,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
-	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
+	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && !dcc.catchpointSecondStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
 		dcc = nil
 	}
 	tr.mu.RUnlock()
