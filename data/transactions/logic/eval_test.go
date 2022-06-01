@@ -260,6 +260,22 @@ func TestWrongProtoVersion(t *testing.T) {
 	}
 }
 
+func TestBlankStackSufficient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := 0; v <= LogicVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			for i := 0; i < 256; i++ {
+				spec := opsByOpcode[v][i]
+				argLen := len(spec.Arg.Types)
+				blankStackLen := len(blankStack)
+				require.GreaterOrEqual(t, blankStackLen, argLen)
+			}
+		})
+	}
+}
+
 func TestSimpleMath(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

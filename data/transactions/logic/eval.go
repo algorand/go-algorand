@@ -1033,13 +1033,13 @@ func (cx *EvalContext) step() error {
 	return nil
 }
 
-// oneBlank is a boring stack provided to deets.Cost during checkStep. It is
+// blankStack is a boring stack provided to deets.Cost during checkStep. It is
 // good enough to allow Cost() to not crash. It would be incorrect to provide
 // this stack if there were linear cost opcodes before backBranchEnabledVersion,
 // because the static cost would be wrong. But then again, a static cost model
 // wouldn't work before backBranchEnabledVersion, so such an opcode is already
 // unacceptable. TestLinearOpcodes ensures.
-var oneBlank = []stackValue{{Bytes: []byte{}}}
+var blankStack = make([]stackValue, 5)
 
 func (cx *EvalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
@@ -1055,8 +1055,6 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
 	}
-	minStackDepth := deets.FullCost.depth + 1
-	blankStack := make([]stackValue, minStackDepth)
 	opcost := deets.Cost(cx.program, cx.pc, blankStack)
 	if opcost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
