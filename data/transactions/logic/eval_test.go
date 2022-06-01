@@ -5053,6 +5053,30 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
+		{
+			source: `byte "{002: \"num key\"}";
+			byte "002";
+			json_ref JSONString;
+			byte "num key";
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		{
+			source: `byte "{0.2: \"dec key\"}";
+			byte "0.2";
+			json_ref JSONString;
+			byte "dec key";
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		{
+			source: `byte "{1e16: \"dec key\"}";
+			byte "1e16";
+			json_ref JSONString;
+			byte "dec key";
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
 	}
 
 	for _, s := range testCases {
@@ -5243,6 +5267,15 @@ func TestOpJSONRef(t *testing.T) {
 			json_ref JSONUint64
 			`,
 			error:              "error while parsing JSON text, invalid json text, only json object is allowed",
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		{
+			source: `byte "{noquotes: \"shouldn't work\"}";
+			byte "noquotes";
+			json_ref JSONString;
+			byte "shouldn't work";
+			==`,
+			error:              "error while parsing JSON text, invalid json text",
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
 	}
