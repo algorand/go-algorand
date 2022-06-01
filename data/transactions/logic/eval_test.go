@@ -5062,6 +5062,9 @@ func TestOpJSONRef(t *testing.T) {
 		pass, _, err := EvalContract(ops.Program, 0, 888, ep)
 		require.NoError(t, err)
 		require.True(t, pass)
+
+		// reset pooled budget for new "app call"
+		*ep.PooledApplicationBudget = ep.Proto.MaxAppProgramCost
 	}
 
 	failedCases := []struct {
@@ -5254,6 +5257,9 @@ func TestOpJSONRef(t *testing.T) {
 		require.False(t, pass)
 		require.Error(t, err)
 		require.EqualError(t, err, s.error)
+
+		// reset pooled budget for new "app call"
+		*ep.PooledApplicationBudget = ep.Proto.MaxAppProgramCost
 	}
 
 }
