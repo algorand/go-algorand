@@ -114,7 +114,7 @@ func benchmarkEvalParams(txn *transactions.SignedTxn) *EvalParams {
 	ep := defaultEvalParamsWithVersion(txn, LogicVersion)
 	ep.Trace = nil // Tracing would slow down benchmarks
 	clone := *ep.Proto
-	bigBudget := 1000 * 1000 // Allow long run times
+	bigBudget := 2 * 1000 * 1000 // Allow long run times
 	clone.LogicSigMaxCost = uint64(bigBudget)
 	clone.MaxAppProgramCost = bigBudget
 	ep.Proto = &clone
