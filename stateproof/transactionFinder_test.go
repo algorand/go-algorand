@@ -44,7 +44,7 @@ func newEmptyBlock(round basics.Round) bookkeeping.Block {
 	return blk
 }
 
-func addStateProofInNeeded(blk bookkeeping.Block) bookkeeping.Block {
+func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	round := uint64(blk.Round())
 	if round%stateProofIntervalTests == (stateProofIntervalTests/2+18) && round > stateProofIntervalTests*2 {
 		stateProofRound := (round - round%stateProofIntervalTests) - stateProofIntervalTests
