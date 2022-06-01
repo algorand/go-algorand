@@ -2403,7 +2403,14 @@ func TestSetBitTypeCheck(t *testing.T) {
 func TestScratchTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+	// All scratch slots should start as uint64
+	testProg(t, "load 0; int 1; +", AssemblerMaxVersion)
+	// Check load and store accurately using the scratch space
 	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{5, "+ arg 0..."})
+	// Loads should know the type it's loading if all the slots are the same type
+	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{3, "btoi arg 0..."})
+	// Stores should only set slots to StackAny if they are not the same type as what is being stored
+	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{8, "+ arg 0..."})
 }
 
 func TestCoverAsm(t *testing.T) {

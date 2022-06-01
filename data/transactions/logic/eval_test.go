@@ -4534,6 +4534,8 @@ func TestLog(t *testing.T) {
 		source      string
 		runMode     runMode
 		errContains string
+		// For cases where assembly errors, we manually put in the bytes
+		assembledBytes []byte
 	}{
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
@@ -4561,9 +4563,10 @@ func TestLog(t *testing.T) {
 			runMode:     modeApp,
 		},
 		{
-			source:      `load 0; log`,
-			errContains: "log arg 0 wanted []byte but got uint64",
-			runMode:     modeApp,
+			source:         `load 0; log`,
+			errContains:    "log arg 0 wanted []byte but got uint64",
+			runMode:        modeApp,
+			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
 		},
 		{
 			source:      `byte  "a logging message"; log; int 1`,
@@ -4575,7 +4578,11 @@ func TestLog(t *testing.T) {
 	for _, c := range failCases {
 		switch c.runMode {
 		case modeApp:
-			testApp(t, c.source, ep, c.errContains)
+			if c.assembledBytes == nil {
+				testApp(t, c.source, ep, c.errContains)
+			} else {
+				testAppBytes(t, c.assembledBytes, ep, c.errContains)
+			}
 		default:
 			testLogic(t, c.source, AssemblerMaxVersion, ep, c.errContains, c.errContains)
 		}
