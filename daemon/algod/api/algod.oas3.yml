@@ -2510,6 +2510,72 @@
         "summary": "Get asset information."
       }
     },
+    "/v2/blocks/lightblockheader/{round}/proof": {
+      "get": {
+        "operationId": "GetProofForLightBlockHeader",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LightBlockHeaderProofResponse"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not create proof since data is missing"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets a proof of a light block header for a given round"
+      }
+    },
     "/v2/blocks/{round}": {
       "get": {
         "operationId": "GetBlock",
@@ -3026,72 +3092,6 @@
           }
         },
         "summary": "Get the current supply reported by the ledger."
-      }
-    },
-    "/v2/lightblockheader/{round}/proof": {
-      "get": {
-        "operationId": "GetLightBlockHeaderProof",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "round",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/LightBlockHeaderProofResponse"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Could not create proof since data is missing"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Temporarily Unavailable"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Gets a proof of a light block header for a given round"
       }
     },
     "/v2/participation": {

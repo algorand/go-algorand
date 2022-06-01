@@ -1215,10 +1215,10 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 // StateProof returns the state proof for a given round.
 // (GET /v2/stateproofs/{round})
 func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
-	if v2.Node.LedgerForAPI().Latest()< basics.Round(round){
+	if v2.Node.LedgerForAPI().Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGraterThanTheLatest), errRoundGraterThanTheLatest, v2.Log)
 	}
-	tx, err := stateproof.GetStateproofTransactionForRound(v2.Node.LedgerForAPI(), basics.Round(round), v2.Node.LedgerForAPI().Latest())
+	tx, err := stateproof.GetStateProofTransactionForRound(v2.Node.LedgerForAPI(), basics.Round(round), v2.Node.LedgerForAPI().Latest())
 	if err != nil {
 		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
 			return notFound(ctx, err, err.Error(), v2.Log)
@@ -1234,14 +1234,14 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// GetLightBlockHeaderProof Gets a proof of a light block header for a given round
-// (GET /v2/lightblockheader/{round}/proof)
-func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) error {
-	if v2.Node.LedgerForAPI().Latest()< basics.Round(round){
+// GetProofForLightBlockHeader Gets a proof of a light block header for a given round
+// (GET /v2/blocks/lightblockheader/{round}/proof)
+func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
+	if v2.Node.LedgerForAPI().Latest() < basics.Round(round) {
 		return internalError(ctx, errors.New(errRoundGraterThanTheLatest), errRoundGraterThanTheLatest, v2.Log)
 	}
 
-	stateProof, err := stateproof.GetStateproofTransactionForRound(v2.Node.LedgerForAPI(), basics.Round(round), v2.Node.LedgerForAPI().Latest())
+	stateProof, err := stateproof.GetStateProofTransactionForRound(v2.Node.LedgerForAPI(), basics.Round(round), v2.Node.LedgerForAPI().Latest())
 	if err != nil {
 		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
 			return notFound(ctx, err, err.Error(), v2.Log)

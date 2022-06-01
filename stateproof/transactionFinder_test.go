@@ -47,7 +47,7 @@ func newEmptyBlock(round basics.Round) bookkeeping.Block {
 
 func addStateProofInNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	round := uint64(blk.Round())
-	if round%stateProofIntervalTests == (stateProofIntervalTests/2 + 18) && round > stateProofIntervalTests*2 {
+	if round%stateProofIntervalTests == (stateProofIntervalTests/2+18) && round > stateProofIntervalTests*2 {
 		stateProofRound := (round - round%stateProofIntervalTests) - stateProofIntervalTests
 		tx := transactions.SignedTxn{
 			Txn: transactions.Transaction{
@@ -101,18 +101,20 @@ func TestStateproofTransactionForRound(t *testing.T) {
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
-	txn, err := GetStateproofTransactionForRound(&ledger, basics.Round(stateProofIntervalTests*2+1), 1000)
+	txn, err := GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalTests*2+1), 1000)
 	a.NoError(err)
 	a.Equal(2*stateProofIntervalTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(3*stateProofIntervalTests, txn.Message.LastAttestedRound)
 	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
 
-	txn, err = GetStateproofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalTests), 1000)
+	txn, err = GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalTests), 1000)
 	a.NoError(err)
 	a.Equal(stateProofIntervalTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(2*stateProofIntervalTests, txn.Message.LastAttestedRound)
 
-	txn, err = GetStateproofTransactionForRound(&ledger, 999, 1000)
+	txn, err = GetStateProofTransactionForRound(&ledger, 999, 1000)
 	a.ErrorIs(err, ErrNoStateProofForRound)
 
+	txn, err = GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalTests), basics.Round(2*stateProofIntervalTests))
+	a.ErrorIs(err, ErrNoStateProofForRound)
 }

@@ -1299,7 +1299,7 @@
         }
       }
     },
-    "/v2/lightblockheader/{round}/proof": {
+    "/v2/blocks/lightblockheader/{round}/proof": {
       "parameters": [
         {
           "type": "integer",
@@ -1317,7 +1317,7 @@
           "http"
         ],
         "summary": "Gets a proof of a light block header for a given round",
-        "operationId": "GetLightBlockHeaderProof",
+        "operationId": "GetProofForLightBlockHeader",
         "responses": {
           "200": {
             "$ref": "#/components/responses/LightBlockHeaderProofResponse"

@@ -53,7 +53,6 @@ import (
 	"github.com/algorand/go-codec/codec"
 )
 
-
 const stateProofIntervalForHandlerTests = uint64(256)
 
 func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
@@ -1008,10 +1007,9 @@ func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
 	return blk
 }
 
-
 func addStateProofInNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	round := uint64(blk.Round())
-	if round%stateProofIntervalForHandlerTests == (stateProofIntervalForHandlerTests/2 + 18) && round > stateProofIntervalForHandlerTests*2 {
+	if round%stateProofIntervalForHandlerTests == (stateProofIntervalForHandlerTests/2+18) && round > stateProofIntervalForHandlerTests*2 {
 		return blk
 	}
 	stateProofRound := (round - round%stateProofIntervalForHandlerTests) - stateProofIntervalForHandlerTests
@@ -1033,7 +1031,6 @@ func addStateProofInNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
 	blk.Payset = append(blk.Payset, txnib)
 
-
 	return blk
 }
 
@@ -1046,7 +1043,6 @@ func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
 		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 	}
 }
-
 
 func TestStateProofNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1099,7 +1095,7 @@ func TestHeaderProofRoundTooHigh(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	a.NoError(handler.GetLightBlockHeaderProof(ctx, 2))
+	a.NoError(handler.GetProofForLightBlockHeader(ctx, 2))
 	a.Equal(500, responseRecorder.Code)
 }
 
@@ -1112,7 +1108,7 @@ func TestHeaderProofStateProofNotFound(t *testing.T) {
 
 	insertRounds(a, handler, 700)
 
-	a.NoError(handler.GetLightBlockHeaderProof(ctx, 650))
+	a.NoError(handler.GetProofForLightBlockHeader(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -1125,10 +1121,10 @@ func TestGetBlockProof200(t *testing.T) {
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofIntervalForHandlerTests*2 +2))
+	a.NoError(handler.GetProofForLightBlockHeader(ctx, stateProofIntervalForHandlerTests*2+2))
 	a.Equal(200, responseRecorder.Code)
 
-	blkHdrArr, err := stateproof.FetchIntervalHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests,basics.Round( stateProofIntervalForHandlerTests*3))
+	blkHdrArr, err := stateproof.FetchIntervalHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))
 	a.NoError(err)
 
 	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofIntervalForHandlerTests, blkHdrArr, 1)

@@ -62,6 +62,7 @@ type BlockHeaderFetcher interface {
 	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
+// TransactionFetcher captures the aspects of the Ledger that is used to fetch transactions
 type TransactionFetcher interface {
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 }
