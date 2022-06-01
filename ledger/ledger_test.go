@@ -1988,11 +1988,35 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		accountsCreateOnlineAccountsTable(ctx, tx)
-		accountsCreateTxTailTable(ctx, tx)
-		accountsCreateOnlineRoundParamsTable(ctx, tx)
-		return nil
+		err0 := accountsCreateOnlineAccountsTable(ctx, tx)
+		if err0 != nil {
+			return err0
+		}
+		err0 = accountsCreateTxTailTable(ctx, tx)
+		if err0 != nil {
+			return err0
+		}
+		err0 = accountsCreateOnlineRoundParamsTable(ctx, tx)
+		if err0 != nil {
+			return err0
+		}
+		var ot basics.OverflowTracker
+		var totals ledgercore.AccountTotals
+		for _, data := range genesisInitState.Accounts {
+			ad := ledgercore.ToAccountData(data)
+			totals.AddAccount(proto, ad, &ot)
+		}
+		onlineRoundParams := []ledgercore.OnlineRoundParamsData{
+			{
+				OnlineSupply:    totals.Online.Money.Raw,
+				RewardsLevel:    totals.RewardsLevel,
+				CurrentProtocol: testProtocolVersion,
+			},
+		}
+		return accountsPutOnlineRoundParams(tx, onlineRoundParams, 0)
 	})
+	require.NoError(t, err)
+
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
@@ -2138,7 +2162,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
 	require.Error(t, err)
-	for i := l.Latest() - basics.Round(proto.MaxBalLookback+shorterLookback-1); i <= l.Latest(); i++ {
+	for i := l.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l.Latest(); i++ {
 		online, err := l.OnlineTotals(i)
 		require.NoError(t, err)
 		require.Equal(t, onlineTotals[i], online)
