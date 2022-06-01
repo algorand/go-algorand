@@ -128,9 +128,9 @@ func FetchIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, lates
 }
 
 // GenerateProofOfLightBlockHeaders sets up a tree over the blkHdrArr and returns merkle proof over one of the blocks.
-func GenerateProofOfLightBlockHeaders(proto config.ConsensusParams, blkHdrArr blockHeadersArray, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
-	if blkHdrArr.Length() != proto.StateProofInterval {
-		return nil, fmt.Errorf("received wrong amount of block headers. err: %w - %d != %d", errInvalidParams, blkHdrArr.Length(), proto.StateProofInterval)
+func GenerateProofOfLightBlockHeaders(stateProofInterval uint64, blkHdrArr blockHeadersArray, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
+	if blkHdrArr.Length() != stateProofInterval {
+		return nil, fmt.Errorf("received wrong amount of block headers. err: %w - %d != %d", errInvalidParams, blkHdrArr.Length(), stateProofInterval)
 	}
 
 	tree, err := merklearray.BuildVectorCommitmentTree(

@@ -18,6 +18,7 @@ package test
 
 import (
 	"encoding/json"
+	"github.com/algorand/go-algorand/data/transactions"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -109,6 +110,10 @@ func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte
 	panic("not implemented")
 }
 func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
+	panic("not implemented")
+}
+
+func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
 	panic("not implemented")
 }
 

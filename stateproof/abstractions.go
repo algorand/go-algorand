@@ -18,7 +18,6 @@ package stateproof
 
 import (
 	"context"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -61,4 +60,8 @@ type Accounts interface {
 // BlockHeaderFetcher captures the aspects of the Ledger that is used to fetch block headers
 type BlockHeaderFetcher interface {
 	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+type TransactionFetcher interface {
+	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 }

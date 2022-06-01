@@ -357,7 +357,7 @@ func TestGenerateBlockProof(t *testing.T) {
 		// attempting to get block proof for every block in the interval
 		for i := firstAttestedRound; i < lastAttestedRound; i++ {
 			headerIndex := i - firstAttestedRound
-			proof, err := GenerateProofOfLightBlockHeaders(proto, headers, headerIndex)
+			proof, err := GenerateProofOfLightBlockHeaders(proto.StateProofInterval, headers, headerIndex)
 			a.NoError(err)
 			a.NotNil(proof)
 
@@ -395,6 +395,6 @@ func TestGenerateBlockProofOnSmallArray(t *testing.T) {
 	a.NoError(err)
 	headers = headers[1:]
 
-	_, err = GenerateProofOfLightBlockHeaders(proto, headers, 1)
+	_, err = GenerateProofOfLightBlockHeaders(proto.StateProofInterval, headers, 1)
 	a.ErrorIs(err, errInvalidParams)
 }

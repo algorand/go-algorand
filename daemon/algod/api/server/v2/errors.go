@@ -44,4 +44,5 @@ var (
 	errFailedToStartCatchup                    = "failed to start catchup : %v"
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
+	errRoundGraterThanTheLatest                   = "given round is greater than the latest round"
 )
