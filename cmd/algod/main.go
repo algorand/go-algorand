@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -56,11 +57,44 @@ var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST liste
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
+var consensusJSON = flag.String("C", "", "load consensus from JSON file, {\"protocol name\":{consensus params}}")
 
 func main() {
 	flag.Parse()
 	exitCode := run()
 	os.Exit(exitCode)
+}
+
+func loadConsensus(absolutePath string) error {
+	consensusPath := filepath.Join(absolutePath, "consensus.json")
+	if *consensusJSON != "" {
+		consensusPath = filepath.Join(absolutePath, *consensusJSON)
+	}
+	if *consensusJSON != "COMPILED_ONLY" {
+		fin, err := os.Open(consensusPath)
+
+		if err != nil {
+			if os.IsNotExist(err) && *consensusJSON == "" {
+				return nil
+			}
+			return fmt.Errorf("%s: %v\n", consensusPath, err)
+		}
+		dec := json.NewDecoder(fin)
+		var newConsensus map[string]config.ConsensusParams
+		err = dec.Decode(&newConsensus)
+		if err != nil {
+			return fmt.Errorf("%s: bad ConsensusParams JSON, %v\n", consensusPath, err)
+		}
+		for pnameStr, prot := range newConsensus {
+			pname := protocol.ConsensusVersion(pnameStr)
+			_, collision := config.Consensus[pname]
+			if collision {
+				return fmt.Errorf("%s: duplicate protocol %#v\n", consensusPath, pname)
+			}
+			config.Consensus[pname] = prot
+		}
+	}
+	return nil
 }
 
 func run() int {
@@ -159,6 +193,10 @@ func run() int {
 	}
 	defer fileLock.Unlock()
 
+	err = loadConsensus(absolutePath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	cfg, err := config.LoadConfigFromDisk(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
