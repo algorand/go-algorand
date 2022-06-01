@@ -18,7 +18,6 @@ package test
 
 import (
 	"encoding/json"
-	"github.com/algorand/go-algorand/data/transactions"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,6 +28,7 @@ import (
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
