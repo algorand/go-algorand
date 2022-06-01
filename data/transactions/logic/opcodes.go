@@ -90,17 +90,19 @@ func (lc *linearCost) compute(stack []stackValue) int {
 	return cost
 }
 
-func (lc *linearCost) docCost() string {
+func (lc *linearCost) docCost(argLength int) string {
 	if *lc == (linearCost{}) {
 		return ""
 	}
 	if lc.chunkCost == 0 {
 		return strconv.Itoa(lc.baseCost)
 	}
+	idxFromStart := argLength - lc.depth - 1
+	stackArg := rune(int('A') + idxFromStart)
 	if lc.chunkSize == 1 {
-		return fmt.Sprintf("%d + %d per byte", lc.baseCost, lc.chunkCost)
+		return fmt.Sprintf("%d + %d per byte of %c", lc.baseCost, lc.chunkCost, stackArg)
 	}
-	return fmt.Sprintf("%d + %d per %d bytes", lc.baseCost, lc.chunkCost, lc.chunkSize)
+	return fmt.Sprintf("%d + %d per %d bytes of %c", lc.baseCost, lc.chunkCost, lc.chunkSize, stackArg)
 }
 
 // OpDetails records details such as non-standard costs, immediate arguments, or
@@ -119,8 +121,8 @@ type OpDetails struct {
 	Immediates []immediate // details of each immediate arg to opcode
 }
 
-func (d *OpDetails) docCost() string {
-	cost := d.FullCost.docCost()
+func (d *OpDetails) docCost(argLength int) string {
+	cost := d.FullCost.docCost(argLength)
 	if cost != "" {
 		return cost
 	}
