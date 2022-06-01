@@ -40,8 +40,6 @@ import (
 const catchupPeersForSync = 10
 const blockQueryPeerLimit = 10
 
-var StopAtRound uint64
-
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
@@ -78,6 +76,9 @@ type Service struct {
 	parallelBlocks      uint64
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
+
+	// stopAtRound represents the block number at which the catchup service should pause
+	stopAtRound uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -394,9 +395,14 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 type task func() basics.Round
 
+// The following code changes the value of s.stopAtRound
+func (s *Service) SetStopAtRound(rnd uint64) {
+	s.stopAtRound = rnd
+}
+
 func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool, peerSelector *peerSelector) func() basics.Round {
 	return func() basics.Round {
-		if StopAtRound != uint64(0) && uint64(r) > StopAtRound {
+		if s.stopAtRound != uint64(0) && uint64(r) > s.stopAtRound {
 			return 0
 		}
 		fetchResult := s.fetchAndWrite(r, prevFetchCompleteChan, lookbackChan, peerSelector)

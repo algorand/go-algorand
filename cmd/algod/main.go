@@ -68,9 +68,10 @@ func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
 	config.UpdateVersionDataDir(absolutePath)
+
+	rnd := 0
 	if stopAtRound != nil {
-		rnd, _ := strconv.Atoi(*stopAtRound)
-		algod.StopAtRound = uint64(rnd)
+		rnd, _ = strconv.Atoi(*stopAtRound)
 	}
 
 	if *seed != "" {
@@ -215,6 +216,9 @@ func run() int {
 		RootPath: absolutePath,
 		Genesis:  genesis,
 	}
+
+	// The following code changes the value of s.stopAtRound
+	s.SetStopAtRound(uint64(rnd))
 
 	// Generate a REST API token if one was not provided
 	apiToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)

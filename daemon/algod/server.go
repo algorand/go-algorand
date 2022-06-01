@@ -49,7 +49,6 @@ import (
 )
 
 var server http.Server
-var StopAtRound uint64
 
 // Server represents an instance of the REST API HTTP server
 type Server struct {
@@ -63,6 +62,13 @@ type Server struct {
 	metricCollector      *metrics.MetricService
 	metricServiceStarted bool
 	stopping             chan struct{}
+	// stopAtRound represents the block number at which the catchup service should pause
+	stopAtRound uint64
+}
+
+// The following code changes the value of s.stopAtRound
+func (s *Server) SetStopAtRound(rnd uint64) {
+	s.stopAtRound = rnd
 }
 
 // Initialize creates a Node instance with applicable network services
@@ -71,7 +77,6 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	s.log = logging.Base()
 
 	lib.GenesisJSONText = genesisText
-	node.StopAtRound = StopAtRound
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
@@ -175,6 +180,9 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	if err != nil {
 		return fmt.Errorf("couldn't initialize the node: %s", err)
 	}
+
+	// The following code changes the value of s.node.stopAtRound
+	s.node.SetStopAtRound(s.stopAtRound)
 
 	return nil
 }

@@ -180,6 +180,90 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
+func helperTestPauseOnRound(t *testing.T, rnd uint64, numBlocks int) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	addBlocks(t, remote, blk, numBlocks)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	auth := &mockedAuthenticator{fail: true}
+	initialLocalRound := local.LastRound()
+	require.True(t, 0 == initialLocalRound)
+
+	// Make Service
+	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
+	s.deadlineTimeout = 2 * time.Second
+
+	// changing s.stopAtRound to a non-zero value, which makes the catchup to halt at block number rnd
+	s.SetStopAtRound(rnd)
+
+	s.Start()
+	defer s.Stop()
+	// wait past the initial sync - which is known to fail due to the above "auth"
+	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
+	require.Equal(t, initialLocalRound, local.LastRound())
+	auth.alter(-1, false)
+
+	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
+	// until the synchronization is complete.
+	waitStart := time.Now()
+	for time.Now().Sub(waitStart) < time.Duration(numBlocks)*s.deadlineTimeout {
+		if uint64(local.LastRound()) == rnd {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// Asserts that the last block is the one we expect
+	lr := local.LastRound()
+	require.Equal(t, uint64(lr), rnd)
+
+	for r := basics.Round(1); r < local.LastRound(); r++ {
+		localBlock, err := local.Block(r)
+		require.NoError(t, err)
+		remoteBlock, err := remote.Block(r)
+		require.NoError(t, err)
+		require.Equal(t, remoteBlock.Hash(), localBlock.Hash())
+	}
+}
+
+func TestPauseOnRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// number of blocks
+	numBlocks := 10
+
+	// pause on round is disabled
+	rnd := uint64(0)
+	helperTestPauseOnRound(t, rnd, numBlocks)
+
+	// pause on round is enabled to halt catchup at block number 5
+	rnd = uint64(5)
+	helperTestPauseOnRound(t, rnd, numBlocks)
+
+}
+
 func TestPeriodicSync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

@@ -122,8 +122,10 @@ func (nc NodeController) buildAlgodCommand(args AlgodStartArgs) *exec.Cmd {
 	}
 
 	stopAtRound := args.StopAtRound
-	startArgs = append(startArgs, "-round")
-	startArgs = append(startArgs, stopAtRound)
+	if len(stopAtRound) > 0 {
+		startArgs = append(startArgs, "-round")
+		startArgs = append(startArgs, stopAtRound)
+	}
 
 	// Check if we should be using algoh
 	var cmd string

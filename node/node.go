@@ -61,8 +61,6 @@ const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
 )
 
-var StopAtRound uint64
-
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
 	LastRound                          basics.Round
@@ -140,6 +138,9 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	compactCert *compactcert.Worker
+
+	// stopAtRound represents the block number at which the catchup service should pause
+	stopAtRound uint64
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -161,6 +162,11 @@ type TxnWithStatus struct {
 	ApplyData transactions.ApplyData
 }
 
+// The following code changes the value of stopAtRound variable
+func (node *AlgorandFullNode) SetStopAtRound(rnd uint64) {
+	node.stopAtRound = rnd
+}
+
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
@@ -170,7 +176,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
 	node.devMode = genesis.DevMode
-	catchup.StopAtRound = StopAtRound
 
 	if node.devMode {
 		cfg.DisableNetworking = true
@@ -378,6 +383,8 @@ func (node *AlgorandFullNode) Start() {
 		startNetwork()
 		node.catchpointCatchupService.Start(node.ctx)
 	} else {
+		// The following code changes the value of node.catchupService.stopAtRound
+		node.catchupService.SetStopAtRound(node.stopAtRound)
 		node.catchupService.Start()
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
