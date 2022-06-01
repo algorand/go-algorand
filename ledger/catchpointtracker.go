@@ -357,6 +357,12 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	dcr.catchpointDataWriting = &ct.catchpointDataWriting
 	dcr.enableGeneratingCatchpointFiles = ct.enableGeneratingCatchpointFiles
 
+	{
+		rounds := calculateCatchpointRounds(
+			dcr.oldBase+1, dcr.oldBase+basics.Round(dcr.offset), ct.catchpointInterval)
+		dcr.catchpointSecondStage = (len(rounds) > 0)
+	}
+
 	return dcr
 }
 

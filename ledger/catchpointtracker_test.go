@@ -486,9 +486,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
-		ml.trackers.mu.Lock()
-		ml.trackers.lastFlushTime = time.Time{}
-		ml.trackers.mu.Unlock()
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
@@ -532,9 +529,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
 
-			ml2.trackers.mu.Lock()
-			ml2.trackers.lastFlushTime = time.Time{}
-			ml2.trackers.mu.Unlock()
 			ml2.trackers.newBlock(blk, delta)
 			ml2.trackers.committedUpTo(i)
 
@@ -908,9 +902,6 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		}
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 
-		ml.trackers.mu.Lock()
-		ml.trackers.lastFlushTime = time.Time{}
-		ml.trackers.mu.Unlock()
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
