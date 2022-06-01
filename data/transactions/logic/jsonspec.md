@@ -151,3 +151,18 @@ The following are interpreted equivalently
 {1: 1}
 {"1": 1}
 ```
+
+```json
+{002: 2}
+{"002": 2}
+```
+
+```json
+{0.2: 3}
+{"0.2": 3}
+```
+
+```json
+{1e16: 1}
+{"1e16": 1}
+```
