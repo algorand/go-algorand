@@ -1055,7 +1055,9 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
 	}
-	opcost := deets.Cost(cx.program, cx.pc, oneBlank)
+	minStackDepth := deets.FullCost.depth + 1
+	blankStack := make([]stackValue, minStackDepth)
+	opcost := deets.Cost(cx.program, cx.pc, blankStack)
 	if opcost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}

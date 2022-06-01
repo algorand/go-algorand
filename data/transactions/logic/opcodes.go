@@ -72,6 +72,7 @@ type linearCost struct {
 	baseCost  int
 	chunkCost int
 	chunkSize int
+	depth     int
 }
 
 // divideCeilUnsafely provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
@@ -84,7 +85,7 @@ func (lc *linearCost) compute(stack []stackValue) int {
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
 		// Uses divideCeilUnsafely rather than (len/size) to match how Ethereum discretizes hashing costs.
-		cost += divideCeilUnsafely(lc.chunkCost*len(stack[len(stack)-1].Bytes), lc.chunkSize)
+		cost += divideCeilUnsafely(lc.chunkCost*len(stack[len(stack)-1-lc.depth].Bytes), lc.chunkSize)
 	}
 	return cost
 }
@@ -147,7 +148,7 @@ func (d *OpDetails) docCost() string {
 // both static (the program, which can be used to find the immediate values
 // supplied), and dynamic (the stack, which can be used to find the run-time
 // arguments supplied). Cost is used at run-time. docCost returns similar
-// information in human-reable form.
+// information in human-readable form.
 func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	cost := d.FullCost.compute(stack)
 	if cost != 0 {
@@ -214,9 +215,9 @@ func (d OpDetails) only(m runMode) OpDetails {
 	return clone
 }
 
-func (d OpDetails) costByLength(initial, perChunk, chunkSize int) OpDetails {
+func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	clone := d
-	clone.FullCost = costByLength(initial, perChunk, chunkSize).FullCost
+	clone.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
 	return clone
 }
 
@@ -263,12 +264,12 @@ func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
 	return opd
 }
 
-func costByLength(initial int, perChunk int, chunkSize int) OpDetails {
+func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	if initial < 1 || perChunk <= 0 || chunkSize < 1 || chunkSize > maxStringSize {
 		panic("bad cost configuration")
 	}
 	d := opDefault()
-	d.FullCost = linearCost{initial, perChunk, chunkSize}
+	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}
 	return d
 }
 
@@ -490,8 +491,8 @@ var OpSpecs = []OpSpec{
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
-	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16)},
-	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7)},
+	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
+	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
