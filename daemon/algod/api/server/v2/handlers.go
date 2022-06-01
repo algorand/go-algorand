@@ -1215,10 +1215,11 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompilePa
 // StateProof returns the state proof for a given round.
 // (GET /v2/stateproofs/{round})
 func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
-	if v2.Node.LedgerForAPI().Latest() < basics.Round(round) {
-		return internalError(ctx, errors.New(errRoundGraterThanTheLatest), errRoundGraterThanTheLatest, v2.Log)
+	ledger := v2.Node.LedgerForAPI()
+	if ledger.Latest() < basics.Round(round) {
+		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
-	tx, err := stateproof.GetStateProofTransactionForRound(v2.Node.LedgerForAPI(), basics.Round(round), v2.Node.LedgerForAPI().Latest())
+	tx, err := stateproof.GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
 	if err != nil {
 		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
 			return notFound(ctx, err, err.Error(), v2.Log)
@@ -1237,11 +1238,12 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 // GetProofForLightBlockHeader Gets a proof of a light block header for a given round
 // (GET /v2/blocks/lightblockheader/{round}/proof)
 func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
-	if v2.Node.LedgerForAPI().Latest() < basics.Round(round) {
-		return internalError(ctx, errors.New(errRoundGraterThanTheLatest), errRoundGraterThanTheLatest, v2.Log)
+	ledger := v2.Node.LedgerForAPI()
+	if ledger.Latest() < basics.Round(round) {
+		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
 
-	stateProof, err := stateproof.GetStateProofTransactionForRound(v2.Node.LedgerForAPI(), basics.Round(round), v2.Node.LedgerForAPI().Latest())
+	stateProof, err := stateproof.GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
 	if err != nil {
 		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
 			return notFound(ctx, err, err.Error(), v2.Log)
@@ -1253,7 +1255,7 @@ func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) 
 	firstAttestedRound := stateProof.Message.FirstAttestedRound
 	stateProofInterval := lastAttestedRound - firstAttestedRound + 1
 
-	blkHdrArr, err := stateproof.FetchIntervalHeaders(v2.Node.LedgerForAPI(), stateProofInterval, basics.Round(lastAttestedRound))
+	blkHdrArr, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
 	if err != nil {
 		return notFound(ctx, err, err.Error(), v2.Log)
 	}

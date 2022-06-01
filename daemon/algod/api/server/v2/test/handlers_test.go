@@ -1007,7 +1007,7 @@ func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
 	return blk
 }
 
-func addStateProofInNeeded(blk bookkeeping.Block) bookkeeping.Block {
+func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	round := uint64(blk.Round())
 	if round%stateProofIntervalForHandlerTests == (stateProofIntervalForHandlerTests/2+18) && round > stateProofIntervalForHandlerTests*2 {
 		return blk
@@ -1038,7 +1038,7 @@ func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
 	ledger := h.Node.LedgerForAPI()
 	for i := 0; i < numRounds; i++ {
 		blk := newEmptyBlock(a, ledger)
-		blk = addStateProofInNeeded(blk)
+		blk = addStateProofIfNeeded(blk)
 		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
 		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 	}
@@ -1124,7 +1124,7 @@ func TestGetBlockProof200(t *testing.T) {
 	a.NoError(handler.GetProofForLightBlockHeader(ctx, stateProofIntervalForHandlerTests*2+2))
 	a.Equal(200, responseRecorder.Code)
 
-	blkHdrArr, err := stateproof.FetchIntervalHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))
+	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))
 	a.NoError(err)
 
 	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofIntervalForHandlerTests, blkHdrArr, 1)

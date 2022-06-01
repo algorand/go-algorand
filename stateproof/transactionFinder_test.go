@@ -96,7 +96,7 @@ func TestStateproofTransactionForRound(t *testing.T) {
 	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
 	for i := 0; i < 1000; i++ {
 		blk := newEmptyBlock(basics.Round(i))
-		blk = addStateProofInNeeded(blk)
+		blk = addStateProofIfNeeded(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 

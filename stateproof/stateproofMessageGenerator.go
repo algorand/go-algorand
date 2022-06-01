@@ -36,7 +36,7 @@ var errProvenWeightOverflow = errors.New("overflow computing provenWeight")
 
 // The Array implementation for block headers, required to build the merkle tree from them.
 //msgp:ignore blockHeadersArray
-type blockHeadersArray []bookkeeping.BlockHeader
+type blockHeadersArray []bookkeeping.LightBlockHeader
 
 func (b blockHeadersArray) Length() uint64 {
 	return uint64(len(b))
@@ -46,7 +46,7 @@ func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= b.Length() {
 		return nil, fmt.Errorf("%w: pos - %d, array length - %d", errOutOfBound, pos, b.Length())
 	}
-	return b[pos].ToLightBlockHeader(), nil
+	return b[pos], nil
 }
 
 // GenerateStateProofMessage returns a stateproof message that contains all the necessary data for proving on Algorand's state.
@@ -95,7 +95,7 @@ func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams,
 		return nil, fmt.Errorf("createHeaderCommitment stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
-	blkHdrArr, err := FetchIntervalHeaders(l, stateProofInterval, latestRoundHeader.Round)
+	blkHdrArr, err := FetchLightHeaders(l, stateProofInterval, latestRoundHeader.Round)
 	if err != nil {
 		return crypto.GenericDigest{}, err
 	}
@@ -111,8 +111,8 @@ func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams,
 	return tree.Root(), nil
 }
 
-// FetchIntervalHeaders returns the headers of the blocks in the interval
-func FetchIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.BlockHeader, error) {
+// FetchLightHeaders returns the headers of the blocks in the interval
+func FetchLightHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.LightBlockHeader, error) {
 	blkHdrArr := make(blockHeadersArray, stateProofInterval)
 	firstRound := latestRound - basics.Round(stateProofInterval) + 1
 
@@ -122,7 +122,7 @@ func FetchIntervalHeaders(l BlockHeaderFetcher, stateProofInterval uint64, lates
 		if err != nil {
 			return nil, err
 		}
-		blkHdrArr[i] = hdr
+		blkHdrArr[i] = hdr.ToLightBlockHeader()
 	}
 	return blkHdrArr, nil
 }

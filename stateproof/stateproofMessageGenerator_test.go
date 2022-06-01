@@ -235,7 +235,7 @@ func verifySha256BlockHeadersCommitments(a *require.Assertions, message statepro
 	blkHdrArr := make(blockHeadersArray, message.LastAttestedRound-message.FirstAttestedRound+1)
 	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
 		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
-		blkHdrArr[i] = hdr
+		blkHdrArr[i] = hdr.ToLightBlockHeader()
 	}
 
 	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
@@ -350,7 +350,7 @@ func TestGenerateBlockProof(t *testing.T) {
 		firstAttestedRound := tx.Txn.Message.FirstAttestedRound
 		lastAttestedRound := tx.Txn.Message.LastAttestedRound
 
-		headers, err := FetchIntervalHeaders(s, proto.StateProofInterval, basics.Round(lastAttestedRound))
+		headers, err := FetchLightHeaders(s, proto.StateProofInterval, basics.Round(lastAttestedRound))
 		a.NoError(err)
 		a.Equal(proto.StateProofInterval, uint64(len(headers)))
 
@@ -361,7 +361,7 @@ func TestGenerateBlockProof(t *testing.T) {
 			a.NoError(err)
 			a.NotNil(proof)
 
-			lightheader := headers[headerIndex].ToLightBlockHeader()
+			lightheader := headers[headerIndex]
 			err = merklearray.VerifyVectorCommitment(
 				tx.Txn.Message.BlockHeadersCommitment,
 				map[uint64]crypto.Hashable{headerIndex: lightheader},
@@ -391,7 +391,7 @@ func TestGenerateBlockProofOnSmallArray(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	s.advanceLatest(2 * proto.StateProofInterval)
-	headers, err := FetchIntervalHeaders(s, proto.StateProofInterval, basics.Round(2*proto.StateProofInterval))
+	headers, err := FetchLightHeaders(s, proto.StateProofInterval, basics.Round(2*proto.StateProofInterval))
 	a.NoError(err)
 	headers = headers[1:]
 
