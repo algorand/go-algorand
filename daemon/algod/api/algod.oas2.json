@@ -1299,7 +1299,7 @@
         }
       }
     },
-    "/v2/blocks/lightblockheader/{round}/proof": {
+    "/v2/blocks/{round}/lightblockheader/proof": {
       "parameters": [
         {
           "type": "integer",
