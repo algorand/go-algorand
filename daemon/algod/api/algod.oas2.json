@@ -1263,7 +1263,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "get a state proof for a given round",
+        "summary": "get a state proof that covers a given round",
         "operationId": "StateProof",
         "responses": {
           "200": {
@@ -1276,7 +1276,7 @@
             }
           },
           "404": {
-            "description": "Could not find state proof for the given round",
+            "description": "Could not find a state proof that covers a given round",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1316,7 +1316,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Gets a proof of a light block header for a given round",
+        "summary": "Gets a proof for a given light block header inside a state proof commitment",
         "operationId": "GetProofForLightBlockHeader",
         "responses": {
           "200": {
@@ -1329,7 +1329,7 @@
             }
           },
           "404": {
-            "description": "Could not create proof since data is missing",
+            "description": "Could not create proof since some data is missing",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }

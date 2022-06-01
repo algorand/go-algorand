@@ -2691,7 +2691,7 @@
                 }
               }
             },
-            "description": "Could not create proof since data is missing"
+            "description": "Could not create proof since some data is missing"
           },
           "500": {
             "content": {
@@ -2718,7 +2718,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Gets a proof of a light block header for a given round"
+        "summary": "Gets a proof for a given light block header inside a state proof commitment"
       }
     },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
@@ -3555,7 +3555,7 @@
                 }
               }
             },
-            "description": "Could not find state proof for the given round"
+            "description": "Could not find a state proof that covers a given round"
           },
           "500": {
             "content": {
@@ -3582,7 +3582,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "get a state proof for a given round"
+        "summary": "get a state proof that covers a given round"
       }
     },
     "/v2/status": {
