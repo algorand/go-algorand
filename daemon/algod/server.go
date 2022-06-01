@@ -66,7 +66,7 @@ type Server struct {
 	stopAtRound uint64
 }
 
-// The following code changes the value of s.stopAtRound
+// SetStopAtRound changes the value of s.stopAtRound
 func (s *Server) SetStopAtRound(rnd uint64) {
 	s.stopAtRound = rnd
 }

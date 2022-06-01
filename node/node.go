@@ -162,7 +162,7 @@ type TxnWithStatus struct {
 	ApplyData transactions.ApplyData
 }
 
-// The following code changes the value of stopAtRound variable
+// SetStopAtRound changes the value of node.stopAtRound variable
 func (node *AlgorandFullNode) SetStopAtRound(rnd uint64) {
 	node.stopAtRound = rnd
 }

@@ -395,7 +395,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 type task func() basics.Round
 
-// The following code changes the value of s.stopAtRound
+// SetStopAtRound changes the value of s.stopAtRound
 func (s *Service) SetStopAtRound(rnd uint64) {
 	s.stopAtRound = rnd
 }
