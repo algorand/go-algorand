@@ -4781,22 +4781,19 @@ func isPrimitiveJSON(jsonText []byte) (bool, error) {
 }
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
-	// guard against primitives
-	isPrimitive, err := isPrimitiveJSON(jsonText)
-	if err != nil {
-		return nil, err
-	} else if isPrimitive {
-		return nil, fmt.Errorf("invalid json text, only json object is allowed")
-	}
-
 	// parse JSON with Algorand's standard JSON library
 	var parsed map[string]json.RawMessage
-	err = protocol.DecodeJSON(jsonText, &parsed)
+	err := protocol.DecodeJSON(jsonText, &parsed)
 
 	if err != nil {
 		// if the error was caused by duplicate keys
 		if strings.Contains(err.Error(), "cannot decode into a non-pointer value") {
 			return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
+		}
+
+		// if the error was caused by non-json object
+		if strings.Contains(err.Error(), "read map - expect char '{' but got char") {
+			return nil, fmt.Errorf("invalid json text, only json object is allowed")
 		}
 
 		return nil, fmt.Errorf("invalid json text")
@@ -4828,6 +4825,17 @@ func opJSONRef(cx *EvalContext) error {
 	var stval stackValue
 	_, ok = parsed[key]
 	if !ok {
+		// if the key is not found, first check whether the JSON text is the null value
+		// by checking whether it is a primitive JSON value. Any other primitive
+		// (or array) would have thrown an error previously during `parseJSON`.
+		isPrimitive, err := isPrimitiveJSON(cx.stack[last].Bytes)
+		if err == nil && isPrimitive {
+			err = fmt.Errorf("invalid json text, only json object is allowed")
+		}
+		if err != nil {
+			return fmt.Errorf("error while parsing JSON text, %v", err)
+		}
+
 		return fmt.Errorf("key %s not found in JSON text", key)
 	}
 
