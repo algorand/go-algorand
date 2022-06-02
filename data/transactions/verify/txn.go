@@ -100,7 +100,7 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
-	batchVerifier := crypto.MakeBatchVerifierDefaultSize()
+	batchVerifier := crypto.MakeBatchVerifier()
 
 	if err := TxnBatchVerify(s, txnIdx, groupCtx, batchVerifier); err != nil {
 		return err
@@ -133,7 +133,7 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
-	batchVerifier := crypto.MakeBatchVerifierDefaultSize()
+	batchVerifier := crypto.MakeBatchVerifier()
 
 	if groupCtx, err = TxnGroupBatchVerify(stxs, contextHdr, cache, batchVerifier); err != nil {
 		return nil, err
@@ -246,7 +246,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
-	batchVerifier := crypto.MakeBatchVerifierDefaultSize()
+	batchVerifier := crypto.MakeBatchVerifier()
 
 	if err := LogicSigSanityCheckBatchVerify(txn, groupIndex, groupCtx, batchVerifier); err != nil {
 		return err
@@ -405,7 +405,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					txnGroups := arg.([][]transactions.SignedTxn)
 					groupCtxs := make([]*GroupContext, len(txnGroups))
 
-					batchVerifier := crypto.MakeBatchVerifier(len(payset))
+					batchVerifier := crypto.MakeBatchVerifierWithHint(len(payset))
 					for i, signTxnsGrp := range txnGroups {
 						groupCtxs[i], grpErr = TxnGroupBatchVerify(signTxnsGrp, blkHeader, nil, batchVerifier)
 						// abort only if it's a non-cache error.

@@ -62,15 +62,14 @@ func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
 	RandBytes(randBuf)
 }
 
-// MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
-// amount of free space to enqueue signatures without expanding
-func MakeBatchVerifierDefaultSize() *BatchVerifier {
-	return MakeBatchVerifier(minBatchVerifierAlloc)
+// MakeBatchVerifier creates a BatchVerifier instance.
+func MakeBatchVerifier() *BatchVerifier {
+	return MakeBatchVerifierWithHint(minBatchVerifierAlloc)
 }
 
-// MakeBatchVerifier create a BatchVerifier instance. This function pre-allocates
-// a given space so it will not expaned the storage
-func MakeBatchVerifier(hint int) *BatchVerifier {
+// MakeBatchVerifierWithHint creates a BatchVerifier instance. This function pre-allocates
+// amount of free space to enqueue signatures without expanding
+func MakeBatchVerifierWithHint(hint int) *BatchVerifier {
 	// preallocate enough storage for the expected usage. We will reallocate as needed.
 	if hint < minBatchVerifierAlloc {
 		hint = minBatchVerifierAlloc
