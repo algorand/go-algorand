@@ -2000,6 +2000,10 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		if err0 != nil {
 			return err0
 		}
+		err0 = accountsCreateCatchpointFirstStageInfoTable(ctx, tx)
+		if err0 != nil {
+			return err0
+		}
 		var ot basics.OverflowTracker
 		var totals ledgercore.AccountTotals
 		for _, data := range genesisInitState.Accounts {
@@ -2123,7 +2127,11 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		require.Equal(t, origBalances[i], wo)
 		origRewardsBalances[i] = acct.MicroAlgos
 
-		oad, err := l.LookupAgreement(balancesRound, addr)
+		offset, err := l.accts.roundOffset(rnd)
+		require.NoError(t, err)
+		rewardsProto := config.Consensus[l.accts.versions[offset]]
+		rewardsLevel := l.accts.roundTotals[offset].RewardsLevel
+		oad := acct.OnlineAccountData(rewardsProto, rewardsLevel)
 		require.NoError(t, err)
 		origAgreementBalances[i] = oad.MicroAlgosWithRewards
 	}
