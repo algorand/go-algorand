@@ -21,14 +21,19 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
@@ -1270,4 +1275,255 @@ func TestTxPoolSizeLimits(t *testing.T) {
 			require.NoError(t, transactionPool.RememberOne(txgroup[0]))
 		}
 	}
+}
+
+func TestTStateProofLogging(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+
+	numOfAccounts := 1
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	firstAddress := addresses[0]
+	initAccounts := initAcc(map[basics.Address]uint64{firstAddress: proto.MinBalance*1000 + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize)})
+	stateproofIntervals := uint64(256) 
+	keys, err := merklesignature.New(0, uint64(stateproofIntervals)*stateproofIntervals+1, stateproofIntervals)
+	require.NoError(t, err)
+
+	firstAcct := initAccounts[firstAddress]
+	firstAcct.StateProofID = *keys.GetVerifier()
+	initAccounts[firstAddress] = firstAcct
+	acctData := initAccounts[addresses[0]]
+	acctData.Status = basics.Online
+	acctData.VoteLastValid = 1000000
+	initAccounts[addresses[0]] = acctData
+	ledger := makeMockLedgerFuture(t, initAccounts)
+
+	var b bookkeeping.Block
+	b.BlockHeader.GenesisID = "pooltest"
+	b.BlockHeader.GenesisHash = ledger.GenesisHash()
+	b.CurrentProtocol = protocol.ConsensusFuture
+
+	b.BlockHeader.Round = 1
+
+	//	var tx transactions.SignedTxn
+	//	tx.Txn.GenesisID = b.BlockHeader.GenesisID
+	//	tx.Txn.GenesisHash = b.BlockHeader.GenesisHash
+
+	//	txib, err := b.EncodeSignedTxn(tx, transactions.ApplyData{})
+
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
+	transactionPool.logAssembleStats = true
+
+	phdr, err := ledger.BlockHdr(0)
+	require.NoError(t, err)
+	b.BlockHeader.Branch = phdr.Hash()
+
+	eval, err := ledger.StartEvaluator(b.BlockHeader, 0, 10000)
+	require.NoError(t, err)
+
+	for i := 1; i < 513; i++ {
+		blk, err := eval.GenerateBlock()
+		require.NoError(t, err)
+
+		//		blk, err := transactionPool.AssembleBlock(basics.Round(i), time.Time{})
+		//		require.NoError(t, err)
+
+		err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		b.BlockHeader.Round++
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
+
+		phdr, err := ledger.BlockHdr(basics.Round(i))
+		require.NoError(t, err)
+		b.BlockHeader.Branch = phdr.Hash()
+
+		if i == 2550 {
+			spt := b.BlockHeader.StateProofTracking[protocol.StateProofBasic]
+			spt.StateProofVotersTotalWeight = basics.MicroAlgos{Raw: 1}
+			b.BlockHeader.StateProofTracking[protocol.StateProofBasic] = spt
+		}
+
+		eval, err = ledger.StartEvaluator(b.BlockHeader, 0, 10000)
+		require.NoError(t, err)
+
+	}
+
+
+
+	//////////////////////////
+
+	lookback := basics.Round(512).SubSaturate(basics.Round(proto.StateProofVotersLookback))
+	voters, err := ledger.VotersForStateProof(lookback)
+	require.NoError(t, err)
+	require.NotNil(t, voters)
+
+
+	/*
+	if voters != nil {
+		root, total = voters.Tree.Root(), voters.TotalWeight
+	}
+
+		basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
+		if err != nil {
+			return err
+		}
+
+		basicStateProof.StateProofNextRound = eval.state.stateProofNext()
+
+	*/
+	///////////////////////////
+
+	proof := generateProofForTesting(uint64(512), voters.Participants, voters.Tree, keys, voters.TotalWeight.Raw, t)
+
+	uniqueTxID := 0
+	tx := transactions.Transaction{
+		Type: protocol.StateProofTx,
+		Header: transactions.Header{
+			Sender:      firstAddress,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+			FirstValid:  512,
+			LastValid:   1024,
+			Note:        []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)},
+			GenesisHash: ledger.GenesisHash(),
+		},
+		StateProofTxnFields: transactions.StateProofTxnFields{
+			StateProofIntervalLatestRound: 512,
+			StateProof:                    *proof,
+			StateProofMessage: stateproofmsg.Message{
+				LnProvenWeight: 1,
+			},
+		},
+	}
+
+	signedTx := tx.Sign(secrets[0])
+	txib, err := b.EncodeSignedTxn(signedTx, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	txgroup := []transactions.SignedTxn{signedTx}
+	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
+
+	err = eval.TransactionGroup(txgroupad)
+	require.NoError(t, err)
+
+	aa := transactionPool.assemblyResults.blk.Block()
+	aa.Payset = append(transactionPool.assemblyResults.blk.Block().Payset, txib)
+	// consume the transaction of allowed limit
+	//	require.Error(t, transactionPool.RememberOne(signedTx))
+	uniqueTxID++
+
+	_, err = transactionPool.AssembleBlock(513, time.Time{})
+	require.NoError(t, err)	
+
+}
+
+type testMessage []byte
+
+func (m testMessage) IntoStateProofMessageHash() stateproof.MessageHash {
+	hsh := stateproof.MessageHash{}
+	copy(hsh[:], m)
+	return hsh
+}
+
+func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklesignature.Verifier) []basics.Participant {
+	parts := make([]basics.Participant, 0, numberOfParticipant)
+
+	for i := 0; i < numberOfParticipant; i++ {
+		part := basics.Participant{
+			PK:     *key,
+			Weight: uint64(totalWeight / 2 / numberOfParticipant),
+		}
+
+		parts = append(parts, part)
+	}
+	return parts
+}
+
+func generateProofForTesting(
+	round uint64,
+	partArray basics.ParticipantsArray,
+	partTree *merklearray.Tree,
+	keys *merklesignature.Secrets,
+	totalWeight uint64,
+	t *testing.T) *stateproof.StateProof {
+
+
+	//	npartHi := 1                       //2
+	//	npartLo := 1                       //100
+
+	npart := 1//npartHi + npartLo
+
+	// data := testMessage("hello world").IntoStateProofMessageHash()
+	//	provenWt := uint64(totalWeight / 2)
+
+	data := stateproofmsg.Message{
+		LnProvenWeight: 1,
+	}.IntoStateProofMessageHash()
+
+
+	//	var parts []basics.Participant
+	var sigs []merklesignature.Signature
+	//	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartHi, key.GetVerifier())...)
+	//	parts = append(parts, createParticipantSliceWithWeight(totalWeight, npartLo, key.GetVerifier())...)
+
+	signerInRound := keys.GetSigner(round)
+	sig, err := signerInRound.SignBytes(data[:])
+	require.NoError(t, err)
+
+	for i := 0; i < npart; i++ {
+		sigs = append(sigs, sig)
+	}
+
+	//		partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: stateproof.HashType})
+	//	require.NoError(t, err)
+
+	stateProofStrengthTargetForTests := uint64(256)
+	//	b, err := stateproof.MkBuilder(data, round, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
+	b, err := stateproof.MkBuilder(data, round, uint64(totalWeight/2),
+		partArray, partTree, stateProofStrengthTargetForTests)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < uint64(npart); i++ {
+		p, err := b.Present(i)
+		require.False(t, p)
+		require.NoError(t, err)
+		err = b.IsValid(i, sigs[i], true)
+		require.NoError(t, err)
+		b.Add(i, sigs[i])
+
+		// sanity check that the builder add the signature
+		isPresent, err := b.Present(i)
+		require.NoError(t, err)
+		require.True(t, isPresent)
+	}
+
+	proof, err := b.Build()
+	require.NoError(t, err)
+
+	return proof
+	/*
+		p := paramsForTest{
+			sp:                   *proof,
+			provenWeight:         provenWt,
+			partCommitment:       partcom.Root(),
+			numberOfParticipnets: uint64(npart),
+			data:                 data,
+		}
+		return p
+	*/
 }

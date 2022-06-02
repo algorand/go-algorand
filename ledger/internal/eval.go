@@ -1113,13 +1113,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Only do those checks if we are validating or generating. It is useful to skip them
 	// if we cannot provide account data that contains enough information to
 	// compute the correct minimum balance (the case with indexer which does not store it).
-	if eval.validate || eval.generate {
+	/*	if eval.validate || eval.generate {
 		err := eval.checkMinBalance(cow)
 		if err != nil {
 			return fmt.Errorf("transaction %v: %w", txid, err)
 		}
 	}
-
+*/
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)
 

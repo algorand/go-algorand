@@ -57,7 +57,9 @@ type AssembleBlockStats struct {
 	ProcessingTime            transactionProcessingTimeDistibution
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
-	HasStateProofNextRound    uint64 // next round for which state proof if expected. Set only if this block has a state proof
+	StateProofNextRound       uint64 // next round for which state proof if expected
+	StateProofSignedWeight    uint64 // state proof signed weight (0 if no SP is added)
+	StateProofNumReveals      int    // state proof number of reveals  (0 if no SP is added)
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout
