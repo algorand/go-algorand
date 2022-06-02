@@ -1876,7 +1876,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupKvPairStmt, err = r.Prepare("SELECT value FROM kvstore WHERE key = ?")
+	qs.lookupKvPairStmt, err = r.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
 	if err != nil {
 		return nil, err
 	}
@@ -1961,17 +1961,29 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-func (qs *accountsDbQueries) lookupKvPair(key string) (value string, ok bool, err error) {
+type persistedValue struct {
+	value *string
+	round basics.Round
+}
+
+func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err error) {
 	err = db.Retry(func() error {
-		err := qs.lookupKvPairStmt.QueryRow(key).Scan(&value)
+		var v sql.NullString
+		err := qs.lookupKvPairStmt.QueryRow(key).Scan(&pv.round, &v)
+		fmt.Printf("lookupKeyValue(%s) %+v %+v\n", key, pv, v)
 		if err != nil {
+			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 			if err == sql.ErrNoRows {
-				return nil // value and ok remain zero values
+				// Return the zero value of data
+				err = fmt.Errorf("unable to query value for key %v : %w", key, err)
 			}
 			return err
 		}
-		// value has been set by Scan
-		ok = true
+		if v.Valid { // We got a non-null value, so it exists
+			pv.value = &v.String
+			return nil
+		}
+		// we don't have that key, just return pv with the database round (pv.value==nil)
 		return nil
 	})
 	return
