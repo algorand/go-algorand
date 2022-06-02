@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -4914,6 +4915,15 @@ func TestIsPrimitive(t *testing.T) {
 		require.Nil(t, err)
 		require.False(t, primitive)
 	}
+}
+
+func TestProtocolParseDuplicateErrMsg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	text := `{"key0": "algo", "key0": "algo"}`
+	var parsed map[string]json.RawMessage
+	err := protocol.DecodeJSON([]byte(text), &parsed)
+	require.Contains(t, err.Error(), "cannot decode into a non-pointer value")
+	require.Error(t, err)
 }
 
 func TestOpJSONRef(t *testing.T) {
