@@ -360,6 +360,19 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// LightBlockHeaderProof defines model for LightBlockHeaderProof.
+type LightBlockHeaderProof struct {
+
+	// The index of the light block header in the vector commitment tree
+	Index uint64 `json:"index"`
+
+	// The encoded proof.
+	Proof []byte `json:"proof"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
+}
+
 // ParticipationKey defines model for ParticipationKey.
 type ParticipationKey struct {
 
@@ -640,6 +653,9 @@ type DryrunResponse struct {
 	ProtocolVersion string            `json:"protocol-version"`
 	Txns            []DryrunTxnResult `json:"txns"`
 }
+
+// LightBlockHeaderProofResponse defines model for LightBlockHeaderProofResponse.
+type LightBlockHeaderProofResponse LightBlockHeaderProof
 
 // NodeStatusResponse defines model for NodeStatusResponse.
 type NodeStatusResponse struct {

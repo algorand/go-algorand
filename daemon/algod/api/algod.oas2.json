@@ -1263,7 +1263,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "get a state proof for a given round",
+        "summary": "get a state proof that covers a given round",
         "operationId": "StateProof",
         "responses": {
           "200": {
@@ -1276,7 +1276,60 @@
             }
           },
           "404": {
-            "description": "Could not find state proof for the given round",
+            "description": "Could not find a state proof that covers a given round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/blocks/{round}/lightblockheader/proof": {
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true,
+          "minimum": 0
+        }
+      ],
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets a proof for a given light block header inside a state proof commitment",
+        "operationId": "GetProofForLightBlockHeader",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LightBlockHeaderProofResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not create proof since some data is missing",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2614,6 +2667,30 @@
           "format": "byte"
         }
       }
+    },
+    "LightBlockHeaderProof": {
+      "description": "Proof of membership and position of a light block header.",
+      "type": "object",
+      "required": [
+        "index",
+        "treedepth",
+        "proof"
+      ],
+      "properties": {
+        "index": {
+          "description": "The index of the light block header in the vector commitment tree",
+          "type": "integer"
+        },
+        "treedepth": {
+          "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+          "type": "integer"
+        },
+        "proof": {
+          "description": "The encoded proof.",
+          "type": "string",
+          "format": "byte"
+        }
+      }
     }
   },
   "parameters": {
@@ -2787,6 +2864,12 @@
     }
   },
   "responses": {
+    "LightBlockHeaderProofResponse": {
+      "description": "Proof of a light block header.",
+      "schema": {
+        "$ref": "#/definitions/LightBlockHeaderProof"
+      }
+    },
     "StateProofResponse": {
       "description": "StateProofResponse wraps the StateProof type in a response.",
       "schema": {

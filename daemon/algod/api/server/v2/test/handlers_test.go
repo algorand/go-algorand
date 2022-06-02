@@ -31,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -48,10 +47,13 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-codec/codec"
 )
+
+const stateProofIntervalForHandlerTests = uint64(256)
 
 func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
@@ -966,10 +968,7 @@ func TestGetProofDefault(t *testing.T) {
 	a.NoError(err)
 }
 
-func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
-	genBlk, err := l.Block(0)
-	a.NoError(err)
-
+func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bookkeeping.Block, l v2.LedgerForAPI) bookkeeping.Block {
 	totalsRound, totals, err := l.LatestTotals()
 	a.NoError(err)
 	a.Equal(l.Latest(), totalsRound)
@@ -978,8 +977,7 @@ func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
 	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err)
 
-	latestBlock, err := l.Block(l.Latest())
-	a.NoError(err)
+	latestBlock := lastBlock
 
 	var blk bookkeeping.Block
 	blk.BlockHeader = bookkeeping.BlockHeader{
@@ -1005,26 +1003,59 @@ func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
 	return blk
 }
 
+func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
+	round := uint64(blk.Round())
+	if round%stateProofIntervalForHandlerTests == (stateProofIntervalForHandlerTests/2+18) && round > stateProofIntervalForHandlerTests*2 {
+		return blk
+	}
+	stateProofRound := (round - round%stateProofIntervalForHandlerTests) - stateProofIntervalForHandlerTests
+	tx := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type:   protocol.StateProofTx,
+			Header: transactions.Header{Sender: transactions.StateProofSender},
+			StateProofTxnFields: transactions.StateProofTxnFields{
+				StateProofIntervalLatestRound: basics.Round(stateProofRound + stateProofIntervalForHandlerTests),
+				StateProofType:                0,
+				Message: stateproofmsg.Message{
+					BlockHeadersCommitment: []byte{0x0, 0x1, 0x2},
+					FirstAttestedRound:     stateProofRound + 1,
+					LastAttestedRound:      stateProofRound + stateProofIntervalForHandlerTests,
+				},
+			},
+		},
+	}
+	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
+	blk.Payset = append(blk.Payset, txnib)
+
+	return blk
+}
+
+func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
+	ledger := h.Node.LedgerForAPI()
+
+	genBlk, err := ledger.Block(0)
+	a.NoError(err)
+
+	lastBlk := genBlk
+	for i := 0; i < numRounds; i++ {
+		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
+		blk = addStateProofIfNeeded(blk)
+		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
+		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+		lastBlk = blk
+	}
+}
+
 func TestStateProofNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	ldger := handler.Node.LedgerForAPI()
+	insertRounds(a, handler, 700)
 
-	for i := 0; i < 5; i++ {
-		blk := newEmptyBlock(a, ldger)
-		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
-		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
-	}
-
-	handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = []node.TxnWithStatus{}
-
-	// we didn't add any certificate
-	a.NoError(handler.StateProof(ctx, 5))
+	a.NoError(handler.StateProof(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
 }
 
@@ -1035,49 +1066,20 @@ func TestStateProofHigherRoundThanLatest(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	// we didn't add any certificate
 	a.NoError(handler.StateProof(ctx, 2))
-	a.Equal(404, responseRecorder.Code)
+	a.Equal(500, responseRecorder.Code)
 }
 
 func TestStateProof200(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	ldger := handler.Node.LedgerForAPI()
+	insertRounds(a, handler, 1000)
 
-	for i := 0; i < 5; i++ {
-		blk := newEmptyBlock(a, ldger)
-		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
-		a.NoError(ldger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
-	}
-
-	//setting
-	for i := 0; i < 300; i += int(config.Consensus[protocol.ConsensusFuture].StateProofInterval) {
-		tx := node.TxnWithStatus{
-			Txn: transactions.SignedTxn{
-				Txn: transactions.Transaction{
-					Type: protocol.StateProofTx,
-					StateProofTxnFields: transactions.StateProofTxnFields{
-						StateProofIntervalLatestRound: basics.Round(i + 1),
-						StateProofType:                0,
-						Message: stateproofmsg.Message{
-							BlockHeadersCommitment: []byte("blockheaderscommitment"),
-						},
-					},
-				},
-			},
-			ConfirmedRound: basics.Round(i + 1),
-		}
-		handler.Node.(*mockNode).usertxns[transactions.StateProofSender] = append(handler.Node.(*mockNode).usertxns[transactions.StateProofSender], tx)
-	}
-
-	// we didn't add any certificate
-	a.NoError(handler.StateProof(ctx, 2))
+	a.NoError(handler.StateProof(ctx, stateProofIntervalForHandlerTests+1))
 	a.Equal(200, responseRecorder.Code)
 
 	stprfResp := generated.StateProofResponse{}
@@ -1085,5 +1087,53 @@ func TestStateProof200(t *testing.T) {
 
 	msg := stateproofmsg.Message{}
 	a.NoError(protocol.Decode(stprfResp.Message, &msg))
-	a.Equal("blockheaderscommitment", string(msg.BlockHeadersCommitment))
+	a.Equal([]byte{0x0, 0x1, 0x2}, msg.BlockHeadersCommitment)
+}
+
+func TestHeaderProofRoundTooHigh(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	a.NoError(handler.GetProofForLightBlockHeader(ctx, 2))
+	a.Equal(500, responseRecorder.Code)
+}
+
+func TestHeaderProofStateProofNotFound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 700)
+
+	a.NoError(handler.GetProofForLightBlockHeader(ctx, 650))
+	a.Equal(404, responseRecorder.Code)
+}
+
+func TestGetBlockProof200(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	insertRounds(a, handler, 1000)
+
+	a.NoError(handler.GetProofForLightBlockHeader(ctx, stateProofIntervalForHandlerTests*2+2))
+	a.Equal(200, responseRecorder.Code)
+
+	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))
+	a.NoError(err)
+
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofIntervalForHandlerTests, blkHdrArr, 1)
+	a.NoError(err)
+
+	proofResp := generated.LightBlockHeaderProofResponse{}
+	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &proofResp))
+	a.Equal(proofResp.Proof, leafproof.GetConcatenatedProof())
+	a.Equal(proofResp.Treedepth, uint64(leafproof.TreeDepth))
 }

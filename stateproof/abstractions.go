@@ -18,7 +18,6 @@ package stateproof
 
 import (
 	"context"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -56,4 +55,14 @@ type Network interface {
 type Accounts interface {
 	StateProofKeys(basics.Round) []account.StateProofRecordForRound
 	DeleteStateProofKey(id account.ParticipationID, round basics.Round) error
+}
+
+// BlockHeaderFetcher captures the aspects of the Ledger that is used to fetch block headers
+type BlockHeaderFetcher interface {
+	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+// TransactionFetcher captures the aspects of the Ledger that is used to fetch transactions
+type TransactionFetcher interface {
+	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 }
