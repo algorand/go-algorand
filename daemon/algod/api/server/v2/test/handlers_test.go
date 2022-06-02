@@ -968,10 +968,7 @@ func TestGetProofDefault(t *testing.T) {
 	a.NoError(err)
 }
 
-func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
-	genBlk, err := l.Block(0)
-	a.NoError(err)
-
+func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bookkeeping.Block, l v2.LedgerForAPI) bookkeeping.Block {
 	totalsRound, totals, err := l.LatestTotals()
 	a.NoError(err)
 	a.Equal(l.Latest(), totalsRound)
@@ -980,8 +977,7 @@ func newEmptyBlock(a *require.Assertions, l v2.LedgerForAPI) bookkeeping.Block {
 	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err)
 
-	latestBlock, err := l.Block(l.Latest())
-	a.NoError(err)
+	latestBlock := lastBlock
 
 	var blk bookkeeping.Block
 	blk.BlockHeader = bookkeeping.BlockHeader{
@@ -1036,11 +1032,17 @@ func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 
 func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
 	ledger := h.Node.LedgerForAPI()
+
+	genBlk, err := ledger.Block(0)
+	a.NoError(err)
+
+	lastBlk := genBlk
 	for i := 0; i < numRounds; i++ {
-		blk := newEmptyBlock(a, ledger)
+		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
 		blk = addStateProofIfNeeded(blk)
 		blk.BlockHeader.CurrentProtocol = protocol.ConsensusFuture
 		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+		lastBlk = blk
 	}
 }
 
