@@ -308,9 +308,9 @@ func RandomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 
 // RandomDeltas generates a random set of accounts delta
 func RandomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
-	var lastCreatableId basics.CreatableIndex
+	var lastCreatableID basics.CreatableIndex
 	updates, totals, imbalance =
-		RandomDeltasImpl(niter, base, rewardsLevel, true, &lastCreatableId)
+		RandomDeltasImpl(niter, base, rewardsLevel, true, &lastCreatableID)
 	return
 }
 
