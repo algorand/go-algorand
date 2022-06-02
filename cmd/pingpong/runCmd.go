@@ -67,6 +67,7 @@ var appProgLocalKeys uint32
 var duration uint32
 var rekey bool
 var nftAsaPerSecond uint32
+var pidFile string
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -107,6 +108,7 @@ func init() {
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
 	runCmd.Flags().Uint32Var(&nftAsaPerSecond, "nftasapersecond", 0, "The number of NFT-style ASAs to create per second")
+	runCmd.Flags().StringVar(&pidFile, "pidfile", "", "path to write process id of this pingpong")
 
 }
 
@@ -125,6 +127,22 @@ var runCmd = &cobra.Command{
 		ac, err := libgoal.MakeClient(dataDir, cacheDir, libgoal.FullClient)
 		if err != nil {
 			panic(err)
+		}
+
+		if pidFile != "" {
+			pidf, err := os.Create(pidFile)
+			if err != nil {
+				reportErrorf("%s: %v\n", pidFile, err)
+			}
+			defer os.Remove(pidFile)
+			_, err = fmt.Fprintf(pidf, "%d", os.Getpid())
+			if err != nil {
+				reportErrorf("%s: %v\n", pidFile, err)
+			}
+			err = pidf.Close()
+			if err != nil {
+				reportErrorf("%s: %v\n", pidFile, err)
+			}
 		}
 
 		// Prepare configuration
