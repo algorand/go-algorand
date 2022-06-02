@@ -5081,6 +5081,15 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
+		// larger-than-uint64s are allowed if not requested
+		{
+			source: `byte "{\"maxUint64\": 18446744073709551616, \"smallUint64\": 0}";
+			byte "smallUint64";
+			json_ref JSONUint64;
+			int 0;
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
 	}
 
 	for _, s := range testCases {
