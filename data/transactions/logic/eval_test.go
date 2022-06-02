@@ -5077,6 +5077,24 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
+		// JavaScript MAX_SAFE_INTEGER
+		{
+			source: `byte "{\"maxSafeInt\": 9007199254740991}";
+			byte "maxSafeInt";
+			json_ref JSONUint64;
+			int 9007199254740991;
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		// maximum uint64
+		{
+			source: `byte "{\"maxUint64\": 18446744073709551615}";
+			byte "maxUint64";
+			json_ref JSONUint64;
+			int 18446744073709551615;
+			==`,
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
 	}
 
 	for _, s := range testCases {
@@ -5276,6 +5294,16 @@ func TestOpJSONRef(t *testing.T) {
 			byte "shouldn't work";
 			==`,
 			error:              "error while parsing JSON text, invalid json text",
+			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
+		},
+		// max uint64 + 1 should fail
+		{
+			source: `byte "{\"tooBig\": 18446744073709551616}";
+			byte "tooBig";
+			json_ref JSONUint64;
+			int 1;
+			return`,
+			error:              "json: cannot unmarshal number 18446744073709551616 into Go value of type uint64",
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
 	}
