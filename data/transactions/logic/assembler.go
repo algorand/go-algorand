@@ -974,6 +974,17 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func getUintImm(args []string) (n uint64, errored bool) {
+	if len(args) == 0 {
+		return 0, true
+	}
+	n, err := strconv.ParseUint(args[0], 0, 8)
+	if err != nil {
+		return 0, true
+	}
+	return n, false
+}
+
 func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	topTwo := StackTypes{StackAny, StackAny}
 	top := len(pgm.stack) - 1
@@ -988,11 +999,8 @@ func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 }
 
 func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	if len(args) == 0 {
-		return nil, nil
-	}
-	n, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
+	n, errored := getUintImm(args)
+	if errored {
 		return nil, nil
 	}
 	depth := int(n) + 1
@@ -1061,11 +1069,8 @@ func typeSetBit(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 }
 
 func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	if len(args) == 0 {
-		return nil, nil
-	}
-	n, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
+	n, errored := getUintImm(args)
+	if errored {
 		return nil, nil
 	}
 	depth := int(n) + 1
@@ -1092,11 +1097,8 @@ func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 }
 
 func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	if len(args) == 0 {
-		return nil, nil
-	}
-	n, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
+	n, errored := getUintImm(args)
+	if errored {
 		return nil, nil
 	}
 	depth := int(n) + 1
@@ -1131,16 +1133,13 @@ func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) 
 }
 
 func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	if len(args) == 0 {
-		return nil, nil
-	}
-	n, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
+	n, errored := getUintImm(args)
+	if errored {
 		return nil, nil
 	}
 	scratchIndex := int(n)
 	top := len(pgm.stack) - 1
-	if top >= 0 && scratchIndex < 256 && scratchIndex >= 0 {
+	if top >= 0 {
 		pgm.scratchSpace[scratchIndex] = pgm.stack[top]
 	}
 	return nil, nil
@@ -1148,28 +1147,23 @@ func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 
 func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	top := len(pgm.stack) - 1
-	if top >= 0 {
-		for i := range pgm.scratchSpace {
-			if pgm.scratchSpace[i] != pgm.stack[top] {
-				pgm.scratchSpace[i] = StackAny
-			}
+	if top < 0 {
+		return nil, nil
+	}
+	for i := range pgm.scratchSpace {
+		if pgm.scratchSpace[i] != pgm.stack[top] {
+			pgm.scratchSpace[i] = StackAny
 		}
 	}
 	return nil, nil
 }
 
 func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	if len(args) == 0 {
-		return nil, nil
-	}
-	n, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
+	n, errored := getUintImm(args)
+	if errored {
 		return nil, nil
 	}
 	scratchIndex := int(n)
-	if scratchIndex < 0 || scratchIndex > 255 {
-		return nil, nil
-	}
 	return nil, StackTypes{pgm.scratchSpace[scratchIndex]}
 }
 

@@ -2411,6 +2411,8 @@ func TestScratchTypeCheck(t *testing.T) {
 	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{3, "btoi arg 0..."})
 	// Stores should only set slots to StackAny if they are not the same type as what is being stored
 	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{8, "+ arg 0..."})
+	testProg(t, "txn TypeEnum; bnz label1; byte 0x01; label1:; load 0; int 1; +", AssemblerMaxVersion)
+	testProg(t, "txn TypeEnum; bnz label1; byte 0x01; store 0; label1:; load 0; int 1; +", AssemblerMaxVersion)
 }
 
 func TestCoverAsm(t *testing.T) {
