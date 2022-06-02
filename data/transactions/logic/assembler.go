@@ -314,7 +314,7 @@ func (pgm *ProgramKnowledge) reset() {
 	pgm.stack = nil
 	pgm.bottom = StackAny
 	pgm.deadcode = false
-	for i, _ := range pgm.scratchSpace {
+	for i := range pgm.scratchSpace {
 		pgm.scratchSpace[i] = StackAny
 	}
 }
@@ -1149,7 +1149,7 @@ func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	top := len(pgm.stack) - 1
 	if top >= 0 {
-		for i, _ := range pgm.scratchSpace {
+		for i := range pgm.scratchSpace {
 			if pgm.scratchSpace[i] != pgm.stack[top] {
 				pgm.scratchSpace[i] = StackAny
 			}
@@ -1360,7 +1360,7 @@ func (ops *OpStream) assemble(text string) error {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
 	scanner := bufio.NewScanner(fin)
-	for i, _ := range ops.known.scratchSpace {
+	for i := range ops.known.scratchSpace {
 		ops.known.scratchSpace[i] = StackUint64
 	}
 	for scanner.Scan() {
