@@ -109,7 +109,7 @@ def main():
                 whens.add(ts)
         whens = sorted(whens)
         nodes = sorted(heap_totals.keys())
-        writer.writerow(['when','dt'] + nodes)
+        writer.writerow(['when','dt','round'] + nodes)
         first = None
         for ts in whens:
             tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
@@ -117,6 +117,13 @@ def main():
                 first = tv
             row = [ts, tv-first]
             for nick in nodes:
+                bipath = os.path.join(args.dir, '{}.{}.blockinfo.json'.format(nick, ts))
+                try:
+                    bi = json.load(open(bipath))
+                    rnd = str(bi['block']['rnd'])
+                except:
+                    rnd = ''
+                row.append(rnd)
                 for rec in heap_totals[nick]:
                     if rec[0] == ts:
                         row.append(rec[1])
