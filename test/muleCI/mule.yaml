@@ -105,8 +105,7 @@
 tasks:
   - task: shell.Make
     name: build.darwin-arm64
-    # target: ci-build
-    message: This is go-algorand test
+    target: ci-build
   # - task: docker.Make
   #   name: build.amd64
   #   agent: cicd.ubuntu.amd64
