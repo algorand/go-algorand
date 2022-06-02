@@ -5063,30 +5063,6 @@ func TestOpJSONRef(t *testing.T) {
 			==`,
 			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
 		},
-		{
-			source: `byte "{002: \"num key\"}";
-			byte "002";
-			json_ref JSONString;
-			byte "num key";
-			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
-		},
-		{
-			source: `byte "{0.2: \"dec key\"}";
-			byte "0.2";
-			json_ref JSONString;
-			byte "dec key";
-			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
-		},
-		{
-			source: `byte "{1e16: \"dec key\"}";
-			byte "1e16";
-			json_ref JSONString;
-			byte "dec key";
-			==`,
-			previousVersErrors: []Expect{{5, "unknown opcode: json_ref"}},
-		},
 		// JavaScript MAX_SAFE_INTEGER
 		{
 			source: `byte "{\"maxSafeInt\": 9007199254740991}";

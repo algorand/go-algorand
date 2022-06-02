@@ -204,6 +204,9 @@ func TestParseKeys(t *testing.T) {
 	text = `{"key0": 'algo'}`
 	_, err = parseJSON([]byte(text))
 	require.Error(t, err)
+	text = `{1: 1}`
+	_, err = parseJSON([]byte(text))
+	require.Error(t, err)
 }
 
 func TestParseFileEncoding(t *testing.T) {

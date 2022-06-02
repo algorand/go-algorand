@@ -132,37 +132,3 @@ replaced by U+FFFD
 ```json
 {"key0": "\uD800\uD800n"}
 ```
-
-### Keys
-
-- keys can be strings or numbers
-- strings must be quoted
-- number keys behave as quoted strings
-
-#### Example
-  
-```json
-{"key0": "value0"}
-```
-
-The following are interpreted equivalently
-
-```json
-{1: 1}
-{"1": 1}
-```
-
-```json
-{002: 2}
-{"002": 2}
-```
-
-```json
-{0.2: 3}
-{"0.2": 3}
-```
-
-```json
-{1e16: 1}
-{"1e16": 1}
-```

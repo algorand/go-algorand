@@ -4780,7 +4780,7 @@ func isPrimitiveJSON(jsonText []byte) (bool, error) {
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 	// parse JSON with Algorand's standard JSON library
-	var parsed map[string]json.RawMessage
+	var parsed map[interface{}]json.RawMessage
 	err := protocol.DecodeJSON(jsonText, &parsed)
 
 	if err != nil {
@@ -4797,7 +4797,17 @@ func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 		return nil, fmt.Errorf("invalid json text")
 	}
 
-	return parsed, nil
+	// check whether any keys are not strings
+	stringMap := make(map[string]json.RawMessage)
+	for k, v := range parsed {
+		key, ok := k.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid json text")
+		}
+		stringMap[key] = v
+	}
+
+	return stringMap, nil
 }
 
 func opJSONRef(cx *EvalContext) error {
