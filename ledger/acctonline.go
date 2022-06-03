@@ -467,6 +467,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 			})
 	}
 
+	// clear the backing array to let GC collect data
 	const deltasClearThreshold = 1000
 	if offset > deltasClearThreshold {
 		for i := uint64(0); i < offset; i++ {

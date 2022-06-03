@@ -4104,6 +4104,9 @@ func processAllResources(
 	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
 ) (pendingRow, error) {
 	var err error
+
+	// Declare variabled outside of the loop to prevent allocations per iteration.
+	// At least resData is resolved as "escaped" because of passing it by a pointer to protocol.Decode()
 	var buf []byte
 	var addrid int64
 	var aidx basics.CreatableIndex
