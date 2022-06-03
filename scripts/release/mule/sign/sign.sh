@@ -81,7 +81,8 @@ for os in "${OS_TYPES[@]}"; do
 
                     # Clean package directory of any previous operations.
                     rm -rf hashes* *.sig *.asc *.asc.gz
-
+                    pwd
+                    ls -la
                     for file in *.tar.gz *.deb
                     do
                         gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
@@ -99,6 +100,8 @@ for os in "${OS_TYPES[@]}"; do
 
                     gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
                     gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
+
+                    ls -la
 
                     STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
                     if [[ -f "$STATUSFILE" ]]; then
