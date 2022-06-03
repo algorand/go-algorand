@@ -153,15 +153,13 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 			fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(pps.accounts))
 			generateAccounts(pps.accounts, cfg.NumPartAccounts)
 		}
-		go pps.roundMonitor(ac)
 
-		pps.accountsMu.Lock()
 		err = pps.fundAccounts(pps.accounts, ac, cfg)
-		pps.accountsMu.Unlock()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 			return
 		}
+		go pps.roundMonitor(ac)
 	}
 
 	pps.cfg = cfg
@@ -177,7 +175,6 @@ func (pps *WorkerState) prepareNewAccounts(client libgoal.Client) (newAccounts m
 		newAccounts[pps.cfg.SrcAccount] = srcAcct
 	}
 	pps.accounts = newAccounts
-	go pps.roundMonitor(client)
 
 	err = pps.fundAccounts(newAccounts, client, pps.cfg)
 	if err != nil {
@@ -185,6 +182,7 @@ func (pps *WorkerState) prepareNewAccounts(client libgoal.Client) (newAccounts m
 		return
 	}
 
+	go pps.roundMonitor(client)
 	return
 }
 
