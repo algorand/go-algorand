@@ -3732,8 +3732,6 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 
 	ret, err := selectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
 	require.NoError(t, err)
-
-	sort.Slice(ret, func(i, j int) bool { return ret[i].round < ret[j].round })
 	expected := []unfinishedCatchpointRecord{
 		{
 			round:     3,
@@ -3746,10 +3744,16 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 	}
 	require.Equal(t, expected, ret)
 
-	err = clearUnfinishedCatchpoints(context.Background(), dbs.Wdb.Handle)
+	err = deleteUnfinishedCatchpoint(context.Background(), dbs.Wdb.Handle, 3)
 	require.NoError(t, err)
 
 	ret, err = selectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
 	require.NoError(t, err)
-	require.Empty(t, ret)
+	expected = []unfinishedCatchpointRecord{
+		{
+			round:     5,
+			blockHash: d5,
+		},
+	}
+	require.Equal(t, expected, ret)
 }

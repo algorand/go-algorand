@@ -4856,7 +4856,7 @@ func selectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinis
 	var res []unfinishedCatchpointRecord
 
 	f := func() error {
-		query := "SELECT round, blockhash FROM unfinishedcatchpoints"
+		query := "SELECT round, blockhash FROM unfinishedcatchpoints ORDER BY round"
 		rows, err := q.QueryContext(ctx, query)
 		if err != nil {
 			return err
@@ -4885,10 +4885,10 @@ func selectUnfinishedCatchpoints(ctx context.Context, q db.Queryable) ([]unfinis
 	return res, nil
 }
 
-func clearUnfinishedCatchpoints(ctx context.Context, e db.Executable) error {
+func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basics.Round) error {
 	f := func() error {
-		query := "DELETE FROM unfinishedcatchpoints"
-		_, err := e.ExecContext(ctx, query)
+		query := "DELETE FROM unfinishedcatchpoints WHERE round = ?"
+		_, err := e.ExecContext(ctx, query, round)
 		return err
 	}
 	return db.Retry(f)
