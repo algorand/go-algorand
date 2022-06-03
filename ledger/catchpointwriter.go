@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -48,6 +49,7 @@ type catchpointWriter struct {
 	totalChunks      uint64
 	file             *os.File
 	tar              *tar.Writer
+	compressor       io.WriteCloser
 	balancesChunk    catchpointFileBalancesChunkV6
 	balancesChunkNum uint64
 	writtenBytes     int64
@@ -98,7 +100,11 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 	if err != nil {
 		return nil, err
 	}
-	tar := tar.NewWriter(file)
+	compressor, err := catchpointStage1Encoder(file)
+	if err != nil {
+		return nil, err
+	}
+	tar := tar.NewWriter(compressor)
 
 	res := &catchpointWriter{
 		ctx:           ctx,
@@ -107,6 +113,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 		totalAccounts: totalAccounts,
 		totalChunks:   (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
 		file:          file,
+		compressor:    compressor,
 		tar:           tar,
 	}
 	return res, nil
@@ -115,6 +122,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 func (cw *catchpointWriter) Abort() error {
 	cw.accountsIterator.Close()
 	cw.tar.Close()
+	cw.compressor.Close()
 	cw.file.Close()
 	return os.Remove(cw.filePath)
 }
@@ -221,6 +229,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 
 		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.totalChunks {
 			cw.tar.Close()
+			cw.compressor.Close()
 			cw.file.Close()
 			var fileInfo os.FileInfo
 			fileInfo, err = os.Stat(cw.filePath)
