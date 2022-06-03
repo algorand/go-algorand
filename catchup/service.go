@@ -78,9 +78,10 @@ type Service struct {
 	blockValidationPool execpool.BacklogPool
 
 	// pauseAtRound represents the block number at which the catchup service should pause
-	ctxPauseAtRound    context.Context
-	cancelPauseAtRound func()
-	pauseAtRound       uint64
+	ctxPauseAtRound       context.Context
+	cancelPauseAtRound    func()
+	pauseAtRound          uint64
+	dontAllowPauseAtRound bool
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -130,6 +131,7 @@ func (s *Service) Start() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.ctxPauseAtRound, s.cancelPauseAtRound = context.WithCancel(context.Background())
+	s.dontAllowPauseAtRound = false
 	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
 }
@@ -400,16 +402,38 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 type task func() basics.Round
 
 // SetPauseAtRound changes the value of s.pauseAtRound
-func (s *Service) SetPauseAtRound(rnd uint64) {
-	s.pauseAtRound = rnd
+func (s *Service) SetPauseAtRound(rnd uint64) (err error) {
+	// check if pause functionality is enabled
+	if !s.dontAllowPauseAtRound {
+		// can only pause when the catchup service is running
+		if s.pauseAtRound != 0 {
+			err = errors.New("not allowed to pause when catchup already has a pause round number, try ResumeCatchup")
+		} else {
+			s.pauseAtRound = rnd
+		}
+	} else {
+		err = errors.New("not allowed to pause")
+	}
+	return
 }
 
 // ResumeCatchup resumes the catchup service to continue catching up to the latest block or to a provided block number
-func (s *Service) ResumeCatchup(rnd uint64) {
-	// Change the value of s.pauseAtRound before cancelling the context to avoid race condition
-	s.pauseAtRound = rnd
-	s.cancelPauseAtRound()
-	s.ctxPauseAtRound, s.cancelPauseAtRound = context.WithCancel(context.Background())
+func (s *Service) ResumeCatchup(rnd uint64) (err error) {
+	// check if resume functionality is enabled
+	if !s.dontAllowPauseAtRound {
+		// only allow resumecatchup if either rnd is 0 i.e resume catchup to the latest block or rnd is greater than current pause block
+		if rnd == uint64(0) || rnd > s.pauseAtRound {
+			// Change the value of s.pauseAtRound before cancelling the context to avoid race condition
+			s.pauseAtRound = rnd
+			s.cancelPauseAtRound()
+			s.ctxPauseAtRound, s.cancelPauseAtRound = context.WithCancel(context.Background())
+		} else {
+			err = errors.New("not allowed to resume due to invalid round number")
+		}
+	} else {
+		err = errors.New("not allowed to resume")
+	}
+	return
 }
 
 func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool, peerSelector *peerSelector) func() basics.Round {
@@ -556,7 +580,11 @@ func (s *Service) periodicSync() {
 		s.net.RequestConnectOutgoing(false, s.ctx.Done())
 		s.sync()
 	}
+
+	// Do not allow pause functionality when catchup is disabled in the config file
+	s.dontAllowPauseAtRound = true
 	s.pauseAtRound = uint64(0)
+
 	stuckInARow := 0
 	sleepDuration := s.deadlineTimeout
 	for {
