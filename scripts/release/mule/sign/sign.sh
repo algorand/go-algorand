@@ -68,8 +68,8 @@ cd "$PKG_DIR"
 # Note the surrounding parens turns the string created by `find` into an array.
 OS_TYPES=($(find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n'))
 for os in "${OS_TYPES[@]}"; do
-    if [ "$os" = linux ]
-    then
+    # if [ "$os" = linux ]
+    # then
         for arch in "${ARCHS[@]}"; do
             if [ -d "$os/$arch" ]
             then
@@ -109,7 +109,7 @@ for os in "${OS_TYPES[@]}"; do
                 fi
             fi
         done
-    fi
+    # fi
 done
 
 echo
