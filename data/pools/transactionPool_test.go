@@ -17,6 +17,7 @@
 package pools
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"math/rand"
@@ -1404,10 +1405,16 @@ func TestTStateProofLogging(t *testing.T) {
 
 	transactionPool.recomputeBlockEvaluator(nil, 0) //[]transactions.SignedTxn{stxn}, nil)//telemetryspec.AssembleBlockMetrics{})
 
-	transactionPool.log = logger
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
-	fmt.Println(buf.String())
+
+	scanner := bufio.NewScanner(strings.NewReader(buf.String()))
+	lines := make([]string, 0)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	fmt.Println(lines[len(lines)-1])
+	//	fmt.Println(buf.String())
 }
 
 func generateProofForTesting(
