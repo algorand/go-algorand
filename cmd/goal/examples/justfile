@@ -213,6 +213,10 @@ app-address *ARGS:
 
 # --- Applications --- #
 
+# information about an application of given id
+@app-info $APP_ID=`just last-app-id`:
+    goal app info --app-id {{APP_ID}}
+
 # print out the boxes teal program
 @boxes_teal:
     cat $BOXES_TEAL
@@ -259,3 +263,13 @@ box-app-args *ARGS:
 @last-app-fund $AMOUNT=`echo 100000000`:
     goal clerk send --from `just funder` --to `just last-app-address`  --amount {{AMOUNT}}
 
+# --- MISCELLANEOUS --- #
+
+# print out the network's algod & kmd token and network/process info
+@client-info:
+    echo "algod.token: "$(cat ${ALGORAND_DATA}/algod.token)
+    echo "algod.net:   "$(cat ${ALGORAND_DATA}/algod.net)
+    echo "algod.pid:   "$(cat ${ALGORAND_DATA}/algod.pid)
+    echo "kmd.token:   "$(cat ${ALGORAND_DATA}/kmd-v0.5/kmd.token)
+    echo "kmd.net---->"
+    cat ${ALGORAND_DATA}/kmd-v0.5/kmd.log | grep 127.0.0.1 | head -n 1 | cut -d '"' -f4
