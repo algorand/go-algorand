@@ -69,7 +69,9 @@ const (
 
 	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
 	CatchpointFileVersionV5 = uint64(0200)
-	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6
+	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6.
+	// This version introduced accounts and resources separation. The first catchpoint
+	// round of this version is >= `accountDataResourceSeparationRound`.
 	CatchpointFileVersionV6 = uint64(0201)
 )
 
@@ -356,6 +358,12 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 
 	dcr.catchpointDataWriting = &ct.catchpointDataWriting
 	dcr.enableGeneratingCatchpointFiles = ct.enableGeneratingCatchpointFiles
+
+	{
+		rounds := calculateCatchpointRounds(
+			dcr.oldBase+1, dcr.oldBase+basics.Round(dcr.offset), ct.catchpointInterval)
+		dcr.catchpointSecondStage = (len(rounds) > 0)
+	}
 
 	return dcr
 }

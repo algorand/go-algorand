@@ -195,9 +195,10 @@ type trackerRegistry struct {
 // to syncronize the various trackers and create a uniformity around which rounds need to be persisted
 // next.
 type deferredCommitRange struct {
-	offset   uint64
-	oldBase  basics.Round
-	lookback basics.Round
+	offset      uint64
+	oldBase     basics.Round
+	lookback    basics.Round
+	lowestRound basics.Round // lowest history required by voters
 
 	// catchpointLookback determines the offset from round number to take a snapshot for.
 	// i.e. for round X the DB snapshot is taken at X-catchpointLookback
@@ -219,6 +220,9 @@ type deferredCommitRange struct {
 
 	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
 	enableGeneratingCatchpointFiles bool
+
+	// True iff the commit range includes a catchpoint round.
+	catchpointSecondStage bool
 }
 
 // deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
@@ -231,9 +235,9 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	roundTotals              ledgercore.AccountTotals
-	onlineRoundParams        []ledgercore.OnlineRoundParamsData
-	onlineTotalsForgetBefore basics.Round
+	roundTotals                ledgercore.AccountTotals
+	onlineRoundParams          []ledgercore.OnlineRoundParamsData
+	onlineAccountsForgetBefore basics.Round
 
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
@@ -244,12 +248,10 @@ type deferredCommitContext struct {
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
 	updatedPersistedOnlineAccounts []persistedOnlineAccountData
-	onlineAccountExpirations       []onlineAccountExpiration
-	onlineAccountExpiredRowids     []int64
-	expirationOffset               uint64
 
 	updatingBalancesDuration time.Duration
 
+	// Block hashes for the committed rounds range.
 	committedRoundDigests []crypto.Digest
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
@@ -389,7 +391,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
-	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
+	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && !dcc.catchpointSecondStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
 		dcc = nil
 	}
 	tr.mu.RUnlock()

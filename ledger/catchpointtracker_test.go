@@ -444,7 +444,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	const testCatchpointLabelsCount = 5
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
-	lastCreatableID := crypto.RandUint64() % 512
+	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	catchpointLabels := make(map[basics.Round]string)
 	ledgerHistory := make(map[basics.Round]*mockLedgerForTracker)
@@ -458,7 +458,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		var totals map[basics.Address]ledgercore.AccountData
 		base := accts[i-1]
-		updates, totals, lastCreatableID = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
+		updates, totals = ledgertesting.RandomDeltasBalancedFull(1, base, rewardLevel, &lastCreatableID)
 		prevRound, prevTotals, err := au.LatestTotals()
 		require.Equal(t, i-1, prevRound)
 		require.NoError(t, err)
@@ -486,9 +486,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
-		ml.trackers.mu.Lock()
-		ml.trackers.lastFlushTime = time.Time{}
-		ml.trackers.mu.Unlock()
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
@@ -532,9 +529,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
 
-			ml2.trackers.mu.Lock()
-			ml2.trackers.lastFlushTime = time.Time{}
-			ml2.trackers.mu.Unlock()
 			ml2.trackers.newBlock(blk, delta)
 			ml2.trackers.committedUpTo(i)
 
@@ -910,9 +904,6 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		}
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 
-		ml.trackers.mu.Lock()
-		ml.trackers.lastFlushTime = time.Time{}
-		ml.trackers.mu.Unlock()
 		ml.trackers.newBlock(blk, delta)
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
