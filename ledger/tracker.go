@@ -195,9 +195,10 @@ type trackerRegistry struct {
 // to syncronize the various trackers and create a uniformity around which rounds need to be persisted
 // next.
 type deferredCommitRange struct {
-	offset   uint64
-	oldBase  basics.Round
-	lookback basics.Round
+	offset      uint64
+	oldBase     basics.Round
+	lookback    basics.Round
+	lowestRound basics.Round // lowest history required by voters
 
 	// catchpointLookback determines the offset from round number to take a snapshot for.
 	// i.e. for round X the DB snapshot is taken at X-catchpointLookback
@@ -234,10 +235,10 @@ type deferredCommitContext struct {
 
 	genesisProto config.ConsensusParams
 
-	deltas                   []ledgercore.AccountDeltas
-	roundTotals              ledgercore.AccountTotals
-	onlineRoundParams        []ledgercore.OnlineRoundParamsData
-	onlineTotalsForgetBefore basics.Round
+	deltas                     []ledgercore.AccountDeltas
+	roundTotals                ledgercore.AccountTotals
+	onlineRoundParams          []ledgercore.OnlineRoundParamsData
+	onlineAccountsForgetBefore basics.Round
 
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
@@ -248,9 +249,6 @@ type deferredCommitContext struct {
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
 	updatedPersistedOnlineAccounts []persistedOnlineAccountData
-	onlineAccountExpirations       []onlineAccountExpiration
-	onlineAccountExpiredRowids     []int64
-	expirationOffset               uint64
 
 	updatingBalancesDuration time.Duration
 
