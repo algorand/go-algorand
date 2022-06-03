@@ -180,15 +180,15 @@ tasks:
   #     - installer/genesis/devnet/genesis.json
   #     - installer/genesis/testnet/genesis.json
   #     - installer/genesis/mainnet/genesis.json
-  # - task: stash.Stash
-  #   name: packages
-  #   bucketName: go-algorand-ci-cache
-  #   stashId: ${JENKINS_JOB_CACHE_ID}/packages
-  #   globSpecs:
-  #     - tmp/node_pkgs/**/*
-  #     - installer/genesis/devnet/genesis.json
-  #     - installer/genesis/testnet/genesis.json
-  #     - installer/genesis/mainnet/genesis.json
+  - task: stash.Stash
+    name: packages
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/packages
+    globSpecs:
+      - tmp/node_pkgs/**/*
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
 
   #   # Unstash tasks
   # - task: stash.Unstash
@@ -207,20 +207,20 @@ tasks:
   #   name: linux-arm
   #   bucketName: go-algorand-ci-cache
   #   stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
-  # - task: stash.Unstash
-  #   name: packages
-  #   bucketName: go-algorand-ci-cache
-  #   stashId: ${JENKINS_JOB_CACHE_ID}/packages
+  - task: stash.Unstash
+    name: packages
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/packages
 
   # - task: docker.Make
   #   name: docker-image
   #   agent: docker-ubuntu
   #   target: mule-package-docker
 
-  # - task: docker.Make
-  #   name: docker-sign
-  #   agent: docker-ubuntu-signer
-  #   target: mule-sign
+  - task: docker.Make
+    name: docker-sign
+    agent: docker-ubuntu-signer
+    target: mule-sign
 
 jobs:
   build-darwin-arm64:
@@ -239,14 +239,15 @@ jobs:
   #   tasks:
   #     - docker.Make.build.arm
   #     - stash.Stash.linux-arm
-  # package-linux-amd64:
-  #   tasks:
-  #     - stash.Unstash.linux-amd64
-  #     - stash.Unstash.linux-arm64
-  #     - stash.Unstash.linux-arm
-  #     - docker.Make.deb.amd64
-  #     - docker.Make.rpm.amd64
-  #     - stash.Stash.packages
+  package-all:
+    tasks:
+      # - stash.Unstash.linux-amd64
+      # - stash.Unstash.linux-arm64
+      # - stash.Unstash.linux-arm
+      - stash.Unstash.darwin-arm64
+      # - docker.Make.deb.amd64
+      # - docker.Make.rpm.amd64
+      - stash.Stash.packages
   # archive-linux-amd64:
   #   tasks:
   #     - stash.Unstash.packages
@@ -254,8 +255,8 @@ jobs:
   # package-docker:
   #   tasks:
   #     - docker.Make.docker-image
-  # sign-signer:
-  #   tasks:
-  #     - stash.Unstash.packages
-  #     - docker.Make.docker-sign
-  #     - stash.Stash.packages
+  sign-all:
+    tasks:
+      - stash.Unstash.packages
+      - docker.Make.docker-sign
+      - stash.Stash.packages
