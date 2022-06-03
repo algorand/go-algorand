@@ -2177,44 +2177,51 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
 	require.Less(t, shorterLookback, cfg.MaxAcctLookback)
 	l.Close()
+
 	cfg.MaxAcctLookback = shorterLookback
 	accountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts")
-		tx.ExecContext(ctx, "DROP TABLE IF EXISTS txtail")
-		tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineroundparamstail")
+		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS txtail"); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineroundparamstail"); err != nil {
+			return err
+		}
 		return nil
 	})
-	l.genesisProtoVersion = protocol.ConsensusCurrentVersion
-	l.genesisProto = config.Consensus[protocol.ConsensusCurrentVersion]
-	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+
+	l2, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
-		l.Close()
+		l2.Close()
 	}()
 
-	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	_, err = l2.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
 	require.Error(t, err)
-	for i := l.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l.Latest(); i++ {
-		online, err := l.OnlineTotals(i)
+	for i := l2.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l2.Latest(); i++ {
+		online, err := l2.OnlineTotals(i)
 		require.NoError(t, err)
 		require.Equal(t, onlineTotals[i], online)
 	}
 
 	for i, addr := range addresses {
-		ad, rnd, err := l.LookupWithoutRewards(latest, addr)
+		ad, rnd, err := l2.LookupWithoutRewards(latest, addr)
 		require.NoError(t, err)
 		require.Equal(t, latest, rnd)
 		require.Equal(t, origBalances[i], ad.MicroAlgos)
 
-		acct, rnd, wo, err := l.LookupAccount(latest, addr)
+		acct, rnd, wo, err := l2.LookupAccount(latest, addr)
 		require.NoError(t, err)
 		require.Equal(t, latest, rnd)
 		require.Equal(t, origRewardsBalances[i], acct.MicroAlgos)
 		require.Equal(t, origBalances[i], wo)
 
-		oad, err := l.LookupAgreement(balancesRound, addr)
+		oad, err := l2.LookupAgreement(balancesRound, addr)
 		require.NoError(t, err)
 		require.Equal(t, origAgreementBalances[i], oad.MicroAlgosWithRewards)
 	}
@@ -2222,13 +2229,13 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	// at round maxBlocks the ledger must have maxValidity blocks of transactions, check
 	for i := latest; i <= latest+maxValidity; i++ {
 		for txid := range txnIDs[i] {
-			require.NoError(t, l.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
+			require.NoError(t, l2.CheckDup(proto, nextRound, i-maxValidity, i, txid, ledgercore.Txlease{}))
 		}
 	}
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		require.Error(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
 	}
 }
 
