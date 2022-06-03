@@ -974,8 +974,8 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// Interprets the arg at index argIndex as byte-long uint immediate
-func getUintImm(args []string, argIndex int) (byte, bool) {
+// Interprets the arg at index argIndex as byte-long immediate
+func getByteImm(args []string, argIndex int) (byte, bool) {
 	if len(args) <= argIndex {
 		return 0, false
 	}
@@ -1000,7 +1000,7 @@ func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 }
 
 func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	n, ok := getUintImm(args, 0)
+	n, ok := getByteImm(args, 0)
 	if !ok {
 		return nil, nil
 	}
@@ -1070,7 +1070,7 @@ func typeSetBit(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 }
 
 func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	n, ok := getUintImm(args, 0)
+	n, ok := getByteImm(args, 0)
 	if !ok {
 		return nil, nil
 	}
@@ -1098,7 +1098,7 @@ func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 }
 
 func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	n, ok := getUintImm(args, 0)
+	n, ok := getByteImm(args, 0)
 	if !ok {
 		return nil, nil
 	}
@@ -1134,7 +1134,7 @@ func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) 
 }
 
 func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	scratchIndex, ok := getUintImm(args, 0)
+	scratchIndex, ok := getByteImm(args, 0)
 	if !ok {
 		return nil, nil
 	}
@@ -1160,7 +1160,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 }
 
 func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes) {
-	scratchIndex, ok := getUintImm(args, 0)
+	scratchIndex, ok := getByteImm(args, 0)
 	if !ok {
 		return nil, nil
 	}
