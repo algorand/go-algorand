@@ -1189,9 +1189,20 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	lowest := oa.voters.lowestRound(oa.cachedDBRoundOnline)
 	require.Equal(t, basics.Round(compactCertRounds-compactCertVotersLookback), lowest)
 	require.Equal(t, maxBlocks/compactCertRounds, len(oa.voters.round))
-	// lowestRound is fixed but online accounts tracker successfully decreases the history before the lowestRound
-	// TODO: add max bound check after implementing it for voters tracker
-	require.Greater(t, len(oa.onlineRoundParamsData), maxBlocks-int(lowest))
+
+	// onlineRoundParamsData does not store more than maxBalLookback + deltas even if voters stall
+	require.Equal(t, uint64(len(oa.onlineRoundParamsData)), maxBalLookback+conf.MaxAcctLookback)
+
+	// DB has all the required history tho
+	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
+	var endRound basics.Round
+	err = oa.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, oa.latest()-basics.Round(conf.MaxAcctLookback), endRound)
+	require.Equal(t, maxBlocks-int(lowest)-int(conf.MaxAcctLookback)+1, len(dbOnlineRoundParams))
 
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
 	// +1 comes from the deletion before X without checking account state at X

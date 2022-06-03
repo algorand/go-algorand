@@ -471,18 +471,10 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.deltasAccum = ao.deltasAccum[offset:]
 	ao.cachedDBRoundOnline = newBase
 
-	// convert dcc.lowestRound to votersLookback relative to newBase
-	// onlineRoundParamsData contains data for newBase + 1 - maxOnlineLookback
-	minRound := (newBase + 1).SubSaturate(basics.Round(ao.maxBalLookback()))
-	if dcc.lowestRound > 0 && dcc.lowestRound < minRound {
-		minRound = dcc.lowestRound
-	}
-	// recalculate minRound back to max lookback
-	// minRound is either newBase + 1 - MaxBalLookback or less, so newBase + 1 >= minRound
-	maxLookback := newBase + 1 - minRound
-	onlineRoundParamsLookback := uint64(maxLookback) + uint64(len(ao.deltas))
-	if uint64(len(ao.onlineRoundParamsData)) > onlineRoundParamsLookback {
-		ao.onlineRoundParamsData = ao.onlineRoundParamsData[uint64(len(ao.onlineRoundParamsData))-onlineRoundParamsLookback:]
+	// onlineRoundParamsData does not require extended history since it is not used in top online accounts
+	maxOnlineLookback := int(ao.maxBalLookback()) + len(ao.deltas)
+	if len(ao.onlineRoundParamsData) > maxOnlineLookback {
+		ao.onlineRoundParamsData = ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-maxOnlineLookback:]
 	}
 
 	// online accounts defines deletion round as
