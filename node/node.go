@@ -139,8 +139,8 @@ type AlgorandFullNode struct {
 
 	compactCert *compactcert.Worker
 
-	// stopAtRound represents the block number at which the catchup service should pause
-	stopAtRound uint64
+	// pauseAtRound represents the block number at which the catchup service should pause
+	pauseAtRound uint64
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -162,9 +162,9 @@ type TxnWithStatus struct {
 	ApplyData transactions.ApplyData
 }
 
-// SetStopAtRound changes the value of node.stopAtRound variable
-func (node *AlgorandFullNode) SetStopAtRound(rnd uint64) {
-	node.stopAtRound = rnd
+// SetpauseAtRound changes the value of node.pauseAtRound variable
+func (node *AlgorandFullNode) SetPauseAtRound(rnd uint64) {
+	node.pauseAtRound = rnd
 }
 
 // MakeFull sets up an Algorand full node
@@ -383,8 +383,8 @@ func (node *AlgorandFullNode) Start() {
 		startNetwork()
 		node.catchpointCatchupService.Start(node.ctx)
 	} else {
-		// The following code changes the value of node.catchupService.stopAtRound
-		node.catchupService.SetStopAtRound(node.stopAtRound)
+		// The following code changes the value of node.catchupService.pauseAtRound
+		node.catchupService.SetPauseAtRound(node.pauseAtRound)
 		node.catchupService.Start()
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)

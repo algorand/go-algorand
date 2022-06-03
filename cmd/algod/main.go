@@ -56,7 +56,7 @@ var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST liste
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
-var stopAtRound = flag.String("round", "", "Stop catchup at this block number")
+var pauseAtRound = flag.Uint64("round", uint64(0), "Stop catchup at this block number")
 
 func main() {
 	flag.Parse()
@@ -68,11 +68,6 @@ func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
 	config.UpdateVersionDataDir(absolutePath)
-
-	rnd := 0
-	if stopAtRound != nil {
-		rnd, _ = strconv.Atoi(*stopAtRound)
-	}
 
 	if *seed != "" {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)
@@ -213,12 +208,10 @@ func run() int {
 	}
 
 	s := algod.Server{
-		RootPath: absolutePath,
-		Genesis:  genesis,
+		RootPath:     absolutePath,
+		Genesis:      genesis,
+		PauseAtRound: *pauseAtRound,
 	}
-
-	// The following code changes the value of s.stopAtRound
-	s.SetStopAtRound(uint64(rnd))
 
 	// Generate a REST API token if one was not provided
 	apiToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)

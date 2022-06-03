@@ -77,8 +77,10 @@ type Service struct {
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
 
-	// stopAtRound represents the block number at which the catchup service should pause
-	stopAtRound uint64
+	// pauseAtRound represents the block number at which the catchup service should pause
+	ctxPauseAtRound    context.Context
+	cancelPauseAtRound func()
+	pauseAtRound       uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -127,6 +129,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 func (s *Service) Start() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.ctxPauseAtRound, s.cancelPauseAtRound = context.WithCancel(context.Background())
 	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
 }
@@ -134,6 +137,7 @@ func (s *Service) Start() {
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
 	s.cancel()
+	s.cancelPauseAtRound()
 	<-s.done
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
@@ -395,16 +399,22 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 type task func() basics.Round
 
-// SetStopAtRound changes the value of s.stopAtRound
-func (s *Service) SetStopAtRound(rnd uint64) {
-	s.stopAtRound = rnd
+// SetPauseAtRound changes the value of s.pauseAtRound
+func (s *Service) SetPauseAtRound(rnd uint64) {
+	s.pauseAtRound = rnd
+}
+
+// ResumeCatchup resumes the catchup service to continue catching up to the latest block or to a provided block number
+func (s *Service) ResumeCatchup(rnd uint64) {
+	// Change the value of s.pauseAtRound before cancelling the context to avoid race condition
+	s.pauseAtRound = rnd
+	s.cancelPauseAtRound()
+	s.ctxPauseAtRound, s.cancelPauseAtRound = context.WithCancel(context.Background())
 }
 
 func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool, peerSelector *peerSelector) func() basics.Round {
 	return func() basics.Round {
-		if s.stopAtRound != uint64(0) && uint64(r) > s.stopAtRound {
-			return 0
-		}
+
 		fetchResult := s.fetchAndWrite(r, prevFetchCompleteChan, lookbackChan, peerSelector)
 
 		// the fetch result will be read at most twice (once as the lookback block and once as the prev block, so we write the result twice)
@@ -486,7 +496,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			s.handleUnsupportedRound(nextRound)
 			break
 		}
-
+		if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
+			<-s.ctxPauseAtRound.Done()
+		}
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
 		taskCh <- s.pipelineCallback(nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)], peerSelector)
@@ -519,6 +531,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				}
 				delete(completedRounds, nextRound)
 
+				if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
+					<-s.ctxPauseAtRound.Done()
+				}
 				currentRoundComplete := make(chan bool, 2)
 				// len(taskCh) + (# pending writes to completed) increases by 1
 				taskCh <- s.pipelineCallback(nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[0], peerSelector)

@@ -180,10 +180,14 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
-func helperTestPauseOnRound(t *testing.T, rnd uint64, numBlocks int) {
+func TestPauseAndResumeAtRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
+	numberOfBlocks := basics.Round(100)
+	if testing.Short() {
+		numberOfBlocks = basics.Round(10)
+	}
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
@@ -192,7 +196,7 @@ func helperTestPauseOnRound(t *testing.T, rnd uint64, numBlocks int) {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, numBlocks)
+	addBlocks(t, remote, blk, int(numberOfBlocks)-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -206,62 +210,56 @@ func helperTestPauseOnRound(t *testing.T, rnd uint64, numBlocks int) {
 	rootURL := nodeA.rootURL()
 	net.addPeer(rootURL)
 
-	auth := &mockedAuthenticator{fail: true}
-	initialLocalRound := local.LastRound()
-	require.True(t, 0 == initialLocalRound)
-
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
-	s.log = &periodicSyncLogger{Logger: logging.Base()}
-	s.deadlineTimeout = 2 * time.Second
+	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+	fetcher := makeUniversalBlockFetcher(logging.Base(), net, defaultConfig)
 
-	// changing s.stopAtRound to a non-zero value, which makes the catchup to halt at block number rnd
-	s.SetStopAtRound(rnd)
+	// Start the service ( dummy )
+	syncer.testStart()
 
-	s.Start()
-	defer s.Stop()
-	// wait past the initial sync - which is known to fail due to the above "auth"
-	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
-	require.Equal(t, initialLocalRound, local.LastRound())
-	auth.alter(-1, false)
+	// Pause on block number 50
+	rnd := uint64(50)
+	syncer.SetPauseAtRound(rnd)
 
-	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
-	// until the synchronization is complete.
-	waitStart := time.Now()
-	for time.Now().Sub(waitStart) < time.Duration(numBlocks)*s.deadlineTimeout {
-		if uint64(local.LastRound()) == rnd {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	// Similar to a user running pause and resume catchup functionalities on catchup service
+	go func() {
+		// Testing Pause at round functionality i.e pausing at block number 75
+		time.Sleep(200 * time.Millisecond)
+		// Asserts that the last block is the one we expect
+		require.Equal(t, rnd, uint64(local.LastRound()))
 
-	// Asserts that the last block is the one we expect
-	lr := local.LastRound()
-	require.Equal(t, uint64(lr), rnd)
+		// Change the rnd number and test ResumeCatchup
+		rnd = uint64(75)
 
-	for r := basics.Round(1); r < local.LastRound(); r++ {
-		localBlock, err := local.Block(r)
+		// Testing Resume Catchup functionality i.e resuming until block number 75
+		syncer.ResumeCatchup(rnd)
+		time.Sleep(200 * time.Millisecond)
+		// Asserts that the last block is the one we expect
+		require.Equal(t, rnd, uint64(local.LastRound()))
+
+		// similar to running syncer.stop()
+		syncer.cancel()
+		syncer.cancelPauseAtRound()
+	}()
+
+	// Fetch blocks
+	syncer.sync()
+
+	// Check if the catchup worked as expected
+	for i := basics.Round(1); i <= local.LastRound(); i++ {
+		// Get the same block we wrote
+		blk, _, _, err2 := fetcher.fetchBlock(context.Background(), i, net.GetPeers()[0])
+		require.NoError(t, err2)
+
+		// Check we wrote the correct block
+		localBlock, err := local.Block(i)
 		require.NoError(t, err)
-		remoteBlock, err := remote.Block(r)
+		require.Equal(t, *blk, localBlock)
+
+		remoteBlock, err := remote.Block(i)
 		require.NoError(t, err)
 		require.Equal(t, remoteBlock.Hash(), localBlock.Hash())
 	}
-}
-
-func TestPauseOnRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// number of blocks
-	numBlocks := 10
-
-	// pause on round is disabled
-	rnd := uint64(0)
-	helperTestPauseOnRound(t, rnd, numBlocks)
-
-	// pause on round is enabled to halt catchup at block number 5
-	rnd = uint64(5)
-	helperTestPauseOnRound(t, rnd, numBlocks)
-
 }
 
 func TestPeriodicSync(t *testing.T) {
@@ -858,6 +856,7 @@ func (avv *MockVoteVerifier) Parallelism() int {
 func (s *Service) testStart() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.ctxPauseAtRound, s.cancelPauseAtRound = context.WithCancel(context.Background())
 	s.InitialSyncDone = make(chan struct{})
 }
 

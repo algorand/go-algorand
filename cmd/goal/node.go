@@ -59,7 +59,7 @@ var newNodeRelay string
 var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
-var stopAtRound string
+var pauseAtRound string
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -80,7 +80,7 @@ func init() {
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
 	startCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
 	startCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
-	startCmd.Flags().StringVar(&stopAtRound, "round", "", "Stop catchup at this block number")
+	startCmd.Flags().StringVar(&pauseAtRound, "round", "", "Stop catchup at this block number")
 
 	restartCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	restartCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
@@ -182,7 +182,7 @@ var startCmd = &cobra.Command{
 				RedirectOutput:    false,
 				RunUnderHost:      runUnderHost,
 				TelemetryOverride: telemetryOverride,
-				StopAtRound:       stopAtRound,
+				PauseAtRound:      pauseAtRound,
 			}
 
 			if getRunHostedConfigFlag(dataDir) {

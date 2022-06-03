@@ -62,13 +62,8 @@ type Server struct {
 	metricCollector      *metrics.MetricService
 	metricServiceStarted bool
 	stopping             chan struct{}
-	// stopAtRound represents the block number at which the catchup service should pause
-	stopAtRound uint64
-}
-
-// SetStopAtRound changes the value of s.stopAtRound
-func (s *Server) SetStopAtRound(rnd uint64) {
-	s.stopAtRound = rnd
+	// PauseAtRound represents the block number at which the catchup service should pause
+	PauseAtRound uint64
 }
 
 // Initialize creates a Node instance with applicable network services
@@ -181,8 +176,8 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		return fmt.Errorf("couldn't initialize the node: %s", err)
 	}
 
-	// The following code changes the value of s.node.stopAtRound
-	s.node.SetStopAtRound(s.stopAtRound)
+	// The following code changes the value of s.node.PauseAtRound
+	s.node.SetPauseAtRound(s.PauseAtRound)
 
 	return nil
 }
