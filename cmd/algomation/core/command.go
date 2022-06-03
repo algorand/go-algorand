@@ -3,22 +3,20 @@ package core
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"github.com/algorand/go-algorand/cmd/algomation/core/common"
+	"github.com/algorand/go-algorand/cmd/algomation/core/luarunner"
+	"github.com/algorand/go-algorand/cmd/algomation/core/pyrunner"
 
 	"github.com/spf13/cobra"
-	lua "github.com/yuin/gopher-lua"
-
-	"github.com/algorand/go-algorand/cmd/algomation/core/bindings"
 )
 
 var AlgomationCmd *cobra.Command
 
-type params struct {
-	ScriptFile string
-}
-
 func init() {
 	var (
-		p params
+		p common.Params
 	)
 
 	AlgomationCmd = &cobra.Command{
@@ -34,15 +32,14 @@ func init() {
 	AlgomationCmd.Flags().StringVarP(&p.ScriptFile, "file", "f", "", "script to execute")
 }
 
-func run(p params) error {
-	L := lua.NewState()
-	L.PreloadModule("test", bindings.TestLoader)
-	ncLoader := bindings.MakeNodeControllerLoader("/home/will/go/bin", "/home/will/nodes/testdir")
-	L.PreloadModule("algodModule", ncLoader)
-	bindings.RegisterNodeControllerType(L)
-	defer L.Close()
-	if err := L.DoFile(p.ScriptFile); err != nil {
-		return err
+func run(p common.Params) error {
+	switch ext := filepath.Ext(p.ScriptFile); ext {
+	case ".lua":
+		return luarunner.Run(p)
+	case ".py":
+		return pyrunner.Run(p)
+	default:
+		return fmt.Errorf("unknown script extension: %s", ext)
 	}
-	return nil
+
 }

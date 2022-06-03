@@ -18,6 +18,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
 	github.com/getkin/kin-openapi v0.22.0
+	github.com/go-python/gpython v0.1.0 // indirect
 	github.com/gofrs/flock v0.7.0
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.6.2
@@ -45,7 +46,7 @@ require (
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
-	github.com/gopherjs/gopherwasm v1.0.1 // indirect
+	github.com/gopherjs/gopherwasm v1.1.0 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af // indirect
@@ -54,8 +55,10 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-runewidth v0.0.3 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
+	github.com/peterh/liner v1.2.2 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

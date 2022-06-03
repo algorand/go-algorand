@@ -1,4 +1,4 @@
-package bindings
+package luarunner
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"github.com/algorand/go-algorand/nodecontrol"
 )
 
-// TestLoader basic module test that also has field.
-func TestLoader(L *lua.LState) int {
+// testLoader basic module test that also has field.
+func testLoader(L *lua.LState) int {
 	// this mod thing might be a hack.
 	var mod *lua.LTable
 
@@ -34,7 +34,7 @@ func TestLoader(L *lua.LState) int {
 	return 1
 }
 
-// MakeNodeControllerLoader initializes bindings to node controller with hard coded bin/data dir.
+// makeNodeControllerLoader initializes bindings to node controller with hard coded bin/data dir.
 // Example lua:
 // 	   local algod = require("algodModule")
 // 	   print("Starting node.")
@@ -43,7 +43,7 @@ func TestLoader(L *lua.LState) int {
 // 	   algod.status()
 // 	   print("Stopping node.")
 // 	   algod.stop()
-func MakeNodeControllerLoader(bindir, datadir string) lua.LGFunction {
+func makeNodeControllerLoader(bindir, datadir string) lua.LGFunction {
 	return func(L *lua.LState) int {
 		var mod *lua.LTable
 		nc := nodecontrol.MakeNodeController(bindir, datadir)
@@ -93,13 +93,13 @@ func checkNodeController(L *lua.LState) *nodecontrol.NodeController {
 	return nil
 }
 
-// RegisterNodeControllerType initializes bindings to a global node controller type.
+// registerNodeControllerType initializes bindings to a global node controller type.
 // Example lua:
 //		local node = algod.new("/home/will/go/bin", "/home/will/nodes/testdir")
 //		node:start()
 //		node:status()
 //		node:stop()
-func RegisterNodeControllerType(L *lua.LState) {
+func registerNodeControllerType(L *lua.LState) {
 	// Constructor
 	newAlgod := func(L *lua.LState) int {
 		nc := nodecontrol.MakeNodeController(L.CheckString(1), L.CheckString(2))
