@@ -184,10 +184,8 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numberOfBlocks := basics.Round(100)
-	if testing.Short() {
-		numberOfBlocks = basics.Round(10)
-	}
+	numberOfBlocks := basics.Round(10)
+
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
@@ -218,22 +216,22 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 	syncer.testStart()
 
 	// Pause on block number 50
-	rnd := uint64(50)
+	rnd := uint64(3)
 	syncer.SetPauseAtRound(rnd)
 
 	// Similar to a user running pause and resume catchup functionalities on catchup service
 	go func() {
 		// Testing Pause at round functionality i.e pausing at block number 50
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
 
 		// Change the rnd number and test ResumeCatchup
-		rnd = uint64(75)
+		rnd = uint64(7)
 
 		// Testing Resume Catchup functionality i.e resuming until block number 75
 		syncer.ResumeCatchup(rnd)
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
 
