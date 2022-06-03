@@ -68,7 +68,7 @@ func TestMetricGauge(t *testing.T) {
 
 	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
-	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported.")
+	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
 	// iterate through the metrics and check the each of the metrics reached it's correct count.
 	for k, v := range test.metrics {

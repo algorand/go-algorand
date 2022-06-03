@@ -19,6 +19,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestMetricCounter(t *testing.T) {
 	defer test.Unlock()
 	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
-	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported.")
+	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
 	for k, v := range test.metrics {
 		// we have increased each one of the labels exactly 4 times. See that the counter was counting correctly.
@@ -114,7 +115,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 	defer test.Unlock()
 	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
-	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported.")
+	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
 	for k, v := range test.metrics {
 		// we have increased each one of the labels exactly 4 times. See that the counter was counting correctly.
@@ -163,11 +164,37 @@ func TestMetricCounterMixed(t *testing.T) {
 	defer test.Unlock()
 	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
-	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported.")
+	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
 	for k, v := range test.metrics {
 		// we have increased each one of the labels exactly 4 times. See that the counter was counting correctly.
 		// ( counters starts at zero )
 		require.Equal(t, "35.5", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 	}
+}
+
+func TestCounterWriteMetric(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	c.Deregister(nil)
+
+	// ensure 0 counters are still logged
+	sbOut := strings.Builder{}
+	c.WriteMetric(&sbOut, `host="myhost"`)
+	expected := `# HELP testname testhelp
+# TYPE testname counter
+testname{host="myhost"} 0
+`
+	require.Equal(t, expected, sbOut.String())
+
+	c.Add(2.3, nil)
+	// ensure non-zero counters are logged
+	sbOut = strings.Builder{}
+	c.WriteMetric(&sbOut, `host="myhost"`)
+	expected = `# HELP testname testhelp
+# TYPE testname counter
+testname{host="myhost"} 2.3
+`
+	require.Equal(t, expected, sbOut.String())
 }

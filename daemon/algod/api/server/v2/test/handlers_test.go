@@ -936,6 +936,7 @@ func TestGetProofDefault(t *testing.T) {
 	var resp generatedV2.ProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
+	a.Equal("sha512_256", resp.Hashtype)
 
 	l := handler.Node.LedgerForAPI()
 	blkHdr, err := l.BlockHdr(1)

@@ -1260,18 +1260,20 @@ func TestDryrunCost(t *testing.T) {
 		msg       string
 		numHashes int
 	}{
-		{"REJECT", 12},
-		{"PASS", 5},
+		{"REJECT", 22},
+		{"PASS", 16},
 	}
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			costs := make([]uint64, 2)
+			expectedCosts := make([]int64, 3)
+			expectedBudgetAdded := make([]uint64, 3)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
-			approval := ops.Program
-			costs[0] = 3 + uint64(test.numHashes)*130
+			app1 := ops.Program
+			expectedCosts[0] = 3 + int64(test.numHashes)*130
+			expectedBudgetAdded[0] = 0
 
 			ops, err = logic.AssembleString("int 1")
 			require.NoError(t, err)
@@ -1279,8 +1281,26 @@ func TestDryrunCost(t *testing.T) {
 
 			ops, err = logic.AssembleString("#pragma version 5 \nint 1 \nint 2 \npop")
 			require.NoError(t, err)
-			approv := ops.Program
-			costs[1] = 3
+			app2 := ops.Program
+			expectedCosts[1] = 3
+			expectedBudgetAdded[1] = 0
+
+			ops, err = logic.AssembleString(`#pragma version 6
+itxn_begin
+int appl
+itxn_field TypeEnum
+int DeleteApplication
+itxn_field OnCompletion
+byte 0x068101 // #pragma version 6; int 1;
+itxn_field ApprovalProgram
+byte 0x068101 // #pragma version 6; int 1;
+itxn_field ClearStateProgram
+itxn_submit
+int 1`)
+			require.NoError(t, err)
+			app3 := ops.Program
+			expectedCosts[2] = -687
+			expectedBudgetAdded[2] = 700
 
 			var appIdx basics.AppIndex = 1
 			creator := randomAddress()
@@ -1307,13 +1327,23 @@ func TestDryrunCost(t *testing.T) {
 							},
 						},
 					},
+					{
+						Txn: transactions.Transaction{
+							Header: transactions.Header{Sender: sender},
+							Type:   protocol.ApplicationCallTx,
+							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+								ApplicationID: appIdx + 2,
+								OnCompletion:  transactions.OptInOC,
+							},
+						},
+					},
 				},
 				Apps: []generated.Application{
 					{
 						Id: uint64(appIdx),
 						Params: generated.ApplicationParams{
 							Creator:           creator.String(),
-							ApprovalProgram:   approval,
+							ApprovalProgram:   app1,
 							ClearStateProgram: clst,
 							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
 						},
@@ -1322,7 +1352,16 @@ func TestDryrunCost(t *testing.T) {
 						Id: uint64(appIdx + 1),
 						Params: generated.ApplicationParams{
 							Creator:           creator.String(),
-							ApprovalProgram:   approv,
+							ApprovalProgram:   app2,
+							ClearStateProgram: clst,
+							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+						},
+					},
+					{
+						Id: uint64(appIdx + 2),
+						Params: generated.ApplicationParams{
+							Creator:           creator.String(),
+							ApprovalProgram:   app3,
 							ClearStateProgram: clst,
 							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
 						},
@@ -1340,13 +1379,15 @@ func TestDryrunCost(t *testing.T) {
 			var response generated.DryrunResponse
 			doDryrunRequest(&dr, &response)
 			require.Empty(t, response.Error)
-			require.Equal(t, 2, len(response.Txns))
+			require.Equal(t, 3, len(response.Txns))
 
 			for i, txn := range response.Txns {
 				messages := *txn.AppCallMessages
 				require.GreaterOrEqual(t, len(messages), 1)
-				require.NotNil(t, *txn.Cost)
-				require.Equal(t, costs[i], *txn.Cost)
+				cost := int64(*txn.BudgetConsumed) - int64(*txn.BudgetAdded)
+				require.NotNil(t, cost)
+				require.Equal(t, expectedCosts[i], cost)
+				require.Equal(t, expectedBudgetAdded[i], *txn.BudgetAdded)
 				statusMatches := false
 				costExceedFound := false
 				for _, msg := range messages {

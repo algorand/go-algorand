@@ -32,9 +32,11 @@ import (
 )
 
 var messagesHandledTotal = metrics.MakeCounter(metrics.AgreementMessagesHandled)
-var messagesHandledByType = metrics.NewTagCounter("algod_agreement_handled_{TAG}", "Number of agreement messages handled per type")
+var messagesHandledByType = metrics.NewTagCounter("algod_agreement_handled_{TAG}", "Number of agreement {TAG} messages handled",
+	agreementVoteMessageType, agreementProposalMessageType, agreementBundleMessageType)
 var messagesDroppedTotal = metrics.MakeCounter(metrics.AgreementMessagesDropped)
-var messagesDroppedByType = metrics.NewTagCounter("algod_agreement_dropped_{TAG}", "Number of agreement messages handled per type")
+var messagesDroppedByType = metrics.NewTagCounter("algod_agreement_dropped_{TAG}", "Number of agreement {TAG} messages dropped",
+	agreementVoteMessageType, agreementProposalMessageType, agreementBundleMessageType)
 
 const (
 	agreementVoteMessageType     = "vote"
