@@ -446,7 +446,7 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	}
 }
 
-func doRepackCatchpoint(header CatchpointFileHeader, dataInfo catchpointFirstStageInfo, in *tar.Reader, out *tar.Writer) error {
+func doRepackCatchpoint(header CatchpointFileHeader, biggestChunkLen uint64, in *tar.Reader, out *tar.Writer) error {
 	{
 		bytes := protocol.Encode(&header)
 
@@ -466,7 +466,7 @@ func doRepackCatchpoint(header CatchpointFileHeader, dataInfo catchpointFirstSta
 	}
 
 	// make buffer for re-use that can fit biggest chunk
-	buf := make([]byte, dataInfo.BiggestChunkLen)
+	buf := make([]byte, biggestChunkLen)
 	for {
 		header, err := in.Next()
 		if err != nil {
@@ -522,7 +522,7 @@ func repackCatchpoint(header CatchpointFileHeader, dataInfo catchpointFirstStage
 	defer tarOut.Close()
 
 	// Repack.
-	err = doRepackCatchpoint(header, dataInfo, tarIn, tarOut)
+	err = doRepackCatchpoint(header, dataInfo.BiggestChunkLen, tarIn, tarOut)
 	if err != nil {
 		return err
 	}
