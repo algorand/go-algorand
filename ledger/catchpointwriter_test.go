@@ -239,10 +239,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	// load the file from disk.
 	fileContent, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
-	defer gzipReader.Close()
+	tarReader := tar.NewReader(bytes.NewBuffer(fileContent))
 
 	header, err := tarReader.Next()
 	require.NoError(t, err)
