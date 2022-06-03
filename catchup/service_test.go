@@ -223,8 +223,8 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 
 	// Similar to a user running pause and resume catchup functionalities on catchup service
 	go func() {
-		// Testing Pause at round functionality i.e pausing at block number 75
-		time.Sleep(200 * time.Millisecond)
+		// Testing Pause at round functionality i.e pausing at block number 50
+		time.Sleep(500 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
 
@@ -233,7 +233,7 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 
 		// Testing Resume Catchup functionality i.e resuming until block number 75
 		syncer.ResumeCatchup(rnd)
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
 
