@@ -1286,7 +1286,7 @@ func TestTStateProofLogging(t *testing.T) {
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
 
-	numOfAccounts := 1
+	numOfAccounts := 3
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
@@ -1299,8 +1299,13 @@ func TestTStateProofLogging(t *testing.T) {
 	}
 
 	firstAddress := addresses[0]
-	initAccounts := initAcc(map[basics.Address]uint64{firstAddress: proto.MinBalance*1000 + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize)})
-	stateproofIntervals := uint64(256) 
+	initAccounts := initAcc(map[basics.Address]uint64{
+		firstAddress: proto.MinBalance*1000 + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize),
+		transactions.StateProofSender: 200000,
+		addresses[1]: 100000,
+		addresses[2]: 100000,
+	})
+	stateproofIntervals := uint64(256)
 	keys, err := merklesignature.New(0, uint64(stateproofIntervals)*stateproofIntervals+1, stateproofIntervals)
 	require.NoError(t, err)
 
@@ -1332,16 +1337,18 @@ func TestTStateProofLogging(t *testing.T) {
 	phdr, err := ledger.BlockHdr(0)
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
+	b.BlockHeader.FeeSink = addresses[1]
+	b.BlockHeader.RewardsPool = addresses[2]
 
 	eval, err := ledger.StartEvaluator(b.BlockHeader, 0, 10000)
 	require.NoError(t, err)
 
-	for i := 1; i < 513; i++ {
+	for i := 1; i < 5130; i++ {
 		blk, err := eval.GenerateBlock()
 		require.NoError(t, err)
 
-		//		blk, err := transactionPool.AssembleBlock(basics.Round(i), time.Time{})
-		//		require.NoError(t, err)
+		blk, err = transactionPool.AssembleBlock(basics.Round(i), time.Time{})
+		require.NoError(t, err)
 
 		err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
@@ -1352,6 +1359,7 @@ func TestTStateProofLogging(t *testing.T) {
 		phdr, err := ledger.BlockHdr(basics.Round(i))
 		require.NoError(t, err)
 		b.BlockHeader.Branch = phdr.Hash()
+		b.BlockHeader.TimeStamp = phdr.TimeStamp + 10
 
 		if i == 2550 {
 			spt := b.BlockHeader.StateProofTracking[protocol.StateProofBasic]
@@ -1359,12 +1367,14 @@ func TestTStateProofLogging(t *testing.T) {
 			b.BlockHeader.StateProofTracking[protocol.StateProofBasic] = spt
 		}
 
+
+		if i == 513 {
+			break
+		}
+		
 		eval, err = ledger.StartEvaluator(b.BlockHeader, 0, 10000)
 		require.NoError(t, err)
-
 	}
-
-
 
 	//////////////////////////
 
@@ -1373,18 +1383,17 @@ func TestTStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, voters)
 
-
 	/*
-	if voters != nil {
-		root, total = voters.Tree.Root(), voters.TotalWeight
-	}
-
-		basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
-		if err != nil {
-			return err
+		if voters != nil {
+			root, total = voters.Tree.Root(), voters.TotalWeight
 		}
 
-		basicStateProof.StateProofNextRound = eval.state.stateProofNext()
+			basicStateProof.StateProofVotersCommitment, basicStateProof.StateProofVotersTotalWeight, err = eval.stateProofVotersAndTotal()
+			if err != nil {
+				return err
+			}
+
+			basicStateProof.StateProofNextRound = eval.state.stateProofNext()
 
 	*/
 	///////////////////////////
@@ -1392,43 +1401,55 @@ func TestTStateProofLogging(t *testing.T) {
 	proof := generateProofForTesting(uint64(512), voters.Participants, voters.Tree, keys, voters.TotalWeight.Raw, t)
 
 	uniqueTxID := 0
-	tx := transactions.Transaction{
-		Type: protocol.StateProofTx,
-		Header: transactions.Header{
-			Sender:      firstAddress,
-			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
-			FirstValid:  512,
-			LastValid:   1024,
-			Note:        []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)},
-			GenesisHash: ledger.GenesisHash(),
-		},
-		StateProofTxnFields: transactions.StateProofTxnFields{
-			StateProofIntervalLatestRound: 512,
-			StateProof:                    *proof,
-			StateProofMessage: stateproofmsg.Message{
-				LnProvenWeight: 1,
-			},
-		},
+	var stxn transactions.SignedTxn
+	stxn.Txn.Type = protocol.StateProofTx
+	stxn.Txn.Sender = transactions.StateProofSender
+	stxn.Txn.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee + 1}
+	stxn.Txn.FirstValid = 512
+	stxn.Txn.LastValid = 1024
+	stxn.Txn.Note = []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)}
+	stxn.Txn.GenesisHash = ledger.GenesisHash()
+	stxn.Txn.StateProofIntervalLatestRound = 512
+	stxn.Txn.StateProofType = protocol.StateProofBasic
+	stxn.Txn.StateProof = *proof
+	stxn.Txn.StateProofMessage = stateproofmsg.Message{
+		LnProvenWeight: 1,
 	}
 
-	signedTx := tx.Sign(secrets[0])
-	txib, err := b.EncodeSignedTxn(signedTx, transactions.ApplyData{})
+	eval, err = ledger.StartEvaluator(b.BlockHeader, 0, 10000)
 	require.NoError(t, err)
 
-	txgroup := []transactions.SignedTxn{signedTx}
+	err = eval.Transaction(stxn, transactions.ApplyData{})
+	require.NoError(t, err)
+	/*
+	txib, err := b.EncodeSignedTxn(stxn, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	txgroup := []transactions.SignedTxn{stxn}
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
 
 	err = eval.TransactionGroup(txgroupad)
 	require.NoError(t, err)
-
-	aa := transactionPool.assemblyResults.blk.Block()
-	aa.Payset = append(transactionPool.assemblyResults.blk.Block().Payset, txib)
+*/
+	//	aa := transactionPool.assemblyResults.blk.Block()
+	//	aa.Payset = append(transactionPool.assemblyResults.blk.Block().Payset, txib)
 	// consume the transaction of allowed limit
 	//	require.Error(t, transactionPool.RememberOne(signedTx))
 	uniqueTxID++
 
-	_, err = transactionPool.AssembleBlock(513, time.Time{})
-	require.NoError(t, err)	
+
+	//	err = transactionPool.RememberOne(stxn) 
+	err = transactionPool.RememberOne(stxn)
+	require.NoError(t, err)
+
+	transactionPool.recomputeBlockEvaluator(nil, 0)//[]transactions.SignedTxn{stxn}, nil)//telemetryspec.AssembleBlockMetrics{})
+	//	require.NoError(t, err)
+
+	transactionPool.log.SetLevel(logging.Info)
+	transactionPool.log.EnableTelemetry(logging.TelemetryConfig{Enable: true, SendToLog: true})
+	
+	_, err = transactionPool.AssembleBlock(514, time.Time{})
+	require.NoError(t, err)
 
 }
 
@@ -1462,11 +1483,10 @@ func generateProofForTesting(
 	totalWeight uint64,
 	t *testing.T) *stateproof.StateProof {
 
-
 	//	npartHi := 1                       //2
 	//	npartLo := 1                       //100
 
-	npart := 1//npartHi + npartLo
+	npart := 1 //npartHi + npartLo
 
 	// data := testMessage("hello world").IntoStateProofMessageHash()
 	//	provenWt := uint64(totalWeight / 2)
@@ -1474,7 +1494,6 @@ func generateProofForTesting(
 	data := stateproofmsg.Message{
 		LnProvenWeight: 1,
 	}.IntoStateProofMessageHash()
-
 
 	//	var parts []basics.Participant
 	var sigs []merklesignature.Signature
