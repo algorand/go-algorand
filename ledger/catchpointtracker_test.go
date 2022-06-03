@@ -315,11 +315,11 @@ func TestRecordCatchpointFile(t *testing.T) {
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
 
-		_, _, _, err := ct.generateCatchpointData(
+		_, _, biggestChunkLen, err := ct.generateCatchpointData(
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 
-		err = ct.createCatchpoint(accountsRound, round, catchpointFirstStageInfo{}, crypto.Digest{})
+		err = ct.createCatchpoint(accountsRound, round, catchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 		require.NoError(t, err)
 	}
 
@@ -807,6 +807,7 @@ func TestCalculateFirstStageRounds(t *testing.T) {
 		{29680, 1, 1, 10000, 320, false, false, 1},
 		{29679, 1, 1, 10000, 320, true, false, 1},
 		{29678, 10003, 1, 10000, 320, true, true, 10002},
+		{79680, 7320, 1, 10000, 320, false, false, 7320},
 	}
 
 	for i, testCase := range testCases {
@@ -826,29 +827,30 @@ func TestCalculateFirstStageRounds(t *testing.T) {
 }
 
 func TestCalculateCatchpointRounds(t *testing.T) {
-	const catchpointInterval = 10
 
 	type TestCase struct {
 		// input
-		min basics.Round
-		max basics.Round
+		min                basics.Round
+		max                basics.Round
+		catchpointInterval uint64
 		// output
 		output []basics.Round
 	}
 	testCases := []TestCase{
-		{1, 0, nil},
-		{0, 0, []basics.Round{0}},
-		{11, 19, nil},
-		{11, 20, []basics.Round{20}},
-		{11, 29, []basics.Round{20}},
-		{11, 30, []basics.Round{20, 30}},
-		{10, 20, []basics.Round{10, 20}},
+		{1, 0, 10, nil},
+		{0, 0, 10, []basics.Round{0}},
+		{11, 19, 10, nil},
+		{11, 20, 10, []basics.Round{20}},
+		{11, 29, 10, []basics.Round{20}},
+		{11, 30, 10, []basics.Round{20, 30}},
+		{10, 20, 10, []basics.Round{10, 20}},
+		{79_680 + 1, 87_000, 10_000, []basics.Round{80_000}},
 	}
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("test_case_%d", i), func(t *testing.T) {
 			rounds := calculateCatchpointRounds(
-				testCase.min, testCase.max, catchpointInterval)
+				testCase.min, testCase.max, testCase.catchpointInterval)
 			require.Equal(t, testCase.output, rounds)
 		})
 	}
