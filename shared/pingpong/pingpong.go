@@ -77,9 +77,10 @@ func (ppa *pingPongAccount) addBalance(offset int64) {
 
 // WorkerState object holds a running pingpong worker
 type WorkerState struct {
-	cfg      PpConfig
-	accounts map[string]*pingPongAccount
-	cinfo    CreatablesInfo
+	cfg        PpConfig
+	accounts   map[string]*pingPongAccount
+	accountsMu deadlock.RWMutex
+	cinfo      CreatablesInfo
 
 	nftStartTime       int64
 	localNftIndex      uint64
@@ -154,7 +155,9 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 		}
 		go pps.roundMonitor(ac)
 
+		pps.accountsMu.Lock()
 		err = pps.fundAccounts(pps.accounts, ac, cfg)
+		pps.accountsMu.Unlock()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 			return
@@ -362,7 +365,9 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to s
 		return transactions.Transaction{}, err
 	}
 
+	pps.accountsMu.RLock()
 	stxn, err = signTxn(from, txn, pps.accounts, pps.cfg)
+	pps.accountsMu.RUnlock()
 
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -522,12 +527,16 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			}
 
 			minimumAmount := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*2
+			pps.accountsMu.RLock()
 			fromList := listSufficientAccounts(pps.accounts, minimumAmount, cfg.SrcAccount)
+			pps.accountsMu.RUnlock()
 			// in group tests txns are sent back and forth, so both parties need funds
 			if cfg.GroupSize == 1 {
 				minimumAmount = 0
 			}
+			pps.accountsMu.RLock()
 			toList := listSufficientAccounts(pps.accounts, minimumAmount, cfg.SrcAccount)
+			pps.accountsMu.RUnlock()
 
 			sent, succeeded, err := pps.sendFromTo(fromList, toList, ac, &nextSendTime)
 			totalSent += sent
@@ -537,7 +546,9 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			}
 
 			if cfg.RefreshTime > 0 && time.Now().After(refreshTime) {
+				pps.accountsMu.Lock()
 				err = pps.refreshAccounts(pps.accounts, ac, cfg)
+				pps.accountsMu.Unlock()
 				if err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "error refreshing: %v\n", err)
 				}
@@ -601,10 +612,12 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		privateKey := crypto.GenerateSignatureSecrets(seed)
 		publicKey := basics.Address(privateKey.SignatureVerifier)
 
+		pps.accountsMu.Lock()
 		pps.accounts[publicKey.String()] = &pingPongAccount{
 			sk: privateKey,
 			pk: publicKey,
 		}
+		pps.accountsMu.Unlock()
 		addr = publicKey.String()
 
 		fmt.Printf("new NFT holder %s\n", addr)
@@ -626,7 +639,9 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		// we ran one txn above already to fund the new addr,
 		// we'll run a second txn below
 	}
+	pps.accountsMu.Lock()
 	pps.accounts[pps.cfg.SrcAccount].addBalance(-int64(srcCost))
+	pps.accountsMu.Unlock()
 	// pick a random sender from nft holder sub accounts
 	pick := rand.Intn(len(pps.nftHolders))
 	pos := 0
@@ -660,7 +675,9 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	} else {
 		pps.nftHolders[sender] = senderNftCount + 1
 	}
+	pps.accountsMu.RLock()
 	stxn, err := signTxn(sender, txn, pps.accounts, pps.cfg)
+	pps.accountsMu.RUnlock()
 	if err != nil {
 		return
 	}
@@ -673,11 +690,16 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	return
 }
 
+func (pps *WorkerState) acct(from string) *pingPongAccount {
+	pps.accountsMu.RLock()
+	defer pps.accountsMu.RUnlock()
+	return pps.accounts[from]
+}
+
 func (pps *WorkerState) sendFromTo(
 	fromList, toList []string,
 	client libgoal.Client, nextSendTime *time.Time,
 ) (sentCount, successCount uint64, err error) {
-	accounts := pps.accounts
 	cinfo := pps.cinfo
 	cfg := pps.cfg
 
@@ -740,6 +762,7 @@ func (pps *WorkerState) sendFromTo(
 			amt = 0
 		}
 
+		fromAcct := pps.acct(from)
 		if cfg.GroupSize == 1 {
 			// generate random assetID or appId if we send asset/app txns
 			aidx := randomizeCreatableID(cfg, cinfo)
@@ -754,8 +777,8 @@ func (pps *WorkerState) sendFromTo(
 			}
 
 			// would we have enough money after taking into account the current updated fees ?
-			if accounts[from].getBalance() <= (txn.Fee.Raw + amt + minAccountRunningBalance) {
-				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d: %s -> %s; Current cost too high(%d <= %d + %d  + %d).\n", amt, from, to, accounts[from].getBalance(), txn.Fee.Raw, amt, minAccountRunningBalance)
+			if fromAcct.getBalance() <= (txn.Fee.Raw + amt + minAccountRunningBalance) {
+				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d: %s -> %s; Current cost too high(%d <= %d + %d  + %d).\n", amt, from, to, fromAcct.getBalance(), txn.Fee.Raw, amt, minAccountRunningBalance)
 				belowMinBalanceAccounts[from] = true
 				continue
 			}
@@ -764,7 +787,9 @@ func (pps *WorkerState) sendFromTo(
 			toBalanceChange = int64(amt)
 
 			// Sign txn
+			pps.accountsMu.RLock()
 			stxn, signErr := signTxn(from, txn, pps.accounts, cfg)
+			pps.accountsMu.RUnlock()
 			if signErr != nil {
 				err = signErr
 				_, _ = fmt.Fprintf(os.Stderr, "signTxn failed: %v\n", err)
@@ -826,11 +851,12 @@ func (pps *WorkerState) sendFromTo(
 			}
 
 			// would we have enough money after taking into account the current updated fees ?
-			if int64(accounts[from].getBalance())+fromBalanceChange <= int64(cfg.MinAccountFunds) {
+			if int64(fromAcct.getBalance())+fromBalanceChange <= int64(cfg.MinAccountFunds) {
 				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
 				continue
 			}
-			if int64(accounts[to].getBalance())+toBalanceChange <= int64(cfg.MinAccountFunds) {
+			toAcct := pps.acct(to)
+			if int64(toAcct.getBalance())+toBalanceChange <= int64(cfg.MinAccountFunds) {
 				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending back %d : %s -> %s; Current cost too high.\n", amt, to, from)
 				continue
 			}
@@ -851,7 +877,9 @@ func (pps *WorkerState) sendFromTo(
 			var signErr error
 			for j, txn := range txGroup {
 				txn.Group = gid
+				pps.accountsMu.RLock()
 				stxGroup[j], signErr = signTxn(txSigners[j], txn, pps.accounts, cfg)
+				pps.accountsMu.RUnlock()
 				if signErr != nil {
 					err = signErr
 					return
@@ -871,7 +899,7 @@ func (pps *WorkerState) sendFromTo(
 		}
 
 		successCount++
-		accounts[from].addBalance(fromBalanceChange)
+		fromAcct.addBalance(fromBalanceChange)
 		// avoid updating the "to" account.
 
 	}
@@ -918,7 +946,16 @@ func (pps *WorkerState) roundMonitor(client libgoal.Client) {
 		pps.pendingTxns = pendingTxns
 		pps.muSuggestedParams.Unlock()
 
+		pps.accountsMu.Lock()
+		accountsSnapshot := make([]*pingPongAccount, len(pps.accounts))
+		pos := 0
 		for _, acct := range pps.accounts {
+			accountsSnapshot[pos] = acct
+			pos++
+		}
+		pps.accountsMu.Unlock()
+
+		for _, acct := range accountsSnapshot {
 			acct.Lock()
 			needRefresh := acct.balance < minFund && acct.balanceRound < paramsResp.LastRound
 			acct.Unlock()
