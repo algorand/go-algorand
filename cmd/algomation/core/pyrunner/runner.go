@@ -13,6 +13,7 @@ import (
 	"github.com/algorand/go-algorand/cmd/algomation/core/common"
 )
 
+// Run python script.
 func Run(p common.Params) error {
 	return runWithFile(p.ScriptFile)
 }

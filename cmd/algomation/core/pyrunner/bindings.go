@@ -14,12 +14,12 @@ var (
 )
 
 func init() {
-	pyNodeControllerType.Dict["start"] = py.MustNewMethod("Start", NodeController_start, 0, "")
-	pyNodeControllerType.Dict["stop"] = py.MustNewMethod("Stop", NodeController_stop, 0, "")
-	pyNodeControllerType.Dict["status"] = py.MustNewMethod("Status", NodeController_status, 0, "")
+	pyNodeControllerType.Dict["start"] = py.MustNewMethod("Start", nodeControllerStart, 0, "")
+	pyNodeControllerType.Dict["stop"] = py.MustNewMethod("Stop", nodeControllerStop, 0, "")
+	pyNodeControllerType.Dict["status"] = py.MustNewMethod("Status", nodeControllerStatus, 0, "")
 
 	methods := []*py.Method{
-		py.MustNewMethod("Algod_new", NodeController_new, 0, ""),
+		py.MustNewMethod("Algod_new", nodeControllerNew, 0, ""),
 	}
 
 	// Register a ModuleImpl instance used by the gpython runtime to instantiate new py.Module when first imported.
@@ -40,16 +40,16 @@ func init() {
 	})
 }
 
-type NodeControllerWrapper struct {
+type nodeControllerWrapper struct {
 	nc     *nodecontrol.NodeController
 	MadeBy string
 }
 
-func (nc *NodeControllerWrapper) Type() *py.Type {
+func (nc *nodeControllerWrapper) Type() *py.Type {
 	return pyNodeControllerType
 }
 
-func NodeController_new(module py.Object, args py.Tuple) (py.Object, error) {
+func nodeControllerNew(module py.Object, args py.Tuple) (py.Object, error) {
 	var bindir string
 	var datadir string
 
@@ -60,7 +60,7 @@ func NodeController_new(module py.Object, args py.Tuple) (py.Object, error) {
 	}
 
 	nc := nodecontrol.MakeNodeController(bindir, datadir)
-	v := &NodeControllerWrapper{
+	v := &nodeControllerWrapper{
 		nc: &nc,
 	}
 
@@ -75,8 +75,8 @@ func NodeController_new(module py.Object, args py.Tuple) (py.Object, error) {
 	return ret, nil
 }
 
-func NodeController_start(self py.Object, args py.Tuple) (py.Object, error) {
-	v, ok := self.(*NodeControllerWrapper)
+func nodeControllerStart(self py.Object, args py.Tuple) (py.Object, error) {
+	v, ok := self.(*nodeControllerWrapper)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type provided to node controller start")
 	}
@@ -84,8 +84,8 @@ func NodeController_start(self py.Object, args py.Tuple) (py.Object, error) {
 	return py.None, nil
 }
 
-func NodeController_stop(self py.Object, args py.Tuple) (py.Object, error) {
-	v, ok := self.(*NodeControllerWrapper)
+func nodeControllerStop(self py.Object, args py.Tuple) (py.Object, error) {
+	v, ok := self.(*nodeControllerWrapper)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type provided to node controller start")
 	}
@@ -93,19 +93,19 @@ func NodeController_stop(self py.Object, args py.Tuple) (py.Object, error) {
 	return py.None, nil
 }
 
-func NodeController_status(self py.Object, args py.Tuple) (py.Object, error) {
-	v, ok := self.(*NodeControllerWrapper)
+func nodeControllerStatus(self py.Object, args py.Tuple) (py.Object, error) {
+	v, ok := self.(*nodeControllerWrapper)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type provided to node controller start")
 	}
 
 	c, err := v.nc.AlgodClient()
 	if err != nil {
-		return nil, fmt.Errorf("Problem getting client.")
+		return nil, fmt.Errorf("problem getting client")
 	}
 	s, err := c.Status()
 	if err != nil {
-		return nil, fmt.Errorf("Problem getting status.")
+		return nil, fmt.Errorf("problem getting status")
 	}
 	fmt.Printf("%v\n", s)
 	return py.None, nil

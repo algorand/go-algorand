@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// AlgomationCmd is the cobra command to execute a script.
 var AlgomationCmd *cobra.Command
 
 func init() {
@@ -41,5 +42,4 @@ func run(p common.Params) error {
 	default:
 		return fmt.Errorf("unknown script extension: %s", ext)
 	}
-
 }
