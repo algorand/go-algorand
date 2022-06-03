@@ -556,6 +556,7 @@ func (s *Service) periodicSync() {
 		s.net.RequestConnectOutgoing(false, s.ctx.Done())
 		s.sync()
 	}
+	s.pauseAtRound = uint64(0)
 	stuckInARow := 0
 	sleepDuration := s.deadlineTimeout
 	for {
