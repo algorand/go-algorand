@@ -341,15 +341,8 @@ func TestFullCatchpointWriter(t *testing.T) {
 		Catchpoint:        catchpointLabel,
 		BlockHeaderDigest: blockHeaderDigest,
 	}
-	dataInfo := catchpointFirstStageInfo{
-		Totals:           totals,
-		TrieBalancesHash: crypto.Digest{}, // this test does not make a valid balances hash
-		TotalAccounts:    totalAccounts,
-		TotalChunks:      totalChunks,
-		BiggestChunkLen:  biggestChunkLen,
-	}
 	err = repackCatchpoint(
-		catchpointFileHeader, dataInfo, catchpointDataFilePath, catchpointFilePath)
+		catchpointFileHeader, biggestChunkLen, catchpointDataFilePath, catchpointFilePath)
 	require.NoError(t, err)
 
 	// create a ledger.

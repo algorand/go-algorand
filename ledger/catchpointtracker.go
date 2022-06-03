@@ -504,7 +504,7 @@ func doRepackCatchpoint(header CatchpointFileHeader, biggestChunkLen uint64, in 
 	}
 }
 
-func repackCatchpoint(header CatchpointFileHeader, dataInfo catchpointFirstStageInfo, dataPath string, outPath string) error {
+func repackCatchpoint(header CatchpointFileHeader, biggestChunkLen uint64, dataPath string, outPath string) error {
 	// Initialize streams.
 	fin, err := os.OpenFile(dataPath, os.O_RDONLY, 0666)
 	if err != nil {
@@ -530,7 +530,7 @@ func repackCatchpoint(header CatchpointFileHeader, dataInfo catchpointFirstStage
 	defer tarOut.Close()
 
 	// Repack.
-	err = doRepackCatchpoint(header, dataInfo.BiggestChunkLen, tarIn, tarOut)
+	err = doRepackCatchpoint(header, biggestChunkLen, tarIn, tarOut)
 	if err != nil {
 		return err
 	}
@@ -613,7 +613,7 @@ func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round 
 		return err
 	}
 
-	err = repackCatchpoint(header, dataInfo, catchpointDataFilePath, absCatchpointFilePath)
+	err = repackCatchpoint(header, dataInfo.BiggestChunkLen, catchpointDataFilePath, absCatchpointFilePath)
 	if err != nil {
 		return err
 	}
