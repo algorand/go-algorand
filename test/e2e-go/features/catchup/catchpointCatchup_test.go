@@ -234,60 +234,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	primaryNode.StopAlgod()
 }
 
-func checkCatchPointLabels(t *testing.T, a *require.Assertions, consensus config.ConsensusProtocols, cfg config.Local, log logging.Logger, expectLabels bool) {
-	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
-
-	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
-	defer errorsCollector.Print()
-
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
-
-	// Get primary node
-	primaryNode, err := fixture.GetNodeController("Primary")
-	a.NoError(err)
-
-	cfg.SaveToDisk(primaryNode.GetDataDir())
-
-	// start the primary node
-	_, err = primaryNode.StartAlgod(nodecontrol.AlgodStartArgs{
-		PeerAddress:       "",
-		ListenIP:          "",
-		RedirectOutput:    true,
-		RunUnderHost:      false,
-		TelemetryOverride: "",
-		ExitErrorCallback: errorsCollector.nodeExitWithError,
-	})
-	a.NoError(err)
-
-	// Let the network make some progress
-	currentRound := uint64(1)
-	targetRound := uint64(37)
-	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
-	log.Infof("Building ledger history..")
-	for {
-		err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
-		a.NoError(err)
-		if targetRound <= currentRound {
-			break
-		}
-		currentRound++
-
-	}
-	log.Infof("done building!\n")
-
-	primaryNodeStatus, err := primaryNodeRestClient.Status()
-	a.NoError(err)
-	a.NotNil(primaryNodeStatus.LastCatchpoint)
-	if expectLabels {
-		a.NotEmpty(*primaryNodeStatus.LastCatchpoint)
-	} else {
-		a.Empty(*primaryNodeStatus.LastCatchpoint)
-	}
-	primaryNode.StopAlgod()
-}
-
 func TestCatchpointLabelGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
