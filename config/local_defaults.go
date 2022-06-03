@@ -68,6 +68,7 @@ var defaultLocal = Local{
 	EnableProcessBlockStats:                    false,
 	EnableProfiler:                             false,
 	EnableRequestLogger:                        false,
+	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
 	EnableVerbosedTransactionSyncLogging:       false,
 	EndpointAddress:                            "127.0.0.1:0",

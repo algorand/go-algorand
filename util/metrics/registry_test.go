@@ -37,7 +37,7 @@ func TestWriteAdd(t *testing.T) {
 	results := make(map[string]float64)
 	DefaultRegistry().AddMetrics(results)
 
-	require.Equal(t, 2, len(results))
+	require.Equal(t, 2, len(results), "results", results)
 	require.Contains(t, results, "gauge-name")
 	require.InDelta(t, 12.34, results["gauge-name"], 0.01)
 	require.Contains(t, results, "label-counter_label__a_label_value_")

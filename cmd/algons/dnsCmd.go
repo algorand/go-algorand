@@ -183,12 +183,12 @@ var exportCmd = &cobra.Command{
 }
 
 func doAddDNS(from string, to string) (err error) {
-	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
+	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
 		return fmt.Errorf("error getting DNS credentials: %v", err)
 	}
 
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 
 	const priority = 1
 	const proxied = false
@@ -208,17 +208,16 @@ func doAddDNS(from string, to string) (err error) {
 	return
 }
 
-func getClouldflareAuthCredentials() (email string, authKey string, err error) {
-	email = os.Getenv("CLOUDFLARE_EMAIL")
-	authKey = os.Getenv("CLOUDFLARE_AUTH_KEY")
-	if email == "" || authKey == "" {
-		err = fmt.Errorf("one or more credentials missing from ENV")
+func getClouldflareAuthCredentials() (token string, err error) {
+	token = os.Getenv("CLOUDFLARE_API_TOKEN")
+	if token == "" {
+		err = fmt.Errorf("CLOUDFLARE_API_TOKEN credential missing from ENV")
 	}
 	return
 }
 
-func getClouldflareCredentials() (zoneID string, email string, authKey string, err error) {
-	email, authKey, err = getClouldflareAuthCredentials()
+func getClouldflareCredentials() (zoneID string, token string, err error) {
+	token, err = getClouldflareAuthCredentials()
 	if err != nil {
 		return
 	}
@@ -309,13 +308,13 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 		return false
 	}
 
-	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
+	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
 		return false
 	}
 
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 
 	idsToDelete := make(map[string]string) // Maps record ID to Name
 	services := []string{"_algobootstrap", "_metrics"}
@@ -420,13 +419,13 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 }
 
 func listEntries(listNetwork string, recordType string) {
-	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
+	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
 		return
 	}
 
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfKey)
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 	recordTypes := []string{"A", "CNAME", "SRV"}
 	if recordType != "" {
 		recordTypes = []string{recordType}
@@ -447,12 +446,12 @@ func listEntries(listNetwork string, recordType string) {
 }
 
 func doExportZone(network string, outputFilename string) bool {
-	cfEmail, cfKey, err := getClouldflareAuthCredentials()
+	cfToken, err := getClouldflareAuthCredentials()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
 		return false
 	}
-	cloudflareCred := cloudflare.NewCred(cfEmail, cfKey)
+	cloudflareCred := cloudflare.NewCred(cfToken)
 	zones, err := cloudflareCred.GetZones(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error retrieving zones entries: %v\n", err)
@@ -471,7 +470,7 @@ func doExportZone(network string, outputFilename string) bool {
 		fmt.Fprintf(os.Stderr, "No matching zoneID was found for %s\n", network)
 		return false
 	}
-	cloudflareDNS := cloudflare.NewDNS(zoneID, cfEmail, cfKey)
+	cloudflareDNS := cloudflare.NewDNS(zoneID, cfToken)
 	exportedZone, err := cloudflareDNS.ExportZone(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to export zone : %v\n", err)
@@ -490,12 +489,12 @@ func doExportZone(network string, outputFilename string) bool {
 }
 
 func doListZones() bool {
-	cfEmail, cfKey, err := getClouldflareAuthCredentials()
+	cfToken, err := getClouldflareAuthCredentials()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
 		return false
 	}
-	cloudflareCred := cloudflare.NewCred(cfEmail, cfKey)
+	cloudflareCred := cloudflare.NewCred(cfToken)
 	zones, err := cloudflareCred.GetZones(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error listing zones entries: %v\n", err)

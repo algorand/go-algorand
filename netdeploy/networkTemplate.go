@@ -246,6 +246,7 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	cfg.EndpointAddress = "127.0.0.1:0"
 	cfg.DNSBootstrapID = ""
 	cfg.EnableProfiler = true
+	cfg.EnableRuntimeMetrics = true
 	if relaysCount == 0 {
 		cfg.DisableNetworking = true
 	}

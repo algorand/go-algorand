@@ -251,6 +251,9 @@ type Local struct {
 	// the algod api will be exposed to untrusted individuals
 	EnableProfiler bool `version[0]:"false"`
 
+	// EnableRuntimeMetrics exposes Go runtime metrics in /metrics and via node_exporter.
+	EnableRuntimeMetrics bool `version[22]:"false"`
+
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
 	TelemetryToLog bool `version[5]:"true"`
 
