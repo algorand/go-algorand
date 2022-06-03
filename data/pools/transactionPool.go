@@ -818,7 +818,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 					stats.TotalLength += uint64(encodedLen)
 					stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 					if txib.Txn.Type == protocol.StateProofTx {
-						stats.StateProofNextRound = txib.Txn.StateProofTxnFields.StateProof.SignedWeight
+						stats.StateProofSignedWeight = txib.Txn.StateProofTxnFields.StateProof.SignedWeight
 						stats.StateProofNumReveals = len(txib.Txn.StateProofTxnFields.StateProof.Reveals)
 					}
 				}
