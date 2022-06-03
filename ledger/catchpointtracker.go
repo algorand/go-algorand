@@ -251,7 +251,7 @@ func (ct *catchpointTracker) finishCatchpointsAfterCrash(catchpointLookback uint
 			"finishing abandoned catchpoint record.round: %d accountsRound: %d",
 			record.round, accountsRound)
 
-		// First, delete the unfinished data file.
+		// First, delete the unfinished catchpoint file.
 		catchpointFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
 		catchpointFilePath = filepath.Join(
 			catchpointFilePath,

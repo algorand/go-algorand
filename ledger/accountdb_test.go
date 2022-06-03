@@ -3711,6 +3711,8 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 }
 
 func TestUnfinishedCatchpointsTable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 
