@@ -134,7 +134,16 @@ tasks:
   #   agent: cicd.ubuntu.amd64
   #   target: mule-package-deb
 
-  # # Stash tasks
+  # Stash tasks
+  - task: stash.Stash
+    name: darwin-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-arm64
+    globSpecs:
+      - tmp/node_pkgs/**/*
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
   # - task: stash.Stash
   #   name: linux-amd64
   #   bucketName: go-algorand-ci-cache
@@ -217,7 +226,7 @@ jobs:
   build-darwin-arm64:
     tasks:
       - shell.Make.build.darwin-arm64
-      # - stash.Stash.darwin-arm64
+      - stash.Stash.darwin-arm64
   # build-linux-amd64:
   #   tasks:
   #     - docker.Make.build.amd64
