@@ -208,6 +208,10 @@ tasks:
   #   bucketName: go-algorand-ci-cache
   #   stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
   - task: stash.Unstash
+    name: darwin-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-arm64
+  - task: stash.Unstash
     name: packages
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
