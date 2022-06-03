@@ -4183,10 +4183,11 @@ func processAllResources(
 	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
 ) (pendingRow, error) {
 	var err error
+	var buf []byte
+	var addrid int64
+	var aidx basics.CreatableIndex
+	var resData resourcesData
 	for {
-		var buf []byte
-		var addrid int64
-		var aidx basics.CreatableIndex
 		if pr.addrid != 0 {
 			// some accounts may not have resources, consider the following case:
 			// acct 1 and 3 has resources, account 2 does not
@@ -4224,7 +4225,7 @@ func processAllResources(
 				return pendingRow{addrid, aidx, buf}, err
 			}
 		}
-		var resData resourcesData
+		resData = resourcesData{}
 		err = protocol.Decode(buf, &resData)
 		if err != nil {
 			return pendingRow{}, err
@@ -4248,10 +4249,12 @@ func processAllBaseAccountRecords(
 	var prevAddr basics.Address
 	var err error
 	count := 0
+
+	var accountData baseAccountData
+	var addrbuf []byte
+	var buf []byte
+	var rowid int64
 	for baseRows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		var rowid int64
 		err = baseRows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
 			return 0, pendingRow{}, err
@@ -4264,7 +4267,7 @@ func processAllBaseAccountRecords(
 
 		copy(addr[:], addrbuf)
 
-		var accountData baseAccountData
+		accountData = baseAccountData{}
 		err = protocol.Decode(buf, &accountData)
 		if err != nil {
 			return 0, pendingRow{}, err
