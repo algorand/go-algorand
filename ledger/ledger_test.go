@@ -1897,6 +1897,14 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 		origAgreementBalances[i] = oad.MicroAlgosWithRewards
 	}
 
+	var nonZeros int
+	for _, bal := range origAgreementBalances {
+		if bal.Raw > 0 {
+			nonZeros++
+		}
+	}
+	require.Greater(t, nonZeros, 0)
+
 	// at round "maxBlocks" the ledger must have maxValidity blocks of transactions
 	for i := latest; i <= latest+maxValidity; i++ {
 		for txid := range txnIDs[i] {
@@ -1988,11 +1996,22 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		accountsCreateOnlineAccountsTable(ctx, tx)
-		accountsCreateTxTailTable(ctx, tx)
-		accountsCreateOnlineRoundParamsTable(ctx, tx)
+		if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
+			return err
+		}
+		if err := accountsCreateTxTailTable(ctx, tx); err != nil {
+			return err
+		}
+		if err := accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
+			return err
+		}
+		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
+			return err
+		}
 		return nil
 	})
+	require.NoError(t, err)
+
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
@@ -2004,6 +2023,16 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		os.Remove(dbName + ".block.sqlite-wal")
 		os.Remove(dbName + ".tracker.sqlite-wal")
 	}()
+
+	// remove online tracker in order to make v6 schema work
+	for i := range l.trackers.trackers {
+		if l.trackers.trackers[i] == l.trackers.acctsOnline {
+			l.trackers.trackers = append(l.trackers.trackers[:i], l.trackers.trackers[i+1:]...)
+			break
+		}
+	}
+	l.trackers.acctsOnline = nil
+	l.acctsOnline = onlineAccounts{}
 
 	maxBlocks := 2000
 	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
@@ -2026,7 +2055,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	maxValidity := basics.Round(20) // some number different from number of txns in blocks
 	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
 	// run for maxBlocks rounds with random payment transactions
-	// generate 1000 txn per block
+	// generate numTxns txn per block
 	for i := 0; i < maxBlocks; i++ {
 		numTxns := crypto.RandUint64()%9 + 7
 		stxns := make([]transactions.SignedTxn, numTxns)
@@ -2053,8 +2082,24 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 			// have all other txns be random payment txns
 			if j == 0 {
 				var keyregTxnFields transactions.KeyregTxnFields
-				if i%(len(addresses)*2) < len(addresses) {
-					keyregTxnFields.VoteLast = 10000
+				// keep low accounts online, high accounts offline
+				// otherwise all accounts become offline eventually and no agreement balances to check
+				if curAddressIdx < len(addresses)/2 {
+					keyregTxnFields = transactions.KeyregTxnFields{
+						VoteFirst: latest + 1,
+						VoteLast:  latest + 100_000,
+					}
+					var votepk crypto.OneTimeSignatureVerifier
+					votepk[0] = byte(j % 256)
+					votepk[1] = byte(i % 256)
+					votepk[2] = byte(254)
+					var selpk crypto.VRFVerifier
+					selpk[0] = byte(j % 256)
+					selpk[1] = byte(i % 256)
+					selpk[2] = byte(255)
+
+					keyregTxnFields.VotePK = votepk
+					keyregTxnFields.SelectionPK = selpk
 				}
 				tx.Type = protocol.KeyRegistrationTx
 				tx.KeyregTxnFields = keyregTxnFields
@@ -2099,10 +2144,23 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		require.Equal(t, origBalances[i], wo)
 		origRewardsBalances[i] = acct.MicroAlgos
 
-		oad, err := l.LookupAgreement(balancesRound, addr)
+		acct, rnd, _, err = l.LookupAccount(balancesRound, addr)
 		require.NoError(t, err)
-		origAgreementBalances[i] = oad.MicroAlgosWithRewards
+		require.Equal(t, balancesRound, rnd)
+		if acct.Status == basics.Online {
+			origAgreementBalances[i] = acct.MicroAlgos
+		} else {
+			origAgreementBalances[i] = basics.MicroAlgos{}
+		}
 	}
+
+	var nonZeros int
+	for _, bal := range origAgreementBalances {
+		if bal.Raw > 0 {
+			nonZeros++
+		}
+	}
+	require.Greater(t, nonZeros, 0)
 
 	// at round "maxBlocks" the ledger must have maxValidity blocks of transactions
 	for i := latest; i <= latest+maxValidity; i++ {
@@ -2138,7 +2196,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
 	require.Error(t, err)
-	for i := l.Latest() - basics.Round(proto.MaxBalLookback+shorterLookback-1); i <= l.Latest(); i++ {
+	for i := l.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l.Latest(); i++ {
 		online, err := l.OnlineTotals(i)
 		require.NoError(t, err)
 		require.Equal(t, onlineTotals[i], online)
