@@ -1262,12 +1262,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	au.accountsMu.RLock()
 
-	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	dcc.deltas = make([]ledgercore.AccountDeltas, offset)
-	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset)
+	// create a copy of the round totals and protos for the range we're going to flush.
 	dcc.roundTotals = au.roundTotals[offset]
-	copy(dcc.deltas, au.deltas[:offset])
-	copy(creatableDeltas, au.creatableDeltas[:offset])
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
@@ -1289,9 +1285,9 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactAccountDeltas = makeCompactAccountDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts)
-	dcc.compactResourcesDeltas = makeCompactResourceDeltas(dcc.deltas, dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
-	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
+	dcc.compactAccountDeltas = makeCompactAccountDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts)
+	dcc.compactResourcesDeltas = makeCompactResourceDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
+	dcc.compactCreatableDeltas = compactCreatableDeltas(au.creatableDeltas[:offset])
 
 	au.accountsMu.RUnlock()
 
@@ -1449,6 +1445,16 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		} else {
 			mcreat.Ndeltas -= cnt
 			au.creatables[cidx] = mcreat
+		}
+	}
+
+	// clear baking array to let GC collect data
+	const deltasClearThreshold = 1000
+	if offset > deltasClearThreshold {
+		for i := uint64(0); i < offset; i++ {
+			au.deltas[i] = ledgercore.AccountDeltas{}
+			au.roundTotals[i] = ledgercore.AccountTotals{}
+			au.creatableDeltas[i] = nil
 		}
 	}
 
