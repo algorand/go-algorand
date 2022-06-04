@@ -100,7 +100,7 @@ func (m AssembleBlockStats) String() (string) {
 	b.WriteString(fmt.Sprintf("MinPriority:%d, ", m.MinPriority))
 	b.WriteString(fmt.Sprintf("MaxPriority:%d, ", m.MaxPriority))
 	b.WriteString(fmt.Sprintf("CommittedCount:%d, ", m.CommittedCount))
-	b.WriteString(fmt.Sprintf("StopReason:%d, ", m.StopReason))
+	b.WriteString(fmt.Sprintf("StopReason:%s, ", m.StopReason))
 	b.WriteString(fmt.Sprintf("TotalLength:%d, ", m.TotalLength))
 	b.WriteString(fmt.Sprintf("EarlyCommittedCount:%d, ", m.EarlyCommittedCount))
 	b.WriteString(fmt.Sprintf("Nanoseconds:%d, ", m.Nanoseconds))
