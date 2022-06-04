@@ -2453,8 +2453,8 @@ func (z *catchpointFileBalancesChunkV6) MsgIsZero() bool {
 func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 6 bits */
 	if (*z).Totals.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -2463,13 +2463,17 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).TotalChunks == 0 {
+	if (*z).BiggestChunkLen == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).TrieBalancesHash.MsgIsZero() {
+	if (*z).TotalChunks == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if (*z).TrieBalancesHash.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -2485,11 +2489,16 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalAccounts)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "biggestChunk"
+			o = append(o, 0xac, 0x62, 0x69, 0x67, 0x67, 0x65, 0x73, 0x74, 0x43, 0x68, 0x75, 0x6e, 0x6b)
+			o = msgp.AppendUint64(o, (*z).BiggestChunkLen)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "chunksCount"
 			o = append(o, 0xab, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
 			o = msgp.AppendUint64(o, (*z).TotalChunks)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "trieBalancesHash"
 			o = append(o, 0xb0, 0x74, 0x72, 0x69, 0x65, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x48, 0x61, 0x73, 0x68)
 			o = (*z).TrieBalancesHash.MarshalMsg(o)
@@ -2549,6 +2558,14 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).BiggestChunkLen, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "BiggestChunkLen")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -2595,6 +2612,12 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "TotalChunks")
 					return
 				}
+			case "biggestChunk":
+				(*z).BiggestChunkLen, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BiggestChunkLen")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2615,13 +2638,13 @@ func (_ *catchpointFirstStageInfo) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *catchpointFirstStageInfo) Msgsize() (s int) {
-	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size
+	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFirstStageInfo) MsgIsZero() bool {
-	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0)
+	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

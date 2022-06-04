@@ -239,10 +239,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	// load the file from disk.
 	fileContent, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
-	defer gzipReader.Close()
+	tarReader := tar.NewReader(bytes.NewBuffer(fileContent))
 
 	header, err := tarReader.Next()
 	require.NoError(t, err)
@@ -305,6 +302,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	readDb := ml.trackerDB().Rdb
 	var totalAccounts uint64
 	var totalChunks uint64
+	var biggestChunkLen uint64
 	var accountsRnd basics.Round
 	var totals ledgercore.AccountTotals
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -321,6 +319,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 		}
 		totalAccounts = writer.GetTotalAccounts()
 		totalChunks = writer.GetTotalChunks()
+		biggestChunkLen = writer.GetBiggestChunkLen()
 		accountsRnd, err = accountsRound(tx)
 		if err != nil {
 			return
@@ -343,7 +342,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 		BlockHeaderDigest: blockHeaderDigest,
 	}
 	err = repackCatchpoint(
-		catchpointFileHeader, catchpointDataFilePath, catchpointFilePath)
+		catchpointFileHeader, biggestChunkLen, catchpointDataFilePath, catchpointFilePath)
 	require.NoError(t, err)
 
 	// create a ledger.

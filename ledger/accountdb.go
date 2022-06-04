@@ -450,6 +450,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 // makeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
+// As an optimization, accountDeltas is passed as a slice and must not be modified.
 func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
 	if len(accountDeltas) == 0 {
 		return
@@ -667,6 +668,7 @@ func (a *compactResourcesDeltas) updateOld(idx int, old persistedResourcesData) 
 // makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
+// As an optimization, accountDeltas is passed as a slice and must not be modified.
 func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
@@ -4035,6 +4037,10 @@ func (iterator *encodedAccountsBatchIter) Close() {
 		iterator.accountsRows.Close()
 		iterator.accountsRows = nil
 	}
+	if iterator.resourcesRows != nil {
+		iterator.resourcesRows.Close()
+		iterator.resourcesRows = nil
+	}
 }
 
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
@@ -4098,10 +4104,14 @@ func processAllResources(
 	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte) error,
 ) (pendingRow, error) {
 	var err error
+
+	// Declare variabled outside of the loop to prevent allocations per iteration.
+	// At least resData is resolved as "escaped" because of passing it by a pointer to protocol.Decode()
+	var buf []byte
+	var addrid int64
+	var aidx basics.CreatableIndex
+	var resData resourcesData
 	for {
-		var buf []byte
-		var addrid int64
-		var aidx basics.CreatableIndex
 		if pr.addrid != 0 {
 			// some accounts may not have resources, consider the following case:
 			// acct 1 and 3 has resources, account 2 does not
@@ -4139,7 +4149,7 @@ func processAllResources(
 				return pendingRow{addrid, aidx, buf}, err
 			}
 		}
-		var resData resourcesData
+		resData = resourcesData{}
 		err = protocol.Decode(buf, &resData)
 		if err != nil {
 			return pendingRow{}, err
@@ -4163,10 +4173,12 @@ func processAllBaseAccountRecords(
 	var prevAddr basics.Address
 	var err error
 	count := 0
+
+	var accountData baseAccountData
+	var addrbuf []byte
+	var buf []byte
+	var rowid int64
 	for baseRows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		var rowid int64
 		err = baseRows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
 			return 0, pendingRow{}, err
@@ -4179,7 +4191,7 @@ func processAllBaseAccountRecords(
 
 		copy(addr[:], addrbuf)
 
-		var accountData baseAccountData
+		accountData = baseAccountData{}
 		err = protocol.Decode(buf, &accountData)
 		if err != nil {
 			return 0, pendingRow{}, err
@@ -4759,6 +4771,8 @@ type catchpointFirstStageInfo struct {
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalChunks uint64 `codec:"chunksCount"`
+	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
+	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }
 
 func insertCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
