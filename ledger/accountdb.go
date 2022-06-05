@@ -2700,6 +2700,122 @@ func (qs *onlineAccountsDbQueries) lookupOnlineHistory(addr basics.Address) (res
 	return
 }
 
+func storeCatchpoint(ctx context.Context, e db.Executable, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
+	err = db.Retry(func() (err error) {
+		query := "DELETE FROM storedcatchpoints WHERE round=?"
+		_, err = e.ExecContext(ctx, query, round)
+		if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
+			return err
+		}
+
+		query = "INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)"
+		_, err = e.ExecContext(ctx, query, round, fileName, catchpoint, fileSize)
+		return err
+	})
+	return
+}
+
+func getOldestCatchpointFiles(ctx context.Context, q db.Queryable, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
+	err = db.Retry(func() (err error) {
+		query := "SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?"
+		rows, err := q.QueryContext(ctx, query, filesToKeep, fileCount)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		fileNames = make(map[basics.Round]string)
+		for rows.Next() {
+			var fileName string
+			var round basics.Round
+			err = rows.Scan(&round, &fileName)
+			if err != nil {
+				return err
+			}
+			fileNames[round] = fileName
+		}
+
+		return rows.Err()
+	})
+	if err != nil {
+		fileNames = nil
+	}
+	return
+}
+
+func readCatchpointStateUint64(ctx context.Context, q db.Queryable, stateName catchpointState) (val uint64, err error) {
+	err = db.Retry(func() (err error) {
+		query := "SELECT intval FROM catchpointstate WHERE id=?"
+		var v sql.NullInt64
+		err = q.QueryRowContext(ctx, query, stateName).Scan(&v)
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if v.Valid {
+			val = uint64(v.Int64)
+		}
+		return nil
+	})
+	return val, err
+}
+
+func writeCatchpointStateUint64(ctx context.Context, e db.Executable, stateName catchpointState, setValue uint64) (err error) {
+	err = db.Retry(func() (err error) {
+		if setValue == 0 {
+			return deleteCatchpointStateImpl(ctx, e, stateName)
+		}
+
+		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
+		query := "INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)"
+		_, err = e.ExecContext(ctx, query, stateName, setValue)
+		return err
+	})
+	return err
+}
+
+func readCatchpointStateString(ctx context.Context, q db.Queryable, stateName catchpointState) (val string, err error) {
+	err = db.Retry(func() (err error) {
+		query := "SELECT strval FROM catchpointstate WHERE id=?"
+		var v sql.NullString
+		err = q.QueryRowContext(ctx, query, stateName).Scan(&v)
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		if v.Valid {
+			val = v.String
+		}
+		return nil
+	})
+	return val, err
+}
+
+func writeCatchpointStateString(ctx context.Context, e db.Executable, stateName catchpointState, setValue string) (err error) {
+	err = db.Retry(func() (err error) {
+		if setValue == "" {
+			return deleteCatchpointStateImpl(ctx, e, stateName)
+		}
+
+		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
+		query := "INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)"
+		_, err = e.ExecContext(ctx, query, stateName, setValue)
+		return err
+	})
+	return err
+}
+
+func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName catchpointState) error {
+	query := "DELETE FROM catchpointstate WHERE id=?"
+	_, err := e.ExecContext(ctx, query, stateName)
+	return err
+}
+
 func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
@@ -4602,147 +4718,6 @@ func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundDat
 		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
 	}
 	return roundData, roundHash, expectedRound + 1, nil
-}
-
-func storeCatchpoint(ctx context.Context, e db.Executable, round basics.Round, fileName string, catchpoint string, fileSize int64) error {
-	f := func() error {
-		query := "DELETE FROM storedcatchpoints WHERE round=?"
-		_, err := e.ExecContext(ctx, query, round)
-		if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
-			return err
-		}
-
-		query = "INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)"
-		_, err = e.ExecContext(ctx, query, round, fileName, catchpoint, fileSize)
-		return err
-	}
-	return db.Retry(f)
-}
-
-func getOldestCatchpointFiles(ctx context.Context, q db.Queryable, fileCount int, filesToKeep int) (map[basics.Round]string /*fileNames*/, error) {
-	var res map[basics.Round]string
-
-	f := func() error {
-		query := "SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?"
-		rows, err := q.QueryContext(ctx, query, filesToKeep, fileCount)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-
-		res = make(map[basics.Round]string)
-		for rows.Next() {
-			var fileName string
-			var round basics.Round
-			err = rows.Scan(&round, &fileName)
-			if err != nil {
-				return err
-			}
-			res[round] = fileName
-		}
-
-		return rows.Err()
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-func readCatchpointStateUint64(ctx context.Context, q db.Queryable, stateName catchpointState) (uint64, error) {
-	var value uint64
-
-	f := func() error {
-		query := "SELECT intval FROM catchpointstate WHERE id=?"
-		var v sql.NullInt64
-		err := q.QueryRowContext(ctx, query, stateName).Scan(&v)
-		if err == sql.ErrNoRows {
-			value = 0
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		if !v.Valid {
-			value = 0
-		} else {
-			value = uint64(v.Int64)
-		}
-		return nil
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return 0, err
-	}
-
-	return value, nil
-}
-
-func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName catchpointState) error {
-	query := "DELETE FROM catchpointstate WHERE id=?"
-	_, err := e.ExecContext(ctx, query, stateName)
-	return err
-}
-
-func writeCatchpointStateUint64(ctx context.Context, e db.Executable, stateName catchpointState, setValue uint64) error {
-	f := func() error {
-		if setValue == 0 {
-			return deleteCatchpointStateImpl(ctx, e, stateName)
-		}
-
-		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-		query := "INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)"
-		_, err := e.ExecContext(ctx, query, stateName, setValue)
-		return err
-	}
-	return db.Retry(f)
-}
-
-func readCatchpointStateString(ctx context.Context, q db.Queryable, stateName catchpointState) (string, error) {
-	var value string
-
-	f := func() error {
-		query := "SELECT strval FROM catchpointstate WHERE id=?"
-		var v sql.NullString
-		err := q.QueryRowContext(ctx, query, stateName).Scan(&v)
-		if err == sql.ErrNoRows {
-			value = ""
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		if !v.Valid {
-			value = ""
-		} else {
-			value = v.String
-		}
-		return nil
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return "", err
-	}
-
-	return value, nil
-}
-
-func writeCatchpointStateString(ctx context.Context, e db.Executable, stateName catchpointState, setValue string) error {
-	f := func() error {
-		if setValue == "" {
-			return deleteCatchpointStateImpl(ctx, e, stateName)
-		}
-
-		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-		query := "INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)"
-		_, err := e.ExecContext(ctx, query, stateName, setValue)
-		return err
-	}
-	return db.Retry(f)
 }
 
 // For the `catchpointfirststageinfo` table.
