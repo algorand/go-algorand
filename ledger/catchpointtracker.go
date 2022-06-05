@@ -196,7 +196,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// expects that the accounts data would not be modified in the background during
 		// it's execution.
 		var err error
-		totalAccounts, totalChunks, err = ct.generateCatchpointData(
+		totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
 			ctx, dbRound, updatingBalancesDuration)
 		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		if err != nil {
@@ -205,7 +205,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	}
 
 	f := func(ctx context.Context, tx *sql.Tx) error {
-		err := ct.recordFirstStageInfo(tx, dbRound, totalAccounts, totalChunks, var biggestC)
+		err := ct.recordFirstStageInfo(tx, dbRound, totalAccounts, totalChunks, biggestChunkLen)
 		if err != nil {
 			return err
 		}
@@ -747,8 +747,7 @@ func (ct *catchpointTracker) createCatchpoint(accountsRound basics.Round, round 
 			return err
 		}
 		return deleteUnfinishedCatchpoint(ctx, tx, round)
-	}
-
+	})
 	if err != nil {
 		return err
 	}
