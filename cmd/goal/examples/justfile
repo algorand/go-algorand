@@ -2,7 +2,7 @@ set export
 set shell := ["zsh", "-cu"]
 
 NETWORKS := `echo $HOME` + "/networks"
-NAME := "niftynetwork"
+NAME := "indexerboxes"
 TEMP_NETWORK := NETWORKS + "/" + NAME
 GO_ALGORAND := "../../.."
 NODE_TEMPLATE := GO_ALGORAND + "/test/testdata/nettemplates/OneNodeFuture.json"
