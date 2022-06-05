@@ -143,6 +143,7 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 }
 
 func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
+	// this is a temporary comment
 	panic("not implemented")
 }
 
