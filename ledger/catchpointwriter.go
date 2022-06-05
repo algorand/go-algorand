@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
@@ -48,11 +47,11 @@ type catchpointWriter struct {
 	totalAccounts    uint64
 	totalChunks      uint64
 	file             *os.File
-	gzip             *gzip.Writer
 	tar              *tar.Writer
 	balancesChunk    catchpointFileBalancesChunkV6
 	balancesChunkNum uint64
 	writtenBytes     int64
+	biggestChunkLen  uint64
 	accountsIterator encodedAccountsBatchIter
 }
 
@@ -99,8 +98,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 	if err != nil {
 		return nil, err
 	}
-	gzip := gzip.NewWriter(file)
-	tar := tar.NewWriter(gzip)
+	tar := tar.NewWriter(file)
 
 	res := &catchpointWriter{
 		ctx:           ctx,
@@ -109,7 +107,6 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 		totalAccounts: totalAccounts,
 		totalChunks:   (totalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
 		file:          file,
-		gzip:          gzip,
 		tar:           tar,
 	}
 	return res, nil
@@ -118,7 +115,6 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx) (*ca
 func (cw *catchpointWriter) Abort() error {
 	cw.accountsIterator.Close()
 	cw.tar.Close()
-	cw.gzip.Close()
 	cw.file.Close()
 	return os.Remove(cw.filePath)
 }
@@ -219,10 +215,12 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 			response <- err
 			break
 		}
+		if chunkLen := uint64(len(encodedChunk)); cw.biggestChunkLen < chunkLen {
+			cw.biggestChunkLen = chunkLen
+		}
 
 		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.totalChunks {
 			cw.tar.Close()
-			cw.gzip.Close()
 			cw.file.Close()
 			var fileInfo os.FileInfo
 			fileInfo, err = os.Stat(cw.filePath)
@@ -253,6 +251,10 @@ func (cw *catchpointWriter) GetTotalAccounts() uint64 {
 
 func (cw *catchpointWriter) GetTotalChunks() uint64 {
 	return cw.totalChunks
+}
+
+func (cw *catchpointWriter) GetBiggestChunkLen() uint64 {
+	return cw.biggestChunkLen
 }
 
 // hasContextDeadlineExceeded examine the given context and see if it was canceled or timed-out.
