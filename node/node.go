@@ -1383,8 +1383,13 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 			// If we are closed, upgrade this to info so we don't spam telemetry reporting
 			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
 				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
+			} else if warningFlags&bitAccountOffline == bitAccountOffline {
+				// If account is offline, then warn that no registration transaction has been issued or that previous registration transaction is expired.
+				node.log.Warnf("node.VotingKeys: Account is offline.  No registration transaction has been issued or a previous registration transaction has expired")
 			} else {
-				node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
+				// If the account isn't closed/offline and has a valid participation key, then this key may have been generated
+				// on a different node.
+				node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d. Consider regenerating the participation key for this node.", mismatchingAddr, votingRound, keysRound)
 			}
 
 			continue
@@ -1393,8 +1398,13 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 			// If we are closed, upgrade this to info so we don't spam telemetry reporting
 			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
 				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
+			} else if warningFlags&bitAccountOffline == bitAccountOffline {
+				// If account is offline, then warn that no registration transaction has been issued or that previous registration transaction is expired.
+				node.log.Warnf("node.VotingKeys: Account is offline.  No registration transaction has been issued or a previous registration transaction has expired")
 			} else {
-				node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
+				// If the account isn't closed/offline and has a valid participation key, then this key may have been generated
+				// on a different node.
+				node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d. Consider regenerating the participation key for this node.", mismatchingAddr, votingRound, keysRound)
 			}
 			continue
 		}
