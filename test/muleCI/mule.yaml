@@ -153,15 +153,15 @@ tasks:
       - installer/genesis/devnet/genesis.json
       - installer/genesis/testnet/genesis.json
       - installer/genesis/mainnet/genesis.json
-  # - task: stash.Stash
-  #   name: darwin-amd64
-  #   bucketName: go-algorand-ci-cache
-  #   stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
-  #   globSpecs:
-  #     - tmp/node_pkgs/**/*
-  #     - installer/genesis/devnet/genesis.json
-  #     - installer/genesis/testnet/genesis.json
-  #     - installer/genesis/mainnet/genesis.json
+  - task: stash.Stash
+    name: darwin-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+    globSpecs:
+      - tmp/node_pkgs/**/*
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
   - task: stash.Stash
     name: linux-arm64
     bucketName: go-algorand-ci-cache
@@ -199,10 +199,10 @@ tasks:
     name: linux-amd64
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
-  # - task: stash.Unstash
-  #   name: darwin-amd64
-  #   bucketName: go-algorand-ci-cache
-  #   stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+  - task: stash.Unstash
+    name: darwin-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
   - task: stash.Unstash
     name: linux-arm
     bucketName: go-algorand-ci-cache
