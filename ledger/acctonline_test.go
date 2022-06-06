@@ -1189,6 +1189,9 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	lowest := oa.voters.lowestRound(oa.cachedDBRoundOnline)
 	require.Equal(t, basics.Round(compactCertRounds-compactCertVotersLookback), lowest)
 	require.Equal(t, maxBlocks/compactCertRounds, len(oa.voters.round))
+	retain, lookback := oa.committedUpTo(oa.latest())
+	require.Equal(t, lowest, retain)
+	require.Equal(t, conf.MaxAcctLookback, uint64(lookback))
 
 	// onlineRoundParamsData does not store more than maxBalLookback + deltas even if voters stall
 	require.Equal(t, uint64(len(oa.onlineRoundParamsData)), maxBalLookback+conf.MaxAcctLookback)
