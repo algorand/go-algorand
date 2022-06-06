@@ -245,12 +245,12 @@ jobs:
       - stash.Stash.linux-arm
   package-all:
     tasks:
-      - stash.Unstash.linux-amd64
-      - stash.Unstash.linux-arm64
-      - stash.Unstash.linux-arm
+      # - stash.Unstash.linux-amd64
+      # - stash.Unstash.linux-arm64
+      # - stash.Unstash.linux-arm
       - stash.Unstash.darwin-arm64
-      - docker.Make.deb.amd64
-      - docker.Make.rpm.amd64
+      # - docker.Make.deb.amd64
+      # - docker.Make.rpm.amd64
       - stash.Stash.packages
   archive-linux-amd64:
     tasks:
