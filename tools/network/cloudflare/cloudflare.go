@@ -38,8 +38,7 @@ var ErrDuplicateZoneNameFound = fmt.Errorf("more than a single zone name found t
 
 // Cred contains the credentials used to authenticate with the cloudflare API.
 type Cred struct {
-	authEmail string
-	authKey   string
+	authToken string
 }
 
 // DNS is the cloudflare package main access class. Initiate an instance of this class to access the clouldflare APIs.
@@ -49,20 +48,18 @@ type DNS struct {
 }
 
 // NewCred creates a new credential structure used to authenticate with the cloudflare service.
-func NewCred(authEmail string, authKey string) *Cred {
+func NewCred(authToken string) *Cred {
 	return &Cred{
-		authEmail: authEmail,
-		authKey:   authKey,
+		authToken: authToken,
 	}
 }
 
 // NewDNS create a new instance of clouldflare DNS services class
-func NewDNS(zoneID string, authEmail string, authKey string) *DNS {
+func NewDNS(zoneID string, authToken string) *DNS {
 	return &DNS{
 		zoneID: zoneID,
 		Cred: Cred{
-			authEmail: authEmail,
-			authKey:   authKey,
+			authToken: authToken,
 		},
 	}
 }
@@ -120,7 +117,7 @@ func (d *DNS) ListDNSRecord(ctx context.Context, recordType string, name string,
 		queryContent = ""
 	}
 	for {
-		request, err := listDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordType, name, queryContent, pageIndex, perPage, order, direction, match)
+		request, err := listDNSRecordRequest(d.zoneID, d.authToken, recordType, name, queryContent, pageIndex, perPage, order, direction, match)
 		if err != nil {
 			return []DNSRecordResponseEntry{}, err
 		}
@@ -135,7 +132,7 @@ func (d *DNS) ListDNSRecord(ctx context.Context, recordType string, name string,
 			return []DNSRecordResponseEntry{}, fmt.Errorf("failed to list DNS records. Request url = '%v', response error : %v", request.URL, err)
 		}
 		if len(parsedReponse.Errors) > 0 {
-			return []DNSRecordResponseEntry{}, fmt.Errorf("Failed to list DNS entries. %+v", parsedReponse.Errors)
+			return []DNSRecordResponseEntry{}, fmt.Errorf("failed to list DNS entries. %+v", parsedReponse.Errors)
 		}
 		result = append(result, parsedReponse.Result...)
 		if parsedReponse.ResultInfo.TotalPages <= int(pageIndex) {
@@ -156,7 +153,7 @@ func (d *DNS) ListDNSRecord(ctx context.Context, recordType string, name string,
 
 // CreateDNSRecord creates the DNS record with the given content.
 func (d *DNS) CreateDNSRecord(ctx context.Context, recordType string, name string, content string, ttl uint, priority uint, proxied bool) error {
-	request, err := createDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordType, name, content, ttl, priority, proxied)
+	request, err := createDNSRecordRequest(d.zoneID, d.authToken, recordType, name, content, ttl, priority, proxied)
 	if err != nil {
 		return err
 	}
@@ -170,8 +167,8 @@ func (d *DNS) CreateDNSRecord(ctx context.Context, recordType string, name strin
 	if err != nil {
 		return fmt.Errorf("failed to create DNS record. Request url = '%v', response error : %v", request.URL, err)
 	}
-	if parsedResponse.Success == false {
-		request, _ := createDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordType, name, content, ttl, priority, proxied)
+	if !parsedResponse.Success {
+		request, _ := createDNSRecordRequest(d.zoneID, d.authToken, recordType, name, content, ttl, priority, proxied)
 		requestBody, _ := request.GetBody()
 		bodyBytes, _ := ioutil.ReadAll(requestBody)
 		return fmt.Errorf("failed to create DNS record. Request url = '%v', body = %s, parsed response : %#v, response headers = %#v", request.URL, string(bodyBytes), parsedResponse, response.Header)
@@ -181,7 +178,7 @@ func (d *DNS) CreateDNSRecord(ctx context.Context, recordType string, name strin
 
 // CreateSRVRecord creates the DNS record with the given content.
 func (d *DNS) CreateSRVRecord(ctx context.Context, name string, target string, ttl uint, priority uint, port uint, service string, protocol string, weight uint) error {
-	request, err := createSRVRecordRequest(d.zoneID, d.authEmail, d.authKey, name, service, protocol, weight, port, ttl, priority, target)
+	request, err := createSRVRecordRequest(d.zoneID, d.authToken, name, service, protocol, weight, port, ttl, priority, target)
 	if err != nil {
 		return err
 	}
@@ -195,8 +192,8 @@ func (d *DNS) CreateSRVRecord(ctx context.Context, name string, target string, t
 	if err != nil {
 		return fmt.Errorf("failed to create SRV record. Request url = '%v', response error : %v", request.URL, err)
 	}
-	if parsedResponse.Success == false {
-		request, _ := createSRVRecordRequest(d.zoneID, d.authEmail, d.authKey, name, service, protocol, weight, port, ttl, priority, target)
+	if !parsedResponse.Success {
+		request, _ := createSRVRecordRequest(d.zoneID, d.authToken, name, service, protocol, weight, port, ttl, priority, target)
 		requestBody, _ := request.GetBody()
 		bodyBytes, _ := ioutil.ReadAll(requestBody)
 		return fmt.Errorf("failed to create SRV record. Request url = '%v', body = %s, parsedResponse = %#v, response headers = %#v", request.URL, string(bodyBytes), parsedResponse, response.Header)
@@ -206,7 +203,7 @@ func (d *DNS) CreateSRVRecord(ctx context.Context, name string, target string, t
 
 // DeleteDNSRecord deletes a single DNS entry
 func (d *DNS) DeleteDNSRecord(ctx context.Context, recordID string) error {
-	request, err := deleteDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID)
+	request, err := deleteDNSRecordRequest(d.zoneID, d.authToken, recordID)
 	if err != nil {
 		return err
 	}
@@ -220,8 +217,8 @@ func (d *DNS) DeleteDNSRecord(ctx context.Context, recordID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete DNS record. Request url = '%v', response error : %v", request.URL, err)
 	}
-	if parsedResponse.Success == false {
-		request, _ := deleteDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID)
+	if !parsedResponse.Success {
+		request, _ := deleteDNSRecordRequest(d.zoneID, d.authToken, recordID)
 		requestBody, _ := request.GetBody()
 		bodyBytes, _ := ioutil.ReadAll(requestBody)
 		return fmt.Errorf("failed to delete DNS record. Request url = '%v', body = %s, parsedResponse = %#v, response headers = %#v", request.URL, string(bodyBytes), parsedResponse, response.Header)
@@ -231,7 +228,7 @@ func (d *DNS) DeleteDNSRecord(ctx context.Context, recordID string) error {
 
 // UpdateDNSRecord update the DNS record with the given content.
 func (d *DNS) UpdateDNSRecord(ctx context.Context, recordID string, recordType string, name string, content string, ttl uint, priority uint, proxied bool) error {
-	request, err := updateDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID, recordType, name, content, ttl, priority, proxied)
+	request, err := updateDNSRecordRequest(d.zoneID, d.authToken, recordID, recordType, name, content, ttl, priority, proxied)
 	if err != nil {
 		return err
 	}
@@ -246,8 +243,8 @@ func (d *DNS) UpdateDNSRecord(ctx context.Context, recordID string, recordType s
 		return fmt.Errorf("failed to update DNS record. Request url = '%v', response error : %v", request.URL, err)
 	}
 
-	if parsedResponse.Success == false {
-		request, _ := updateDNSRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID, recordType, name, content, ttl, priority, proxied)
+	if !parsedResponse.Success {
+		request, _ := updateDNSRecordRequest(d.zoneID, d.authToken, recordID, recordType, name, content, ttl, priority, proxied)
 		requestBody, _ := request.GetBody()
 		bodyBytes, _ := ioutil.ReadAll(requestBody)
 		return fmt.Errorf("failed to update DNS record. Request url = '%v', body = %s, parsedResponse = %#v, response headers = %#v", request.URL, string(bodyBytes), parsedResponse, response.Header)
@@ -258,7 +255,7 @@ func (d *DNS) UpdateDNSRecord(ctx context.Context, recordID string, recordType s
 
 // UpdateSRVRecord update the DNS record with the given content.
 func (d *DNS) UpdateSRVRecord(ctx context.Context, recordID string, name string, target string, ttl uint, priority uint, port uint, service string, protocol string, weight uint) error {
-	request, err := updateSRVRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID, name, service, protocol, weight, port, ttl, priority, target)
+	request, err := updateSRVRecordRequest(d.zoneID, d.authToken, recordID, name, service, protocol, weight, port, ttl, priority, target)
 	if err != nil {
 		return err
 	}
@@ -272,8 +269,8 @@ func (d *DNS) UpdateSRVRecord(ctx context.Context, recordID string, name string,
 	if err != nil {
 		return fmt.Errorf("failed to update SRV record. Request url = '%v', response error : %v", request.URL, err)
 	}
-	if parsedResponse.Success == false {
-		request, _ := updateSRVRecordRequest(d.zoneID, d.authEmail, d.authKey, recordID, name, service, protocol, weight, port, ttl, priority, target)
+	if !parsedResponse.Success {
+		request, _ := updateSRVRecordRequest(d.zoneID, d.authToken, recordID, name, service, protocol, weight, port, ttl, priority, target)
 		requestBody, _ := request.GetBody()
 		bodyBytes, _ := ioutil.ReadAll(requestBody)
 		return fmt.Errorf("failed to update SRV record. Request url = '%v', body = %s, parsedResponse = %#v, response headers = %#v", request.URL, string(bodyBytes), parsedResponse, response.Header)
@@ -289,7 +286,7 @@ type Zone struct {
 
 // GetZones returns a list of zones that are associated with cloudflare.
 func (c *Cred) GetZones(ctx context.Context) (zones []Zone, err error) {
-	request, err := getZonesRequest(c.authEmail, c.authKey)
+	request, err := getZonesRequest(c.authToken)
 	if err != nil {
 		return nil, err
 	}
@@ -303,8 +300,8 @@ func (c *Cred) GetZones(ctx context.Context) (zones []Zone, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get zones. Request url = '%v', response error : %v", request.URL, err)
 	}
-	if parsedResponse.Success == false {
-		request, _ := getZonesRequest(c.authEmail, c.authKey)
+	if !parsedResponse.Success {
+		request, _ := getZonesRequest(c.authToken)
 		requestBody, _ := request.GetBody()
 		bodyBytes, _ := ioutil.ReadAll(requestBody)
 		return nil, fmt.Errorf("failed to retrieve zone records. Request url = '%v', body = %s, parsedResponse = %#v, response headers = %#v", request.URL, string(bodyBytes), parsedResponse, response.Header)
@@ -353,7 +350,7 @@ func (c *Cred) GetZoneID(ctx context.Context, zoneDomainName string) (zoneID str
 
 // ExportZone exports the zone into a BIND config bytes array
 func (d *DNS) ExportZone(ctx context.Context) (exportedZoneBytes []byte, err error) {
-	request, err := exportZoneRequest(d.zoneID, d.authEmail, d.authKey)
+	request, err := exportZoneRequest(d.zoneID, d.authToken)
 	if err != nil {
 		return nil, err
 	}

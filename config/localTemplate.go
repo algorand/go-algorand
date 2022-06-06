@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -250,6 +250,9 @@ type Local struct {
 	// EnableProfiler enables the go pprof endpoints, should be false if
 	// the algod api will be exposed to untrusted individuals
 	EnableProfiler bool `version[0]:"false"`
+
+	// EnableRuntimeMetrics exposes Go runtime metrics in /metrics and via node_exporter.
+	EnableRuntimeMetrics bool `version[22]:"false"`
 
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
 	TelemetryToLog bool `version[5]:"true"`
