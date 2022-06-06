@@ -51,7 +51,7 @@ type createSRVRecord struct {
 }
 
 // createDNSRecordRequest construct a http request that would create a new dns record
-func createDNSRecordRequest(zoneID string, authEmail string, authKey string, recordType string, name string, content string, ttl uint, priority uint, proxied bool) (*http.Request, error) {
+func createDNSRecordRequest(zoneID string, authToken string, recordType string, name string, content string, ttl uint, priority uint, proxied bool) (*http.Request, error) {
 	// verify input arguments
 	ttl = clampTTL(ttl)
 	priority = clampPriority(priority)
@@ -77,12 +77,12 @@ func createDNSRecordRequest(zoneID string, authEmail string, authKey string, rec
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
 // createSRVRecordRequest construct a http request that would create a new dns record
-func createSRVRecordRequest(zoneID string, authEmail string, authKey string, name string, service string, protocol string, weight uint, port uint, ttl uint, priority uint, target string) (*http.Request, error) {
+func createSRVRecordRequest(zoneID string, authToken string, name string, service string, protocol string, weight uint, port uint, ttl uint, priority uint, target string) (*http.Request, error) {
 	// verify input arguments
 	ttl = clampTTL(ttl)
 	priority = clampPriority(priority)
@@ -112,7 +112,7 @@ func createSRVRecordRequest(zoneID string, authEmail string, authKey string, nam
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
@@ -149,7 +149,7 @@ func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResp
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response status code %d; body = %s", response.StatusCode, string(body))
+		return nil, fmt.Errorf("response status code %d; body = %s", response.StatusCode, string(body))
 	}
 	var parsedReponse CreateDNSRecordResponse
 	if err := json.Unmarshal(body, &parsedReponse); err != nil {
@@ -176,9 +176,7 @@ func clampTTL(ttl uint) uint {
 // clampPriority clamps the input priority value to the accepted range of 0..65535
 // see documentation at https://api.cloudflare.com/#dns-records-for-a-zone-create-dns-record
 func clampPriority(priority uint) uint {
-	if priority < 0 {
-		priority = 0
-	} else if priority > 65535 {
+	if priority > 65535 {
 		priority = 65535
 	}
 	return priority

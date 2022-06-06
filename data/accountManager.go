@@ -92,12 +92,7 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.registry.GetAll() {
-		if part.OverlapsInterval(from, to) {
-			return true
-		}
-	}
-	return false
+	return manager.registry.HasLiveKeys(from, to)
 }
 
 // AddParticipation adds a new account.Participation to be managed.
