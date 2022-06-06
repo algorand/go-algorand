@@ -190,7 +190,7 @@ tasks:
       - installer/genesis/testnet/genesis.json
       - installer/genesis/mainnet/genesis.json
 
-  #   # Unstash tasks
+    # Unstash tasks
   - task: stash.Unstash
     name: linux-arm64
     bucketName: go-algorand-ci-cache
