@@ -180,7 +180,7 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
-func TestPauseAtRound(t *testing.T) {
+func TestPauseAtRoundAndResumeCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
@@ -214,6 +214,7 @@ func TestPauseAtRound(t *testing.T) {
 
 	// Start the service ( dummy )
 	syncer.testStart()
+	syncer.chanPauseAtRound = make(chan bool)
 
 	// Pause on block number 3
 	rnd := uint64(3)
@@ -222,21 +223,20 @@ func TestPauseAtRound(t *testing.T) {
 	// Similar to a user running pause and resume catchup functionalities on catchup service
 	go func() {
 		// Testing Pause at round functionality i.e pausing at block number 3
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
 
-		// ResumeCatchup works but commented to resolve CI test error
-		// // Change the rnd number and test ResumeCatchup
-		// rnd = uint64(7)
+		// Change the rnd number and test ResumeCatchup
+		rnd = uint64(7)
 
-		// // Testing Resume Catchup functionality i.e resuming until block number 7
-		// syncer.ResumeCatchup(rnd)
-		// time.Sleep(500 * time.Millisecond)
-		// // Asserts that the last block is the one we expect
-		// require.Equal(t, rnd, uint64(local.LastRound()))
+		// Testing Resume Catchup functionality i.e resuming until block number 7
+		syncer.ResumeCatchup(rnd)
+		time.Sleep(1000 * time.Millisecond)
+		// Asserts that the last block is the one we expect
+		require.Equal(t, rnd, uint64(local.LastRound()))
 
-		// // similar to running syncer.stop()
+		// similar to running syncer.stop()
 		syncer.cancel()
 		close(syncer.chanPauseAtRound)
 	}()
@@ -854,7 +854,6 @@ func (avv *MockVoteVerifier) Parallelism() int {
 // Start the catchup service, without starting the periodic sync.
 func (s *Service) testStart() {
 	s.done = make(chan struct{})
-	s.chanPauseAtRound = make(chan bool)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.InitialSyncDone = make(chan struct{})
 }
