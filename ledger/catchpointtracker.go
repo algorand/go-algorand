@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/golang/snappy"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -81,6 +82,20 @@ var TrieMemoryConfig = merkletrie.MemoryConfig{
 	CachedNodesCount:          trieCachedNodesCount,
 	PageFillFactor:            0.95,
 	MaxChildrenPagesThreshold: 64,
+}
+
+func catchpointStage1Encoder(w io.Writer) (io.WriteCloser, error) {
+	return snappy.NewBufferedWriter(w), nil
+}
+
+type snappyReadCloser struct {
+	*snappy.Reader
+}
+
+func (snappyReadCloser) Close() error { return nil }
+
+func catchpointStage1Decoder(r io.Reader) (io.ReadCloser, error) {
+	return snappyReadCloser{snappy.NewReader(r)}, nil
 }
 
 type catchpointTracker struct {
@@ -625,7 +640,13 @@ func repackCatchpoint(header CatchpointFileHeader, biggestChunkLen uint64, dataP
 	}
 	defer fin.Close()
 
-	tarIn := tar.NewReader(fin)
+	compressorIn, err := catchpointStage1Decoder(fin)
+	if err != nil {
+		return err
+	}
+	defer compressorIn.Close()
+
+	tarIn := tar.NewReader(compressorIn)
 
 	fout, err := os.OpenFile(outPath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
@@ -660,6 +681,11 @@ func repackCatchpoint(header CatchpointFileHeader, biggestChunkLen uint64, dataP
 	}
 
 	err = fout.Close()
+	if err != nil {
+		return err
+	}
+
+	err = compressorIn.Close()
 	if err != nil {
 		return err
 	}
