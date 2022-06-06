@@ -142,9 +142,13 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 	return accountResourceMap[address][Creatable{aidx, ctype}], nil
 }
 
+var tbd = "TBD"
+
 func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
-	// this is a temporary comment
-	panic("not implemented")
+	// No need to worry about locks when populating indexer info
+	// r, err := l.lookupResource()
+	// return l.accts.LookupKv(rnd, key)
+	return &tbd, nil
 }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.
