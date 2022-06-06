@@ -238,7 +238,7 @@ func TestPauseAtRound(t *testing.T) {
 
 		// // similar to running syncer.stop()
 		syncer.cancel()
-		syncer.cancelPauseAtRound()
+		close(syncer.chanPauseAtRound)
 	}()
 
 	// Fetch blocks
@@ -854,8 +854,8 @@ func (avv *MockVoteVerifier) Parallelism() int {
 // Start the catchup service, without starting the periodic sync.
 func (s *Service) testStart() {
 	s.done = make(chan struct{})
+	s.chanPauseAtRound = make(chan bool)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.ctxPauseAtRound, s.cancelPauseAtRound = context.WithCancel(context.Background())
 	s.InitialSyncDone = make(chan struct{})
 }
 
