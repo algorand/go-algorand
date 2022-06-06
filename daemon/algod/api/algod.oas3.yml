@@ -2663,7 +2663,7 @@
         "summary": "Get the block for the given round."
       }
     },
-    "/v2/blocks/{round}/lightblockheader/proof": {
+    "/v2/blocks/{round}/lightheader/proof": {
       "get": {
         "operationId": "GetProofForLightBlockHeader",
         "parameters": [

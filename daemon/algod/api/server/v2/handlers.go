@@ -1237,7 +1237,7 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 }
 
 // GetProofForLightBlockHeader Gets a proof of a light block header for a given round
-// (GET /v2/blocks/{round}/lightblockheader/proof)
+// (GET /v2/blocks/{round}/lightheader/proof)
 func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
