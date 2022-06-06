@@ -821,6 +821,26 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			}
 		}
 
+		// Reset the database to version 6.
+		// TODO: pass ctx.
+		err = accountsReset(tx)
+		if err != nil {
+			return err
+		}
+		{
+			tp := trackerDBParams{
+				initAccounts:      c.ledger.GenesisAccounts(),
+				initProto:         c.ledger.GenesisProtoVersion(),
+				catchpointEnabled: c.ledger.catchpoint.catchpointEnabled(),
+				dbPathPrefix:      c.ledger.catchpoint.dbDirectory,
+				blockDb:           c.ledger.blockDBs,
+			}
+			_, err = runMigrations(ctx, tx, tp, c.ledger.log, 6)
+			if err != nil {
+				return err
+			}
+		}
+
 		err = applyCatchpointStagingBalances(ctx, tx, basics.Round(balancesRound), basics.Round(hashRound))
 		if err != nil {
 			return err
