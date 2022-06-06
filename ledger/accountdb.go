@@ -173,6 +173,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS txtail`,
 	`DROP TABLE IF EXISTS onlineroundparamstail`,
 	`DROP TABLE IF EXISTS catchpointfirststageinfo`,
+	`DROP TABLE IF EXISTS unfinishedcatchpoints`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
