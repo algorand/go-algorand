@@ -275,25 +275,16 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 		}
 
 		tu.log.Infof("upgradeDatabaseSchema1 preparing queries")
-		// initialize a new accountsq with the incoming transaction.
-		accountsq, err := accountsInitDbQueries(tx, tx)
-		if err != nil {
-			return fmt.Errorf("upgradeDatabaseSchema1 unable to prepare queries : %v", err)
-		}
-
-		// close the prepared statements when we're done with them.
-		defer accountsq.close()
-
 		tu.log.Infof("upgradeDatabaseSchema1 resetting prior catchpoints")
 		// delete the last catchpoint label if we have any.
-		_, err = accountsq.writeCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
+		err = writeCatchpointStateString(ctx, tx, catchpointStateLastCatchpoint, "")
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to clear prior catchpoint : %v", err)
 		}
 
 		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
 		// delete catchpoints.
-		err = deleteStoredCatchpoints(ctx, accountsq, tu.trackerDBParams.dbPathPrefix)
+		err = deleteStoredCatchpoints(ctx, tx, tu.trackerDBParams.dbPathPrefix)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
 		}
@@ -473,6 +464,10 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 	}
 
 	err = accountsCreateCatchpointFirstStageInfoTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+	err = accountsCreateUnfinishedCatchpointsTable(ctx, tx)
 	if err != nil {
 		return err
 	}

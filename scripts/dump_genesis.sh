@@ -69,6 +69,9 @@ for LEDGER in $LEDGERS; do
       catchpointfirststageinfo)
         SORT=round
         ;;
+      unfinishedcatchpoints)
+        SORT=round
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

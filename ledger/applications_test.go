@@ -296,7 +296,8 @@ return`
 	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 
 	// ensure writing into empty global state works as well
-	l.reloadLedger()
+	err = l.reloadLedger()
+	a.NoError(err)
 	txHeader.Sender = creator
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,

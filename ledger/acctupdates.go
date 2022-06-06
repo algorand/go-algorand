@@ -638,7 +638,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	au.accountsq, err = accountsInitDbQueries(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
+	au.accountsq, err = accountsInitDbQueries(au.dbs.Rdb.Handle)
 	if err != nil {
 		return
 	}

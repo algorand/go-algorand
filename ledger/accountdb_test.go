@@ -90,7 +90,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aq, err := accountsInitDbQueries(tx, tx)
+	aq, err := accountsInitDbQueries(tx)
 	require.NoError(t, err)
 	defer aq.close()
 
@@ -714,7 +714,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
 
-	qs, err := accountsInitDbQueries(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(b, err)
 
 	// read all the balances in the database, shuffled
@@ -965,7 +965,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	qs, err := accountsInitDbQueries(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	qs, err := accountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(t, err)
 	require.NotNil(t, qs.listCreatablesStmt)
 	qs.close()
@@ -3679,7 +3679,7 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 		info := catchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
-		err = insertCatchpointFirstStageInfo(dbs.Wdb.Handle, round, &info)
+		err = insertOrReplaceCatchpointFirstStageInfo(dbs.Wdb.Handle, round, &info)
 		require.NoError(t, err)
 	}
 
@@ -3708,4 +3708,52 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	rounds, err = selectOldCatchpointFirstStageInfoRounds(dbs.Rdb.Handle, 9)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{8}, rounds)
+}
+
+func TestUnfinishedCatchpointsTable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+
+	err := accountsCreateUnfinishedCatchpointsTable(
+		context.Background(), dbs.Wdb.Handle)
+	require.NoError(t, err)
+
+	var d3 crypto.Digest
+	rand.Read(d3[:])
+	err = insertUnfinishedCatchpoint(context.Background(), dbs.Wdb.Handle, 3, d3)
+	require.NoError(t, err)
+
+	var d5 crypto.Digest
+	rand.Read(d5[:])
+	err = insertUnfinishedCatchpoint(context.Background(), dbs.Wdb.Handle, 5, d5)
+	require.NoError(t, err)
+
+	ret, err := selectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
+	require.NoError(t, err)
+	expected := []unfinishedCatchpointRecord{
+		{
+			round:     3,
+			blockHash: d3,
+		},
+		{
+			round:     5,
+			blockHash: d5,
+		},
+	}
+	require.Equal(t, expected, ret)
+
+	err = deleteUnfinishedCatchpoint(context.Background(), dbs.Wdb.Handle, 3)
+	require.NoError(t, err)
+
+	ret, err = selectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
+	require.NoError(t, err)
+	expected = []unfinishedCatchpointRecord{
+		{
+			round:     5,
+			blockHash: d5,
+		},
+	}
+	require.Equal(t, expected, ret)
 }
