@@ -19,7 +19,6 @@ package ledger
 import (
 	"archive/tar"
 	"compress/gzip"
-	"compress/zlib"
 	"context"
 	"database/sql"
 	"encoding/binary"
@@ -36,7 +35,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/golang/snappy"
-	"github.com/klauspost/compress/zstd"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -86,28 +84,8 @@ var TrieMemoryConfig = merkletrie.MemoryConfig{
 	MaxChildrenPagesThreshold: 64,
 }
 
-type nopWriteCloser struct {
-	w io.Writer
-}
-
-func (c nopWriteCloser) Write(p []byte) (n int, err error) { return c.w.Write(p) }
-func (c nopWriteCloser) Close() error                      { return nil }
-
 func catchpointStage1Encoder(w io.Writer) (io.WriteCloser, error) {
-	switch strings.ToLower(os.Getenv("CATCHPOINT_COMPRESS")) {
-	case "snappy":
-		fmt.Println("using Snappy")
-		return snappy.NewBufferedWriter(w), nil
-	case "zlib":
-		fmt.Println("using ZLib BestSpeed")
-		return zlib.NewWriterLevel(w, zlib.BestSpeed)
-	case "zstd":
-		fmt.Println("using Zstd")
-		return zstd.NewWriter(w)
-	default:
-		fmt.Println("using Noop compression writer")
-		return nopWriteCloser{w}, nil
-	}
+	return snappy.NewBufferedWriter(w), nil
 }
 
 type snappyReadCloser struct {
@@ -117,20 +95,7 @@ type snappyReadCloser struct {
 func (snappyReadCloser) Close() error { return nil }
 
 func catchpointStage1Decoder(r io.Reader) (io.ReadCloser, error) {
-	switch strings.ToLower(os.Getenv("CATCHPOINT_COMPRESS")) {
-	case "snappy":
-		return snappyReadCloser{snappy.NewReader(r)}, nil
-	case "zlib":
-		return zlib.NewReader(r)
-	case "zstd":
-		ret, err := zstd.NewReader(r)
-		if err != nil {
-			return nil, err
-		}
-		return ret.IOReadCloser(), nil
-	default:
-		return io.NopCloser(r), nil
-	}
+	return snappyReadCloser{snappy.NewReader(r)}, nil
 }
 
 type catchpointTracker struct {

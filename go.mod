@@ -25,7 +25,6 @@ require (
 	github.com/gorilla/mux v1.6.2
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/usb v0.0.2
-	github.com/klauspost/compress v1.15.6
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/miekg/dns v1.1.27
