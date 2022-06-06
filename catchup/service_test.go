@@ -180,7 +180,7 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
-func TestPauseAtRound(t *testing.T) {
+func TestPauseAndResumeAtRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger

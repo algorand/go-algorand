@@ -426,8 +426,7 @@ func (s *Service) ResumeCatchup(rnd uint64) (err error) {
 		if (rnd == uint64(0) && s.pauseAtRound > uint64(0)) ||
 			(s.pauseAtRound > uint64(0) && uint64(s.ledger.LastRound()) >= s.pauseAtRound &&
 				rnd > uint64(s.ledger.LastRound())) {
-			// Change the value of s.pauseAtRound before sending the signal to avoid race condition
-			// s.pauseAtRound = rnd
+			// send the new value of s.pauseAtRound as the signal and update the value at the other end of the channel to avoid race condition
 			s.chanPauseAtRound <- rnd
 		} else {
 			err = errors.New("not allowed to resume due to invalid round number")
@@ -558,7 +557,6 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				delete(completedRounds, nextRound)
 				// pause here until resume catchup sends a signal
 				if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
-					// <-s.chanPauseAtRound
 					s.pauseAtRound = <-s.chanPauseAtRound
 				}
 				currentRoundComplete := make(chan bool, 2)
