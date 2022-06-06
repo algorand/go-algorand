@@ -214,7 +214,7 @@ func TestPauseAtRound(t *testing.T) {
 
 	// Start the service ( dummy )
 	syncer.testStart()
-	syncer.chanPauseAtRound = make(chan bool)
+	syncer.chanPauseAtRound = make(chan uint64)
 
 	// Pause on block number 3
 	rnd := uint64(3)
@@ -230,11 +230,11 @@ func TestPauseAtRound(t *testing.T) {
 		// Change the rnd number and test ResumeCatchup
 		rnd = uint64(7)
 
-		// // Testing Resume Catchup functionality i.e resuming until block number 7
-		// syncer.ResumeCatchup(rnd)
-		// time.Sleep(1000 * time.Millisecond)
-		// // Asserts that the last block is the one we expect
-		// require.Equal(t, rnd, uint64(local.LastRound()))
+		// Testing Resume Catchup functionality i.e resuming until block number 7
+		syncer.ResumeCatchup(rnd)
+		time.Sleep(1000 * time.Millisecond)
+		// Asserts that the last block is the one we expect
+		require.Equal(t, rnd, uint64(local.LastRound()))
 
 		// similar to running syncer.stop()
 		syncer.cancel()

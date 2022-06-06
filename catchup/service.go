@@ -80,7 +80,7 @@ type Service struct {
 	// pauseAtRound represents the block number at which the catchup service should pause
 	pauseAtRound          uint64
 	dontAllowPauseAtRound bool
-	chanPauseAtRound      chan bool
+	chanPauseAtRound      chan uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -129,7 +129,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 func (s *Service) Start() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.chanPauseAtRound = make(chan bool)
+	s.chanPauseAtRound = make(chan uint64)
 	s.dontAllowPauseAtRound = false
 	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
@@ -427,8 +427,8 @@ func (s *Service) ResumeCatchup(rnd uint64) (err error) {
 			(s.pauseAtRound > uint64(0) && uint64(s.ledger.LastRound()) >= s.pauseAtRound &&
 				rnd > uint64(s.ledger.LastRound())) {
 			// Change the value of s.pauseAtRound before sending the signal to avoid race condition
-			s.pauseAtRound = rnd
-			s.chanPauseAtRound <- true
+			// s.pauseAtRound = rnd
+			s.chanPauseAtRound <- rnd
 		} else {
 			err = errors.New("not allowed to resume due to invalid round number")
 		}
@@ -523,7 +523,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		}
 		// pause here until resume catchup sends a signal
 		if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
-			<-s.chanPauseAtRound
+			s.pauseAtRound = <-s.chanPauseAtRound
 		}
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
@@ -558,7 +558,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				delete(completedRounds, nextRound)
 				// pause here until resume catchup sends a signal
 				if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
-					<-s.chanPauseAtRound
+					// <-s.chanPauseAtRound
+					s.pauseAtRound = <-s.chanPauseAtRound
 				}
 				currentRoundComplete := make(chan bool, 2)
 				// len(taskCh) + (# pending writes to completed) increases by 1
