@@ -421,8 +421,12 @@ func (s *Service) SetPauseAtRound(rnd uint64) (err error) {
 func (s *Service) ResumeCatchup(rnd uint64) (err error) {
 	// check if resume functionality is enabled
 	if !s.dontAllowPauseAtRound {
-		// only allow resumecatchup if either rnd is 0 i.e resume catchup to the latest block or rnd is greater than current pause block
-		if rnd == uint64(0) || rnd > s.pauseAtRound {
+		// only allow resumecatchup if either rnd is 0 i.e resume catchup to the latest block
+		// check if the catchup has finished reaching the pauseAtRound block number
+		// check if next pauseAtRound block number is greater than the latest block on the ledger
+		if (rnd == uint64(0) && s.pauseAtRound > uint64(0)) ||
+			(s.pauseAtRound > uint64(0) && uint64(s.ledger.LastRound()) >= s.pauseAtRound &&
+				rnd > uint64(s.ledger.LastRound())) {
 			// Change the value of s.pauseAtRound before cancelling the context to avoid race condition
 			s.pauseAtRound = rnd
 			s.cancelPauseAtRound()
@@ -438,7 +442,6 @@ func (s *Service) ResumeCatchup(rnd uint64) (err error) {
 
 func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool, peerSelector *peerSelector) func() basics.Round {
 	return func() basics.Round {
-
 		fetchResult := s.fetchAndWrite(r, prevFetchCompleteChan, lookbackChan, peerSelector)
 
 		// the fetch result will be read at most twice (once as the lookback block and once as the prev block, so we write the result twice)
