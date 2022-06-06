@@ -203,6 +203,10 @@ func (s *Server) Start() {
 
 	cfg := s.node.Config()
 
+	if cfg.EnableRuntimeMetrics {
+		metrics.DefaultRegistry().Register(metrics.NewRuntimeMetrics())
+	}
+
 	if cfg.EnableMetricReporting {
 		if err := s.metricCollector.Start(context.Background()); err != nil {
 			// log this error

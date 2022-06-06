@@ -640,6 +640,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			Stibhash:  stibhash[:],
 			Idx:       uint64(idx),
 			Treedepth: uint64(proof.TreeDepth),
+			Hashtype:  hashtype,
 		}
 
 		return ctx.JSON(http.StatusOK, response)
@@ -1236,7 +1237,7 @@ func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 }
 
 // GetProofForLightBlockHeader Gets a proof of a light block header for a given round
-// (GET /v2/blocks/{round}/lightblockheader/proof)
+// (GET /v2/blocks/{round}/lightheader/proof)
 func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
 	if ledger.Latest() < basics.Round(round) {
