@@ -265,6 +265,10 @@ func (ao *onlineAccounts) committedUpTo(committedRound basics.Round) (retRound, 
 	}
 
 	retRound = ao.cachedDBRoundOnline
+	lowestRound := ao.voters.lowestRound(ao.cachedDBRoundOnline)
+	if lowestRound > 0 && lowestRound < retRound {
+		retRound = lowestRound
+	}
 	return
 }
 
