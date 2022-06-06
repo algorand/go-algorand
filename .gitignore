@@ -68,6 +68,5 @@ index.html
 # test summary
 testresults.json
 
-# asdf
+# Exclude asdf config
 .tool-versions
-
