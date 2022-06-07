@@ -46,12 +46,15 @@ func makeTestProto() *config.ConsensusParams {
 
 func makeTestProtoV(version uint64) *config.ConsensusParams {
 	return &config.ConsensusParams{
-		LogicSigVersion:     version,
-		LogicSigMaxCost:     20000,
-		Application:         version >= appsEnabledVersion,
-		MaxAppProgramCost:   700,
-		MaxAppKeyLen:        64,
-		MaxAppBytesValueLen: 64,
+		LogicSigVersion:   version,
+		LogicSigMaxCost:   20000,
+		Application:       version >= appsEnabledVersion,
+		MaxAppProgramCost: 700,
+
+		MaxAppKeyLen:          64,
+		MaxAppBytesValueLen:   64,
+		MaxAppSumKeyValueLens: 128,
+
 		// These must be identical to keep an old backward compat test working
 		MinTxnFee:  1001,
 		MinBalance: 1001,
@@ -103,6 +106,9 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		SupportBecomeNonParticipatingTransactions: true,
 
 		UnifyInnerTxIDs: true,
+
+		MaxBoxSize:           1000,
+		BytesPerBoxReference: 100,
 	}
 }
 
@@ -138,6 +144,10 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	return ep
 }
 
+func (ep *EvalParams) isFull() bool {
+	return ep.available != nil
+}
+
 // reset puts an ep back into its original state.  This is in *_test.go because
 // no real code should ever need this. EvalParams should be created to evaluate
 // a group, and then thrown away.
@@ -163,6 +173,7 @@ func (ep *EvalParams) reset() {
 			ep.available.boxes = available.boxes
 		}
 	}
+	ep.readBudgetChecked = false
 	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
 	if ep.Trace != nil {
 		ep.Trace = &strings.Builder{}
@@ -1037,10 +1048,14 @@ func TestGlobal(t *testing.T) {
 				}
 			}
 
-			txn := transactions.SignedTxn{}
-			txn.Txn.Group = crypto.Digest{0x07, 0x06}
+			appcall := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+				},
+			}
+			appcall.Txn.Group = crypto.Digest{0x07, 0x06}
 
-			ep := defaultEvalParams(txn)
+			ep := defaultEvalParams(appcall)
 			ep.Ledger = ledger
 			testApp(t, tests[v].program, ep)
 		})
@@ -1539,15 +1554,16 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetFrozen = true
 	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
 	txn.Txn.ForeignApps = []basics.AppIndex{56, 100, 111} // 100 must be 2nd, 111 must be present
-	txn.Txn.Boxes = []transactions.BoxRef{{Index: 0, Name: "self"}, {Index: 0, Name: "other"}}
+	txn.Txn.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("self")}, {Index: 0, Name: []byte("other")}}
 	txn.Txn.GlobalStateSchema = basics.StateSchema{NumUint: 3, NumByteSlice: 0}
 	txn.Txn.LocalStateSchema = basics.StateSchema{NumUint: 1, NumByteSlice: 2}
 	return txn
 }
 
-func makeSampleAppl() transactions.SignedTxn {
+func makeSampleAppl(app basics.AppIndex) transactions.SignedTxn {
 	sample := makeSampleTxn()
 	sample.Txn.Type = protocol.ApplicationCallTx
+	sample.Txn.ApplicationID = app
 	return sample
 }
 
@@ -2433,7 +2449,6 @@ int 5
 
 func TestGload(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	// for simple app-call-only transaction groups
@@ -2445,48 +2460,22 @@ func TestGload(t *testing.T) {
 
 	simpleCase := scratchTestCase{
 		tealSources: []string{
-			`
-int 2
-store 0
-int 1`,
-			`
-gload 0 0
-int 2
-==
-`,
+			`int 2; store 0; int 1`,
+			`gload 0 0; int 2; ==`,
 		},
 	}
 
 	multipleTxnCase := scratchTestCase{
 		tealSources: []string{
-			`
-byte "txn 1"
-store 0
-int 1`,
-			`
-byte "txn 2"
-store 2
-int 1`,
-			`
-gload 0 0
-byte "txn 1"
-==
-gload 1 2
-byte "txn 2"
-==
-&&
-`,
+			`byte "txn 1"; store 0; int 1`,
+			`byte "txn 2"; store 2; int 1`,
+			`gload 0 0; byte "txn 1"; ==; gload 1 2; byte "txn 2"; ==; &&`,
 		},
 	}
 
 	selfCase := scratchTestCase{
 		tealSources: []string{
-			`
-gload 0 0
-int 2
-store 0
-int 1
-`,
+			`gload 0 0; int 2; store 0; int 1`,
 		},
 		errTxn:      0,
 		errContains: "can't use gload on self, use load instead",
@@ -2494,14 +2483,8 @@ int 1
 
 	laterTxnSlotCase := scratchTestCase{
 		tealSources: []string{
-			`
-gload 1 0
-int 2
-==`,
-			`
-int 2
-store 0
-int 1`,
+			`gload 1 0; int 2; ==`,
+			`int 2; store 0; int 1`,
 		},
 		errTxn:      0,
 		errContains: "gload can't get future scratch space from txn with index 1",
@@ -2559,19 +2542,16 @@ int 1`,
 	failCases := []failureCase{nonAppCall, logicSigCall}
 	for j, failCase := range failCases {
 		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
+
+			appcall := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+				},
+			}
+
+			ep := defaultEvalParams(failCase.firstTxn, appcall)
+
 			program := testProg(t, "gload 0 0", AssemblerMaxVersion).Program
-
-			txgroup := []transactions.SignedTxnWithAD{
-				{SignedTxn: failCase.firstTxn},
-				{},
-			}
-
-			ep := &EvalParams{
-				Proto:       makeTestProto(),
-				TxnGroup:    txgroup,
-				pastScratch: make([]*scratchSpace, 2),
-			}
-
 			switch failCase.runMode {
 			case modeApp:
 				testAppBytes(t, program, ep, failCase.errContains)
@@ -3724,7 +3704,6 @@ byte 0x // empty byte constant
 
 func TestArgType(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	var sv stackValue
@@ -3739,8 +3718,8 @@ func TestArgType(t *testing.T) {
 
 func TestApplicationsDisallowOldTeal(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	const source = "int 1"
 
 	txn := makeSampleTxn()
@@ -3759,8 +3738,8 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 
 func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	const source = "int 1"
 
 	// Construct a group of two payments, no rekeying
@@ -3809,14 +3788,18 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
 			for v := uint64(0); v < cse.validFromVersion; v++ {
 				ops := testProg(t, source, v)
-				testAppBytes(t, ops.Program, ep, expected, expected)
+				if ep.isFull() {
+					testAppBytes(t, ops.Program, ep, expected, expected)
+				}
 				testLogicBytes(t, ops.Program, ep, expected, expected)
 			}
 
 			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
 				ops := testProg(t, source, v)
-				testAppBytes(t, ops.Program, ep)
+				if ep.isFull() {
+					testAppBytes(t, ops.Program, ep)
+				}
 				testLogicBytes(t, ops.Program, ep)
 			}
 		})

@@ -359,7 +359,7 @@ func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRe
 		}
 		output[i] = transactions.BoxRef{
 			Index: index,
-			Name:  string(rawName),
+			Name:  rawName,
 		}
 	}
 	return output

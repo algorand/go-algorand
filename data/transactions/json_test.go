@@ -16,6 +16,12 @@
 
 package transactions_test
 
+/* These tests are pretty low-value now.  They test something very basic about
+   our codec for encoding []byte as base64 strings in json. The test were
+   written we BoxRef contained a string instead of []byte.  When that was true,
+   these tests were more important because there was work that had to be done to
+   make it happen (implement MarshalJSON and UnmarshalJSON) */
+
 import (
 	"strings"
 	"testing"
@@ -41,16 +47,16 @@ func compact(data []byte) string {
 
 // TestJsonMarshal ensures that BoxRef names are b64 encoded, since they may not be characters.
 func TestJsonMarshal(t *testing.T) {
-	marshal := protocol.EncodeJSON(transactions.BoxRef{Index: 4, Name: "joe"})
+	marshal := protocol.EncodeJSON(transactions.BoxRef{Index: 4, Name: []byte("joe")})
 	require.Equal(t, `{"i":4,"n":"am9l"}`, compact(marshal))
 
-	marshal = protocol.EncodeJSON(transactions.BoxRef{Index: 0, Name: "joe"})
+	marshal = protocol.EncodeJSON(transactions.BoxRef{Index: 0, Name: []byte("joe")})
 	require.Equal(t, `{"n":"am9l"}`, compact(marshal))
 
-	marshal = protocol.EncodeJSON(transactions.BoxRef{Index: 1, Name: ""})
+	marshal = protocol.EncodeJSON(transactions.BoxRef{Index: 1, Name: []byte("")})
 	require.Equal(t, `{"i":1}`, compact(marshal))
 
-	marshal = protocol.EncodeJSON(transactions.BoxRef{Index: 0, Name: ""})
+	marshal = protocol.EncodeJSON(transactions.BoxRef{Index: 0, Name: []byte("")})
 	require.Equal(t, `{}`, compact(marshal))
 }
 
@@ -59,16 +65,19 @@ func TestJsonUnmarshal(t *testing.T) {
 	var br transactions.BoxRef
 
 	decode(`{"i":4,"n":"am9l"}`, &br)
-	require.Equal(t, transactions.BoxRef{Index: 4, Name: "joe"}, br)
+	require.Equal(t, transactions.BoxRef{Index: 4, Name: []byte("joe")}, br)
 
+	br = transactions.BoxRef{}
 	decode(`{"n":"am9l"}`, &br)
-	require.Equal(t, transactions.BoxRef{Index: 0, Name: "joe"}, br)
+	require.Equal(t, transactions.BoxRef{Index: 0, Name: []byte("joe")}, br)
 
+	br = transactions.BoxRef{}
 	decode(`{"i":4}`, &br)
-	require.Equal(t, transactions.BoxRef{Index: 4, Name: ""}, br)
+	require.Equal(t, transactions.BoxRef{Index: 4, Name: nil}, br)
 
+	br = transactions.BoxRef{}
 	decode(`{}`, &br)
-	require.Equal(t, transactions.BoxRef{Index: 0, Name: ""}, br)
+	require.Equal(t, transactions.BoxRef{Index: 0, Name: nil}, br)
 }
 
 // TestTxnJson tests a few more things about how our Transactions get JSON
@@ -82,7 +91,7 @@ func TestTxnJson(t *testing.T) {
 	require.Contains(t, compact(marshal), `"snd":"AEBA`)
 
 	txn = txntest.Txn{
-		Boxes: []transactions.BoxRef{{Index: 3, Name: "john"}},
+		Boxes: []transactions.BoxRef{{Index: 3, Name: []byte("john")}},
 	}
 	marshal = protocol.EncodeJSON(txn.Txn())
 	require.Contains(t, compact(marshal), `"apbx":[{"i":3,"n":"am9obg=="}]`)

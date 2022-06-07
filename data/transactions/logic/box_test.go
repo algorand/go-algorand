@@ -124,25 +124,139 @@ func TestBoxAvailability(t *testing.T) {
 	group := logic.MakeSampleTxnGroup(logic.MakeSampleTxn(), txntest.Txn{
 		Type:          "appl",
 		ApplicationID: 10000,
-		Boxes:         []transactions.BoxRef{{Index: 0, Name: "B"}},
+		Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("B")}},
 	}.SignedTxn())
 	group[0].Txn.Type = protocol.ApplicationCallTx
 	logic.TestApps(t, []string{
 		`int 64; byte "self"; box_create; int 1`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, group, 7, ledger, logic.NewExpect(1, "no such app"))
+	}, group, 7, ledger, logic.NewExpect(1, "no such box"))
 
 	// B is available if listed by appId in tx[1].Boxes
 	group = logic.MakeSampleTxnGroup(logic.MakeSampleTxn(), txntest.Txn{
 		Type:          "appl",
 		ApplicationID: 10000,
 		ForeignApps:   []basics.AppIndex{10000},
-		Boxes:         []transactions.BoxRef{{Index: 1, Name: "B"}},
+		Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("B")}},
 	}.SignedTxn())
 	group[0].Txn.Type = protocol.ApplicationCallTx
 	logic.TestApps(t, []string{
 		`int 64; byte "self"; box_create; int 1`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, group, 7, ledger, logic.NewExpect(1, "no such app"))
+	}, group, 7, ledger, logic.NewExpect(1, "no such box"))
 
+}
+
+func TestBoxReadBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ledger := logic.NewLedger(nil)
+	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+}
+
+func TestBoxWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, ledger := logic.MakeSampleEnv()
+	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+
+	// Sample tx[0] has two box refs, so write budget is 2*100
+
+	// Test simple use of one box, less than, equal, or over budget
+	logic.TestApp(t, `int 4; byte "self"; box_create;
+                      int 1`, ep)
+	logic.TestApp(t, `byte "self"; box_del;
+                      int 199; byte "self"; box_create;
+                      int 1`, ep)
+	logic.TestApp(t, `byte "self"; box_del;
+                      int 200; byte "self"; box_create;
+                      int 1`, ep)
+	logic.TestApp(t, `byte "self"; box_del;
+                      int 201; byte "self"; box_create;
+                      int 1`, ep, "write budget (200) exceeded")
+	ledger.DelBox(888, "self") // cleanup (doing it in a program would fail b/c the 201 len box exists)
+
+	// Test interplay of two different boxes being created
+	logic.TestApp(t, `int 4; byte "self"; box_create;
+                      int 4; byte "other"; box_create;
+                      int 1`, ep)
+
+	logic.TestApp(t, `byte "self"; box_del; byte "other"; box_del;
+                      int 4; byte "self"; box_create;
+                      int 196; byte "other"; box_create;
+                      int 1`, ep)
+
+	logic.TestApp(t, `byte "self"; box_del; byte "other"; box_del;
+                      int 6; byte "self"; box_create;
+                      int 196; byte "other"; box_create;
+                      int 1`, ep, "write budget (200) exceeded")
+	ledger.DelBox(888, "other")
+
+	logic.TestApp(t, `byte "self"; box_del;
+                      int 6; byte "self"; box_create;
+                      int 196; byte "other"; box_create;
+                      byte "self"; box_del; // deletion means we don't pay for write bytes
+                      int 1`, ep)
+	logic.TestApp(t, `byte "other"; box_del; int 1`, ep) // cleanup (self was already deleted in last test)
+
+	// Create two boxes, that sum to over budget, then test trying to use them together
+	logic.TestApp(t, `int 101; byte "self"; box_create;
+                      int 1`, ep)
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+                      int 101; byte "other"; box_create;
+                      int 1`, ep, "write budget (200) exceeded")
+	// error was detected, but the TestLedger now has both boxes present
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+                      byte "other"; int 1; byte 0x3333; box_replace;
+                      int 1`, ep, "read budget (200) exceeded")
+	ledger.DelBox(888, "other")
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+                      int 10; byte "other"; box_create
+                      int 1`, ep)
+	// They're now small enough to read and write
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+                      byte "other"; int 1; byte 0x3333; box_replace;
+                      int 1`, ep)
+	// writing twice is no problem (even though it's the big one)
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+                      byte "self"; int 50; byte 0x3333; box_replace;
+                      byte "other"; int 1; byte 0x3333; box_replace;
+                      int 1`, ep)
+
+	logic.TestApp(t, `byte "self"; box_del; byte "other"; box_del; int 1`, ep) // cleanup
+
+}
+
+func TestIOBudgetGrow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, ledger := logic.MakeSampleEnv()
+	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+	ledger.NewBox(888, "self", 101)
+	ledger.NewBox(888, "other", 101)
+
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+                      byte "other"; int 1; byte 0x3333; box_replace;
+                      int 1`, ep, "read budget (200) exceeded")
+
+	txn.Boxes = append(txn.Boxes, transactions.BoxRef{})
+	// Since we added an empty BoxRef, we can read > 200.
+	logic.TestApp(t, `byte "self"; int 1; int 7; box_extract; pop;
+                      byte "other"; int 1; int 7; box_extract; pop;
+                      int 1`, ep)
+	// Add write, for that matter
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+                      byte "other"; int 1; byte 0x3333; box_replace;
+                      int 1`, ep)
+
+	txn.Boxes = append(txn.Boxes, transactions.BoxRef{Name: []byte("another")})
+
+	// Here we read 202, and write a very different 350 (since we now have 4 brs)
+	logic.TestApp(t, `byte "self"; int 1; int 7; box_extract; pop;
+                      byte "other"; int 1; int 7; box_extract; pop;
+                      int 350; byte "another"; box_create;
+                      int 1`, ep)
 }

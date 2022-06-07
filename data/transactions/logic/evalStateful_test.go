@@ -927,7 +927,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 		}
 	}
 
-	txn := makeSampleTxn()
+	txn := makeSampleAppl(888)
 	pre := defaultEvalParamsWithVersion(directRefEnabledVersion-1, txn)
 	require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
 	now := defaultEvalParamsWithVersion(version, txn)
@@ -1294,11 +1294,9 @@ intc_1
 
 func TestAppLocalStateReadWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
-	txn := makeSampleTxn()
-	txn.Txn.ApplicationID = 100
+	txn := makeSampleAppl(100)
 	ep := defaultEvalParams(txn)
 	ledger := NewLedger(
 		map[basics.Address]uint64{
@@ -1645,8 +1643,7 @@ int 0x77
 ==
 &&
 `
-	txn := makeSampleAppl()
-	txn.Txn.ApplicationID = 100
+	txn := makeSampleAppl(100)
 	txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	ep := defaultEvalParams(txn)
 	ledger := NewLedger(
@@ -1825,8 +1822,7 @@ app_global_get
 int 7
 ==
 `
-	txn := makeSampleTxn()
-	txn.Txn.ApplicationID = 100
+	txn := makeSampleAppl(100)
 	ep := defaultEvalParams(txn)
 	ledger := NewLedger(
 		map[basics.Address]uint64{
@@ -2029,8 +2025,7 @@ err
 ok:
 int 1
 `
-	txn := makeSampleTxn()
-	txn.Txn.ApplicationID = 100
+	txn := makeSampleAppl(100)
 	ep := defaultEvalParams(txn)
 	ledger := NewLedger(
 		map[basics.Address]uint64{

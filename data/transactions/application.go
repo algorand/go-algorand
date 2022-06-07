@@ -122,7 +122,7 @@ type ApplicationCallTxnFields struct {
 	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
 
 	// Boxes are the boxes that can be accessed by this transaction (and others
-	// in the same group). The Index in the boxRef is the slot of ForeignApps
+	// in the same group). The Index in the BoxRef is the slot of ForeignApps
 	// that the name is asscoiated with (shifted by 1, so 0 indicates "current
 	// app")
 	Boxes []BoxRef `codec:"apbx,allocbound=encodedMaxBoxes"`
@@ -172,7 +172,7 @@ type BoxRef struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Index uint64 `codec:"i"`
-	Name  string `codec:"n"`
+	Name  []byte `codec:"n"`
 }
 
 // Empty indicates whether or not all the fields in the
