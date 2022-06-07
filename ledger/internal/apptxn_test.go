@@ -2070,6 +2070,10 @@ func TestAppDowngrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	two, err := logic.AssembleStringWithVersion("int 1", 2)
+	require.NoError(t, err)
+	three, err := logic.AssembleStringWithVersion("int 1", 3)
+	require.NoError(t, err)
 	four, err := logic.AssembleStringWithVersion("int 1", 4)
 	require.NoError(t, err)
 	five, err := logic.AssembleStringWithVersion("int 1", 5)
@@ -2078,6 +2082,40 @@ func TestAppDowngrade(t *testing.T) {
 	require.NoError(t, err)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	// Confirm that in old protocol version, downgrade is legal
+	// Start at 28 because we want to v4 app to downgrade to v3
+	testConsensusRange(t, 28, 30, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		create := txntest.Txn{
+			Type:              "appl",
+			Sender:            addrs[0],
+			ApprovalProgram:   four.Program,
+			ClearStateProgram: four.Program,
+		}
+
+		vb := dl.fullBlock(&create)
+		app := vb.Block().Payset[0].ApplicationID
+
+		update := txntest.Txn{
+			Type:              "appl",
+			ApplicationID:     app,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			Sender:            addrs[0],
+			ApprovalProgram:   three.Program,
+			ClearStateProgram: three.Program,
+		}
+
+		// No change - legal
+		dl.fullBlock(&update)
+
+		update.ApprovalProgram = two.Program
+		// Also legal, and let's check mismatched version while we're at it.
+		dl.fullBlock(&update)
+	})
+
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
