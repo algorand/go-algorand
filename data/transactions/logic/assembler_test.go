@@ -763,8 +763,8 @@ func TestAssembleBytes(t *testing.T) {
 	expectedOptimizedConsts := "018006616263646566"
 
 	bad := [][]string{
-		{"byte", "...operation needs byte literal argument"},
-		{`byte "john" "doe"`, "...operation with extraneous argument"},
+		{"byte", "...needs byte literal argument"},
+		{`byte "john" "doe"`, "...with extraneous argument"},
 	}
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1543,17 +1543,40 @@ func TestConstantArgs(t *testing.T) {
 	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "int", v, Expect{1, "int needs one argument"})
-		testProg(t, "intc", v, Expect{1, "intc operation needs one argument"})
-		testProg(t, "byte", v, Expect{1, "byte operation needs byte literal argument"})
-		testProg(t, "bytec", v, Expect{1, "bytec operation needs one argument"})
-		testProg(t, "addr", v, Expect{1, "addr operation needs one argument"})
+		testProg(t, "int", v, Expect{1, "int needs one immediate argument, was given 0"})
+		testProg(t, "int 1 2", v, Expect{1, "int needs one immediate argument, was given 2"})
+		testProg(t, "intc", v, Expect{1, "intc needs one immediate argument, was given 0"})
+		testProg(t, "intc hi bye", v, Expect{1, "intc needs one immediate argument, was given 2"})
+		testProg(t, "byte", v, Expect{1, "byte needs byte literal argument"})
+		testProg(t, "bytec", v, Expect{1, "bytec needs one immediate argument, was given 0"})
+		testProg(t, "bytec 1 x", v, Expect{1, "bytec needs one immediate argument, was given 2"})
+		testProg(t, "addr", v, Expect{1, "addr needs one immediate argument, was given 0"})
+		testProg(t, "addr x y", v, Expect{1, "addr needs one immediate argument, was given 2"})
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "pushint", v, Expect{1, "pushint needs one argument"})
-		testProg(t, "pushbytes", v, Expect{1, "pushbytes operation needs byte literal argument"})
+		testProg(t, "pushint", v, Expect{1, "pushint needs one immediate argument, was given 0"})
+		testProg(t, "pushint 3 4", v, Expect{1, "pushint needs one immediate argument, was given 2"})
+		testProg(t, "pushbytes", v, Expect{1, "pushbytes needs byte literal argument"})
+	}
+}
+
+func TestBranchArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "b", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "b lab1 lab2", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "int 1; bz", v, Expect{2, "bz needs a single label argument"})
+		testProg(t, "int 1; bz a b", v, Expect{2, "bz needs a single label argument"})
+		testProg(t, "int 1; bnz", v, Expect{2, "bnz needs a single label argument"})
+		testProg(t, "int 1; bnz c d", v, Expect{2, "bnz needs a single label argument"})
 	}
 
+	for v := uint64(4); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "callsub", v, Expect{1, "callsub needs a single label argument"})
+		testProg(t, "callsub one two", v, Expect{1, "callsub needs a single label argument"})
+	}
 }
 
 func TestAssembleDisassembleErrors(t *testing.T) {

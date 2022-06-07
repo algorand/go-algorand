@@ -16,6 +16,20 @@
 
 package logic
 
+/* This Ledger implements LedgerForLogic for unit tests in the logic package. It
+   does *not* carry the protocol around, so it does *not* enforce the various
+   limits imposed there.  This helps ensure that the logic package itself
+   enforces those limits, rather than rely on the ledger package. (Which should
+   also do so, to be defensive.)
+
+   This Ledger is not clever enough to have a good mechanism for making changes
+   and rolling them back if the program that makes them fails. It just has a
+   Reset() method that throws away all changes made by programs.  Generally,
+   it's probably best to call Reset() after any error test, though you can keep
+   testing if you take into account that changes made before the failure will
+   take effect.
+*/
+
 import (
 	"errors"
 	"fmt"
@@ -37,14 +51,13 @@ type balanceRecord struct {
 }
 
 func newBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
-	br := balanceRecord{
+	return balanceRecord{
 		addr:     addr,
 		balance:  balance,
 		locals:   make(map[basics.AppIndex]basics.TealKeyValue),
 		holdings: make(map[basics.AssetIndex]basics.AssetHolding),
 		mods:     make(map[basics.AppIndex]map[string]basics.ValueDelta),
 	}
-	return br
 }
 
 // In our test ledger, we don't store the creatables with their
@@ -53,7 +66,8 @@ type appParams struct {
 	basics.AppParams
 	Creator basics.Address
 
-	boxes map[string]string
+	boxes   map[string]string
+	boxMods map[string]*string
 }
 
 type asaParams struct {
@@ -91,7 +105,7 @@ func (l *Ledger) Reset() {
 		l.balances[addr] = br
 	}
 	for id, app := range l.applications {
-		app.boxes = nil
+		app.boxMods = nil
 		l.applications[id] = app
 	}
 }
@@ -331,66 +345,82 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	return nil
 }
 
+// NewBox makes a new box, through the boxMods mechanism. It can be Reset()
 func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, size uint64) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
 		return fmt.Errorf("no such app %d", appIdx)
 	}
-	if params.boxes == nil {
-		params.boxes = make(map[string]string)
+	if params.boxMods == nil {
+		params.boxMods = make(map[string]*string)
 	}
-	if _, ok = params.boxes[key]; ok {
-		return fmt.Errorf("box already exists %#v", key)
+	if current, ok := params.boxMods[key]; ok {
+		if current != nil {
+			return fmt.Errorf("box already exists 1 %#v %d", key, len(*current))
+		}
+	} else if current, ok := params.boxes[key]; ok {
+		return fmt.Errorf("box already exists 2 %#v %d", key, len(current))
 	}
-	params.boxes[key] = string(make([]byte, size))
+	s := string(make([]byte, size))
+	params.boxMods[key] = &s
 	l.applications[appIdx] = params
 	return nil
 }
 
-func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) (string, error) {
+func (l *Ledger) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return "", fmt.Errorf("no such app %d", appIdx)
+		return "", false, nil
 	}
-	if params.boxes == nil {
-		return "", fmt.Errorf("no such box %#v", key)
-	}
-	if box, ok := params.boxes[key]; ok {
-		return box, nil
-	}
-	return "", fmt.Errorf("no such box %#v", key)
-}
-
-func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error {
-	params, ok := l.applications[appIdx]
-	if !ok {
-		return fmt.Errorf("no such app %d", appIdx)
-	}
-	if params.boxes == nil {
-		return fmt.Errorf("no such box %#v", key)
-	}
-	if box, ok := params.boxes[key]; ok {
-		if len(box) != len(value) {
-			return fmt.Errorf("wrong box size %#v %d != %d", key, len(box), len(value))
+	if params.boxMods != nil {
+		if ps, ok := params.boxMods[key]; ok {
+			if ps == nil { // deletion in mod
+				return "", false, nil
+			}
+			return *ps, true, nil
 		}
-		params.boxes[key] = value
-		return nil
-	}
-	return fmt.Errorf("no such box %#v", key)
-}
-
-func (l *Ledger) DelBox(appIdx basics.AppIndex, key string) error {
-	params, ok := l.applications[appIdx]
-	if !ok {
-		return fmt.Errorf("no such app %d", appIdx)
 	}
 	if params.boxes == nil {
-		return fmt.Errorf("boxes %#v", key)
+		return "", false, nil
 	}
-	if _, ok := params.boxes[key]; !ok {
-		return fmt.Errorf("no such box %#v", key)
+	box, ok := params.boxes[key]
+	return box, ok, nil
+}
+
+// SetBox set a box value through the boxMods mechanism. It can be Reset()
+func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error {
+	current, ok, err := l.GetBox(appIdx, key)
+	if err != nil {
+		return err
 	}
-	delete(params.boxes, key)
+	if !ok {
+		return fmt.Errorf("no such box %d", appIdx)
+	}
+	params := l.applications[appIdx] // assured, based on above
+	if params.boxMods == nil {
+		params.boxMods = make(map[string]*string)
+	}
+	if len(current) != len(value) {
+		return fmt.Errorf("wrong box size %#v %d != %d", key, len(current), len(value))
+	}
+	params.boxMods[key] = &value
+	return nil
+}
+
+// DelBox deletes a value through moxMods mechanism
+func (l *Ledger) DelBox(appIdx basics.AppIndex, key string) error {
+	_, ok, err := l.GetBox(appIdx, key)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no such box %d", appIdx)
+	}
+	params := l.applications[appIdx] // assured, based on above
+	if params.boxMods == nil {
+		params.boxMods = make(map[string]*string)
+	}
+	params.boxMods[key] = nil
 	return nil
 }
 

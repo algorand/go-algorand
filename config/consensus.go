@@ -342,7 +342,14 @@ type ConsensusParams struct {
 	BoxByteMinBalance uint64
 
 	// Number of box references allowed
-	MaxAppBoxReferences uint64
+	MaxAppBoxReferences int
+
+	// Amount added to a txgroup's box I/O budget per box ref supplied.
+	// For reads: the sum of the sizes of all boxes in the group must be less than I/O budget
+	// For writes: the sum of the sizes of all boxes created or written must be less than I/O budget
+	// In both cases, what matters is the sizes of the boxes touched, not the
+	// number of times they are touched, or the size of the touches.
+	BytesPerBoxReference uint64
 
 	// maximum number of total key/value pairs allowed by a given
 	// LocalStateSchema (and therefore allowed in LocalState)
@@ -1163,10 +1170,11 @@ func initConsensusProtocols() {
 	vFuture.EnableSHA256TxnCommitmentHeader = true
 
 	// Boxes (unlimited global storage)
-	vFuture.MaxBoxSize = 8096
-	vFuture.BoxFlatMinBalance = 2500
-	vFuture.BoxByteMinBalance = 400
+	vFuture.MaxBoxSize = 4 * 8096
+	vFuture.BoxFlatMinBalance = 10000
+	vFuture.BoxByteMinBalance = 350
 	vFuture.MaxAppBoxReferences = 8
+	vFuture.BytesPerBoxReference = 8096
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

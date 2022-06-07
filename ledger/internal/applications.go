@@ -236,16 +236,9 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64)
 	return cs.kvPut(fullKey, value)
 }
 
-func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) (string, error) {
+func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) (string, bool, error) {
 	fullKey := logic.MakeBoxKey(appIdx, key)
-	value, ok, err := cs.kvGet(fullKey)
-	if err != nil {
-		return "", err
-	}
-	if !ok {
-		return "", fmt.Errorf("book %s does not exist for %d", key, appIdx)
-	}
-	return value, nil
+	return cs.kvGet(fullKey)
 }
 
 func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value string) error {

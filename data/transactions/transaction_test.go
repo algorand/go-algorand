@@ -533,7 +533,7 @@ func TestWellFormedErrors(t *testing.T) {
 				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: "junk"}},
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
 				},
 			},
 			proto:         futureProto,
@@ -545,7 +545,7 @@ func TestWellFormedErrors(t *testing.T) {
 				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: "junk"}},
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
 					ForeignApps:   []basics.AppIndex{1},
 				},
 			},
@@ -557,7 +557,7 @@ func TestWellFormedErrors(t *testing.T) {
 				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: "junk"}},
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
 					ForeignApps:   []basics.AppIndex{1},
 				},
 			},

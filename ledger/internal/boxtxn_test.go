@@ -107,19 +107,19 @@ func TestBoxCreate(t *testing.T) {
 
 		adam := call.Args("create", "adam")
 		dl.txn(adam, "invalid Box reference adam")
-		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: "adam"}}
+		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("adam")}}
 		dl.txn(adam)
 		dl.txn(adam.Args("check", "adam", "\x00\x00"))
 		dl.txgroup("exists", adam.Noted("one"), adam.Noted("two"))
 		bobo := call.Args("create", "bobo")
 		dl.txn(bobo, "invalid Box reference bobo")
-		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: "bobo"}}
+		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("bobo")}}
 		dl.txn(bobo)
 		dl.txgroup("exists", bobo.Noted("one"), bobo.Noted("two"))
 
 		dl.beginBlock()
 		chaz := call.Args("create", "chaz")
-		chaz.Boxes = []transactions.BoxRef{{Index: 0, Name: "chaz"}}
+		chaz.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("chaz")}}
 		dl.txn(chaz)
 		dl.txn(chaz.Noted("again"), "exists")
 		dl.endBlock()
@@ -127,7 +127,7 @@ func TestBoxCreate(t *testing.T) {
 		// new block
 		dl.txn(chaz.Noted("again"), "exists")
 		dogg := call.Args("create", "dogg")
-		dogg.Boxes = []transactions.BoxRef{{Index: 0, Name: "dogg"}}
+		dogg.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("dogg")}}
 		dl.txn(dogg, "below min")
 		dl.txn(chaz.Args("delete", "chaz"))
 		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "does not exist")
@@ -156,7 +156,7 @@ func TestBoxCreateAvailability(t *testing.T) {
 			Type:          "appl",
 			Sender:        addrs[0],
 			ApplicationID: 0, // This is a create
-			Boxes:         []transactions.BoxRef{{Index: 0, Name: "hello"}},
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("hello")}},
 			ApprovalProgram: `
               int 10
               byte "hello"
@@ -191,7 +191,7 @@ func TestBoxCreateAvailability(t *testing.T) {
 			Type:          "appl",
 			Sender:        addrs[0],
 			ApplicationID: 0, // This is a create
-			Boxes:         []transactions.BoxRef{{Index: 0, Name: "hello"}},
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("hello")}},
 			// Note that main() wraps the program so it does not run at creation time.
 			ApprovalProgram: main(`
               int 10
@@ -265,7 +265,7 @@ func TestBoxRW(t *testing.T) {
 			Type:          "appl",
 			Sender:        addrs[0],
 			ApplicationID: appIndex,
-			Boxes:         []transactions.BoxRef{{Index: 0, Name: "x"}},
+			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 
 		dl.txn(call.Args("create", "x", "\x10"))    // 16
@@ -296,7 +296,7 @@ func TestBoxRW(t *testing.T) {
 
 		dl.txn(call.Args("create", "yy"), "invalid Box reference yy")
 		withBr := call.Args("create", "yy")
-		withBr.Boxes = append(withBr.Boxes, transactions.BoxRef{Index: 1, Name: "yy"})
+		withBr.Boxes = append(withBr.Boxes, transactions.BoxRef{Index: 1, Name: []byte("yy")})
 		require.Error(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
 		withBr.Boxes[1].Index = 0
 		dl.txn(withBr)

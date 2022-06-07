@@ -215,7 +215,7 @@ type LedgerForLogic interface {
 	DelGlobal(appIdx basics.AppIndex, key string) error
 
 	NewBox(appIdx basics.AppIndex, key string, size uint64) error
-	GetBox(appIdx basics.AppIndex, key string) (string, error)
+	GetBox(appIdx basics.AppIndex, key string) (string, bool, error)
 	SetBox(appIdx basics.AppIndex, key string, value string) error
 	DelBox(appIdx basics.AppIndex, key string) error
 
@@ -233,7 +233,21 @@ type resources struct {
 	// boxes are all of the top-level box refs from the txgroup. Most are added
 	// during NewEvalParams(). refs using 0 on an appl create are resolved and
 	// added when the appl executes.
-	boxes map[basics.AppIndex][]string
+	boxes map[boxRef]boxTouch
+}
+
+// boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
+type boxRef struct {
+	app  basics.AppIndex
+	name string
+}
+
+// boxTouch tracks whether how many write bytes must be charged for the
+// box. touches are marked dirty if they are written to, or created.  size is
+// set during the initial read I/O check, or at create time.
+type boxTouch struct {
+	dirty bool
+	size  uint64
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -279,6 +293,13 @@ type EvalParams struct {
 	// availability across all txns in the group.
 	available *resources
 
+	// ioBudget is the number of bytes that the box ref'd boxes can sum to, and
+	// the number of bytes that created or written boxes may sum to.
+	ioBudget uint64
+
+	// readBudgetChecked allows us to only check the read budget once
+	readBudgetChecked bool
+
 	// Caching these here means the hashes can be shared across the TxnGroup
 	// (and inners, because the cache is shared with the inner EvalParams)
 	appAddrCache map[basics.AppIndex]basics.Address
@@ -304,19 +325,19 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 // NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
 func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
-	var allBoxes map[basics.AppIndex][]string
+	var allBoxes map[boxRef]boxTouch
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
 			if allBoxes == nil && len(tx.Txn.Boxes) > 0 {
-				allBoxes = make(map[basics.AppIndex][]string)
+				allBoxes = make(map[boxRef]boxTouch)
 			}
 			for _, br := range tx.Txn.Boxes {
 				var app basics.AppIndex
 				if br.Index == 0 {
-					// 0 is the "current app". Ignore if this is a create, else use ApplicationID
+					// "current app": Ignore if this is a create, else use ApplicationID
 					if tx.Txn.ApplicationID == 0 {
-						// When the create actually happens, and we learn the appID, we'll make it _available_.
+						// When the create actually happens, and we learn the appID, we'll add it.
 						continue
 					}
 					app = tx.Txn.ApplicationID
@@ -326,8 +347,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 					// now than after returning a nil.
 					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
 				}
-				appBoxes := allBoxes[app]
-				allBoxes[app] = append(appBoxes, br.Name)
+				allBoxes[boxRef{app, string(br.Name)}] = boxTouch{}
 			}
 		}
 	}
@@ -664,16 +684,58 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if cx.txn.Txn.ApplicationID == 0 {
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				appBoxes := cx.EvalParams.available.boxes[cx.appID]
-				cx.EvalParams.available.boxes[cx.appID] = append(appBoxes, br.Name)
+				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = boxTouch{}
 			}
 		}
+	}
+
+	// Check the I/O budget for reading if this is the first top-level app call
+	if cx.caller == nil && !cx.readBudgetChecked {
+		boxRefCount := uint64(0) // Intentionally counts duplicates
+		for _, tx := range cx.TxnGroup {
+			boxRefCount += uint64(len(tx.Txn.Boxes))
+		}
+		cx.ioBudget = boxRefCount * cx.Proto.BytesPerBoxReference
+
+		used := uint64(0)
+		for br := range cx.available.boxes {
+			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
+			if err != nil {
+				return false, nil, err
+			}
+			if !ok {
+				continue
+			}
+			size := uint64(len(box))
+			cx.available.boxes[br] = boxTouch{false, size}
+
+			used = basics.AddSaturate(used, size)
+			if used > cx.ioBudget {
+				return false, nil, fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+			}
+		}
+		cx.readBudgetChecked = true
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.txn.Txn.OnCompletion, cx.txn.Txn.ApplicationArgs)
 	}
 	pass, err := eval(program, &cx)
+
+	// Check the I/O budget for writing. TODO: Only need to do this once if we
+	// figure out we're the last app call in the group.
+	if cx.caller == nil {
+		used := uint64(0)
+		for _, bt := range cx.available.boxes {
+			if bt.dirty {
+				used = basics.AddSaturate(used, bt.size)
+			}
+			if used > cx.ioBudget {
+				return false, nil, fmt.Errorf("box write budget (%d) exceeded", cx.ioBudget)
+			}
+		}
+	}
+
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
 	}
@@ -3881,6 +3943,14 @@ func opAppLocalPut(cx *EvalContext) error {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 
+	// Enforce maximum key length. Currently this is the same as enforced by
+	// ledger. If it were ever to change in proto, we would need to isolate
+	// changes to different program versions. (so a v6 app could not see a
+	// bigger key, for example)
+	if len(key) > cx.Proto.MaxAppKeyLen {
+		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cx.Proto.MaxAppKeyLen)
+	}
+
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[pprev])
 	if err != nil {
 		return err
@@ -3900,6 +3970,17 @@ func opAppLocalPut(cx *EvalContext) error {
 		}
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
 	}
+
+	// Enforce maximum value length (also enforced by ledger)
+	if tv.Type == basics.TealBytesType {
+		if len(tv.Bytes) > cx.Proto.MaxAppBytesValueLen {
+			return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(tv.Bytes))
+		}
+		if sum := len(key) + len(tv.Bytes); sum > cx.Proto.MaxAppSumKeyValueLens {
+			return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
+		}
+	}
+
 	err = cx.Ledger.SetLocal(addr, cx.appID, key, tv, accountIdx)
 	if err != nil {
 		return err
@@ -3916,6 +3997,14 @@ func opAppGlobalPut(cx *EvalContext) error {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 
+	// Enforce maximum key length. Currently this is the same as enforced by
+	// ledger. If it were ever to change in proto, we would need to isolate
+	// changes to different program versions. (so a v6 app could not see a
+	// bigger key, for example)
+	if len(key) > cx.Proto.MaxAppKeyLen {
+		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cx.Proto.MaxAppKeyLen)
+	}
+
 	// if writing the same value, don't record in EvalDelta, matching ledger
 	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
@@ -3925,6 +4014,16 @@ func opAppGlobalPut(cx *EvalContext) error {
 	tv := sv.toTealValue()
 	if !ok || tv != etv {
 		cx.txn.EvalDelta.GlobalDelta[key] = tv.ToValueDelta()
+	}
+
+	// Enforce maximum value length (also enforced by ledger)
+	if tv.Type == basics.TealBytesType {
+		if len(tv.Bytes) > cx.Proto.MaxAppBytesValueLen {
+			return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(tv.Bytes))
+		}
+		if sum := len(key) + len(tv.Bytes); sum > cx.Proto.MaxAppSumKeyValueLens {
+			return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
+		}
 	}
 
 	err = cx.Ledger.SetGlobal(cx.appID, key, tv)
