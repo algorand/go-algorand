@@ -18,11 +18,13 @@ package telemetryspec
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
@@ -46,4 +48,16 @@ func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
 	bytes, err = json.Marshal(container)
 	require.NoError(t, err)
 	require.Equal(t, []byte("{\"ProcessingTime\":[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"), bytes)
+}
+
+func TestAssembleBlockStatsString(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var abs AssembleBlockStats
+	localType := reflect.TypeOf(abs)
+	absString := abs.String()
+	for f := 0; f < localType.NumField(); f++ {
+		field := localType.Field(f)
+		require.Contains(t, absString, field.Name)
+	}
 }

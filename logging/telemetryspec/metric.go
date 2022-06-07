@@ -104,6 +104,7 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("TotalLength:%d, ", m.TotalLength))
 	b.WriteString(fmt.Sprintf("EarlyCommittedCount:%d, ", m.EarlyCommittedCount))
 	b.WriteString(fmt.Sprintf("Nanoseconds:%d, ", m.Nanoseconds))
+	b.WriteString(fmt.Sprintf("ProcessingTime:%v, ", m.ProcessingTime))
 	b.WriteString(fmt.Sprintf("BlockGenerationDuration:%d, ", m.BlockGenerationDuration))
 	b.WriteString(fmt.Sprintf("TransactionsLoopStartTime:%d, ", m.TransactionsLoopStartTime))
 	b.WriteString(fmt.Sprintf("StateProofNextRound:%d, ", m.StateProofNextRound))
