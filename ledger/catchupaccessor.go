@@ -821,7 +821,12 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			}
 		}
 
-		// Reset the database to version 6.
+		// Reset the database to version 6. For now, we create a version 6 database from
+		// the catchpoint and let `reloadLedger()` run the normal database migration.
+		// When implementing a new catchpoint format (e.g. adding a new table),
+		// it might be necessary to restore it into the latest database version. To do that, one
+		// will need to run the 6->7 migration code manually here or in a similar function to create
+		// onlineaccounts and other V7 tables.
 		// TODO: pass ctx.
 		err = accountsReset(tx)
 		if err != nil {
@@ -835,7 +840,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 				dbPathPrefix:      c.ledger.catchpoint.dbDirectory,
 				blockDb:           c.ledger.blockDBs,
 			}
-			_, err = runMigrations(ctx, tx, tp, c.ledger.log, 6)
+			_, err = runMigrations(ctx, tx, tp, c.ledger.log, 6 /*target database version*/)
 			if err != nil {
 				return err
 			}
