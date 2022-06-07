@@ -158,6 +158,9 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {
 		metricLabels["telemetry_session"] = s.log.GetTelemetrySession()
+		if h := s.log.GetTelemetryHostName(); h != "" {
+			metricLabels["telemetry_host"] = h
+		}
 	}
 	s.metricCollector = metrics.MakeMetricService(
 		&metrics.ServiceConfig{
