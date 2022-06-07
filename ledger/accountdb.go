@@ -1085,8 +1085,6 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
-		"DROP TABLE IF EXISTS catchpointtxtail",
-		"DROP TABLE IF EXISTS catchpointonlineaccounts",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -1100,7 +1098,6 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		now := time.Now().UnixNano()
 		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
 		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
-		idxnameOnlineBalances := fmt.Sprintf("onlineaccountnorm_idx_%d", now)
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
@@ -1108,11 +1105,8 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
-			"CREATE TABLE IF NOT EXISTS catchpointonlineaccounts (address blob NOT NULL, updround INTEGER, normalizedonlinebalance INTEGER NOT NULL, votelastvalid INTEGER NOT NULL, data blob NOT NULL, PRIMARY KEY (address, updround) )",
-			"CREATE TABLE IF NOT EXISTS catchpointtxtail (round INTEGER PRIMARY KEY NOT NULL, data blob)",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
-			createNormalizedOnlineBalanceIndexOnline(idxnameOnlineBalances, "catchpointonlineaccounts"),
 		)
 	}
 
@@ -1130,26 +1124,15 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 // tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
 func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
 	stmts := []string{
-		"ALTER TABLE accountbase RENAME TO accountbase_old",
-		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
-		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
-		"ALTER TABLE resources RENAME TO resources_old",
-		"ALTER TABLE onlineaccounts RENAME TO onlineaccounts_old",
-		"ALTER TABLE txtail RENAME TO txtail_old",
+		"DROP TABLE IF EXISTS accountbase",
+		"DROP TABLE IF EXISTS assetcreators",
+		"DROP TABLE IF EXISTS accounthashes",
+		"DROP TABLE IF EXISTS resources",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
-		"ALTER TABLE catchpointonlineaccounts RENAME TO onlineaccounts",
-		"ALTER TABLE catchpointtxtail RENAME TO txtail",
-
-		"DROP TABLE IF EXISTS accountbase_old",
-		"DROP TABLE IF EXISTS assetcreators_old",
-		"DROP TABLE IF EXISTS accounthashes_old",
-		"DROP TABLE IF EXISTS resources_old",
-		"DROP TABLE IF EXISTS onlineaccounts_old",
-		"DROP TABLE IF EXISTS txtail_old",
 	}
 
 	for _, stmt := range stmts {
@@ -2400,14 +2383,14 @@ func resetAccountHashes(tx *sql.Tx) (err error) {
 	return
 }
 
-func accountsReset(tx *sql.Tx) error {
+func accountsReset(ctx context.Context, tx *sql.Tx) error {
 	for _, stmt := range accountsResetExprs {
-		_, err := tx.Exec(stmt)
+		_, err := tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
 		}
 	}
-	_, err := db.SetUserVersion(context.Background(), tx, 0)
+	_, err := db.SetUserVersion(ctx, tx, 0)
 	return err
 }
 
