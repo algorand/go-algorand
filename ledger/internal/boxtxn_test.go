@@ -176,7 +176,7 @@ func TestBoxCreateAvailability(t *testing.T) {
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: psychic.Address(),
-			Amount:   108501,
+			Amount:   100_000 + 2500 + 15*400,
 		})
 		dl.txn(&accessInCreate)
 
@@ -275,7 +275,7 @@ func TestBoxRW(t *testing.T) {
 		dl.txn(call.Args("check", "x", "ABCDEFGHIJ\x00"))
 
 		dl.txn(call.Args("delete", "x"))
-		dl.txn(call.Args("check", "x", "ABC"), "x does not exist")
+		dl.txn(call.Args("check", "x", "ABC"), "no such box")
 		dl.txn(call.Args("create", "x", "\x08"))
 		dl.txn(call.Args("check", "x", "\x00")) // it was cleared
 		dl.txn(call.Args("set", "x", "ABCDEFGHIJ"), "replacement end 10")

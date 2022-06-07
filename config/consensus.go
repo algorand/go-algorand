@@ -1171,8 +1171,8 @@ func initConsensusProtocols() {
 
 	// Boxes (unlimited global storage)
 	vFuture.MaxBoxSize = 4 * 8096
-	vFuture.BoxFlatMinBalance = 10000
-	vFuture.BoxByteMinBalance = 350
+	vFuture.BoxFlatMinBalance = 2500
+	vFuture.BoxByteMinBalance = 400
 	vFuture.MaxAppBoxReferences = 8
 	vFuture.BytesPerBoxReference = 8096
 

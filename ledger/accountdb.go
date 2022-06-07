@@ -1970,7 +1970,6 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err 
 	err = db.Retry(func() error {
 		var v sql.NullString
 		err := qs.lookupKvPairStmt.QueryRow(key).Scan(&pv.round, &v)
-		fmt.Printf("lookupKeyValue(%s) %+v %+v\n", key, pv, v)
 		if err != nil {
 			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 			if err == sql.ErrNoRows {
