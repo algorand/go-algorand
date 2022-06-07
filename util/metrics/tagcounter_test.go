@@ -40,6 +40,7 @@ func TestTagCounter(t *testing.T) {
 	}
 
 	tc := NewTagCounter("tc", "wat")
+	DefaultRegistry().Deregister(tc)
 
 	// check that empty TagCounter cleanly returns no results
 	var sb strings.Builder
@@ -78,6 +79,39 @@ func TestTagCounter(t *testing.T) {
 			t.Errorf("tag[%d] %v wanted %d got %d", i, tag, countin, endcount)
 		}
 	}
+}
+
+func TestTagCounterWriteMetric(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tc := NewTagCounter("count_msgs_{TAG}", "number of {TAG} messages")
+	DefaultRegistry().Deregister(tc)
+
+	tc.Add("TX", 100)
+	tc.Add("TX", 1)
+	tc.Add("RX", 0)
+
+	var sbOut strings.Builder
+	tc.WriteMetric(&sbOut, `host="myhost"`)
+	txExpected := `# HELP count_msgs_TX number of TX messages
+# TYPE count_msgs_TX counter
+count_msgs_TX{host="myhost"} 101
+`
+	rxExpected := `# HELP count_msgs_RX number of RX messages
+# TYPE count_msgs_RX counter
+count_msgs_RX{host="myhost"} 0
+`
+	expfmt := sbOut.String()
+	require.True(t, expfmt == txExpected+rxExpected || expfmt == rxExpected+txExpected, "bad fmt: %s", expfmt)
+
+	tc2 := NewTagCounter("declared", "number of {TAG}s", "A", "B")
+	DefaultRegistry().Deregister(tc2)
+	aExpected := "# HELP declared_A number of As\n# TYPE declared_A counter\ndeclared_A{host=\"h\"} 0\n"
+	bExpected := "# HELP declared_B number of Bs\n# TYPE declared_B counter\ndeclared_B{host=\"h\"} 0\n"
+	sbOut = strings.Builder{}
+	tc2.WriteMetric(&sbOut, `host="h"`)
+	expfmt = sbOut.String()
+	require.True(t, expfmt == aExpected+bExpected || expfmt == bExpected+aExpected, "bad fmt: %s", expfmt)
 }
 
 func BenchmarkTagCounter(b *testing.B) {

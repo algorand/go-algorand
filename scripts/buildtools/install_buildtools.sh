@@ -53,7 +53,7 @@ cd ${SCRIPTPATH}
 
 function get_go_version {
     cd "${SCRIPTPATH}"
-    VERSION=$( grep "$1" 2>/dev/null < ./go.mod | awk -F " " '{print $2}')
+    VERSION=$( grep "$1" 2>/dev/null < ./versions | awk -F " " '{print $2}')
     echo "$VERSION"
     return
 }
@@ -67,11 +67,11 @@ function install_go_module {
         MODULE=$1
     fi
 
-    # Check for version to go.mod version
+    # Check for version
     VERSION=$(get_go_version "$1")
 
     if [ -z "$VERSION" ]; then
-        echo "Unable to install requested package '$1' (${MODULE}): no version listed in ${SCRIPTPATH}/go.mod"
+        echo "Unable to install requested package '$1' (${MODULE}): no version listed in ${SCRIPTPATH}/versions"
         exit 1
     else
         OUTPUT=$(go install "${MODULE}@${VERSION}" 2>&1)

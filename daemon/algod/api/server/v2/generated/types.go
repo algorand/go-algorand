@@ -316,7 +316,13 @@ type DryrunTxnResult struct {
 	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
-	// Execution cost of app call transaction
+	// Budget added during execution of app call transaction.
+	BudgetAdded *uint64 `json:"budget-added,omitempty"`
+
+	// Budget consumed during execution of app call transaction.
+	BudgetConsumed *uint64 `json:"budget-consumed,omitempty"`
+
+	// Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.
 	Cost *uint64 `json:"cost,omitempty"`
 
 	// Disassembled program line by line.
@@ -610,6 +616,9 @@ type CompileResponse struct {
 
 	// base64 encoded program bytes
 	Result string `json:"result"`
+
+	// JSON of the source map
+	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
 }
 
 // DisassembleResponse defines model for DisassembleResponse.
@@ -711,8 +720,8 @@ type PostTransactionsResponse struct {
 type ProofResponse struct {
 
 	// The type of hash function used to create the proof, must be one of:
-	// * sumhash
 	// * sha512_256
+	// * sha256
 	Hashtype string `json:"hashtype"`
 
 	// Index of the transaction in the block's payset.
@@ -815,8 +824,20 @@ type GetBlockParams struct {
 // GetProofParams defines parameters for GetProof.
 type GetProofParams struct {
 
+	// The type of hash function used to create the proof, must be one of:
+	// * sha512_256
+	// * sha256
+	Hashtype *string `json:"hashtype,omitempty"`
+
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// TealCompileParams defines parameters for TealCompile.
+type TealCompileParams struct {
+
+	// When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.
+	Sourcemap *bool `json:"sourcemap,omitempty"`
 }
 
 // TealDryrunJSONBody defines parameters for TealDryrun.

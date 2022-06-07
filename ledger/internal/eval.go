@@ -871,7 +871,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
@@ -981,7 +981,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			txWithoutGroup := txad.SignedTxn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
@@ -1230,7 +1230,7 @@ func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
 		var err error
-		eval.block.TxnRoot, err = eval.block.PaysetCommit()
+		eval.block.TxnCommitments, err = eval.block.PaysetCommit()
 		if err != nil {
 			return err
 		}
@@ -1275,8 +1275,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if err != nil {
 			return err
 		}
-		if txnRoot != eval.block.TxnRoot {
-			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
+		if txnRoot != eval.block.TxnCommitments {
+			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnCommitments)
 		}
 
 		var expectedTxnCount uint64

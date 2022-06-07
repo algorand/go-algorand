@@ -487,7 +487,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 		Seed:              crypto.Digest(b.Seed()).String(),
 		Proposer:          c.Proposal.OriginalProposer.String(),
 		Round:             uint64(b.Round()),
-		TransactionsRoot:  b.TxnRoot.String(),
+		TransactionsRoot:  b.TxnCommitments.NativeSha512_256Commitment.String(), // No need to support SHA256 in API V1
 		RewardsRate:       b.RewardsRate,
 		RewardsLevel:      b.RewardsLevel,
 		RewardsResidue:    b.RewardsResidue,
