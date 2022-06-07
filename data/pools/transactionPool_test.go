@@ -1288,77 +1288,82 @@ func TestTStateProofLogging(t *testing.T) {
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
 
-	numOfAccounts := 3
+	// Create 5 accounts, the last 3 uesd for signing the SP
+	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
-
 	for i := 0; i < numOfAccounts; i++ {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
 	}
-
-	firstAddress := addresses[0]
 	initAccounts := initAcc(map[basics.Address]uint64{
-		firstAddress:                  proto.MinBalance*1000 + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize),
 		transactions.StateProofSender: 200000,
+		addresses[0]:                  100000,
 		addresses[1]:                  100000,
-		addresses[2]:                  100000,
+		addresses[2]:                  100000000000,
+		addresses[3]:                  100000000000,
+		addresses[4]:                  100000000000,
 	})
+
+	// Prepare the SP signing keys
+	allKeys := make([]*merklesignature.Secrets, 0, 3)
 	stateproofIntervals := uint64(256)
-	keys, err := merklesignature.New(0, uint64(stateproofIntervals)*stateproofIntervals+1, stateproofIntervals)
-	require.NoError(t, err)
+	for a := 2; a < numOfAccounts; a++ {
+		keys, err := merklesignature.New(0, uint64(512), stateproofIntervals)
+		require.NoError(t, err)
 
-	firstAcct := initAccounts[firstAddress]
-	firstAcct.StateProofID = *keys.GetVerifier()
-	initAccounts[firstAddress] = firstAcct
-	acctData := initAccounts[addresses[0]]
-	acctData.Status = basics.Online
-	acctData.VoteLastValid = 1000000
-	initAccounts[addresses[0]] = acctData
-	ledger := makeMockLedgerFuture(t, initAccounts)
+		acct := initAccounts[addresses[a]]
+		acct.StateProofID = *keys.GetVerifier()
+		acct.Status = basics.Online
+		acct.VoteLastValid = 100000
+		initAccounts[addresses[a]] = acct
 
-	var b bookkeeping.Block
-	b.BlockHeader.GenesisID = "pooltest"
-	b.BlockHeader.GenesisHash = ledger.GenesisHash()
-	b.CurrentProtocol = protocol.ConsensusFuture
+		allKeys = append(allKeys, keys)
+	}
 
-	b.BlockHeader.Round = 1
-
+	// Set the logging to capture the telemetry Metrics into logging
 	logger := logging.TestingLog(t)
 	logger.SetLevel(logging.Info)
 	logger.EnableTelemetry(logging.TelemetryConfig{Enable: true, SendToLog: true})
 	var buf bytes.Buffer
 	logger.SetOutput(&buf)
 
-	transactionPool := MakeTransactionPool(ledger, cfg, logger)
+	// Set the ledger and the transaction pool
+	mockLedger := makeMockLedgerFuture(t, initAccounts)
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logger)
 	transactionPool.logAssembleStats = true
 
-	phdr, err := ledger.BlockHdr(0)
+	// Set the first round block
+	var b bookkeeping.Block
+	b.BlockHeader.GenesisID = "pooltest"
+	b.BlockHeader.GenesisHash = mockLedger.GenesisHash()
+	b.CurrentProtocol = protocol.ConsensusFuture
+	b.BlockHeader.Round = 1
+
+	phdr, err := mockLedger.BlockHdr(0)
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
-	b.BlockHeader.FeeSink = addresses[1]
-	b.BlockHeader.RewardsPool = addresses[2]
+	b.BlockHeader.FeeSink = addresses[0]
+	b.BlockHeader.RewardsPool = addresses[1]
 
-	eval, err := ledger.StartEvaluator(b.BlockHeader, 0, 10000)
+	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
 	require.NoError(t, err)
 
+	// Simulate the blocks up to round 512 without any transactions
 	for i := 1; true; i++ {
-		blk, err := eval.GenerateBlock()
+		blk, err := transactionPool.AssembleBlock(basics.Round(i), time.Time{})
 		require.NoError(t, err)
 
-		blk, err = transactionPool.AssembleBlock(basics.Round(i), time.Time{})
-		require.NoError(t, err)
-
-		err = ledger.AddValidatedBlock(*blk, agreement.Certificate{})
+		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
 		b.BlockHeader.Round++
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
-		phdr, err := ledger.BlockHdr(basics.Round(i))
+		phdr, err := mockLedger.BlockHdr(basics.Round(i))
 		require.NoError(t, err)
 		b.BlockHeader.Branch = phdr.Hash()
 		b.BlockHeader.TimeStamp = phdr.TimeStamp + 10
@@ -1367,17 +1372,31 @@ func TestTStateProofLogging(t *testing.T) {
 			break
 		}
 
-		eval, err = ledger.StartEvaluator(b.BlockHeader, 0, 10000)
+		eval, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
 		require.NoError(t, err)
 	}
 
-	lookback := basics.Round(512).SubSaturate(basics.Round(proto.StateProofVotersLookback))
-	voters, err := ledger.VotersForStateProof(lookback)
+	// Prepare the transaction with the SP
+	round := basics.Round(512)
+	spRoundHdr, err := mockLedger.BlockHdr(round)
+	require.NoError(t, err)
+
+	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersRoundHdr, err := mockLedger.BlockHdr(votersRound)
+	require.NoError(t, err)
+
+	provenWeight, err := ledger.GetProvenWeight(votersRoundHdr, spRoundHdr)
+	require.NoError(t, err)
+
+	lookback := votersRound.SubSaturate(basics.Round(proto.StateProofVotersLookback))
+	voters, err := mockLedger.VotersForStateProof(lookback)
 	require.NoError(t, err)
 	require.NotNil(t, voters)
 
-	proof := generateProofForTesting(uint64(512), voters.Participants, voters.Tree, keys, voters.TotalWeight.Raw, t)
+	// Get the SP
+	proof := generateProofForTesting(uint64(round), provenWeight, voters.Participants, voters.Tree, allKeys, voters.TotalWeight.Raw, t)
 
+	// Set the transaction with the SP
 	uniqueTxID := 0
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
@@ -1386,7 +1405,7 @@ func TestTStateProofLogging(t *testing.T) {
 	stxn.Txn.FirstValid = 512
 	stxn.Txn.LastValid = 1024
 	stxn.Txn.Note = []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)}
-	stxn.Txn.GenesisHash = ledger.GenesisHash()
+	stxn.Txn.GenesisHash = mockLedger.GenesisHash()
 	stxn.Txn.StateProofIntervalLatestRound = 512
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.StateProof = *proof
@@ -1394,7 +1413,8 @@ func TestTStateProofLogging(t *testing.T) {
 		LnProvenWeight: 1,
 	}
 
-	eval, err = ledger.StartEvaluator(b.BlockHeader, 0, 10000)
+	// Add it to the transaction pool and assemble the block
+	eval, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000)
 	require.NoError(t, err)
 
 	err = eval.Transaction(stxn, transactions.ApplyData{})
@@ -1402,64 +1422,75 @@ func TestTStateProofLogging(t *testing.T) {
 
 	err = transactionPool.RememberOne(stxn)
 	require.NoError(t, err)
-
-	transactionPool.recomputeBlockEvaluator(nil, 0) //[]transactions.SignedTxn{stxn}, nil)//telemetryspec.AssembleBlockMetrics{})
-
+	transactionPool.recomputeBlockEvaluator(nil, 0)
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
 
+	// parse the log messages and retreive the Metrics for SP in assmbe block
 	scanner := bufio.NewScanner(strings.NewReader(buf.String()))
 	lines := make([]string, 0)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
 	fmt.Println(lines[len(lines)-1])
-	//	fmt.Println(buf.String())
+	parts := strings.Split(lines[len(lines)-1], "StateProofNextRound:")
+
+	// Verify the Metrics is correct
+	var nextRound, signedWeight, numReveals uint64
+	var str1 string
+	fmt.Sscanf(parts[1], "%d, StateProofSignedWeight:%d, StateProofNumReveals:%d\"%s",
+		&nextRound, &signedWeight, &numReveals, &str1)
+	require.Equal(t, uint64(768), nextRound)
+	require.Equal(t, proof.SignedWeight, signedWeight)
+	require.Equal(t, numOfAccounts-2, int(numReveals))
 }
 
+// Given the round number, partArray and partTree from the previous period block, the keys and the totalWeight
+// return a stateProof which can be submitted in a transaction to the transaction pool and assembled into a new block.
 func generateProofForTesting(
 	round uint64,
+	provenWeight uint64,
 	partArray basics.ParticipantsArray,
 	partTree *merklearray.Tree,
-	keys *merklesignature.Secrets,
+	allKeys []*merklesignature.Secrets,
 	totalWeight uint64,
 	t *testing.T) *stateproof.StateProof {
-
-	npart := 1 //npartHi + npartLo
 
 	data := stateproofmsg.Message{
 		LnProvenWeight: 1,
 	}.IntoStateProofMessageHash()
 
-	var sigs []merklesignature.Signature
-
-	signerInRound := keys.GetSigner(round)
-	sig, err := signerInRound.SignBytes(data[:])
-	require.NoError(t, err)
-
-	for i := 0; i < npart; i++ {
-		sigs = append(sigs, sig)
+	// Sign with the participation keys
+	sigs := make(map[merklesignature.Verifier]merklesignature.Signature)
+	for _, keys := range allKeys {
+		signerInRound := keys.GetSigner(round)
+		sig, err := signerInRound.SignBytes(data[:])
+		require.NoError(t, err)
+		sigs[*keys.GetVerifier()] = sig
 	}
 
-	stateProofStrengthTargetForTests := uint64(256)
-	b, err := stateproof.MkBuilder(data, round, uint64(totalWeight/2),
+	// Prepare the builder
+	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusFuture].StateProofStrengthTarget
+	b, err := stateproof.MkBuilder(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)
 
-	for i := uint64(0); i < uint64(npart); i++ {
-		p, err := b.Present(i)
+	// Add the signatures
+	for i := range partArray {
+		p, err := b.Present(uint64(i))
 		require.False(t, p)
 		require.NoError(t, err)
-		err = b.IsValid(i, sigs[i], true)
+		err = b.IsValid(uint64(i), sigs[partArray[i].PK], true)
 		require.NoError(t, err)
-		b.Add(i, sigs[i])
+		b.Add(uint64(i), sigs[partArray[i].PK])
 
 		// sanity check that the builder add the signature
-		isPresent, err := b.Present(i)
+		isPresent, err := b.Present(uint64(i))
 		require.NoError(t, err)
 		require.True(t, isPresent)
 	}
 
+	// Build the SP
 	proof, err := b.Build()
 	require.NoError(t, err)
 
