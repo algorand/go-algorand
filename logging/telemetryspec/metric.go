@@ -87,7 +87,7 @@ type AssembleBlockMetrics struct {
 func (m AssembleBlockMetrics) Identifier() Metric {
 	return assembleBlockMetricsIdentifier
 }
-func (m AssembleBlockStats) String() (string) {
+func (m AssembleBlockStats) String() string {
 	b := &bytes.Buffer{}
 	b.WriteString(fmt.Sprintf("StartCount:%d, ", m.StartCount))
 	b.WriteString(fmt.Sprintf("IncludedCount:%d, ", m.IncludedCount))
