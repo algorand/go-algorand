@@ -1289,7 +1289,7 @@ func TestTStateProofLogging(t *testing.T) {
 	cfg.EnableProcessBlockStats = false
 
 	// Create 5 accounts, the last 3 uesd for signing the SP
-	numOfAccounts := 5
+	numOfAccounts := 20
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
@@ -1299,14 +1299,11 @@ func TestTStateProofLogging(t *testing.T) {
 		secrets[i] = secret
 		addresses[i] = addr
 	}
-	initAccounts := initAcc(map[basics.Address]uint64{
-		transactions.StateProofSender: 200000,
-		addresses[0]:                  100000,
-		addresses[1]:                  100000,
-		addresses[2]:                  100000000000,
-		addresses[3]:                  100000000000,
-		addresses[4]:                  100000000000,
-	})
+	accountsBalances := make(map[basics.Address]uint64)
+	for _, addr := range addresses {
+		accountsBalances[addr] = 1000000000
+	}
+	initAccounts := initAcc(accountsBalances)
 
 	// Prepare the SP signing keys
 	allKeys := make([]*merklesignature.Secrets, 0, 3)
@@ -1346,8 +1343,6 @@ func TestTStateProofLogging(t *testing.T) {
 	phdr, err := mockLedger.BlockHdr(0)
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
-	b.BlockHeader.FeeSink = addresses[0]
-	b.BlockHeader.RewardsPool = addresses[1]
 
 	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
 	require.NoError(t, err)
@@ -1401,7 +1396,6 @@ func TestTStateProofLogging(t *testing.T) {
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
-	stxn.Txn.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee + 1}
 	stxn.Txn.FirstValid = 512
 	stxn.Txn.LastValid = 1024
 	stxn.Txn.Note = []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)}
