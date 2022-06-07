@@ -827,8 +827,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		// it might be necessary to restore it into the latest database version. To do that, one
 		// will need to run the 6->7 migration code manually here or in a similar function to create
 		// onlineaccounts and other V7 tables.
-		// TODO: pass ctx.
-		err = accountsReset(tx)
+		err = accountsReset(ctx, tx)
 		if err != nil {
 			return err
 		}

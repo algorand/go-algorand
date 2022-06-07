@@ -2383,14 +2383,14 @@ func resetAccountHashes(tx *sql.Tx) (err error) {
 	return
 }
 
-func accountsReset(tx *sql.Tx) error {
+func accountsReset(ctx context.Context, tx *sql.Tx) error {
 	for _, stmt := range accountsResetExprs {
-		_, err := tx.Exec(stmt)
+		_, err := tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
 		}
 	}
-	_, err := db.SetUserVersion(context.Background(), tx, 0)
+	_, err := db.SetUserVersion(ctx, tx, 0)
 	return err
 }
 

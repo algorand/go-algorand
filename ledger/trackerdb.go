@@ -95,7 +95,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		// Check for blocks DB and tracker DB un-sync
 		if lastBalancesRound > lastestBlockRound {
 			log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
-			err0 = accountsReset(tx)
+			err0 = accountsReset(ctx, tx)
 			if err0 != nil {
 				return err0
 			}
