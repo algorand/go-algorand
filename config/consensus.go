@@ -440,6 +440,9 @@ type ConsensusParams struct {
 	// This new header is in addition to the existing SHA512_256 merkle root.
 	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
 	EnableSHA256TxnCommitmentHeader bool
+
+	// ClearOfflineStateProofID tells the ledger to clear the account's StateProofID when a keyreg transaction marks it offline.
+	ClearOfflineStateProofID bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1150,6 +1153,7 @@ func initConsensusProtocols() {
 	vFuture.UnifyInnerTxIDs = true
 
 	vFuture.EnableSHA256TxnCommitmentHeader = true
+	vFuture.ClearOfflineStateProofID = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

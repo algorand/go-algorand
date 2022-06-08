@@ -230,14 +230,32 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, acct.StateProofID.IsEmpty())
 
-	// go offline: StateProofID should be empty
+	// go offline in current consensus version: StateProofID should not be empty
 	emptyKeyreg := transactions.KeyregTxnFields{}
 	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
+	require.False(t, acct.StateProofID.IsEmpty())
+
+	// run same test using vFuture
+	mockBal = makeMockBalances(protocol.ConsensusFuture)
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	require.NoError(t, err)
+
+	acct, err = mockBal.Get(tx.Src(), false)
+	require.NoError(t, err)
+	require.False(t, acct.StateProofID.IsEmpty())
+
+	// go offline in vFuture: StateProofID should be empty
+	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	require.NoError(t, err)
+
+	acct, err = mockBal.Get(tx.Src(), false)
+	require.NoError(t, err)
 	require.True(t, acct.StateProofID.IsEmpty())
+
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
