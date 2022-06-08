@@ -3533,8 +3533,9 @@ func onlineAccountsNewRoundImpl(
 								prevAcct = updated
 							}
 						}
-					} else if !newAcct.IsVotingEmpty() {
-						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
+						// TODO: restore after migrating offline accounts and clearing state proof PK
+						// } else if !newAcct.IsVotingEmpty() {
+						// 	err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
 					}
 				}
 			} else {
