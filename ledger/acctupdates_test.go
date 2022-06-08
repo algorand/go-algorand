@@ -567,7 +567,7 @@ func TestAcctUpdates(t *testing.T) {
 			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
 			var actualTotals ledgercore.AccountTotals
 			err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				actualTotals, err = accountsTotals(tx, false)
+				actualTotals, err = accountsTotals(ctx, tx, false)
 				return
 			})
 			require.NoError(t, err)
@@ -1313,7 +1313,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	}
 
 	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return updateAccountsHashRound(tx, 1)
+		return updateAccountsHashRound(ctx, tx, 1)
 	})
 	require.NoError(b, err)
 

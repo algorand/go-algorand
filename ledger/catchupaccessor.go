@@ -664,7 +664,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get trie root hash: %v", err)
 		}
 
-		totals, err = accountsTotals(tx, true)
+		totals, err = accountsTotals(ctx, tx, true)
 		if err != nil {
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
@@ -809,13 +809,13 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		totals, err = accountsTotals(tx, true)
+		totals, err = accountsTotals(ctx, tx, true)
 		if err != nil {
 			return err
 		}
 
 		if hashRound == 0 {
-			err = resetAccountHashes(tx)
+			err = resetAccountHashes(ctx, tx)
 			if err != nil {
 				return err
 			}

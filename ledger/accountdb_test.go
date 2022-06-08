@@ -119,7 +119,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
-	totals, err := accountsTotals(tx, false)
+	totals, err := accountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
 	require.Equal(t, totalOnline, totals.Online.Money.Raw, "mismatching total online money")
 	require.Equal(t, totalOffline, totals.Offline.Money.Raw)
@@ -253,7 +253,7 @@ func TestAccountDBRound(t *testing.T) {
 	accts := ledgertesting.RandomAccounts(20, true)
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	checkAccounts(t, tx, 0, accts)
-	totals, err := accountsTotals(tx, false)
+	totals, err := accountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
 	expectedOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
 	require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestAccountDBRound(t *testing.T) {
 	}
 
 	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, nil, ledgercore.AccountTotals{})
-	actualTotals, err := accountsTotals(tx, false)
+	actualTotals, err := accountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
 
@@ -2938,7 +2938,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	var accts map[basics.Address]basics.AccountData
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	totals, err := accountsTotals(tx, false)
+	totals, err := accountsTotals(context.Background(), tx, false)
 	require.NoError(t, err)
 
 	var baseAccounts lruAccounts
@@ -3680,12 +3680,14 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 		info := catchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
-		err = insertOrReplaceCatchpointFirstStageInfo(dbs.Wdb.Handle, round, &info)
+		err = insertOrReplaceCatchpointFirstStageInfo(
+			context.Background(), dbs.Wdb.Handle, round, &info)
 		require.NoError(t, err)
 	}
 
 	for _, round := range []basics.Round{4, 6, 8} {
-		info, exists, err := selectCatchpointFirstStageInfo(dbs.Rdb.Handle, round)
+		info, exists, err := selectCatchpointFirstStageInfo(
+			context.Background(), dbs.Rdb.Handle, round)
 		require.NoError(t, err)
 		require.True(t, exists)
 
@@ -3695,18 +3697,22 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 		require.Equal(t, infoExpected, info)
 	}
 
-	_, exists, err := selectCatchpointFirstStageInfo(dbs.Rdb.Handle, 7)
+	_, exists, err := selectCatchpointFirstStageInfo(
+		context.Background(), dbs.Rdb.Handle, 7)
 	require.NoError(t, err)
 	require.False(t, exists)
 
-	rounds, err := selectOldCatchpointFirstStageInfoRounds(dbs.Rdb.Handle, 6)
+	rounds, err := selectOldCatchpointFirstStageInfoRounds(
+		context.Background(), dbs.Rdb.Handle, 6)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{4, 6}, rounds)
 
-	err = deleteOldCatchpointFirstStageInfo(dbs.Wdb.Handle, 6)
+	err = deleteOldCatchpointFirstStageInfo(
+		context.Background(), dbs.Wdb.Handle, 6)
 	require.NoError(t, err)
 
-	rounds, err = selectOldCatchpointFirstStageInfoRounds(dbs.Rdb.Handle, 9)
+	rounds, err = selectOldCatchpointFirstStageInfoRounds(
+		context.Background(), dbs.Rdb.Handle, 9)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{8}, rounds)
 }
