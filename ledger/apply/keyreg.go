@@ -49,6 +49,9 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 	// (or, if the voting or selection keys are zero, offline/not-participating)
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
+	if balances.ConsensusParams().EnableStateProofKeyregCheck {
+		record.StateProofID = keyreg.StateProofPK
+	}
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
 		if keyreg.Nonparticipation {
 			if balances.ConsensusParams().SupportBecomeNonParticipatingTransactions {
@@ -76,9 +79,6 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
-		if balances.ConsensusParams().EnableStateProofKeyregCheck {
-			record.StateProofID = keyreg.StateProofPK
-		}
 	}
 
 	// Write the updated entry
