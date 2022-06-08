@@ -2150,7 +2150,7 @@ func TestAppDowngrade(t *testing.T) {
 		update.ClearStateProgram = five.Program
 		dl.fullBlock(&update)
 
-		// Downgrade (allowed for pre 6 programs until MinInnerApplVersion)
+		// Downgrade (allowed for pre 6 programs until MinInnerApplVersion was lowered)
 		update.ClearStateProgram = four.Program
 		if ver <= 32 {
 			dl.fullBlock(update.Noted("actually a repeat of first upgrade"))
