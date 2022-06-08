@@ -17,6 +17,8 @@
 package logic_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -48,6 +50,32 @@ func TestBoxNewDel(t *testing.T) {
 	logic.TestApp(t, `int 24; byte "self"; box_del; int 1`, ep, `no such box`)
 	logic.TestApp(t, `int 24; byte "self"; box_create; byte "self"; box_del; byte "self"; box_del; int 1`, ep,
 		`no such box`)
+}
+
+func TestBoxNewBad(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, ledger := logic.MakeSampleEnv()
+
+	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
+	logic.TestApp(t, `int 999; byte "self"; box_create; int 1`, ep, "write budget")
+	ledger.DelBox(888, "self")
+
+	// In test proto, you get 100 I/O budget per boxref
+	ten := [10]transactions.BoxRef{}
+	txn.Boxes = append(txn.Boxes, ten[:]...) // write budget is now 11*100 = 1100
+	logic.TestApp(t, `int 999; byte "self"; box_create; int 1`, ep)
+	ledger.DelBox(888, "self")
+	logic.TestApp(t, `int 1000; byte "self"; box_create; int 1`, ep)
+	ledger.DelBox(888, "self")
+	logic.TestApp(t, `int 1001; byte "self"; box_create; int 1`, ep, "box size too large")
+
+	logic.TestApp(t, `int 1000; byte "unknown"; box_create; int 1`, ep, "invalid Box reference")
+
+	long := strings.Repeat("x", 65)
+	txn.Boxes = []transactions.BoxRef{{Name: []byte(long)}}
+	logic.TestApp(t, fmt.Sprintf(`int 1000; byte "%s"; box_create; int 1`, long), ep, "name too long")
 }
 
 func TestBoxReadWrite(t *testing.T) {
@@ -86,6 +114,13 @@ func TestBoxReadWrite(t *testing.T) {
 	logic.TestApp(t, `byte "self"; int 0; byte 0x4444; box_replace;
                       byte "self"; int 0; int 4; box_extract;
                       byte 0x44443132; ==`, ep)
+
+	// All bow down to the God of code coverage!
+	ledger.DelBox(888, "self")
+	logic.TestApp(t, `byte "self"; int 1; byte 0x3031; box_replace`, ep,
+		"no such box")
+	logic.TestApp(t, `byte "junk"; int 1; byte 0x3031; box_replace`, ep,
+		"invalid Box reference")
 }
 
 func TestBoxAcrossTxns(t *testing.T) {
@@ -200,6 +235,8 @@ func TestBoxWriteBudget(t *testing.T) {
                       byte "self"; box_del; // deletion means we don't pay for write bytes
                       int 1`, ep)
 	logic.TestApp(t, `byte "other"; box_del; int 1`, ep) // cleanup (self was already deleted in last test)
+	logic.TestApp(t, `byte "other"; box_del; int 1`, ep, "no such box")
+	logic.TestApp(t, `byte "junk"; box_del; int 1`, ep, "invalid Box reference")
 
 	// Create two boxes, that sum to over budget, then test trying to use them together
 	logic.TestApp(t, `int 101; byte "self"; box_create;

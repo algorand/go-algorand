@@ -172,9 +172,6 @@ func TestBlockFields(t *testing.T) {
 		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("LocalDeltas").addValue().addMapKey(),
 		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("LocalDeltas").addValue().addValue().addField("Bytes"),
 		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("ApplyData").addField("EvalDelta").addField("Logs").addValue(),
-
-		// This exception is for a NEW string field.  See transactions/json.go to see how we get b64 output.
-		typePath{}.addField("Payset").addValue().addField("SignedTxnWithAD").addField("SignedTxn").addField("Txn").addField("ApplicationCallTxnFields").addField("Boxes").addValue().addField("Name"),
 	}
 
 	seen := make(map[reflect.Type]bool)
