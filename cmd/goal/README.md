@@ -52,7 +52,7 @@ Here's an example with the following assumptions:
 
 * the callers's account is given by `$ACCOUNT` (see previous answer)
 * the `app-id` is 1
-* the box referenced in the app-call has name `jj`
+* the box referenced in the app-call has name `zeph`
   * this is also app arg 1
 * the box referenced in the app-call will have contents `hi`
   * this is also app arg 2
