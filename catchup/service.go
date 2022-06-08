@@ -406,15 +406,18 @@ func (s *Service) SetPauseAtRound(rnd uint64) (err error) {
 	if !s.dontAllowPauseAtRound {
 		// can only pause when the catchup service is running
 		if s.pauseAtRound != 0 {
-			// only allow resume catchup if either rnd is 0 i.e resume catchup to the latest block
-			if rnd == uint64(0) ||
-				// check if the catchup has finished reaching the pauseAtRound block number
-				// check if next pauseAtRound block number is greater than the latest block on the ledger
-				(uint64(s.ledger.LastRound()) >= s.pauseAtRound && rnd > uint64(s.ledger.LastRound())) {
-				// send the new value of s.pauseAtRound as the signal and update the value at the other end of the channel to avoid race condition
-				s.chanPauseAtRound <- rnd
+			// check if the catchup has finished reaching the pauseAtRound block number
+			if uint64(s.ledger.LastRound()) >= s.pauseAtRound {
+				// only allow resume catchup if either rnd is 0 i.e resume catchup to the latest block
+				// or if next pauseAtRound block number is greater than the latest block on the ledger
+				if rnd == uint64(0) || rnd > uint64(s.ledger.LastRound()) {
+					// send the new value of s.pauseAtRound as the signal and update the value at the other end of the channel to avoid race condition
+					s.chanPauseAtRound <- rnd
+				} else {
+					err = errors.New("not allowed to pause or resume due to an invalid round number")
+				}
 			} else {
-				err = errors.New("not allowed to pause or resume due to an invalid round number")
+				err = errors.New("not allowed to pause or resume because currently catching up to a round")
 			}
 		} else {
 			// takes care of two conditions: when catchup is running as usual and when --round is set before the start
