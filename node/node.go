@@ -1379,11 +1379,11 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		if matchingAccountsKeys[mismatchingAddr] {
 			continue
 		}
-		if warningFlags&bitMismatchingVotingKey == bitMismatchingVotingKey {
+		if warningFlags&bitMismatchingVotingKey != 0 {
 			// If we are closed, upgrade this to info so we don't spam telemetry reporting
-			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
+			if warningFlags&bitAccountIsClosed != 0 {
 				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
-			} else if warningFlags&bitAccountOffline == bitAccountOffline {
+			} else if warningFlags&bitAccountOffline != 0 {
 				// If account is offline, then warn that no registration transaction has been issued or that previous registration transaction is expired.
 				node.log.Warnf("node.VotingKeys: Account is offline.  No registration transaction has been issued or a previous registration transaction has expired")
 			} else {
@@ -1394,11 +1394,11 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 
 			continue
 		}
-		if warningFlags&bitMismatchingSelectionKey == bitMismatchingSelectionKey {
+		if warningFlags&bitMismatchingSelectionKey != 0 {
 			// If we are closed, upgrade this to info so we don't spam telemetry reporting
-			if warningFlags&bitAccountIsClosed == bitAccountIsClosed {
+			if warningFlags&bitAccountIsClosed != 0 {
 				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
-			} else if warningFlags&bitAccountOffline == bitAccountOffline {
+			} else if warningFlags&bitAccountOffline != 0 {
 				// If account is offline, then warn that no registration transaction has been issued or that previous registration transaction is expired.
 				node.log.Warnf("node.VotingKeys: Account is offline.  No registration transaction has been issued or a previous registration transaction has expired")
 			} else {
