@@ -1890,7 +1890,7 @@ func TestInnerAppVersionCalling(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	// 31 allowed inner appls. vFuture enables proto.AllowV4InnerAppls (presumed v33, below)
+	// 31 allowed inner appls. vFuture enables proto.MinInnerApplVersion (presumed v33, below)
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -1994,7 +1994,7 @@ itxn_submit`,
 			createAndOptin.ApplicationArgs = [][]byte{six.Program, six.Program}
 			dl.txn(&createAndOptin, "overspend") // passed the checks, but is an overspend
 		} else {
-			// after 32 proto.AllowV4InnerAppls should be in effect, so calls and optins to v5 are ok
+			// after 32 proto.MinInnerApplVersion should be in effect, so calls and optins to v5 are ok
 			dl.txn(&call, "overspend")         // it tried to execute, but test doesn't bother funding
 			dl.txn(&optin, "overspend")        // it tried to execute, but test doesn't bother funding
 			optin.ForeignApps[0] = v5withv3csp // but we can't optin to a v5 if it has an old csp
@@ -2150,7 +2150,7 @@ func TestAppDowngrade(t *testing.T) {
 		update.ClearStateProgram = five.Program
 		dl.fullBlock(&update)
 
-		// Downgrade (allowed for pre 6 programs until AllowV4InnerAppls)
+		// Downgrade (allowed for pre 6 programs until MinInnerApplVersion)
 		update.ClearStateProgram = four.Program
 		if ver <= 32 {
 			dl.fullBlock(update.Noted("actually a repeat of first upgrade"))
