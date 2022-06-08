@@ -18,10 +18,12 @@ package libgoal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -936,6 +938,30 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 		resp, err = algod.PendingTransactionsByAddr(addr, maxTxns)
 	}
 	return
+}
+
+// VerifyParticipationKey checks if a given participationID is installed in a loop until timeout has elapsed.
+func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID string) error {
+	start := time.Now()
+
+	for {
+		keysResp, err := c.GetParticipationKeys()
+		if err != nil {
+			return err
+		}
+		for _, key := range keysResp {
+			if key.Id == participationID {
+				// Installation successful.
+				return nil
+			}
+		}
+
+		if time.Since(start) > timeout {
+			return errors.New("timeout waiting for key to appear")
+		}
+
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // AddParticipationKey takes a participation key file and sends it to the node.
