@@ -214,7 +214,6 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 
 	// Start the service ( dummy )
 	syncer.testStart()
-	syncer.chanPauseAtRound = make(chan uint64)
 
 	// Pause on block number 3
 	rnd := uint64(3)

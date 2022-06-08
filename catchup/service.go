@@ -129,7 +129,9 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 func (s *Service) Start() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.chanPauseAtRound = make(chan uint64)
+	if s.chanPauseAtRound == nil {
+		s.chanPauseAtRound = make(chan uint64, 1)
+	}
 	s.dontAllowPauseAtRound = false
 	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
@@ -421,7 +423,11 @@ func (s *Service) SetPauseAtRound(rnd uint64) (err error) {
 			}
 		} else {
 			// takes care of two conditions: when catchup is running as usual and when --round is set before the start
-			s.pauseAtRound = rnd
+			// check if the channel has been set up, if not, then set it up and send the round number
+			if s.chanPauseAtRound == nil {
+				s.chanPauseAtRound = make(chan uint64, 1)
+			}
+			s.chanPauseAtRound <- rnd
 		}
 	} else {
 		err = errors.New("not allowed to pause")
@@ -512,9 +518,16 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			s.handleUnsupportedRound(nextRound)
 			break
 		}
+
 		// pause here until resume catchup sends a signal
 		if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
 			s.pauseAtRound = <-s.chanPauseAtRound
+		} else if s.pauseAtRound == uint64(0) {
+			// best effort when the user wants to pause the catchup service
+			select {
+			case s.pauseAtRound = <-s.chanPauseAtRound:
+			default:
+			}
 		}
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
@@ -547,9 +560,16 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 					return
 				}
 				delete(completedRounds, nextRound)
+
 				// pause here until resume catchup sends a signal
 				if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
 					s.pauseAtRound = <-s.chanPauseAtRound
+				} else if s.pauseAtRound == uint64(0) {
+					// best effort when the user wants to pause the catchup service
+					select {
+					case s.pauseAtRound = <-s.chanPauseAtRound:
+					default:
+					}
 				}
 				currentRoundComplete := make(chan bool, 2)
 				// len(taskCh) + (# pending writes to completed) increases by 1
