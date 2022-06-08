@@ -365,6 +365,7 @@ const (
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
+	deleteStateProofByPK   = `DELETE FROM StateProofKeys WHERE pk=?`
 	updateRollingFieldsSQL = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
