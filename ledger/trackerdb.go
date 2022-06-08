@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"github.com/algorand/go-algorand/config"
 	"io"
@@ -470,15 +469,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return err
 	}
 	if round != 0 {
-		catchpointFilePath := filepath.Join(tu.dbPathPrefix, CatchpointDirName)
-		catchpointFilePath = filepath.Join(
-			catchpointFilePath,
+		relCatchpointFilePath := filepath.Join(
+			CatchpointDirName,
 			makeCatchpointFilePath(basics.Round(round)))
-		err = os.Remove(catchpointFilePath)
-		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
+		err = removeSingleCatchpointFileFromDisk(tu.dbPathPrefix, relCatchpointFilePath)
+		if err != nil {
 			return err
 		}
-
 		err = writeCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint, 0)
 		if err != nil {
 			return err
