@@ -43,6 +43,7 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
+	// LookupKv(rnd basics.Round, key string) (*string, error)
 }
 
 // FoundAddress is a wrapper for an address and a boolean.
@@ -142,13 +143,28 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 	return accountResourceMap[address][Creatable{aidx, ctype}], nil
 }
 
-var tbd = "TBD"
+// var tbd = "TBD"
 
 func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) (*string, error) {
-	// No need to worry about locks when populating indexer info
-	// r, err := l.lookupResource()
-	// return l.accts.LookupKv(rnd, key)
-	return &tbd, nil
+	// check to see if the account data in the cache.
+	// if creatableMap, ok := l.roundResources.Resources[address]; ok {
+	// 	if resource, ok := creatableMap[Creatable{aidx, ctype}]; ok {
+	// 		return resource, nil
+	// 	}
+	// }
+
+	// accountResourceMap, err :=
+	// 	l.il.LookupResources(map[basics.Address]map[Creatable]struct{}{address: {{aidx, ctype}: {}}})
+	// if err != nil {
+	// 	return ledgercore.AccountResource{}, err
+	// }
+
+	// return accountResourceMap[address][Creatable{aidx, ctype}], nil
+
+	// r, err := l.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+	// return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+
+	return nil, nil
 }
 
 // GetCreatorForRound is part of LedgerForEvaluator interface.
