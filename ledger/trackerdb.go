@@ -418,6 +418,27 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 	return tu.setVersion(ctx, tx, 6)
 }
 
+func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Context, tx *sql.Tx) error {
+	// Delete an unfinished catchpoint if there is one.
+	round, err := readCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint)
+	if err != nil {
+		return err
+	}
+	if round == 0 {
+		return nil
+	}
+
+	relCatchpointFilePath := filepath.Join(
+		CatchpointDirName,
+		makeCatchpointFilePath(basics.Round(round)))
+	err = removeSingleCatchpointFileFromDisk(tu.dbPathPrefix, relCatchpointFilePath)
+	if err != nil {
+		return err
+	}
+
+	return writeCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint, 0)
+}
+
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
 // adding a new onlineaccounts table
 // TODO: onlineaccounts: upgrade as needed after switching to the final table version
@@ -463,6 +484,10 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}
 
+	err = tu.deleteUnfinishedCatchpoint(ctx, tx)
+	if err != nil {
+		return err
+	}
 	err = accountsCreateCatchpointFirstStageInfoTable(ctx, tx)
 	if err != nil {
 		return err
