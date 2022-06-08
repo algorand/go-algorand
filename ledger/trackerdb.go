@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"errors"
 	"github.com/algorand/go-algorand/config"
 	"io"
 	"os"
@@ -463,6 +464,26 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}
 
+	// Delete an unfinished catchpoint if there is one.
+	round, err := readCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint)
+	if err != nil {
+		return err
+	}
+	if round != 0 {
+		catchpointFilePath := filepath.Join(tu.dbPathPrefix, CatchpointDirName)
+		catchpointFilePath = filepath.Join(
+			catchpointFilePath,
+			makeCatchpointFilePath(basics.Round(round)))
+		err = os.Remove(catchpointFilePath)
+		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+
+		err = writeCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint, 0)
+		if err != nil {
+			return err
+		}
+	}
 	err = accountsCreateCatchpointFirstStageInfoTable(ctx, tx)
 	if err != nil {
 		return err
