@@ -244,12 +244,11 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round) er
 	}
 
 	// First, delete the unfinished data file.
-	catchpointDataFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
-	catchpointDataFilePath = filepath.Join(
-		catchpointDataFilePath,
+	relCatchpointDataFilePath := filepath.Join(
+		CatchpointDirName,
 		makeCatchpointDataFilePath(dbRound))
-	err = os.Remove(catchpointDataFilePath)
-	if (err != nil) && !errors.Is(err, os.ErrNotExist) {
+	err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+	if err != nil {
 		return err
 	}
 
@@ -264,12 +263,11 @@ func (ct *catchpointTracker) finishCatchpointsAfterCrash(catchpointLookback uint
 
 	for _, record := range records {
 		// First, delete the unfinished catchpoint file.
-		catchpointFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
-		catchpointFilePath = filepath.Join(
-			catchpointFilePath,
+		relCatchpointFilePath := filepath.Join(
+			CatchpointDirName,
 			makeCatchpointFilePath(basics.Round(record.round)))
-		err = os.Remove(catchpointFilePath)
-		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
+		err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
+		if err != nil {
 			return err
 		}
 
@@ -846,12 +844,10 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(maxRoundToDelete basics.
 	}
 
 	for _, round := range rounds {
-		catchpointDataFilePath := filepath.Join(ct.dbDirectory, CatchpointDirName)
-		catchpointDataFilePath =
-			filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(round))
-
-		err = os.Remove(catchpointDataFilePath)
-		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
+		relCatchpointDataFilePath :=
+			filepath.Join(CatchpointDirName, makeCatchpointDataFilePath(round))
+		err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+		if err != nil {
 			return err
 		}
 	}
@@ -1180,7 +1176,7 @@ func (ct *catchpointTracker) recordCatchpointFile(e db.Executable, round basics.
 			return
 		}
 	} else {
-		err = os.Remove(relCatchpointFilePath)
+		err = removeSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
 		if err != nil {
 			ct.log.Warnf("catchpointTracker.recordCatchpointFile() unable to remove file (%s): %v", relCatchpointFilePath, err)
 			return
