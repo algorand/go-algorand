@@ -129,9 +129,6 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 func (s *Service) Start() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	if s.chanPauseAtRound == nil {
-		s.chanPauseAtRound = make(chan uint64, 1)
-	}
 	s.dontAllowPauseAtRound = false
 	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
