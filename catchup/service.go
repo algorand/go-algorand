@@ -137,7 +137,9 @@ func (s *Service) Start() {
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
 	s.cancel()
-	close(s.chanPauseAtRound)
+	if s.chanPauseAtRound != nil {
+		close(s.chanPauseAtRound)
+	}
 	<-s.done
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
