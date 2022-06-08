@@ -128,7 +128,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 		partkeyResponse, _, err := client.GenParticipationKeys(account, curRound-10, curRound+1000, 0)
 		a.NoError(err, "should be no errors when creating many partkeys, creation number %v", i)
 		a.Equal(account, partkeyResponse.Address, "successful partkey creation should echo account")
-		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
+		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 		a.NoError(err, "should be able to make go online tx %v", i)
 		wh, err := client.GetUnencryptedWalletHandle()
 		a.NoError(err, "should be able to get unencrypted wallet handle")
@@ -149,7 +149,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 		a.NoError(err, "should be no errors when creating many partkeys, creation number %v", i)
 		a.Equal(account, partkeyResponse.Address, "successful partkey creation should echo account")
 
-		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
+		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 		a.NoError(err, "should be able to make go online tx %v", i)
 		wh, err := client.GetUnencryptedWalletHandle()
 		a.NoError(err, "should be able to get unencrypted wallet handle")

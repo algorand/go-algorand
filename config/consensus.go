@@ -910,6 +910,9 @@ func initConsensusProtocols() {
 	// Enable application support
 	v24.Application = true
 
+	// Although Inners were not allowed yet, this gates downgrade checks, which must be allowed
+	v24.MinInnerApplVersion = 6
+
 	// Enable rekeying
 	v24.SupportRekeying = true
 
@@ -1090,7 +1093,6 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
-	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true

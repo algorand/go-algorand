@@ -1033,13 +1033,13 @@ func (cx *EvalContext) step() error {
 	return nil
 }
 
-// oneBlank is a boring stack provided to deets.Cost during checkStep. It is
+// blankStack is a boring stack provided to deets.Cost during checkStep. It is
 // good enough to allow Cost() to not crash. It would be incorrect to provide
 // this stack if there were linear cost opcodes before backBranchEnabledVersion,
 // because the static cost would be wrong. But then again, a static cost model
 // wouldn't work before backBranchEnabledVersion, so such an opcode is already
 // unacceptable. TestLinearOpcodes ensures.
-var oneBlank = []stackValue{{Bytes: []byte{}}}
+var blankStack = make([]stackValue, 5)
 
 func (cx *EvalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
@@ -1055,7 +1055,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
 	}
-	opcost := deets.Cost(cx.program, cx.pc, oneBlank)
+	opcost := deets.Cost(cx.program, cx.pc, blankStack)
 	if opcost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}
@@ -4764,56 +4764,52 @@ func opBase64Decode(cx *EvalContext) error {
 	cx.stack[last].Bytes = bytes
 	return nil
 }
-func hasDuplicateKeys(jsonText []byte) (bool, map[string]json.RawMessage, error) {
+
+func isPrimitiveJSON(jsonText []byte) (bool, error) {
 	dec := json.NewDecoder(bytes.NewReader(jsonText))
-	parsed := make(map[string]json.RawMessage)
 	t, err := dec.Token()
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 	t, ok := t.(json.Delim)
 	if !ok || t.(json.Delim).String() != "{" {
-		return false, nil, fmt.Errorf("only json object is allowed")
+		return true, nil
 	}
-	for dec.More() {
-		var value json.RawMessage
-		// get JSON key
-		key, err := dec.Token()
-		if err != nil {
-			return false, nil, err
-		}
-		// end of json
-		if key == '}' {
-			break
-		}
-		// decode value
-		err = dec.Decode(&value)
-		if err != nil {
-			return false, nil, err
-		}
-		// check for duplicates
-		if _, ok := parsed[key.(string)]; ok {
-			return true, nil, nil
-		}
-		parsed[key.(string)] = value
-	}
-	return false, parsed, nil
+	return false, nil
 }
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
-	if !json.Valid(jsonText) {
+	// parse JSON with Algorand's standard JSON library
+	var parsed map[interface{}]json.RawMessage
+	err := protocol.DecodeJSON(jsonText, &parsed)
+
+	if err != nil {
+		// if the error was caused by duplicate keys
+		if strings.Contains(err.Error(), "cannot decode into a non-pointer value") {
+			return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
+		}
+
+		// if the error was caused by non-json object
+		if strings.Contains(err.Error(), "read map - expect char '{' but got char") {
+			return nil, fmt.Errorf("invalid json text, only json object is allowed")
+		}
+
 		return nil, fmt.Errorf("invalid json text")
 	}
-	// parse json text and check for duplicate keys
-	hasDuplicates, parsed, err := hasDuplicateKeys(jsonText)
-	if hasDuplicates {
-		return nil, fmt.Errorf("invalid json text, duplicate keys not allowed")
+
+	// check whether any keys are not strings
+	stringMap := make(map[string]json.RawMessage)
+	for k, v := range parsed {
+		key, ok := k.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid json text")
+		}
+		stringMap[key] = v
 	}
-	if err != nil {
-		return nil, fmt.Errorf("invalid json text, %v", err)
-	}
-	return parsed, nil
+
+	return stringMap, nil
 }
+
 func opJSONRef(cx *EvalContext) error {
 	// get json key
 	last := len(cx.stack) - 1
@@ -4837,6 +4833,17 @@ func opJSONRef(cx *EvalContext) error {
 	var stval stackValue
 	_, ok = parsed[key]
 	if !ok {
+		// if the key is not found, first check whether the JSON text is the null value
+		// by checking whether it is a primitive JSON value. Any other primitive
+		// (or array) would have thrown an error previously during `parseJSON`.
+		isPrimitive, err := isPrimitiveJSON(cx.stack[last].Bytes)
+		if err == nil && isPrimitive {
+			err = fmt.Errorf("invalid json text, only json object is allowed")
+		}
+		if err != nil {
+			return fmt.Errorf("error while parsing JSON text, %v", err)
+		}
+
 		return fmt.Errorf("key %s not found in JSON text", key)
 	}
 
