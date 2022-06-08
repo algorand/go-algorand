@@ -446,6 +446,9 @@ type ConsensusParams struct {
 	// available for lookup for smart contracts and smart signatures.
 	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
 	DeeperBlockHeaderHistory uint64
+
+	// ClearOfflineStateProofID tells the ledger to clear the account's StateProofID when a keyreg transaction marks it offline.
+	ClearOfflineStateProofID bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1163,6 +1166,7 @@ func initConsensusProtocols() {
 	vFuture.UnifyInnerTxIDs = true
 
 	vFuture.EnableSHA256TxnCommitmentHeader = true
+	vFuture.ClearOfflineStateProofID = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
