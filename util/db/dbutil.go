@@ -207,13 +207,7 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
-	return db.atomic(fn, extras...)
-}
-
-// Atomic executes a piece of code with respect to the database atomically.
-// For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
+func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...interface{}) (err error) {
 	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
@@ -234,7 +228,6 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 
 	var tx *sql.Tx
 	var conn *sql.Conn
-	ctx := context.Background()
 
 	for i := 0; (i == 0) || dbretry(err); i++ {
 		if i > 0 {
@@ -304,6 +297,10 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Now().Sub(atomicDeadline))
 	}
 	return
+}
+
+func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) error {
+	return db.AtomicContext(context.Background(), fn, extras)
 }
 
 // ResetTransactionWarnDeadline allow the atomic function to extend it's warn deadline by setting a new deadline.
