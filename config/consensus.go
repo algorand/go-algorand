@@ -332,13 +332,13 @@ type ConsensusParams struct {
 	// []byte values stored in LocalState or GlobalState key/value stores
 	SchemaBytesMinBalance uint64
 
-	// Maximum length of a box (does not include name length)
+	// Maximum length of a box (Does not include name/key length. That is capped by MaxAppKeyLen)
 	MaxBoxSize uint64
 
-	// MBR per box created
+	// MBR per box created (this accounts for a bit of overhead used to store the box bytes)
 	BoxFlatMinBalance uint64
 
-	// MBR per byte in a box
+	// MBR per byte of box storage. MBR is incremented by BoxByteMinBalance * (len(name)+len(value))
 	BoxByteMinBalance uint64
 
 	// Number of box references allowed
