@@ -1994,7 +1994,7 @@ itxn_submit`,
 			createAndOptin.ApplicationArgs = [][]byte{six.Program, six.Program}
 			dl.txn(&createAndOptin, "overspend") // passed the checks, but is an overspend
 		} else {
-			// after 32 proto.MinInnerApplVersion should be in effect, so calls and optins to v5 are ok
+			// after 32 proto.MinInnerApplVersion is lowered to 4, so calls and optins to v5 are ok
 			dl.txn(&call, "overspend")         // it tried to execute, but test doesn't bother funding
 			dl.txn(&optin, "overspend")        // it tried to execute, but test doesn't bother funding
 			optin.ForeignApps[0] = v5withv3csp // but we can't optin to a v5 if it has an old csp
