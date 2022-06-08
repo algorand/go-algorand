@@ -319,6 +319,67 @@ func TestParticipation_DeleteExpired(t *testing.T) {
 	checkExpired(registry.GetAll())
 }
 
+func TestParticipation_CleanupTablesAfterDeleteExpired(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry, dbfile := getRegistryImpl(t, false, true) // inMem=false, erasable=true
+	defer registryCloseTest(t, registry, dbfile)
+
+	keyDilution := 1
+	for i := 10; i < 20; i++ {
+		p := makeTestParticipation(a, i, 1, basics.Round(i), uint64(keyDilution))
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.Equal(p.ID(), id)
+
+		err = registry.AppendKeys(id, p.StateProofSecrets.GetAllKeys())
+		a.NoError(err)
+	}
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	latestRound := basics.Round(50)
+	err := registry.DeleteExpired(latestRound, config.Consensus[protocol.ConsensusCurrentVersion])
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+	var numOfRecords int
+	// make sure tables are clean
+	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow(`select count(*) from Keysets`)
+		err = row.Scan(&numOfRecords)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+		return nil
+	})
+
+	a.NoError(err)
+	a.Equal(0, numOfRecords)
+
+	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow(`select count(*) from Rolling`)
+		err = row.Scan(&numOfRecords)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+		return nil
+	})
+	a.NoError(err)
+	a.Equal(0, numOfRecords)
+
+	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		row := tx.QueryRow(`select count(*) from stateproofkeys`)
+		err = row.Scan(&numOfRecords)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+		return nil
+	})
+	a.NoError(err)
+	a.Equal(0, numOfRecords)
+}
+
 // Make sure the register function properly sets effective first/last for all effected records.
 func TestParticipation_Register(t *testing.T) {
 	partitiontest.PartitionTest(t)

@@ -202,6 +202,11 @@ func (d *deleteOp) apply(db *participationDB) error {
 			return err
 		}
 
+		_, err = tx.Exec(deleteStateProofByPK, pk)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 	return err
