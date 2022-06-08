@@ -227,16 +227,25 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
 
-		// Change the rnd number and test ResumeCatchup
+		// Change the rnd number and test resume catchup
 		rnd = uint64(7)
 
 		// Testing Resume Catchup functionality i.e resuming until block number 7
-		syncer.ResumeCatchup(rnd)
+		syncer.SetPauseAtRound(rnd)
 		time.Sleep(1000 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
 
-		// similar to running syncer.stop()
+		// Testing Resume Catchup functionality i.e resuming until latest block
+		rnd = uint64(10)
+
+		// Testing Resume Catchup functionality i.e resuming catchup altogether
+		syncer.SetPauseAtRound(uint64(0))
+		time.Sleep(1000 * time.Millisecond)
+		// Asserts that the last block is the one we expect
+		require.Equal(t, rnd, uint64(local.LastRound()))
+
+		// Similar to running syncer.stop()
 		syncer.cancel()
 		close(syncer.chanPauseAtRound)
 	}()

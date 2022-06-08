@@ -406,33 +406,22 @@ func (s *Service) SetPauseAtRound(rnd uint64) (err error) {
 	if !s.dontAllowPauseAtRound {
 		// can only pause when the catchup service is running
 		if s.pauseAtRound != 0 {
-			err = errors.New("not allowed to pause when catchup already has a pause round number, try ResumeCatchup")
+			// only allow resume catchup if either rnd is 0 i.e resume catchup to the latest block
+			if rnd == uint64(0) ||
+				// check if the catchup has finished reaching the pauseAtRound block number
+				// check if next pauseAtRound block number is greater than the latest block on the ledger
+				(uint64(s.ledger.LastRound()) >= s.pauseAtRound && rnd > uint64(s.ledger.LastRound())) {
+				// send the new value of s.pauseAtRound as the signal and update the value at the other end of the channel to avoid race condition
+				s.chanPauseAtRound <- rnd
+			} else {
+				err = errors.New("not allowed to pause or resume due to an invalid round number")
+			}
 		} else {
+			// takes care of two conditions: when catchup is running as usual and when --round is set before the start
 			s.pauseAtRound = rnd
 		}
 	} else {
 		err = errors.New("not allowed to pause")
-	}
-	return
-}
-
-// ResumeCatchup resumes the catchup service to continue catching up to the latest block or to a provided block number
-func (s *Service) ResumeCatchup(rnd uint64) (err error) {
-	// check if resume functionality is enabled
-	if !s.dontAllowPauseAtRound {
-		// only allow resumecatchup if either rnd is 0 i.e resume catchup to the latest block
-		// check if the catchup has finished reaching the pauseAtRound block number
-		// check if next pauseAtRound block number is greater than the latest block on the ledger
-		if (rnd == uint64(0) && s.pauseAtRound > uint64(0)) ||
-			(s.pauseAtRound > uint64(0) && uint64(s.ledger.LastRound()) >= s.pauseAtRound &&
-				rnd > uint64(s.ledger.LastRound())) {
-			// send the new value of s.pauseAtRound as the signal and update the value at the other end of the channel to avoid race condition
-			s.chanPauseAtRound <- rnd
-		} else {
-			err = errors.New("not allowed to resume due to invalid round number")
-		}
-	} else {
-		err = errors.New("not allowed to resume")
 	}
 	return
 }
