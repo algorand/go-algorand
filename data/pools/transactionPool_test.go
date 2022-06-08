@@ -1392,13 +1392,11 @@ func TestTStateProofLogging(t *testing.T) {
 	proof := generateProofForTesting(uint64(round), provenWeight, voters.Participants, voters.Tree, allKeys, voters.TotalWeight.Raw, t)
 
 	// Set the transaction with the SP
-	uniqueTxID := 0
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
 	stxn.Txn.FirstValid = 512
 	stxn.Txn.LastValid = 1024
-	stxn.Txn.Note = []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)}
 	stxn.Txn.GenesisHash = mockLedger.GenesisHash()
 	stxn.Txn.StateProofIntervalLatestRound = 512
 	stxn.Txn.StateProofType = protocol.StateProofBasic
@@ -1406,6 +1404,9 @@ func TestTStateProofLogging(t *testing.T) {
 	stxn.Txn.StateProofMessage = stateproofmsg.Message{
 		LnProvenWeight: 1,
 	}
+
+	err = stxn.Txn.WellFormed(transactions.SpecialAddresses{}, proto)
+	require.NoError(t, err)
 
 	// Add it to the transaction pool and assemble the block
 	eval, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000)
