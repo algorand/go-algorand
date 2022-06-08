@@ -3628,7 +3628,7 @@ func BenchmarkJsonRef(b *testing.B) {
 		{"key0", "key1"},
 		{"key0"},
 	}
-	value_fmt := [][]string{
+	valueFmt := [][]string{
 		{"JSONString"},
 		{"JSONString", "JSONString"},
 		{"JSONString", "JSONString"},
@@ -3639,7 +3639,7 @@ func BenchmarkJsonRef(b *testing.B) {
 	benches := [][]string{}
 	for i, label := range jsonLabels {
 		for j, key := range keys[i] {
-			prog := fmt.Sprintf(`byte "%s"; byte "%s"; json_ref %s; pop;`, jsonSamples[i], key, value_fmt[i][j])
+			prog := fmt.Sprintf(`byte "%s"; byte "%s"; json_ref %s; pop;`, jsonSamples[i], key, valueFmt[i][j])
 
 			// indicate long key
 			keyLabel := key
@@ -3664,7 +3664,6 @@ func BenchmarkJsonRef(b *testing.B) {
 
 func TestEvalVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	text := `intcblock 1
@@ -4919,6 +4918,7 @@ func TestIsPrimitive(t *testing.T) {
 
 func TestProtocolParseDuplicateErrMsg(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": "algo", "key0": "algo"}`
 	var parsed map[string]json.RawMessage
 	err := protocol.DecodeJSON([]byte(text), &parsed)
