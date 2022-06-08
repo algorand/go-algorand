@@ -3295,12 +3295,13 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.Error(t, err)
 
-	// check errors: new non-online with non-empty voting data
-	deltaB.newStatus[0] = basics.Offline
-	deltaB.newAcct[0].VoteFirstValid = 1
-	updates.deltas = []onlineAccountDelta{deltaB}
-	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
+	// TODO: restore after migrating offline accounts and clearing state proof PK
+	// // check errors: new non-online with non-empty voting data
+	// deltaB.newStatus[0] = basics.Offline
+	// deltaB.newAcct[0].VoteFirstValid = 1
+	// updates.deltas = []onlineAccountDelta{deltaB}
+	// _, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	// require.Error(t, err)
 
 	// check errors: new online with empty voting data
 	deltaD.newStatus[0] = basics.Online
