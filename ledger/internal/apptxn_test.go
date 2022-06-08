@@ -1890,7 +1890,7 @@ func TestInnerAppVersionCalling(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	// 31 allowed inner appls. vFuture enables proto.MinInnerApplVersion (presumed v33, below)
+	// 31 allowed inner appls. v33 lowered proto.MinInnerApplVersion
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
