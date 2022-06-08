@@ -172,6 +172,8 @@ function get_updater_url() {
         UNAME=$(uname -m)
         if [[ "${UNAME}" = "x86_64" ]]; then
             ARCH="amd64"
+        elif [[ "${UNAME}" = "arm64" ]]; then
+            ARCH="arm64"
         else
             echo "This platform ${UNAME} is not supported by updater."
             exit 1
