@@ -229,6 +229,15 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	acct, err = mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
 	require.False(t, acct.StateProofID.IsEmpty())
+
+	// go offline: StateProofID should be empty
+	emptyKeyreg := transactions.KeyregTxnFields{}
+	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	require.NoError(t, err)
+
+	acct, err = mockBal.Get(tx.Src(), false)
+	require.NoError(t, err)
+	require.True(t, acct.StateProofID.IsEmpty())
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
