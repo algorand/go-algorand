@@ -1286,7 +1286,7 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 	// want to create different Txns, run on all of these cases the check, and have an expected result
 	cases := []stateproofTxnTestCase{
 		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
-		/* 0 */ {expectedError: nil, StateProofInterval: 256, sender: StateProofSender},
+		/* 1 */ {expectedError: nil, StateProofInterval: 256, sender: StateProofSender},
 	}
 	for i, testCase := range cases {
 		testCase := testCase
