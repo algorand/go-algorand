@@ -662,3 +662,49 @@ func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcast
 		}
 	}
 }
+
+func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	s.advanceLatest(proto.StateProofInterval)
+
+	for i := 0; i < len(keys); i++ {
+		// Expect all signatures to be broadcast.
+		_ = <-s.sigmsg // todo: think about case where this is blocked.
+	}
+
+	txn := (<-s.txmsg).Txn // todo: think about case where this is blocked.
+	a.Zero(txn.Fee)
+	a.Zero(len(txn.Note))
+	a.Equal(transactions.StateProofSender, txn.Sender)
+
+	// ensuring other Txn types aren't filled accidentally.
+	a.Zero(txn.KeyregTxnFields)
+	a.Zero(txn.PaymentTxnFields)
+	a.Zero(txn.AssetConfigTxnFields)
+	a.Zero(txn.AssetTransferTxnFields)
+	a.Zero(txn.AssetFreezeTxnFields)
+	a.Zero(txn.ApplicationCallTxnFields)
+
+	// check message contents:
+	a.NotZero(txn.Message) // todo
+
+}
