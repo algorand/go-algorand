@@ -436,15 +436,15 @@ func (s *Service) PauseOrResume(rnd uint64) (err error) {
 }
 
 func (s *Service) updatePauseAtRound(nextRound basics.Round) {
-	// pause here until resume catchup sends a signal
+	// check for pending user provided round
+	select {
+	case s.pauseAtRound = <-s.chanPauseAtRound:
+	default:
+	}
+
+	// once the desired round is reached pause until the user provides a new round
 	if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
 		s.pauseAtRound = <-s.chanPauseAtRound
-	} else if s.pauseAtRound == uint64(0) {
-		// best effort when the user wants to pause the catchup service
-		select {
-		case s.pauseAtRound = <-s.chanPauseAtRound:
-		default:
-		}
 	}
 }
 
