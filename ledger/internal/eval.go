@@ -872,7 +872,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 			txWithoutGroup := txn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
@@ -982,7 +982,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			txWithoutGroup := txad.SignedTxn.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
@@ -1167,7 +1167,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = balances.applyStateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.StateProofMessage, tx.Header.FirstValid, eval.validate)
+			err = balances.applyStateProof(tx.StateProofIntervalLatestRound, tx.StateProofType, tx.StateProof, tx.Message, tx.Header.FirstValid, eval.validate)
 		}
 
 	default:

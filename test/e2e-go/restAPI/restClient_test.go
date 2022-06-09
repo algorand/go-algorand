@@ -554,7 +554,8 @@ func TestAccountParticipationInfo(t *testing.T) {
 	lastRound := basics.Round(params.LastRound + 1000)
 	dilution := uint64(100)
 	var stateproof merklesignature.Verifier
-	stateproof[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v31)
+	stateproof.KeyLifetime = merklesignature.KeyLifetimeDefault
+	stateproof.Commitment[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v31)
 
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
@@ -579,7 +580,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 			VoteKeyDilution: dilution,
 			VoteFirst:       firstRound,
 			VoteLast:        lastRound,
-			StateProofPK:    stateproof,
+			StateProofPK:    stateproof.Commitment,
 		},
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
@@ -1160,7 +1161,7 @@ func TestStateProofParticipationKeysAPI(t *testing.T) {
 	actual := [merklesignature.MerkleSignatureSchemeRootSize]byte{}
 	a.NotNil(pRoot[0].Key.StateProofKey)
 	copy(actual[:], *pRoot[0].Key.StateProofKey)
-	a.Equal(partkey.StateProofSecrets.GetVerifier()[:], actual[:])
+	a.Equal(partkey.StateProofSecrets.GetVerifier().Commitment[:], actual[:])
 }
 
 func TestNilStateProofInParticipationInfo(t *testing.T) {

@@ -380,6 +380,11 @@
                 "result": {
                   "description": "base64 encoded program bytes",
                   "type": "string"
+                },
+                "sourcemap": {
+                  "description": "JSON of the source map",
+                  "properties": {},
+                  "type": "object"
                 }
               },
               "required": [
@@ -440,6 +445,16 @@
           }
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
+      },
+      "LightBlockHeaderProofResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LightBlockHeaderProof"
+            }
+          }
+        },
+        "description": "Proof of a light block header."
       },
       "NodeStatusResponse": {
         "content": {
@@ -669,7 +684,7 @@
             }
           }
         },
-        "description": "StateProof transaction."
+        "description": "StateProofResponse wraps the StateProof type in a response."
       },
       "SupplyResponse": {
         "content": {
@@ -1333,8 +1348,16 @@
             },
             "type": "array"
           },
+          "budget-added": {
+            "description": "Budget added during execution of app call transaction.",
+            "type": "integer"
+          },
+          "budget-consumed": {
+            "description": "Budget consumed during execution of app call transaction.",
+            "type": "integer"
+          },
           "cost": {
-            "description": "Execution cost of app call transaction",
+            "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
             "type": "integer"
           },
           "disassembly": {
@@ -1437,6 +1460,31 @@
         "required": [
           "key",
           "value"
+        ],
+        "type": "object"
+      },
+      "LightBlockHeaderProof": {
+        "description": "Proof of membership and position of a light block header.",
+        "properties": {
+          "index": {
+            "description": "The index of the light block header in the vector commitment tree",
+            "type": "integer"
+          },
+          "proof": {
+            "description": "The encoded proof.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "treedepth": {
+            "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index",
+          "proof",
+          "treedepth"
         ],
         "type": "object"
       },
@@ -1571,24 +1619,24 @@
         "type": "array"
       },
       "StateProof": {
-        "description": "StateProof transaction.",
+        "description": "Represents a state proof and its corresponding message",
         "properties": {
-          "StateProof": {
-            "description": "The encoded StateProof certificate.",
+          "Message": {
+            "description": "The encoded message.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           },
-          "StateProofMessage": {
-            "description": "The encoded StateProof message.",
+          "StateProof": {
+            "description": "The encoded StateProof for the message.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           }
         },
         "required": [
-          "StateProof",
-          "StateProofMessage"
+          "Message",
+          "StateProof"
         ],
         "type": "object"
       },
@@ -2615,6 +2663,72 @@
         "summary": "Get the block for the given round."
       }
     },
+    "/v2/blocks/{round}/lightheader/proof": {
+      "get": {
+        "operationId": "GetProofForLightBlockHeader",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LightBlockHeaderProofResponse"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not create proof since some data is missing"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets a proof for a given light block header inside a state proof commitment"
+      }
+    },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
       "get": {
         "operationId": "GetProof",
@@ -3413,6 +3527,72 @@
         ]
       }
     },
+    "/v2/stateproofs/{round}": {
+      "get": {
+        "operationId": "StateProof",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/StateProofResponse"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find a state proof that covers a given round"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "get a state proof that covers a given round"
+      }
+    },
     "/v2/status": {
       "get": {
         "operationId": "GetStatus",
@@ -3678,6 +3858,16 @@
       "post": {
         "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "operationId": "TealCompile",
+        "parameters": [
+          {
+            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
+            "in": "query",
+            "name": "sourcemap",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "text/plain": {
@@ -3703,6 +3893,11 @@
                     "result": {
                       "description": "base64 encoded program bytes",
                       "type": "string"
+                    },
+                    "sourcemap": {
+                      "description": "JSON of the source map",
+                      "properties": {},
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -3760,7 +3955,7 @@
     },
     "/v2/teal/disassemble": {
       "post": {
-        "description": "Given the base64 encoded program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "description": "Given the program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "operationId": "TealDisassemble",
         "requestBody": {
           "content": {
@@ -4335,72 +4530,6 @@
           }
         },
         "summary": "Get a specific pending transaction."
-      }
-    },
-    "/v2/transactions/state-proof/{round}": {
-      "get": {
-        "operationId": "StateProof",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "round",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/StateProofResponse"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "State proof transaction not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Temporarily Unavailable"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Get the state proof transaction for a given round"
       }
     },
     "/versions": {

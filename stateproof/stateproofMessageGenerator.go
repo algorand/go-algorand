@@ -35,32 +35,30 @@ var errOutOfBound = errors.New("request pos is out of array bounds")
 var errProvenWeightOverflow = errors.New("overflow computing provenWeight")
 
 // The Array implementation for block headers, required to build the merkle tree from them.
-//msgp:ignore
-type blockHeadersArray struct {
-	blockHeaders []bookkeeping.BlockHeader
-}
+//msgp:ignore blockHeadersArray
+type blockHeadersArray []bookkeeping.LightBlockHeader
 
 func (b blockHeadersArray) Length() uint64 {
-	return uint64(len(b.blockHeaders))
+	return uint64(len(b))
 }
 
 func (b blockHeadersArray) Marshal(pos uint64) (crypto.Hashable, error) {
 	if pos >= b.Length() {
 		return nil, fmt.Errorf("%w: pos - %d, array length - %d", errOutOfBound, pos, b.Length())
 	}
-	return b.blockHeaders[pos].ToSha256BlockHeader(), nil
+	return b[pos], nil
 }
 
 // GenerateStateProofMessage returns a stateproof message that contains all the necessary data for proving on Algorand's state.
 // In addition, it also includes the trusted data for the next stateproof verification
-func GenerateStateProofMessage(l Ledger, votersRound uint64, latestRoundHeader bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
+func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestRoundHeader bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
 	proto := config.Consensus[latestRoundHeader.CurrentProtocol]
-	commitment, err := createHeaderCommitment(l, proto, latestRoundHeader)
+	commitment, err := createHeaderCommitment(l, &proto, &latestRoundHeader)
 	if err != nil {
 		return stateproofmsg.Message{}, err
 	}
 
-	lnProvenWeight, err := calculateLnProvenWeight(latestRoundHeader, proto)
+	lnProvenWeight, err := calculateLnProvenWeight(&latestRoundHeader, &proto)
 	if err != nil {
 		return stateproofmsg.Message{}, err
 	}
@@ -74,7 +72,7 @@ func GenerateStateProofMessage(l Ledger, votersRound uint64, latestRoundHeader b
 	}, nil
 }
 
-func calculateLnProvenWeight(latestRoundInInterval bookkeeping.BlockHeader, proto config.ConsensusParams) (uint64, error) {
+func calculateLnProvenWeight(latestRoundInInterval *bookkeeping.BlockHeader, proto *config.ConsensusParams) (uint64, error) {
 	totalWeight := latestRoundInInterval.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.ToUint64()
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
@@ -90,29 +88,58 @@ func calculateLnProvenWeight(latestRoundInInterval bookkeeping.BlockHeader, prot
 	return lnProvenWeight, nil
 }
 
-func createHeaderCommitment(l Ledger, proto config.ConsensusParams, latestRoundHeader bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
+func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams, latestRoundHeader *bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
 	stateProofInterval := proto.StateProofInterval
 
 	if latestRoundHeader.Round < basics.Round(stateProofInterval) {
 		return nil, fmt.Errorf("createHeaderCommitment stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
-	var blkHdrArr blockHeadersArray
-	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, stateProofInterval)
-	firstRound := latestRoundHeader.Round - basics.Round(stateProofInterval) + 1
+	blkHdrArr, err := FetchLightHeaders(l, stateProofInterval, latestRoundHeader.Round)
+	if err != nil {
+		return crypto.GenericDigest{}, err
+	}
+
+	// Build merkle tree from encoded headers
+	tree, err := merklearray.BuildVectorCommitmentTree(
+		blockHeadersArray(blkHdrArr),
+		crypto.HashFactory{HashType: crypto.Sha256},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return tree.Root(), nil
+}
+
+// FetchLightHeaders returns the headers of the blocks in the interval
+func FetchLightHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRound basics.Round) ([]bookkeeping.LightBlockHeader, error) {
+	blkHdrArr := make(blockHeadersArray, stateProofInterval)
+	firstRound := latestRound - basics.Round(stateProofInterval) + 1
+
 	for i := uint64(0); i < stateProofInterval; i++ {
 		rnd := firstRound + basics.Round(i)
 		hdr, err := l.BlockHdr(rnd)
 		if err != nil {
 			return nil, err
 		}
-		blkHdrArr.blockHeaders[i] = hdr
+		blkHdrArr[i] = hdr.ToLightBlockHeader()
+	}
+	return blkHdrArr, nil
+}
+
+// GenerateProofOfLightBlockHeaders sets up a tree over the blkHdrArr and returns merkle proof over one of the blocks.
+func GenerateProofOfLightBlockHeaders(stateProofInterval uint64, blkHdrArr blockHeadersArray, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
+	if blkHdrArr.Length() != stateProofInterval {
+		return nil, fmt.Errorf("received wrong amount of block headers. err: %w - %d != %d", errInvalidParams, blkHdrArr.Length(), stateProofInterval)
 	}
 
-	// Build merkle tree from encoded headers
-	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
+	tree, err := merklearray.BuildVectorCommitmentTree(
+		blkHdrArr,
+		crypto.HashFactory{HashType: crypto.Sha256},
+	)
 	if err != nil {
 		return nil, err
 	}
-	return tree.Root(), nil
+
+	return tree.ProveSingleLeaf(blockIndex)
 }

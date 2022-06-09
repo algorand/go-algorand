@@ -170,7 +170,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 	}
 	if stateProofSigner := part.StateProofSigner(); stateProofSigner != nil {
 		if includeStateProofKeys { // TODO: remove this check and parameter after the network had enough time to upgrade
-			t.KeyregTxnFields.StateProofPK = *(stateProofSigner.GetVerifier())
+			t.KeyregTxnFields.StateProofPK = stateProofSigner.GetVerifier().Commitment
 		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
@@ -220,10 +220,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		return
 	}
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	interval := config.Consensus[protocol.ConsensusFuture].StateProofInterval
 	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
-
 	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
 		return PersistedParticipation{}, fmt.Errorf("the validity period for mss is too large: the limit is %d", maxValidPeriod)
 	}
@@ -240,7 +237,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate a new key which signs the state proof
-	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), interval)
+	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), merklesignature.KeyLifetimeDefault)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}

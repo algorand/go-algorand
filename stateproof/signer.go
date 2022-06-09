@@ -33,9 +33,9 @@ import (
 type sigFromAddr struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Signer basics.Address            `codec:"signer"`
-	Round  basics.Round              `codec:"rnd"`
-	Sig    merklesignature.Signature `codec:"sig"`
+	SignerAddress basics.Address            `codec:"a"`
+	Round         basics.Round              `codec:"r"`
+	Sig           merklesignature.Signature `codec:"s"`
 }
 
 func (spw *Worker) signer(latest basics.Round) {
@@ -116,6 +116,7 @@ func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 
 	sigs := make([]sigFromAddr, 0, len(keys))
 	ids := make([]account.ParticipationID, 0, len(keys))
+	usedSigners := make([]*merklesignature.Signer, 0, len(keys))
 
 	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
 	if err != nil {
@@ -141,11 +142,12 @@ func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		}
 
 		sigs = append(sigs, sigFromAddr{
-			Signer: key.Account,
-			Round:  hdr.Round,
-			Sig:    sig,
+			SignerAddress: key.Account,
+			Round:         hdr.Round,
+			Sig:           sig,
 		})
 		ids = append(ids, key.ParticipationID)
+		usedSigners = append(usedSigners, key.StateProofSecrets)
 	}
 
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
@@ -155,8 +157,17 @@ func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 			continue
 		}
 
+		firstRoundInKeyLifetime, err := usedSigners[i].FirstRoundInKeyLifetime() // Calculate first round of the key in order to delete all previous keys (and keep the current one for now)
+		if err != nil {
+			spw.log.Warnf("spw.signBlock(%d): Signer.FirstRoundInKeyLifetime: %v", hdr.Round, err)
+			continue
+		}
+		if firstRoundInKeyLifetime == 0 {
+			continue // No previous keys to delete (also underflows when subtracting 1)
+		}
+
 		// Safe to delete key for sfa.Round because the signature is now stored in the disk.
-		if err := spw.accts.DeleteStateProofKey(ids[i], sfa.Round); err != nil {
+		if err := spw.accts.DeleteStateProofKey(ids[i], basics.Round(firstRoundInKeyLifetime-1)); err != nil { // Subtract 1 to delete all keys up to this one
 			spw.log.Warnf("spw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
 		}
 	}

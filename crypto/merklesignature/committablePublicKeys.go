@@ -29,9 +29,9 @@ type (
 	// committablePublicKeyArray used to arrange the keys so a merkle tree could be build on them.
 	//msgp:ignore committablePublicKeyArray
 	committablePublicKeyArray struct {
-		keys       []crypto.FalconSigner
-		firstValid uint64
-		interval   uint64
+		keys        []crypto.FalconSigner
+		firstValid  uint64
+		keyLifetime uint64
 	}
 
 	// CommittablePublicKey  is used to create a binary representation of public keys in the merkle
@@ -59,7 +59,7 @@ func (k *committablePublicKeyArray) Marshal(pos uint64) (crypto.Hashable, error)
 
 	ephPK := CommittablePublicKey{
 		VerifyingKey: *k.keys[pos].GetVerifyingKey(),
-		Round:        indexToRound(k.firstValid, k.interval, pos),
+		Round:        indexToRound(k.firstValid, k.keyLifetime, pos),
 	}
 
 	return &ephPK, nil

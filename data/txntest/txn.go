@@ -246,7 +246,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			StateProofIntervalLatestRound: tx.StateProofIntervalLatestRound,
 			StateProofType:                tx.StateProofType,
 			StateProof:                    tx.StateProof,
-			StateProofMessage:             tx.StateProofMsg,
+			Message:                       tx.StateProofMsg,
 		},
 	}
 }
@@ -272,19 +272,20 @@ func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
 	txgroup := transactions.TxGroup{
 		TxGroupHashes: make([]crypto.Digest, len(txns)),
 	}
-	for i, txn := range txns {
-		txn.Group = crypto.Digest{}
-		txgroup.TxGroupHashes[i] = crypto.HashObj(txn.Txn())
-	}
-	group := crypto.HashObj(txgroup)
-	for _, txn := range txns {
-		txn.Group = group
-	}
-
 	stxns := make([]transactions.SignedTxn, len(txns))
 	for i, txn := range txns {
 		stxns[i] = txn.SignedTxn()
 	}
+	for i, txn := range stxns {
+		txn.Txn.Group = crypto.Digest{}
+		txgroup.TxGroupHashes[i] = crypto.Digest(txn.ID())
+	}
+	group := crypto.HashObj(txgroup)
+	for i, txn := range txns {
+		txn.Group = group
+		stxns[i].Txn.Group = group
+	}
+
 	return stxns
 
 }
