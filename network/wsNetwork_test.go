@@ -1927,6 +1927,13 @@ func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
+	for {
+		// wait for async messagesOfInterestRefresh
+		time.Sleep(time.Millisecond)
+		if len(netB.messagesOfInterestRefresh) == 0 {
+			break
+		}
+	}
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -2009,6 +2016,13 @@ func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
+	for {
+		// wait for async messagesOfInterestRefresh
+		time.Sleep(time.Millisecond)
+		if len(netB.messagesOfInterestRefresh) == 0 {
+			break
+		}
+	}
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -2091,8 +2105,13 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
-	// TODO: better event driven thing for netB sending new MOI
-	time.Sleep(10 * time.Millisecond)
+	for {
+		// wait for async messagesOfInterestRefresh
+		time.Sleep(time.Millisecond)
+		if len(netB.messagesOfInterestRefresh) == 0 {
+			break
+		}
+	}
 	require.Equal(t, uint32(wantTXGossipNo), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
@@ -2190,8 +2209,13 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
-	// TODO: better event driven thing for netB sending new MOI
-	time.Sleep(10 * time.Millisecond)
+	for {
+		// wait for async messagesOfInterestRefresh
+		time.Sleep(time.Millisecond)
+		if len(netB.messagesOfInterestRefresh) == 0 {
+			break
+		}
+	}
 	require.Equal(t, uint32(wantTXGossipYes), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
