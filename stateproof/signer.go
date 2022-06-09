@@ -33,9 +33,9 @@ import (
 type sigFromAddr struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Signer basics.Address            `codec:"signer"`
-	Round  basics.Round              `codec:"rnd"`
-	Sig    merklesignature.Signature `codec:"sig"`
+	SignerAddress basics.Address            `codec:"a"`
+	Round         basics.Round              `codec:"r"`
+	Sig           merklesignature.Signature `codec:"s"`
 }
 
 func (spw *Worker) signer(latest basics.Round) {
@@ -142,9 +142,9 @@ func (spw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		}
 
 		sigs = append(sigs, sigFromAddr{
-			Signer: key.Account,
-			Round:  hdr.Round,
-			Sig:    sig,
+			SignerAddress: key.Account,
+			Round:         hdr.Round,
+			Sig:           sig,
 		})
 		ids = append(ids, key.ParticipationID)
 		usedSigners = append(usedSigners, key.StateProofSecrets)

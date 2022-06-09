@@ -184,9 +184,9 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		}
 	}
 
-	pos, ok := builderForRound.voters.AddrToPos[sfa.Signer]
+	pos, ok := builderForRound.voters.AddrToPos[sfa.SignerAddress]
 	if !ok {
-		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.Signer, sfa.Round)
+		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.SignerAddress, sfa.Round)
 	}
 
 	if isPresent, err := builderForRound.Present(pos); err != nil || isPresent {
@@ -200,7 +200,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return addPendingSig(tx, sfa.Round, pendingSig{
-			signer:       sfa.Signer,
+			signer:       sfa.SignerAddress,
 			sig:          sfa.Sig,
 			fromThisNode: sender == nil,
 		})
@@ -314,9 +314,9 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 			}
 
 			sfa := sigFromAddr{
-				Signer: sig.signer,
-				Round:  rnd,
-				Sig:    sig.sig,
+				SignerAddress: sig.signer,
+				Round:         rnd,
+				Sig:           sig.sig,
 			}
 			err = spw.net.Broadcast(context.Background(), protocol.StateProofSigTag,
 				protocol.Encode(&sfa), false, nil)
