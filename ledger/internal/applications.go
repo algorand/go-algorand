@@ -218,7 +218,7 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64)
 		return err
 	}
 	if ok {
-		return fmt.Errorf("book %s exists for %d", key, appIdx)
+		return fmt.Errorf("box %s exists for %d", key, appIdx)
 	}
 
 	record, err := cs.Get(appIdx.Address(), false)
@@ -248,10 +248,10 @@ func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value string
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("book %s does not exist for %d", key, appIdx)
+		return fmt.Errorf("box %s does not exist for %d", key, appIdx)
 	}
 	if len(old) != len(value) {
-		return fmt.Errorf("book %s is wrong size old:%d != new:%d",
+		return fmt.Errorf("box %s is wrong size old:%d != new:%d",
 			key, len(old), len(value))
 	}
 	return cs.kvPut(fullKey, value)
@@ -265,7 +265,7 @@ func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string) error {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("book %s does not exist for %d", key, appIdx)
+		return fmt.Errorf("box %s does not exist for %d", key, appIdx)
 	}
 
 	record, err := cs.Get(appIdx.Address(), false)
