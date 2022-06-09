@@ -65,7 +65,6 @@ func TestAssembleBlockStatsString(t *testing.T) {
 			for nf := 0; nf < field.Type.NumField(); nf++ {
 				nestedField := field.Type.Field(nf)
 				require.Contains(t, absString, nestedField.Name)
-
 			}
 			continue
 		}
@@ -81,7 +80,6 @@ func TestAssembleBlockStatsString(t *testing.T) {
 			for nf := 0; nf < field.Type.NumField(); nf++ {
 				nestedField := field.Type.Field(nf)
 				require.NotContains(t, absString, nestedField.Name)
-
 			}
 			continue
 		}
