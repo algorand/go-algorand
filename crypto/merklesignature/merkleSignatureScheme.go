@@ -58,7 +58,7 @@ type (
 	Signer struct {
 		SigningKey *crypto.FalconSigner
 
-		// The round for which this SigningKey is related to
+		// The round for which the signature would be valid
 		Round uint64
 
 		SignerContext
@@ -68,13 +68,21 @@ type (
 	SignerContext struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		FirstValid uint64           `codec:"fv"`
-		Interval   uint64           `codec:"iv"`
-		Tree       merklearray.Tree `codec:"tree"`
+		FirstValid  uint64           `codec:"fv"`
+		KeyLifetime uint64           `codec:"iv"`
+		Tree        merklearray.Tree `codec:"tree"`
 	}
 
+	// Commitment represents the root of the vector commitment tree built upon the MSS keys.
+	Commitment [MerkleSignatureSchemeRootSize]byte
+
 	// Verifier is used to verify a merklesignature.Signature produced by merklesignature.Secrets.
-	Verifier [MerkleSignatureSchemeRootSize]byte
+	Verifier struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+		Commitment  Commitment `codec:"cmt"`
+		KeyLifetime uint64     `codec:"lf"`
+	}
 
 	//KeyRoundPair represents an ephemeral signing key with it's corresponding round
 	KeyRoundPair struct {
@@ -84,6 +92,9 @@ type (
 		Key   *crypto.FalconSigner `codec:"key"`
 	}
 )
+
+// KeyLifetimeDefault defines the default lifetime of a key in the merkle signature scheme (in rounds).
+const KeyLifetimeDefault = 256
 
 // SchemeSaltVersion is the current salt version of merkleSignature
 const SchemeSaltVersion = byte(0)
@@ -95,37 +106,36 @@ var CryptoPrimitivesID = uint16(0)
 // Errors for the merkle signature scheme
 var (
 	ErrStartBiggerThanEndRound           = errors.New("cannot create Merkle Signature Scheme because end round is smaller then start round")
-	ErrDivisorIsZero                     = errors.New("received zero Interval")
+	ErrKeyLifetimeIsZero                 = errors.New("received zero KeyLifetime")
 	ErrNoStateProofKeyForRound           = errors.New("no stateproof key exists for this round")
 	ErrSignatureSchemeVerificationFailed = errors.New("merkle signature verification failed")
-	ErrSignatureSaltVersionMismatch      = fmt.Errorf("the signature's salt version does not match")
+	ErrSignatureSaltVersionMismatch      = errors.New("the signature's salt version does not match")
 )
 
 // New creates secrets needed for the merkle signature scheme.
 // This function generates one key for each round within the participation period [firstValid, lastValid] (inclusive bounds)
 // which holds round % interval == 0.
 // In case firstValid equals zero then signer will generate all keys from (0,Z], i.e will not generate key for round zero.
-func New(firstValid, lastValid, interval uint64) (*Secrets, error) {
+func New(firstValid, lastValid, keyLifetime uint64) (*Secrets, error) {
 	if firstValid > lastValid {
 		return nil, ErrStartBiggerThanEndRound
 	}
-	if interval == 0 {
-		return nil, ErrDivisorIsZero
-	}
-
-	if firstValid == 0 {
-		firstValid = 1
+	if keyLifetime == 0 {
+		return nil, ErrKeyLifetimeIsZero
 	}
 
 	// calculates the number of indices from first valid round and up to lastValid.
 	// writing this explicit calculation to avoid overflow.
-	numberOfKeys := lastValid/interval - ((firstValid - 1) / interval)
+	numberOfKeys := lastValid/keyLifetime - ((firstValid - 1) / keyLifetime)
+	if firstValid == 0 {
+		numberOfKeys = lastValid/keyLifetime + 1 // add 1 for round zero
+	}
 
 	keys, err := KeysBuilder(numberOfKeys)
 	if err != nil {
 		return nil, err
 	}
-	tree, err := merklearray.BuildVectorCommitmentTree(&committablePublicKeyArray{keys, firstValid, interval}, crypto.HashFactory{HashType: MerkleSignatureSchemeHashFunction})
+	tree, err := merklearray.BuildVectorCommitmentTree(&committablePublicKeyArray{keys, firstValid, keyLifetime}, crypto.HashFactory{HashType: MerkleSignatureSchemeHashFunction})
 	if err != nil {
 		return nil, err
 	}
@@ -133,9 +143,9 @@ func New(firstValid, lastValid, interval uint64) (*Secrets, error) {
 	return &Secrets{
 		ephemeralKeys: keys,
 		SignerContext: SignerContext{
-			FirstValid: firstValid,
-			Interval:   interval,
-			Tree:       *tree,
+			FirstValid:  firstValid,
+			KeyLifetime: keyLifetime,
+			Tree:        *tree,
 		},
 	}, nil
 }
@@ -148,8 +158,26 @@ func (s *Secrets) GetVerifier() *Verifier {
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *SignerContext) GetVerifier() *Verifier {
 	var ver Verifier
-	copy(ver[:], s.Tree.Root())
+	copy(ver.Commitment[:], s.Tree.Root())
+	ver.KeyLifetime = s.KeyLifetime
 	return &ver
+}
+
+// FirstRoundInKeyLifetime calculates the round of the valid key for a given round by lowering to the closest KeyLiftime divisor.
+func (s *Signer) FirstRoundInKeyLifetime() (uint64, error) {
+	if s.KeyLifetime == 0 {
+		return 0, ErrKeyLifetimeIsZero
+	}
+
+	return firstRoundInKeyLifetime(s.Round, s.KeyLifetime), nil
+}
+
+func (s *Signer) vectorCommitmentTreeIndex() (uint64, error) {
+	validKeyRound, err := s.FirstRoundInKeyLifetime()
+	if err != nil {
+		return 0, err
+	}
+	return roundToIndex(s.FirstValid, validKeyRound, s.KeyLifetime), nil
 }
 
 // SignBytes signs a given message. The signature is valid on a specific round
@@ -160,12 +188,16 @@ func (s *Signer) SignBytes(msg []byte) (Signature, error) {
 		return Signature{}, ErrNoStateProofKeyForRound
 	}
 
-	if err := checkMerkleSignatureSchemeParams(s.FirstValid, s.Round, s.Interval); err != nil {
+	if err := checkMerkleSignatureSchemeParams(s.FirstValid, s.Round, s.KeyLifetime); err != nil {
 		return Signature{}, err
 	}
 
-	index := s.getMerkleTreeIndex(s.Round)
-	proof, err := s.Tree.ProveSingleLeaf(index)
+	vcIdx, err := s.vectorCommitmentTreeIndex()
+	if err != nil {
+		return Signature{}, err
+	}
+
+	proof, err := s.Tree.ProveSingleLeaf(vcIdx)
 	if err != nil {
 		return Signature{}, err
 	}
@@ -179,13 +211,8 @@ func (s *Signer) SignBytes(msg []byte) (Signature, error) {
 		Signature:             sig,
 		Proof:                 *proof,
 		VerifyingKey:          *s.SigningKey.GetVerifyingKey(),
-		VectorCommitmentIndex: index,
+		VectorCommitmentIndex: vcIdx,
 	}, nil
-}
-
-// expects valid rounds, i.e round that are bigger than FirstValid.
-func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
-	return roundToIndex(s.FirstValid, round, s.Interval)
 }
 
 // GetAllKeys returns all stateproof secrets.
@@ -195,7 +222,7 @@ func (s *Secrets) GetAllKeys() []KeyRoundPair {
 	keys := make([]KeyRoundPair, NumOfKeys)
 	for i := uint64(0); i < NumOfKeys; i++ {
 		keyRound := KeyRoundPair{
-			Round: indexToRound(s.SignerContext.FirstValid, s.SignerContext.Interval, i),
+			Round: indexToRound(s.FirstValid, s.KeyLifetime, i),
 			Key:   &s.ephemeralKeys[i],
 		}
 		keys[i] = keyRound
@@ -206,8 +233,9 @@ func (s *Secrets) GetAllKeys() []KeyRoundPair {
 // GetKey retrieves key from memory
 // the function return nil if the key does not exists
 func (s *Secrets) GetKey(round uint64) *crypto.FalconSigner {
-	idx := roundToIndex(s.FirstValid, round, s.Interval)
-	if idx >= uint64(len(s.ephemeralKeys)) || (round%s.Interval) != 0 {
+	keyRound := firstRoundInKeyLifetime(round, s.KeyLifetime)
+	idx := roundToIndex(s.FirstValid, keyRound, s.KeyLifetime)
+	if idx >= uint64(len(s.ephemeralKeys)) || (keyRound%s.KeyLifetime) != 0 || keyRound < s.FirstValid {
 		return nil
 	}
 
@@ -224,7 +252,7 @@ func (s *Secrets) GetSigner(round uint64) *Signer {
 }
 
 // IsEmpty returns true if the verifier contains an empty key
-func (v *Verifier) IsEmpty() bool {
+func (v *Commitment) IsEmpty() bool {
 	return *v == [MerkleSignatureSchemeRootSize]byte{}
 }
 
@@ -236,28 +264,42 @@ func (s *Signature) IsSaltVersionEqual(version byte) error {
 	return nil
 }
 
+// FirstRoundInKeyLifetime calculates the round of the valid key for a given round by lowering to the closest KeyLiftime divisor.
+func (v *Verifier) FirstRoundInKeyLifetime(round uint64) (uint64, error) {
+	if v.KeyLifetime == 0 {
+		return 0, ErrKeyLifetimeIsZero
+	}
+
+	return firstRoundInKeyLifetime(round, v.KeyLifetime), nil
+}
+
 // VerifyBytes verifies that a merklesignature sig is valid, on a specific round, under a given public key
 func (v *Verifier) VerifyBytes(round uint64, msg []byte, sig Signature) error {
+	validKeyRound, err := v.FirstRoundInKeyLifetime(round)
+	if err != nil {
+		return err
+	}
+
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
-		Round:        round,
+		Round:        validKeyRound,
 	}
 
 	// verify the merkle tree verification path using the ephemeral public key, the
 	// verification path and the index.
-	err := merklearray.VerifyVectorCommitment(
-		v[:],
+	err = merklearray.VerifyVectorCommitment(
+		v.Commitment[:],
 		map[uint64]crypto.Hashable{sig.VectorCommitmentIndex: &ephkey},
 		sig.Proof.ToProof(),
 	)
 	if err != nil {
-		return fmt.Errorf("%w - %v", ErrSignatureSchemeVerificationFailed, err)
+		return fmt.Errorf("%w: %v", ErrSignatureSchemeVerificationFailed, err)
 	}
 
 	// verify that the signature is valid under the ephemeral public key
 	err = sig.VerifyingKey.VerifyBytes(msg, sig.Signature)
 	if err != nil {
-		return fmt.Errorf("%w - %v", ErrSignatureSchemeVerificationFailed, err)
+		return fmt.Errorf("%w: %v", ErrSignatureSchemeVerificationFailed, err)
 	}
 	return nil
 }

@@ -24,7 +24,7 @@ import (
 	"net/url"
 )
 
-func getZonesRequest(authEmail, authKey string) (*http.Request, error) {
+func getZonesRequest(authToken string) (*http.Request, error) {
 	// construct the query
 	requestURI, err := url.Parse(cloudFlareURI)
 	if err != nil {
@@ -35,7 +35,7 @@ func getZonesRequest(authEmail, authKey string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
@@ -76,7 +76,7 @@ func parseGetZonesResponse(response *http.Response) (*GetZonesResult, error) {
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response status code %d", response.StatusCode)
+		return nil, fmt.Errorf("response status code %d", response.StatusCode)
 	}
 	var parsedReponse GetZonesResult
 	if err := json.Unmarshal(body, &parsedReponse); err != nil {
@@ -85,7 +85,7 @@ func parseGetZonesResponse(response *http.Response) (*GetZonesResult, error) {
 	return &parsedReponse, nil
 }
 
-func exportZoneRequest(zoneID, authEmail, authKey string) (*http.Request, error) {
+func exportZoneRequest(zoneID, authToken string) (*http.Request, error) {
 	// construct the query
 	requestURI, err := url.Parse(cloudFlareURI)
 	if err != nil {
@@ -96,6 +96,6 @@ func exportZoneRequest(zoneID, authEmail, authKey string) (*http.Request, error)
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }

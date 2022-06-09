@@ -212,31 +212,30 @@ func TestStateProofMessage(t *testing.T) {
 			}
 
 			a.Equal(tx.Txn.StateProofIntervalLatestRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
-			a.Equal(tx.Txn.StateProofMessage.LastAttestedRound, (iter+2)*proto.StateProofInterval)
-			a.Equal(tx.Txn.StateProofMessage.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
+			a.Equal(tx.Txn.Message.LastAttestedRound, (iter+2)*proto.StateProofInterval)
+			a.Equal(tx.Txn.Message.FirstAttestedRound, (iter+1)*proto.StateProofInterval+1)
 
-			verifySha256BlockHeadersCommitments(a, tx.Txn.StateProofMessage, s.w.blocks)
+			verifySha256BlockHeadersCommitments(a, tx.Txn.Message, s.w.blocks)
 
 			if !lastMessage.MsgIsZero() {
 				verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
-				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.StateProofMessage.IntoStateProofMessageHash(), &tx.Txn.StateProof)
+				err := verifier.Verify(uint64(tx.Txn.StateProofIntervalLatestRound), tx.Txn.Message.IntoStateProofMessageHash(), &tx.Txn.StateProof)
 				a.NoError(err)
 
 			}
 
-			lastMessage = tx.Txn.StateProofMessage
+			lastMessage = tx.Txn.Message
 			break
 		}
 	}
 }
 
 func verifySha256BlockHeadersCommitments(a *require.Assertions, message stateproofmsg.Message, blocks map[basics.Round]bookkeeping.BlockHeader) {
-	var blkHdrArr blockHeadersArray
-	blkHdrArr.blockHeaders = make([]bookkeeping.BlockHeader, message.LastAttestedRound-message.FirstAttestedRound+1)
+	blkHdrArr := make(blockHeadersArray, message.LastAttestedRound-message.FirstAttestedRound+1)
 	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
 		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
-		blkHdrArr.blockHeaders[i] = hdr
+		blkHdrArr[i] = hdr.ToLightBlockHeader()
 	}
 
 	tree, err := merklearray.BuildVectorCommitmentTree(blkHdrArr, crypto.HashFactory{HashType: crypto.Sha256})
@@ -315,4 +314,87 @@ func TestMessageMissingHeaderOnInterval(t *testing.T) {
 
 	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
 	a.ErrorIs(err, ledgercore.ErrNoEntry{Round: 510})
+}
+
+func TestGenerateBlockProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys, len(keys))
+	dbs, _ := dbOpenTest(t, true)
+	w := NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
+
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	for iter := uint64(0); iter < 5; iter++ {
+		s.advanceLatest(proto.StateProofInterval)
+
+		tx := <-s.w.txmsg
+		// we have a new tx. now attempt to fetch a block proof.
+		firstAttestedRound := tx.Txn.Message.FirstAttestedRound
+		lastAttestedRound := tx.Txn.Message.LastAttestedRound
+
+		headers, err := FetchLightHeaders(s, proto.StateProofInterval, basics.Round(lastAttestedRound))
+		a.NoError(err)
+		a.Equal(proto.StateProofInterval, uint64(len(headers)))
+
+		// attempting to get block proof for every block in the interval
+		for i := firstAttestedRound; i < lastAttestedRound; i++ {
+			headerIndex := i - firstAttestedRound
+			proof, err := GenerateProofOfLightBlockHeaders(proto.StateProofInterval, headers, headerIndex)
+			a.NoError(err)
+			a.NotNil(proof)
+
+			lightheader := headers[headerIndex]
+			err = merklearray.VerifyVectorCommitment(
+				tx.Txn.Message.BlockHeadersCommitment,
+				map[uint64]crypto.Hashable{headerIndex: lightheader},
+				proof.ToProof())
+
+			a.NoError(err)
+		}
+	}
+}
+
+func TestGenerateBlockProofOnSmallArray(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerForStateProofMessageStubs(keys, len(keys))
+	s.w.latest--
+	s.addBlockWithStateProofHeaders(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval))
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(2 * proto.StateProofInterval)
+	headers, err := FetchLightHeaders(s, proto.StateProofInterval, basics.Round(2*proto.StateProofInterval))
+	a.NoError(err)
+	headers = headers[1:]
+
+	_, err = GenerateProofOfLightBlockHeaders(proto.StateProofInterval, headers, 1)
+	a.ErrorIs(err, errInvalidParams)
 }

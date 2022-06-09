@@ -25,7 +25,7 @@ import (
 )
 
 // deleteDNSRecordRequest creates a new http request for deleting a single DNS records.
-func deleteDNSRecordRequest(zoneID string, authEmail string, authKey string, recordID string) (*http.Request, error) {
+func deleteDNSRecordRequest(zoneID string, authToken string, recordID string) (*http.Request, error) {
 	// construct the query
 	uri, err := url.Parse(fmt.Sprintf("%szones/%s/dns_records/%s", cloudFlareURI, zoneID, recordID))
 	if err != nil {
@@ -35,7 +35,7 @@ func deleteDNSRecordRequest(zoneID string, authEmail string, authKey string, rec
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 

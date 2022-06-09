@@ -355,7 +355,7 @@ func stateProofTxEncode(tx transactions.Transaction) v1.Transaction {
 	sp := v1.StateProofTransactionType{
 		StateProofIntervalLatestRound: uint64(tx.StateProofTxnFields.StateProofIntervalLatestRound),
 		StateProof:                    protocol.Encode(&tx.StateProofTxnFields.StateProof),
-		StateProofMessage:             protocol.Encode(&tx.StateProofMessage),
+		StateProofMessage:             protocol.Encode(&tx.Message),
 	}
 
 	return v1.Transaction{

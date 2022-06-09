@@ -737,7 +737,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 	var selectionPK crypto.VRFVerifier
 	selectionPK[0] = 2
 	var stateProofPK merklesignature.Verifier
-	stateProofPK[0] = 3
+	stateProofPK.Commitment[0] = 3
 
 	txn := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
@@ -748,7 +748,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:          votePK,
 			SelectionPK:     selectionPK,
-			StateProofPK:    stateProofPK,
+			StateProofPK:    stateProofPK.Commitment,
 			VoteLast:        9,
 			VoteKeyDilution: 10,
 		},

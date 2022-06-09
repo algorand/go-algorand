@@ -5,11 +5,12 @@ package bookkeeping
 import (
 	"sort"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 // The following msgp objects are implemented in this file:
@@ -53,6 +54,14 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
+// LightBlockHeader
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
 // ParticipationUpdates
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
@@ -68,14 +77,6 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//
-// SHA256BlockHeader
-//         |-----> (*) MarshalMsg
-//         |-----> (*) CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> (*) Msgsize
-//         |-----> (*) MsgIsZero
 //
 // StateProofTrackingData
 //            |-----> (*) MarshalMsg
@@ -2204,6 +2205,158 @@ func (z *GenesisAllocation) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).GenesisHash.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).RoundNumber.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).Sha256TxnCommitment.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "gh"
+			o = append(o, 0xa2, 0x67, 0x68)
+			o = (*z).GenesisHash.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "r"
+			o = append(o, 0xa1, 0x72)
+			o = (*z).RoundNumber.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "tc"
+			o = append(o, 0xa2, 0x74, 0x63)
+			o = (*z).Sha256TxnCommitment.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *LightBlockHeader) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*LightBlockHeader)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).RoundNumber.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RoundNumber")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Sha256TxnCommitment.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Sha256TxnCommitment")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = LightBlockHeader{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "r":
+				bts, err = (*z).RoundNumber.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RoundNumber")
+					return
+				}
+			case "gh":
+				bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+			case "tc":
+				bts, err = (*z).Sha256TxnCommitment.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Sha256TxnCommitment")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *LightBlockHeader) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*LightBlockHeader)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *LightBlockHeader) Msgsize() (s int) {
+	s = 1 + 2 + (*z).RoundNumber.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *LightBlockHeader) MsgIsZero() bool {
+	return ((*z).RoundNumber.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *ParticipationUpdates) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -2580,158 +2733,6 @@ func (z *RewardsState) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *RewardsState) MsgIsZero() bool {
 	return ((*z).FeeSink.MsgIsZero()) && ((*z).RewardsPool.MsgIsZero()) && ((*z).RewardsLevel == 0) && ((*z).RewardsRate == 0) && ((*z).RewardsResidue == 0) && ((*z).RewardsRecalculationRound.MsgIsZero())
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *SHA256BlockHeader) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 4 bits */
-	if (*z).GenesisHash.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x2
-	}
-	if (*z).RoundNumber.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
-	if (*z).Sha256TxnCommitment.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "gh"
-			o = append(o, 0xa2, 0x67, 0x68)
-			o = (*z).GenesisHash.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "r"
-			o = append(o, 0xa1, 0x72)
-			o = (*z).RoundNumber.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "tc"
-			o = append(o, 0xa2, 0x74, 0x63)
-			o = (*z).Sha256TxnCommitment.MarshalMsg(o)
-		}
-	}
-	return
-}
-
-func (_ *SHA256BlockHeader) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*SHA256BlockHeader)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *SHA256BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	var zb0002 bool
-	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).RoundNumber.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RoundNumber")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).Sha256TxnCommitment.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sha256TxnCommitment")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = SHA256BlockHeader{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "r":
-				bts, err = (*z).RoundNumber.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RoundNumber")
-					return
-				}
-			case "gh":
-				bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
-				}
-			case "tc":
-				bts, err = (*z).Sha256TxnCommitment.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Sha256TxnCommitment")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *SHA256BlockHeader) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*SHA256BlockHeader)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *SHA256BlockHeader) Msgsize() (s int) {
-	s = 1 + 2 + (*z).RoundNumber.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *SHA256BlockHeader) MsgIsZero() bool {
-	return ((*z).RoundNumber.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

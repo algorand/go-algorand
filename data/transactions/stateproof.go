@@ -31,7 +31,7 @@ type StateProofTxnFields struct {
 	StateProofIntervalLatestRound basics.Round            `codec:"sprnd"`
 	StateProofType                protocol.StateProofType `codec:"sptype"`
 	StateProof                    stateproof.StateProof   `codec:"sp"`
-	StateProofMessage             stateproofmsg.Message   `codec:"spmsg"`
+	Message                       stateproofmsg.Message   `codec:"spmsg"`
 }
 
 // Empty returns whether the StateProofTxnFields are all zero,
@@ -49,7 +49,7 @@ func (sp StateProofTxnFields) Empty() bool {
 	if len(sp.StateProof.Reveals) != 0 {
 		return false
 	}
-	if !sp.StateProofMessage.MsgIsZero() {
+	if !sp.Message.MsgIsZero() {
 		return false
 	}
 
