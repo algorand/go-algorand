@@ -149,7 +149,7 @@ gen-app-and-box-scenarios:
 @box-delete $BOX:
     just app-call-last '\"delete\", \"{{BOX}}\"'
 
-# stop and tear down the node network
+# stop and tear down the node network. WARNING: YOU WILL LOSE ALL YOUR NODE INFO FROM THE FILE SYSTEM.
 @stop_and_nuke: stop nuke
 
 # --- PRE-REQUISITES --- #
