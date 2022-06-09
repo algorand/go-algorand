@@ -60,8 +60,15 @@ type AssembleBlockStats struct {
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
 	StateProofNextRound       uint64 // next round for which state proof if expected
-	StateProofSignedWeight    uint64 // state proof signed weight (0 if no SP is added)
-	StateProofNumReveals      int    // state proof number of reveals  (0 if no SP is added)
+	StateProofStats           StateProofStats
+}
+
+type StateProofStats struct {
+	StateProofProvenWeight    uint64
+	StateProofSignedWeight    uint64
+	StateProofNumReveals      int
+	NumberOfPositionsToReveal int
+	StateProofTxnSize         int
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout
@@ -108,8 +115,14 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("BlockGenerationDuration:%d, ", m.BlockGenerationDuration))
 	b.WriteString(fmt.Sprintf("TransactionsLoopStartTime:%d, ", m.TransactionsLoopStartTime))
 	b.WriteString(fmt.Sprintf("StateProofNextRound:%d, ", m.StateProofNextRound))
-	b.WriteString(fmt.Sprintf("StateProofSignedWeight:%d, ", m.StateProofSignedWeight))
-	b.WriteString(fmt.Sprintf("StateProofNumReveals:%d", m.StateProofNumReveals))
+	emptySPStats := StateProofStats{}
+	if m.StateProofStats != emptySPStats {
+		b.WriteString(fmt.Sprintf("StateProofProvenWeight:%d, ", m.StateProofStats.StateProofProvenWeight))
+		b.WriteString(fmt.Sprintf("StateProofSignedWeight:%d, ", m.StateProofStats.StateProofSignedWeight))
+		b.WriteString(fmt.Sprintf("StateProofNumReveals:%d, ", m.StateProofStats.StateProofNumReveals))
+		b.WriteString(fmt.Sprintf("NumberOfPositionsToReveal:%d, ", m.StateProofStats.NumberOfPositionsToReveal))
+		b.WriteString(fmt.Sprintf("StateProofTxnSize:%d", m.StateProofStats.StateProofTxnSize))
+	}
 	return b.String()
 }
 

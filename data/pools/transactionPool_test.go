@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	astateproof "github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -1388,8 +1389,11 @@ func TestTStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, voters)
 
+	// Get the message
+	msg, err := astateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
+
 	// Get the SP
-	proof := generateProofForTesting(uint64(round), provenWeight, voters.Participants, voters.Tree, allKeys, voters.TotalWeight.Raw, t)
+	proof := generateProofForTesting(uint64(round), msg, provenWeight, voters.Participants, voters.Tree, allKeys, voters.TotalWeight.Raw, t)
 
 	// Set the transaction with the SP
 	var stxn transactions.SignedTxn
@@ -1401,9 +1405,8 @@ func TestTStateProofLogging(t *testing.T) {
 	stxn.Txn.StateProofIntervalLatestRound = 512
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.StateProof = *proof
-	stxn.Txn.StateProofMessage = stateproofmsg.Message{
-		LnProvenWeight: 1,
-	}
+	require.NoError(t, err)
+	stxn.Txn.StateProofMessage = msg
 
 	err = stxn.Txn.WellFormed(transactions.SpecialAddresses{}, proto)
 	require.NoError(t, err)
@@ -1431,19 +1434,24 @@ func TestTStateProofLogging(t *testing.T) {
 	parts := strings.Split(lines[len(lines)-1], "StateProofNextRound:")
 
 	// Verify the Metrics is correct
-	var nextRound, signedWeight, numReveals uint64
+	var nextRound, pWeight, signedWeight, numReveals, posToReveal, txnSize uint64
 	var str1 string
-	fmt.Sscanf(parts[1], "%d, StateProofSignedWeight:%d, StateProofNumReveals:%d\"%s",
-		&nextRound, &signedWeight, &numReveals, &str1)
+	fmt.Sscanf(parts[1], "%d, StateProofProvenWeight:%d, StateProofSignedWeight:%d, StateProofNumReveals:%d, NumberOfPositionsToReveal:%d, StateProofTxnSize:%d\"%s",
+		&nextRound, &pWeight, &signedWeight, &numReveals, &posToReveal, &txnSize, &str1)
 	require.Equal(t, uint64(768), nextRound)
+	require.Equal(t, provenWeight, pWeight)
 	require.Equal(t, proof.SignedWeight, signedWeight)
-	require.Equal(t, numOfAccounts-2, int(numReveals))
+	require.Less(t, numOfAccounts/2, int(numReveals))
+	require.Greater(t, numOfAccounts, int(numReveals))
+	require.Equal(t, len(proof.PositionsToReveal), int(posToReveal))
+	require.Equal(t, stxn.GetEncodedLength()-37, int(txnSize))
 }
 
 // Given the round number, partArray and partTree from the previous period block, the keys and the totalWeight
 // return a stateProof which can be submitted in a transaction to the transaction pool and assembled into a new block.
 func generateProofForTesting(
 	round uint64,
+	msg stateproofmsg.Message,
 	provenWeight uint64,
 	partArray basics.ParticipantsArray,
 	partTree *merklearray.Tree,
@@ -1451,9 +1459,7 @@ func generateProofForTesting(
 	totalWeight uint64,
 	t *testing.T) *stateproof.StateProof {
 
-	data := stateproofmsg.Message{
-		LnProvenWeight: 1,
-	}.IntoStateProofMessageHash()
+	data := msg.IntoStateProofMessageHash()
 
 	// Sign with the participation keys
 	sigs := make(map[merklesignature.Verifier]merklesignature.Signature)

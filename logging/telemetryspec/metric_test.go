@@ -55,9 +55,36 @@ func TestAssembleBlockStatsString(t *testing.T) {
 
 	var abs AssembleBlockStats
 	localType := reflect.TypeOf(abs)
+
+	// Empty StateProofStats will not be reported. Set a filed to check it printed
+	abs.StateProofStats.StateProofProvenWeight = 1
 	absString := abs.String()
 	for f := 0; f < localType.NumField(); f++ {
 		field := localType.Field(f)
+		if field.Type.Kind() == reflect.Struct && field.Type.NumField() > 1 {
+			for nf := 0; nf < field.Type.NumField(); nf++ {
+				nestedField := field.Type.Field(nf)
+				require.Contains(t, absString, nestedField.Name)
+
+			}
+			continue
+		}
+		require.Contains(t, absString, field.Name)
+	}
+
+	// Make sure the StateProofStats is not reported if they are empty
+	abs.StateProofStats.StateProofProvenWeight = 0
+	absString = abs.String()
+	for f := 0; f < localType.NumField(); f++ {
+		field := localType.Field(f)
+		if field.Name == "StateProofStats" {
+			for nf := 0; nf < field.Type.NumField(); nf++ {
+				nestedField := field.Type.Field(nf)
+				require.NotContains(t, absString, nestedField.Name)
+
+			}
+			continue
+		}
 		require.Contains(t, absString, field.Name)
 	}
 }
