@@ -180,7 +180,7 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
-func TestPauseAndResumeAtRound(t *testing.T) {
+func TestPauseOrResume(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
@@ -217,7 +217,7 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 
 	// Pause on block number 3
 	rnd := uint64(3)
-	syncer.SetPauseAtRound(rnd)
+	syncer.PauseOrResume(rnd)
 
 	// Similar to a user running pause and resume catchup functionalities on catchup service
 	go func() {
@@ -230,7 +230,7 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 		rnd = uint64(7)
 
 		// Testing Resume Catchup functionality i.e resuming until block number 7
-		syncer.SetPauseAtRound(rnd)
+		syncer.PauseOrResume(rnd)
 		time.Sleep(1000 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))
@@ -239,7 +239,7 @@ func TestPauseAndResumeAtRound(t *testing.T) {
 		rnd = uint64(10)
 
 		// Testing Resume Catchup functionality i.e resuming catchup altogether
-		syncer.SetPauseAtRound(uint64(0))
+		syncer.PauseOrResume(uint64(0))
 		time.Sleep(1000 * time.Millisecond)
 		// Asserts that the last block is the one we expect
 		require.Equal(t, rnd, uint64(local.LastRound()))

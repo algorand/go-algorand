@@ -129,7 +129,6 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 func (s *Service) Start() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.dontAllowPauseAtRound = false
 	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
 }
@@ -401,37 +400,52 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 type task func() basics.Round
 
-// SetPauseAtRound changes the value of s.pauseAtRound
-func (s *Service) SetPauseAtRound(rnd uint64) (err error) {
+// PauseOrResume changes the value of s.pauseAtRound
+func (s *Service) PauseOrResume(rnd uint64) (err error) {
 	// check if pause functionality is enabled
-	if !s.dontAllowPauseAtRound {
-		// can only pause when the catchup service is running
-		if s.pauseAtRound != 0 {
-			// check if the catchup has finished reaching the pauseAtRound block number
-			if uint64(s.ledger.LastRound()) >= s.pauseAtRound {
-				// only allow resume catchup if either rnd is 0 i.e resume catchup to the latest block
-				// or if next pauseAtRound block number is greater than the latest block on the ledger
-				if rnd == uint64(0) || rnd > uint64(s.ledger.LastRound()) {
-					// send the new value of s.pauseAtRound as the signal and update the value at the other end of the channel to avoid race condition
-					s.chanPauseAtRound <- rnd
-				} else {
-					err = errors.New("not allowed to pause or resume due to an invalid round number")
-				}
-			} else {
-				err = errors.New("not allowed to pause or resume because currently catching up to a round")
-			}
-		} else {
-			// takes care of two conditions: when catchup is running as usual and when --round is set before the start
-			// check if the channel has been set up, if not, then set it up and send the round number
-			if s.chanPauseAtRound == nil {
-				s.chanPauseAtRound = make(chan uint64, 1)
-			}
+	if s.dontAllowPauseAtRound {
+		err = errors.New("not allowed to pause")
+		return
+	}
+	if s.pauseAtRound != 0 {
+		// represents the Resume functionality
+		// check if the catchup has finished reaching the pauseAtRound block number
+		if uint64(s.ledger.LastRound()) < s.pauseAtRound {
+			err = errors.New("not allowed to pause or resume because currently catching up to a round")
+			return
+		}
+		// only allow resume catchup if either rnd is 0 i.e resume catchup to the latest block
+		// or if next pauseAtRound block number is greater than the latest block on the ledger
+		if rnd == uint64(0) || rnd > uint64(s.ledger.LastRound()) {
+			// send the new value of s.pauseAtRound as the signal
+			// and update the value at the other end of the channel to avoid race condition
 			s.chanPauseAtRound <- rnd
+		} else {
+			err = errors.New("not allowed to pause or resume due to an invalid round number")
 		}
 	} else {
-		err = errors.New("not allowed to pause")
+		// represents the Pause functionality
+		// takes care of two conditions: when catchup is running as usual and when --round is set before the start
+		if s.chanPauseAtRound == nil {
+			// check if the channel has been set up, if not, then set it up and send the round number
+			s.chanPauseAtRound = make(chan uint64, 1)
+		}
+		s.chanPauseAtRound <- rnd
 	}
 	return
+}
+
+func (s *Service) updatePauseAtRound(nextRound basics.Round) {
+	// pause here until resume catchup sends a signal
+	if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
+		s.pauseAtRound = <-s.chanPauseAtRound
+	} else if s.pauseAtRound == uint64(0) {
+		// best effort when the user wants to pause the catchup service
+		select {
+		case s.pauseAtRound = <-s.chanPauseAtRound:
+		default:
+		}
+	}
 }
 
 func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool, peerSelector *peerSelector) func() basics.Round {
@@ -517,17 +531,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			s.handleUnsupportedRound(nextRound)
 			break
 		}
-
-		// pause here until resume catchup sends a signal
-		if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
-			s.pauseAtRound = <-s.chanPauseAtRound
-		} else if s.pauseAtRound == uint64(0) {
-			// best effort when the user wants to pause the catchup service
-			select {
-			case s.pauseAtRound = <-s.chanPauseAtRound:
-			default:
-			}
-		}
+		// updates s.pauseAtRound
+		s.updatePauseAtRound(nextRound)
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
 		taskCh <- s.pipelineCallback(nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)], peerSelector)
@@ -559,17 +564,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 					return
 				}
 				delete(completedRounds, nextRound)
-
-				// pause here until resume catchup sends a signal
-				if s.pauseAtRound != uint64(0) && uint64(nextRound) > s.pauseAtRound {
-					s.pauseAtRound = <-s.chanPauseAtRound
-				} else if s.pauseAtRound == uint64(0) {
-					// best effort when the user wants to pause the catchup service
-					select {
-					case s.pauseAtRound = <-s.chanPauseAtRound:
-					default:
-					}
-				}
+				// updates s.pauseAtRound
+				s.updatePauseAtRound(nextRound)
 				currentRoundComplete := make(chan bool, 2)
 				// len(taskCh) + (# pending writes to completed) increases by 1
 				taskCh <- s.pipelineCallback(nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[0], peerSelector)
@@ -593,7 +589,7 @@ func (s *Service) periodicSync() {
 		s.sync()
 	}
 
-	// Do not allow pause functionality when catchup is disabled in the config file
+	// Do not allow pause functionality when catchup is disabled in the config file or when catchup is caught up to the recent block
 	s.dontAllowPauseAtRound = true
 	s.pauseAtRound = uint64(0)
 
