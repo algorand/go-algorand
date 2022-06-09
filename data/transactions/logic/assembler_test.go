@@ -2409,6 +2409,8 @@ func TestScratchTypeCheck(t *testing.T) {
 	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{5, "+ arg 0..."})
 	// Loads should know the type it's loading if all the slots are the same type
 	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{3, "btoi arg 0..."})
+	// Loads doesn't know the type when slot types vary
+	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion)
 	// Stores should only set slots to StackAny if they are not the same type as what is being stored
 	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{8, "+ arg 0..."})
 	// ScratchSpace should reset after hitting label in deadcode
