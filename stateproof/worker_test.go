@@ -692,19 +692,5 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 	}
 
 	txn := (<-s.txmsg).Txn // todo: think about case where this is blocked.
-	a.Zero(txn.Fee)
-	a.Zero(len(txn.Note))
-	a.Equal(transactions.StateProofSender, txn.Sender)
-
-	// ensuring other Txn types aren't filled accidentally.
-	a.Zero(txn.KeyregTxnFields)
-	a.Zero(txn.PaymentTxnFields)
-	a.Zero(txn.AssetConfigTxnFields)
-	a.Zero(txn.AssetTransferTxnFields)
-	a.Zero(txn.AssetFreezeTxnFields)
-	a.Zero(txn.ApplicationCallTxnFields)
-
-	// check message contents:
-	a.NotZero(txn.Message) // todo
-
+	a.NoError(txn.WellFormed(transactions.SpecialAddresses{}, proto))
 }
