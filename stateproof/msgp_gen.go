@@ -22,15 +22,15 @@ func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).Round.MsgIsZero() {
+	if (*z).SignerAddress.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).Sig.MsgIsZero() {
+	if (*z).Round.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Signer.MsgIsZero() {
+	if (*z).Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -38,19 +38,19 @@ func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "rnd"
-			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o = (*z).Round.MarshalMsg(o)
+			// string "a"
+			o = append(o, 0xa1, 0x61)
+			o = (*z).SignerAddress.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o = (*z).Sig.MarshalMsg(o)
+			// string "r"
+			o = append(o, 0xa1, 0x72)
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "signer"
-			o = append(o, 0xa6, 0x73, 0x69, 0x67, 0x6e, 0x65, 0x72)
-			o = (*z).Signer.MarshalMsg(o)
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = (*z).Sig.MarshalMsg(o)
 		}
 	}
 	return
@@ -76,9 +76,9 @@ func (z *sigFromAddr) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Signer.UnmarshalMsg(bts)
+			bts, err = (*z).SignerAddress.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signer")
+				err = msgp.WrapError(err, "struct-from-array", "SignerAddress")
 				return
 			}
 		}
@@ -121,19 +121,19 @@ func (z *sigFromAddr) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "signer":
-				bts, err = (*z).Signer.UnmarshalMsg(bts)
+			case "a":
+				bts, err = (*z).SignerAddress.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Signer")
+					err = msgp.WrapError(err, "SignerAddress")
 					return
 				}
-			case "rnd":
+			case "r":
 				bts, err = (*z).Round.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Round")
 					return
 				}
-			case "sig":
+			case "s":
 				bts, err = (*z).Sig.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
@@ -159,11 +159,11 @@ func (_ *sigFromAddr) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *sigFromAddr) Msgsize() (s int) {
-	s = 1 + 7 + (*z).Signer.Msgsize() + 4 + (*z).Round.Msgsize() + 4 + (*z).Sig.Msgsize()
+	s = 1 + 2 + (*z).SignerAddress.Msgsize() + 2 + (*z).Round.Msgsize() + 2 + (*z).Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *sigFromAddr) MsgIsZero() bool {
-	return ((*z).Signer.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+	return ((*z).SignerAddress.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Sig.MsgIsZero())
 }
