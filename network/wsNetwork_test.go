@@ -2041,6 +2041,8 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	netB := makeTestWebsocketNodeWithConfig(t, bConfig)
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
+	netBnewBlockNotify := make(chan struct{}, 1)
+	netB.newBlockNotify = netBnewBlockNotify
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
@@ -2087,6 +2089,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
+	netBnewBlockNotify <- struct{}{}
 	// TODO: better event driven thing for netB sending new MOI
 	time.Sleep(10 * time.Millisecond)
 	require.Equal(t, uint32(wantTXGossipNo), netB.wantTXGossip)
@@ -2139,6 +2142,8 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	netB.nodeInfo = &participatingNodeInfo{}
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
+	netBnewBlockNotify := make(chan struct{}, 1)
+	netB.newBlockNotify = netBnewBlockNotify
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
@@ -2185,6 +2190,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
+	netBnewBlockNotify <- struct{}{}
 	// TODO: better event driven thing for netB sending new MOI
 	time.Sleep(10 * time.Millisecond)
 	require.Equal(t, uint32(wantTXGossipYes), netB.wantTXGossip)

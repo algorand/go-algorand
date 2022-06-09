@@ -133,6 +133,7 @@ type AlgorandFullNode struct {
 	catchupBlockAuth                   blockAuthenticatorImpl
 
 	oldKeyDeletionNotify        chan struct{}
+	networkBlockNotify          chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
 
 	tracer messagetracer.MessageTracer
@@ -168,6 +169,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
 	node.devMode = genesis.DevMode
+	node.networkBlockNotify = make(chan struct{}, 1)
 
 	if node.devMode {
 		cfg.DisableNetworking = true
@@ -175,7 +177,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node.networkBlockNotify, node)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -1064,6 +1066,12 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {
 	case node.oldKeyDeletionNotify <- struct{}{}:
+	default:
+	}
+
+	// Tell the network a new block has arrived, non-blocking.
+	select {
+	case node.networkBlockNotify <- struct{}{}:
 	default:
 	}
 }

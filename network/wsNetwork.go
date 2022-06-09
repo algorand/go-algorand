@@ -417,8 +417,7 @@ type WebsocketNetwork struct {
 	// messagesOfInterestMu protects messagesOfInterest and ensures
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
-	messagesOfInterestMu   deadlock.Mutex
-	messagesOfInterestCond *sync.Cond
+	messagesOfInterestMu deadlock.Mutex
 
 	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
 	// are still transmitting or receiving information. The channel produced by this ticker
@@ -426,7 +425,8 @@ type WebsocketNetwork struct {
 	// Start(), and being shut down when Stop() is called.
 	peersConnectivityCheckTicker *time.Ticker
 
-	nodeInfo NodeInfo
+	nodeInfo       NodeInfo
+	newBlockNotify <-chan struct{}
 
 	// atomic {0:unknown, 1:yes, 2:no}
 	wantTXGossip uint32
@@ -764,7 +764,6 @@ func (wn *WebsocketNetwork) setup() {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
 
-	wn.messagesOfInterestCond = sync.NewCond(&wn.messagesOfInterestMu)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
@@ -833,7 +832,9 @@ func (wn *WebsocketNetwork) Start() {
 		go wn.prioWeightRefresh()
 	}
 
-	go wn.postMessagesOfInterestThread()
+	if wn.nodeInfo != nil && wn.newBlockNotify != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
+		go wn.postMessagesOfInterestThread()
+	}
 
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
 }
@@ -1725,17 +1726,6 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
 	wn.lastNetworkAdvance = time.Now().UTC()
-	if wn.nodeInfo != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
-		// if we're not a relay, and not participating, we don't need txn pool
-		wantTXGossip := wn.nodeInfo.IsParticipating()
-		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
-			wn.RegisterMessageInterest(protocol.TxnTag)
-			wn.wantTXGossip = wantTXGossipYes
-		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
-			wn.DeregisterMessageInterest(protocol.TxnTag)
-			wn.wantTXGossip = wantTXGossipNo
-		}
-	}
 }
 
 // sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
@@ -2146,17 +2136,18 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, newBlockNotify <-chan struct{}, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
 	wn = &WebsocketNetwork{
-		log:       log,
-		config:    config,
-		phonebook: phonebook,
-		GenesisID: genesisID,
-		NetworkID: networkID,
-		nodeInfo:  nodeInfo,
+		log:            log,
+		config:         config,
+		phonebook:      phonebook,
+		GenesisID:      genesisID,
+		NetworkID:      networkID,
+		nodeInfo:       nodeInfo,
+		newBlockNotify: newBlockNotify,
 	}
 
 	wn.setup()
@@ -2165,7 +2156,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
 func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil)
+	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil, nil)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node
@@ -2350,15 +2341,27 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
-	wn.messagesOfInterestCond.Broadcast()
 }
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 	var peers []*wsPeer
-	wn.messagesOfInterestMu.Lock()
-	defer wn.messagesOfInterestMu.Unlock()
 	for {
-		wn.messagesOfInterestCond.Wait()
+		select {
+		case <-wn.ctx.Done():
+			return
+		case <-wn.newBlockNotify: // wait for a new block notification
+		}
+
+		// if we're not a relay, and not participating, we don't need txn pool
+		wantTXGossip := wn.nodeInfo.IsParticipating()
+		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+			wn.RegisterMessageInterest(protocol.TxnTag)
+			wn.wantTXGossip = wantTXGossipYes
+		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+			wn.DeregisterMessageInterest(protocol.TxnTag)
+			wn.wantTXGossip = wantTXGossipNo
+		}
+
 		peers, _ = wn.peerSnapshot(peers)
 		for _, peer := range peers {
 			wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
