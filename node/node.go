@@ -384,7 +384,9 @@ func (node *AlgorandFullNode) Start() {
 		node.catchpointCatchupService.Start(node.ctx)
 	} else {
 		// The following code changes the value of node.catchupService.pauseAtRound
-		node.catchupService.PauseOrResume(node.pauseAtRound)
+		if node.pauseAtRound > uint64(0) {
+			node.catchupService.PauseOrResume(node.pauseAtRound)
+		}
 		node.catchupService.Start()
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
