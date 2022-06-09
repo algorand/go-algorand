@@ -112,7 +112,6 @@ gen-app-and-box-scenarios:
                         datefmt="%H:%M:%S")
 
     results = []
-    # with ThreadPoolExecutor(max_workers=2*BOXES_PER_APP) as executor:
     with ThreadPoolExecutor() as executor:
         for r in executor.map(worker, range(BOXES_PER_APP)):
             results.append(r)
