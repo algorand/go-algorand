@@ -252,12 +252,18 @@ type OpStream struct {
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
 // OpStream must be used for each call to assemble().
 func newOpStream(version uint64) OpStream {
-	return OpStream{
+	o := OpStream{
 		labels:       make(map[string]int),
 		OffsetToLine: make(map[int]int),
 		typeTracking: true,
 		Version:      version,
 	}
+
+	for i, _ := range o.known.scratchSpace {
+		o.known.scratchSpace[i] = StackUint64
+	}
+
+	return o
 }
 
 // ProgramKnowledge tracks statically known information as we assemble
@@ -1355,9 +1361,6 @@ func (ops *OpStream) assemble(text string) error {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
 	scanner := bufio.NewScanner(fin)
-	for i := range ops.known.scratchSpace {
-		ops.known.scratchSpace[i] = StackUint64
-	}
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
