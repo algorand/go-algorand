@@ -159,7 +159,7 @@ function validate_channel_specified() {
 
 function determine_current_version() {
     CURRENTVER="$(( ${BINDIR}/algod -v 2>/dev/null || echo 0 ) | head -n 1)"
-    echo Current Version = ${CURRENTVER}
+    echo "Current Version = ${CURRENTVER}"
 }
 
 function get_updater_url() {
@@ -241,11 +241,15 @@ function check_for_updater() {
     if ! curl -sSL "$UPDATER_URL" -o "$UPDATER_ARCHIVE"; then
         echo "failed to download updater archive from ${UPDATER_URL} using curl."
         exit 1
+    else
+        echo "Downloading $UPDATER_URL"
     fi
 
     if [ ! -f "$UPDATER_ARCHIVE" ]; then
         echo "downloaded file ${UPDATER_ARCHIVE} is missing."
         exit
+    else
+        echo "Downloaded into file ${UPDATER_ARCHIVE}"
     fi
 
     # if -verify command line flag is set, try verifying updater archive
@@ -275,6 +279,8 @@ function check_for_updater() {
                         if ! gpg --verify "$UPDATER_SIGFILE" "$UPDATER_ARCHIVE"; then
                             echo "failed to verify signature of updater archive."
                             exit 1
+                        else
+                            echo "Verified signature of updater archive"
                         fi
                     else
                         echo "failed download signature file, cannot perform signature validation."
@@ -300,6 +306,8 @@ function check_for_updater() {
                     echo "failed to verify checksum of updater archive."
                     popd
                     exit 1
+                else
+                    echo "Verified checksum of updater archive"
                 fi
                 popd
             else
@@ -339,14 +347,14 @@ function check_for_update() {
 
     if [ ${CURRENTVER} -ge ${LATEST} ]; then
         if [ "${UPDATETYPE}" = "install" ]; then
-            echo No new version found - forcing install anyway
+            echo "No new version found - forcing install anyway"
         else
-            echo No new version found
+            echo "No new version found"
             return 1
         fi
     fi
 
-    echo New version found
+    echo "New version found"
     return 0
 }
 
@@ -395,10 +403,10 @@ function download_update() {
     ${SCRIPTPATH}/updater ver get -c ${CHANNEL} -o ${TARFILE} ${BUCKET} ${SPECIFIC_VERSION}
 
     if [ $? -ne 0 ]; then
-        echo Error downloading update file
+        echo "Error downloading update file"
         exit 1
     fi
-    echo Update Downloaded to ${TARFILE}
+    echo "Update Downloaded to ${TARFILE}"
 }
 
 function check_and_download_update() {
@@ -416,7 +424,7 @@ function download_update_for_current_version() {
 }
 
 function expand_update() {
-    echo Expanding update...
+    echo "Expanding update..."
     if ! tar -zxof "${TARFILE}" -C "${UPDATESRCDIR}"; then
         return 1
     fi
@@ -424,7 +432,7 @@ function expand_update() {
 }
 
 function validate_update() {
-    echo Validating update...
+    echo "Validating update..."
     # We should consider including a version.info file
     # that we can compare against the expected version
     return 0
@@ -484,7 +492,7 @@ function run_systemd_action() {
 }
 
 function backup_binaries() {
-    echo Backing up current binary files...
+    echo "Backing up current binary files..."
     mkdir -p "${BINDIR}/backup"
     BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
@@ -527,7 +535,7 @@ function install_new_binaries() {
     if [ ! -d ${UPDATESRCDIR}/bin ]; then
         return 0
     else
-        echo Installing new binary files...
+        echo "Installing new binary files..."
         ROLLBACKBIN=1
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new
@@ -546,7 +554,7 @@ function reset_wallets_for_new_ledger() {
     for file in *.partkey *.rootkey; do
         if [ -e "${file}" ]; then
             cp "${file}" "${NEW_VER}/${file}"
-            echo 'Installed genesis account file: ' "${file}"
+            echo "Installed genesis account file: ${file}"
         fi
     done
     popd >/dev/null
@@ -629,12 +637,12 @@ function clean_legacy_logs() {
 
 function startup_node() {
     if [ "${NOSTART}" != "" ]; then
-        echo Auto-start node disabled - not starting
+        echo "Auto-start node disabled - not starting"
         return
     fi
 
     CURDATADIR=$1
-    echo Restarting node in ${CURDATADIR}...
+    echo "Restarting node in ${CURDATADIR}..."
 
     check_install_valid
     if [ $? -ne 0 ]; then
@@ -654,7 +662,7 @@ function startup_nodes() {
 }
 
 function rollback() {
-    echo Rolling back from failed update...
+    echo "Rolling back from failed update..."
     if [ ${ROLLBACKBIN} -ne 0 ]; then
         rollback_binaries
     fi
