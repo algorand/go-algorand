@@ -203,8 +203,8 @@ function get_updater_url() {
     UPDATER_URL="http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/releases/stable/f9d842778_3.6.2/install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
     UPDATER_FILENAME="install_stable_${OS}-${ARCH}_3.6.2.tar.gz"
 
-    # if on linux, also set variables for signature and checksum validation
-    if [ "$OS" = "linux" ] && [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
+    # also set variables for signature and checksum validation
+    if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
         UPDATER_PUBKEYURL="https://releases.algorand.com/key.pub"
         UPDATER_SIGURL="http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/releases/stable/f9d842778_3.6.2/install_stable_${OS}-${ARCH}_3.6.2.tar.gz.sig"
         UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/stable/hashes_stable_${OS}_${ARCH}_3.6.2"
@@ -213,26 +213,22 @@ function get_updater_url() {
 
 # check to see if the binary updater exists. if not, it will automatically the correct updater binary for the current platform
 function check_for_updater() {
-    local UNAME
-    UNAME="$(uname)"
-
     # check if the updater binary exist and is not empty.
     if [[ -s "${SCRIPTPATH}/updater" && -f "${SCRIPTPATH}/updater" ]]; then
         return 0
     fi
 
     # set UPDATER_URL and UPDATER_ARCHIVE as a global that can be referenced here
-    # if linux, UPDATER_PUBKEYURL, UPDATER_SIGURL, UPDATER_CHECKSUMURL will be set to try verification
+    # UPDATER_PUBKEYURL, UPDATER_SIGURL, UPDATER_CHECKSUMURL will be set to try verification
     get_updater_url
 
     # check if curl is available
     if ! type curl &>/dev/null; then
         # no curl is installed.
         echo "updater binary is missing and cannot be downloaded since curl is missing."
-        if [ "$UNAME" = "Linux" ]; then
-            echo "To install curl, run the following command:"
-            echo "apt-get update; apt-get install -y curl"
-        fi
+        echo "To install curl, run the following command:"
+        echo "On Linux: apt-get update; apt-get install -y curl"
+        echo "On Mac: brew install curl"
         exit 1
     fi
 
@@ -254,20 +250,18 @@ function check_for_updater() {
 
     # if -verify command line flag is set, try verifying updater archive
     if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
-        # if linux, check for checksum and signature validation dependencies
+        # check for checksum and signature validation dependencies
         local GPG_VERIFY="0" CHECKSUM_VERIFY="0"
-        if [ "$UNAME" = "Linux" ]; then
-            if type gpg >&/dev/null; then
-                GPG_VERIFY="1"
-            else
-                echo "gpg is not available to perform signature validation."
-            fi
+        if type gpg >&/dev/null; then
+            GPG_VERIFY="1"
+        else
+            echo "gpg is not available to perform signature validation."
+        fi
 
-            if type sha256sum &>/dev/null; then
-                CHECKSUM_VERIFY="1"
-            else
-                echo "sha256sum is not available to perform checksum validation."
-            fi
+        if type sha256sum &>/dev/null; then
+            CHECKSUM_VERIFY="1"
+        else
+            echo "sha256sum is not available to perform checksum validation."
         fi
 
         # try signature validation
