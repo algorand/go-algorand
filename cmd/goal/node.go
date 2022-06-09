@@ -164,8 +164,7 @@ var catchupCmd = &cobra.Command{
 				URL := fmt.Sprintf(catchpointURL, genesis)
 				label, err := getMissingCatchpointLabel(URL)
 				if err != nil {
-					fmt.Println(errorUnableToLookupCatchpointLabel)
-					os.Exit(1)
+					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel)
 				}
 				args = append(args, label)
 			}
