@@ -631,7 +631,7 @@ func (fs ecdsaCurveSpec) Note() string {
 
 var ecdsaCurveSpecs = [...]ecdsaCurveSpec{
 	{Secp256k1, 5, "secp256k1 curve, used in Bitcoin"},
-	{Secp256r1, fidoVersion, "secp256r1 curve, NIST standard"},
+	{Secp256r1, experimentalVersionFido, "secp256r1 curve, NIST standard"},
 }
 
 func ecdsaCurveSpecByField(c EcdsaCurve) (ecdsaCurveSpec, bool) {
@@ -742,9 +742,9 @@ type jsonRefSpec struct {
 }
 
 var jsonRefSpecs = [...]jsonRefSpec{
-	{JSONString, StackBytes, fidoVersion},
-	{JSONUint64, StackUint64, fidoVersion},
-	{JSONObject, StackBytes, fidoVersion},
+	{JSONString, StackBytes, experimentalVersionFido},
+	{JSONUint64, StackUint64, experimentalVersionFido},
+	{JSONObject, StackBytes, experimentalVersionFido},
 }
 
 func jsonRefSpecByField(r JSONRefType) (jsonRefSpec, bool) {
@@ -765,7 +765,7 @@ func (fs jsonRefSpec) Type() StackType {
 	return fs.ftype
 }
 func (fs jsonRefSpec) OpVersion() uint64 {
-	return fidoVersion
+	return experimentalVersionFido
 }
 func (fs jsonRefSpec) Version() uint64 {
 	return fs.version
