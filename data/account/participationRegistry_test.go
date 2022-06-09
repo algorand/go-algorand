@@ -1039,6 +1039,53 @@ func TestFlushResetsLastError(t *testing.T) {
 	a.NoError(registry.Flush(10 * time.Second))
 }
 
+// TestParticipationDB_Locking adds some secrets to the registry and makes sure the same ones are returned.
+func TestParticipationDB_Locking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbName := strings.Replace(t.Name(), "/", "_", -1)
+
+	dbfile, err := db.OpenErasablePair(dbName + ".sqlite3")
+	a.NoError(err)
+
+	registry, err := makeParticipationRegistry(dbfile, logging.TestingLog(t))
+	require.NoError(t, err)
+	require.NotNil(t, registry)
+
+	defer registryCloseTest(t, registry, dbName)
+
+	var id2 ParticipationID
+	for i := 0; i < 3; i++ {
+		part := makeTestParticipation(a, 1, 0, 511, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		id, err := registry.Insert(part)
+		if i == 0 {
+			id2 = id
+		}
+		a.NoError(err)
+		a.NoError(registry.AppendKeys(id, part.StateProofSecrets.GetAllKeys()))
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(id, part.ID())
+	}
+
+	go func() {
+		for i := 0; i < 100; i++ {
+			fmt.Printf("removing %d\n", i)
+			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusFuture])
+			registry.Flush(defaultTimeout)
+		}
+	}()
+
+	for i := 0; i < 50; i++ {
+		time.Sleep(time.Second / 2)
+		fmt.Printf("reading %d\n", i)
+		_, err = registry.GetStateProofForRound(id2, basics.Round(256))
+		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
+		// while the main thread is updating the Rolling table.
+		a.NoError(err)
+	}
+}
+
 // based on BenchmarkOldKeysDeletion
 func BenchmarkDeleteExpired(b *testing.B) {
 	for _, erasable := range []bool{true, false} {

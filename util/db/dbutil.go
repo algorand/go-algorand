@@ -91,7 +91,7 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 }
 
 func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on"})
+	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on", "_journal_mode=wal"})
 }
 
 func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
