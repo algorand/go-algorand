@@ -269,7 +269,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 		tu.log.Infof("upgradeDatabaseSchema1 resetting account hashes")
 		// reset the merkle trie
-		err = resetAccountHashes(tx)
+		err = resetAccountHashes(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to reset account hashes : %v", err)
 		}
@@ -409,7 +409,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 	}
 
 	// reset the merkle trie
-	err = resetAccountHashes(tx)
+	err = resetAccountHashes(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to reset account hashes : %v", err)
 	}

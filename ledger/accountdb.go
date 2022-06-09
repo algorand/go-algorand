@@ -1155,8 +1155,8 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	return
 }
 
-func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
-	err = tx.QueryRow("SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
+func getCatchpoint(ctx context.Context, tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
+	err = tx.QueryRowContext(ctx, "SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
 }
 
@@ -2190,7 +2190,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 }
 
 func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
-	totals, err := accountsTotals(tx, false)
+	totals, err := accountsTotals(ctx, tx, false)
 	if err != nil {
 		return err
 	}
@@ -2378,8 +2378,8 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 	}
 }
 
-func resetAccountHashes(tx *sql.Tx) (err error) {
-	_, err = tx.Exec(`DELETE FROM accounthashes`)
+func resetAccountHashes(ctx context.Context, tx *sql.Tx) (err error) {
+	_, err = tx.ExecContext(ctx, `DELETE FROM accounthashes`)
 	return
 }
 
@@ -2405,8 +2405,8 @@ func accountsRound(q db.Queryable) (rnd basics.Round, err error) {
 
 // accountsHashRound returns the round of the hash tree
 // if the hash of the tree doesn't exists, it returns zero.
-func accountsHashRound(tx *sql.Tx) (hashrnd basics.Round, err error) {
-	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
+func accountsHashRound(ctx context.Context, tx *sql.Tx) (hashrnd basics.Round, err error) {
+	err = tx.QueryRowContext(ctx, "SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
 	if err == sql.ErrNoRows {
 		hashrnd = basics.Round(0)
 		err = nil
@@ -2940,12 +2940,12 @@ func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]persistedOnlineAccount
 	return result, nil
 }
 
-func accountsTotals(q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
+func accountsTotals(ctx context.Context, q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
 	}
-	row := q.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
+	row := q.QueryRowContext(ctx, "SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
 		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
@@ -3729,8 +3729,8 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 }
 
 // updates the round number associated with the hash of current account data.
-func updateAccountsHashRound(tx *sql.Tx, hashRound basics.Round) (err error) {
-	res, err := tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
+func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.Round) (err error) {
+	res, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
 	if err != nil {
 		return
 	}
@@ -4733,21 +4733,21 @@ type catchpointFirstStageInfo struct {
 	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }
 
-func insertOrReplaceCatchpointFirstStageInfo(e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
+func insertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
 	infoSerialized := protocol.Encode(info)
 	f := func() error {
 		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
-		_, err := e.Exec(query, round, infoSerialized)
+		_, err := e.ExecContext(ctx, query, round, infoSerialized)
 		return err
 	}
 	return db.Retry(f)
 }
 
-func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpointFirstStageInfo, bool /*exists*/, error) {
+func selectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round basics.Round) (catchpointFirstStageInfo, bool /*exists*/, error) {
 	var data []byte
 	f := func() error {
 		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
-		err := q.QueryRow(query, round).Scan(&data)
+		err := q.QueryRowContext(ctx, query, round).Scan(&data)
 		if err == sql.ErrNoRows {
 			data = nil
 			return nil
@@ -4772,12 +4772,12 @@ func selectCatchpointFirstStageInfo(q db.Queryable, round basics.Round) (catchpo
 	return res, true, nil
 }
 
-func selectOldCatchpointFirstStageInfoRounds(q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
+func selectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
 	var res []basics.Round
 
 	f := func() error {
 		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
-		rows, err := q.Query(query, maxRound)
+		rows, err := q.QueryContext(ctx, query, maxRound)
 		if err != nil {
 			return err
 		}
@@ -4803,10 +4803,10 @@ func selectOldCatchpointFirstStageInfoRounds(q db.Queryable, maxRound basics.Rou
 	return res, nil
 }
 
-func deleteOldCatchpointFirstStageInfo(e db.Executable, maxRoundToDelete basics.Round) error {
+func deleteOldCatchpointFirstStageInfo(ctx context.Context, e db.Executable, maxRoundToDelete basics.Round) error {
 	f := func() error {
 		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
-		_, err := e.Exec(query, maxRoundToDelete)
+		_, err := e.ExecContext(ctx, query, maxRoundToDelete)
 		return err
 	}
 	return db.Retry(f)

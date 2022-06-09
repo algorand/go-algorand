@@ -327,7 +327,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 		if err != nil {
 			return
 		}
-		totals, err = accountsTotals(tx, false)
+		totals, err = accountsTotals(ctx, tx, false)
 		return
 	})
 	require.NoError(t, err)
@@ -345,7 +345,8 @@ func TestFullCatchpointWriter(t *testing.T) {
 		BlockHeaderDigest: blockHeaderDigest,
 	}
 	err = repackCatchpoint(
-		catchpointFileHeader, biggestChunkLen, catchpointDataFilePath, catchpointFilePath)
+		context.Background(), catchpointFileHeader, biggestChunkLen,
+		catchpointDataFilePath, catchpointFilePath)
 	require.NoError(t, err)
 
 	// create a ledger.

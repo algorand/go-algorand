@@ -624,7 +624,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		totals, err0 := accountsTotals(tx, false)
+		totals, err0 := accountsTotals(ctx, tx, false)
 		if err0 != nil {
 			return err0
 		}
