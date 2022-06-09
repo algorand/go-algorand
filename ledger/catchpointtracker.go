@@ -287,7 +287,10 @@ func (ct *catchpointTracker) recoverFromCrash(dbRound basics.Round) error {
 		return err
 	}
 
-	catchpointLookback, err := readCatchpointStateUint64(context.Background(), ct.dbs.Rdb.Handle, catchpointStateCatchpointLookback)
+	ctx := context.Background()
+
+	catchpointLookback, err := readCatchpointStateUint64(
+		ctx, ct.dbs.Rdb.Handle, catchpointStateCatchpointLookback)
 	if err != nil {
 		return err
 	}
@@ -299,8 +302,7 @@ func (ct *catchpointTracker) recoverFromCrash(dbRound basics.Round) error {
 		}
 
 		if uint64(dbRound) >= catchpointLookback {
-			err := ct.pruneFirstStageRecordsData(
-				context.Background(), dbRound-basics.Round(catchpointLookback))
+			err := ct.pruneFirstStageRecordsData(ctx, dbRound-basics.Round(catchpointLookback))
 			if err != nil {
 				return err
 			}

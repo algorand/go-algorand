@@ -3672,22 +3672,21 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 
-	err := accountsCreateCatchpointFirstStageInfoTable(
-		context.Background(), dbs.Wdb.Handle)
+	ctx := context.Background()
+
+	err := accountsCreateCatchpointFirstStageInfoTable(ctx, dbs.Wdb.Handle)
 	require.NoError(t, err)
 
 	for _, round := range []basics.Round{4, 6, 8} {
 		info := catchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
-		err = insertOrReplaceCatchpointFirstStageInfo(
-			context.Background(), dbs.Wdb.Handle, round, &info)
+		err = insertOrReplaceCatchpointFirstStageInfo(ctx, dbs.Wdb.Handle, round, &info)
 		require.NoError(t, err)
 	}
 
 	for _, round := range []basics.Round{4, 6, 8} {
-		info, exists, err := selectCatchpointFirstStageInfo(
-			context.Background(), dbs.Rdb.Handle, round)
+		info, exists, err := selectCatchpointFirstStageInfo(ctx, dbs.Rdb.Handle, round)
 		require.NoError(t, err)
 		require.True(t, exists)
 
@@ -3697,22 +3696,18 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 		require.Equal(t, infoExpected, info)
 	}
 
-	_, exists, err := selectCatchpointFirstStageInfo(
-		context.Background(), dbs.Rdb.Handle, 7)
+	_, exists, err := selectCatchpointFirstStageInfo(ctx, dbs.Rdb.Handle, 7)
 	require.NoError(t, err)
 	require.False(t, exists)
 
-	rounds, err := selectOldCatchpointFirstStageInfoRounds(
-		context.Background(), dbs.Rdb.Handle, 6)
+	rounds, err := selectOldCatchpointFirstStageInfoRounds(ctx, dbs.Rdb.Handle, 6)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{4, 6}, rounds)
 
-	err = deleteOldCatchpointFirstStageInfo(
-		context.Background(), dbs.Wdb.Handle, 6)
+	err = deleteOldCatchpointFirstStageInfo(ctx, dbs.Wdb.Handle, 6)
 	require.NoError(t, err)
 
-	rounds, err = selectOldCatchpointFirstStageInfoRounds(
-		context.Background(), dbs.Rdb.Handle, 9)
+	rounds, err = selectOldCatchpointFirstStageInfoRounds(ctx, dbs.Rdb.Handle, 9)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{8}, rounds)
 }
