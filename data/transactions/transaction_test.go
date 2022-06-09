@@ -1241,3 +1241,59 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		require.Equalf(t, testCase.err, err, "index: %d\ntest case: %#v", testcaseIdx, testCase)
 	}
 }
+
+type stateproofTxnTestCase struct {
+	expectedError error
+	// proto params:
+	protoBase          protocol.ConsensusVersion
+	StateProofInterval uint64
+
+	// txn params
+	fee        basics.MicroAlgos
+	note       []byte
+	group      crypto.Digest
+	lease      [32]byte
+	rekeyValue basics.Address
+	sender     basics.Address
+}
+
+func (s stateproofTxnTestCase) RunIsWellFormedForTestCase() error {
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	curProto.StateProofInterval = s.StateProofInterval
+
+	// edit txn params. wanted
+	return Transaction{
+		_struct: struct{}{},
+		Type:    protocol.StateProofTx,
+		Header: Header{
+			_struct:     struct{}{},
+			Sender:      s.sender,
+			Fee:         s.fee,
+			FirstValid:  0,
+			LastValid:   0,
+			Note:        s.note,
+			GenesisID:   "",
+			GenesisHash: crypto.Digest{},
+			Group:       s.group,
+			Lease:       s.lease,
+			RekeyTo:     s.rekeyValue,
+		},
+		StateProofTxnFields: StateProofTxnFields{},
+	}.WellFormed(SpecialAddresses{}, curProto)
+}
+
+func TestWellFormedStateProofTxn(t *testing.T) {
+	// want to create different Txns, run on all of these cases the check, and have an expected result
+	cases := []stateproofTxnTestCase{
+		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
+		/* 0 */ {expectedError: nil, StateProofInterval: 256, sender: StateProofSender},
+	}
+	for i, testCase := range cases {
+		testCase := testCase
+		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, testCase.expectedError, testCase.RunIsWellFormedForTestCase())
+		})
+
+	}
+}

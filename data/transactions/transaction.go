@@ -290,6 +290,7 @@ var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofP
 var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
 var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
 var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
+var errStateProofNotSupported = errors.New("state proofs not supported")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -474,7 +475,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	case protocol.StateProofTx:
 		if proto.StateProofInterval == 0 {
-			return fmt.Errorf("state proofs not supported")
+			return errStateProofNotSupported
 		}
 
 		// This is a placeholder transaction used to store state proofs
