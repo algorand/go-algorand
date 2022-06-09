@@ -228,6 +228,15 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	}
 }
 
+func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, error) {
+	select {
+	case sig := <-s.sigmsg:
+		return sig, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("timeout waiting on sigmsg")
+	}
+}
+
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
 	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
 }
@@ -277,7 +286,9 @@ func TestWorkerAllSigs(t *testing.T) {
 
 		for i := 0; i < len(keys); i++ {
 			// Expect all signatures to be broadcast.
-			_ = <-s.sigmsg
+			_, err := s.waitOnSigWithTimeout(time.Second * 2)
+			require.NoError(t, err)
+
 		}
 
 		// Expect a state proof to be formed.
@@ -338,7 +349,8 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		_ = <-s.sigmsg
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
 	}
 
 	// No state proof should be formed yet: not enough sigs for a stateproof this early.
@@ -397,7 +409,8 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		_ = <-s.sigmsg
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
 	}
 
 	// No state proof should be formed: not enough sigs.
@@ -473,7 +486,9 @@ func TestWorkerHandleSig(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		msg := <-s.sigmsg
+		msg, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
+
 		res := w.handleSigMessage(network.IncomingMessage{
 			Data: msg,
 		})
@@ -688,7 +703,8 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		_ = <-s.sigmsg // todo: think about case where this is blocked.
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
 	}
 
 	txn := (<-s.txmsg).Txn // todo: think about case where this is blocked.
