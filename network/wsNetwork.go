@@ -417,8 +417,9 @@ type WebsocketNetwork struct {
 	// messagesOfInterestMu protects messagesOfInterest and ensures
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
-	messagesOfInterestMu     deadlock.Mutex
-	messagesOfInterestNotify chan uint32
+	messagesOfInterestMu      deadlock.Mutex
+	messagesOfInterestNotify  chan uint32
+	messagesOfInterestRefresh chan int
 
 	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
 	// are still transmitting or receiving information. The channel produced by this ticker
@@ -765,6 +766,7 @@ func (wn *WebsocketNetwork) setup() {
 	}
 
 	wn.messagesOfInterestNotify = make(chan uint32, 2)
+	wn.messagesOfInterestRefresh = make(chan int, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
@@ -1726,14 +1728,10 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	defer wn.lastNetworkAdvanceMu.Unlock()
 	wn.lastNetworkAdvance = time.Now().UTC()
 	if wn.nodeInfo != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
-		// if we're not a relay, and not participating, we don't need txn pool
-		wantTXGossip := wn.nodeInfo.IsParticipating()
-		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
-			wn.RegisterMessageInterest(protocol.TxnTag)
-			wn.wantTXGossip = wantTXGossipYes
-		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
-			wn.DeregisterMessageInterest(protocol.TxnTag)
-			wn.wantTXGossip = wantTXGossipNo
+		select {
+		case wn.messagesOfInterestRefresh <- 1:
+		default:
+			// if the notify chan is full, it will get around to updating the latest when it actually runs
 		}
 	}
 }
@@ -2350,18 +2348,36 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	newgen := atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
-	wn.messagesOfInterestNotify <- newgen
+	select {
+	case wn.messagesOfInterestNotify <- newgen:
+	default:
+		// it has been notified enough, it will pick up the latest when it actually runs
+	}
 }
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 	var peers []*wsPeer
-	for _ = range wn.messagesOfInterestNotify {
-		wn.messagesOfInterestMu.Lock()
-		peers, _ = wn.peerSnapshot(peers)
-		for _, peer := range peers {
-			wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
+	for {
+		select {
+		case <-wn.messagesOfInterestRefresh:
+			// if we're not a relay, and not participating, we don't need txn pool
+			wantTXGossip := wn.nodeInfo.IsParticipating()
+			if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+				wn.RegisterMessageInterest(protocol.TxnTag)
+				atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
+			} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+				wn.DeregisterMessageInterest(protocol.TxnTag)
+				atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
+			}
+		case <-wn.messagesOfInterestNotify:
+			// wn.messagesOfInterestEnc has changed, tell peers
+			wn.messagesOfInterestMu.Lock()
+			peers, _ = wn.peerSnapshot(peers)
+			for _, peer := range peers {
+				wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
+			}
+			wn.messagesOfInterestMu.Unlock()
 		}
-		wn.messagesOfInterestMu.Unlock()
 	}
 }
 

@@ -2052,7 +2052,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	require.False(t, netB.relayMessages)
-	require.Equal(t, uint32(wantTXGossipUnk), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipUnk), atomic.LoadUint32(&netB.wantTXGossip))
 
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
@@ -2093,7 +2093,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	netB.OnNetworkAdvance()
 	// TODO: better event driven thing for netB sending new MOI
 	time.Sleep(10 * time.Millisecond)
-	require.Equal(t, uint32(wantTXGossipNo), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipNo), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -2151,7 +2151,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	require.False(t, netB.relayMessages)
-	require.Equal(t, uint32(wantTXGossipUnk), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipUnk), atomic.LoadUint32(&netB.wantTXGossip))
 
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
@@ -2192,7 +2192,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	netB.OnNetworkAdvance()
 	// TODO: better event driven thing for netB sending new MOI
 	time.Sleep(10 * time.Millisecond)
-	require.Equal(t, uint32(wantTXGossipYes), netB.wantTXGossip)
+	require.Equal(t, uint32(wantTXGossipYes), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
