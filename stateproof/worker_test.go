@@ -237,6 +237,15 @@ func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, e
 	}
 }
 
+func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transactions.SignedTxn, error) {
+	select {
+	case signedTx := <-s.txmsg:
+		return signedTx, nil
+	case <-time.After(timeout):
+		return transactions.SignedTxn{}, fmt.Errorf("timeout waiting on sigmsg")
+	}
+}
+
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
 	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
 }
@@ -293,7 +302,9 @@ func TestWorkerAllSigs(t *testing.T) {
 
 		// Expect a state proof to be formed.
 		for {
-			tx := <-s.txmsg
+			tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+			require.NoError(t, err)
+
 			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
@@ -362,7 +373,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	// Expect a state proof to be formed in the next StateProofInterval/2.
 	s.advanceLatest(proto.StateProofInterval / 2)
-	tx := <-s.txmsg
+
+	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+	require.NoError(t, err)
+
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
 
@@ -707,6 +721,8 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	txn := (<-s.txmsg).Txn // todo: think about case where this is blocked.
-	a.NoError(txn.WellFormed(transactions.SpecialAddresses{}, proto))
+	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+	require.NoError(t, err)
+
+	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
 }
