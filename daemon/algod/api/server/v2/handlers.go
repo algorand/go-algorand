@@ -24,7 +24,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -47,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-codec/codec"
 )
 
@@ -75,6 +75,7 @@ type LedgerForAPI interface {
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
+	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -95,7 +96,6 @@ type NodeInterface interface {
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
-	ListTxns(addr basics.Address, minRound, maxRound basics.Round) ([]node.TxnWithStatus, error)
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -118,7 +118,7 @@ func convertParticipationRecord(record account.ParticipationRecord) generated.Pa
 	}
 
 	if record.StateProof != nil {
-		tmp := record.StateProof[:]
+		tmp := record.StateProof.Commitment[:]
 		participationKey.Key.StateProofKey = &tmp
 	}
 
@@ -640,6 +640,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 			Stibhash:  stibhash[:],
 			Idx:       uint64(idx),
 			Treedepth: uint64(proof.TreeDepth),
+			Hashtype:  hashtype,
 		}
 
 		return ctx.JSON(http.StatusOK, response)
@@ -1159,16 +1160,29 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 	return v2.abortCatchup(ctx, catchpoint)
 }
 
+// CompileResponseWithSourceMap overrides the sourcemap field in
+// the CompileResponse for JSON marshalling.
+type CompileResponseWithSourceMap struct {
+	generated.CompileResponse
+	Sourcemap *logic.SourceMap `json:"sourcemap,omitempty"`
+}
+
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
-func (v2 *Handlers) TealCompile(ctx echo.Context) error {
-	// return early if teal compile is not allowed in node config
+func (v2 *Handlers) TealCompile(ctx echo.Context, params generated.TealCompileParams) (err error) {
+	// Return early if teal compile is not allowed in node config.
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
+	if params.Sourcemap == nil {
+		// Backwards compatibility: set sourcemap flag to default false value.
+		defaultValue := false
+		params.Sourcemap = &defaultValue
+	}
+
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
-	_, err := buf.ReadFrom(ctx.Request().Body)
+	_, err = buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -1181,62 +1195,84 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	}
 	pd := logic.HashProgram(ops.Program)
 	addr := basics.Address(pd)
-	response := generated.CompileResponse{
-		Hash:   addr.String(),
-		Result: base64.StdEncoding.EncodeToString(ops.Program),
+
+	// If source map flag is enabled, then return the map.
+	var sourcemap *logic.SourceMap
+	if *params.Sourcemap {
+		rawmap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+		sourcemap = &rawmap
+	}
+
+	response := CompileResponseWithSourceMap{
+		generated.CompileResponse{
+			Hash:   addr.String(),
+			Result: base64.StdEncoding.EncodeToString(ops.Program),
+		},
+		sourcemap,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
 
-var errNilLedger = errors.New("could not contact ledger")
-var errNoStateProofInRange = errors.New("no stateproof for that round")
-
 // StateProof returns the state proof for a given round.
-// (GET /v2/transaction/state-proof/{round})
+// (GET /v2/stateproofs/{round})
 func (v2 *Handlers) StateProof(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
-	if ledger == nil {
-		return internalError(ctx, errNilLedger, errNilLedger.Error(), v2.Log)
+	if ledger.Latest() < basics.Round(round) {
+		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
-
-	if basics.Round(round) > ledger.Latest() {
-		return notFound(ctx, errNoStateProofInRange, "round does not exist", v2.Log)
-	}
-
-	txns, err := v2.Node.ListTxns(transactions.StateProofSender, basics.Round(round), ledger.Latest())
+	tx, err := stateproof.GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
 	if err != nil {
-		return internalError(ctx, err, errNilLedger.Error(), v2.Log)
+		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
+			return notFound(ctx, err, err.Error(), v2.Log)
+		}
+		return internalError(ctx, err, err.Error(), v2.Log)
 	}
 
-	compareFunc := func(i, j int) bool {
-		return txns[i].ConfirmedRound < txns[j].ConfirmedRound
+	response := generated.StateProofResponse{
+		Message:    protocol.Encode(&tx.Message),
+		StateProof: protocol.Encode(&tx.StateProof),
 	}
 
-	if !sort.SliceIsSorted(txns, compareFunc) {
-		sort.Slice(txns, compareFunc)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetProofForLightBlockHeader Gets a proof of a light block header for a given round
+// (GET /v2/blocks/{round}/lightheader/proof)
+func (v2 *Handlers) GetProofForLightBlockHeader(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	if ledger.Latest() < basics.Round(round) {
+		return internalError(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
 	}
 
-	for _, txn := range txns {
-		if txn.ConfirmedRound < basics.Round(round) {
-			continue
+	stateProof, err := stateproof.GetStateProofTransactionForRound(ledger, basics.Round(round), ledger.Latest())
+	if err != nil {
+		if errors.Is(err, stateproof.ErrNoStateProofForRound) {
+			return notFound(ctx, err, err.Error(), v2.Log)
 		}
-
-		tx := txn.Txn.Txn
-		if tx.Type != protocol.StateProofTx {
-			continue
-		}
-
-		if basics.Round(round) > tx.StateProofTxnFields.StateProofIntervalLatestRound {
-			continue
-		}
-
-		response := generated.StateProofResponse{
-			StateProofMessage: protocol.Encode(&tx.StateProofMessage),
-			StateProof:        protocol.Encode(&tx.StateProof),
-		}
-		return ctx.JSON(http.StatusOK, response)
+		return internalError(ctx, err, err.Error(), v2.Log)
 	}
-	return notFound(ctx, errNoStateProofInRange, fmt.Sprintf("could not find state-proof for round (%d), please re-attempt later", round), v2.Log)
+
+	lastAttestedRound := stateProof.Message.LastAttestedRound
+	firstAttestedRound := stateProof.Message.FirstAttestedRound
+	stateProofInterval := lastAttestedRound - firstAttestedRound + 1
+
+	blkHdrArr, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
+	if err != nil {
+		return notFound(ctx, err, err.Error(), v2.Log)
+	}
+
+	blockIndex := round - firstAttestedRound
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, blkHdrArr, blockIndex)
+	if err != nil {
+		return internalError(ctx, err, err.Error(), v2.Log)
+	}
+
+	response := generated.LightBlockHeaderProofResponse{
+		Index:     blockIndex,
+		Proof:     leafproof.GetConcatenatedProof(),
+		Treedepth: uint64(leafproof.TreeDepth),
+	}
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // TealDisassemble disassembles the program bytecode in base64 into TEAL code.

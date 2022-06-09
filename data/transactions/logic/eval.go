@@ -3524,12 +3524,12 @@ func opExtract64Bits(cx *EvalContext) error {
 }
 
 // accountReference yields the address and Accounts offset designated by a
-// stackValue. If the stackValue is the app account or an account of an app in
-// created.apps, and it is not be in the Accounts array, then len(Accounts) + 1
-// is returned as the index. This would let us catch the mistake if the index is
-// used for set/del. If the txn somehow "psychically" predicted the address, and
-// therefore it IS in txn.Accounts, then happy day, we can set/del it.  Return
-// the proper index.
+// stackValue. If the stackValue is the app account, an account of an app in
+// created.apps, or an account of an app in foreignApps, and it is not in the
+// Accounts array, then len(Accounts) + 1 is returned as the index. This would
+// let us catch the mistake if the index is used for set/del. If the txn somehow
+// "psychically" predicted the address, and therefore it IS in txn.Accounts,
+// then happy day, we can set/del it. Return the proper index.
 
 // If we ever want apps to be able to change local state on these accounts
 // (which includes this app's own account!), we will need a change to
@@ -3553,6 +3553,16 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 		for _, appID := range cx.created.apps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
+				return addr, invalidIndex, nil
+			}
+		}
+	}
+
+	// Allow an address for an app that was provided in the foreign apps array.
+	if err != nil && cx.version >= appAddressAvailableVersion {
+		for _, appID := range cx.txn.Txn.ForeignApps {
+			foreignAddress := cx.getApplicationAddress(appID)
+			if addr == foreignAddress {
 				return addr, invalidIndex, nil
 			}
 		}
@@ -4716,6 +4726,21 @@ func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
 	return decoded[:n], err
 }
 
+// base64padded returns true iff `encoded` has padding chars at the end
+func base64padded(encoded []byte) bool {
+	for i := len(encoded) - 1; i > 0; i-- {
+		switch encoded[i] {
+		case '=':
+			return true
+		case '\n', '\r':
+			/* nothing */
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 func opBase64Decode(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	encodingField := Base64Encoding(cx.program[cx.pc+1])
@@ -4728,8 +4753,11 @@ func opBase64Decode(cx *EvalContext) error {
 	if encodingField == StdEncoding {
 		encoding = base64.StdEncoding
 	}
-	encoding = encoding.Strict()
-	bytes, err := base64Decode(cx.stack[last].Bytes, encoding)
+	encoded := cx.stack[last].Bytes
+	if !base64padded(encoded) {
+		encoding = encoding.WithPadding(base64.NoPadding)
+	}
+	bytes, err := base64Decode(encoded, encoding.Strict())
 	if err != nil {
 		return err
 	}

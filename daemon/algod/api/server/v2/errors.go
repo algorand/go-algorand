@@ -31,6 +31,7 @@ var (
 	errFailedToParseTransaction                = "failed to parse transaction"
 	errFailedToParseBlock                      = "failed to parse block"
 	errFailedToParseCert                       = "failed to parse cert"
+	errFailedToParseSourcemap                  = "failed to parse sourcemap"
 	errFailedToEncodeResponse                  = "failed to encode response"
 	errInternalFailure                         = "internal failure"
 	errNoTxnSpecified                          = "no transaction ID was specified"
@@ -43,4 +44,5 @@ var (
 	errFailedToStartCatchup                    = "failed to start catchup : %v"
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
+	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
 )

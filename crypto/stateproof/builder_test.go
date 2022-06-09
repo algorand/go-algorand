@@ -193,11 +193,15 @@ func calculateHashOnPartLeaf(part basics.Participant) []byte {
 	binaryWeight := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryWeight, part.Weight)
 
+	keyLifetimeBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(keyLifetimeBytes, part.PK.KeyLifetime)
+
 	publicKeyBytes := part.PK
-	partCommitment := make([]byte, 0, len(protocol.StateProofPart)+len(binaryWeight)+len(publicKeyBytes))
+	partCommitment := make([]byte, 0, len(protocol.StateProofPart)+len(binaryWeight)+len(publicKeyBytes.Commitment)+len(keyLifetimeBytes))
 	partCommitment = append(partCommitment, protocol.StateProofPart...)
 	partCommitment = append(partCommitment, binaryWeight...)
-	partCommitment = append(partCommitment, publicKeyBytes[:]...)
+	partCommitment = append(partCommitment, keyLifetimeBytes...)
+	partCommitment = append(partCommitment, publicKeyBytes.Commitment[:]...)
 
 	factory := crypto.HashFactory{HashType: HashType}
 	hashValue := hashBytes(factory.NewHash(), partCommitment)
@@ -369,7 +373,7 @@ func checkSignature(a *require.Assertions, sigBytes []byte, verifier *merklesign
 
 	leafHash = verifyMerklePath(idx, pathLe, sigBytes, parsedBytes, leafHash)
 
-	a.Equal(leafHash, verifier[:])
+	a.Equal(leafHash, verifier.Commitment[:])
 }
 
 func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int, leafHash []byte) []byte {
@@ -517,6 +521,10 @@ func TestErrorCases(t *testing.T) {
 	require.ErrorIs(t, err, ErrPositionWithZeroWeight)
 
 	builder.participants[0].Weight = 1
+	err = builder.IsValid(0, merklesignature.Signature{}, true)
+	a.ErrorIs(err, merklesignature.ErrKeyLifetimeIsZero)
+
+	builder.participants[0].PK.KeyLifetime = 20
 	err = builder.IsValid(0, merklesignature.Signature{}, true)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
 

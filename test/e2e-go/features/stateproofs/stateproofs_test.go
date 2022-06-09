@@ -57,12 +57,6 @@ func TestStateProofs(t *testing.T) {
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
-	tmp := config.Consensus[protocol.ConsensusFuture]
-	config.Consensus[protocol.ConsensusFuture] = consensusParams
-	defer func() {
-		config.Consensus[protocol.ConsensusFuture] = tmp
-	}()
-
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
@@ -99,7 +93,7 @@ func TestStateProofs(t *testing.T) {
 		r.NoError(err)
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
-		r.NoErrorf(err, "failed to retre block from algod on round %d", rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
 		//t.Logf("Round %d, block %v\n", rnd, blk)
 

@@ -316,7 +316,13 @@ type DryrunTxnResult struct {
 	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
-	// Execution cost of app call transaction
+	// Budget added during execution of app call transaction.
+	BudgetAdded *uint64 `json:"budget-added,omitempty"`
+
+	// Budget consumed during execution of app call transaction.
+	BudgetConsumed *uint64 `json:"budget-consumed,omitempty"`
+
+	// Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.
 	Cost *uint64 `json:"cost,omitempty"`
 
 	// Disassembled program line by line.
@@ -358,6 +364,19 @@ type EvalDeltaKeyValue struct {
 
 	// Represents a TEAL value delta.
 	Value EvalDelta `json:"value"`
+}
+
+// LightBlockHeaderProof defines model for LightBlockHeaderProof.
+type LightBlockHeaderProof struct {
+
+	// The index of the light block header in the vector commitment tree
+	Index uint64 `json:"index"`
+
+	// The encoded proof.
+	Proof []byte `json:"proof"`
+
+	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
 }
 
 // ParticipationKey defines model for ParticipationKey.
@@ -440,11 +459,11 @@ type StateDelta []EvalDeltaKeyValue
 // StateProof defines model for StateProof.
 type StateProof struct {
 
-	// The encoded StateProof certificate.
-	StateProof []byte `json:"StateProof"`
+	// The encoded message.
+	Message []byte `json:"Message"`
 
-	// The encoded StateProof message.
-	StateProofMessage []byte `json:"StateProofMessage"`
+	// The encoded StateProof for the message.
+	StateProof []byte `json:"StateProof"`
 }
 
 // TealKeyValue defines model for TealKeyValue.
@@ -620,6 +639,9 @@ type CompileResponse struct {
 
 	// base64 encoded program bytes
 	Result string `json:"result"`
+
+	// JSON of the source map
+	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
 }
 
 // DisassembleResponse defines model for DisassembleResponse.
@@ -637,6 +659,9 @@ type DryrunResponse struct {
 	ProtocolVersion string            `json:"protocol-version"`
 	Txns            []DryrunTxnResult `json:"txns"`
 }
+
+// LightBlockHeaderProofResponse defines model for LightBlockHeaderProofResponse.
+type LightBlockHeaderProofResponse LightBlockHeaderProof
 
 // NodeStatusResponse defines model for NodeStatusResponse.
 type NodeStatusResponse struct {

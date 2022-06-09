@@ -42,13 +42,13 @@ func TestSignerCreation(t *testing.T) {
 		a.NoError(err)
 	}
 
-	testSignerNumKeysLimits := func(firstValid uint64, lastValid uint64, interval uint64, expectedLen int) {
-		signer := generateTestSigner(firstValid, lastValid, interval, a)
+	testSignerNumKeysLimits := func(firstValid uint64, lastValid uint64, keyLifetime uint64, expectedLen int) {
+		signer := generateTestSigner(firstValid, lastValid, keyLifetime, a)
 		a.Equal(expectedLen, length(signer, a))
 	}
 
-	testSignerNumKeysLimits(0, 0, 1, 0)
-	testSignerNumKeysLimits(0, 1, 1, 1)
+	testSignerNumKeysLimits(0, 0, 1, 1)
+	testSignerNumKeysLimits(0, 1, 1, 2)
 	testSignerNumKeysLimits(2, 2, 2, 1)
 	testSignerNumKeysLimits(8, 21, 10, 2)
 	testSignerNumKeysLimits(8, 20, 10, 2)
@@ -74,6 +74,25 @@ func TestSignerCreation(t *testing.T) {
 	_, err = signer.GetSigner(2).SignBytes(genMsgForTest())
 	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
+
+	// Make sure both rounds 10 and 11 can be signed (as key for round 10 is valid for both)
+	signer = generateTestSigner(0, 19, 10, a)
+
+	sig, err = signer.GetSigner(10).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(10, genMsgForTest(), sig))
+
+	sig, err = signer.GetSigner(11).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(11, genMsgForTest(), sig))
+
+	sig, err = signer.GetSigner(0).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(0, genMsgForTest(), sig))
+
+	sig, err = signer.GetSigner(1).SignBytes(genMsgForTest())
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().VerifyBytes(1, genMsgForTest(), sig))
 }
 
 func TestSignerCreationOutOfBounds(t *testing.T) {
@@ -85,7 +104,7 @@ func TestSignerCreationOutOfBounds(t *testing.T) {
 
 	_, err = New(1, 8, 0)
 	a.Error(err)
-	a.ErrorIs(err, ErrDivisorIsZero)
+	a.ErrorIs(err, ErrKeyLifetimeIsZero)
 }
 
 func TestEmptyVerifier(t *testing.T) {
@@ -95,7 +114,24 @@ func TestEmptyVerifier(t *testing.T) {
 	signer := generateTestSigner(8, 9, 5, a)
 	// even if there are no keys for that period, the root is not empty
 	// (part of the vector commitment property).
-	a.Equal(false, signer.GetVerifier().IsEmpty())
+	a.False(signer.GetVerifier().MsgIsZero())
+}
+
+func TestVerifierKeyLifetimeError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	signer := generateTestSigner(8, 12, 1, a)
+	verifier := signer.GetVerifier()
+
+	verifier.KeyLifetime = 0
+	a.ErrorIs(verifier.VerifyBytes(0, []byte(""), Signature{}), ErrKeyLifetimeIsZero)
+
+	verifier.KeyLifetime = 1
+	sig, err := signer.GetSigner(10).SignBytes([]byte("hello"))
+	a.NoError(err)
+
+	a.NoError(verifier.VerifyBytes(10, []byte("hello"), sig))
 }
 
 func TestEmptySigner(t *testing.T) {
@@ -121,7 +157,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	a := require.New(t)
 
 	signer := generateTestSigner(0, 100, 1, a)
-	for i := uint64(1); i < 100; i++ {
+	for i := uint64(0); i < 100; i++ {
 		k := signer.GetKey(i)
 		a.NotNil(k)
 	}
@@ -138,13 +174,21 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	k = signer.GetKey(999)
 	a.Nil(k)
 
-	signer = generateTestSigner(1000, 1100, 101, a)
-	for i := uint64(1000); i <= 1100; i++ {
-		if i%101 == 0 {
-			a.NotNil(signer.GetKey(i))
-			continue
-		}
+	signer = generateTestSigner(1000, 1100, 105, a)
+	i := uint64(1000)
+	for ; i < 1050; i++ {
 		a.Nil(signer.GetKey(i))
+	}
+
+	k = signer.GetKey(i) // 1050
+	a.NotNil(k)
+	pk := k.PublicKey
+	i++
+
+	for ; i <= 1100; i++ { // same key since it's under the same lifetime period
+		k = signer.GetKey(i)
+		a.NotNil(k)
+		a.Equal(pk, k.PublicKey)
 	}
 }
 
@@ -225,24 +269,26 @@ func TestSigning(t *testing.T) {
 	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, sig))
 
 	sig, err = signer.GetSigner(start + 5).SignBytes(msg)
-	a.Error(err)
+	a.NoError(err)
 
 	err = signer.GetVerifier().VerifyBytes(start+5, msg, sig)
-	a.Error(err)
-	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
+	a.NoError(err)
+	err = signer.GetVerifier().VerifyBytes(start+7, msg, sig) // same key used since both rounds under same lifetime of key
+	a.NoError(err)
 
 	signer = generateTestSigner(50, 100, 12, a)
 	a.Equal(4, length(signer, a))
 
-	for i := uint64(50); i < 100; i++ {
-		if i%12 != 0 {
-			_, err = signer.GetSigner(i).SignBytes(msg)
-			a.Error(err)
-		} else {
-			sig, err = signer.GetSigner(i).SignBytes(msg)
-			a.NoError(err)
-			a.NoError(signer.GetVerifier().VerifyBytes(i, msg, sig))
-		}
+	i := uint64(50)
+	for ; i < 60; i++ { // no key for these rounds (key for round 48 was not generated)
+		_, err = signer.GetSigner(i).SignBytes(msg)
+		a.Error(err)
+		a.ErrorIs(err, ErrNoStateProofKeyForRound)
+	}
+	for ; i < 100; i++ {
+		sig, err = signer.GetSigner(i).SignBytes(msg)
+		a.NoError(err)
+		a.NoError(signer.GetVerifier().VerifyBytes(i, msg, sig))
 	}
 
 	signer = generateTestSigner(234, 4634, 256, a)
@@ -250,7 +296,7 @@ func TestSigning(t *testing.T) {
 	a.NotNil(key)
 	key = signer.GetKey(4096)
 	a.NotNil(key)
-	key = signer.GetKey(234 + 256)
+	key = signer.GetKey(234) // keys valid only for round > 256
 	a.Nil(key)
 }
 
@@ -395,25 +441,25 @@ func TestMarshal(t *testing.T) {
 func TestNumberOfGeneratedKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numberOfKeys := uint64(1 << 6)
-	validPeriod := numberOfKeys*interval - 1
+	validPeriod := numberOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(0)
 	lastValid = validPeriod
-	s, err = New(firstValid, lastValid, interval)
+	s, err = New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
-	a.Equal(numberOfKeys-1, uint64(length(s, a)))
+	a.Equal(numberOfKeys, uint64(length(s, a)))
 
 	firstValid = uint64(1000)
-	lastValid = validPeriod + 1000 - (interval * 50)
-	s, err = New(firstValid, lastValid, interval)
+	lastValid = validPeriod + 1000 - (keyLifetime * 50)
+	s, err = New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 
 	a.Equal(numberOfKeys-50, uint64(length(s, a)))
@@ -422,20 +468,20 @@ func TestNumberOfGeneratedKeys(t *testing.T) {
 func TestGetAllKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numOfKeys := uint64(1 << 8)
-	validPeriod := numOfKeys*interval - 1
+	validPeriod := numOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
 	keys := s.GetAllKeys()
 	for i := uint64(0); i < uint64(len(s.ephemeralKeys)); i++ {
 		a.Equal(s.ephemeralKeys[i], *keys[i].Key)
-		a.Equal(indexToRound(firstValid, interval, i), keys[i].Round)
+		a.Equal(indexToRound(firstValid, keyLifetime, i), keys[i].Round)
 	}
 
 	s, err = New(1, 2, 100)
@@ -462,8 +508,8 @@ func generateTestSignerAux(a *require.Assertions) (uint64, uint64, *Secrets) {
 	return start, end, signer
 }
 
-func generateTestSigner(firstValid, lastValid, interval uint64, a *require.Assertions) *Secrets {
-	signer, err := New(firstValid, lastValid, interval)
+func generateTestSigner(firstValid, lastValid, keyLifetime uint64, a *require.Assertions) *Secrets {
+	signer, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 
 	return signer
@@ -490,16 +536,16 @@ func copyProof(proof merklearray.SingleLeafProof) merklearray.SingleLeafProof {
 func TestTreeRootHashLength(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-	interval := uint64(256)
+	keyLifetime := uint64(256)
 	numOfKeys := uint64(1 << 8)
-	validPeriod := numOfKeys*interval - 1
+	validPeriod := numOfKeys*keyLifetime - 1
 
 	firstValid := uint64(1000)
 	lastValid := validPeriod + 1000
-	s, err := New(firstValid, lastValid, interval)
+	s, err := New(firstValid, lastValid, keyLifetime)
 	a.NoError(err)
 	a.Equal(numOfKeys, uint64(len(s.ephemeralKeys)))
 
 	a.Equal(MerkleSignatureSchemeRootSize, len(s.Tree.Root()))
-	a.Equal(MerkleSignatureSchemeRootSize, len(Verifier{}))
+	a.Equal(MerkleSignatureSchemeRootSize, len(Verifier{}.Commitment))
 }
