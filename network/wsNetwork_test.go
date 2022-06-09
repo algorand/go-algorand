@@ -2112,6 +2112,12 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 			break
 		}
 	}
+	for i := 0; i < 10; i++ {
+		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipNo) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 	require.Equal(t, uint32(wantTXGossipNo), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
@@ -2215,6 +2221,12 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 		if len(netB.messagesOfInterestRefresh) == 0 {
 			break
 		}
+	}
+	for i := 0; i < 10; i++ {
+		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipYes) {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
 	require.Equal(t, uint32(wantTXGossipYes), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
