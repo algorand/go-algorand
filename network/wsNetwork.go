@@ -417,8 +417,8 @@ type WebsocketNetwork struct {
 	// messagesOfInterestMu protects messagesOfInterest and ensures
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
-	messagesOfInterestMu   deadlock.Mutex
-	messagesOfInterestCond *sync.Cond
+	messagesOfInterestMu     deadlock.Mutex
+	messagesOfInterestNotify chan uint32
 
 	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
 	// are still transmitting or receiving information. The channel produced by this ticker
@@ -764,7 +764,7 @@ func (wn *WebsocketNetwork) setup() {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
 
-	wn.messagesOfInterestCond = sync.NewCond(&wn.messagesOfInterestMu)
+	wn.messagesOfInterestNotify = make(chan uint32, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
@@ -2349,20 +2349,19 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
-	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
-	wn.messagesOfInterestCond.Broadcast()
+	newgen := atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
+	wn.messagesOfInterestNotify <- newgen
 }
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 	var peers []*wsPeer
-	wn.messagesOfInterestMu.Lock()
-	defer wn.messagesOfInterestMu.Unlock()
-	for {
-		wn.messagesOfInterestCond.Wait()
+	for _ = range wn.messagesOfInterestNotify {
+		wn.messagesOfInterestMu.Lock()
 		peers, _ = wn.peerSnapshot(peers)
 		for _, peer := range peers {
 			wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
 		}
+		wn.messagesOfInterestMu.Unlock()
 	}
 }
 
