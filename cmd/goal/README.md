@@ -6,7 +6,7 @@ begins at the top level of the `go-algorand` repo.
 ## Starting a Single Node Dev Network 
 
 ### Q:
-> Having just done a new build in go-algorand, how do I get a single node dev network up, with algos in an easily used wallet from goal?
+### Q: Having just done a new build in go-algorand, how do I get a single node dev network up, with algos in an easily used wallet from goal?
 
 ### A:
 
