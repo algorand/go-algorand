@@ -17,6 +17,8 @@
 package telemetryspec
 
 import (
+	"bytes"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -57,7 +59,16 @@ type AssembleBlockStats struct {
 	ProcessingTime            transactionProcessingTimeDistibution
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
-	HasStateProofNextRound    uint64 // next round for which state proof if expected. Set only if this block has a state proof
+	StateProofNextRound       uint64 // next round for which state proof if expected
+	StateProofStats           StateProofStats
+}
+
+type StateProofStats struct {
+	StateProofProvenWeight    uint64
+	StateProofSignedWeight    uint64
+	StateProofNumReveals      int
+	NumberOfPositionsToReveal int
+	StateProofTxnSize         int
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout
@@ -82,6 +93,37 @@ type AssembleBlockMetrics struct {
 // Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
 func (m AssembleBlockMetrics) Identifier() Metric {
 	return assembleBlockMetricsIdentifier
+}
+func (m AssembleBlockStats) String() string {
+	b := &bytes.Buffer{}
+	b.WriteString(fmt.Sprintf("StartCount:%d, ", m.StartCount))
+	b.WriteString(fmt.Sprintf("IncludedCount:%d, ", m.IncludedCount))
+	b.WriteString(fmt.Sprintf("InvalidCount:%d, ", m.InvalidCount))
+	b.WriteString(fmt.Sprintf("MinFee:%d, ", m.MinFee))
+	b.WriteString(fmt.Sprintf("MaxFee:%d, ", m.MaxFee))
+	b.WriteString(fmt.Sprintf("AverageFee:%d, ", m.AverageFee))
+	b.WriteString(fmt.Sprintf("MinLength:%d, ", m.MinLength))
+	b.WriteString(fmt.Sprintf("MaxLength:%d, ", m.MaxLength))
+	b.WriteString(fmt.Sprintf("MinPriority:%d, ", m.MinPriority))
+	b.WriteString(fmt.Sprintf("MaxPriority:%d, ", m.MaxPriority))
+	b.WriteString(fmt.Sprintf("CommittedCount:%d, ", m.CommittedCount))
+	b.WriteString(fmt.Sprintf("StopReason:%s, ", m.StopReason))
+	b.WriteString(fmt.Sprintf("TotalLength:%d, ", m.TotalLength))
+	b.WriteString(fmt.Sprintf("EarlyCommittedCount:%d, ", m.EarlyCommittedCount))
+	b.WriteString(fmt.Sprintf("Nanoseconds:%d, ", m.Nanoseconds))
+	b.WriteString(fmt.Sprintf("ProcessingTime:%v, ", m.ProcessingTime))
+	b.WriteString(fmt.Sprintf("BlockGenerationDuration:%d, ", m.BlockGenerationDuration))
+	b.WriteString(fmt.Sprintf("TransactionsLoopStartTime:%d, ", m.TransactionsLoopStartTime))
+	b.WriteString(fmt.Sprintf("StateProofNextRound:%d, ", m.StateProofNextRound))
+	emptySPStats := StateProofStats{}
+	if m.StateProofStats != emptySPStats {
+		b.WriteString(fmt.Sprintf("StateProofProvenWeight:%d, ", m.StateProofStats.StateProofProvenWeight))
+		b.WriteString(fmt.Sprintf("StateProofSignedWeight:%d, ", m.StateProofStats.StateProofSignedWeight))
+		b.WriteString(fmt.Sprintf("StateProofNumReveals:%d, ", m.StateProofStats.StateProofNumReveals))
+		b.WriteString(fmt.Sprintf("NumberOfPositionsToReveal:%d, ", m.StateProofStats.NumberOfPositionsToReveal))
+		b.WriteString(fmt.Sprintf("StateProofTxnSize:%d", m.StateProofStats.StateProofTxnSize))
+	}
+	return b.String()
 }
 
 //-------------------------------------------------------
