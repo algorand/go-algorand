@@ -1729,6 +1729,31 @@ var (
 	testTags = []protocol.Tag{ft1, ft2, ft3, ft4}
 )
 
+func waitPeerInternalChanQuiet(t *testing.T, netA *WebsocketNetwork) {
+	// okay, but now we need to wait for asynchronous thread within netA to _apply_ the MOI to its peer for netB...
+	timeout := time.Now().Add(100 * time.Millisecond)
+	waiting := true
+	for waiting {
+		time.Sleep(1 * time.Millisecond)
+		peers := netA.GetPeers(PeersConnectedIn)
+		for _, pg := range peers {
+			wp := pg.(*wsPeer)
+			if len(wp.sendBufferHighPrio)+len(wp.sendBufferBulk) == 0 {
+				waiting = false
+				break
+			}
+		}
+		if time.Now().After(timeout) {
+			for _, pg := range peers {
+				wp := pg.(*wsPeer)
+				if len(wp.sendBufferHighPrio)+len(wp.sendBufferBulk) == 0 {
+					t.Fatalf("netA peer buff empty timeout len(high)=%d, len(bulk)=%d", len(wp.sendBufferHighPrio), len(wp.sendBufferBulk))
+				}
+			}
+		}
+	}
+}
+
 // Set up two nodes, have one of them request a certain message tag mask, and verify the other follow that.
 func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1802,28 +1827,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
-	// okay, but now we need to wait for asynchronous thread within netA to _apply_ the MOI to its peer for netB...
-	timeout := time.Now().Add(100 * time.Millisecond)
-	waiting := true
-	for waiting {
-		time.Sleep(1 * time.Millisecond)
-		peers := netA.GetPeers(PeersConnectedIn)
-		for _, pg := range peers {
-			wp := pg.(*wsPeer)
-			if len(wp.sendBufferHighPrio)+len(wp.sendBufferBulk) == 0 {
-				waiting = false
-				break
-			}
-		}
-		if time.Now().After(timeout) {
-			for _, pg := range peers {
-				wp := pg.(*wsPeer)
-				if len(wp.sendBufferHighPrio)+len(wp.sendBufferBulk) == 0 {
-					t.Fatalf("netA peer buff empty timeout len(high)=%d, len(bulk)=%d", len(wp.sendBufferHighPrio), len(wp.sendBufferBulk))
-				}
-			}
-		}
-	}
+	waitPeerInternalChanQuiet(t, netA)
 
 	messageArriveWg.Add(5 * 2) // we're expecting exactly 10 messages.
 	// send 5 messages of few types.
@@ -2093,6 +2097,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
+	waitPeerInternalChanQuiet(t, netA)
 
 	messageArriveWg.Add(5 * 3) // we're expecting exactly 15 messages.
 	// send 5 messages of few types.
