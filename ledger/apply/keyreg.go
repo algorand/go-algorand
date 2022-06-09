@@ -45,16 +45,18 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		return fmt.Errorf("cannot change online/offline status of non-participating account %v", header.Sender)
 	}
 
+	params := balances.ConsensusParams()
+
 	// Update the registered keys and mark account as online
 	// (or, if the voting or selection keys are zero, offline/not-participating)
 	record.VoteID = keyreg.VotePK
 	record.SelectionID = keyreg.SelectionPK
-	if params := balances.ConsensusParams(); params.EnableStateProofKeyregCheck && params.EnableOnlineAccountCatchpoints {
+	if params.EnableStateProofKeyregCheck && params.EnableOnlineAccountCatchpoints {
 		record.StateProofID = keyreg.StateProofPK
 	}
 	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
 		if keyreg.Nonparticipation {
-			if balances.ConsensusParams().SupportBecomeNonParticipatingTransactions {
+			if params.SupportBecomeNonParticipatingTransactions {
 				record.Status = basics.NotParticipating
 			} else {
 				return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
@@ -67,7 +69,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteKeyDilution = 0
 	} else {
 
-		if balances.ConsensusParams().EnableKeyregCoherencyCheck {
+		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
 				return errKeyregGoingOnlineExpiredParticipationKey
 			}
@@ -79,7 +81,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
-		if params := balances.ConsensusParams(); params.EnableStateProofKeyregCheck && !params.EnableOnlineAccountCatchpoints {
+		if params.EnableStateProofKeyregCheck && !params.EnableOnlineAccountCatchpoints {
 			record.StateProofID = keyreg.StateProofPK
 		}
 	}
