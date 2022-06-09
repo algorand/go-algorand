@@ -393,7 +393,7 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			return persistedData.value, nil
 		}
 
-		// The db round is unepxected...
+		// The db round is unexpected...
 		if synchronized {
 			if persistedData.round < currentDbRound {
 				// Somehow the db is LOWER than it should be.
