@@ -418,8 +418,8 @@ type WebsocketNetwork struct {
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
 	messagesOfInterestMu      deadlock.Mutex
-	messagesOfInterestNotify  chan uint32
-	messagesOfInterestRefresh chan int
+	messagesOfInterestNotify  chan struct{}
+	messagesOfInterestRefresh chan struct{}
 
 	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
 	// are still transmitting or receiving information. The channel produced by this ticker
@@ -765,8 +765,8 @@ func (wn *WebsocketNetwork) setup() {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
 
-	wn.messagesOfInterestNotify = make(chan uint32, 2)
-	wn.messagesOfInterestRefresh = make(chan int, 2)
+	wn.messagesOfInterestNotify = make(chan struct{}, 2)
+	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
@@ -1729,7 +1729,7 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvance = time.Now().UTC()
 	if wn.nodeInfo != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
 		select {
-		case wn.messagesOfInterestRefresh <- 1:
+		case wn.messagesOfInterestRefresh <- struct{}{}:
 		default:
 			// if the notify chan is full, it will get around to updating the latest when it actually runs
 		}
@@ -2347,9 +2347,9 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
-	newgen := atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
+	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
 	select {
-	case wn.messagesOfInterestNotify <- newgen:
+	case wn.messagesOfInterestNotify <- struct{}{}:
 	default:
 		// it has been notified enough, it will pick up the latest when it actually runs
 	}
