@@ -62,11 +62,13 @@ const createdResourcesVersion = 6
 // field.
 const appAddressAvailableVersion = 7
 
-// EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
+// EXPERIMENTAL opcode versions
+// These opcode versions should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version.
-const experimentalVersionFido = 7    // base64, json, secp256r1
-const experimentalVersionPairing = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const fidoVersion = 7    // base64, json, secp256r1
+const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+// End EXPERIMENTAL opcode versions
 
 type linearCost struct {
 	baseCost  int
@@ -493,8 +495,8 @@ var OpSpecs = []OpSpec{
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
-	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), experimentalVersionFido, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
-	{0x5d, "json_ref", opJSONRef, proto("bb:a"), experimentalVersionFido, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
+	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
+	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
@@ -547,9 +549,9 @@ var OpSpecs = []OpSpec{
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
 
-	{0x99, "bn256_add", opBn256Add, proto("bb:b"), experimentalVersionPairing, costly(70)},
-	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), experimentalVersionPairing, costly(970)},
-	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), experimentalVersionPairing, costly(8700)},
+	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
+	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
+	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
 	// leave room here for eip-2537 style opcodes
 
 	// Byteslice math.

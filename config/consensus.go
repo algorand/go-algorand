@@ -1148,7 +1148,7 @@ func initConsensusProtocols() {
 
 	// When bumping `vFuture.LogicSigVersion`, consider _experimental_ opcode versions.  _Experimental_ opcodes use `vFuture.LogicSigVersion` to be made available for testing, but not mainnet.
 	//
-	// To find candidate opcodes, search `opcodes.go` for variables starting with "experimentalVersion".  If an _experimental_ opcode should _not_ be made generally available, then increment its version to match `vFuture.LogicSigVersion`.
+	// To find candidate opcodes, search `opcodes.go` for "EXPERIMENTAL opcode versions".  If an _experimental_ opcode should _not_ be made generally available, then increment its version to match `vFuture.LogicSigVersion`.
 	vFuture.LogicSigVersion = 7
 	vFuture.MinInnerApplVersion = 4
 

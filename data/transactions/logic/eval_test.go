@@ -4822,16 +4822,16 @@ By Herman Melville`, "",
 	for _, tc := range testCases {
 		source := fmt.Sprintf(template, hex.EncodeToString([]byte(tc.decoded)), hex.EncodeToString([]byte(tc.encoded)), tc.alph)
 		if tc.error == "" {
-			if LogicVersion < experimentalVersionFido {
+			if LogicVersion < fidoVersion {
 				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
 			} else {
-				testAccepts(t, source, experimentalVersionFido)
+				testAccepts(t, source, fidoVersion)
 			}
 		} else {
-			if LogicVersion < experimentalVersionFido {
+			if LogicVersion < fidoVersion {
 				testProg(t, source, AssemblerMaxVersion, Expect{0, "unknown opcode..."})
 			} else {
-				err := testPanics(t, source, experimentalVersionFido)
+				err := testPanics(t, source, fidoVersion)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.error)
 			}
@@ -4851,7 +4851,7 @@ global OpcodeBudget
 int ` + fmt.Sprintf("%d", 20_000-3-1) + ` // base64_decode cost = 1
 ==
 `
-	testAccepts(t, source, experimentalVersionFido)
+	testAccepts(t, source, fidoVersion)
 
 	source = `
 byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
@@ -4861,7 +4861,7 @@ global OpcodeBudget
 int ` + fmt.Sprintf("%d", 20_000-3-5) + ` // base64_decode cost = 5 (64 bytes -> 1 + 64/16)
 ==
 `
-	testAccepts(t, source, experimentalVersionFido)
+	testAccepts(t, source, fidoVersion)
 
 	source = `
 byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567"
@@ -4871,7 +4871,7 @@ global OpcodeBudget
 int ` + fmt.Sprintf("%d", 20_000-3-5) + ` // base64_decode cost = 5 (60 bytes -> 1 + ceil(60/16))
 ==
 `
-	testAccepts(t, source, experimentalVersionFido)
+	testAccepts(t, source, fidoVersion)
 
 	source = `
 byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_AA=="
@@ -4881,7 +4881,7 @@ global OpcodeBudget
 int ` + fmt.Sprintf("%d", 20_000-3-6) + ` // base64_decode cost = 6 (68 bytes -> 1 + ceil(68/16))
 ==
 `
-	testAccepts(t, source, experimentalVersionFido)
+	testAccepts(t, source, fidoVersion)
 }
 
 func TestIsPrimitive(t *testing.T) {
@@ -5100,18 +5100,18 @@ func TestOpJSONRef(t *testing.T) {
 	}
 
 	for _, s := range testCases {
-		for v := uint64(2); v < experimentalVersionFido; v++ {
+		for v := uint64(2); v < fidoVersion; v++ {
 			expectedErrs := s.previousVersErrors
-			if experimentalVersionFido <= AssemblerMaxVersion {
+			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", experimentalVersionFido)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
 					}
 				}
 			}
 			testProg(t, s.source, v, expectedErrs...)
 		}
-		if experimentalVersionFido > AssemblerMaxVersion {
+		if fidoVersion > AssemblerMaxVersion {
 			continue
 		}
 		ops := testProg(t, s.source, AssemblerMaxVersion)
@@ -5311,19 +5311,19 @@ func TestOpJSONRef(t *testing.T) {
 	}
 
 	for _, s := range failedCases {
-		for v := uint64(2); v < experimentalVersionFido; v++ {
+		for v := uint64(2); v < fidoVersion; v++ {
 			expectedErrs := s.previousVersErrors
-			if experimentalVersionFido <= AssemblerMaxVersion {
+			if fidoVersion <= AssemblerMaxVersion {
 				for i := range expectedErrs {
 					if strings.Contains(expectedErrs[i].s, "json_ref") {
-						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", experimentalVersionFido)
+						expectedErrs[i].s = fmt.Sprintf("json_ref opcode was introduced in TEAL v%d", fidoVersion)
 					}
 				}
 			}
 
 			testProg(t, s.source, v, expectedErrs...)
 		}
-		if experimentalVersionFido > AssemblerMaxVersion {
+		if fidoVersion > AssemblerMaxVersion {
 			continue
 		}
 
