@@ -418,7 +418,6 @@ type WebsocketNetwork struct {
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
 	messagesOfInterestMu      deadlock.Mutex
-	messagesOfInterestNotify  chan struct{}
 	messagesOfInterestRefresh chan struct{}
 
 	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
@@ -765,7 +764,6 @@ func (wn *WebsocketNetwork) setup() {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
 
-	wn.messagesOfInterestNotify = make(chan struct{}, 2)
 	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
@@ -1180,7 +1178,7 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 		if messagesOfInterestEnc != nil {
 			peer.sendMessagesOfInterest(messagesOfInterestGeneration, messagesOfInterestEnc)
 		} else {
-			wn.log.Infof("msgOfInterest Enc=nil")
+			wn.log.Infof("msgOfInterest Enc=nil, MOIGen=%d", messagesOfInterestGeneration)
 		}
 	}
 }
@@ -2348,35 +2346,24 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
-	select {
-	case wn.messagesOfInterestNotify <- struct{}{}:
-	default:
-		// it has been notified enough, it will pick up the latest when it actually runs
+	var peers []*wsPeer
+	peers, _ = wn.peerSnapshot(peers)
+	for _, peer := range peers {
+		wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
 	}
 }
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
-	var peers []*wsPeer
 	for {
-		select {
-		case <-wn.messagesOfInterestRefresh:
-			// if we're not a relay, and not participating, we don't need txn pool
-			wantTXGossip := wn.nodeInfo.IsParticipating()
-			if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
-				wn.RegisterMessageInterest(protocol.TxnTag)
-				atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
-			} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
-				wn.DeregisterMessageInterest(protocol.TxnTag)
-				atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
-			}
-		case <-wn.messagesOfInterestNotify:
-			// wn.messagesOfInterestEnc has changed, tell peers
-			wn.messagesOfInterestMu.Lock()
-			peers, _ = wn.peerSnapshot(peers)
-			for _, peer := range peers {
-				wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
-			}
-			wn.messagesOfInterestMu.Unlock()
+		<-wn.messagesOfInterestRefresh
+		// if we're not a relay, and not participating, we don't need txn pool
+		wantTXGossip := wn.nodeInfo.IsParticipating()
+		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+			wn.RegisterMessageInterest(protocol.TxnTag)
+			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
+		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+			wn.DeregisterMessageInterest(protocol.TxnTag)
+			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
 		}
 	}
 }
