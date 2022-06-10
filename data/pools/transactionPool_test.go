@@ -1314,7 +1314,7 @@ func TestTStateProofLogging(t *testing.T) {
 		require.NoError(t, err)
 
 		acct := initAccounts[addresses[a]]
-		acct.StateProofID = *keys.GetVerifier()
+		acct.StateProofID = keys.GetVerifier().Commitment
 		acct.Status = basics.Online
 		acct.VoteLastValid = 100000
 		initAccounts[addresses[a]] = acct
@@ -1406,7 +1406,7 @@ func TestTStateProofLogging(t *testing.T) {
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.StateProof = *proof
 	require.NoError(t, err)
-	stxn.Txn.StateProofMessage = msg
+	stxn.Txn.Message = msg
 
 	err = stxn.Txn.WellFormed(transactions.SpecialAddresses{}, proto)
 	require.NoError(t, err)
