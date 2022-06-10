@@ -771,6 +771,26 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	return
 }
 
+func (pool *TransactionPool) getStateProofStats(txib transactions.SignedTxnInBlock, encodedLen int) (stateProofStats telemetryspec.StateProofStats) {
+	lastSPRound := txib.Txn.StateProofTxnFields.StateProofIntervalLatestRound
+	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
+	if err == nil {
+		proto := config.Consensus[lastRoundHdr.CurrentProtocol]
+		votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
+		votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
+		if err == nil {
+			totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw
+			stateProofStats.ProvenWeight, _ =
+				basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
+		}
+	}
+	stateProofStats.SignedWeight = txib.Txn.StateProofTxnFields.StateProof.SignedWeight
+	stateProofStats.NumReveals = len(txib.Txn.StateProofTxnFields.StateProof.Reveals)
+	stateProofStats.NumPosToReveal = len(txib.Txn.StateProofTxnFields.StateProof.PositionsToReveal)
+	stateProofStats.TxnSize = encodedLen
+	return
+}
+
 // AssembleBlock assembles a block for a given round, trying not to
 // take longer than deadline to finish.
 func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Time) (assembled *ledgercore.ValidatedBlock, err error) {
@@ -818,22 +838,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 					stats.TotalLength += uint64(encodedLen)
 					stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 					if txib.Txn.Type == protocol.StateProofTx {
-						lastSPRound := txib.Txn.StateProofTxnFields.StateProofIntervalLatestRound
-						lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
-						if err == nil {
-							proto := config.Consensus[lastRoundHdr.CurrentProtocol]
-							votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
-							votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
-							if err == nil {
-								totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight.Raw
-								stats.StateProofStats.StateProofProvenWeight, _ =
-									basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
-							}
-						}
-						stats.StateProofStats.StateProofSignedWeight = txib.Txn.StateProofTxnFields.StateProof.SignedWeight
-						stats.StateProofStats.StateProofNumReveals = len(txib.Txn.StateProofTxnFields.StateProof.Reveals)
-						stats.StateProofStats.NumberOfPositionsToReveal = len(txib.Txn.StateProofTxnFields.StateProof.PositionsToReveal)
-						stats.StateProofStats.StateProofTxnSize = encodedLen
+						stats.StateProofStats = pool.getStateProofStats(txib, encodedLen)
 					}
 				}
 

@@ -65,11 +65,11 @@ type AssembleBlockStats struct {
 
 // StateProofStats is the set of stats captured when a StateProof is present in the assembled block
 type StateProofStats struct {
-	StateProofProvenWeight    uint64
-	StateProofSignedWeight    uint64
-	StateProofNumReveals      int
-	NumberOfPositionsToReveal int
-	StateProofTxnSize         int
+	ProvenWeight   uint64
+	SignedWeight   uint64
+	NumReveals     int
+	NumPosToReveal int
+	TxnSize        int
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout
@@ -118,11 +118,11 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("StateProofNextRound:%d, ", m.StateProofNextRound))
 	emptySPStats := StateProofStats{}
 	if m.StateProofStats != emptySPStats {
-		b.WriteString(fmt.Sprintf("StateProofProvenWeight:%d, ", m.StateProofStats.StateProofProvenWeight))
-		b.WriteString(fmt.Sprintf("StateProofSignedWeight:%d, ", m.StateProofStats.StateProofSignedWeight))
-		b.WriteString(fmt.Sprintf("StateProofNumReveals:%d, ", m.StateProofStats.StateProofNumReveals))
-		b.WriteString(fmt.Sprintf("NumberOfPositionsToReveal:%d, ", m.StateProofStats.NumberOfPositionsToReveal))
-		b.WriteString(fmt.Sprintf("StateProofTxnSize:%d", m.StateProofStats.StateProofTxnSize))
+		b.WriteString(fmt.Sprintf("ProvenWeight:%d, ", m.StateProofStats.ProvenWeight))
+		b.WriteString(fmt.Sprintf("SignedWeight:%d, ", m.StateProofStats.SignedWeight))
+		b.WriteString(fmt.Sprintf("NumReveals:%d, ", m.StateProofStats.NumReveals))
+		b.WriteString(fmt.Sprintf("NumPosToReveal:%d, ", m.StateProofStats.NumPosToReveal))
+		b.WriteString(fmt.Sprintf("TxnSize:%d", m.StateProofStats.TxnSize))
 	}
 	return b.String()
 }

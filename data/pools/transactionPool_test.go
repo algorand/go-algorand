@@ -1356,6 +1356,7 @@ func TestTStateProofLogging(t *testing.T) {
 		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
+		// Move to the next round
 		b.BlockHeader.Round++
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
@@ -1436,7 +1437,7 @@ func TestTStateProofLogging(t *testing.T) {
 	// Verify the Metrics is correct
 	var nextRound, pWeight, signedWeight, numReveals, posToReveal, txnSize uint64
 	var str1 string
-	fmt.Sscanf(parts[1], "%d, StateProofProvenWeight:%d, StateProofSignedWeight:%d, StateProofNumReveals:%d, NumberOfPositionsToReveal:%d, StateProofTxnSize:%d\"%s",
+	fmt.Sscanf(parts[1], "%d, ProvenWeight:%d, SignedWeight:%d, NumReveals:%d, NumPosToReveal:%d, TxnSize:%d\"%s",
 		&nextRound, &pWeight, &signedWeight, &numReveals, &posToReveal, &txnSize, &str1)
 	require.Equal(t, uint64(768), nextRound)
 	require.Equal(t, provenWeight, pWeight)
@@ -1444,7 +1445,8 @@ func TestTStateProofLogging(t *testing.T) {
 	require.Less(t, numOfAccounts/2, int(numReveals))
 	require.Greater(t, numOfAccounts, int(numReveals))
 	require.Equal(t, len(proof.PositionsToReveal), int(posToReveal))
-	require.Equal(t, stxn.GetEncodedLength()-37, int(txnSize))
+	stxn.Txn.GenesisHash = crypto.Digest{}
+	require.Equal(t, stxn.GetEncodedLength(), int(txnSize))
 }
 
 // Given the round number, partArray and partTree from the previous period block, the keys and the totalWeight
