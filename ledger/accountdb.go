@@ -128,6 +128,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
 	`DROP TABLE IF EXISTS accountbase`,
+	`DROP TABLE IF EXISTS kvstore`,
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
