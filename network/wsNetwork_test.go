@@ -1754,6 +1754,16 @@ func waitPeerInternalChanQuiet(t *testing.T, netA *WebsocketNetwork) {
 	}
 }
 
+func waitForMOIRefreshQuiet(netB *WebsocketNetwork) {
+	for {
+		// wait for async messagesOfInterestRefresh
+		time.Sleep(time.Millisecond)
+		if len(netB.messagesOfInterestRefresh) == 0 {
+			break
+		}
+	}
+}
+
 // Set up two nodes, have one of them request a certain message tag mask, and verify the other follow that.
 func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1894,6 +1904,7 @@ func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	msgCounters := make(map[protocol.Tag]int)
 	messageArriveWg := sync.WaitGroup{}
 	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		t.Logf("A->B %s", msg.Tag)
 		incomingMsgSync.Lock()
 		defer incomingMsgSync.Unlock()
 		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
@@ -1927,13 +1938,7 @@ func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
-	for {
-		// wait for async messagesOfInterestRefresh
-		time.Sleep(time.Millisecond)
-		if len(netB.messagesOfInterestRefresh) == 0 {
-			break
-		}
-	}
+	waitForMOIRefreshQuiet(netB)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -1983,6 +1988,7 @@ func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
 	msgCounters := make(map[protocol.Tag]int)
 	messageArriveWg := sync.WaitGroup{}
 	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		t.Logf("A->B %s", msg.Tag)
 		incomingMsgSync.Lock()
 		defer incomingMsgSync.Unlock()
 		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
@@ -2016,13 +2022,7 @@ func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
-	for {
-		// wait for async messagesOfInterestRefresh
-		time.Sleep(time.Millisecond)
-		if len(netB.messagesOfInterestRefresh) == 0 {
-			break
-		}
-	}
+	waitForMOIRefreshQuiet(netB)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -2072,6 +2072,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	msgCounters := make(map[protocol.Tag]int)
 	messageArriveWg := sync.WaitGroup{}
 	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		t.Logf("A->B %s", msg.Tag)
 		incomingMsgSync.Lock()
 		defer incomingMsgSync.Unlock()
 		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
@@ -2105,18 +2106,19 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
-	for {
-		// wait for async messagesOfInterestRefresh
-		time.Sleep(time.Millisecond)
-		if len(netB.messagesOfInterestRefresh) == 0 {
-			break
-		}
-	}
+	waitForMOIRefreshQuiet(netB)
 	for i := 0; i < 10; i++ {
 		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipNo) {
 			break
 		}
 		time.Sleep(time.Millisecond)
+	}
+	for {
+		// wait for async messagesOfInterestNotify
+		time.Sleep(time.Millisecond)
+		if len(netB.messagesOfInterestNotify) == 0 {
+			break
+		}
 	}
 	require.Equal(t, uint32(wantTXGossipNo), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
@@ -2135,7 +2137,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	// wait until all the expected messages arrive.
 	messageArriveWg.Wait()
 	incomingMsgSync.Lock()
-	require.Equal(t, 3, len(msgCounters))
+	require.Equal(t, 3, len(msgCounters), msgCounters)
 	for tag, count := range msgCounters {
 		if tag == protocol.TxnTag {
 			require.Equal(t, 0, count)
@@ -2182,6 +2184,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	msgCounters := make(map[protocol.Tag]int)
 	messageArriveWg := sync.WaitGroup{}
 	msgHandler := func(msg IncomingMessage) (out OutgoingMessage) {
+		t.Logf("A->B %s", msg.Tag)
 		incomingMsgSync.Lock()
 		defer incomingMsgSync.Unlock()
 		msgCounters[msg.Tag] = msgCounters[msg.Tag] + 1
@@ -2215,13 +2218,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	netB.OnNetworkAdvance()
-	for {
-		// wait for async messagesOfInterestRefresh
-		time.Sleep(time.Millisecond)
-		if len(netB.messagesOfInterestRefresh) == 0 {
-			break
-		}
-	}
+	waitForMOIRefreshQuiet(netB)
 	for i := 0; i < 10; i++ {
 		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipYes) {
 			break
