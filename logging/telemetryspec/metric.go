@@ -63,6 +63,7 @@ type AssembleBlockStats struct {
 	StateProofStats           StateProofStats
 }
 
+// StateProofStats is the set of stats captured when a StateProof is present in the assembled block
 type StateProofStats struct {
 	StateProofProvenWeight    uint64
 	StateProofSignedWeight    uint64
