@@ -57,7 +57,7 @@ func TestAssembleBlockStatsString(t *testing.T) {
 	localType := reflect.TypeOf(abs)
 
 	// Empty StateProofStats will not be reported. Set a filed to check it printed
-	abs.StateProofStats.StateProofProvenWeight = 1
+	abs.StateProofStats.ProvenWeight = 1
 	absString := abs.String()
 	for f := 0; f < localType.NumField(); f++ {
 		field := localType.Field(f)
@@ -72,7 +72,7 @@ func TestAssembleBlockStatsString(t *testing.T) {
 	}
 
 	// Make sure the StateProofStats is not reported if they are empty
-	abs.StateProofStats.StateProofProvenWeight = 0
+	abs.StateProofStats.ProvenWeight = 0
 	absString = abs.String()
 	for f := 0; f < localType.NumField(); f++ {
 		field := localType.Field(f)
