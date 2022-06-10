@@ -134,11 +134,12 @@ func TestBoxCreate(t *testing.T) {
 		dl.txn(dogg)
 		dl.txn(bobo.Args("delete", "bobo"))
 
-		// empty name is legal
+		// empty name is illegal
 		empty := call.Args("create", "")
-		dl.txn(empty, "invalid Box reference")
+		dl.txn(empty, "box names may not be zero")
+		// and, of course, that's true even if there's a box ref with the empty name
 		empty.Boxes = []transactions.BoxRef{{}}
-		dl.txn(empty)
+		dl.txn(empty, "box names may not be zero")
 	})
 }
 

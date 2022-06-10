@@ -699,6 +699,11 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 		used := uint64(0)
 		for br := range cx.available.boxes {
+			if len(br.name) == 0 {
+				// 0 length names are not allowed for actual created boxes, but
+				// may have bene used to add I/O budget.
+				continue
+			}
 			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
 			if err != nil {
 				return false, nil, err
@@ -3943,10 +3948,9 @@ func opAppLocalPut(cx *EvalContext) error {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 
-	// Enforce maximum key length. Currently this is the same as enforced by
-	// ledger. If it were ever to change in proto, we would need to isolate
-	// changes to different program versions. (so a v6 app could not see a
-	// bigger key, for example)
+	// Enforce key lengths. Now, this is the same as enforced by ledger, but if
+	// it ever to change in proto, we would need to isolate changes to different
+	// program versions. (so a v6 app could not see a bigger key, for example)
 	if len(key) > cx.Proto.MaxAppKeyLen {
 		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cx.Proto.MaxAppKeyLen)
 	}

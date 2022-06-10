@@ -56,10 +56,13 @@ func opBoxCreate(cx *EvalContext) error {
 	name := string(cx.stack[last].Bytes)
 	size := cx.stack[prev].Uint
 
-	// Enforce maximums. Currently this is the same as enforced by ledger. If
-	// these were ever to change in proto, we would need to isolate changes to
-	// different program versions. (so a v7 app could not see a bigger box than
-	// expected, for example)
+	// Enforce length rules. Currently these are the same as enforced by
+	// ledger. If these were ever to change in proto, we would need to isolate
+	// changes to different program versions. (so a v7 app could not see a
+	// bigger box than expected, for example)
+	if len(name) == 0 {
+		return fmt.Errorf("box names may not be zero length")
+	}
 	if len(name) > cx.Proto.MaxAppKeyLen {
 		return fmt.Errorf("name too long: length was %d, maximum is %d", len(name), cx.Proto.MaxAppKeyLen)
 	}

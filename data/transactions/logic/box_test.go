@@ -76,6 +76,9 @@ func TestBoxNewBad(t *testing.T) {
 	long := strings.Repeat("x", 65)
 	txn.Boxes = []transactions.BoxRef{{Name: []byte(long)}}
 	logic.TestApp(t, fmt.Sprintf(`int 1000; byte "%s"; box_create; int 1`, long), ep, "name too long")
+
+	txn.Boxes = []transactions.BoxRef{{Name: []byte("")}} // irrelevant, zero check comes first anyway
+	logic.TestApp(t, `int 1000; byte ""; box_create; int 1`, ep, "zero length")
 }
 
 func TestBoxReadWrite(t *testing.T) {

@@ -205,7 +205,12 @@ func (cs *roundCowState) kvDel(key string) error {
 func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, size uint64) error {
 	// Use same limit on key length as for global/local storage
 	if len(key) > cs.proto.MaxAppKeyLen {
-		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
+		return fmt.Errorf("name too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
+	}
+	// This rule is NOT like global/local storage, but seems like it will limit
+	// confusion, since these are standalone entities.
+	if len(key) == 0 {
+		return fmt.Errorf("box names may not be zero length")
 	}
 
 	if size > cs.proto.MaxBoxSize {
