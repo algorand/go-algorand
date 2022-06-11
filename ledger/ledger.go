@@ -538,6 +538,17 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 		return basics.OnlineAccountData{}, err
 	}
 
+	if l.acctsOnline.independentCommits && l.accts.acctLookback >= 320 { // hardcode for e2e tests
+		l.log.Infof("LookupAgreement verifying %d %s\n", rnd, addr.String())
+		dataOld, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
+		if err != nil {
+			return basics.OnlineAccountData{}, err
+		}
+		if dataOld != data {
+			panic(fmt.Sprintf("LookupAgreement not equal: %v != %v", dataOld, data))
+		}
+	}
+
 	return data, nil
 }
 
@@ -568,7 +579,26 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.OnlineTotals(rnd)
+	totals, err := l.acctsOnline.OnlineTotals(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+
+	if l.acctsOnline.independentCommits && l.accts.acctLookback >= 320 { // hardcode for e2e tests
+		l.log.Infof("OnlineTotals verifying %d\n", rnd)
+
+		totalsOld, err := l.accts.onlineTotals(rnd)
+		if err != nil {
+			return basics.MicroAlgos{}, err
+		}
+
+		if totalsOld != totals {
+			panic(fmt.Sprintf("OnlineTotals not equal: %v != %v", totalsOld, totals))
+		}
+	}
+
+	return totals, nil
+
 }
 
 // CheckDup return whether a transaction is a duplicate one.

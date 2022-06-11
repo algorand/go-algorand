@@ -1974,6 +1974,8 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Skip()
+
 	accountDBVersion = 6
 	defer func() {
 		accountDBVersion = 7
@@ -2247,6 +2249,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 // are available via txTail
 func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	t.Skip()
 
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10_000_000_000)
 	const inMem = true

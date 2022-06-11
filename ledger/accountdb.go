@@ -1190,6 +1190,11 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
+		_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctonline', 0)")
+		if err != nil {
+			return false, err
+		}
+
 		var ot basics.OverflowTracker
 		var totals ledgercore.AccountTotals
 
@@ -2397,6 +2402,14 @@ func accountsReset(ctx context.Context, tx *sql.Tx) error {
 // accountsRound returns the tracker balances round number
 func accountsRound(q db.Queryable) (rnd basics.Round, err error) {
 	err = q.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func onlineAccountsRound(q db.Queryable) (rnd basics.Round, err error) {
+	err = q.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctonline'").Scan(&rnd)
 	if err != nil {
 		return
 	}
@@ -3722,6 +3735,35 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
 			return
 		} else if base != rnd {
 			err = fmt.Errorf("updateAccountsRound(acctbase, %d): expected to update 1 row but got %d", rnd, aff)
+			return
+		}
+	}
+	return
+}
+
+func updateOnlineAccountsRound(tx *sql.Tx, rnd basics.Round) (err error) {
+	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctonline' AND rnd<?", rnd, rnd)
+	if err != nil {
+		return
+	}
+
+	aff, err := res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if aff != 1 {
+		// try to figure out why we couldn't update the round number.
+		var base basics.Round
+		err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctonline'").Scan(&base)
+		if err != nil {
+			return
+		}
+		if base > rnd {
+			err = fmt.Errorf("newRound %d is not after base %d", rnd, base)
+			return
+		} else if base != rnd {
+			err = fmt.Errorf("updateAccountsRound(acctonline, %d): expected to update 1 row but got %d", rnd, aff)
 			return
 		}
 	}

@@ -451,7 +451,9 @@ type Local struct {
 
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
-	MaxAcctLookback uint64 `version[23]:"8"`
+	MaxAcctLookback uint64 `version[23]:"320"`
+
+	MaxOnlineAcctLookback uint64 `version[23]:"8"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

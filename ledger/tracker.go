@@ -195,10 +195,12 @@ type trackerRegistry struct {
 // to syncronize the various trackers and create a uniformity around which rounds need to be persisted
 // next.
 type deferredCommitRange struct {
-	offset      uint64
-	oldBase     basics.Round
-	lookback    basics.Round
-	lowestRound basics.Round // lowest history required by voters
+	offset        uint64
+	onlineOffset  uint64
+	oldBase       basics.Round
+	onlineOldBase basics.Round
+	lookback      basics.Round
+	lowestRound   basics.Round // lowest history required by voters
 
 	// catchpointLookback determines the offset from round number to take a snapshot for.
 	// i.e. for round X the DB snapshot is taken at X-catchpointLookback
@@ -369,6 +371,9 @@ func (tr *trackerRegistry) produceCommittingTask(blockqRound basics.Round, dbRou
 			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
 		}
 	}
+	// if cdr != nil {
+	// 	fmt.Printf("reg (%d, %d), online (%d, %d)\n", cdr.oldBase, cdr.offset, cdr.onlineOldBase, cdr.onlineOffset)
+	// }
 	return cdr
 }
 
@@ -509,7 +514,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 				return err0
 			}
 		}
-
 		return updateAccountsRound(tx, dbRound+basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
@@ -521,6 +525,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) (err error) {
 
 	tr.mu.Lock()
 	tr.dbRound = newBase
+	// fmt.Printf("tr.dbRound = %d\n", tr.dbRound)
 	for _, lt := range tr.trackers {
 		lt.postCommit(tr.ctx, dcc)
 	}

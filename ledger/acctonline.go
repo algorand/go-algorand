@@ -114,13 +114,20 @@ type onlineAccounts struct {
 	onlineAccountsCache onlineAccountsCache
 
 	// maxAcctLookback sets the minimim deltas size to keep in memory
-	acctLookback uint64
+	acctLookback       uint64
+	independentCommits bool
+	cfg                config.Local
 }
 
 // initialize initializes the accountUpdates structure
 func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.accountsReadCond = sync.NewCond(ao.accountsMu.RLocker())
 	ao.acctLookback = cfg.MaxAcctLookback
+	if cfg.MaxOnlineAcctLookback != cfg.MaxAcctLookback {
+		ao.acctLookback = cfg.MaxOnlineAcctLookback
+		ao.independentCommits = true
+	}
+	ao.cfg = cfg
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -143,6 +150,21 @@ func (ao *onlineAccounts) loadFromDisk(l ledgerForTracker, lastBalancesRound bas
 func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) (err error) {
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
+
+	if ao.independentCommits {
+		ao.log.Infoln("onlineAccounts: independent commits are on")
+		err = ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			lastBalancesRound, err = onlineAccountsRound(tx)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+
+		ao.cachedDBRoundOnline = lastBalancesRound
+	} else {
+		ao.log.Infof("onlineAccounts: independent commits are off: (%d, %d, %d)", ao.acctLookback, ao.cfg.MaxAcctLookback, ao.cfg.MaxOnlineAcctLookback)
+	}
 
 	err = ao.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
@@ -213,6 +235,9 @@ func (ao *onlineAccounts) newBlock(blk bookkeeping.Block, delta ledgercore.State
 func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
+	if rnd <= ao.cachedDBRoundOnline {
+		return
+	}
 	if rnd <= ao.latest() {
 		// Duplicate, ignore.
 		return
@@ -283,20 +308,31 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	ao.accountsMu.RLock()
 	defer ao.accountsMu.RUnlock()
 
-	// repeat logic from account updates
-	// TODO: after clean up removing 320 rounds lookback
-	if committedRound < dcr.lookback {
+	var lookback basics.Round
+	if ao.independentCommits {
+		dbRound = ao.cachedDBRoundOnline
+		lookback = basics.Round(ao.acctLookback)
+		if dcr.lookback < lookback {
+			lookback = dcr.lookback
+		}
+	} else {
+		lookback = dcr.lookback
+	}
+
+	if committedRound < lookback {
 		return nil
 	}
 
-	newBase := committedRound - dcr.lookback
+	newBase := committedRound - lookback
 	if newBase <= dbRound {
 		// Already forgotten
 		return nil
 	}
 
+	// fmt.Printf("produceCommittingTask: o=%d, n=%d d=%d\n", dbRound, newBase, len(ao.deltas))
+
 	if newBase > dbRound+basics.Round(len(ao.deltas)) {
-		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
+		ao.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, lookback, dbRound, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 
 	var lowestRound basics.Round
@@ -308,11 +344,17 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	offset = ao.consecutiveVersion(offset)
 
 	// synchronize base and offset with account updates
-	if offset < dcr.offset {
-		dcr.offset = offset
+	if ao.independentCommits {
+		dcr.onlineOffset = offset
+		dcr.onlineOldBase = dbRound
+	} else {
+		if offset < dcr.offset {
+			dcr.offset = offset
+		}
+		dcr.oldBase = dbRound
 	}
-	dcr.oldBase = dbRound
 	dcr.lowestRound = lowestRound
+
 	return dcr
 }
 
@@ -346,10 +388,30 @@ func (ao *onlineAccounts) maxBalLookback() uint64 {
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	offset := dcc.offset
+	oldBase := dcc.oldBase
+	if ao.independentCommits {
+		offset = dcc.onlineOffset
+		oldBase = dcc.onlineOldBase
+
+		// adjust the offset according to what happened meanwhile..
+		offset -= uint64(ao.cachedDBRoundOnline - oldBase)
+
+		// if this iteration need to flush out zero rounds, just return right away.
+		// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
+		// flush, without the commitRound have a chance of committing these rounds.
+		if offset == 0 {
+			return nil
+		}
+
+		dcc.onlineOffset = offset
+		dcc.onlineOldBase = ao.cachedDBRoundOnline
+		oldBase = dcc.onlineOldBase
+	}
 
 	ao.accountsMu.RLock()
 	defer ao.accountsMu.RUnlock()
 
+	// fmt.Printf("prepareCommit o=%d of=%d d=%d\n", oldBase, offset, len(ao.deltas))
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset)
 	copy(deltas, ao.deltas[:offset])
@@ -372,15 +434,16 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, dcc.oldBase, ao.baseOnlineAccounts)
+	dcc.compactOnlineAccountDeltas = makeCompactOnlineAccountDeltas(deltas, oldBase, ao.baseOnlineAccounts)
 
 	dcc.genesisProto = ao.ledger.GenesisProto()
 
-	start, err := ao.roundParamsOffset(dcc.oldBase)
+	start, err := ao.roundParamsOffset(oldBase)
 	if err != nil {
 		return err
 	}
-	end, err := ao.roundParamsOffset(dcc.newBase)
+	newBase := oldBase + basics.Round(offset)
+	end, err := ao.roundParamsOffset(newBase)
 	if err != nil {
 		return err
 	}
@@ -388,7 +451,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1 : end+1]
 
 	maxOnlineLookback := basics.Round(ao.maxBalLookback())
-	dcc.onlineAccountsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
+	dcc.onlineAccountsForgetBefore = (newBase + 1).SubSaturate(maxOnlineLookback)
 	if dcc.lowestRound > 0 && dcc.lowestRound < dcc.onlineAccountsForgetBefore {
 		// extend history as needed
 		dcc.onlineAccountsForgetBefore = dcc.lowestRound
@@ -402,6 +465,10 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
+	if ao.independentCommits {
+		offset = dcc.onlineOffset
+		dbRound = dcc.onlineOldBase
+	}
 
 	_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
@@ -425,20 +492,30 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dcc.oldBase+1)
+	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dbRound+1)
 	if err != nil {
 		return err
 	}
 
 	// delete all entries all older than maxBalLookback (or votersLookback) rounds ago
 	err = accountsPruneOnlineRoundParams(tx, dcc.onlineAccountsForgetBefore)
+	if err != nil {
+		return err
+	}
+
+	newBase := dbRound + basics.Round(offset)
+	err = updateOnlineAccountsRound(tx, newBase)
 
 	return
 }
 
 func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	offset := dcc.offset
-	newBase := dcc.newBase
+	newBase := dcc.oldBase + basics.Round(dcc.offset)
+	if ao.independentCommits {
+		offset = dcc.onlineOffset
+		newBase = dcc.onlineOldBase + basics.Round(dcc.onlineOffset)
+	}
 
 	ao.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
@@ -482,6 +559,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.deltas = ao.deltas[offset:]
 	ao.deltasAccum = ao.deltasAccum[offset:]
 	ao.cachedDBRoundOnline = newBase
+	// fmt.Printf("postCommit cachedDBRoundOnline = %d\n", ao.cachedDBRoundOnline)
 
 	// onlineRoundParamsData does not require extended history since it is not used in top online accounts
 	maxOnlineLookback := int(ao.maxBalLookback()) + len(ao.deltas)

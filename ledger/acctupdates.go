@@ -436,6 +436,8 @@ func (au *accountUpdates) produceCommittingTask(committedRound basics.Round, dbR
 		return nil
 	}
 
+	// fmt.Printf("produceCommittingTaskU: o=%d, n=%d d=%d\n", dbRound, newBase, len(au.deltas))
+
 	if newBase > dbRound+basics.Round(len(au.deltas)) {
 		au.log.Panicf("produceCommittingTask: block %d too far in the future, lookback %d, dbRound %d (cached %d), deltas %d", committedRound, dcr.lookback, dbRound, au.cachedDBRound, len(au.deltas))
 	}
@@ -1153,6 +1155,110 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 	}
 }
 
+// LookupOnlineAccountData returns the online account data for a given address at a given round.
+func (au *accountUpdates) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
+	oad, err := au.lookupOnlineAccountData(rnd, addr)
+	if err != nil {
+		return
+	}
+
+	data.MicroAlgosWithRewards = oad.MicroAlgosWithRewards
+	data.VotingData.VoteID = oad.VotingData.VoteID
+	data.VotingData.SelectionID = oad.VotingData.SelectionID
+	data.VotingData.StateProofID = oad.VotingData.StateProofID
+	data.VotingData.VoteFirstValid = oad.VotingData.VoteFirstValid
+	data.VotingData.VoteLastValid = oad.VotingData.VoteLastValid
+	data.VotingData.VoteKeyDilution = oad.VotingData.VoteKeyDilution
+
+	return
+}
+
+// lookupWithRewards returns the online account data for a given address at a given round.
+func (au *accountUpdates) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data ledgercore.OnlineAccountData, err error) {
+	au.accountsMu.RLock()
+	needUnlock := true
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
+	var offset uint64
+	var rewardsProto config.ConsensusParams
+	var rewardsLevel uint64
+	var persistedData persistedAccountData
+	for {
+		currentDbRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, err = au.roundOffset(rnd)
+		if err != nil {
+			return
+		}
+
+		rewardsProto = config.Consensus[au.versions[offset]]
+		rewardsLevel = au.roundTotals[offset].RewardsLevel
+
+		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
+		macct, indeltas := au.accounts[addr]
+		if indeltas {
+			// Check if this is the most recent round, in which case, we can
+			// use a cache of the most recent account state.
+			if offset == uint64(len(au.deltas)) {
+				return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+			}
+			// the account appears in the deltas, but we don't know if it appears in the
+			// delta range of [0..offset], so we'll need to check :
+			// Traverse the deltas backwards to ensure that later updates take
+			// priority if present.
+			for offset > 0 {
+				offset--
+				d, ok := au.deltas[offset].GetData(addr)
+				if ok {
+					return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+				}
+			}
+		}
+
+		// check the baseAccounts -
+		if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
+			// would ensure that we promote this field.
+			au.baseAccounts.writePending(macct)
+			u := macct.accountData.GetLedgerCoreAccountData()
+			return u.OnlineAccountData(rewardsProto, rewardsLevel), nil
+		}
+
+		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		// No updates of this account in the in-memory deltas; use on-disk DB.
+		// The check in roundOffset() made sure the round is exactly the one
+		// present in the on-disk DB.  As an optimization, we avoid creating
+		// a separate transaction here, and directly use a prepared SQL query
+		// against the database.
+		persistedData, err = au.accountsq.lookup(addr)
+		if persistedData.round == currentDbRound {
+			var u ledgercore.AccountData
+			if persistedData.rowid != 0 {
+				// if we read actual data return it
+				au.baseAccounts.writePending(persistedData)
+				u = persistedData.accountData.GetLedgerCoreAccountData()
+			}
+			// otherwise return empty
+			return u.OnlineAccountData(rewardsProto, rewardsLevel), err
+		}
+
+		if persistedData.round < currentDbRound {
+			au.log.Errorf("accountUpdates.lookupOnlineAccountData: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+			return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
+		}
+	}
+}
+
 // getCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (creator basics.Address, ok bool, err error) {
 	unlock := false
@@ -1257,6 +1363,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 			au.lastMetricsLogTime = now
 		}
 	}
+
+	// fmt.Printf("prepareCommitU o=%d of=%d d=%d\n", dcc.oldBase, dcc.offset, len(au.deltas))
 
 	offset := dcc.offset
 
