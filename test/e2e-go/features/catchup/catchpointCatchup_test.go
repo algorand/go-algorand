@@ -160,7 +160,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	log.Infof("Building ledger history..")
 	for {
-		err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45000*time.Millisecond)
+		err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
 		a.NoError(err)
 		if targetRound <= currentRound {
 			break
@@ -232,4 +232,105 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	secondNode.StopAlgod()
 	primaryNode.StopAlgod()
+}
+
+func TestCatchpointLabelGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	testCases := []struct {
+		catchpointInterval uint64
+		archival           bool
+		expectLabels       bool
+	}{
+		{4, true, true},
+		{4, false, true},
+		{0, true, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("CatchpointInterval: %v, Archival: %v", tc.catchpointInterval, tc.archival), func(t *testing.T) {
+			a := require.New(fixtures.SynchronizedTest(t))
+			log := logging.TestingLog(t)
+
+			consensus := make(config.ConsensusProtocols)
+			const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
+			catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+			catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+			// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
+			// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
+			catchpointCatchupProtocol.SeedLookback = 2
+			catchpointCatchupProtocol.SeedRefreshInterval = 8
+			catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
+			catchpointCatchupProtocol.MaxTxnLife = 33
+
+			if runtime.GOARCH == "amd64" {
+				// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+				catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
+				catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
+			}
+
+			consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
+
+			var fixture fixtures.RestClientFixture
+			fixture.SetConsensus(consensus)
+
+			errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
+			defer errorsCollector.Print()
+
+			fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
+
+			// Get primary node
+			primaryNode, err := fixture.GetNodeController("Primary")
+			a.NoError(err)
+
+			cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+			a.NoError(err)
+			cfg.CatchpointInterval = tc.catchpointInterval
+			cfg.Archival = tc.archival
+			cfg.SaveToDisk(primaryNode.GetDataDir())
+
+			// start the primary node
+			_, err = primaryNode.StartAlgod(nodecontrol.AlgodStartArgs{
+				PeerAddress:       "",
+				ListenIP:          "",
+				RedirectOutput:    true,
+				RunUnderHost:      false,
+				TelemetryOverride: "",
+				ExitErrorCallback: errorsCollector.nodeExitWithError,
+			})
+			a.NoError(err)
+
+			// Let the network make some progress
+			currentRound := uint64(1)
+			targetRound := uint64(37)
+			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
+			primaryNodeRestClient.SetAPIVersionAffinity(algodclient.APIVersionV2)
+			log.Infof("Building ledger history..")
+			for {
+				err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
+				a.NoError(err)
+				if targetRound <= currentRound {
+					break
+				}
+				currentRound++
+
+			}
+			log.Infof("done building!\n")
+
+			primaryNodeStatus, err := primaryNodeRestClient.Status()
+			a.NoError(err)
+			a.NotNil(primaryNodeStatus.LastCatchpoint)
+			if tc.expectLabels {
+				a.NotEmpty(*primaryNodeStatus.LastCatchpoint)
+			} else {
+				a.Empty(*primaryNodeStatus.LastCatchpoint)
+			}
+			primaryNode.StopAlgod()
+		})
+	}
 }

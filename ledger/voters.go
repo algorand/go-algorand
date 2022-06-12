@@ -62,7 +62,7 @@ type votersTracker struct {
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 
 	l  ledgerForTracker
-	au *accountUpdates
+	ao *onlineAccounts
 
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
@@ -79,9 +79,9 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto config.Cons
 	return stateProofRnd.SubSaturate(basics.Round(proto.StateProofInterval)).SubSaturate(basics.Round(proto.StateProofVotersLookback))
 }
 
-func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
+func (vt *votersTracker) loadFromDisk(l ledgerForTracker, ao *onlineAccounts) error {
 	vt.l = l
-	vt.au = au
+	vt.ao = ao
 	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 
 	latest := l.Latest()
@@ -139,7 +139,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	vt.loadWaitGroup.Add(1)
 	go func() {
 		defer vt.loadWaitGroup.Done()
-		onlineAccounts := ledgercore.TopOnlineAccounts(vt.au.onlineTop)
+		onlineAccounts := ledgercore.TopOnlineAccounts(vt.ao.onlineTop)
 		err := tr.LoadTree(onlineAccounts, hdr)
 		if err != nil {
 			vt.l.trackerLog().Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
