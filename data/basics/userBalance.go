@@ -101,7 +101,7 @@ func UnmarshalStatus(value string) (s Status, err error) {
 type VotingData struct {
 	VoteID       crypto.OneTimeSignatureVerifier
 	SelectionID  crypto.VRFVerifier
-	StateProofID merklesignature.Verifier
+	StateProofID merklesignature.Commitment
 
 	VoteFirstValid  Round
 	VoteLastValid   Round

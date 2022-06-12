@@ -1155,9 +1155,9 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	protoParams.MaxBalLookback = maxBalLookback
 	protoParams.SeedLookback = seedLookback
 	protoParams.SeedRefreshInterval = seedInteval
-	protoParams.CompactCertRounds = compactCertRounds
-	protoParams.CompactCertVotersLookback = compactCertVotersLookback
-	protoParams.CompactCertSecKQ = compactCertSecKQ
+	protoParams.StateProofInterval = compactCertRounds
+	protoParams.StateProofVotersLookback = compactCertVotersLookback
+	protoParams.StateProofStrengthTarget = compactCertSecKQ
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1188,7 +1188,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	// voters stalls after the first interval
 	lowest := oa.voters.lowestRound(oa.cachedDBRoundOnline)
 	require.Equal(t, basics.Round(compactCertRounds-compactCertVotersLookback), lowest)
-	require.Equal(t, maxBlocks/compactCertRounds, len(oa.voters.round))
+	require.Equal(t, maxBlocks/compactCertRounds, len(oa.voters.votersForRoundCache))
 	retain, lookback := oa.committedUpTo(oa.latest())
 	require.Equal(t, lowest, retain)
 	require.Equal(t, conf.MaxAcctLookback, uint64(lookback))

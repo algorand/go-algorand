@@ -1553,9 +1553,35 @@ func (bo baseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalanc
 		NormalizedOnlineBalance: normBalance,
 		VoteFirstValid:          bo.VoteFirstValid,
 		VoteLastValid:           bo.VoteLastValid,
-		StateProofID:            bo.StateProofID,
+		// KeyLifetime is set as a default value here (256) as the currently registered StateProof keys do not have a KeyLifetime value associated with them.
+		// In order to support changing the KeyLifetime in the future, we would need to update the Keyreg transaction and replace the value here with the one
+		// registered by the Account.
+		// TODO Stateproof: update when supporting different KeyLifetime.
+		StateProofID: merklesignature.Verifier{Commitment: bo.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
 	}
 }
+
+//
+//// accountDataToOnline returns the part of the AccountData that matters
+//// for online accounts (to answer top-N queries).  We store a subset of
+//// the full AccountData because we need to store a large number of these
+//// in memory (say, 1M), and storing that many AccountData could easily
+//// cause us to run out of memory.
+//func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
+//	return &ledgercore.OnlineAccount{
+//		Address:                 address,
+//		MicroAlgos:              ad.MicroAlgos,
+//		RewardsBase:             ad.RewardsBase,
+//		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
+//		VoteFirstValid:          ad.VoteFirstValid,
+//		VoteLastValid:           ad.VoteLastValid,
+//		// KeyLifetime is set as a default value here (256) as the currently registered StateProof keys do not have a KeyLifetime value associated with them.
+//		// In order to support changing the KeyLifetime in the future, we would need to update the Keyreg transaction and replace the value here with the one
+//		// registered by the Account.
+//		// TODO Stateproof: update when supporting different KeyLifetime.
+//		StateProofID: merklesignature.Verifier{Commitment: ad.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
+//	}
+//}
 
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
@@ -2359,27 +2385,6 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 		err = nil
 	}
 	return num, addresses, err
-}
-
-// accountDataToOnline returns the part of the AccountData that matters
-// for online accounts (to answer top-N queries).  We store a subset of
-// the full AccountData because we need to store a large number of these
-// in memory (say, 1M), and storing that many AccountData could easily
-// cause us to run out of memory.
-func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, proto config.ConsensusParams) *ledgercore.OnlineAccount {
-	return &ledgercore.OnlineAccount{
-		Address:                 address,
-		MicroAlgos:              ad.MicroAlgos,
-		RewardsBase:             ad.RewardsBase,
-		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
-		VoteFirstValid:          ad.VoteFirstValid,
-		VoteLastValid:           ad.VoteLastValid,
-		// KeyLifetime is set as a default value here (256) as the currently registered StateProof keys do not have a KeyLifetime value associated with them.
-		// In order to support changing the KeyLifetime in the future, we would need to update the Keyreg transaction and replace the value here with the one
-		// registered by the Account.
-		// TODO Stateproof: update when supporting different KeyLifetime.
-		StateProofID: merklesignature.Verifier{Commitment: ad.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault},
-	}
 }
 
 func resetAccountHashes(ctx context.Context, tx *sql.Tx) (err error) {
@@ -3610,7 +3615,7 @@ func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
 		}
 	} else {
 		for i := 0; i < numChunks; i++ {
-			var chunkSize int = sqliteMaxVariableNumber
+			var chunkSize = sqliteMaxVariableNumber
 			if i == numChunks-1 {
 				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
 			}

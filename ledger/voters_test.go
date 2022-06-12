@@ -28,10 +28,10 @@ import (
 	"testing"
 )
 
-func addBlockToAccountsUpdate(blk bookkeeping.Block, au *accountUpdates) {
+func addBlockToOnlineAccounts(blk bookkeeping.Block, ao *onlineAccounts) {
 	updates := ledgercore.MakeAccountDeltas(1)
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-	au.newBlock(blk, delta)
+	ao.newBlock(blk, delta)
 }
 
 func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
@@ -58,19 +58,20 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	i := uint64(1)
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToOnlineAccounts(block.block, ao)
 	}
 
-	a.Equal(numOfIntervals, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(numOfIntervals, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	block := randomBlock(basics.Round(i))
 	i++
@@ -81,24 +82,24 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	stateTracking.StateProofNextRound = basics.Round((numOfIntervals - 1) * intervalForTest)
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, au)
+	addBlockToOnlineAccounts(block.block, ao)
 
 	// the tracker should have 3 entries
 	//  - voters to confirm the numOfIntervals - 1 th interval
 	//  - voters to confirm the numOfIntervals th interval
 	//  - voters to confirm the numOfIntervals + 1  th interval
-	a.Equal(uint64(3), uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(uint64(3), uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	block = randomBlock(basics.Round(i))
 	block.block.CurrentProtocol = protocol.ConsensusFuture
 	stateTracking.StateProofNextRound = basics.Round(numOfIntervals * intervalForTest)
 	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, au)
+	addBlockToOnlineAccounts(block.block, ao)
 
-	a.Equal(uint64(2), uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(uint64(2), uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }
 
 func TestLimitVoterTracker(t *testing.T) {
@@ -126,37 +127,38 @@ func TestLimitVoterTracker(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au := newAcctUpdates(t, ml, conf, ".")
+	au, ao := newAcctUpdates(t, ml, conf, ".")
 	defer au.close()
+	defer ao.close()
 
 	i := uint64(1)
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToOnlineAccounts(block.block, ao)
 	}
 
-	a.Equal(recoveryIntervalForTests, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests+1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
 	for ; i < 2*(numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToOnlineAccounts(block.block, ao)
 	}
 
-	a.Equal(recoveryIntervalForTests+1, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// we add numOfIntervals*intervalForTest more blocks. the voter should have only recoveryIntervalForTests number of elements
 	for ; i < 3*(numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusFuture
-		addBlockToAccountsUpdate(block.block, au)
+		addBlockToOnlineAccounts(block.block, ao)
 	}
 
-	a.Equal(recoveryIntervalForTests+1, uint64(len(au.voters.votersForRoundCache)))
-	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), au.voters.lowestRound(basics.Round(i)))
+	a.Equal(recoveryIntervalForTests+1, uint64(len(ao.voters.votersForRoundCache)))
+	a.Equal(basics.Round(((i/intervalForTest)-recoveryIntervalForTests)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }

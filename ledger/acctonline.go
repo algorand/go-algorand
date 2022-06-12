@@ -748,7 +748,14 @@ func (ao *onlineAccounts) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 						continue
 					}
 
-					modifiedAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
+					//
+					var ba baseOnlineAccountData
+					ba.SetCoreAccountData(d)
+					normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, d.RewardsBase, d.MicroAlgos, genesisProto)
+					acct := ba.GetOnlineAccount(addr, normBalance)
+					modifiedAccounts[addr] = &acct
+					// VS
+					//modifiedAccounts[addr] = accountDataToOnline(addr, &d, genesisProto)
 				}
 			}
 		}

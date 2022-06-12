@@ -138,7 +138,12 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	for addr, data := range accts {
 		if data.Status == basics.Online {
 			ad := ledgercore.ToAccountData(data)
-			onlineAccounts[addr] = accountDataToOnline(addr, &ad, proto)
+			//onlineAccounts[addr] = accountDataToOnline(addr, &ad, proto)
+			var ba baseOnlineAccountData
+			ba.SetCoreAccountData(ad)
+			normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, ad.RewardsBase, ad.MicroAlgos, proto)
+			acct := ba.GetOnlineAccount(addr, normBalance)
+			onlineAccounts[addr] = &acct
 		}
 	}
 
@@ -2247,7 +2252,8 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	require.Equal(t, normBalance, oa.NormalizedOnlineBalance)
 	require.Equal(t, ba.VoteFirstValid, oa.VoteFirstValid)
 	require.Equal(t, ba.VoteLastValid, oa.VoteLastValid)
-	require.Equal(t, ba.StateProofID, oa.StateProofID)
+	stateProofVerifier := merklesignature.Verifier{Commitment: ba.StateProofID, KeyLifetime: merklesignature.KeyLifetimeDefault}
+	require.Equal(t, stateProofVerifier, oa.StateProofID)
 
 	rewardsLevel := uint64(1)
 	microAlgos, _, _ := basics.WithUpdatedRewards(
