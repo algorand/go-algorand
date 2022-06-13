@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -108,7 +110,11 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 }
 
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
-	for _, part := range s.keys {
+	return stateProofRecordFromKeys(rnd, s.keys)
+}
+
+func stateProofRecordFromKeys(rnd basics.Round, keys []account.Participation) (out []account.StateProofRecordForRound) {
+	for _, part := range keys {
 		if part.OverlapsInterval(rnd, rnd) {
 			partRecord := account.ParticipationRecord{
 				ParticipationID:   part.ID(),
@@ -132,7 +138,7 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 			out = append(out, partRecordForRound)
 		}
 	}
-	return
+	return out
 }
 
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
@@ -545,4 +551,84 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 	s.deletedStateProofKeys = map[account.ParticipationID]basics.Round{}
 	w.signBlock(s.blocks[3*basics.Round(proto.StateProofInterval)])
 	require.Zero(t, len(s.deletedStateProofKeys))
+}
+
+// TestSigBroacastTwoPerSig checks if each signature is broadcasted twice per period
+func TestSigBroacastTwoPerSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numAddresses := 10
+	signatureBcasted := make(map[basics.Address]int)
+
+	var keys []account.Participation
+	for i := 0; i < numAddresses; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+		signatureBcasted[parent] = 0
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	spw := newTestWorker(t, s)
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return initDB(tx)
+	})
+	require.NoError(t, err)
+
+	round := basics.Round(256)
+
+	spRecords := stateProofRecordFromKeys(round, keys)
+	sigs := make([]sigFromAddr, 0, len(keys))
+	stateproofMessage := stateproofmsg.Message{}
+	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	for _, key := range spRecords {
+		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
+		require.NoError(t, err)
+
+		sigs = append(sigs, sigFromAddr{
+			SignerAddress: key.Account,
+			Round:         round,
+			Sig:           sig,
+		})
+	}
+
+	for _, sfa := range sigs {
+		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return addPendingSig(tx, sfa.Round, pendingSig{
+				signer:       sfa.SignerAddress,
+				sig:          sfa.Sig,
+				fromThisNode: true,
+			})
+		})
+		require.NoError(t, err)
+	}
+
+	tns := spw.net.(*testWorkerStubs)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for bMsg := range tns.sigmsg {
+			sfa := sigFromAddr{}
+			err = protocol.Decode(bMsg, &sfa)
+			require.NoError(t, err)
+			signatureBcasted[sfa.SignerAddress]++
+		}
+	}()
+
+	periods := 5
+	for brnd := 512; brnd <= 513+256*periods; brnd++ {
+		spw.broadcastSigs(basics.Round(brnd), proto)
+	}
+	close(tns.sigmsg)
+
+	wg.Wait()
+
+	for _, sb := range signatureBcasted {
+		require.Equal(t, 2*periods, sb)
+	}
 }
