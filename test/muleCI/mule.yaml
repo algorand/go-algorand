@@ -120,7 +120,7 @@ tasks:
     target: ci-build
 
   - task: docker.Make
-    name: archive.amd64
+    name: archive
     agent: cicd.centos8.amd64
     target: archive
 
@@ -252,10 +252,10 @@ jobs:
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages
-  archive-linux-amd64:
+  archive-all:
     tasks:
       - stash.Unstash.packages
-      - docker.Make.archive.amd64
+      - docker.Make.archive
   package-docker:
     tasks:
       - docker.Make.docker-image
