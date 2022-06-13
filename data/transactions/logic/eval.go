@@ -3486,6 +3486,63 @@ func opExtract3(cx *EvalContext) error {
 	return err
 }
 
+func replaceCarefully(original []byte, replacement []byte, start uint64) ([]byte, error) {
+	if start > uint64(len(original)) {
+		return nil, fmt.Errorf("replacement start %d beyond length: %d", start, len(original))
+	}
+	end := start + uint64(len(replacement))
+	if end < start { // impossible because it is sum of two avm value lengths
+		return nil, fmt.Errorf("replacement end exceeds uint64")
+	}
+
+	if end > uint64(len(original)) {
+		return nil, fmt.Errorf("replacement end %d beyond original length: %d", end, len(original))
+	}
+
+	// Do NOT use the append trick to make a copy here.
+	// append(nil, []byte{}...) would return a nil, which means "not a bytearray" to AVM.
+	clone := make([]byte, len(original))
+	copy(clone[:start], original)
+	copy(clone[start:end], replacement)
+	copy(clone[end:], original[end:])
+	return clone, nil
+}
+
+func opReplace2(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // replacement
+	prev := last - 1          // original
+
+	replacement := cx.stack[last].Bytes
+	start := uint64(cx.program[cx.pc+1])
+	original := cx.stack[prev].Bytes
+
+	bytes, err := replaceCarefully(original, replacement, start)
+	if err != nil {
+		return err
+	}
+	cx.stack[prev].Bytes = bytes
+	cx.stack = cx.stack[:last]
+	return err
+}
+
+func opReplace3(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // replacement
+	prev := last - 1          // start
+	pprev := prev - 1         // original
+
+	replacement := cx.stack[last].Bytes
+	start := cx.stack[prev].Uint
+	original := cx.stack[pprev].Bytes
+
+	bytes, err := replaceCarefully(original, replacement, start)
+	if err != nil {
+		return err
+	}
+	cx.stack[pprev].Bytes = bytes
+	cx.stack = cx.stack[:prev]
+	return err
+}
+
 // We convert the bytes manually here because we need to accept "short" byte arrays.
 // A single byte is a legal uint64 decoded this way.
 func convertBytesToInt(x []byte) uint64 {
