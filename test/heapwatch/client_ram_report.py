@@ -115,15 +115,15 @@ def main():
             tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
             if first is None:
                 first = tv
-            row = [ts, tv-first]
+            nick = nodes[0]
+            bipath = os.path.join(args.dir, '{}.{}.blockinfo.json'.format(nick, ts))
+            try:
+                bi = json.load(open(bipath))
+                rnd = str(bi['block']['rnd'])
+            except:
+                rnd = ''
+            row = [ts, tv-first, rnd]
             for nick in nodes:
-                bipath = os.path.join(args.dir, '{}.{}.blockinfo.json'.format(nick, ts))
-                try:
-                    bi = json.load(open(bipath))
-                    rnd = str(bi['block']['rnd'])
-                except:
-                    rnd = ''
-                row.append(rnd)
                 for rec in heap_totals[nick]:
                     if rec[0] == ts:
                         row.append(rec[1])

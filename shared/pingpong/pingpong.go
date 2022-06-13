@@ -363,9 +363,8 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to s
 		return transactions.Transaction{}, err
 	}
 
-	pps.accountsMu.RLock()
-	stxn, err = signTxn(from, txn, pps.accounts, pps.cfg)
-	pps.accountsMu.RUnlock()
+	signer := pps.acct(from)
+	stxn, err = signTxn(signer, txn, pps.cfg)
 
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -673,9 +672,8 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	} else {
 		pps.nftHolders[sender] = senderNftCount + 1
 	}
-	pps.accountsMu.RLock()
-	stxn, err := signTxn(sender, txn, pps.accounts, pps.cfg)
-	pps.accountsMu.RUnlock()
+	signer := pps.acct(sender)
+	stxn, err := signTxn(signer, txn, pps.cfg)
 	if err != nil {
 		return
 	}
@@ -785,9 +783,8 @@ func (pps *WorkerState) sendFromTo(
 			toBalanceChange = int64(amt)
 
 			// Sign txn
-			pps.accountsMu.RLock()
-			stxn, signErr := signTxn(from, txn, pps.accounts, cfg)
-			pps.accountsMu.RUnlock()
+			signer := pps.acct(from)
+			stxn, signErr := signTxn(signer, txn, cfg)
 			if signErr != nil {
 				err = signErr
 				_, _ = fmt.Fprintf(os.Stderr, "signTxn failed: %v\n", err)
@@ -875,9 +872,8 @@ func (pps *WorkerState) sendFromTo(
 			var signErr error
 			for j, txn := range txGroup {
 				txn.Group = gid
-				pps.accountsMu.RLock()
-				stxGroup[j], signErr = signTxn(txSigners[j], txn, pps.accounts, cfg)
-				pps.accountsMu.RUnlock()
+				signer := pps.acct(txSigners[j])
+				stxGroup[j], signErr = signTxn(signer, txn, cfg)
 				if signErr != nil {
 					err = signErr
 					return
@@ -1179,17 +1175,18 @@ func (pps *WorkerState) constructPayment(from, to string, fee, amount uint64, no
 	return tx, nil
 }
 
-func signTxn(signer string, txn transactions.Transaction, accounts map[string]*pingPongAccount, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
+//func signTxn(signer string, txn transactions.Transaction, accounts map[string]*pingPongAccount, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
+func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
 
 	var psig crypto.Signature
 
 	if cfg.Rekey {
-		stxn, err = txn.Sign(accounts[signer].sk), nil
+		stxn, err = txn.Sign(signer.sk), nil
 
 	} else if len(cfg.Program) > 0 {
 		// If there's a program, sign it and use that in a lsig
 		progb := logic.Program(cfg.Program)
-		psig = accounts[signer].sk.Sign(&progb)
+		psig = signer.sk.Sign(&progb)
 
 		// Fill in signed transaction
 		stxn.Txn = txn
@@ -1199,7 +1196,7 @@ func signTxn(signer string, txn transactions.Transaction, accounts map[string]*p
 	} else {
 
 		// Otherwise, just sign the transaction like normal
-		stxn, err = txn.Sign(accounts[signer].sk), nil
+		stxn, err = txn.Sign(signer.sk), nil
 	}
 	return
 }
