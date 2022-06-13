@@ -89,6 +89,7 @@ fi
   /var/lib/algorand/genesis/testnet/genesis.json
   /var/lib/algorand/genesis/betanet/genesis.json
   /var/lib/algorand/genesis/mainnet/genesis.json
+  /var/lib/algorand/genesis/alphanet/genesis.json
 %endif
 /lib/systemd/system/algorand.service
 /lib/systemd/system/algorand@.service
