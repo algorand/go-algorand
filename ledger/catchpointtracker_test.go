@@ -1205,7 +1205,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 
-	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
 
 	tempDirectory, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
@@ -1242,11 +1242,17 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	}
 	ml.trackers.waitAccountsWriting()
 
-	// Configure a new catchpoint tracker with catchpoints enabled.
+	// Copy the database.
 	ct.close()
+	ml2 := ml.fork(t)
+	require.NotNil(t, ml2)
+	defer ml2.Close()
+	ml.Close()
+
+	// Configure a new catchpoint tracker with catchpoints enabled.
 	cfg.CatchpointTracking = 2
 	ct2 := newCatchpointTracker(
-		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+		t, ml2, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
 	defer ct2.close()
 
 	// Add the last block.
@@ -1261,15 +1267,15 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 		}
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 
-		ml.trackers.newBlock(blk, delta)
-		ml.trackers.committedUpTo(secondStageRound)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
+		ml2.trackers.newBlock(blk, delta)
+		ml2.trackers.committedUpTo(secondStageRound)
+		ml2.addMockBlock(blockEntry{block: blk}, delta)
 	}
-	ml.trackers.waitAccountsWriting()
+	ml2.trackers.waitAccountsWriting()
 
 	// Check that the unfinished catchpoint database record is deleted.
 	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml.dbs.Rdb.Handle)
+		context.Background(), ml2.dbs.Rdb.Handle)
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
