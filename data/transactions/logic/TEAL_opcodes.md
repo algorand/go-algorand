@@ -751,7 +751,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Opcode: 0x5c {uint8 encoding index}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 1 + 1 per 16 bytes
+- **Cost**: 1 + 1 per 16 bytes of A
 - Availability: v7
 
 `base64` Encodings:
@@ -769,6 +769,7 @@ Decodes A using the base64 encoding E. Specify the encoding with an immediate ar
 - Opcode: 0x5d {string return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
+- **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
 
 `json_ref` Types:
