@@ -182,6 +182,12 @@ const ConsensusFuture = ConsensusVersion(
 	"future",
 )
 
+// ConsensusVAlpha1 is the first consensus protocol for AlphaNet, which is the same as
+// v32, but with a 2-second filter timeout and 5M block size.
+const ConsensusVAlpha1 = ConsensusVersion(
+	"alpha1",
+)
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!

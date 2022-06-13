@@ -1154,6 +1154,12 @@ func initConsensusProtocols() {
 	vFuture.EnableSHA256TxnCommitmentHeader = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
+
+	vAlpha1 := v32
+	vAlpha1.AgreementFilterTimeoutPeriod0 = 2 * time.Second
+	vAlpha1.MaxTxnBytesPerBlock = 5000000
+
+	Consensus[protocol.ConsensusVAlpha1] = vAlpha1
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.
