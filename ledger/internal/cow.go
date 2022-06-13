@@ -51,7 +51,7 @@ type roundCowParent interface {
 	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error)
 
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
-	txnCounter() uint64
+	Counter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	compactCertNext() basics.Round
 	blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
@@ -61,6 +61,8 @@ type roundCowParent interface {
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
+
+	kvGet(key string) (string, bool, error)
 }
 
 type roundCowState struct {
@@ -75,7 +77,7 @@ type roundCowState struct {
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
-	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
+	// 2. Stateful TEAL evaluation (see setKey/delKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
@@ -132,11 +134,11 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.Hdr.RewardsLevel
 }
 
-func (cb *roundCowState) round() basics.Round {
+func (cb *roundCowState) Round() basics.Round {
 	return cb.mods.Hdr.Round
 }
 
-func (cb *roundCowState) prevTimestamp() int64 {
+func (cb *roundCowState) PrevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
 }
 
@@ -212,8 +214,8 @@ func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid trans
 	return cb.lookupParent.checkDup(firstValid, lastValid, txid, txl)
 }
 
-func (cb *roundCowState) txnCounter() uint64 {
-	return cb.lookupParent.txnCounter() + cb.txnCount
+func (cb *roundCowState) Counter() uint64 {
+	return cb.lookupParent.Counter() + cb.txnCount
 }
 
 func (cb *roundCowState) compactCertNext() basics.Round {
@@ -288,6 +290,10 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
+
+	for key, value := range cb.mods.KvMods {
+		cb.commitParent.mods.KvMods[key] = value
+	}
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

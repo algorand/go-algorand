@@ -328,6 +328,8 @@ return stack matches the name of the input value.
 | `extract_uint32` | A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails |
 | `extract_uint64` | A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails |
 | `base64_decode e` | decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E |
+| `replace2 s` | Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A) |
+| `replace3` | Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A) |
 | `json_ref r` | return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A |
 
 The following opcodes take byte-array values that are interpreted as
@@ -609,6 +611,10 @@ Account fields used in the `acct_params_get` opcode.
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
+| `box_create` | make a box |
+| `box_extract` | read from a box |
+| `box_replace` | write to a box |
+| `box_del` | delete a box |
 
 ### Inner Transactions
 

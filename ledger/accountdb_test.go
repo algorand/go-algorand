@@ -269,7 +269,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = accountsPutTotals(tx, totals, false)
 		require.NoError(t, err)
-		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		updatedAccts, updatesResources, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, updatesCnt.len(), len(updatedAccts))
 		numResUpdates := 0
@@ -393,7 +393,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 			require.NoError(t, err)
 
-			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, proto, basics.Round(lastRound))
+			updatedAccts, updatesResources, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
 			require.NoError(t, err)
 			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
 			require.Equal(t,
@@ -2185,6 +2185,8 @@ type mockAccountWriter struct {
 	rowids    map[int64]basics.Address
 	resources map[mockResourcesKey]ledgercore.AccountResource
 
+	kvStore map[string]string
+
 	lastRowid   int64
 	availRowIds []int64
 }
@@ -2373,6 +2375,16 @@ func (m *mockAccountWriter) updateResource(addrid int64, aidx basics.CreatableIn
 	}
 	m.resources[key] = new
 	return 1, nil
+}
+
+func (m *mockAccountWriter) upsertKvPair(key string, value string) error {
+	m.kvStore[key] = value
+	return nil
+}
+
+func (m *mockAccountWriter) deleteKvPair(key string) error {
+	delete(m.kvStore, key)
+	return nil
 }
 
 func (m *mockAccountWriter) insertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
@@ -2619,7 +2631,7 @@ func TestAccountUnorderedUpdates(t *testing.T) {
 				a := require.New(t)
 				mock2 := mock.clone()
 				updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-					&mock2, acctVariant, resVariant, nil, config.ConsensusParams{}, latestRound,
+					&mock2, acctVariant, resVariant, nil, nil, config.ConsensusParams{}, latestRound,
 				)
 				a.NoError(err)
 				a.Equal(3, len(updatedAccounts))
@@ -2701,7 +2713,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	a.Equal(2, resDeltas.len())       // (addr1, aidx) found
 
 	updatedAccounts, updatedResources, err := accountsNewRoundImpl(
-		&mock, acctDeltas, resDeltas, nil, config.ConsensusParams{}, latestRound,
+		&mock, acctDeltas, resDeltas, nil, nil, config.ConsensusParams{}, latestRound,
 	)
 	a.NoError(err)
 	a.Equal(3, len(updatedAccounts))

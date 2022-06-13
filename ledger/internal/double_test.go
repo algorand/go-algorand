@@ -19,6 +19,7 @@ package internal_test
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -110,9 +111,31 @@ func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBloc
 
 func (dl *DoubleLedger) endBlock() *ledgercore.ValidatedBlock {
 	vb := endBlock(dl.t, dl.generator, dl.eval)
-	checkBlock(dl.t, dl.validator, vb)
+	if dl.validator != nil { // Allows setting to nil while debugging, to simplify
+		checkBlock(dl.t, dl.validator, vb)
+	}
 	dl.eval = nil // Ensure it's not used again
 	return vb
+}
+
+func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {
+	createapp := txntest.Txn{
+		Type:            "appl",
+		Sender:          sender,
+		ApprovalProgram: source,
+	}
+	vb := dl.fullBlock(&createapp)
+	appIndex := vb.Block().Payset[0].ApplyData.ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   sender,
+		Receiver: appIndex.Address(),
+		Amount:   amount,
+	}
+
+	dl.txn(&fund)
+	return appIndex
 }
 
 func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.ValidatedBlock) {

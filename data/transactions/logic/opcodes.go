@@ -68,6 +68,9 @@ const appAddressAvailableVersion = 7
 const fidoVersion = 7    // base64, json, secp256r1
 const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
 
+// Unlimited Global Storage opcodes
+const boxVersion = 7 // box_*
+
 type linearCost struct {
 	baseCost  int
 	chunkCost int
@@ -490,8 +493,11 @@ var OpSpecs = []OpSpec{
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
-	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16)},
-	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes)},
+	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
+	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, opDefault()},
+
+	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16)},
+	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes)},
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
@@ -577,6 +583,12 @@ var OpSpecs = []OpSpec{
 	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(modeApp)},
 	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(modeApp).assembler(asmGitxn)},
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(modeApp)},
+
+	// Unlimited Global Storage - Boxes
+	{0xb9, "box_create", opBoxCreate, proto("ib:"), boxVersion, only(modeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(modeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(modeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:"), boxVersion, only(modeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},
