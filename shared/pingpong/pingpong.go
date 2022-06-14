@@ -1200,7 +1200,6 @@ func (pps *WorkerState) constructPayment(from, to string, fee, amount uint64, no
 	return tx, nil
 }
 
-//func signTxn(signer string, txn transactions.Transaction, accounts map[string]*pingPongAccount, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
 func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
 
 	var psig crypto.Signature
