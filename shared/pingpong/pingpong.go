@@ -294,9 +294,12 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	}
 	fmt.Printf("adjusting account balance to %d\n", minFund)
 
+	srcAcct := accounts[cfg.SrcAccount]
+
 	nextSendTime := time.Now()
 	for {
 		accountsAdjusted := 0
+		adjStart := time.Now()
 		for addr, acct := range accounts {
 			if addr == pps.cfg.SrcAccount {
 				continue
@@ -318,7 +321,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			}
 
 			schedule(cfg.TxnPerSec, &nextSendTime)
-			tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
+			tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend, srcAcct)
 			if err != nil {
 				if strings.Contains(err.Error(), "broadcast queue full") {
 					fmt.Printf("failed to send payment, broadcast queue full. sleeping & retrying.\n")
@@ -332,15 +335,20 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if !cfg.Quiet {
 				fmt.Printf("account balance for key %s will be %d\n", addr, minFund)
 			}
-
+			acct.setBalance(minFund)
 			totalSent++
 		}
 		accounts[cfg.SrcAccount].setBalance(srcFunds)
+		waitStart := time.Now()
 		// wait until all the above transactions are sent, or that we have no more transactions
 		// in our pending transaction pool coming from the source account.
-		err = waitPendingTransactions(map[string]*pingPongAccount{cfg.SrcAccount: nil}, client)
+		err = waitPendingTransactions([]string{cfg.SrcAccount}, client)
 		if err != nil {
 			return err
+		}
+		waitStop := time.Now()
+		if !cfg.Quiet {
+			fmt.Printf("%d sent (%s); waited %s\n", accountsAdjusted, waitStart.Sub(adjStart).String(), waitStop.Sub(waitStart).String())
 		}
 		if accountsAdjusted == 0 {
 			break
@@ -349,22 +357,20 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	return err
 }
 
-func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to string, fee, amount uint64) (transactions.Transaction, error) {
+func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to string, fee, amount uint64, srcAcct *pingPongAccount) (transactions.Transaction, error) {
 	// generate a unique note to avoid duplicate transaction failures
 	note := pps.makeNextUniqueNoteField()
 
-	from := pps.cfg.SrcAccount
 	var txn transactions.Transaction
 	var stxn transactions.SignedTxn
 	var err error
-	txn, err = client.ConstructPayment(from, to, fee, amount, note, "", [32]byte{}, 0, 0)
+	txn, err = client.ConstructPayment(srcAcct.pk.String(), to, fee, amount, note, "", [32]byte{}, 0, 0)
 
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
 
-	signer := pps.acct(from)
-	stxn, err = signTxn(signer, txn, pps.cfg)
+	stxn, err = signTxn(srcAcct, txn, pps.cfg)
 
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -382,8 +388,8 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client libgoal.Client, to s
 // accounts map have been cleared out of the transaction pool. A prerequesite for this is that
 // there is no other source who might be generating transactions that would come from these account
 // addresses.
-func waitPendingTransactions(accounts map[string]*pingPongAccount, client libgoal.Client) error {
-	for from := range accounts {
+func waitPendingTransactions(accounts []string, client libgoal.Client) error {
+	for _, from := range accounts {
 	repeat:
 		pendingTxns, err := client.GetPendingTransactionsByAddress(from, 0)
 		if err != nil {
@@ -405,26 +411,40 @@ func waitPendingTransactions(accounts map[string]*pingPongAccount, client libgoa
 	return nil
 }
 
-func (pps *WorkerState) refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
+func (pps *WorkerState) refreshAccounts(client libgoal.Client, cfg PpConfig) error {
+	pps.accountsMu.Lock()
+	addrs := make([]string, len(pps.accounts))
+	pos := 0
+	for addr := range pps.accounts {
+		addrs[pos] = addr
+		pos++
+	}
+	pps.accountsMu.Unlock()
 	// wait until all the pending transactions have been sent; otherwise, getting the balance
 	// is pretty much meaningless.
 	fmt.Printf("waiting for all transactions to be accepted before refreshing accounts.\n")
-	err := waitPendingTransactions(accounts, client)
+	err := waitPendingTransactions(addrs, client)
 	if err != nil {
 		return err
 	}
 
-	for addr := range accounts {
+	balanceUpdates := make(map[string]uint64, len(addrs))
+	for _, addr := range addrs {
 		amount, err := client.GetBalance(addr)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "error refreshAccounts: %v\n", err)
 			return err
 		}
-
-		accounts[addr].setBalance(amount)
+		balanceUpdates[addr] = amount
 	}
 
-	return pps.fundAccounts(accounts, client, cfg)
+	pps.accountsMu.Lock()
+	defer pps.accountsMu.Unlock()
+	for addr, amount := range balanceUpdates {
+		pps.accounts[addr].setBalance(amount)
+	}
+
+	return pps.fundAccounts(pps.accounts, client, cfg)
 }
 
 // return a shuffled list of accounts with some minimum balance
@@ -528,12 +548,18 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			fromList := listSufficientAccounts(pps.accounts, minimumAmount, cfg.SrcAccount)
 			pps.accountsMu.RUnlock()
 			// in group tests txns are sent back and forth, so both parties need funds
+			var toList []string
 			if cfg.GroupSize == 1 {
 				minimumAmount = 0
+				pps.accountsMu.RLock()
+				toList = listSufficientAccounts(pps.accounts, minimumAmount, cfg.SrcAccount)
+				pps.accountsMu.RUnlock()
+			} else {
+				// same selection with another shuffle
+				toList = make([]string, len(fromList))
+				copy(toList, fromList)
+				rand.Shuffle(len(toList), func(i, j int) { toList[i], toList[j] = toList[j], toList[i] })
 			}
-			pps.accountsMu.RLock()
-			toList := listSufficientAccounts(pps.accounts, minimumAmount, cfg.SrcAccount)
-			pps.accountsMu.RUnlock()
 
 			sent, succeeded, err := pps.sendFromTo(fromList, toList, ac, &nextSendTime)
 			totalSent += sent
@@ -543,9 +569,7 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			}
 
 			if cfg.RefreshTime > 0 && time.Now().After(refreshTime) {
-				pps.accountsMu.Lock()
-				err = pps.refreshAccounts(pps.accounts, ac, cfg)
-				pps.accountsMu.Unlock()
+				err = pps.refreshAccounts(ac, cfg)
 				if err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "error refreshing: %v\n", err)
 				}
@@ -627,7 +651,8 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
 		pps.nftHolders[addr] = 0
 		var tx transactions.Transaction
-		tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend)
+		srcAcct := pps.acct(pps.cfg.SrcAccount)
+		tx, err = pps.sendPaymentFromSourceAccount(client, addr, fee, toSend, srcAcct)
 		if err != nil {
 			return
 		}
@@ -714,8 +739,7 @@ func (pps *WorkerState) sendFromTo(
 		*ap = p
 		assetsByCreator[c] = append(assetsByCreator[c], ap)
 	}
-	for i := 0; i < len(fromList); i = (i + 1) % len(fromList) {
-		from := fromList[i]
+	for i, from := range fromList {
 
 		// keep going until the balances of at least 20% of the accounts is too low.
 		if len(belowMinBalanceAccounts)*5 > len(fromList) {
@@ -940,6 +964,7 @@ func (pps *WorkerState) roundMonitor(client libgoal.Client) {
 		pps.pendingTxns = pendingTxns
 		pps.muSuggestedParams.Unlock()
 
+		// take a quick snapshot of accounts to decrease mutex shadow
 		pps.accountsMu.Lock()
 		accountsSnapshot := make([]*pingPongAccount, len(pps.accounts))
 		pos := 0
