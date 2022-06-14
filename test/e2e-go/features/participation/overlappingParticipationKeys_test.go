@@ -83,7 +83,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 
 	genesis, err := bookkeeping.LoadGenesisFromFile(filepath.Join(fixture.PrimaryDataDir(), "genesis.json"))
 	a.NoError(err)
-	genesisHash := crypto.HashObj(genesis)
+	genesisHash := genesis.Hash()
 	rootKeys := make(map[int]*account.Root)
 	regTransactions := make(map[int]transactions.SignedTxn)
 	lastRound := uint64(39) // check 3 rounds of keys rotations

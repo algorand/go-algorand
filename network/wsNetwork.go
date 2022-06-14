@@ -417,8 +417,8 @@ type WebsocketNetwork struct {
 	// messagesOfInterestMu protects messagesOfInterest and ensures
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
-	messagesOfInterestMu   deadlock.Mutex
-	messagesOfInterestCond *sync.Cond
+	messagesOfInterestMu      deadlock.Mutex
+	messagesOfInterestRefresh chan struct{}
 
 	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
 	// are still transmitting or receiving information. The channel produced by this ticker
@@ -764,7 +764,7 @@ func (wn *WebsocketNetwork) setup() {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
 
-	wn.messagesOfInterestCond = sync.NewCond(&wn.messagesOfInterestMu)
+	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
@@ -917,7 +917,7 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
-	localTelemetryGUID := wn.log.GetTelemetryHostName()
+	localTelemetryGUID := wn.log.GetTelemetryGUID()
 	localInstanceName := wn.log.GetInstanceName()
 	header.Set(TelemetryIDHeader, localTelemetryGUID)
 	header.Set(InstanceNameHeader, localInstanceName)
@@ -970,11 +970,11 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      remoteHost,
-				HostName:     otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: otherInstanceName,
-				Reason:       "Connection Limit",
+				Address:       remoteHost,
+				TelemetryGUID: otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  otherInstanceName,
+				Reason:        "Connection Limit",
 			})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
@@ -985,11 +985,11 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_limit"})
 		wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      remoteHost,
-				HostName:     otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: otherInstanceName,
-				Reason:       "Remote IP Connection Limit",
+				Address:       remoteHost,
+				TelemetryGUID: otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  otherInstanceName,
+				Reason:        "Remote IP Connection Limit",
 			})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return http.StatusServiceUnavailable
@@ -1154,10 +1154,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      trackedRequest.remoteHost,
-			HostName:     trackedRequest.otherTelemetryGUID,
-			Incoming:     true,
-			InstanceName: trackedRequest.otherInstanceName,
+			Address:       trackedRequest.remoteHost,
+			TelemetryGUID: trackedRequest.otherTelemetryGUID,
+			Incoming:      true,
+			InstanceName:  trackedRequest.otherInstanceName,
 		})
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
@@ -1178,7 +1178,7 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 		if messagesOfInterestEnc != nil {
 			peer.sendMessagesOfInterest(messagesOfInterestGeneration, messagesOfInterestEnc)
 		} else {
-			wn.log.Infof("msgOfInterest Enc=nil")
+			wn.log.Infof("msgOfInterest Enc=nil, MOIGen=%d", messagesOfInterestGeneration)
 		}
 	}
 }
@@ -1726,14 +1726,10 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	defer wn.lastNetworkAdvanceMu.Unlock()
 	wn.lastNetworkAdvance = time.Now().UTC()
 	if wn.nodeInfo != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
-		// if we're not a relay, and not participating, we don't need txn pool
-		wantTXGossip := wn.nodeInfo.IsParticipating()
-		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
-			wn.RegisterMessageInterest(protocol.TxnTag)
-			wn.wantTXGossip = wantTXGossipYes
-		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
-			wn.DeregisterMessageInterest(protocol.TxnTag)
-			wn.wantTXGossip = wantTXGossipNo
+		select {
+		case wn.messagesOfInterestRefresh <- struct{}{}:
+		default:
+			// if the notify chan is full, it will get around to updating the latest when it actually runs
 		}
 	}
 }
@@ -1754,7 +1750,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
 			ConnectionDuration: uint(now.Sub(peer.createTime).Seconds()),
-			HostName:           peer.TelemetryGUID,
+			TelemetryGUID:      peer.TelemetryGUID,
 			InstanceName:       peer.InstanceName,
 		}
 		if peer.outgoing {
@@ -2098,11 +2094,11 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
-			Address:      justHost(conn.RemoteAddr().String()),
-			HostName:     peer.TelemetryGUID,
-			Incoming:     false,
-			InstanceName: peer.InstanceName,
-			Endpoint:     peer.GetAddress(),
+			Address:       justHost(conn.RemoteAddr().String()),
+			TelemetryGUID: peer.TelemetryGUID,
+			Incoming:      false,
+			InstanceName:  peer.InstanceName,
+			Endpoint:      peer.GetAddress(),
 		})
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
@@ -2206,10 +2202,10 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		}
 	}
 	eventDetails := telemetryspec.PeerEventDetails{
-		Address:      peerAddr,
-		HostName:     peer.TelemetryGUID,
-		Incoming:     !peer.outgoing,
-		InstanceName: peer.InstanceName,
+		Address:       peerAddr,
+		TelemetryGUID: peer.TelemetryGUID,
+		Incoming:      !peer.outgoing,
+		InstanceName:  peer.InstanceName,
 	}
 	if peer.outgoing {
 		eventDetails.Endpoint = peer.GetAddress()
@@ -2350,18 +2346,24 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
-	wn.messagesOfInterestCond.Broadcast()
+	var peers []*wsPeer
+	peers, _ = wn.peerSnapshot(peers)
+	for _, peer := range peers {
+		wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
+	}
 }
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
-	var peers []*wsPeer
-	wn.messagesOfInterestMu.Lock()
-	defer wn.messagesOfInterestMu.Unlock()
 	for {
-		wn.messagesOfInterestCond.Wait()
-		peers, _ = wn.peerSnapshot(peers)
-		for _, peer := range peers {
-			wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
+		<-wn.messagesOfInterestRefresh
+		// if we're not a relay, and not participating, we don't need txn pool
+		wantTXGossip := wn.nodeInfo.IsParticipating()
+		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+			wn.RegisterMessageInterest(protocol.TxnTag)
+			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
+		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+			wn.DeregisterMessageInterest(protocol.TxnTag)
+			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
 		}
 	}
 }

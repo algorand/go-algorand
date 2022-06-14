@@ -882,7 +882,10 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusFuture,
 }
 
-func TestContainsLatestVersion(t *testing.T) {
+// TestReleasedVersion ensures that the necessary tidying is done when a new
+// protocol release happens.  The new version must be added to
+// consensusByNumber, and a new LogicSigVersion must be added to vFuture.
+func TestReleasedVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -891,6 +894,13 @@ func TestContainsLatestVersion(t *testing.T) {
 	require.Len(t, config.Consensus[consensusByNumber[len(consensusByNumber)-2]].ApprovedUpgrades, 0)
 	// And no funny business with vFuture
 	require.Equal(t, protocol.ConsensusFuture, consensusByNumber[len(consensusByNumber)-1])
+
+	// Ensure that vFuture gets a new LogicSigVersion when we promote the
+	// existing one.  That allows TestExperimental in the logic package to
+	// prevent unintended releases of experimental opcodes.
+	relV := config.Consensus[consensusByNumber[len(consensusByNumber)-2]].LogicSigVersion
+	futureV := config.Consensus[protocol.ConsensusFuture].LogicSigVersion
+	require.Equal(t, relV+1, futureV)
 }
 
 // testConsensusRange allows for running tests against a range of consensus

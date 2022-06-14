@@ -62,9 +62,9 @@ const createdResourcesVersion = 6
 // field.
 const appAddressAvailableVersion = 7
 
-// EXPERIMENTAL. These should be revisited whenever a new LogiSigVersion is
+// EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
-// their version.
+// their version, and fixup TestAssemble() in assembler_test.go.
 const fidoVersion = 7    // base64, json, secp256r1
 const pairingVersion = 7 // bn256 opcodes. will add bls12-381, and unify the available opcodes.// experimental-
 
@@ -446,8 +446,8 @@ var OpSpecs = []OpSpec{
 	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 2, immediates("t", "f").field("f", &TxnFields).assembler(asmGtxn2)},
-	{0x34, "load", opLoad, proto(":a"), 1, immediates("i")},
-	{0x35, "store", opStore, proto("a:"), 1, immediates("i")},
+	{0x34, "load", opLoad, proto(":a"), 1, stacky(typeLoad, "i")},
+	{0x35, "store", opStore, proto("a:"), 1, stacky(typeStore, "i")},
 	{0x36, "txna", opTxna, proto(":a"), 2, immediates("f", "i").field("f", &TxnArrayFields)},
 	{0x37, "gtxna", opGtxna, proto(":a"), 2, immediates("t", "f", "i").field("f", &TxnArrayFields)},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
@@ -461,8 +461,8 @@ var OpSpecs = []OpSpec{
 	{0x3d, "gaids", opGaids, proto("i:i"), 4, only(modeApp)},
 
 	// Like load/store, but scratch slot taken from TOS instead of immediate
-	{0x3e, "loads", opLoads, proto("i:a"), 5, opDefault()},
-	{0x3f, "stores", opStores, proto("ia:"), 5, opDefault()},
+	{0x3e, "loads", opLoads, proto("i:a"), 5, stacky(typeLoads)},
+	{0x3f, "stores", opStores, proto("ia:"), 5, stacky(typeStores)},
 
 	{0x40, "bnz", opBnz, proto("i:"), 1, opBranch()},
 	{0x41, "bz", opBz, proto("i:"), 2, opBranch()},
@@ -493,8 +493,9 @@ var OpSpecs = []OpSpec{
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, opDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, opDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, opDefault()},
-	{0x5c, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
-	{0x5d, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
+
+	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
+	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},

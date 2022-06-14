@@ -1146,7 +1146,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	vFuture.LogicSigVersion = 7
+	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.MinInnerApplVersion = 4
 
 	vFuture.UnifyInnerTxIDs = true
@@ -1184,4 +1184,5 @@ func init() {
 	for _, p := range Consensus {
 		checkSetAllocBounds(p)
 	}
+
 }
