@@ -409,7 +409,7 @@ func (s *Service) PauseOrResume(rnd uint64) (err error) {
 		return
 	}
 	// only allow to set pauseAtRound one at a time
-	if len(s.chanPauseAtRound) == cap(s.chanPauseAtRound) {
+	if s.chanPauseAtRound != nil && len(s.chanPauseAtRound) == cap(s.chanPauseAtRound) {
 		err = errors.New("not allowed to pause: already has a pause number")
 		return
 	}
