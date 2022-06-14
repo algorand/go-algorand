@@ -884,7 +884,7 @@ var consensusByNumber = []protocol.ConsensusVersion{
 
 // TestReleasedVersion ensures that the necessary tidying is done when a new
 // protocol release happens.  The new version must be added to
-// consensusByNumber, and a new LogicSigVerion must be added to vFuture.
+// consensusByNumber, and a new LogicSigVersion must be added to vFuture.
 func TestReleasedVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
