@@ -115,28 +115,26 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 
 func stateProofRecordFromKeys(rnd basics.Round, keys []account.Participation) (out []account.StateProofRecordForRound) {
 	for _, part := range keys {
-		if part.OverlapsInterval(rnd, rnd) {
-			partRecord := account.ParticipationRecord{
-				ParticipationID:   part.ID(),
-				Account:           part.Parent,
-				FirstValid:        part.FirstValid,
-				LastValid:         part.LastValid,
-				KeyDilution:       part.KeyDilution,
-				LastVote:          0,
-				LastBlockProposal: 0,
-				LastStateProof:    0,
-				EffectiveFirst:    0,
-				EffectiveLast:     0,
-				VRF:               part.VRF,
-				Voting:            part.Voting,
-			}
-			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
-			partRecordForRound := account.StateProofRecordForRound{
-				ParticipationRecord: partRecord,
-				StateProofSecrets:   signerInRound,
-			}
-			out = append(out, partRecordForRound)
+		partRecord := account.ParticipationRecord{
+			ParticipationID:   part.ID(),
+			Account:           part.Parent,
+			FirstValid:        part.FirstValid,
+			LastValid:         part.LastValid,
+			KeyDilution:       part.KeyDilution,
+			LastVote:          0,
+			LastBlockProposal: 0,
+			LastStateProof:    0,
+			EffectiveFirst:    0,
+			EffectiveLast:     0,
+			VRF:               part.VRF,
+			Voting:            part.Voting,
 		}
+		signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
+		partRecordForRound := account.StateProofRecordForRound{
+			ParticipationRecord: partRecord,
+			StateProofSecrets:   signerInRound,
+		}
+		out = append(out, partRecordForRound)
 	}
 	return out
 }
@@ -554,12 +552,17 @@ func TestSignerDoesntDeleteKeysWhenDBDoesntStoreSigs(t *testing.T) {
 }
 
 // TestSigBroacastTwoPerSig checks if each signature is broadcasted twice per period
+// It generates numAddresses and prepares a database with the account/signatures.
+// Then, calls broadcastSigs with round numbers spanning periods and
+// makes sure each account has 2 sigs sent per period if originated locally, and 1 sig
+// if received from another relay.
 func TestSigBroacastTwoPerSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// Prepare the addresses and the keys
 	numAddresses := 10
 	signatureBcasted := make(map[basics.Address]int)
-
+	fromThisNode := make(map[basics.Address]bool)
 	var keys []account.Participation
 	for i := 0; i < numAddresses; i++ {
 		var parent basics.Address
@@ -574,13 +577,18 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 	spw := newTestWorker(t, s)
 	proto := config.Consensus[protocol.ConsensusFuture]
 
+	// Prepare the database
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initDB(tx)
 	})
 	require.NoError(t, err)
 
-	round := basics.Round(256)
+	// All the keys are for round 255. This way, starting the period at 256,
+	// there will be no disqualified signatures from broadcasting because they are
+	// into the future.
+	round := basics.Round(255)
 
+	// Sign the message
 	spRecords := stateProofRecordFromKeys(round, keys)
 	sigs := make([]sigFromAddr, 0, len(keys))
 	stateproofMessage := stateproofmsg.Message{}
@@ -588,7 +596,6 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 	for _, key := range spRecords {
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		require.NoError(t, err)
-
 		sigs = append(sigs, sigFromAddr{
 			SignerAddress: key.Account,
 			Round:         round,
@@ -596,17 +603,23 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		})
 	}
 
+	// Add the signatures to the databse
+	ftn := true
 	for _, sfa := range sigs {
 		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return addPendingSig(tx, sfa.Round, pendingSig{
 				signer:       sfa.SignerAddress,
 				sig:          sfa.Sig,
-				fromThisNode: true,
+				fromThisNode: ftn,
 			})
 		})
 		require.NoError(t, err)
+		fromThisNode[sfa.SignerAddress] = ftn
+		// alternate the from this node argument between addresses
+		ftn = !ftn
 	}
 
+	// Collect the broadcast messages
 	tns := spw.net.(*testWorkerStubs)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -620,15 +633,21 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		}
 	}()
 
+	// Broadcast the messages
 	periods := 5
 	for brnd := 257; brnd < 257+256*periods; brnd++ {
 		spw.broadcastSigs(basics.Round(brnd), proto)
 	}
-	close(tns.sigmsg)
 
+	close(tns.sigmsg)
 	wg.Wait()
 
-	for _, sb := range signatureBcasted {
-		require.Equal(t, 2*periods, sb)
+	// Verify the number of times each signature was broadcast
+	for addr, sb := range signatureBcasted {
+		if fromThisNode[addr] {
+			require.Equal(t, 2*periods, sb)
+		} else {
+			require.Equal(t, periods, sb)
+		}
 	}
 }
