@@ -62,7 +62,7 @@ const createdResourcesVersion = 6
 // field.
 const appAddressAvailableVersion = 7
 
-// EXPERIMENTAL. These should be revisited whenever a new LogiSigVersion is
+// EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const fidoVersion = 7    // base64, json, secp256r1
