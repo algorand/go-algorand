@@ -621,7 +621,7 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 	}()
 
 	periods := 5
-	for brnd := 512; brnd <= 513+256*periods; brnd++ {
+	for brnd := 257; brnd < 257+256*periods; brnd++ {
 		spw.broadcastSigs(basics.Round(brnd), proto)
 	}
 	close(tns.sigmsg)
