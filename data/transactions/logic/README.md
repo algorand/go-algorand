@@ -180,6 +180,9 @@ _available_.
    associated account of a contract that was created earlier in the
    group is _available_.
 
+ * Since v7, the account associated with any contract present in the
+   `txn.ForeignApplications` field is _available_.
+
 ## Constants
 
 Constants can be pushed onto the stack in two different ways:
@@ -273,6 +276,9 @@ return stack matches the name of the input value.
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
+| `bn256_add` | for (curve points A and B) return the curve point A + B |
+| `bn256_scalar_mul` | for (curve point A, scalar K) return the curve point KA |
+| `bn256_pairing` | for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1} |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
