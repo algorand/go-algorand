@@ -75,6 +75,7 @@ var partGenerateCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		defer partdb.Close()
 
 		fmt.Println("Please stand by while generating keys. This might take a few minutes...")
 
@@ -112,6 +113,7 @@ var partInfoCmd = &cobra.Command{
 		}
 
 		partkey, err := account.RestoreParticipation(partdb)
+		partdb.Close()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot load partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
@@ -138,6 +140,7 @@ var partReparentCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot open partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		defer partdb.Close()
 
 		partkey, err := account.RestoreParticipation(partdb)
 		if err != nil {
