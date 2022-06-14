@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
@@ -62,7 +63,6 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	if err != nil {
 		return builder{}, err
 	}
-	spw.Message = msg
 
 	provenWeight, err := ledger.GetProvenWeight(votersHdr, hdr)
 	if err != nil {
@@ -72,6 +72,7 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 	var res builder
 	res.votersHdr = votersHdr
 	res.voters = voters
+	res.message = msg
 	res.Builder, err = stateproof.MkBuilder(msg.IntoStateProofMessageHash(),
 		uint64(hdr.Round),
 		provenWeight,
@@ -380,7 +381,7 @@ func (spw *Worker) tryBuilding() {
 		firstValid := spw.ledger.Latest()
 		acceptableWeight := ledger.AcceptableStateProofWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
-			// Haven't signed enough to build the cert at this time..
+			// Haven't signed enough to build the state proof at this time..
 			continue
 		}
 
@@ -389,7 +390,7 @@ func (spw *Worker) tryBuilding() {
 			continue
 		}
 
-		cert, err := b.Build()
+		sp, err := b.Build()
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: building state proof for %d: %v", rnd, err)
 			continue
@@ -403,8 +404,8 @@ func (spw *Worker) tryBuilding() {
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofIntervalLatestRound = rnd
-		stxn.Txn.StateProof = *cert
-		stxn.Txn.Message = spw.Message
+		stxn.Txn.StateProof = *sp
+		stxn.Txn.Message = b.message
 		err = spw.txnSender.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			spw.log.Warnf("spw.tryBuilding: broadcasting state proof txn for %d: %v", rnd, err)
