@@ -57,7 +57,7 @@ if [[ ! "$PKG_NAME" =~ devtools ]]; then
         cp "./installer/$data" "$PKG_ROOT/var/lib/algorand"
     done
 
-    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet" "alphanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p "$PKG_ROOT/var/lib/algorand/genesis/$dir"
         cp "./installer/genesis/$dir/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis/$dir/genesis.json"
