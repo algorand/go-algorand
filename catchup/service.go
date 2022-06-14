@@ -140,6 +140,7 @@ func (s *Service) Stop() {
 		close(s.chanPauseAtRound)
 	}
 	<-s.done
+	s.dontAllowPauseAtRound = false
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
 	}
@@ -405,6 +406,11 @@ func (s *Service) PauseOrResume(rnd uint64) (err error) {
 	// check if pause functionality is enabled
 	if s.dontAllowPauseAtRound {
 		err = errors.New("not allowed to pause")
+		return
+	}
+	// only allow to set pauseAtRound one at a time
+	if len(s.chanPauseAtRound) == cap(s.chanPauseAtRound) {
+		err = errors.New("not allowed to pause: already has a pause number")
 		return
 	}
 	if s.pauseAtRound != 0 {
