@@ -2346,6 +2346,12 @@ func TestReplace(t *testing.T) {
 	testAccepts(t, `byte 0x11111111; int 1; byte 0x; replace3; byte 0x11111111; ==`, 7)
 	testAccepts(t, `byte 0x11111111; int 2; byte 0x; replace3; byte 0x11111111; ==`, 7)
 	testAccepts(t, `byte 0x11111111; int 3; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	// unusual, perhaps, but legal. inserts 0 bytes at len(A)
+	testAccepts(t, `byte 0x11111111; int 4; byte 0x; replace3; byte 0x11111111; ==`, 7)
+	// but can't replace a byte there
+	testPanics(t, `byte 0x11111111; int 4; byte 0x22; replace3; len`, 7)
+	// even a zero byte replace fails after len(A)
+	testPanics(t, `byte 0x11111111; int 5; byte 0x; replace3; len`, 7)
 
 	testAccepts(t, `byte 0x; byte 0x; replace2 0; byte 0x; ==`, 7)
 	testAccepts(t, `byte 0x; int 0; byte 0x; replace3; byte 0x; ==`, 7)
