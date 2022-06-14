@@ -23,6 +23,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -207,6 +208,8 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
+// The return error of fn should be a native sqlite3.Error type or an error wrapping it.
+// DO NOT return a custom error - the internal logic of Atmoic expects an sqlite error and uses that value.
 func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	return db.atomic(fn, extras...)
 }
@@ -386,6 +389,9 @@ func (db *Accessor) GetPageSize(ctx context.Context) (pageSize uint64, err error
 
 // dbretry returns true if the error might be temporary
 func dbretry(obj error) bool {
+	if err := errors.Unwrap(obj); err != nil { // unwrap error if wrapped
+		obj = err
+	}
 	err, ok := obj.(sqlite3.Error)
 	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
 }

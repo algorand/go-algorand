@@ -1039,7 +1039,8 @@ func TestFlushResetsLastError(t *testing.T) {
 	a.NoError(registry.Flush(10 * time.Second))
 }
 
-// TestParticipationDB_Locking adds some secrets to the registry and makes sure the same ones are returned.
+// TestParticipationDB_Locking tries fetching StateProof keys from the DB while the Rolling table is being updated.
+// Makes sure the table is not locked for reading while a different one is locked for writing.
 func TestParticipationDB_Locking(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

@@ -540,20 +540,22 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 
 			var x int
 			err = readAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				row := tx.QueryRow(`SELECT a FROM bar WHERE pk =1`)
+				row := tx.QueryRow(`SELECT a FROM bar WHERE pk=1`)
 				err = row.Scan(&x)
+				if useWAL {
+					a.NoError(err)
+					a.Equal(234, x)
+				} else {
+					if err != nil { // database should be locked very often, but not every time (probabilistic)
+						fmt.Printf("SELECT query failed: %v\n", err)
+						a.ErrorContains(err, "database is locked")
+					}
+				}
 				return err
 			})
 			if useWAL {
 				a.NoError(err)
-				a.Equal(234, x)
-			} else {
-				if err != nil { // database should be locked very often, but not every time (probabilistic)
-					a.ErrorContains(err, "database is locked")
-					continue
-				}
 			}
-			a.NoError(err)
 		}
 	}()
 
