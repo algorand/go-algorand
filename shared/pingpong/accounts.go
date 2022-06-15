@@ -40,6 +40,31 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
+	out := make(chan *crypto.SignatureSecrets)
+	go func() {
+		// randomly select numAccounts from generatedAccountsCount
+		numAccounts := initCfg.NumPartAccounts
+		totalAccounts := initCfg.GeneratedAccountsCount
+		selected := make(map[uint32]bool)
+
+		for uint32(len(selected)) < numAccounts {
+			acct := uint32(rand.Int31n(int32(totalAccounts)))
+			if selected[acct] {
+				continue // already picked this account
+			}
+			// generate deterministic secret key from integer ID
+			// same uint64 seed used as netdeploy/remote/deployedNetwork.go
+			var seed crypto.Seed
+			binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+			out <- crypto.GenerateSignatureSecrets(seed)
+			selected[acct] = true
+		}
+		close(out)
+	}()
+	return out
+}
+
 func fileAccounts(ac libgoal.Client) (<-chan *crypto.SignatureSecrets, error) {
 	genID, err := ac.GenesisID()
 	if err != nil {
@@ -83,31 +108,6 @@ func enumerateFileAccounts(files []fs.FileInfo, genesisDir string, out chan<- *c
 		out <- root.Secrets()
 	}
 	close(out)
-}
-
-func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
-	out := make(chan *crypto.SignatureSecrets)
-	go func() {
-		// randomly select numAccounts from generatedAccountsCount
-		numAccounts := initCfg.NumPartAccounts
-		totalAccounts := initCfg.GeneratedAccountsCount
-		selected := make(map[uint32]bool)
-
-		for uint32(len(selected)) < numAccounts {
-			acct := uint32(rand.Int31n(int32(totalAccounts)))
-			if selected[acct] {
-				continue // already picked this account
-			}
-			// generate deterministic secret key from integer ID
-			// same uint64 seed used as netdeploy/remote/deployedNetwork.go
-			var seed crypto.Seed
-			binary.LittleEndian.PutUint64(seed[:], uint64(acct))
-			out <- crypto.GenerateSignatureSecrets(seed)
-			selected[acct] = true
-		}
-		close(out)
-	}()
-	return out
 }
 
 func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
