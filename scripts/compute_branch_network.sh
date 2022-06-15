@@ -15,6 +15,9 @@ if [ "${BRANCH}" = "rel/stable" ]; then
 elif [ "${BRANCH}" = "rel/beta" ]; then
     echo "betanet"
     exit 0
+elif [ "${BRANCH}" = "feature/alphanet" ]; then
+    echo "alphanet"
+    exit 0
 fi
 
 #get parent of current branch
@@ -26,6 +29,8 @@ if [ "${BRANCHPARENT}" = "rel/stable" ]; then
     echo "testnet"
 elif [ "${BRANCHPARENT}" = "rel/beta" ]; then
     echo "betanet"
+elif [ "${BRANCHPARENT}" = "feature/alphanet" ]; then
+    echo "alphanet"
 else
     echo "devnet"
 fi
