@@ -37,14 +37,14 @@ func TestBoxNewDel(t *testing.T) {
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	logic.TestApp(t, `int 24; byte "self"; box_create; int 1`, ep)
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 	logic.TestApp(t, `int 24; byte "self"; box_create; int 1`, ep)
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 	logic.TestApp(t, `int 24; byte "self"; box_create; int 24; byte "self"; box_create; int 1`, ep,
 		`already exists`)
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 	logic.TestApp(t, `int 24; byte "self"; box_create; int 24; byte "other"; box_create; int 1`, ep)
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 
 	logic.TestApp(t, `int 24; byte "self"; box_create; byte "self"; box_del; int 1`, ep)
 	logic.TestApp(t, `int 24; byte "self"; box_del; int 1`, ep, `no such box`)
@@ -60,15 +60,15 @@ func TestBoxNewBad(t *testing.T) {
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	logic.TestApp(t, `int 999; byte "self"; box_create; int 1`, ep, "write budget")
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 
 	// In test proto, you get 100 I/O budget per boxref
 	ten := [10]transactions.BoxRef{}
 	txn.Boxes = append(txn.Boxes, ten[:]...) // write budget is now 11*100 = 1100
 	logic.TestApp(t, `int 999; byte "self"; box_create; int 1`, ep)
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 	logic.TestApp(t, `int 1000; byte "self"; box_create; int 1`, ep)
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 	logic.TestApp(t, `int 1001; byte "self"; box_create; int 1`, ep, "box size too large")
 
 	logic.TestApp(t, `int 1000; byte "unknown"; box_create; int 1`, ep, "invalid Box reference")
@@ -119,7 +119,7 @@ func TestBoxReadWrite(t *testing.T) {
                       byte 0x44443132; ==`, ep)
 
 	// All bow down to the God of code coverage!
-	ledger.DelBox(888, "self")
+	ledger.DeleteBox(888, "self")
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3031; box_replace`, ep,
 		"no such box")
 	logic.TestApp(t, `byte "junk"; int 1; byte 0x3031; box_replace`, ep,
@@ -214,7 +214,7 @@ func TestBoxWriteBudget(t *testing.T) {
 	logic.TestApp(t, `byte "self"; box_del;
                       int 201; byte "self"; box_create;
                       int 1`, ep, "write budget (200) exceeded")
-	ledger.DelBox(888, "self") // cleanup (doing it in a program would fail b/c the 201 len box exists)
+	ledger.DeleteBox(888, "self") // cleanup (doing it in a program would fail b/c the 201 len box exists)
 
 	// Test interplay of two different boxes being created
 	logic.TestApp(t, `int 4; byte "self"; box_create;
@@ -230,7 +230,7 @@ func TestBoxWriteBudget(t *testing.T) {
                       int 6; byte "self"; box_create;
                       int 196; byte "other"; box_create;
                       int 1`, ep, "write budget (200) exceeded")
-	ledger.DelBox(888, "other")
+	ledger.DeleteBox(888, "other")
 
 	logic.TestApp(t, `byte "self"; box_del;
                       int 6; byte "self"; box_create;
@@ -251,7 +251,7 @@ func TestBoxWriteBudget(t *testing.T) {
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
                       int 1`, ep, "read budget (200) exceeded")
-	ledger.DelBox(888, "other")
+	ledger.DeleteBox(888, "other")
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       int 10; byte "other"; box_create
                       int 1`, ep)
@@ -275,8 +275,8 @@ func TestIOBudgetGrow(t *testing.T) {
 
 	ep, txn, ledger := logic.MakeSampleEnv()
 	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
-	ledger.NewBox(888, "self", 101)
-	ledger.NewBox(888, "other", 101)
+	ledger.CreateBox(888, "self", 101)
+	ledger.CreateBox(888, "other", 101)
 
 	logic.TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
