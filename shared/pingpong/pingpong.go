@@ -413,11 +413,9 @@ func waitPendingTransactions(accounts []string, client libgoal.Client) error {
 
 func (pps *WorkerState) refreshAccounts(client libgoal.Client, cfg PpConfig) error {
 	pps.accountsMu.Lock()
-	addrs := make([]string, len(pps.accounts))
-	pos := 0
+	addrs := make([]string, 0, len(pps.accounts))
 	for addr := range pps.accounts {
-		addrs[pos] = addr
-		pos++
+		addrs = append(addrs, addr)
 	}
 	pps.accountsMu.Unlock()
 	// wait until all the pending transactions have been sent; otherwise, getting the balance
@@ -966,11 +964,9 @@ func (pps *WorkerState) roundMonitor(client libgoal.Client) {
 
 		// take a quick snapshot of accounts to decrease mutex shadow
 		pps.accountsMu.Lock()
-		accountsSnapshot := make([]*pingPongAccount, len(pps.accounts))
-		pos := 0
+		accountsSnapshot := make([]*pingPongAccount, 0, len(pps.accounts))
 		for _, acct := range pps.accounts {
-			accountsSnapshot[pos] = acct
-			pos++
+			accountsSnapshot = append(accountsSnapshot, acct)
 		}
 		pps.accountsMu.Unlock()
 
