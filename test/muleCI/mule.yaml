@@ -10,6 +10,7 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=amd64
+      - FULLVERSION=${FULLVERSION}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -53,6 +54,7 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=arm64
+      - FULLVERSION=${FULLVERSION}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -68,6 +70,7 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=arm
+      - FULLVERSION=${FULLVERSION}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v7
