@@ -567,6 +567,12 @@ func (client RestClient) Shutdown() (err error) {
 	return
 }
 
+// ChangePauseAtRound starts catching up and pauses at the block number rnd
+func (client RestClient) ChangePauseAtRound(rnd string) (response privateV2.PauseAtRoundResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/pausecatchup/%s", rnd), nil, "POST", false, true)
+	return
+}
+
 // AbortCatchup aborts the currently running catchup
 func (client RestClient) AbortCatchup(catchpointLabel string) (response privateV2.CatchpointAbortResponse, err error) {
 	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true)

@@ -200,6 +200,10 @@ func (m mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, e
 	return nil, fmt.Errorf("assemble block not implemented")
 }
 
+func (m mockNode) ChangePauseAtRound(rnd uint64) error {
+	return m.err
+}
+
 func (m mockNode) StartCatchup(catchpoint string) error {
 	return m.err
 }

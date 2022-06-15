@@ -8,11 +8,13 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/algorand/oapi-codegen/pkg/runtime"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
-	"net/http"
-	"strings"
 )
 
 // ServerInterface represents all server handlers.
@@ -20,6 +22,9 @@ type ServerInterface interface {
 	// Aborts a catchpoint catchup.
 	// (DELETE /v2/catchup/{catchpoint})
 	AbortCatchup(ctx echo.Context, catchpoint string) error
+	// Changes PauseAtRound variable in catchup service.
+	// (POST /v2/changepauseatround/{rnd})
+	ChangePauseAtRound(ctx echo.Context, rnd uint64) error
 	// Starts a catchpoint catchup.
 	// (POST /v2/catchup/{catchpoint})
 	StartCatchup(ctx echo.Context, catchpoint string) error
@@ -75,6 +80,40 @@ func (w *ServerInterfaceWrapper) AbortCatchup(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshalled arguments
 	err = w.Handler.AbortCatchup(ctx, catchpoint)
+	return err
+}
+// ChangePauseAtRound converts echo context to params.
+func (w *ServerInterfaceWrapper) ChangePauseAtRound(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
+	var err error
+	// ------------- Path parameter "catchpoint" -------------
+	var rnd string
+
+	err = runtime.BindStyledParameter("simple", false, "rnd", ctx.Param("rnd"), &rnd)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter rnd: %s", err))
+	}
+
+	ctx.Set("api_key.Scopes", []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	var num int
+	num, err = strconv.Atoi(rnd)
+	if err != nil {
+		return err
+	}
+	err = w.Handler.ChangePauseAtRound(ctx, uint64(num))
 	return err
 }
 
@@ -298,6 +337,7 @@ func RegisterHandlers(router interface {
 	}
 
 	router.DELETE("/v2/catchup/:catchpoint", wrapper.AbortCatchup, m...)
+	router.POST("/v2/pausecatchup/:rnd", wrapper.ChangePauseAtRound, m...)
 	router.POST("/v2/catchup/:catchpoint", wrapper.StartCatchup, m...)
 	router.GET("/v2/participation", wrapper.GetParticipationKeys, m...)
 	router.POST("/v2/participation", wrapper.AddParticipationKey, m...)

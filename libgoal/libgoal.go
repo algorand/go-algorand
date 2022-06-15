@@ -1035,6 +1035,19 @@ func (c *Client) AbortCatchup() error {
 	return nil
 }
 
+// ChangePauseAtRound starts catching up and pauses at the block number rnd
+func (c *Client) ChangePauseAtRound(rnd string) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	_, err = algod.ChangePauseAtRound(rnd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Catchup start catching up to the give catchpoint label.
 func (c *Client) Catchup(catchpointLabel string) error {
 	algod, err := c.ensureAlgodClient()

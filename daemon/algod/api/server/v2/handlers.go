@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,6 +87,7 @@ type NodeInterface interface {
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
+	ChangePauseAtRound(rnd uint64) error
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
 	Config() config.Local
@@ -1034,6 +1036,24 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// changePauseAtRound Given a block number, it pauses the catchup at this block number
+func (v2 *Handlers) changePauseAtRound(ctx echo.Context, rnd uint64) (err error) {
+	// Select 200/201, or return an error
+	var code int
+	err = v2.Node.ChangePauseAtRound(rnd)
+	switch err.(type) {
+	case nil:
+		code = http.StatusCreated
+	default:
+		return internalError(ctx, err, fmt.Sprintf("failed to pause at round : %v", err), v2.Log)
+	}
+
+	str := strconv.FormatUint(rnd, 10)
+	return ctx.JSON(code, private.PauseAtRoundResponse{
+		PauseAtRoundMessage: str,
+	})
+}
+
 // startCatchup Given a catchpoint, it starts catching up to this catchpoint
 func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 	_, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
@@ -1144,6 +1164,12 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
+}
+
+//  Given a block number, it starts catching up and pauses at this block number
+// (POST /v2/changepauseatround/{rnd})
+func (v2 *Handlers) ChangePauseAtRound(ctx echo.Context, rnd uint64) error {
+	return v2.changePauseAtRound(ctx, rnd)
 }
 
 // StartCatchup Given a catchpoint, it starts catching up to this catchpoint

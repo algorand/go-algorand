@@ -1162,6 +1162,16 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 	}, nil
 }
 
+// ChangePauseAtRound calls pause or resume functionality implemented in catchup service
+// this function is intended to be called externally via the REST api interface.
+func (node *AlgorandFullNode) ChangePauseAtRound(rnd uint64) error {
+	if node.catchpointCatchupService == nil {
+		err := node.catchupService.PauseOrResume(rnd)
+		return err
+	}
+	return errors.New("catching up to a catchpoint, cannot pause")
+}
+
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
 // this function is intended to be called externally via the REST api interface.
 func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {

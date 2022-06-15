@@ -27,6 +27,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,6 +74,7 @@ func init() {
 	nodeCmd.AddCommand(waitCmd)
 	nodeCmd.AddCommand(createCmd)
 	nodeCmd.AddCommand(catchupCmd)
+	catchupCmd.AddCommand(pauseCmd)
 	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
 	//nodeCmd.AddCommand(shutdownCmd)
 
@@ -119,6 +121,29 @@ var nodeCmd = &cobra.Command{
 		//Fall back
 		cmd.HelpFunc()(cmd, args)
 	},
+}
+
+var pauseCmd = &cobra.Command{
+	Use:     "pause",
+	Short:   "Pause catchup service at a given block number",
+	Long:    "Pause allows users to stop the catchup at any desired block number",
+	Example: "goal node catchup pause 1000\tStart catching up and pause at the block number 1000",
+	Args:    pauseCmdArgument,
+	Run: func(cmd *cobra.Command, args []string) {
+		onDataDirs(func(datadir string) { changePauseAtRound(datadir, args) })
+	},
+}
+
+func pauseCmdArgument(cmd *cobra.Command, args []string) error {
+	if len(args) > 1 {
+		return errors.New("invalid block number")
+	}
+	_, err := strconv.Atoi(args[0])
+	if err != nil {
+		err = errors.New("invalid block number")
+		return err
+	}
+	return nil
 }
 
 var catchupCmd = &cobra.Command{
@@ -627,6 +652,14 @@ var createCmd = &cobra.Command{
 			reportErrorf(errorNodeCreation, err)
 		}
 	},
+}
+
+func changePauseAtRound(dataDir string, args []string) {
+	client := ensureAlgodClient(ensureSingleDataDir())
+	err := client.ChangePauseAtRound(args[0])
+	if err != nil {
+		reportErrorf(errorNodeStatus, err)
+	}
 }
 
 func catchup(dataDir string, args []string) {

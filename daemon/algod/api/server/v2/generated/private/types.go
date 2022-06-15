@@ -608,6 +608,13 @@ type CatchpointStartResponse struct {
 	CatchupMessage string `json:"catchup-message"`
 }
 
+// ChangePauseAtRoundResponse defines model for PauseAtRoundResponse.
+type PauseAtRoundResponse struct {
+
+	// Catchup start response string
+	PauseAtRoundMessage string `json:"pauseatround-message"`
+}
+
 // CompileResponse defines model for CompileResponse.
 type CompileResponse struct {
 
