@@ -450,6 +450,36 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200)
 }
 
+func changePauseAtRoundTest(t *testing.T, rnd uint64, nodeError error, expectedCode int) {
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nodeError)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := handler.ChangePauseAtRound(c, rnd)
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+}
+
+func TestChangePauseAtRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	goodRnd := uint64(100)
+	changePauseAtRoundTest(t, goodRnd, nil, 201)
+}
+
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
 	numAccounts := 1
 	numTransactions := 1
