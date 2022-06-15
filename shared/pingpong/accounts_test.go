@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2022 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package pingpong
 
 import (
@@ -9,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func makeKey(i uint64) *crypto.SignatureSecrets {
+func makeKeyFromSeed(i uint64) *crypto.SignatureSecrets {
 	var seed crypto.Seed
 	binary.LittleEndian.PutUint64(seed[:], i)
 	s := crypto.GenerateSignatureSecrets(seed)
@@ -23,15 +39,15 @@ func TestDeterministicAccounts(t *testing.T) {
 		GeneratedAccountsCount: 100,
 	}
 
-	// created expected set of keys similar like how netgoal does
+	// created expected set of keys in a similar way as netgoal generate --deterministic
 	expectedPubKeys := make(map[crypto.PublicKey]*crypto.SignatureSecrets)
 	for i := 0; i < int(initCfg.GeneratedAccountsCount); i++ {
-		key := makeKey(uint64(i))
+		key := makeKeyFromSeed(uint64(i))
 		expectedPubKeys[key.SignatureVerifier] = key
 	}
 	assert.Len(t, expectedPubKeys, int(initCfg.GeneratedAccountsCount))
 
-	// call pingpong generator and assert separate-generated accounts are equal
+	// call pingpong acct generator and assert its separately-generated secrets are equal
 	accountSecrets := deterministicAccounts(initCfg)
 	cnt := 0
 	for secret := range accountSecrets {

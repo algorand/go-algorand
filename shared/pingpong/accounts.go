@@ -65,20 +65,22 @@ func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
 	return out
 }
 
-func fileAccounts(ac libgoal.Client) (<-chan *crypto.SignatureSecrets, error) {
-	genID, err := ac.GenesisID()
-	if err != nil {
-		return nil, err
+func fileAccounts(ac libgoal.Client) (out <-chan *crypto.SignatureSecrets, err error) {
+	genID, err2 := ac.GenesisID()
+	if err2 != nil {
+		err = err2
+		return
 	}
 	genesisDir := filepath.Join(ac.DataDir(), genID)
-	files, err := ioutil.ReadDir(genesisDir)
-	if err != nil {
-		return nil, err
+	files, err2 := ioutil.ReadDir(genesisDir)
+	if err2 != nil {
+		err = err2
+		return
 	}
 
-	out := make(chan *crypto.SignatureSecrets)
-	go enumerateFileAccounts(files, genesisDir, out)
-	return out, nil
+	ch := make(chan *crypto.SignatureSecrets)
+	go enumerateFileAccounts(files, genesisDir, ch)
+	return ch, nil
 }
 
 func enumerateFileAccounts(files []fs.FileInfo, genesisDir string, out chan<- *crypto.SignatureSecrets) {
