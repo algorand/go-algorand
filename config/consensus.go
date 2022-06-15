@@ -929,6 +929,9 @@ func initConsensusProtocols() {
 	// Enable application support
 	v24.Application = true
 
+	// Although Inners were not allowed yet, this gates downgrade checks, which must be allowed
+	v24.MinInnerApplVersion = 6
+
 	// Enable rekeying
 	v24.SupportRekeying = true
 
@@ -1109,7 +1112,6 @@ func initConsensusProtocols() {
 	v31.LogicSigVersion = 6
 	v31.EnableInnerTransactionPooling = true
 	v31.IsolateClearState = true
-	v31.MinInnerApplVersion = 6
 
 	// stat proof key registration
 	v31.EnableStateProofKeyregCheck = true
@@ -1163,7 +1165,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	vFuture.LogicSigVersion = 7
+	vFuture.LogicSigVersion = 7 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.MinInnerApplVersion = 4
 	vFuture.UnifyInnerTxIDs = true
 
@@ -1201,4 +1203,5 @@ func init() {
 	for _, p := range Consensus {
 		checkSetAllocBounds(p)
 	}
+
 }
