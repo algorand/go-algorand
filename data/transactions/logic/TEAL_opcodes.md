@@ -746,12 +746,26 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
 
+## replace2 s
+
+- Opcode: 0x5c {uint8 start position}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)
+- Availability: v7
+
+## replace3
+
+- Opcode: 0x5d
+- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
+- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)
+- Availability: v7
+
 ## base64_decode e
 
-- Opcode: 0x5c {uint8 encoding index}
+- Opcode: 0x5e {uint8 encoding index}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 1 + 1 per 16 bytes
+- **Cost**: 1 + 1 per 16 bytes of A
 - Availability: v7
 
 `base64` Encodings:
@@ -766,9 +780,10 @@ Decodes A using the base64 encoding E. Specify the encoding with an immediate ar
 
 ## json_ref r
 
-- Opcode: 0x5d {string return type}
+- Opcode: 0x5f {string return type}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - return key B's value from a [valid](jsonspec.md) utf-8 encoded json object A
+- **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
 
 `json_ref` Types:
@@ -1096,6 +1111,36 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - SHA3_256 hash of value A, yields [32]byte
 - **Cost**: 130
 - Availability: v7
+
+## bn256_add
+
+- Opcode: 0x99
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- for (curve points A and B) return the curve point A + B
+- **Cost**: 70
+- Availability: v7
+
+A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.
+
+## bn256_scalar_mul
+
+- Opcode: 0x9a
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- for (curve point A, scalar K) return the curve point KA
+- **Cost**: 970
+- Availability: v7
+
+A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.
+
+## bn256_pairing
+
+- Opcode: 0x9b
+- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}
+- **Cost**: 8700
+- Availability: v7
+
+G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.
 
 ## b+
 

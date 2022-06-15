@@ -155,9 +155,6 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 	counter.Lock()
 	defer counter.Unlock()
 
-	if len(counter.values) < 1 {
-		return
-	}
 	buf.WriteString("# HELP ")
 	buf.WriteString(counter.name)
 	buf.WriteString(" ")
@@ -165,6 +162,17 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 	buf.WriteString("\n# TYPE ")
 	buf.WriteString(counter.name)
 	buf.WriteString(" counter\n")
+	// if counter is zero, report 0 using parentLabels and no tags
+	if len(counter.values) == 0 {
+		buf.WriteString(counter.name)
+		if len(parentLabels) > 0 {
+			buf.WriteString("{" + parentLabels + "}")
+		}
+		buf.WriteString(" 0")
+		buf.WriteString("\n")
+		return
+	}
+	// otherwise iterate through values and write one line per label
 	for _, l := range counter.values {
 		buf.WriteString(counter.name)
 		buf.WriteString("{")

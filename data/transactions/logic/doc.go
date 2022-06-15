@@ -32,6 +32,9 @@ var opDocByName = map[string]string{
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y",
 	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key",
+	"bn256_add":           "for (curve points A and B) return the curve point A + B",
+	"bn256_scalar_mul":    "for (curve point A, scalar K) return the curve point KA",
+	"bn256_pairing":       "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}",
 
 	"+":       "A plus B. Fail on overflow.",
 	"-":       "A minus B. Fail if B > A.",
@@ -141,6 +144,8 @@ var opDocByName = map[string]string{
 	"extract_uint16": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
 	"extract_uint32": "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
 	"extract_uint64": "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
+	"replace2":       "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+	"replace3":       "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
 	"base64_decode":  "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
 
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
@@ -226,6 +231,7 @@ var opcodeImmediateNotes = map[string]string{
 
 	"substring": "{uint8 start position} {uint8 end position}",
 	"extract":   "{uint8 start position} {uint8 length}",
+	"replace2":  "{uint8 start position}",
 	"dig":       "{uint8 depth}",
 	"cover":     "{uint8 depth}",
 	"uncover":   "{uint8 depth}",
@@ -262,6 +268,9 @@ var opDocExtras = map[string]string{
 	"ecdsa_verify":        "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
 	"ecdsa_pk_decompress": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
 	"ecdsa_pk_recover":    "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
+	"bn256_add":           "A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.",
+	"bn256_scalar_mul":    "A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.",
+	"bn256_pairing":       "G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.",
 	"bnz":                 "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
 	"bz":                  "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
 	"b":                   "See `bnz` for details on how branches work. `b` always jumps to the offset.",
@@ -319,8 +328,8 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
-	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "base64_decode", "json_ref"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "bn256_add", "bn256_scalar_mul", "bn256_pairing", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
@@ -350,7 +359,8 @@ func OpAllCosts(opName string) []VerCost {
 		if !ok {
 			continue
 		}
-		cost := spec.OpDetails.docCost()
+		argLen := len(spec.Arg.Types)
+		cost := spec.OpDetails.docCost(argLen)
 		if costs == nil || cost != costs[len(costs)-1].Cost {
 			costs = append(costs, VerCost{v, v, cost})
 		} else {

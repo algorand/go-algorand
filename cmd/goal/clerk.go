@@ -874,7 +874,7 @@ var groupCmd = &cobra.Command{
 			}
 
 			stxns = append(stxns, stxn)
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(stxn.Txn))
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxn.ID()))
 			transactionIdx++
 		}
 
@@ -1213,6 +1213,12 @@ var dryrunRemoteCmd = &cobra.Command{
 				}
 				if txnResult.Cost != nil {
 					fmt.Fprintf(os.Stdout, "tx[%d] cost: %d\n", i, *txnResult.Cost)
+				}
+				if txnResult.BudgetConsumed != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)
+				}
+				if txnResult.BudgetAdded != nil {
+					fmt.Fprintf(os.Stdout, "tx[%d] budget added: %d\n", i, *txnResult.BudgetAdded)
 				}
 
 				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)

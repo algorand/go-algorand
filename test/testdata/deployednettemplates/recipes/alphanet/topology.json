@@ -1,0 +1,32 @@
+{
+  "Hosts": [
+    {
+      "Name": "R1-alphanet",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N1-alphanet",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N2-alphanet",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "N3-alphanet",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "N4-alphanet",
+      "Template": "AWS-EU-WEST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN1-alphanet",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN2-alphanet",
+      "Template": "AWS-US-WEST-2-m5d.4xl"
+    }
+  ]
+}

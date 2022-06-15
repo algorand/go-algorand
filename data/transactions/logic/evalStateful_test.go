@@ -2345,6 +2345,8 @@ func TestReturnTypes(t *testing.T) {
 		"substring":         "substring 0 2",
 		"extract_uint32":    ": byte 0x0102030405; int 1; extract_uint32",
 		"extract_uint64":    ": byte 0x010203040506070809; int 1; extract_uint64",
+		"replace2":          ": byte 0x0102030405; byte 0x0809; replace2 2",
+		"replace3":          ": byte 0x0102030405; int 2; byte 0x0809; replace3",
 		"asset_params_get":  "asset_params_get AssetUnitName",
 		"asset_holding_get": "asset_holding_get AssetBalance",
 		"gtxns":             "gtxns Sender",
@@ -2388,6 +2390,10 @@ func TestReturnTypes(t *testing.T) {
 		"ecdsa_verify":        true,
 		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,
+
+		"bn256_add":        true,
+		"bn256_scalar_mul": true,
+		"bn256_pairing":    true,
 	}
 
 	byName := OpsByName[LogicVersion]

@@ -76,7 +76,7 @@
         },
         {
           "name": "keyword.operator.teal",
-          "match": "^(\\!|\\!\\=|%|\u0026|\u0026\u0026|\\*|\\+|\\-|/|\\\u003c|\\\u003c\\=|\\=\\=|\\\u003e|\\\u003e\\=|\\^|addw|bitlen|btoi|concat|divmodw|divw|ecdsa_pk_decompress|ecdsa_pk_recover|ecdsa_verify|ed25519verify|ed25519verify_bare|exp|expw|getbit|getbyte|itob|keccak256|len|mulw|setbit|setbyte|sha256|sha3_256|sha512_256|shl|shr|sqrt|\\||\\|\\||\\~|b\\!\\=|b%|b\\*|b\\+|b\\-|b/|b\\\u003c|b\\\u003c\\=|b\\=\\=|b\\\u003e|b\\\u003e\\=|bsqrt|b\u0026|b\\^|b\\||b\\~|base64_decode|extract|extract3|extract_uint16|extract_uint32|extract_uint64|json_ref|substring|substring3|gitxn|gitxna|gitxnas|itxn|itxn_begin|itxn_field|itxn_next|itxn_submit|itxna|itxnas)\\b"
+          "match": "^(\\!|\\!\\=|%|\u0026|\u0026\u0026|\\*|\\+|\\-|/|\\\u003c|\\\u003c\\=|\\=\\=|\\\u003e|\\\u003e\\=|\\^|addw|bitlen|bn256_add|bn256_pairing|bn256_scalar_mul|btoi|concat|divmodw|divw|ecdsa_pk_decompress|ecdsa_pk_recover|ecdsa_verify|ed25519verify|ed25519verify_bare|exp|expw|getbit|getbyte|itob|keccak256|len|mulw|setbit|setbyte|sha256|sha3_256|sha512_256|shl|shr|sqrt|\\||\\|\\||\\~|b\\!\\=|b%|b\\*|b\\+|b\\-|b/|b\\\u003c|b\\\u003c\\=|b\\=\\=|b\\\u003e|b\\\u003e\\=|bsqrt|b\u0026|b\\^|b\\||b\\~|base64_decode|extract|extract3|extract_uint16|extract_uint32|extract_uint64|json_ref|replace2|replace3|substring|substring3|gitxn|gitxna|gitxnas|itxn|itxn_begin|itxn_field|itxn_next|itxn_submit|itxna|itxnas)\\b"
         }
       ]
     },

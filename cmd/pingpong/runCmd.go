@@ -43,9 +43,7 @@ var minFee uint64
 var randomFee, noRandomFee bool
 var randomAmount, noRandomAmount bool
 var randomDst bool
-var delayBetween string
 var runTime string
-var restTime string
 var refreshTime string
 var saveConfig bool
 var useDefault bool
@@ -84,9 +82,7 @@ func init() {
 	runCmd.Flags().BoolVar(&randomFee, "rf", false, "Set to enable random fees (between minf and mf)")
 	runCmd.Flags().BoolVar(&noRandomFee, "nrf", false, "Set to disable random fees")
 	runCmd.Flags().BoolVar(&randomDst, "rd", false, "Send money to randomly-generated addresses")
-	runCmd.Flags().StringVar(&delayBetween, "delay", "", "Delay (ms) between every transaction (0 means none)")
 	runCmd.Flags().StringVar(&runTime, "run", "", "Duration of time (seconds) to run transfers before resting (0 means non-stop)")
-	runCmd.Flags().StringVar(&restTime, "rest", "", "Duration of time (seconds) to rest between transfer periods (0 means no rest)")
 	runCmd.Flags().StringVar(&refreshTime, "refresh", "", "Duration of time (seconds) between refilling accounts with money (0 means no refresh)")
 	runCmd.Flags().StringVar(&logicProg, "program", "", "File containing the compiled program to include as a logic sig")
 	runCmd.Flags().BoolVar(&saveConfig, "save", false, "Save the effective configuration to disk")
@@ -187,26 +183,12 @@ var runCmd = &cobra.Command{
 		}
 		cfg.RandomizeDst = randomDst
 		cfg.Quiet = quietish
-		if delayBetween != "" {
-			val, err := strconv.ParseUint(delayBetween, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --delay: %v\n", err)
-			}
-			cfg.DelayBetweenTxn = time.Duration(uint32(val)) * time.Millisecond
-		}
 		if runTime != "" {
 			val, err := strconv.ParseUint(runTime, 10, 32)
 			if err != nil {
 				reportErrorf("Invalid value specified for --run: %v\n", err)
 			}
 			cfg.RunTime = time.Duration(uint32(val)) * time.Second
-		}
-		if restTime != "" {
-			val, err := strconv.ParseUint(restTime, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --rest: %v\n", err)
-			}
-			cfg.RestTime = time.Duration(uint32(val)) * time.Second
 		}
 		if refreshTime != "" {
 			val, err := strconv.ParseUint(refreshTime, 10, 32)

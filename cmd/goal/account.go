@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -825,7 +826,7 @@ var changeOnlineCmd = &cobra.Command{
 			reportErrorf(err.Error())
 		}
 		err = changeAccountOnlineStatus(
-			accountAddress, part, online, statusChangeTxFile, walletName,
+			accountAddress, online, statusChangeTxFile, walletName,
 			firstTxRound, lastTxRound, transactionFee, scLeaseBytes(cmd), dataDir, client,
 		)
 		if err != nil {
@@ -834,12 +835,16 @@ var changeOnlineCmd = &cobra.Command{
 	},
 }
 
-func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnline bool, txFile string, wallet string, firstTxRound, lastTxRound, fee uint64, leaseBytes [32]byte, dataDir string, client libgoal.Client) error {
+func changeAccountOnlineStatus(
+	acct string, goOnline bool, txFile string, wallet string,
+	firstTxRound, lastTxRound, fee uint64, leaseBytes [32]byte,
+	dataDir string, client libgoal.Client,
+) error {
 	// Generate an unsigned online/offline tx
 	var utx transactions.Transaction
 	var err error
 	if goOnline {
-		utx, err = client.MakeUnsignedGoOnlineTx(acct, part, firstTxRound, lastTxRound, fee, leaseBytes)
+		utx, err = client.MakeUnsignedGoOnlineTx(acct, firstTxRound, lastTxRound, fee, leaseBytes)
 	} else {
 		utx, err = client.MakeUnsignedGoOfflineTx(acct, firstTxRound, lastTxRound, fee, leaseBytes)
 	}
@@ -870,8 +875,8 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 
 var addParticipationKeyCmd = &cobra.Command{
 	Use:   "addpartkey",
-	Short: "Generate a participation key for the specified account",
-	Long:  `Generate a participation key for the specified account. This participation key can then be used for going online and participating in consensus.`,
+	Short: "Generate and install participation key for the specified account",
+	Long:  `Generate and install participation key for the specified account. This participation key can then be used for going online and participating in consensus.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -886,8 +891,9 @@ var addParticipationKeyCmd = &cobra.Command{
 		reportInfof("Please stand by while generating keys. This might take a few minutes...")
 
 		var err error
+		var part algodAcct.Participation
 		participationGen := func() {
-			_, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+			part, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
 		}
 
 		util.RunFuncWithSpinningCursor(participationGen)
@@ -895,7 +901,7 @@ var addParticipationKeyCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		reportInfof("Participation key generation successful")
+		reportInfof("Participation key generation successful. Participation ID: %s\n", part.ID())
 	},
 }
 
@@ -922,11 +928,22 @@ No --delete-input flag specified, exiting without installing key.`)
 		dataDir := ensureSingleDataDir()
 
 		client := ensureAlgodClient(dataDir)
-		_, _, err := client.InstallParticipationKeys(partKeyFile)
+		addResponse, err := client.AddParticipationKey(partKeyFile)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		fmt.Println("Participation key installed successfully")
+		// In an abundance of caution, check for ourselves that the key has been installed.
+		if err := client.VerifyParticipationKey(time.Minute, addResponse.PartId); err != nil {
+			err = fmt.Errorf("unable to verify key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: %w", partKeyFile, err)
+			reportErrorf(errorRequestFail, err)
+		}
+
+		reportInfof("Participation key installed successfully, Participation ID: %s\n", addResponse.PartId)
+
+		// Delete partKeyFile
+		if nil != os.Remove(partKeyFile) {
+			reportErrorf("An error occurred while removing the partkey file, please delete it manually: %s", err)
+		}
 	},
 }
 
@@ -957,14 +974,14 @@ var renewParticipationKeyCmd = &cobra.Command{
 		txRoundLastValid := currentRound + proto.MaxTxnLife
 
 		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
-		parts, err := client.ListParticipationKeyFiles()
+		parts, err := client.ListParticipationKeys()
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 		for _, part := range parts {
-			if part.Address().String() == accountAddress {
-				if part.LastValid >= basics.Round(roundLastValid) {
-					reportErrorf(errExistingPartKey, roundLastValid, part.LastValid)
+			if part.Address == accountAddress {
+				if part.Key.VoteLastValid >= roundLastValid {
+					reportErrorf(errExistingPartKey, roundLastValid, part.Key.VoteLastValid)
 				}
 			}
 		}
@@ -982,7 +999,7 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 	var keyPath string
 	var err error
 	genFunc := func() {
-		part, keyPath, err = client.GenParticipationKeysTo(address, currentRound, keyLastValidRound, dilution, "")
+		part, keyPath, err = client.GenParticipationKeys(address, currentRound, keyLastValidRound, dilution)
 		if err != nil {
 			err = fmt.Errorf(errorRequestFail, err)
 		}
@@ -997,12 +1014,13 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 	// Now register it as our new online participation key
 	goOnline := true
 	txFile := ""
-	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
+	err = changeAccountOnlineStatus(address, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
 	}
-	return err
+	fmt.Printf("Participation key installed successfully, Participation ID: %s\n", part.ID())
+	return nil
 }
 
 var renewAllParticipationKeyCmd = &cobra.Command{
@@ -1025,19 +1043,19 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	client := ensureAlgodClient(dataDir)
 
 	// Build list of accounts to renew from all accounts with part keys present
-	parts, err := client.ListParticipationKeyFiles()
+	parts, err := client.ListParticipationKeys()
 	if err != nil {
 		return fmt.Errorf(errorRequestFail, err)
 	}
-	renewAccounts := make(map[basics.Address]algodAcct.Participation)
+	renewAccounts := make(map[string]generatedV2.ParticipationKey)
 	for _, part := range parts {
-		if existing, has := renewAccounts[part.Address()]; has {
-			if existing.LastValid >= part.LastValid {
+		if existing, has := renewAccounts[part.Address]; has {
+			if existing.Key.VoteFirstValid >= part.Key.VoteLastValid {
 				// We already saw a partkey that expires later
 				continue
 			}
 		}
-		renewAccounts[part.Address()] = part
+		renewAccounts[part.Address] = part
 	}
 
 	currentRound, err := client.CurrentRound()
@@ -1062,18 +1080,18 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	// at least through lastValidRound, generate a new key and register it.
 	// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 	for _, renewPart := range renewAccounts {
-		if renewPart.LastValid >= basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address(), lastValidRound, renewPart.LastValid)
+		if renewPart.Key.VoteLastValid >= lastValidRound {
+			fmt.Printf("  Skipping account %s: Already has a part key valid beyond %d (currently %d)\n", renewPart.Address, lastValidRound, renewPart.Key.VoteLastValid)
 			continue
 		}
 
 		// If the account's latest partkey expired before the current round, don't automatically renew and instead instruct the user to explicitly renew it.
-		if renewPart.LastValid < basics.Round(lastValidRound) {
-			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address())
+		if renewPart.Key.VoteLastValid < lastValidRound {
+			fmt.Printf("  Skipping account %s: This account has part keys that have expired.  Please renew this account explicitly using 'renewpartkey'\n", renewPart.Address)
 			continue
 		}
 
-		address := renewPart.Address().String()
+		address := renewPart.Address
 		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, txLastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
@@ -1095,53 +1113,6 @@ func maxRound(current uint64, next *uint64) uint64 {
 
 func uintToStr(number uint64) string {
 	return fmt.Sprintf("%d", number)
-}
-
-// legacyListParticipationKeysCommand prints key information in the same
-// format as earlier versions of goal. Some users are using this information
-// in scripts and need some extra time to migrate to the REST API.
-// DEPRECATED
-func legacyListParticipationKeysCommand() {
-	dataDir := ensureSingleDataDir()
-
-	client := ensureGoalClient(dataDir, libgoal.DynamicClient)
-	parts, err := client.ListParticipationKeyFiles()
-	if err != nil {
-		reportErrorf(errorRequestFail, err)
-	}
-
-	var filenames []string
-	for fn := range parts {
-		filenames = append(filenames, fn)
-	}
-	sort.Strings(filenames)
-
-	rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
-	fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
-	for _, fn := range filenames {
-		onlineInfoStr := "unknown"
-		onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
-		if err == nil {
-			votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
-			vrfBytes := parts[fn].VRF.PK
-			if onlineAccountInfo.Participation != nil &&
-				(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
-				(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
-				(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
-				(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
-				(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
-				onlineInfoStr = "yes"
-			} else {
-				onlineInfoStr = "no"
-			}
-		}
-		// it's okay to proceed without algod info
-		first, last := parts[fn].ValidInterval()
-		fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
-			fmt.Sprintf("%d", first),
-			fmt.Sprintf("%d", last),
-			fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
-	}
 }
 
 var listParticipationKeysCmd = &cobra.Command{
@@ -1396,47 +1367,6 @@ func strOrNA(value *uint64) string {
 	return uintToStr(*value)
 }
 
-// legacyPartkeyInfoCommand prints key information in the same
-// format as earlier versions of goal. Some users are using this information
-// in scripts and need some extra time to migrate to alternatives.
-// DEPRECATED
-func legacyPartkeyInfoCommand() {
-	type partkeyInfo struct {
-		_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
-		Address         string                          `codec:"acct"`
-		FirstValid      basics.Round                    `codec:"first"`
-		LastValid       basics.Round                    `codec:"last"`
-		VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
-		SelectionID     crypto.VRFVerifier              `codec:"sel"`
-		VoteKeyDilution uint64                          `codec:"voteKD"`
-	}
-
-	onDataDirs(func(dataDir string) {
-		fmt.Printf("Dumping participation key info from %s...\n", dataDir)
-		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
-
-		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
-		parts, err := client.ListParticipationKeyFiles()
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
-
-		for filename, part := range parts {
-			fmt.Println("------------------------------------------------------------------")
-			info := partkeyInfo{
-				Address:         part.Address().String(),
-				FirstValid:      part.FirstValid,
-				LastValid:       part.LastValid,
-				VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
-				SelectionID:     part.VRFSecrets().PK,
-				VoteKeyDilution: part.KeyDilution,
-			}
-			infoString := protocol.EncodeJSON(&info)
-			fmt.Printf("File: %s\n%s\n", filename, string(infoString))
-		}
-	})
-}
-
 var partkeyInfoCmd = &cobra.Command{
 	Use:   "partkeyinfo",
 	Short: "Output details about all available part keys",
@@ -1527,4 +1457,139 @@ var markNonparticipatingCmd = &cobra.Command{
 			reportErrorf("error waiting for transaction to be committed: %v", err)
 		}
 	},
+}
+
+// listParticipationKeyFiles returns the available participation keys,
+// as a map from database filename to Participation key object.
+// DEPRECATED
+func listParticipationKeyFiles(c *libgoal.Client) (partKeyFiles map[string]algodAcct.Participation, err error) {
+	genID, err := c.GenesisID()
+	if err != nil {
+		return
+	}
+
+	// Get a list of files in the participation keys directory
+	keyDir := filepath.Join(c.DataDir(), genID)
+	files, err := ioutil.ReadDir(keyDir)
+	if err != nil {
+		return
+	}
+
+	partKeyFiles = make(map[string]algodAcct.Participation)
+	for _, file := range files {
+		// If it can't be a participation key database, skip it
+		if !config.IsPartKeyFilename(file.Name()) {
+			continue
+		}
+
+		filename := file.Name()
+
+		// Fetch a handle to this database
+		handle, err := db.MakeErasableAccessor(filepath.Join(keyDir, filename))
+		if err != nil {
+			// Couldn't open it, skip it
+			continue
+		}
+
+		// Fetch an account.Participation from the database
+		part, err := algodAcct.RestoreParticipation(handle)
+		if err != nil {
+			// Couldn't read it, skip it
+			handle.Close()
+			continue
+		}
+
+		partKeyFiles[filename] = part.Participation
+		part.Close()
+	}
+
+	return
+}
+
+// legacyListParticipationKeysCommand prints key information in the same
+// format as earlier versions of goal. Some users are using this information
+// in scripts and need some extra time to migrate to the REST API.
+// DEPRECATED
+func legacyListParticipationKeysCommand() {
+	dataDir := ensureSingleDataDir()
+
+	client := ensureGoalClient(dataDir, libgoal.DynamicClient)
+	parts, err := listParticipationKeyFiles(&client)
+	if err != nil {
+		reportErrorf(errorRequestFail, err)
+	}
+
+	var filenames []string
+	for fn := range parts {
+		filenames = append(filenames, fn)
+	}
+	sort.Strings(filenames)
+
+	rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
+	fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
+	for _, fn := range filenames {
+		onlineInfoStr := "unknown"
+		onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
+		if err == nil {
+			votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
+			vrfBytes := parts[fn].VRF.PK
+			if onlineAccountInfo.Participation != nil &&
+				(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
+				(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
+				(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
+				(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+				(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
+				onlineInfoStr = "yes"
+			} else {
+				onlineInfoStr = "no"
+			}
+		}
+		// it's okay to proceed without algod info
+		first, last := parts[fn].ValidInterval()
+		fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
+			fmt.Sprintf("%d", first),
+			fmt.Sprintf("%d", last),
+			fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
+	}
+}
+
+// legacyPartkeyInfoCommand prints key information in the same
+// format as earlier versions of goal. Some users are using this information
+// in scripts and need some extra time to migrate to alternatives.
+// DEPRECATED
+func legacyPartkeyInfoCommand() {
+	type partkeyInfo struct {
+		_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
+		Address         string                          `codec:"acct"`
+		FirstValid      basics.Round                    `codec:"first"`
+		LastValid       basics.Round                    `codec:"last"`
+		VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+		SelectionID     crypto.VRFVerifier              `codec:"sel"`
+		VoteKeyDilution uint64                          `codec:"voteKD"`
+	}
+
+	onDataDirs(func(dataDir string) {
+		fmt.Printf("Dumping participation key info from %s...\n", dataDir)
+		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
+
+		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
+		parts, err := listParticipationKeyFiles(&client)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		for filename, part := range parts {
+			fmt.Println(strings.Repeat("-", 40))
+			info := partkeyInfo{
+				Address:         part.Address().String(),
+				FirstValid:      part.FirstValid,
+				LastValid:       part.LastValid,
+				VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
+				SelectionID:     part.VRFSecrets().PK,
+				VoteKeyDilution: part.KeyDilution,
+			}
+			infoString := protocol.EncodeJSON(&info)
+			fmt.Printf("File: %s\n%s\n", filename, string(infoString))
+		}
+	})
 }
