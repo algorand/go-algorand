@@ -1239,7 +1239,7 @@
       ]
     },
     {
-      "Opcode": 92,
+      "Opcode": 94,
       "Name": "base64_decode",
       "Args": "B",
       "Returns": "B",
@@ -1252,7 +1252,7 @@
       ]
     },
     {
-      "Opcode": 93,
+      "Opcode": 95,
       "Name": "json_ref",
       "Args": "BB",
       "Returns": ".",
