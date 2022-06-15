@@ -12,6 +12,8 @@ elif [ "$1" = "rel/beta" ]; then
     echo "beta"
 elif [ "$1" = "feature/alphanet" ]; then
     echo "alpha"
+elif [ "$1" = "build-alphanet" ]; then
+    echo "alpha"
 else
     echo "dev"
 fi
