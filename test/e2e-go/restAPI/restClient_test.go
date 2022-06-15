@@ -1307,16 +1307,25 @@ end:
 	_, err = waitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
+	// NOTE actually should do some iteration
 	// call app, which creates a box called `first-box`
-	//appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), [][]byte{[]byte("create"), []byte("first-box")}, nil, nil, nil, nil)
-	//a.NoError(err)
-	//appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
-	//a.NoError(err)
-	//fmt.Println(appCallTxn)
-	//appCallTxnTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
-	//a.NoError(err)
-	//_, err = waitForTransaction(t, testClient, someAddress, appCallTxnTxID, 30*time.Second)
-	//a.NoError(err)
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(createdAppID),
+		[][]byte{[]byte("create"), []byte("first-box")},
+		nil, nil, nil,
+		[]transactions.BoxRef{
+			{
+				Name: []byte("first-box"), Index: 0,
+			},
+		},
+	)
+	a.NoError(err)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	a.NoError(err)
+	appCallTxnTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, someAddress, appCallTxnTxID, 30*time.Second)
+	a.NoError(err)
 
 	// verify pending txn info of outer txn
 	//submittedAppCallTxn, err := testClient.PendingTransactionInformationV2(appCallTxnTxID)
