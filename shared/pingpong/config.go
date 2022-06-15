@@ -64,6 +64,12 @@ type PpConfig struct {
 	NftAsaPerSecond       uint32 // e.g. 100
 	NftAsaPerAccount      uint32 // 0..999
 	NftAsaAccountInFlight uint32
+
+	// configuration related to using bootstrapped ledgers built by netgoal
+	// TODO: support generatedAssetsCount, generatedApplicationCount
+	DeterministicKeys            bool
+	GeneratedAccountsCount       uint32
+	GeneratedAccountSampleMethod string
 }
 
 // DefaultConfig object for Ping Pong

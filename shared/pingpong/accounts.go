@@ -17,7 +17,9 @@
 package pingpong
 
 import (
+	"encoding/binary"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -38,26 +40,23 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
-	accounts = make(map[string]*pingPongAccount)
-	cfg = initCfg
-
-	genID, err2 := ac.GenesisID()
-	if err2 != nil {
-		err = err2
-		return
+func fileAccounts(ac libgoal.Client) (<-chan *crypto.SignatureSecrets, error) {
+	genID, err := ac.GenesisID()
+	if err != nil {
+		return nil, err
 	}
 	genesisDir := filepath.Join(ac.DataDir(), genID)
-	files, err2 := ioutil.ReadDir(genesisDir)
-	if err2 != nil {
-		err = err2
-		return
+	files, err := ioutil.ReadDir(genesisDir)
+	if err != nil {
+		return nil, err
 	}
 
-	var srcAcctPresent bool
-	var richestAccount string
-	var richestBalance uint64
+	out := make(chan *crypto.SignatureSecrets)
+	go enumerateFileAccounts(files, genesisDir, out)
+	return out, nil
+}
 
+func enumerateFileAccounts(files []fs.FileInfo, genesisDir string, out chan<- *crypto.SignatureSecrets) {
 	for _, info := range files {
 		var handle db.Accessor
 
@@ -67,7 +66,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 		}
 
 		// Fetch a handle to this database
-		handle, err = db.MakeErasableAccessor(filepath.Join(genesisDir, info.Name()))
+		handle, err := db.MakeErasableAccessor(filepath.Join(genesisDir, info.Name()))
 		if err != nil {
 			// Couldn't open it, skip it
 			continue
@@ -81,7 +80,56 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 			continue
 		}
 
-		publicKey := root.Secrets().SignatureVerifier
+		out <- root.Secrets()
+	}
+	close(out)
+}
+
+func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
+	out := make(chan *crypto.SignatureSecrets)
+	go func() {
+		// randomly select numAccounts from generatedAccountsCount
+		numAccounts := initCfg.NumPartAccounts
+		totalAccounts := initCfg.GeneratedAccountsCount
+		selected := make(map[uint32]bool)
+
+		for uint32(len(selected)) < numAccounts {
+			acct := uint32(rand.Int31n(int32(totalAccounts)))
+			if selected[acct] {
+				continue // already picked this account
+			}
+			// generate deterministic secret key from integer ID
+			// same uint64 seed used as netdeploy/remote/deployedNetwork.go
+			var seed crypto.Seed
+			binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+			out <- crypto.GenerateSignatureSecrets(seed)
+			selected[acct] = true
+		}
+		close(out)
+	}()
+	return out
+}
+
+func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
+	accounts = make(map[string]*pingPongAccount)
+	cfg = initCfg
+
+	var accountSecrets <-chan *crypto.SignatureSecrets
+	if initCfg.DeterministicKeys {
+		accountSecrets = deterministicAccounts(initCfg)
+	} else {
+		accountSecrets, err = fileAccounts(ac)
+		if err != nil {
+			return
+		}
+	}
+
+	var srcAcctPresent bool
+	var richestAccount string
+	var richestBalance uint64
+
+	for secret := range accountSecrets {
+		publicKey := secret.SignatureVerifier
 		accountAddress := basics.Address(publicKey)
 
 		if accountAddress.String() == cfg.SrcAccount {
@@ -104,7 +152,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 
 		accounts[accountAddress.String()] = &pingPongAccount{
 			balance: amt,
-			sk:      root.Secrets(),
+			sk:      secret,
 			pk:      accountAddress,
 		}
 	}
