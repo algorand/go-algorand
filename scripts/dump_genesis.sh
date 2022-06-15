@@ -57,15 +57,18 @@ for LEDGER in $LEDGERS; do
       resources)
         SORT=addrid
         ;;
+      kvstore)
+        SORT=key
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1
         ;;
     esac
 
-    echo ".schema $T" | sqlite3 $LEDGER
+    echo ".schema $T" | sqlite3 "$LEDGER"
     ( echo .headers on;
-      echo .mode insert $T;
-      echo "SELECT * FROM $T ORDER BY $SORT;" ) | sqlite3 $LEDGER
+      echo .mode insert "$T";
+      echo "SELECT * FROM $T ORDER BY $SORT;" ) | sqlite3 "$LEDGER"
   done
 done

@@ -317,6 +317,10 @@ func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, a
 	return result, nil
 }
 
+func (l *localLedger) LookupKv(rnd basics.Round, name string) (*string, error) {
+	return nil, fmt.Errorf("boxes not implemented in debugger")
+}
+
 func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	ad := l.balances[addr]
 	// Clear RewardsBase since tealdbg has no idea about rewards level so the underlying calculation with reward will fail.

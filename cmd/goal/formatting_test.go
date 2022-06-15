@@ -42,3 +42,64 @@ func TestUnicodePrintable(t *testing.T) {
 		require.Equalf(t, testElement.printableString, printableString, "test string:%s", testElement.testString)
 	}
 }
+
+func TestNewAppCallBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	acb := newAppCallBytes("str:hello")
+	require.Equal(t, "str", acb.Encoding)
+	require.Equal(t, "hello", acb.Value)
+	_, err := acb.raw()
+	require.NoError(t, err)
+
+	require.Panics(t, func() { newAppCallBytes("hello") })
+
+	acb = newAppCallBytes("str:1:2")
+	require.Equal(t, "str", acb.Encoding)
+	require.Equal(t, "1:2", acb.Value)
+	_, err = acb.raw()
+	require.NoError(t, err)
+
+	acb = newAppCallBytes(":x")
+	_, err = acb.raw()
+	require.Error(t, err)
+}
+
+func TestNewBoxRef(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	br := newBoxRef("str:hello")
+	require.EqualValues(t, 0, br.appID)
+	require.Equal(t, "str", br.name.Encoding)
+	require.Equal(t, "hello", br.name.Value)
+
+	require.Panics(t, func() { newBoxRef("1,hello") })
+	require.Panics(t, func() { newBoxRef("hello") })
+
+	br = newBoxRef("2,str:hello")
+	require.EqualValues(t, 2, br.appID)
+	require.Equal(t, "str", br.name.Encoding)
+	require.Equal(t, "hello", br.name.Value)
+}
+
+func TestStringsToBoxRefs(t *testing.T) {
+	brs := stringsToBoxRefs([]string{"77,str:hello", "55,int:6", "int:88"})
+	require.EqualValues(t, 77, brs[0].appID)
+	require.EqualValues(t, 55, brs[1].appID)
+	require.EqualValues(t, 0, brs[2].appID)
+
+	tbrs := translateBoxRefs(brs, []uint64{55, 77})
+	require.EqualValues(t, 2, tbrs[0].Index)
+	require.EqualValues(t, 1, tbrs[1].Index)
+	require.EqualValues(t, 0, tbrs[2].Index)
+
+	require.Panics(t, func() { translateBoxRefs(stringsToBoxRefs([]string{"addr:88"}), nil) })
+	translateBoxRefs(stringsToBoxRefs([]string{"addr:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"}), nil)
+	// if we're here, that didn't panic/exit
+
+	tbrs = translateBoxRefs(brs, []uint64{77, 55})
+	require.EqualValues(t, 1, tbrs[0].Index)
+	require.EqualValues(t, 2, tbrs[1].Index)
+	require.EqualValues(t, 0, tbrs[2].Index)
+
+	require.Panics(t, func() { translateBoxRefs(brs, []uint64{55, 78}) })
+	require.Panics(t, func() { translateBoxRefs(brs, []uint64{51, 77}) })
+}

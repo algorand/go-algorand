@@ -199,7 +199,7 @@ type LedgerForLogic interface {
 	AccountData(addr basics.Address) (ledgercore.AccountData, error)
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
-	LatestTimestamp() int64
+	PrevTimestamp() int64
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -214,15 +214,40 @@ type LedgerForLogic interface {
 	SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error
 	DelGlobal(appIdx basics.AppIndex, key string) error
 
+	NewBox(appIdx basics.AppIndex, key string, size uint64) error
+	GetBox(appIdx basics.AppIndex, key string) (string, bool, error)
+	SetBox(appIdx basics.AppIndex, key string, value string) error
+	DelBox(appIdx basics.AppIndex, key string) error
+
 	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
 }
 
-// resources contains a list of apps and assets. It's used to track the apps and
-// assets created by a txgroup, for "free" access.
+// resources contains a catalog of available resources. It's used to track the
+// apps, assets, and boxes that are available to a transaction, outside the
+// direct foreign array mechanism.
 type resources struct {
 	asas []basics.AssetIndex
 	apps []basics.AppIndex
+
+	// boxes are all of the top-level box refs from the txgroup. Most are added
+	// during NewEvalParams(). refs using 0 on an appl create are resolved and
+	// added when the appl executes.
+	boxes map[boxRef]boxTouch
+}
+
+// boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
+type boxRef struct {
+	app  basics.AppIndex
+	name string
+}
+
+// boxTouch tracks whether how many write bytes must be charged for the
+// box. touches are marked dirty if they are written to, or created.  size is
+// set during the initial read I/O check, or at create time.
+type boxTouch struct {
+	dirty bool
+	size  uint64
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -261,9 +286,19 @@ type EvalParams struct {
 	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
 	pooledAllowedInners *int
 
-	// created contains resources that may be used for "created" - they need not be in
-	// a foreign array. They remain empty until createdResourcesVersion.
-	created *resources
+	// available contains resources that may be used even though they are not
+	// necessarily directly in the txn's "static arrays". Apps and ASAs go in if
+	// the app or asa was created earlier in the txgroup (empty until
+	// createdResourcesVersion). Boxes go in when the ep is created, to share
+	// availability across all txns in the group.
+	available *resources
+
+	// ioBudget is the number of bytes that the box ref'd boxes can sum to, and
+	// the number of bytes that created or written boxes may sum to.
+	ioBudget uint64
+
+	// readBudgetChecked allows us to only check the read budget once
+	readBudgetChecked bool
 
 	// Caching these here means the hashes can be shared across the TxnGroup
 	// (and inners, because the cache is shared with the inner EvalParams)
@@ -290,9 +325,30 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 // NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
 func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
+	var allBoxes map[boxRef]boxTouch
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
+			if allBoxes == nil && len(tx.Txn.Boxes) > 0 {
+				allBoxes = make(map[boxRef]boxTouch)
+			}
+			for _, br := range tx.Txn.Boxes {
+				var app basics.AppIndex
+				if br.Index == 0 {
+					// "current app": Ignore if this is a create, else use ApplicationID
+					if tx.Txn.ApplicationID == 0 {
+						// When the create actually happens, and we learn the appID, we'll add it.
+						continue
+					}
+					app = tx.Txn.ApplicationID
+				} else {
+					// Bounds check will already have been done by
+					// WellFormed. For testing purposes, it's better to panic
+					// now than after returning a nil.
+					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
+				}
+				allBoxes[boxRef{app, string(br.Name)}] = boxTouch{}
+			}
 		}
 	}
 
@@ -331,15 +387,14 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
-		created:                 &resources{},
+		available:               &resources{boxes: allBoxes},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 	}
 }
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
 // to required minfee.  It can make assumptions about overflow because the group
-// is known OK according to TxnGroupBatchVerify. (In essence the group is
-// "WellFormed")
+// is known OK according to TxnGroupBatchVerify. (The group is "WellFormed")
 func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
@@ -351,8 +406,7 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 	}
 	// Overflow is impossible, because TxnGroupBatchVerify checked.
 	feeNeeded := minFee * minFeeCount
-
-	return feesPaid - feeNeeded
+	return basics.SubSaturate(feesPaid, feeNeeded)
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -386,7 +440,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		pooledAllowedInners:     caller.pooledAllowedInners,
 		Ledger:                  caller.Ledger,
-		created:                 caller.created,
+		available:               caller.available,
 		appAddrCache:            caller.appAddrCache,
 		caller:                  caller,
 	}
@@ -437,17 +491,17 @@ func (ep *EvalParams) log() logging.Logger {
 // package. For example, after a acfg transaction is processed, the AD created
 // by the acfg is added to the EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
-	if ep.created == nil {
+	if ep.available == nil {
 		// This is a simplified ep. It won't be used for app evaluation, and
 		// shares the TxnGroup memory with the caller.  Don't touch anything!
 		return
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
-		ep.created.asas = append(ep.created.asas, aid)
+		ep.available.asas = append(ep.available.asas, aid)
 	}
 	if aid := ad.ApplicationID; aid != 0 {
-		ep.created.apps = append(ep.created.apps, aid)
+		ep.available.apps = append(ep.available.apps, aid)
 	}
 }
 
@@ -625,10 +679,68 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 	}
 
+	// If this is a creation, make any "0 index" box refs available now that we
+	// have an appID.
+	if cx.txn.Txn.ApplicationID == 0 {
+		for _, br := range cx.txn.Txn.Boxes {
+			if br.Index == 0 {
+				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = boxTouch{}
+			}
+		}
+	}
+
+	// Check the I/O budget for reading if this is the first top-level app call
+	if cx.caller == nil && !cx.readBudgetChecked {
+		boxRefCount := uint64(0) // Intentionally counts duplicates
+		for _, tx := range cx.TxnGroup {
+			boxRefCount += uint64(len(tx.Txn.Boxes))
+		}
+		cx.ioBudget = boxRefCount * cx.Proto.BytesPerBoxReference
+
+		used := uint64(0)
+		for br := range cx.available.boxes {
+			if len(br.name) == 0 {
+				// 0 length names are not allowed for actual created boxes, but
+				// may have bene used to add I/O budget.
+				continue
+			}
+			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
+			if err != nil {
+				return false, nil, err
+			}
+			if !ok {
+				continue
+			}
+			size := uint64(len(box))
+			cx.available.boxes[br] = boxTouch{false, size}
+
+			used = basics.AddSaturate(used, size)
+			if used > cx.ioBudget {
+				return false, nil, fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+			}
+		}
+		cx.readBudgetChecked = true
+	}
+
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.txn.Txn.OnCompletion, cx.txn.Txn.ApplicationArgs)
 	}
 	pass, err := eval(program, &cx)
+
+	// Check the I/O budget for writing. TODO: Only need to do this once if we
+	// figure out we're the last app call in the group.
+	if cx.caller == nil {
+		used := uint64(0)
+		for _, bt := range cx.available.boxes {
+			if bt.dirty {
+				used = basics.AddSaturate(used, bt.size)
+			}
+			if used > cx.ioBudget {
+				return false, nil, fmt.Errorf("box write budget (%d) exceeded", cx.ioBudget)
+			}
+		}
+	}
+
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
 	}
@@ -2831,7 +2943,7 @@ func (cx *EvalContext) getRound() uint64 {
 }
 
 func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
-	ts := cx.Ledger.LatestTimestamp()
+	ts := cx.Ledger.PrevTimestamp()
 	if ts < 0 {
 		return 0, fmt.Errorf("latest timestamp %d < 0", ts)
 	}
@@ -3449,24 +3561,30 @@ func opSetByte(cx *EvalContext) error {
 	return nil
 }
 
-func opExtractImpl(x []byte, start, length int) ([]byte, error) {
+func extractCarefully(x []byte, start, length uint64) ([]byte, error) {
+	if start > uint64(len(x)) {
+		return nil, fmt.Errorf("extraction start %d beyond length: %d", start, len(x))
+	}
 	end := start + length
-	if start > len(x) || end > len(x) {
-		return nil, errors.New("extract range beyond length of string")
+	if end < start {
+		return nil, fmt.Errorf("extraction end exceeds uint64")
+	}
+	if end > uint64(len(x)) {
+		return nil, fmt.Errorf("extraction end %d beyond length: %d", end, len(x))
 	}
 	return x[start:end], nil
 }
 
 func opExtract(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	startIdx := cx.program[cx.pc+1]
-	lengthIdx := cx.program[cx.pc+2]
+	start := uint64(cx.program[cx.pc+1])
+	length := uint64(cx.program[cx.pc+2])
 	// Shortcut: if length is 0, take bytes from start index to the end
-	length := int(lengthIdx)
 	if length == 0 {
-		length = len(cx.stack[last].Bytes) - int(startIdx)
+		// If length has wrapped, it's because start > len(), so extractCarefully will report
+		length = uint64(len(cx.stack[last].Bytes) - int(start))
 	}
-	bytes, err := opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
+	bytes, err := extractCarefully(cx.stack[last].Bytes, start, length)
 	cx.stack[last].Bytes = bytes
 	return err
 }
@@ -3474,14 +3592,69 @@ func opExtract(cx *EvalContext) error {
 func opExtract3(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // length
 	prev := last - 1          // start
-	byteArrayIdx := prev - 1  // bytes
-	startIdx := cx.stack[prev].Uint
-	lengthIdx := cx.stack[last].Uint
-	if startIdx > math.MaxInt32 || lengthIdx > math.MaxInt32 {
-		return errors.New("extract range beyond length of string")
+	pprev := prev - 1         // bytes
+
+	start := cx.stack[prev].Uint
+	length := cx.stack[last].Uint
+	bytes, err := extractCarefully(cx.stack[pprev].Bytes, start, length)
+	cx.stack[pprev].Bytes = bytes
+	cx.stack = cx.stack[:prev]
+	return err
+}
+
+func replaceCarefully(original []byte, replacement []byte, start uint64) ([]byte, error) {
+	if start > uint64(len(original)) {
+		return nil, fmt.Errorf("replacement start %d beyond length: %d", start, len(original))
 	}
-	bytes, err := opExtractImpl(cx.stack[byteArrayIdx].Bytes, int(startIdx), int(lengthIdx))
-	cx.stack[byteArrayIdx].Bytes = bytes
+	end := start + uint64(len(replacement))
+	if end < start { // impossible because it is sum of two avm value lengths
+		return nil, fmt.Errorf("replacement end exceeds uint64")
+	}
+
+	if end > uint64(len(original)) {
+		return nil, fmt.Errorf("replacement end %d beyond original length: %d", end, len(original))
+	}
+
+	// Do NOT use the append trick to make a copy here.
+	// append(nil, []byte{}...) would return a nil, which means "not a bytearray" to AVM.
+	clone := make([]byte, len(original))
+	copy(clone[:start], original)
+	copy(clone[start:end], replacement)
+	copy(clone[end:], original[end:])
+	return clone, nil
+}
+
+func opReplace2(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // replacement
+	prev := last - 1          // original
+
+	replacement := cx.stack[last].Bytes
+	start := uint64(cx.program[cx.pc+1])
+	original := cx.stack[prev].Bytes
+
+	bytes, err := replaceCarefully(original, replacement, start)
+	if err != nil {
+		return err
+	}
+	cx.stack[prev].Bytes = bytes
+	cx.stack = cx.stack[:last]
+	return err
+}
+
+func opReplace3(cx *EvalContext) error {
+	last := len(cx.stack) - 1 // replacement
+	prev := last - 1          // start
+	pprev := prev - 1         // original
+
+	replacement := cx.stack[last].Bytes
+	start := cx.stack[prev].Uint
+	original := cx.stack[pprev].Bytes
+
+	bytes, err := replaceCarefully(original, replacement, start)
+	if err != nil {
+		return err
+	}
+	cx.stack[pprev].Bytes = bytes
 	cx.stack = cx.stack[:prev]
 	return err
 }
@@ -3497,11 +3670,11 @@ func convertBytesToInt(x []byte) uint64 {
 	return out
 }
 
-func opExtractNBytes(cx *EvalContext, n int) error {
+func opExtractNBytes(cx *EvalContext, n uint64) error {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
-	startIdx := cx.stack[last].Uint
-	bytes, err := opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bytes
+	start := cx.stack[last].Uint
+	bytes, err := extractCarefully(cx.stack[prev].Bytes, start, n) // extract n bytes
 	if err != nil {
 		return err
 	}
@@ -3550,7 +3723,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
 	// Allow an address for an app that was created in group
 	if err != nil && cx.version >= createdResourcesVersion {
-		for _, appID := range cx.created.apps {
+		for _, appID := range cx.available.apps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
 				return addr, invalidIndex, nil
@@ -3775,6 +3948,13 @@ func opAppLocalPut(cx *EvalContext) error {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 
+	// Enforce key lengths. Now, this is the same as enforced by ledger, but if
+	// it ever to change in proto, we would need to isolate changes to different
+	// program versions. (so a v6 app could not see a bigger key, for example)
+	if len(key) > cx.Proto.MaxAppKeyLen {
+		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cx.Proto.MaxAppKeyLen)
+	}
+
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[pprev])
 	if err != nil {
 		return err
@@ -3794,6 +3974,17 @@ func opAppLocalPut(cx *EvalContext) error {
 		}
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
 	}
+
+	// Enforce maximum value length (also enforced by ledger)
+	if tv.Type == basics.TealBytesType {
+		if len(tv.Bytes) > cx.Proto.MaxAppBytesValueLen {
+			return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(tv.Bytes))
+		}
+		if sum := len(key) + len(tv.Bytes); sum > cx.Proto.MaxAppSumKeyValueLens {
+			return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
+		}
+	}
+
 	err = cx.Ledger.SetLocal(addr, cx.appID, key, tv, accountIdx)
 	if err != nil {
 		return err
@@ -3810,6 +4001,14 @@ func opAppGlobalPut(cx *EvalContext) error {
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
 
+	// Enforce maximum key length. Currently this is the same as enforced by
+	// ledger. If it were ever to change in proto, we would need to isolate
+	// changes to different program versions. (so a v6 app could not see a
+	// bigger key, for example)
+	if len(key) > cx.Proto.MaxAppKeyLen {
+		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cx.Proto.MaxAppKeyLen)
+	}
+
 	// if writing the same value, don't record in EvalDelta, matching ledger
 	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetGlobal(cx.appID, key)
@@ -3819,6 +4018,16 @@ func opAppGlobalPut(cx *EvalContext) error {
 	tv := sv.toTealValue()
 	if !ok || tv != etv {
 		cx.txn.EvalDelta.GlobalDelta[key] = tv.ToValueDelta()
+	}
+
+	// Enforce maximum value length (also enforced by ledger)
+	if tv.Type == basics.TealBytesType {
+		if len(tv.Bytes) > cx.Proto.MaxAppBytesValueLen {
+			return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(tv.Bytes))
+		}
+		if sum := len(key) + len(tv.Bytes); sum > cx.Proto.MaxAppSumKeyValueLens {
+			return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
+		}
 	}
 
 	err = cx.Ledger.SetGlobal(cx.appID, key, tv)
@@ -3906,7 +4115,7 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 		}
 		// or was created in group
 		if cx.version >= createdResourcesVersion {
-			for _, appID := range cx.created.apps {
+			for _, appID := range cx.available.apps {
 				if appID == basics.AppIndex(ref) {
 					return appID, nil
 				}
@@ -3945,7 +4154,7 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 		}
 		// or was created in group
 		if cx.version >= createdResourcesVersion {
-			for _, assetID := range cx.created.asas {
+			for _, assetID := range cx.available.asas {
 				if assetID == basics.AssetIndex(ref) {
 					return assetID, nil
 				}
@@ -4234,7 +4443,7 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, assetID := range cx.created.asas {
+		for _, assetID := range cx.available.asas {
 			if assetID == aid {
 				return aid, nil
 			}
@@ -4262,7 +4471,7 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, appID := range cx.created.apps {
+		for _, appID := range cx.available.apps {
 			if appID == aid {
 				return aid, nil
 			}
