@@ -447,6 +447,10 @@ type Local struct {
 
 	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
 	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
+
+	// MaxAPIBoxPerApplication defines the maximum total number of boxes per application that will be returned
+	// in GetApplicationBoxes REST API responses.
+	MaxAPIBoxPerApplication uint64 `version[22]:"10000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

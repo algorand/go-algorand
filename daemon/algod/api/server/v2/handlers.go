@@ -65,6 +65,7 @@ type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) (*string, error)
+	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -1111,6 +1112,42 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	appParams := *record.AppParams
 	app := AppParamsToApplication(creator.String(), appIdx, &appParams)
 	response := generated.ApplicationResponse(app)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetApplicationBoxes returns the box names of an application
+// (GET /v2/applications/{application-id}/boxes)
+func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params generated.GetApplicationBoxesParams) error {
+	appIdx := basics.AppIndex(applicationID)
+	ledger := v2.Node.LedgerForAPI()
+	lastRound := ledger.Latest()
+	keyPrefix := logic.MakeBoxKey(appIdx, "")
+
+	var maxReturnNum uint64
+	if params.Max == nil || *params.Max == 0 {
+		// maxReturnNum == 0 means getting keys up to `MaxAPIBoxPerApplication`
+		maxReturnNum = v2.Node.Config().MaxAPIBoxPerApplication
+	} else {
+		maxReturnNum = *params.Max
+		// NOTE: if they are asking for too much BoxName, I downed the number to `MaxAPIBoxPerApplication`
+		if maxReturnNum > v2.Node.Config().MaxAPIBoxPerApplication {
+			maxReturnNum = v2.Node.Config().MaxAPIBoxPerApplication
+		}
+	}
+
+	appIDandBoxNames, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxReturnNum)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	prefixLen := len(keyPrefix)
+	responseBoxes := make([][]byte, len(appIDandBoxNames))
+	for i, appIDandBoxName := range appIDandBoxNames {
+		responseBoxes[i] = []byte(appIDandBoxName[prefixLen:])
+	}
+	response := generated.BoxesResponse{
+		Boxes: responseBoxes,
+	}
 	return ctx.JSON(http.StatusOK, response)
 }
 

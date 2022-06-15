@@ -1309,6 +1309,75 @@
       }
       ]
     },
+    "/v2/applications/{application-id}/boxes": {
+      "get": {
+        "description": "Given an application ID, it returns the box names of that application.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get boxes for a given application.",
+        "operationId": "GetApplicationBoxes",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Number of box names to return. If max is not set, or max == 0, returns box-names up to `MaxAPIBoxPerApplication`.",
+            "name": "max",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/BoxesResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Application Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "application-id",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
     "/v2/applications/{application-id}/boxes/{box-name}": {
       "get": {
         "description": "Given an application ID and box name, it returns the box name and value (each base64 encoded).",
@@ -3191,6 +3260,25 @@
       "description": "Application information",
       "schema": {
         "$ref": "#/definitions/Application"
+      }
+    },
+    "BoxesResponse": {
+      "description": "Boxes of an application",
+      "schema": {
+        "type": "object",
+        "required": [
+          "boxes"
+        ],
+        "properties": {
+          "boxes": {
+            "description": "Box names",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "byte"
+            }
+          }
+        }
       }
     },
     "BoxResponse": {

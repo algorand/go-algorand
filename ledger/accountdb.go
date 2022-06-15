@@ -45,6 +45,7 @@ type accountsDbQueries struct {
 	lookupResourcesStmt         *sql.Stmt
 	lookupAllResourcesStmt      *sql.Stmt
 	lookupKvPairStmt            *sql.Stmt
+	lookupKeysByPrefixStmt      *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
 	deleteStoredCatchpoint      *sql.Stmt
 	insertStoredCatchpoint      *sql.Stmt
@@ -1882,6 +1883,11 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
+	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON key LIKE ? || '%' WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
@@ -1985,6 +1991,39 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err 
 		}
 		// we don't have that key, just return pv with the database round (pv.value==nil)
 		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+	err = db.Retry(func() (_err error) {
+		rows, _err := qs.lookupKeysByPrefixStmt.Query(prefix)
+		if _err != nil {
+			if _err == sql.ErrNoRows {
+				_err = fmt.Errorf("unable to query value for prefix %v : %w", prefix, _err)
+				return
+			}
+		}
+		defer rows.Close()
+
+		var keyName string
+
+		for rows.Next() {
+			if resultCount == maxKeyNum {
+				return
+			}
+			_err = rows.Scan(&round, &keyName)
+			if _err != nil {
+				return
+			}
+			// I assume that in DB, there is only key with valid value (no empty value)
+			if _, ok := results[keyName]; ok {
+				continue
+			}
+			results[keyName] = true
+			resultCount++
+		}
+		return
 	})
 	return
 }
@@ -2235,6 +2274,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
+		&qs.lookupKeysByPrefixStmt,
 		&qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,

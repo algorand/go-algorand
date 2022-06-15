@@ -607,6 +607,13 @@ type BlockResponse struct {
 // BoxResponse defines model for BoxResponse.
 type BoxResponse Box
 
+// BoxesResponse defines model for BoxesResponse.
+type BoxesResponse struct {
+
+	// Box names
+	Boxes [][]byte `json:"boxes"`
+}
+
 // CatchpointAbortResponse defines model for CatchpointAbortResponse.
 type CatchpointAbortResponse struct {
 
@@ -825,6 +832,13 @@ type GetPendingTransactionsByAddressParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParams struct {
+
+	// Number of box names to return. If max is not set, or max == 0, returns box-names up to `MaxAPIBoxPerApplication`.
+	Max *uint64 `json:"max,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.
