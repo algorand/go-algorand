@@ -1,20 +1,36 @@
 #!/usr/bin/env bash
 
 # If workspace isn't clean, it's 'dev'.
+BRANCH="$1"
 
-if [ "$1" = "master" ]; then
+if [ "${BRANCH}" = "master" ]; then
     echo "master"
-elif [ "$1" = "rel/nightly" ]; then
+    exit 0
+elif [ "${BRANCH}" = "rel/nightly" ]; then
     echo "nightly"
-elif [ "$1" = "rel/stable" ]; then
+    exit 0
+elif [ "${BRANCH}" = "rel/stable" ]; then
     echo "stable"
-elif [ "$1" = "rel/beta" ]; then
+    exit 0
+elif [ "${BRANCH}" = "rel/beta" ]; then
     echo "beta"
-elif [ "$1" = "feature/alphanet" ]; then
+    exit 0
+elif [ "${BRANCH}" = "feature/alphanet" ]; then
     echo "alpha"
-elif [ "$1" = "build-alphanet" ]; then
+    exit 0
+fi
+
+#get parent of current branch
+#credit to https://stackoverflow.com/questions/3161204/find-the-parent-branch-of-a-git-branch
+BRANCHPARENT="$(git show-branch | grep '\*' | grep -v "${BRANCH}" | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//' || ${BRANCH})"
+BRANCHPARENT=${BRANCHPARENT:-$BRANCH}
+
+if [ "${BRANCHPARENT}" = "rel/stable" ]; then
+    echo "stable"
+elif [ "${BRANCHPARENT}" = "rel/beta" ]; then
+    echo "beta"
+elif [ "${BRANCHPARENT}" = "feature/alphanet" ]; then
     echo "alpha"
 else
     echo "dev"
 fi
-
