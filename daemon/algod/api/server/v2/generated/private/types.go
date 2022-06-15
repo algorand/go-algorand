@@ -611,7 +611,7 @@ type CatchpointStartResponse struct {
 // ChangePauseAtRoundResponse defines model for PauseAtRoundResponse.
 type PauseAtRoundResponse struct {
 
-	// Catchup start response string
+	// Change Pause round number response string
 	PauseAtRoundMessage string `json:"pauseatround-message"`
 }
 

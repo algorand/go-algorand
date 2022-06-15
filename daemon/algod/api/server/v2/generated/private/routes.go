@@ -22,8 +22,8 @@ type ServerInterface interface {
 	// Aborts a catchpoint catchup.
 	// (DELETE /v2/catchup/{catchpoint})
 	AbortCatchup(ctx echo.Context, catchpoint string) error
-	// Changes PauseAtRound variable in catchup service.
-	// (POST /v2/changepauseatround/{rnd})
+	// Pauses catchup service at block number rnd.
+	// (POST /v2/pausecatchup/{rnd})
 	ChangePauseAtRound(ctx echo.Context, rnd uint64) error
 	// Starts a catchpoint catchup.
 	// (POST /v2/catchup/{catchpoint})
@@ -82,6 +82,7 @@ func (w *ServerInterfaceWrapper) AbortCatchup(ctx echo.Context) error {
 	err = w.Handler.AbortCatchup(ctx, catchpoint)
 	return err
 }
+
 // ChangePauseAtRound converts echo context to params.
 func (w *ServerInterfaceWrapper) ChangePauseAtRound(ctx echo.Context) error {
 

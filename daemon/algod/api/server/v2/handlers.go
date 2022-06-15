@@ -1167,7 +1167,7 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 }
 
 //  Given a block number, it starts catching up and pauses at this block number
-// (POST /v2/changepauseatround/{rnd})
+// (POST /v2/pausecatchup/{rnd})
 func (v2 *Handlers) ChangePauseAtRound(ctx echo.Context, rnd uint64) error {
 	return v2.changePauseAtRound(ctx, rnd)
 }
