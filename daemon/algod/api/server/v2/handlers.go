@@ -1124,15 +1124,15 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	keyPrefix := logic.MakeBoxKey(appIdx, "")
 
 	var maxReturnNum uint64
-	if params.Max == nil || *params.Max == 0 {
-		// maxReturnNum == 0 means getting keys up to `MaxAPIBoxPerApplication`
-		maxReturnNum = v2.Node.Config().MaxAPIBoxPerApplication
+	maxAPIBoxNameThreshold := v2.Node.Config().MaxAPIBoxPerApplication
+
+	if params.Max == nil || *params.Max == 0 || *params.Max > maxAPIBoxNameThreshold {
+		if params.Max != nil && *params.Max > maxAPIBoxNameThreshold {
+			v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded, total results %d", maxAPIBoxNameThreshold, *params.Max)
+		}
+		maxReturnNum = maxAPIBoxNameThreshold
 	} else {
 		maxReturnNum = *params.Max
-		// NOTE: if they are asking for too much BoxName, I downed the number to `MaxAPIBoxPerApplication`
-		if maxReturnNum > v2.Node.Config().MaxAPIBoxPerApplication {
-			maxReturnNum = v2.Node.Config().MaxAPIBoxPerApplication
-		}
 	}
 
 	appIDandBoxNames, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxReturnNum)
