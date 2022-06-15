@@ -217,10 +217,12 @@ commands:
       - restore_libsodium
       - restore_cache:
           keys:
-            - 'go-mod-1-14-7-v2-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+            - 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
           keys:
-            - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
+            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
+            - 'go-cache-v3-{{ arch }}-'
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -233,11 +235,11 @@ commands:
             scripts/travis/build.sh --make_debug
       - cache_libsodium
       - save_cache:
-          key: 'go-mod-1-14-7-v2-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          key: 'go-mod-1.17.9-v3-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
             - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
-          key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
+          key: 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
           paths:
             - tmp/go-cache
       - persist_to_workspace:
@@ -257,7 +259,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
-          key: 'libsodium-fork-v2-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
+          key: 'libsodium-fork-v2-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs
 
@@ -271,7 +273,7 @@ commands:
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
           keys:
-            - 'libsodium-fork-v2-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
+            - 'libsodium-fork-v2-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
 
   generic_test:
     description: Run build tests from build workspace, for re-use by diferent architectures
@@ -301,7 +303,9 @@ commands:
           touch << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json
       - restore_cache:
           keys:
-            - 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-'
+            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+            - 'go-cache-v3-{{ arch }}-{{ .Branch }}-'
+            - 'go-cache-v3-{{ arch }}-'
       - run:
           name: Run build tests
           no_output_timeout: << parameters.no_output_timeout >>
@@ -333,10 +337,6 @@ commands:
           root: << parameters.result_path >>
           paths:
             - << parameters.result_subdir >>
-      - save_cache:
-          key: 'go-cache-v2-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
-          paths:
-            - tmp/go-cache
 
   upload_coverage:
     description: Collect coverage reports and upload them

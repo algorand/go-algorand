@@ -35,10 +35,10 @@ python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-he
 echo "$!" > .heapWatch.pid
 
 # TODO: other pingpong modes
-pingpong run -d "${TESTDIR}/node1" --tps 20 --rest 0 --run 0 &
+pingpong run -d "${TESTDIR}/node1" --tps 20 --run 0 &
 
 echo "$!" > .pingpong1.pid
 
-pingpong run -d "${TESTDIR}/node2" --tps 20 --rest 0 --run 0 &
+pingpong run -d "${TESTDIR}/node2" --tps 20 --run 0 &
 
 echo "$!" > .pingpong2.pid
