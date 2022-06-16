@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1258,9 +1259,9 @@ func TestBoxNamesByAppID(t *testing.T) {
     byte "create"			// [arg[0], "create"] // create box named arg[1]
     ==                      // [arg[0]=?="create"]
     bz del                  // "create" ? continue : goto del
-    int 24                  // [24]
-    txn ApplicationArgs 1   // [24, arg[1]]
-    box_create              // [] // boxes: arg[1] -> [24]byte
+    int 5                   // [5]
+    txn ApplicationArgs 1   // [5, arg[1]]
+    box_create              // [] // boxes: arg[1] -> [5]byte
     b end
 del:						// delete box arg[1]
     txn ApplicationArgs 0   // [arg[0]]
@@ -1276,15 +1277,19 @@ end:
     int 1
 `
 	ops, err := logic.AssembleString(prog)
-	approv := ops.Program
+	approval := ops.Program
 	ops, err = logic.AssembleString("#pragma version 7\nint 1")
-	clst := ops.Program
+	clearState := ops.Program
 
 	gl := basics.StateSchema{}
 	lc := basics.StateSchema{}
 
 	// create app
-	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, nil, nil, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, nil, nil,
+		nil, nil, transactions.NoOpOC,
+		approval, clearState, gl, lc, 0,
+	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -1301,57 +1306,57 @@ end:
 	a.Greater(uint64(createdAppID), uint64(0))
 
 	// fund app account
-	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 10_000_000, nil, "", 0, 0)
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, someAddress, createdAppID.Address().String(),
+		0, 10_000_000, nil, "", 0, 0,
+	)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
 	_, err = waitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
-	// NOTE actually should do some iteration
-	// call app, which creates a box called `first-box`
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID),
-		[][]byte{[]byte("create"), []byte("first-box")},
-		nil, nil, nil,
-		[]transactions.BoxRef{
-			{
-				Name: []byte("first-box"), Index: 0,
+	// define operate box helper
+	operateBoxAndSendTxn := func(operation, boxName string) (txID string, err error) {
+		tx, err := testClient.MakeUnsignedAppNoOpTx(
+			uint64(createdAppID),
+			[][]byte{[]byte(operation), []byte(boxName)},
+			nil, nil, nil,
+			[]transactions.BoxRef{
+				{
+					Name: []byte(boxName), Index: 0,
+				},
 			},
-		},
-	)
-	a.NoError(err)
-	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
-	a.NoError(err)
-	appCallTxnTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
-	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, appCallTxnTxID, 30*time.Second)
-	a.NoError(err)
+		)
+		if err != nil {
+			return
+		}
+		tx, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, tx)
+		if err != nil {
+			return
+		}
+		txID, err = testClient.SignAndBroadcastTransaction(wh, nil, tx)
+		if err != nil {
+			return
+		}
+		_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
+		// no matter wait for txn returns error or not, we should all return with txID and err
+		return
+	}
 
-	// verify pending txn info of outer txn
-	//submittedAppCallTxn, err := testClient.PendingTransactionInformationV2(appCallTxnTxID)
-	//a.NoError(err)
-	//a.Nil(submittedAppCallTxn.ApplicationIndex)
-	//a.Nil(submittedAppCallTxn.AssetIndex)
-	//a.NotNil(submittedAppCallTxn.InnerTxns)
-	//a.Len(*submittedAppCallTxn.InnerTxns, 1)
+	// iterate and create boxes
+	BoxNumber := 2
 
-	// verify pending txn info of inner txn
-	//innerTxn := (*submittedAppCallTxn.InnerTxns)[0]
-	//a.Nil(innerTxn.ApplicationIndex)
-	//a.NotNil(innerTxn.AssetIndex)
-	//createdAssetID := *innerTxn.AssetIndex
-	//a.Greater(createdAssetID, uint64(0))
-	//
-	//createdAssetInfo, err := testClient.AssetInformationV2(createdAssetID)
-	//a.NoError(err)
-	//a.Equal(createdAssetID, createdAssetInfo.Index)
-	//a.Equal(createdAppID.Address().String(), createdAssetInfo.Params.Creator)
-	//a.Equal(uint64(1000000), createdAssetInfo.Params.Total)
-	//a.Equal(uint64(3), createdAssetInfo.Params.Decimals)
-	//a.Equal("oz", *createdAssetInfo.Params.UnitName)
-	//a.Equal("Gold", *createdAssetInfo.Params.Name)
-	//a.Equal("https://gold.rush/", *createdAssetInfo.Params.Url)
-	//expectedMetadata, err := hex.DecodeString("67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b")
-	//a.NoError(err)
-	//a.Equal(expectedMetadata, *createdAssetInfo.Params.MetadataHash)
+	for boxIterIndex := 0; boxIterIndex < BoxNumber; boxIterIndex++ {
+		_, err = operateBoxAndSendTxn("create", "box"+strconv.Itoa(boxIterIndex))
+		a.NoError(err)
+	}
+
+	//resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
+	//fmt.Println(resp, err)
+	// QUESTION: how to query for boxes
+
+	for boxIterIndex := 0; boxIterIndex < BoxNumber; boxIterIndex++ {
+		_, err = operateBoxAndSendTxn("delete", "box"+strconv.Itoa(boxIterIndex))
+		a.NoError(err)
+	}
 }

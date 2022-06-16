@@ -776,6 +776,15 @@ func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Applicat
 	return
 }
 
+// ApplicationBoxes takes an app's index and returns the names of boxes under it
+func (c *Client) ApplicationBoxes(index uint64) (resp generatedV2.BoxesResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.ApplicationBoxes(index)
+	}
+	return
+}
+
 // TransactionInformation takes an address and associated txid and return its information
 func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
 	algod, err := c.ensureAlgodClient()
