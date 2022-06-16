@@ -1468,7 +1468,31 @@ assert
 int 1
 `
 
-const testTxnProgramTextV7 = testTxnProgramTextV6
+const testTxnProgramTextV7 = testTxnProgramTextV6 + `
+assert
+
+txn NumApprovalProgramPages
+int 1
+==
+assert
+
+txna ApprovalProgramPages 0
+txn ApprovalProgram
+==
+assert
+
+txn NumClearStateProgramPages
+int 1
+==
+assert
+
+txna ClearStateProgramPages 0
+txn ClearStateProgram
+==
+assert
+
+int 1
+`
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
@@ -1631,7 +1655,7 @@ func TestTxn(t *testing.T) {
 			if v < txnEffectsVersion {
 				testLogicFull(t, ops.Program, 3, ep)
 			} else {
-				// Starting in txnEffectsVersion, there are fields we can't access all fields in Logic mode
+				// Starting in txnEffectsVersion, there are fields we can't access in Logic mode
 				testLogicFull(t, ops.Program, 3, ep, "not allowed in current mode")
 				// And the early tests use "arg" a lot - not allowed in stateful. So remove those tests.
 				lastArg := strings.Index(source, "arg 10\n==\n&&")
@@ -2078,6 +2102,40 @@ global ZeroAddress
 
 	txn2.Txn.Accounts = make([]basics.Address, 1)
 	testLogicBytes(t, ops.Program, defaultEvalParams(&txn2))
+}
+
+func TestTxnBigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+txna ApprovalProgramPages 0
+len
+int 4096
+==
+assert
+
+txna ApprovalProgramPages 1
+byte 0x01020304					// 4096 % 7 == 1, so the last four bytes start with 0x01
+==
+assert
+
+int 1
+`
+	var txn transactions.SignedTxn
+	txn.Txn.ApprovalProgram = make([]byte, 4100) // 4 bytes more than a page
+	for i := range txn.Txn.ApprovalProgram {
+		txn.Txn.ApprovalProgram[i] = byte(i % 7)
+	}
+	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(&txn))
+
+	testLogic(t, `txna ApprovalProgramPages 2`, AssemblerMaxVersion, defaultEvalParams(&txn),
+		"invalid ApprovalProgramPages index")
+
+	// ClearStateProgram is not in the txn at all
+	testLogic(t, `txn NumClearStateProgramPages; !`, AssemblerMaxVersion, defaultEvalParams(&txn))
+	testLogic(t, `txna ClearStateProgramPages 0`, AssemblerMaxVersion, defaultEvalParams(&txn),
+		"invalid ClearStateProgramPages index")
 }
 
 func TestTxnas(t *testing.T) {

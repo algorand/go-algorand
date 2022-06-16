@@ -2403,6 +2403,32 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:
 		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
+	case NumApprovalProgramPages:
+		sv.Uint = uint64(divCeil(len(txn.ApprovalProgram), maxStringSize))
+	case ApprovalProgramPages:
+		pageCount := divCeil(len(txn.ApprovalProgram), maxStringSize)
+		if arrayFieldIdx >= uint64(pageCount) {
+			return sv, fmt.Errorf("invalid ApprovalProgramPages index %d", arrayFieldIdx)
+		}
+		first := arrayFieldIdx * maxStringSize
+		last := first + maxStringSize
+		if last > uint64(len(txn.ApprovalProgram)) {
+			last = uint64(len(txn.ApprovalProgram))
+		}
+		sv.Bytes = txn.ApprovalProgram[first:last]
+	case NumClearStateProgramPages:
+		sv.Uint = uint64(divCeil(len(txn.ClearStateProgram), maxStringSize))
+	case ClearStateProgramPages:
+		pageCount := divCeil(len(txn.ClearStateProgram), maxStringSize)
+		if arrayFieldIdx >= uint64(pageCount) {
+			return sv, fmt.Errorf("invalid ClearStateProgramPages index %d", arrayFieldIdx)
+		}
+		first := arrayFieldIdx * maxStringSize
+		last := first + maxStringSize
+		if last > uint64(len(txn.ClearStateProgram)) {
+			last = uint64(len(txn.ClearStateProgram))
+		}
+		sv.Bytes = txn.ClearStateProgram[first:last]
 	case RekeyTo:
 		sv.Bytes = txn.RekeyTo[:]
 	case ConfigAsset:
@@ -4522,6 +4548,18 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 		txn.ClearStateProgram = make([]byte, len(sv.Bytes))
 		copy(txn.ClearStateProgram, sv.Bytes)
+	case ApprovalProgramPages:
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
+		if len(txn.ApprovalProgram) > maxPossible {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
+		}
+	case ClearStateProgramPages:
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		txn.ClearStateProgram = append(txn.ClearStateProgram, sv.Bytes...)
+		if len(txn.ClearStateProgram) > maxPossible {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
+		}
 	case Assets:
 		var new basics.AssetIndex
 		new, err = cx.availableAsset(sv)
