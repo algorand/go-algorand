@@ -110,33 +110,31 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 }
 
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
-	return stateProofRecordFromKeys(rnd, s.keys)
-}
-
-func stateProofRecordFromKeys(rnd basics.Round, keys []account.Participation) (out []account.StateProofRecordForRound) {
-	for _, part := range keys {
-		partRecord := account.ParticipationRecord{
-			ParticipationID:   part.ID(),
-			Account:           part.Parent,
-			FirstValid:        part.FirstValid,
-			LastValid:         part.LastValid,
-			KeyDilution:       part.KeyDilution,
-			LastVote:          0,
-			LastBlockProposal: 0,
-			LastStateProof:    0,
-			EffectiveFirst:    0,
-			EffectiveLast:     0,
-			VRF:               part.VRF,
-			Voting:            part.Voting,
+	for _, part := range s.keys {
+		if part.OverlapsInterval(rnd, rnd) {
+			partRecord := account.ParticipationRecord{
+				ParticipationID:   part.ID(),
+				Account:           part.Parent,
+				FirstValid:        part.FirstValid,
+				LastValid:         part.LastValid,
+				KeyDilution:       part.KeyDilution,
+				LastVote:          0,
+				LastBlockProposal: 0,
+				LastStateProof:    0,
+				EffectiveFirst:    0,
+				EffectiveLast:     0,
+				VRF:               part.VRF,
+				Voting:            part.Voting,
+			}
+			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
+			partRecordForRound := account.StateProofRecordForRound{
+				ParticipationRecord: partRecord,
+				StateProofSecrets:   signerInRound,
+			}
+			out = append(out, partRecordForRound)
 		}
-		signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
-		partRecordForRound := account.StateProofRecordForRound{
-			ParticipationRecord: partRecord,
-			StateProofSecrets:   signerInRound,
-		}
-		out = append(out, partRecordForRound)
 	}
-	return out
+	return
 }
 
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
@@ -573,9 +571,8 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		signatureBcasted[parent] = 0
 	}
 
-	s := newWorkerStubs(t, keys, len(keys))
-	spw := newTestWorker(t, s)
-	proto := config.Consensus[protocol.ConsensusFuture]
+	tns := newWorkerStubs(t, keys, len(keys))
+	spw := newTestWorker(t, tns)
 
 	// Prepare the database
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -589,7 +586,7 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 	round := basics.Round(255)
 
 	// Sign the message
-	spRecords := stateProofRecordFromKeys(round, keys)
+	spRecords := tns.StateProofKeys(round)
 	sigs := make([]sigFromAddr, 0, len(keys))
 	stateproofMessage := stateproofmsg.Message{}
 	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
@@ -619,22 +616,36 @@ func TestSigBroacastTwoPerSig(t *testing.T) {
 		ftn = !ftn
 	}
 
+	for periods := 1; periods < 10; periods += 3 {
+		sendReceiveCountMessages(t, tns, signatureBcasted, fromThisNode, spw, periods)
+		// reopen the channel
+		tns.sigmsg = make(chan []byte, 1024)
+		// reset the counters
+		for addr := range signatureBcasted {
+			signatureBcasted[addr] = 0
+		}
+	}
+}
+
+func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcasted map[basics.Address]int,
+	fromThisNode map[basics.Address]bool, spw *Worker, periods int) {
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
 	// Collect the broadcast messages
-	tns := spw.net.(*testWorkerStubs)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for bMsg := range tns.sigmsg {
 			sfa := sigFromAddr{}
-			err = protocol.Decode(bMsg, &sfa)
+			err := protocol.Decode(bMsg, &sfa)
 			require.NoError(t, err)
 			signatureBcasted[sfa.SignerAddress]++
 		}
 	}()
 
 	// Broadcast the messages
-	periods := 5
 	for brnd := 257; brnd < 257+256*periods; brnd++ {
 		spw.broadcastSigs(basics.Round(brnd), proto)
 	}
