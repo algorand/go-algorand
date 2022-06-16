@@ -291,6 +291,12 @@ var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non partic
 var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
 var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
 var errStateProofNotSupported = errors.New("state proofs not supported")
+var errBadSenderInStateProofTxn = fmt.Errorf("sender must be the state-proof sender")
+var errFeeMustBeZeroInStateproofTxn = fmt.Errorf("fee must be zero in state-proof transaction")
+var errNoteMustBeEmptyInStateproofTxn = fmt.Errorf("note must be empty in stateproof transaction")
+var errGroupMustBeZeroInStateproofTxn = fmt.Errorf("group must be zero in state-proof transaction")
+var errRekeyToMustBeZeroInStateproofTxn = fmt.Errorf("rekey must be zero in state-proof transaction")
+var errLeaseMustBeZeroInStateproofTxn = fmt.Errorf("lease must be zero in state-proof transaction")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -483,22 +489,22 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// the fields must be empty.  It must be issued from a special
 		// sender address.
 		if tx.Sender != StateProofSender {
-			return fmt.Errorf("sender must be the state-proof sender")
+			return errBadSenderInStateProofTxn
 		}
 		if !tx.Fee.IsZero() {
-			return fmt.Errorf("fee must be zero")
+			return errFeeMustBeZeroInStateproofTxn
 		}
 		if len(tx.Note) != 0 {
-			return fmt.Errorf("note must be empty")
+			return errNoteMustBeEmptyInStateproofTxn
 		}
 		if !tx.Group.IsZero() {
-			return fmt.Errorf("group must be zero")
+			return errGroupMustBeZeroInStateproofTxn
 		}
 		if !tx.RekeyTo.IsZero() {
-			return fmt.Errorf("rekey must be zero")
+			return errRekeyToMustBeZeroInStateproofTxn
 		}
 		if tx.Lease != [32]byte{} {
-			return fmt.Errorf("lease must be zero")
+			return errLeaseMustBeZeroInStateproofTxn
 		}
 
 	default:
