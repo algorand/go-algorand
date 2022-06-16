@@ -201,6 +201,9 @@ func TestStateProofsRecovery(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
 
+	err := fixture.WaitForRound(1, 30*time.Second)
+	r.NoError(err)
+
 	dir, err := fixture.GetNodeDir("Node4")
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), dir)
 	nc.FullStop()
@@ -211,7 +214,7 @@ func TestStateProofsRecovery(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
-	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == (consensusParams.StateProofRecoveryInterval+1)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
@@ -279,6 +282,9 @@ func TestStateProofsRecoveryFail(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
 
+	err := fixture.WaitForRound(1, 30*time.Second)
+	r.NoError(err)
+
 	dir, err := fixture.GetNodeDir("Node4")
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), dir)
 	nc.FullStop()
@@ -286,7 +292,7 @@ func TestStateProofsRecoveryFail(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 
 	libgoal := fixture.LibGoalClient
-	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
+	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == (consensusParams.StateProofRecoveryInterval+2)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
