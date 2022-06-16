@@ -33,22 +33,22 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// builderForRound not threadsafe, should be called in a lock environment
-func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
-	hdr, err := spw.ledger.BlockHdr(rnd)
+// makeBuilderForRound not threadsafe, should be called in a lock environment
+func makeBuilderForRound(l Ledger, rnd basics.Round) (builder, error) {
+	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
 	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.StateProofInterval))
-	votersHdr, err := spw.ledger.BlockHdr(votersRnd)
+	votersHdr, err := l.BlockHdr(votersRnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
-	voters, err := spw.ledger.VotersForStateProof(lookback)
+	voters, err := l.VotersForStateProof(lookback)
 	if err != nil {
 		return builder{}, err
 	}
@@ -59,7 +59,7 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
 	}
 
-	msg, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
+	msg, err := GenerateStateProofMessage(l, uint64(votersHdr.Round), hdr)
 	if err != nil {
 		return builder{}, err
 	}
@@ -83,7 +83,6 @@ func (spw *Worker) builderForRound(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	spw.builders[rnd] = res
 	return res, nil
 }
 
@@ -111,11 +110,12 @@ func (spw *Worker) initBuilders() {
 }
 
 func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
-	builderForRound, err := spw.builderForRound(rnd)
+	builderForRound, err := makeBuilderForRound(spw.ledger, rnd)
 	if err != nil {
-		spw.log.Warnf("addSigsToBuilder: builderForRound(%d): %v", rnd, err)
+		spw.log.Warnf("addSigsToBuilder: makeBuilderForRound(%d): %v", rnd, err)
 		return
 	}
+	spw.builders[rnd] = builderForRound
 
 	for _, sig := range sigs {
 		pos, ok := builderForRound.voters.AddrToPos[sig.signer]
@@ -179,10 +179,11 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, nil
 		}
 
-		builderForRound, err = spw.builderForRound(sfa.Round)
+		builderForRound, err = makeBuilderForRound(spw.ledger, sfa.Round)
 		if err != nil {
 			return network.Disconnect, err
 		}
+		spw.builders[sfa.Round] = builderForRound
 	}
 
 	pos, ok := builderForRound.voters.AddrToPos[sfa.SignerAddress]
