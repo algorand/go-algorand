@@ -24,6 +24,7 @@ mkdir -p ${NETWORKS}
 # set this to "name" your network
 NAME=niftynetwork
 
+# assuming here that are currently working out of the root directory of the go-algorand repo
 goal network create -n ${NAME} -r ${NETWORKS}/${NAME} -t ./test/testdata/nettemplates/OneNodeFuture.json
 
 # after the next command and for the rest of the README, we assume that `${ALGORAND_DATA}` is set
