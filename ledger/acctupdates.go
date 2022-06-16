@@ -487,7 +487,7 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 					resultCount++
 					// check if the size of `results` reaches `maxKeyNum`
 					// if so just return the list of keys
-					if resultCount == maxKeyNum {
+					if maxKeyNum > 0 && resultCount == maxKeyNum {
 						return
 					}
 				}

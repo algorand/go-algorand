@@ -2009,7 +2009,7 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 		var keyName string
 
 		for rows.Next() {
-			if resultCount == maxKeyNum {
+			if maxKeyNum > 0 && resultCount == maxKeyNum {
 				return
 			}
 			_err = rows.Scan(&round, &keyName)
