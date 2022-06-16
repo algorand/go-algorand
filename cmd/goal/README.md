@@ -107,22 +107,21 @@ goal account balance --address ${APP_ACCOUNT}
 ### A:
 Here's an example with the following assumptions:
 
-* the callers's account is given by `${ACCOUNT}` (see first answer)
+* the caller's account is given by `${ACCOUNT}` (see first answer)
 * the program used is `boxes.teal` referenced above. In particular:
   * it routes to box subroutines using the app argument at index 0 as the method signifier
 * the app id has been stored in `${APPID}` (see the previous answer)
 * the box referenced in the first non-create app-call has name `greatBox`
 * another referenced box is named `an_ABI_box`
   * this second box is provided contents `[2,3,5]` of ABI-type `(uint8,uint8,uint8)`
-  * we provide the box'es `${APPID}` as well in the `--box` reference. This can be used to access boxes of external applications
 
 ```sh
 # create a box with a simple non-ABI name. Note how the `--box` flag needs to be set so as to refer to the box being touched
 goal app call --from $ACCOUNT --app-id ${APPID} --box "str:greatBox" --app-arg "str:create" --app-arg "str:greatBox"
 
 # create another box
-goal app call --from ${ACCOUNT} --app-id ${APPID} --box "${APPID},str:an_ABI_box" --app-arg "str:create" --app-arg "str:an_ABI_box"
+goal app call --from ${ACCOUNT} --app-id ${APPID} --box "str:an_ABI_box" --app-arg "str:create" --app-arg "str:an_ABI_box"
 
 # set the contents to ABI type `(uint8,uint8,uint8)` with value `[2,3,5]`
-goal app call --from ${ACCOUNT} --app-id ${APPID} --box "${APPID},str:an_ABI_box" --app-arg "str:set" --app-arg "str:an_ABI_box"  --app-arg "abi:(uint8,uint8,uint8):[2,3,5]"
+goal app call --from ${ACCOUNT} --app-id ${APPID} --box "$str:an_ABI_box" --app-arg "str:set" --app-arg "str:an_ABI_box"  --app-arg "abi:(uint8,uint8,uint8):[2,3,5]"
 ```
