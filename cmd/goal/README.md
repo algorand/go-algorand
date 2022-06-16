@@ -15,11 +15,11 @@ Finally, all the `goal` commands assume that `${ALGORAND_DATA}` has been set. Se
 ### A:
 
 ```sh
-# create a networks directory if you don't already have it
-mkdir -p ~/networks
-
 # set this to where you want to keep the network files (and data dirs will go beneath)
 NETWORKS=~/networks
+
+# create a networks directory if you don't already have it
+mkdir -p ${NETWORKS}
 
 # set this to "name" your network
 NAME=niftynetwork
@@ -68,6 +68,17 @@ echo $TEALDIR
 goal app create --creator ${ACCOUNT} --approval-prog ${TEALDIR}/boxes.teal --clear-prog ${TEALDIR}/clear.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0
 ```
 
+For the following questions, you'll need to use the app index. That will be shown in the last line printed. EG:
+
+```sh
+Attempting to create app (approval size 125, hash RKWO3VXBKQXF77PC6EHRLFXD4YTJYTJTGPTPWQ46YH5ESGPZ5JIA; clear size 3, hash IS4FW6ZCRMQRTDIINAVAQHD2GK6DXUNQHQ52IQGZEVPP4OEU56QA)
+Issued transaction from account ECRQFXZ7P3PLNK6QLIEVX7AXU6NTVQZHFUSEXTXMBKKOA2NTIV4PCX7XNY, txid SZK3U7AARMPQSZUICZIGYRLC7UDXJCVPV34JCBN5LIBXMF635UKA (fee 1000)
+Transaction SZK3U7AARMPQSZUICZIGYRLC7UDXJCVPV34JCBN5LIBXMF635UKA still pending as of round 12
+Transaction SZK3U7AARMPQSZUICZIGYRLC7UDXJCVPV34JCBN5LIBXMF635UKA still pending as of round 13
+Transaction SZK3U7AARMPQSZUICZIGYRLC7UDXJCVPV34JCBN5LIBXMF635UKA committed in round 14
+Created app with app index 2
+```
+
 ### Q: How do I fund the app account so that it can satisfy its boxes min-balance requirement and allow for box creation?
 
 ### A:
@@ -91,26 +102,27 @@ goal account balance --address ${APP_ACCOUNT}
 
 ### Q: How do I use boxes in goal? In particular, I'd like to make a goal app call which:
 * accesses a particular box for a particular app
-* the name of the box is defined as an ABI type
+* stores an ABI type as its contents
 
 ### A:
 Here's an example with the following assumptions:
 
 * the callers's account is given by `${ACCOUNT}` (see first answer)
 * the program used is `boxes.teal` referenced above. In particular:
-  * it routes to box subroutines using the method signifier `app-arg 0`
+  * it routes to box subroutines using the app argument at index 0 as the method signifier
 * the app id has been stored in `${APPID}` (see the previous answer)
-* the box referenced in the first app-call has name `greatBox`
-* another referenced box is named `[2,3,5]` of ABI-type `(byte,byte,byte)`
-* this second box is provided contents `fourty two`
+* the box referenced in the first non-create app-call has name `greatBox`
+* another referenced box is named `an_ABI_box`
+  * this second box is provided contents `[2,3,5]` of ABI-type `(uint8,uint8,uint8)`
+  * we provide the box'es `${APPID}` as well in the `--box` reference. This can be used to access boxes of external applications
 
 ```sh
 # create a box with a simple non-ABI name. Note how the `--box` flag needs to be set so as to refer to the box being touched
 goal app call --from $ACCOUNT --app-id ${APPID} --box "str:greatBox" --app-arg "str:create" --app-arg "str:greatBox"
 
-# create a box named by an ABI-type
-goal app call --from ${ACCOUNT} --app-id ${APPID} --box "abi:(byte,byte,byte):[2,3,5]" --app-arg "str:create" --app-arg "abi:(byte,byte,byte):[2,3,5]"
+# create another box
+goal app call --from ${ACCOUNT} --app-id ${APPID} --box "${APPID},str:an_ABI_box" --app-arg "str:create" --app-arg "str:an_ABI_box"
 
-# set the ABI-type box name contents
-goal app call --from ${ACCOUNT} --app-id ${APPID} --box "${APPID},abi:(byte,byte,byte):[2,3,5]" --app-arg "str:set" --app-arg "abi:(byte,byte,byte):[2,3,5]" --app-arg "str:fourty two"
+# set the contents to ABI type `(uint8,uint8,uint8)` with value `[2,3,5]`
+goal app call --from ${ACCOUNT} --app-id ${APPID} --box "${APPID},str:an_ABI_box" --app-arg "str:set" --app-arg "str:an_ABI_box"  --app-arg "abi:(uint8,uint8,uint8):[2,3,5]"
 ```
