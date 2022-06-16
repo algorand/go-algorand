@@ -66,33 +66,39 @@ func main() {
 }
 
 func loadConsensus(absolutePath string) error {
-	consensusPath := filepath.Join(absolutePath, "consensus.json")
-	if *consensusJSON != "" {
+	if *consensusJSON == "COMPILED_ONLY" {
+		return nil
+	}
+	var consensusPath string
+	if *consensusJSON == "" {
+		// try ${ALGORAND_DATA}/consensus.json by default
+		consensusPath = filepath.Join(absolutePath, "consensus.json")
+	} else {
 		consensusPath = filepath.Join(absolutePath, *consensusJSON)
 	}
-	if *consensusJSON != "COMPILED_ONLY" {
-		fin, err := os.Open(consensusPath)
+	fin, err := os.Open(consensusPath)
 
-		if err != nil {
-			if os.IsNotExist(err) && *consensusJSON == "" {
-				return nil
-			}
-			return fmt.Errorf("%s: %v\n", consensusPath, err)
+	if err != nil {
+		if os.IsNotExist(err) && *consensusJSON == "" {
+			// if the default isn't there, no problem
+			return nil
 		}
-		dec := json.NewDecoder(fin)
-		var newConsensus map[string]config.ConsensusParams
-		err = dec.Decode(&newConsensus)
-		if err != nil {
-			return fmt.Errorf("%s: bad ConsensusParams JSON, %v\n", consensusPath, err)
+		// if a specified thing isn't there, error
+		return fmt.Errorf("%s: %v", consensusPath, err)
+	}
+	dec := json.NewDecoder(fin)
+	var newConsensus map[string]config.ConsensusParams
+	err = dec.Decode(&newConsensus)
+	if err != nil {
+		return fmt.Errorf("%s: bad ConsensusParams JSON, %v", consensusPath, err)
+	}
+	for pnameStr, prot := range newConsensus {
+		pname := protocol.ConsensusVersion(pnameStr)
+		_, collision := config.Consensus[pname]
+		if collision {
+			return fmt.Errorf("%s: duplicate protocol %#v", consensusPath, pname)
 		}
-		for pnameStr, prot := range newConsensus {
-			pname := protocol.ConsensusVersion(pnameStr)
-			_, collision := config.Consensus[pname]
-			if collision {
-				return fmt.Errorf("%s: duplicate protocol %#v\n", consensusPath, pname)
-			}
-			config.Consensus[pname] = prot
-		}
+		config.Consensus[pname] = prot
 	}
 	return nil
 }
