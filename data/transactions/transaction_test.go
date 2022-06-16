@@ -1280,6 +1280,7 @@ func (s stateproofTxnTestCase) RunIsWellFormedForTestCase() error {
 }
 
 func TestWellFormedStateProofTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// want to create different Txns, run on all of these cases the check, and have an expected result
 	cases := []stateproofTxnTestCase{
 		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
