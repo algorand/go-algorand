@@ -925,12 +925,7 @@ func TestAddStateProofKeys(t *testing.T) {
 	signer, err := merklesignature.New(1, max, 3)
 	a.NoError(err)
 	// Initialize keys array.
-	var keys StateProofKeys
-	for i := uint64(3); i < max; i += 3 {
-		k := signer.GetKey(i)
-		keysRound := merklesignature.KeyRoundPair{Round: i, Key: k}
-		keys = append(keys, keysRound)
-	}
+	keys := signer.GetAllKeys()
 
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
@@ -1093,15 +1088,7 @@ func TestDeleteStateProofKeys(t *testing.T) {
 	// Wait for async DB operations to finish.
 	a.NoError(registry.Flush(10 * time.Second))
 
-	// Initialize keys array.
-	keys := make(keypairs, 0)
-	for i := uint64(4); i <= maxRound; i += 4 {
-		k := p.StateProofSecrets.GetKey(i)
-		if k == nil {
-			continue
-		}
-		keys = append(keys, merklesignature.KeyRoundPair{Round: i, Key: k})
-	}
+	keys := keypairs(p.StateProofSecrets.GetAllKeys())
 
 	a.NoError(registry.AppendKeys(id, StateProofKeys(keys)))
 
