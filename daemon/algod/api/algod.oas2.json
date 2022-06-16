@@ -1330,7 +1330,7 @@
           },
           {
             "type": "integer",
-            "description": "Number of box names to return. If max is not set, or max == 0, returns box-names up to `MaxAPIBoxPerApplication`.",
+            "description": "Number of box names to return. If max is not set, or max == 0, returns all box-names.",
             "name": "max",
             "in": "query"
           }

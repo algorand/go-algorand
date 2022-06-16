@@ -2448,7 +2448,7 @@
             }
           },
           {
-            "description": "Number of box names to return. If max is not set, or max == 0, returns box-names up to `MaxAPIBoxPerApplication`.",
+            "description": "Number of box names to return. If max is not set, or max == 0, returns all box-names.",
             "in": "query",
             "name": "max",
             "schema": {

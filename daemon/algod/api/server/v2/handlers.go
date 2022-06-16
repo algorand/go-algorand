@@ -1148,10 +1148,10 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	var boxKeys []string
 	var err error
 
-	followsParams := (isNilOrZero(params.Max) && maxBoxThreshold == 0) ||
-		(!isNilOrZero(params.Max) && (maxBoxThreshold > *params.Max || maxBoxThreshold == 0))
+	dominatedByQryParams := !isNilOrZero(params.Max) && (maxBoxThreshold > *params.Max || maxBoxThreshold == 0)
+	returnsAll := isNilOrZero(params.Max) && maxBoxThreshold == 0
 
-	if followsParams {
+	if dominatedByQryParams || returnsAll {
 		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, nilToZero(params.Max))
 	} else {
 		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxBoxThreshold+1)
