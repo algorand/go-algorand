@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -25,14 +26,13 @@ import (
 	"runtime/pprof"
 	"testing"
 
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/util/db"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -141,6 +142,18 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	blk.RewardsPool = testPoolAddr
 	blk.FeeSink = testSinkAddr
 	blk.CurrentProtocol = lastBlock.CurrentProtocol
+
+	if proto.StateProofInterval != 0 && uint64(blk.Round())%proto.StateProofInterval == 0 && uint64(blk.Round()) != 0 {
+		voters, err := l.VotersForStateProof(blk.Round() - basics.Round(proto.StateProofVotersLookback))
+		require.NoError(t, err)
+		stateProofTracking := bookkeeping.StateProofTrackingData{
+			StateProofVotersCommitment:  voters.Tree.Root(),
+			StateProofVotersTotalWeight: voters.TotalWeight,
+			StateProofNextRound:         blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound,
+		}
+		blk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateProofTracking
+	}
+
 	return
 }
 
@@ -1632,6 +1645,135 @@ func TestListAssetsAndApplications(t *testing.T) {
 		}
 	}
 	require.Equal(t, appCount, len(results))
+}
+
+// TestLedgerKeepsOldBlocksForStateProof test that if stateproof chain is delayed for X intervals,  the ledger will not
+// remove old blocks for the database. When verifying old stateproof transaction, nodes must have the header of the corresponding
+// voters round, if this won't vbe available the verification would fail.
+// the voter tracker should prevent the remove needed blocks from the database.
+func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofRecoveryInterval + 2) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
+
+	// place real values on the participation period, so we would create a commitment with some stake.
+	accountsWithValid := make(map[basics.Address]basics.AccountData)
+	for addr, elem := range genesisInitState.Accounts {
+		newAccount := elem
+		newAccount.VoteFirstValid = 0
+		newAccount.VoteLastValid = 10000
+		accountsWithValid[addr] = newAccount
+	}
+	genesisInitState.Accounts = accountsWithValid
+
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	lastBlock, err := l.Block(l.Latest())
+	proto := config.Consensus[lastBlock.CurrentProtocol]
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts)+maxBlocks)
+	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys)+maxBlocks)
+	// regular addresses: all init accounts minus pools
+
+	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts)+maxBlocks)
+	i := 0
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			addresses[i] = addr
+			i++
+		}
+		accounts[addr] = genesisInitState.Accounts[addr]
+		keys[addr] = initKeys[addr]
+	}
+
+	for i := 0; i < maxBlocks; i++ {
+		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	}
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	// We now create block with stateproof transaction. since we don't want to complicate the test and create
+	// a cryptographically correct stateproof we would make sure that only the crypto part of the verification fails.
+	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
+	_, err = l.Validate(context.Background(), blk, backlogPool)
+	require.ErrorContains(t, err, "state proof crypto error")
+
+	for i := uint64(0); i < proto.StateProofInterval; i++ {
+		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	}
+
+	// at the point the ledger would remove the voters round for the database.
+	// that will cause the stateproof transaction verification to fail because there are
+	// missing blocks
+	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
+	_, err = l.Validate(context.Background(), blk, backlogPool)
+	expectedErr := &ledgercore.ErrNoEntry{}
+	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
+}
+
+func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
+	sp := stateproof.StateProof{SignedWeight: 3000000000000000}
+	var stxn transactions.SignedTxn
+	stxn.Txn.Type = protocol.StateProofTx
+	stxn.Txn.Sender = transactions.StateProofSender
+	stxn.Txn.FirstValid = basics.Round(uint64(maxBlocks) - proto.StateProofInterval)
+	stxn.Txn.LastValid = stxn.Txn.FirstValid + basics.Round(proto.MaxTxnLife)
+	stxn.Txn.GenesisHash = genesisInitState.GenesisHash
+	stxn.Txn.StateProofType = protocol.StateProofBasic
+	stxn.Txn.StateProofIntervalLatestRound = 512
+	stxn.Txn.StateProof = sp
+
+	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
+	proto = config.Consensus[blk.CurrentProtocol]
+	for _, stx := range []transactions.SignedTxn{stxn} {
+		txib, err := blk.EncodeSignedTxn(stx, transactions.ApplyData{})
+		require.NoError(t, err)
+		if proto.TxnCounter {
+			blk.TxnCounter = blk.TxnCounter + 1
+		}
+		blk.Payset = append(blk.Payset, txib)
+	}
+
+	var err error
+	blk.TxnCommitments, err = blk.PaysetCommit()
+	require.NoError(t, err)
+	return blk
+}
+
+func addDummyBlock(t *testing.T, addresses []basics.Address, proto config.ConsensusParams, l *Ledger, initKeys map[basics.Address]*crypto.SignatureSecrets, genesisInitState ledgercore.InitState) {
+	stxns := make([]transactions.SignedTxn, 2)
+	for j := 0; j < 2; j++ {
+		txHeader := transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid:  l.Latest() + 1,
+			LastValid:   l.Latest() + 10,
+			GenesisID:   t.Name(),
+			GenesisHash: crypto.Hash([]byte(t.Name())),
+		}
+
+		payment := transactions.PaymentTxnFields{
+			Receiver: addresses[0],
+			Amount:   basics.MicroAlgos{Raw: 1000},
+		}
+
+		tx := transactions.Transaction{
+			Type:             protocol.PaymentTx,
+			Header:           txHeader,
+			PaymentTxnFields: payment,
+		}
+		stxns[j] = sign(initKeys, tx)
+	}
+	err := l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+	require.NoError(t, err)
+
 }
 
 func TestLedgerMemoryLeak(t *testing.T) {
