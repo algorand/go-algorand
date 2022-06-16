@@ -3,8 +3,8 @@
 Unless otherwise noted, it is assumed that the working directory
 begins at the top level of the `go-algorand` repo.
 
-It is also assumed that the main README's installation instructions have been followed and `make install` run so that the `goal` executable is available via `${GOPATH}/bin/goal`.
-You can verify this to be the case by comparing the output of `which goal` with the output of `echo ${GOPATH}/bin/goal`.
+It is also assumed that the main README's installation instructions have been followed and `make install` run so that the `goal` executable has been rebuilt from the same source as this example and is available in the shell environment.
+You can run `ls -l $(which goal)` after your `make install` and look at the installation time as a sanity check.
 
 Finally, all the `goal` commands assume that `${ALGORAND_DATA}` has been set. See the first Q/A for how this is done.
 
