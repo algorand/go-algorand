@@ -30,8 +30,8 @@ export OS_TYPE
 
 export SHA
 
-ALGORAND_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-beta || [ "$CHANNEL" = alpha ] && echo algorand-alpha || echo algorand)
-DEVTOOLS_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-devtools-beta || [ "$CHANNEL" = alpha ] && echo algorand-devtools-alpha || echo algorand-devtools)
+ALGORAND_PACKAGE_NAME=$(( [ "$CHANNEL" = beta ] && echo algorand-beta ) || ( [ "$CHANNEL" = alpha ] && echo algorand-alpha ) || ( echo algorand ))
+DEVTOOLS_PACKAGE_NAME=$(( [ "$CHANNEL" = beta ] && echo algorand-devtools-beta ) || ( [ "$CHANNEL" = alpha ] && echo algorand-devtools-alpha ) || ( echo algorand-devtools ))
 export ALGORAND_PACKAGE_NAME
 export DEVTOOLS_PACKAGE_NAME
 
