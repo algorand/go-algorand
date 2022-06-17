@@ -3699,7 +3699,13 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	ep := defaultEvalParams(&txn)
 
 	for v := uint64(0); v < appsEnabledVersion; v++ {
-		ops := testProg(t, source, v)
+		var ops *OpStream
+		if v == 0 {
+			ops = testProg(t, source, 1)
+			ops.Program[0] = 0x0
+		} else {
+			ops = testProg(t, source, v)
+		}
 		e := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
 		testAppBytes(t, ops.Program, ep, e, e)
 	}
@@ -3711,7 +3717,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	const source = "int 1"
+	const source = "int 0x01"
 
 	// Construct a group of two payments, no rekeying
 	txn0 := makeSampleTxn()
@@ -3759,14 +3765,26 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 			// Should fail for all versions < validFromVersion
 			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
 			for v := uint64(0); v < cse.validFromVersion; v++ {
-				ops := testProg(t, source, v)
+				var ops *OpStream
+				if v == 0 {
+					ops = testProg(t, source, 1)
+					ops.Program[0] = 0x0
+				} else {
+					ops = testProg(t, source, v)
+				}
 				testAppBytes(t, ops.Program, ep, expected, expected)
 				testLogicBytes(t, ops.Program, ep, expected, expected)
 			}
 
 			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
-				ops := testProg(t, source, v)
+				var ops *OpStream
+				if v == 0 {
+					ops = testProg(t, source, 1)
+					ops.Program[0] = 0x0
+				} else {
+					ops = testProg(t, source, v)
+				}
 				testAppBytes(t, ops.Program, ep)
 				testLogicBytes(t, ops.Program, ep)
 			}
@@ -3908,7 +3926,13 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1`, v)
+			var ops *OpStream
+			if v == 0 {
+				ops = testProg(t, "int 1", 1)
+				ops.Program[0] = 0x0
+			} else {
+				ops = testProg(t, "int 1", v)
+			}
 			var txn transactions.SignedTxn
 			txn.Txn.RekeyTo = basics.Address{1, 2, 3, 4}
 			ep := defaultEvalParams(&txn)

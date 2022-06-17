@@ -1125,17 +1125,119 @@ func typeTxField(pgm ProgramKnowledge, args []string) (StackTypes, StackTypes) {
 	return StackTypes{fs.ftype}, nil
 }
 
-// keywords or "pseudo-ops" handle parsing and assembling special asm language
+type selectFunc func(*OpStream, *selectorPseudo, []string) (OpSpec, bool)
+
+// Common pseudo func pattern which determines the spec based on the number of immediates and offset, i.e. i imms maps to the (i-offset)'th child
+// Warning: Not safe to use if any of children are themselves multi/pseudo ops
+func selectNumImmediatesChildOffset(ops *OpStream, sp *selectorPseudo, args []string, offset int) (OpSpec, bool) {
+	errMsg := fmt.Sprintf("%s expects", sp.name)
+	if len(args)-offset >= len(sp.children) || len(args)-offset < 0 {
+		for i, _ := range sp.children {
+			if i+1 < len(sp.children) {
+				errMsg += fmt.Sprintf(" %d or", i+offset)
+			} else {
+				errMsg += fmt.Sprintf(" %d", i+offset)
+			}
+		}
+		errMsg += " immediate arguments"
+		ops.error(errMsg)
+		return OpSpec{}, false
+	}
+	res := OpsByName[sp.children[len(args)-offset].version][sp.children[len(args)-offset].name]
+	res.Name = sp.name
+	return res, true
+}
+
+func selectNumImmediatesChildSingleOffset(ops *OpStream, sp *selectorPseudo, args []string) (OpSpec, bool) {
+	return selectNumImmediatesChildOffset(ops, sp, args, 1)
+}
+
+func selectNumImmediatesChildDoubleOffset(ops *OpStream, sp *selectorPseudo, args []string) (OpSpec, bool) {
+	return selectNumImmediatesChildOffset(ops, sp, args, 2)
+}
+
+type intermediateSpec interface {
+	getSpec(*OpStream, []string) (OpSpec, bool)
+	getVersion() uint64
+}
+
+type childSpec struct {
+	name    string
+	version uint64
+}
+
+// These pseudo-ops look at the passed in args and select an OpSpec to assemble
+type selectorPseudo struct {
+	name       string
+	version    uint64
+	selectSpec selectFunc
+	children   []childSpec
+}
+
+func (sp selectorPseudo) getSpec(ops *OpStream, args []string) (OpSpec, bool) {
+	return sp.selectSpec(ops, &sp, args)
+}
+
+func (sp selectorPseudo) getVersion() uint64 {
+	return sp.version
+}
+
+// These pseudo-ops don't have any real OpSpec connected to them but have very customized assembly functions
+type asmPseudo struct {
+	name    string
+	version uint64
+	proto   Proto
+	asm     asmFunc
+}
+
+func (ap asmPseudo) getSpec(ops *OpStream, args []string) (OpSpec, bool) {
+	return OpSpec{Name: ap.name, Version: ap.version, Proto: ap.proto, OpDetails: assembler(ap.asm)}, true
+}
+
+func (ap asmPseudo) getVersion() uint64 {
+	return ap.version
+}
+
+func (op OpSpec) getSpec(ops *OpStream, args []string) (OpSpec, bool) {
+	return op, true
+}
+
+func (op OpSpec) getVersion() uint64 {
+	return op.Version
+}
+
+func getProperVersion(ops *OpStream, specs []intermediateSpec) (intermediateSpec, intermediateSpec, bool) {
+	properIndex := -1
+	highest := -1
+	for i, spec := range specs {
+		if spec.getVersion() <= ops.Version {
+			if properIndex < 0 || spec.getVersion() <= specs[properIndex].getVersion() {
+				properIndex = i
+			}
+		}
+		if highest < 0 || spec.getVersion() > specs[highest].getVersion() {
+			highest = i
+		}
+	}
+	if properIndex < 0 {
+		return nil, specs[highest], false
+	}
+	return specs[properIndex], nil, true
+}
+
+// pseudoOps or "pseudo-ops" handle parsing and assembling special asm language
 // constructs like 'addr' We use an OpSpec here, but it's somewhat degenerate,
 // since they don't have opcodes or eval functions. But it does need a lot of
 // OpSpec, in order to support assembly - Mode, typing info, etc.
-var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, proto(":i"), 1, assembler(asmInt)},
-	"byte": {0, "byte", nil, proto(":b"), 1, assembler(asmByte)},
+var pseudoOps = map[string][]intermediateSpec{
+	"int":  {asmPseudo{"int", 1, proto(":i"), asmInt}},
+	"byte": {asmPseudo{"byte", 1, proto(":b"), asmByte}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, proto(":b"), 1, assembler(asmAddr)},
+	"addr": {asmPseudo{"addr", 1, proto(":b"), asmAddr}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, proto(":b"), 1, assembler(asmMethod)},
+	"method": {asmPseudo{"method", 1, proto(":b"), asmMethod}},
+	"txn":    {selectorPseudo{"txn", 2, selectNumImmediatesChildSingleOffset, []childSpec{{"txn", 2}, {"txna", 2}}}},
+	"gtxn":   {selectorPseudo{"gtxn", 2, selectNumImmediatesChildDoubleOffset, []childSpec{{"gtxn", 2}, {"gtxna", 2}}}},
 }
 
 type lineError struct {
@@ -1339,25 +1441,38 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			opstring = fields[0]
 		}
-
-		spec, ok := OpsByName[ops.Version][opstring]
+		var intermediate intermediateSpec
+		var alternate intermediateSpec
+		specs, ok := pseudoOps[opstring]
 		if !ok {
-			spec, ok = keywords[opstring]
-			if spec.Version > 1 && spec.Version > ops.Version {
-				ok = false
-			}
-		}
-		if !ok {
-			// If the problem is only the version, it's useful to lookup the
-			// opcode from latest version, so we proceed with assembly well
-			// enough to report follow-on errors.  Of course, we still have to
-			// bail out on the assembly as a whole.
-			spec, ok = OpsByName[AssemblerMaxVersion][opstring]
+			intermediate, ok = OpsByName[ops.Version][opstring]
 			if !ok {
-				spec, ok = keywords[opstring]
+				intermediate, ok = OpsByName[AssemblerMaxVersion][opstring]
+				if ok {
+					ops.errorf("%s opcode was introduced in TEAL v%d", opstring, intermediate.getVersion())
+				} else {
+					ops.errorf("unknown opcode: %s", opstring)
+					continue
+				}
 			}
-			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
+		} else {
+			intermediate, alternate, ok = getProperVersion(ops, specs)
+			if !ok {
+				intermediate, ok = OpsByName[ops.Version][opstring]
+				if !ok {
+					intermediate, ok = OpsByName[AssemblerMaxVersion][opstring]
+					if ok {
+						if alternate.getVersion() > intermediate.getVersion() {
+							intermediate = alternate
+						}
+					} else {
+						intermediate = alternate
+					}
+					ops.errorf("%s opcode was introduced in TEAL v%d", opstring, intermediate.getVersion())
+				}
+			}
 		}
+		spec, ok := intermediate.getSpec(ops, fields[1:])
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.recordSourceLine()
@@ -1385,8 +1500,6 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			ops.trace("\n")
 			continue
-		} else {
-			ops.errorf("unknown opcode: %s", opstring)
 		}
 	}
 

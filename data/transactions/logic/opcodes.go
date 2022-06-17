@@ -439,10 +439,8 @@ var OpSpecs = []OpSpec{
 	// It is ok to have the same opcode for different TEAL versions.
 	// This 'txn' asm command supports additional argument in version 2 and
 	// generates 'txna' opcode in that particular case
-	{0x31, "txn", opTxn, proto(":a"), 2, field("f", &TxnFields).assembler(asmTxn2)},
 	{0x32, "global", opGlobal, proto(":a"), 1, field("f", &GlobalFields)},
 	{0x33, "gtxn", opGtxn, proto(":a"), 1, immediates("t", "f").field("f", &TxnScalarFields)},
-	{0x33, "gtxn", opGtxn, proto(":a"), 2, immediates("t", "f").field("f", &TxnFields).assembler(asmGtxn2)},
 	{0x34, "load", opLoad, proto(":a"), 1, immediates("i")},
 	{0x35, "store", opStore, proto("a:"), 1, immediates("i")},
 	{0x36, "txna", opTxna, proto(":a"), 2, immediates("f", "i").field("f", &TxnArrayFields)},
