@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
-	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -1335,6 +1334,10 @@ end:
 		if err != nil {
 			return
 		}
+		wh, err = testClient.GetUnencryptedWalletHandle()
+		if err != nil {
+			return
+		}
 		txID, err = testClient.SignAndBroadcastTransaction(wh, nil, tx)
 		if err != nil {
 			return
@@ -1345,21 +1348,47 @@ end:
 	}
 
 	// iterate and create boxes
-	BoxNumber := 2
-
-	for boxIterIndex := 0; boxIterIndex < BoxNumber; boxIterIndex++ {
-		_, err = operateBoxAndSendTxn("create", "box"+strconv.Itoa(boxIterIndex))
-		a.NoError(err)
-	}
+	totalBoxNum := 10
 
 	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	a.NoError(err)
-	for _, boxBytes := range resp.Boxes {
-		fmt.Println(string(boxBytes))
+	a.Empty(resp.Boxes)
+
+	createdBoxName := map[string]bool{}
+	createdBoxCount := 0
+
+	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
+		boxName := "box" + strconv.Itoa(boxIterIndex)
+		_, err = operateBoxAndSendTxn("create", boxName)
+		a.NoError(err)
+		createdBoxName[boxName] = true
+		createdBoxCount++
+
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+		a.NoError(err)
+		a.Equal(createdBoxCount, len(resp.Boxes))
+		for _, byteName := range resp.Boxes {
+			a.True(createdBoxName[string(byteName)])
+		}
 	}
 
-	for boxIterIndex := 0; boxIterIndex < BoxNumber; boxIterIndex++ {
-		_, err = operateBoxAndSendTxn("delete", "box"+strconv.Itoa(boxIterIndex))
+	for boxIterIndex := 0; boxIterIndex < totalBoxNum; boxIterIndex++ {
+		boxName := "box" + strconv.Itoa(boxIterIndex)
+		_, err = operateBoxAndSendTxn("delete", boxName)
 		a.NoError(err)
+		createdBoxName[boxName] = false
+		createdBoxCount--
+
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+		a.NoError(err)
+		a.Equal(createdBoxCount, len(resp.Boxes))
+		for _, byteName := range resp.Boxes {
+			a.True(createdBoxName[string(byteName)])
+		}
 	}
+
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID))
+	a.NoError(err)
+	a.Empty(resp.Boxes)
+	a.Zero(createdBoxCount)
 }

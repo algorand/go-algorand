@@ -1123,25 +1123,24 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	lastRound := ledger.Latest()
 	keyPrefix := logic.MakeBoxKey(appIdx, "")
 
+	// cast param.Max to zero, if param.Max points to some value, we keep the value
+	castedMax := nilToZero(params.Max)
 	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
 
-	// compute `maxReturnNum` from `params.Max` and `maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication`
+	// compute `maxReturnNum` from `castedMax` and `maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication`
 	// `maxReturnNum == 0` for returning everything
-	// - `params.Max == nil || *params.Max == 0` and `maxBoxThreshold == 0`,
+	// - `castedMax == 0` and `maxBoxThreshold == 0`,
 	//       return everything
-	// - `params.Max == nil || *params.Max == 0` and `maxBoxThreshold > 0`,
+	// - `castedMax == 0` and `maxBoxThreshold > 0`,
 	//       returns up to `maxBoxThreshold`, check if exceeds
-	// - `*params.Max > 0` and `maxBoxThreshold == 0`,
-	//       return up to `*params.Max`
-	// - `*params.Max > 0` and `maxBoxThreshold > 0`,
-	//       return up to min(*params.Max, maxBoxThreshold),
+	// - `castedMax > 0` and `maxBoxThreshold == 0`,
+	//       return up to `castedMax`
+	// - `castedMax > 0` and `maxBoxThreshold > 0`,
+	//       return up to min(castedMax, maxBoxThreshold),
 	//       if return size is `maxBoxThreshold`, check if exceeds
 
 	var boxKeys []string
 	var err error
-
-	// cast param.Max to zero, if param.Max points to some value, we keep the value
-	castedMax := nilToZero(params.Max)
 
 	dominatedByQryParams := castedMax > 0 && (maxBoxThreshold > castedMax || maxBoxThreshold == 0)
 	returnsAll := castedMax == 0 && maxBoxThreshold == 0
