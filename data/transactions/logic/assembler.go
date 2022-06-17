@@ -1225,10 +1225,7 @@ func getProperVersion(ops *OpStream, specs []intermediateSpec) (intermediateSpec
 	return specs[properIndex], nil, true
 }
 
-// pseudoOps or "pseudo-ops" handle parsing and assembling special asm language
-// constructs like 'addr' We use an OpSpec here, but it's somewhat degenerate,
-// since they don't have opcodes or eval functions. But it does need a lot of
-// OpSpec, in order to support assembly - Mode, typing info, etc.
+// pseudoOps or "pseudo-ops" allow us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
 var pseudoOps = map[string][]intermediateSpec{
 	"int":  {asmPseudo{"int", 1, proto(":i"), asmInt}},
 	"byte": {asmPseudo{"byte", 1, proto(":b"), asmByte}},
