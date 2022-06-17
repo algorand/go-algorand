@@ -15,7 +15,7 @@ fi
 
 if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$|^alphanet$ ]]
 then
-    echo "[$0] \ \`mainnet\`, \`testnet\`, \`betanet\` or \`alphanet\`."
+    echo "[$0] Network values must be either \`mainnet\`, \`testnet\`, \`betanet\`, or \`alphanet\`."
     exit 1
 fi
 
