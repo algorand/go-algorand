@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -1351,9 +1352,11 @@ end:
 		a.NoError(err)
 	}
 
-	//resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
-	//fmt.Println(resp, err)
-	//QUESTION: how to query for boxes
+	resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
+	a.NoError(err)
+	for _, boxBytes := range resp.Boxes {
+		fmt.Println(string(boxBytes))
+	}
 
 	for boxIterIndex := 0; boxIterIndex < BoxNumber; boxIterIndex++ {
 		_, err = operateBoxAndSendTxn("delete", "box"+strconv.Itoa(boxIterIndex))

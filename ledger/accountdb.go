@@ -2006,22 +2006,25 @@ func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64,
 		}
 		defer rows.Close()
 
-		var keyName string
+		var v sql.NullString
 
 		for rows.Next() {
 			if maxKeyNum > 0 && resultCount == maxKeyNum {
 				return
 			}
-			_err = rows.Scan(&round, &keyName)
+			_err = rows.Scan(&round, &v)
 			if _err != nil {
 				return
 			}
-			// I assume that in DB, there is only key with valid value (no empty value)
-			if _, ok := results[keyName]; ok {
+			if v.Valid {
+				if _, ok := results[v.String]; ok {
+					continue
+				}
+				results[v.String] = true
+				resultCount++
+			} else {
 				continue
 			}
-			results[keyName] = true
-			resultCount++
 		}
 		return
 	})
