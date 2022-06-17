@@ -346,7 +346,10 @@ func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 }
 
 // NewBox makes a new box, through the boxMods mechanism. It can be Reset()
-func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, size uint64) error {
+func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, size uint64, appAddr basics.Address) error {
+	if appIdx.Address() != appAddr {
+		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
+	}
 	params, ok := l.applications[appIdx]
 	if !ok {
 		return fmt.Errorf("no such app %d", appIdx)
@@ -408,7 +411,10 @@ func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value string) error 
 }
 
 // DelBox deletes a value through moxMods mechanism
-func (l *Ledger) DelBox(appIdx basics.AppIndex, key string) error {
+func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) error {
+	if appIdx.Address() != appAddr {
+		panic(fmt.Sprintf("%d %v %v", appIdx, appIdx.Address(), appAddr))
+	}
 	_, ok, err := l.GetBox(appIdx, key)
 	if err != nil {
 		return err

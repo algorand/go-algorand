@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -74,7 +75,9 @@ func opBoxCreate(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	err = cx.Ledger.NewBox(cx.appID, name, size)
+
+	appAddr := cx.getApplicationAddress(cx.appID)
+	err = cx.Ledger.NewBox(cx.appID, name, size, appAddr)
 	if err != nil {
 		return err
 	}
@@ -149,19 +152,22 @@ func opBoxDel(cx *EvalContext) error {
 		return err
 	}
 	cx.stack = cx.stack[:last]
-	return cx.Ledger.DelBox(cx.appID, name)
+	appAddr := cx.getApplicationAddress(cx.appID)
+	return cx.Ledger.DelBox(cx.appID, name, appAddr)
 }
 
 // MakeBoxKey creates the key that a box named `name` under app `appIdx` should use.
 func MakeBoxKey(appIdx basics.AppIndex, name string) string {
-	// TODO: This format is WRONG! Printf does substitutions for non-unicode Be
-	// sure to use an encoding that allows for prefixes. For example, msgpack is
-	// a bad idea, because it encodes the string length ahead of the
-	// string. "foo" would not be a prefix of "food".  A straightforward,
-	// reasonable encoding might be: bx:[8 byte big endian appid]:[bytes of
-	// name] The first colon seems important, so all future uses of kvstore have
-	// an easy way to ensure uniqueness.  The second seems less important if the
-	// appid is fixed length. But maybe the appID should be in ascii, then the
-	// colon is important.
-	return fmt.Sprintf("bx:%d:%s", appIdx, name)
+	/* This format is chosen so that a simple indexing scheme on the key would
+	   allow for quick lookups of all the boxes of a certain app, or even all
+	   the boxes of a certain app with a certain prefix.
+
+	   The "bx:" prefix is so that the kvstore might be usable for things
+	   besides boxes.
+	*/
+	key := make([]byte, 3 /* bx: */ +8 /* appIdx, big-endian */ +len(name))
+	copy(key, "bx:")
+	binary.BigEndian.PutUint64(key[3:], uint64(appIdx))
+	copy(key[11:], name)
+	return string(key)
 }
