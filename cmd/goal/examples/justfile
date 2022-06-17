@@ -1,0 +1,274 @@
+set export
+set shell := ["zsh", "-cu"]
+
+NETWORKS := `echo $HOME` + "/networks"
+NAME := "indexerboxes"
+TEMP_NETWORK := NETWORKS + "/" + NAME
+GO_ALGORAND := "../../.."
+NODE_TEMPLATE := GO_ALGORAND + "/test/testdata/nettemplates/OneNodeFuture.json"
+ALGORAND_DATA := TEMP_NETWORK + "/Primary"
+BOXES_TEAL := "boxes.teal"
+
+# --- SUMMARY --- #
+
+# list all available commands
+default:
+    just --list
+
+# echo all variables
+@echo:
+    echo NETWORKS: $NETWORKS
+    echo NAME: $NAME
+    echo TEMP_NETWORK: $TEMP_NETWORK
+    echo GO_ALGORAND: $GO_ALGORAND
+    echo NODE_TEMPLATE: $NODE_TEMPLATE
+    echo ALGORAND_DATA: $ALGORAND_DATA
+    echo BOXES_TEAL: $BOXES_TEAL
+
+# --- GENERATOR SCRIPT COMMANDS --- #
+
+# generate an arbitrary number of app and box scenarios, each with up to 8 boxes
+gen-mult-app-boxes NUM_APPS="10":
+    #!/usr/bin/env python3
+    import subprocess
+    from subprocess import CalledProcessError
+
+    num_apps = int({{NUM_APPS}})
+    print(f"{num_apps=}")
+    for i in range(num_apps):
+        print("\n", "\n", "\n", f"gen-app-and-box-scenarios #{i+1}" )
+        subprocess.run(["just", "gen-app-and-box-scenarios"]).check_returncode()
+
+
+# create an app and add up to 8 random boxes to it in a multi-threaded fashion
+gen-app-and-box-scenarios:
+    #!/usr/bin/env python3
+    from concurrent.futures import ThreadPoolExecutor
+    import json
+    import logging
+    import random
+    import string
+    import subprocess
+    from subprocess import CalledProcessError
+    import time
+
+    CHARS = string.digits + string.ascii_letters
+    VAL_SIZE = 24
+    BOXES_PER_APP = 8
+    NLS = "\n" * 3
+
+    subprocess.run(["just", "app-create_fund"]).check_returncode()
+
+    def worker(thread_number):
+        logging.info(f"HELLO from {thread_number}!")
+        
+        create_cpe = set_cpe = test_cpe = del_cpe = None
+
+        rand_key_size = random.randint(4, 64)
+        rand_key = "".join(random.choice(CHARS) for _ in range(rand_key_size))
+        print(f"{NLS}{thread_number}: {rand_key=}")
+        try:
+            subprocess.run(["just", "box-create", rand_key]).check_returncode()
+        except CalledProcessError as cpe:
+            create_cpe = str(cpe)
+
+        rand_val = "".join(random.choice(CHARS) for _ in range(VAL_SIZE))
+        print(f"{NLS}{thread_number}: {rand_val=}")
+        try:
+            subprocess.run(["just", "box-set", rand_key, rand_val]).check_returncode()
+        except CalledProcessError as cpe:
+            set_cpe = str(cpe)
+
+        print(f"{NLS}{thread_number}: checking {rand_val=}")
+        try:
+            subprocess.run(["just", "box-test", rand_key, rand_val]).check_returncode()
+        except CalledProcessError as cpe:
+            test_cpe = str(cpe)
+
+        delete = random.choice([True, False])
+        if delete:
+            print(f"{NLS}{thread_number}: deleting")
+            try:
+                subprocess.run(["just", "box-delete", rand_key]).check_returncode()
+            except CalledProcessError as cpe:
+                del_cpe = str(cpe)
+
+        return {
+            "thread_number": thread_number,
+            "key_size": rand_key_size,
+            "key": rand_key,
+            "val": rand_val,
+            "deleted": delete,
+            "called_process_errors": {
+                "create_cpe": create_cpe,
+                "set_cpe": set_cpe,
+                "test_cpe": test_cpe,
+                "del_cpe": del_cpe,
+            },
+        }
+
+    format = "%(asctime)s: %(message)s"
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
+
+    results = []
+    with ThreadPoolExecutor() as executor:
+        for r in executor.map(worker, range(BOXES_PER_APP)):
+            results.append(r)
+
+    print(json.dumps(results, indent=2))
+    
+    for result in results:
+        for err in result["called_process_errors"].values():
+            if err:
+                raise err
+
+# --- HIGHER LEVEL --- #
+
+# create and then start (error if already created)
+@create_and_start: create start status
+    sleep 5
+    just status
+
+# create an app and then fund it
+@app-create_fund: app-create last-app-fund 
+
+# create box[BOX] for last app with provided key variable BOX
+@box-create $BOX:
+    just app-call-last '\"create\", \"{{BOX}}\"'
+
+# set box[BOX]=VAL for last app with key BOX and val VAL
+@box-set $BOX $VAL:
+    just app-call-last '\"set\", \"{{BOX}}\", \"{{VAL}}\"'
+
+# set box[BOX]=VAL for last app with key BOX and val VAL
+@box-test $BOX $VAL:
+    just app-call-last '\"check\", \"{{BOX}}\", \"{{VAL}}\"'
+
+# delete box[BOX] for last app
+@box-delete $BOX:
+    just app-call-last '\"delete\", \"{{BOX}}\"'
+
+# stop and tear down the node network. WARNING: YOU WILL LOSE ALL YOUR NODE DATA FROM THE FILE SYSTEM.
+@stop_and_nuke: stop nuke
+
+# --- PRE-REQUISITES --- #
+
+# calculate an app's address using the python SDK
+app-address *ARGS:
+    #!/usr/bin/env python3
+    from algosdk import logic
+    print(logic.get_application_address({{ ARGS }}))
+
+# --- NETWORKS / NODE --- #
+
+# create a private network with one node (error if already created)
+@create:
+	mkdir -p $NETWORKS
+	goal network create -n $NAME -r $TEMP_NETWORK -t $NODE_TEMPLATE
+
+# start a the network (error if already running or not created)
+@start:
+	goal node start
+
+# status of network node
+@status:
+	goal node status && echo "RUNNING" || echo "NOT RUNNING"
+
+# stop the running node (error if not running)
+@stop:
+	goal node stop
+
+# remove the node's data from the file system
+@nuke:
+    echo "deleting $TEMP_NETWORK"
+    rm -rf $TEMP_NETWORK
+
+# --- ACCOUNTS --- #
+
+# list all associated accounts
+@list:
+	goal account list
+
+# funding account's address
+@funder:
+    just list | awk '{print $2}'
+    
+# provide information about a given account
+@info $ACCOUNT=`just funder`:
+    goal account info --address {{ACCOUNT}}
+
+# provide an account's balance
+@balance $ACCOUNT=`just funder`:
+    goal account balance --address {{ACCOUNT}}
+
+# funder's most recently created app-id
+@last-app-id:
+    just info | grep ID | tail -n 1 | cut -d "," -f1 | awk '{print $2}'
+
+# the account address of the funders most recently created app-id
+@last-app-address:
+    just app-address `just last-app-id`
+
+# --- Applications --- #
+
+# information about an application of given id
+@app-info $APP_ID=`just last-app-id`:
+    goal app info --app-id {{APP_ID}}
+
+# print out the boxes teal program
+@boxes_teal:
+    cat $BOXES_TEAL
+
+# shortcut for the approval and clear program `goal app create` params
+@programs:
+    echo "--approval-prog $BOXES_TEAL --clear-prog clear.teal"
+
+# shortcut for the storage params of `goal app create`
+@app-vars:
+    echo "--global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0"
+
+# shortcut for creating the arguments of an app call
+box-app-args *ARGS:
+    #!/usr/bin/env python3
+    args = []
+    box_arg = ""
+    i = 0
+    for arg in {{ARGS}}:
+        try:
+            int(arg)
+            arg = f"int:{arg}"
+        except Exception:
+            arg = f"str:{arg}"
+        args.extend(["--app-arg", arg])
+        if i == 1:
+            box_arg = f"--box {arg}"
+        i += 1
+    if box_arg:
+        args = [box_arg] + args
+    print(*args)
+
+# create an app funded by funder account
+@app-create:
+    goal app create --creator `just funder` `just programs` `just app-vars`
+
+# call the last app from the funder address using ARGS
+@app-call-last *ARGS='\"create\", \"mybox\"':
+    (set -x; goal app call --app-id `just last-app-id` --from `just funder` `just box-app-args {{ARGS}}`)
+
+# --- CLERK --- #
+
+# fund the most recently created app
+@last-app-fund $AMOUNT=`echo 100000000`:
+    goal clerk send --from `just funder` --to `just last-app-address`  --amount {{AMOUNT}}
+
+# --- MISCELLANEOUS --- #
+
+# print out the network's algod & kmd token and network/process info
+@client-info:
+    echo "algod.token: "$(cat ${ALGORAND_DATA}/algod.token)
+    echo "algod.net:   "$(cat ${ALGORAND_DATA}/algod.net)
+    echo "algod.pid:   "$(cat ${ALGORAND_DATA}/algod.pid)
+    echo "kmd.token:   "$(cat ${ALGORAND_DATA}/kmd-v0.5/kmd.token)
+    echo "kmd.net---->"
+    cat ${ALGORAND_DATA}/kmd-v0.5/kmd.log | grep 127.0.0.1 | head -n 1 | cut -d '"' -f4
