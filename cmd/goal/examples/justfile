@@ -272,3 +272,8 @@ box-app-args *ARGS:
     echo "kmd.token:   "$(cat ${ALGORAND_DATA}/kmd-v0.5/kmd.token)
     echo "kmd.net---->"
     cat ${ALGORAND_DATA}/kmd-v0.5/kmd.log | grep 127.0.0.1 | head -n 1 | cut -d '"' -f4
+
+# print out broadcastQueueBulk's channel size ... the default is 100 which is too small for the example
+@broadcast-queue-size:
+    echo "default is 100. What is it actually in network/wsNetwork.go ?"
+    cat {{GO_ALGORAND}}/network/wsNetwork.go | grep "wn.broadcastQueueBulk = make(chan broadcastRequest" | cut -d "," -f2 | cut -d ")" -f1 | awk '{print $1}'
