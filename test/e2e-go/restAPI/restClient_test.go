@@ -1353,7 +1353,7 @@ end:
 
 	//resp, err := testClient.ApplicationBoxes(uint64(createdAppID))
 	//fmt.Println(resp, err)
-	// QUESTION: how to query for boxes
+	//QUESTION: how to query for boxes
 
 	for boxIterIndex := 0; boxIterIndex < BoxNumber; boxIterIndex++ {
 		_, err = operateBoxAndSendTxn("delete", "box"+strconv.Itoa(boxIterIndex))

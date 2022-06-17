@@ -1125,36 +1125,37 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 
 	maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication
 
-	isNilOrZero := func(a *uint64) bool { return a == nil || *a == 0 }
-	nilToZero := func(a *uint64) uint64 {
-		if a == nil {
-			return 0
-		}
-		return *a
-	}
-
-	// compute `maxReturnNum` from `param.Max` and `maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication`
+	// compute `maxReturnNum` from `params.Max` and `maxBoxThreshold := v2.Node.Config().MaxAPIBoxPerApplication`
 	// `maxReturnNum == 0` for returning everything
-	// - `param.Max == nil || *param.Max == 0` and `maxBoxThreshold == 0`,
+	// - `params.Max == nil || *params.Max == 0` and `maxBoxThreshold == 0`,
 	//       return everything
-	// - `param.Max == nil || *param.Max == 0` and `maxBoxThreshold > 0`,
+	// - `params.Max == nil || *params.Max == 0` and `maxBoxThreshold > 0`,
 	//       returns up to `maxBoxThreshold`, check if exceeds
-	// - `*param.Max > 0` and `maxBoxThreshold == 0`,
-	//       return up to `*param.Max`
-	// - `*param.Max > 0` and `maxBoxThreshold > 0`,
-	//       return up to min(*param.Max, maxBoxThreshold),
+	// - `*params.Max > 0` and `maxBoxThreshold == 0`,
+	//       return up to `*params.Max`
+	// - `*params.Max > 0` and `maxBoxThreshold > 0`,
+	//       return up to min(*params.Max, maxBoxThreshold),
 	//       if return size is `maxBoxThreshold`, check if exceeds
 
 	var boxKeys []string
 	var err error
 
-	dominatedByQryParams := !isNilOrZero(params.Max) && (maxBoxThreshold > *params.Max || maxBoxThreshold == 0)
-	returnsAll := isNilOrZero(params.Max) && maxBoxThreshold == 0
+	// cast param.Max to zero, if param.Max points to some value, we keep the value
+	castedMax := nilToZero(params.Max)
+
+	dominatedByQryParams := castedMax > 0 && (maxBoxThreshold > castedMax || maxBoxThreshold == 0)
+	returnsAll := castedMax == 0 && maxBoxThreshold == 0
 
 	if dominatedByQryParams || returnsAll {
-		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, nilToZero(params.Max))
+		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, castedMax)
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
 	} else {
 		boxKeys, err = ledger.LookupKeysByPrefix(lastRound, keyPrefix, maxBoxThreshold+1)
+		if err != nil {
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
 		if uint64(len(boxKeys)) > maxBoxThreshold {
 			v2.Log.Info("MaxAPIBoxPerApplication limit %d exceeded", maxBoxThreshold)
 			return ctx.JSON(http.StatusBadRequest, generated.ErrorResponse{
@@ -1162,10 +1163,6 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 				Data:    nil,
 			})
 		}
-	}
-
-	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
 	prefixLen := len(keyPrefix)
