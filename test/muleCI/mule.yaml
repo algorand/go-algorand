@@ -239,7 +239,7 @@ jobs:
       - stash.Stash.darwin-arm64
   build-darwin-amd64:
     tasks:
-      - shell.make.build.darwin-amd64
+      - shell.Make.build.darwin-amd64
       - stash.Stash.darwin-amd64
   build-linux-amd64:
     tasks:
