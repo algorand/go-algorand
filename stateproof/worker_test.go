@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -676,5 +678,119 @@ func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs, r basics.Round) er
 			continue
 		}
 		return nil
+	}
+}
+
+// TestSigBroacastTwoPerSig checks if each signature is broadcasted twice per period
+// It generates numAddresses and prepares a database with the account/signatures.
+// Then, calls broadcastSigs with round numbers spanning periods and
+// makes sure each account has 2 sigs sent per period if originated locally, and 1 sig
+// if received from another relay.
+func TestSigBroacastTwoPerSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Prepare the addresses and the keys
+	numAddresses := 10
+	signatureBcasted := make(map[basics.Address]int)
+	fromThisNode := make(map[basics.Address]bool)
+	var keys []account.Participation
+	for i := 0; i < numAddresses; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+		signatureBcasted[parent] = 0
+	}
+
+	tns := newWorkerStubs(t, keys, len(keys))
+	spw := newTestWorker(t, tns)
+
+	// Prepare the database
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return initDB(tx)
+	})
+	require.NoError(t, err)
+
+	// All the keys are for round 255. This way, starting the period at 256,
+	// there will be no disqualified signatures from broadcasting because they are
+	// into the future.
+	round := basics.Round(255)
+
+	// Sign the message
+	spRecords := tns.StateProofKeys(round)
+	sigs := make([]sigFromAddr, 0, len(keys))
+	stateproofMessage := stateproofmsg.Message{}
+	hashedStateproofMessage := stateproofMessage.IntoStateProofMessageHash()
+	for _, key := range spRecords {
+		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
+		require.NoError(t, err)
+		sigs = append(sigs, sigFromAddr{
+			SignerAddress: key.Account,
+			Round:         round,
+			Sig:           sig,
+		})
+	}
+
+	// Add the signatures to the databse
+	ftn := true
+	for _, sfa := range sigs {
+		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return addPendingSig(tx, sfa.Round, pendingSig{
+				signer:       sfa.SignerAddress,
+				sig:          sfa.Sig,
+				fromThisNode: ftn,
+			})
+		})
+		require.NoError(t, err)
+		fromThisNode[sfa.SignerAddress] = ftn
+		// alternate the from this node argument between addresses
+		ftn = !ftn
+	}
+
+	for periods := 1; periods < 10; periods += 3 {
+		sendReceiveCountMessages(t, tns, signatureBcasted, fromThisNode, spw, periods)
+		// reopen the channel
+		tns.sigmsg = make(chan []byte, 1024)
+		// reset the counters
+		for addr := range signatureBcasted {
+			signatureBcasted[addr] = 0
+		}
+	}
+}
+
+func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcasted map[basics.Address]int,
+	fromThisNode map[basics.Address]bool, spw *Worker, periods int) {
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	// Collect the broadcast messages
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for bMsg := range tns.sigmsg {
+			sfa := sigFromAddr{}
+			err := protocol.Decode(bMsg, &sfa)
+			require.NoError(t, err)
+			signatureBcasted[sfa.SignerAddress]++
+		}
+	}()
+
+	// Broadcast the messages
+	for brnd := 257; brnd < 257+256*periods; brnd++ {
+		spw.broadcastSigs(basics.Round(brnd), proto)
+	}
+
+	close(tns.sigmsg)
+	wg.Wait()
+
+	// Verify the number of times each signature was broadcast
+	for addr, sb := range signatureBcasted {
+		if fromThisNode[addr] {
+			require.Equal(t, 2*periods, sb)
+		} else {
+			require.Equal(t, periods, sb)
+		}
 	}
 }
