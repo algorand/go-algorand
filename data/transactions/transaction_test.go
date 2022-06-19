@@ -1293,9 +1293,10 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 		/* 7 */ {expectedError: nil, StateProofInterval: 256, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
 	}
 	for i, testCase := range cases {
+		cpyTestCase := testCase
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
 			t.Parallel()
-			require.Equal(t, testCase.expectedError, testCase.runIsWellFormedForTestCase())
+			require.Equal(t, cpyTestCase.expectedError, cpyTestCase.runIsWellFormedForTestCase())
 		})
 	}
 }
