@@ -291,12 +291,12 @@ var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non partic
 var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
 var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
 var errStateProofNotSupported = errors.New("state proofs not supported")
-var errBadSenderInStateProofTxn = fmt.Errorf("sender must be the state-proof sender")
-var errFeeMustBeZeroInStateproofTxn = fmt.Errorf("fee must be zero in state-proof transaction")
-var errNoteMustBeEmptyInStateproofTxn = fmt.Errorf("note must be empty in stateproof transaction")
-var errGroupMustBeZeroInStateproofTxn = fmt.Errorf("group must be zero in state-proof transaction")
-var errRekeyToMustBeZeroInStateproofTxn = fmt.Errorf("rekey must be zero in state-proof transaction")
-var errLeaseMustBeZeroInStateproofTxn = fmt.Errorf("lease must be zero in state-proof transaction")
+var errBadSenderInStateProofTxn = errors.New("sender must be the state-proof sender")
+var errFeeMustBeZeroInStateproofTxn = errors.New("fee must be zero in state-proof transaction")
+var errNoteMustBeEmptyInStateproofTxn = errors.New("note must be empty in state-proof transaction")
+var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-proof transaction")
+var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
+var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {

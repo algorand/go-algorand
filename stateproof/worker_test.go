@@ -297,7 +297,6 @@ func TestWorkerAllSigs(t *testing.T) {
 			// Expect all signatures to be broadcast.
 			_, err := s.waitOnSigWithTimeout(time.Second * 2)
 			require.NoError(t, err)
-
 		}
 
 		// Expect a state proof to be formed.

@@ -1254,7 +1254,7 @@ type stateproofTxnTestCase struct {
 	sender             basics.Address
 }
 
-func (s stateproofTxnTestCase) RunIsWellFormedForTestCase() error {
+func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 	curProto.StateProofInterval = s.StateProofInterval
 
@@ -1293,10 +1293,9 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 		/* 7 */ {expectedError: nil, StateProofInterval: 256, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
 	}
 	for i, testCase := range cases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
 			t.Parallel()
-			require.Equal(t, testCase.expectedError, testCase.RunIsWellFormedForTestCase())
+			require.Equal(t, testCase.expectedError, testCase.runIsWellFormedForTestCase())
 		})
 	}
 }
