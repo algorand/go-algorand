@@ -46,7 +46,7 @@ type Ledger interface {
 // Network captures the aspects of the gossip network protocol that are
 // used by this package.
 type Network interface {
-	Broadcast(context.Context, protocol.Tag, []byte, bool, network.Peer) error
+	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error
 	RegisterHandlers([]network.TaggedMessageHandler)
 }
 
