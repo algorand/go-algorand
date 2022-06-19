@@ -1241,3 +1241,61 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		require.Equalf(t, testCase.err, err, "index: %d\ntest case: %#v", testcaseIdx, testCase)
 	}
 }
+
+type stateproofTxnTestCase struct {
+	expectedError error
+
+	StateProofInterval uint64
+	fee                basics.MicroAlgos
+	note               []byte
+	group              crypto.Digest
+	lease              [32]byte
+	rekeyValue         basics.Address
+	sender             basics.Address
+}
+
+func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	curProto.StateProofInterval = s.StateProofInterval
+
+	// edit txn params. wanted
+	return Transaction{
+		_struct: struct{}{},
+		Type:    protocol.StateProofTx,
+		Header: Header{
+			_struct:     struct{}{},
+			Sender:      s.sender,
+			Fee:         s.fee,
+			FirstValid:  0,
+			LastValid:   0,
+			Note:        s.note,
+			GenesisID:   "",
+			GenesisHash: crypto.Digest{},
+			Group:       s.group,
+			Lease:       s.lease,
+			RekeyTo:     s.rekeyValue,
+		},
+		StateProofTxnFields: StateProofTxnFields{},
+	}.WellFormed(SpecialAddresses{}, curProto)
+}
+
+func TestWellFormedStateProofTxn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// want to create different Txns, run on all of these cases the check, and have an expected result
+	cases := []stateproofTxnTestCase{
+		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
+		/* 1 */ {expectedError: errBadSenderInStateProofTxn, StateProofInterval: 256, sender: basics.Address{1, 2, 3, 4}},
+		/* 2 */ {expectedError: errFeeMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, fee: basics.MicroAlgos{Raw: 1}},
+		/* 3 */ {expectedError: errNoteMustBeEmptyInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, note: []byte{1, 2, 3}},
+		/* 4 */ {expectedError: errGroupMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, group: crypto.Digest{1, 2, 3}},
+		/* 5 */ {expectedError: errRekeyToMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, rekeyValue: basics.Address{1, 2, 3, 4}},
+		/* 6 */ {expectedError: errLeaseMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, lease: [32]byte{1, 2, 3, 4}},
+		/* 7 */ {expectedError: nil, StateProofInterval: 256, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
+	}
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, testCase.expectedError, testCase.runIsWellFormedForTestCase())
+		})
+	}
+}
