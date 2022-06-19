@@ -354,9 +354,6 @@ func lowestRoundToRemove(currentHdr bookkeeping.BlockHeader) basics.Round {
 func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
 	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
 
-	spw.mu.Lock()
-	defer spw.mu.Unlock()
-
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deletePendingSigsBeforeRound(tx, oldestRoundToRemove)
 	})
@@ -367,6 +364,10 @@ func (spw *Worker) deleteOldSigs(currentHdr bookkeeping.BlockHeader) {
 
 func (spw *Worker) deleteOldBuilders(currentHdr bookkeeping.BlockHeader) {
 	oldestRoundToRemove := lowestRoundToRemove(currentHdr)
+
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
+
 	for rnd := range spw.builders {
 		if rnd < oldestRoundToRemove {
 			delete(spw.builders, rnd)
