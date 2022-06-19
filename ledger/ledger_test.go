@@ -1648,8 +1648,8 @@ func TestListAssetsAndApplications(t *testing.T) {
 }
 
 // TestLedgerKeepsOldBlocksForStateProof test that if stateproof chain is delayed for X intervals,  the ledger will not
-// remove old blocks for the database. When verifying old stateproof transaction, nodes must have the header of the corresponding
-// voters round, if this won't vbe available the verification would fail.
+// remove old blocks from the database. When verifying old stateproof transaction, nodes must have the header of the corresponding
+// voters round, if this won't be available the verification would fail.
 // the voter tracker should prevent the remove needed blocks from the database.
 func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)

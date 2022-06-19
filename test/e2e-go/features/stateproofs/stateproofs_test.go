@@ -80,8 +80,6 @@ func TestStateProofs(t *testing.T) {
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
-		//t.Logf("Round %d, block %v\n", rnd, blk)
-
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
@@ -92,6 +90,9 @@ func TestStateProofs(t *testing.T) {
 			if lastStateProofBlock.Round() == 0 {
 				lastStateProofBlock = blk
 			}
+		} else {
+			r.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) == 0)
+			r.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersTotalWeight == basics.MicroAlgos{})
 		}
 
 		for lastStateProofBlock.Round() != 0 && lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
@@ -176,7 +177,10 @@ func verifyStateProofForRound(r *require.Assertions, libgoal libgoal.Client, res
 	return stateProofMessage, nextStateProofBlock
 }
 
-func TestStateProofsRecovery(t *testing.T) {
+// TestRecoverFromLaggingStateProofChain simulates a situation where the stateproof chain is lagging after the main chain.
+// If the missing data is being accepted before  StateProofRecoveryInterval * StateProofInterval rounds have passed, nodes should
+// be able to produce stateproofs and continue as normal
+func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -205,6 +209,8 @@ func TestStateProofsRecovery(t *testing.T) {
 	r.NoError(err)
 
 	dir, err := fixture.GetNodeDir("Node4")
+	r.NoError(err)
+
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), dir)
 	nc.FullStop()
 
@@ -229,8 +235,6 @@ func TestStateProofsRecovery(t *testing.T) {
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
-
-		//t.Logf("Round %d, block %v\n", rnd, blk)
 
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
@@ -257,7 +261,7 @@ func TestStateProofsRecovery(t *testing.T) {
 	r.Equalf(consensusParams.StateProofInterval*expectedNumberOfStateProofs, uint64(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
-func TestStateProofsRecoveryFail(t *testing.T) {
+func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -306,8 +310,6 @@ func TestStateProofsRecoveryFail(t *testing.T) {
 
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
-
-		//t.Logf("Round %d, block %v\n", rnd, blk)
 
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants

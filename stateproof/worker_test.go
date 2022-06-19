@@ -576,11 +576,8 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 
 	for iter := 0; iter < expectedStateProofs; iter++ {
 		s.advanceLatest(proto.StateProofInterval)
-		for {
-			tx := <-s.txmsg
-			a.Equal(tx.Txn.Type, protocol.StateProofTx)
-			break
-		}
+		tx := <-s.txmsg
+		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
 	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
@@ -636,11 +633,8 @@ func TestWorkerBuildersRecoveryLimit(t *testing.T) {
 
 	for iter := uint64(0); iter < expectedStateProofs; iter++ {
 		s.advanceLatest(proto.StateProofInterval)
-		for {
-			tx := <-s.txmsg
-			a.Equal(tx.Txn.Type, protocol.StateProofTx)
-			break
-		}
+		tx := <-s.txmsg
+		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
 	err := waitForBuilderAndSignerToWaitOnRound(s, s.latest+1)
