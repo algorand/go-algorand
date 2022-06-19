@@ -233,6 +233,24 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	}
 }
 
+func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, error) {
+	select {
+	case sig := <-s.sigmsg:
+		return sig, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("timeout waiting on sigmsg")
+	}
+}
+
+func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transactions.SignedTxn, error) {
+	select {
+	case signedTx := <-s.txmsg:
+		return signedTx, nil
+	case <-time.After(timeout):
+		return transactions.SignedTxn{}, fmt.Errorf("timeout waiting on sigmsg")
+	}
+}
+
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
 	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
 }
@@ -282,12 +300,15 @@ func TestWorkerAllSigs(t *testing.T) {
 
 		for i := 0; i < len(keys); i++ {
 			// Expect all signatures to be broadcast.
-			_ = <-s.sigmsg
+			_, err := s.waitOnSigWithTimeout(time.Second * 2)
+			require.NoError(t, err)
 		}
 
 		// Expect a state proof to be formed.
 		for {
-			tx := <-s.txmsg
+			tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+			require.NoError(t, err)
+
 			require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 			if tx.Txn.StateProofIntervalLatestRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
@@ -343,7 +364,8 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		_ = <-s.sigmsg
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
 	}
 
 	// No state proof should be formed yet: not enough sigs for a stateproof this early.
@@ -355,7 +377,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 
 	// Expect a state proof to be formed in the next StateProofInterval/2.
 	s.advanceLatest(proto.StateProofInterval / 2)
-	tx := <-s.txmsg
+
+	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+	require.NoError(t, err)
+
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, tx.Txn.StateProofIntervalLatestRound, 2*basics.Round(proto.StateProofInterval))
 
@@ -402,7 +427,8 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		_ = <-s.sigmsg
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
 	}
 
 	// No state proof should be formed: not enough sigs.
@@ -478,7 +504,9 @@ func TestWorkerHandleSig(t *testing.T) {
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
-		msg := <-s.sigmsg
+		msg, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
+
 		res := w.handleSigMessage(network.IncomingMessage{
 			Data: msg,
 		})
@@ -793,4 +821,39 @@ func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcast
 			require.Equal(t, periods, sb)
 		}
 	}
+}
+
+func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
+
+	s.advanceLatest(proto.StateProofInterval)
+
+	for i := 0; i < len(keys); i++ {
+		// Expect all signatures to be broadcast.
+		_, err := s.waitOnSigWithTimeout(time.Second * 2)
+		require.NoError(t, err)
+	}
+
+	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
+	require.NoError(t, err)
+
+	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
 }
