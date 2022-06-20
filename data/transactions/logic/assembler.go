@@ -246,6 +246,9 @@ type OpStream struct {
 	// map opcode offsets to source line
 	OffsetToLine map[int]int
 
+	// map comment to source l ine
+	Comments map[int]string
+
 	HasStatefulOps bool
 }
 
@@ -255,6 +258,7 @@ func newOpStream(version uint64) OpStream {
 	o := OpStream{
 		labels:       make(map[string]int),
 		OffsetToLine: make(map[int]int),
+		Comments:     make(map[int]string),
 		typeTracking: true,
 		Version:      version,
 	}
@@ -1224,7 +1228,7 @@ func typecheck(expected, got StackType) bool {
 
 var spaces = [256]uint8{'\t': 1, ' ': 1}
 
-func fieldsFromLine(line string) []string {
+func fieldsFromLine(line string) ([]string, string) {
 	var fields []string
 
 	i := 0
@@ -1253,7 +1257,7 @@ func fieldsFromLine(line string) []string {
 					if start != i { // if a comment without whitespace
 						fields = append(fields, line[start:i])
 					}
-					return fields
+					return fields, line[i:]
 				}
 			case '(': // is base64( seq?
 				prefix := line[start:i]
@@ -1293,7 +1297,7 @@ func fieldsFromLine(line string) []string {
 		fields = append(fields, line[start:i])
 	}
 
-	return fields
+	return fields, ""
 }
 
 func (ops *OpStream) trace(format string, args ...interface{}) {
@@ -1371,6 +1375,7 @@ func (ops *OpStream) assemble(text string) error {
 		}
 		if strings.HasPrefix(line, "//") {
 			ops.trace("%3d: // line\n", ops.sourceLine)
+			ops.Comments[ops.sourceLine] = line
 			continue
 		}
 		if strings.HasPrefix(line, "#pragma") {
@@ -1378,7 +1383,12 @@ func (ops *OpStream) assemble(text string) error {
 			ops.pragma(line)
 			continue
 		}
-		fields := fieldsFromLine(line)
+		fields, comment := fieldsFromLine(line)
+
+		if comment != "" {
+			ops.Comments[ops.sourceLine] = strings.Trim(comment, "/ ")
+		}
+
 		if len(fields) == 0 {
 			ops.trace("%3d: no fields\n", ops.sourceLine)
 			continue

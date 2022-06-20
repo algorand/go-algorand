@@ -574,7 +574,7 @@ int 1
 assert
 int 1`, logic.AssemblerMaxVersion)
 	ops, _ := logic.AssembleString(goodProgram)
-	expectedSourcemap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+	expectedSourcemap := logic.GetSourceMap([]string{}, ops.OffsetToLine, ops.Comments)
 	goodProgramBytes := []byte(goodProgram)
 
 	// Test good program with params

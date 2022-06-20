@@ -31,17 +31,18 @@ const b64table string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
 // the assembled bytecode position and details about
 // the template variables contained in the source file.
 type SourceMap struct {
-	Version    int      `json:"version"`
-	File       string   `json:"file,omitempty"`
-	SourceRoot string   `json:"sourceRoot,omitempty"`
-	Sources    []string `json:"sources"`
-	Names      []string `json:"names"`
-	Mapping    string   `json:"mapping"`
+	Version    int            `json:"version"`
+	File       string         `json:"file,omitempty"`
+	SourceRoot string         `json:"sourceRoot,omitempty"`
+	Sources    []string       `json:"sources"`
+	Names      []string       `json:"names"`
+	Mapping    string         `json:"mapping"`
+	Comments   map[int]string `json:"comments"`
 }
 
 // GetSourceMap returns a struct containing details about
 // the assembled file and encoded mappings to the source file.
-func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
+func GetSourceMap(sourceNames []string, offsetToLine map[int]int, comments map[int]string) SourceMap {
 	maxPC := 0
 	for pc := range offsetToLine {
 		if pc > maxPC {
@@ -63,10 +64,11 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 	encodedMapping := strings.Join(pcToLine, ";")
 
 	return SourceMap{
-		Version: sourceMapVersion,
-		Sources: sourceNames,
-		Names:   []string{}, // TEAL code does not generate any names.
-		Mapping: encodedMapping,
+		Version:  sourceMapVersion,
+		Sources:  sourceNames,
+		Names:    []string{}, // TEAL code does not generate any names.
+		Mapping:  encodedMapping,
+		Comments: comments,
 	}
 }
 

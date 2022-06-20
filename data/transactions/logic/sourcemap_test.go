@@ -34,7 +34,8 @@ func TestGetSourceMap(t *testing.T) {
 		2: 2,
 		5: 3,
 	}
-	actualSourceMap := GetSourceMap(sourceNames, offsetToLine)
+	comments := map[int]string{}
+	actualSourceMap := GetSourceMap(sourceNames, offsetToLine, comments)
 
 	a.Equal(sourceMapVersion, actualSourceMap.Version)
 	a.Equal(sourceNames, actualSourceMap.Sources)
