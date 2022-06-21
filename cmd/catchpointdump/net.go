@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -191,7 +192,46 @@ func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCanc
 	return
 }
 
-func downloadCatchpoint(addr string, round int) (tarName string, err error) {
+func doDownloadCatchpoint(url string, wdReader util.WatchdogStreamReader, out io.Writer) error {
+	writeChunkSize := 64 * 1024
+
+	var totalBytes int
+	tempBytes := make([]byte, writeChunkSize)
+	lastProgressUpdate := time.Now()
+	progress := -25
+	printDownloadProgressLine(progress, 50, url, 0)
+
+	for {
+		n, err := wdReader.Read(tempBytes)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		totalBytes += n
+		_, err = out.Write(tempBytes[:n])
+		if err != nil {
+			return err
+		}
+
+		err = wdReader.Reset()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if time.Since(lastProgressUpdate) > 50*time.Millisecond {
+			lastProgressUpdate = time.Now()
+			printDownloadProgressLine(progress, 50, url, int64(totalBytes))
+			progress++
+		}
+	}
+}
+
+// Downloads a catchpoint tar file and returns the path to the tar file.
+func downloadCatchpoint(addr string, round int) (string, error) {
 	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
 	urlTemplate := "http://" + addr + "/v1/" + genesisID + "/%s/" + strconv.FormatUint(uint64(round), 36)
 	catchpointURL := fmt.Sprintf(urlTemplate, "ledger")
@@ -199,7 +239,7 @@ func downloadCatchpoint(addr string, round int) (tarName string, err error) {
 	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(catchpointURL, "catchpoint")
 	defer catchpointCtxCancel()
 	if err != nil {
-		return
+		return "", err
 	}
 	defer catchpointStream.Close()
 
@@ -207,69 +247,71 @@ func downloadCatchpoint(addr string, round int) (tarName string, err error) {
 	os.RemoveAll(dirName)
 	err = os.MkdirAll(dirName, 0777)
 	if err != nil && !os.IsExist(err) {
-		return
+		return "", err
 	}
-	tarName = dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
-	file, err2 := os.Create(tarName) // will create a file with 0666 permission.
-	if err2 != nil {
-		return tarName, err2
+	tarName := dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
+	file, err := os.Create(tarName) // will create a file with 0666 permission.
+	if err != nil {
+		return "", err
 	}
-	defer func() {
-		err = file.Close()
-	}()
-	writeChunkSize := 64 * 1024
+	defer file.Close()
 
-	wdReader := util.MakeWatchdogStreamReader(catchpointStream, 4096, 4096, 2*time.Second)
-	var totalBytes int
-	tempBytes := make([]byte, writeChunkSize)
-	lastProgressUpdate := time.Now()
-	progress := -25
-	printDownloadProgressLine(progress, 50, catchpointURL, 0)
-	defer printDownloadProgressLine(0, 0, catchpointURL, 0)
-	var n int
-	for {
-		n, err = wdReader.Read(tempBytes)
-		if err != nil && err != io.EOF {
-			return
-		}
-		totalBytes += n
-		writtenBytes, err2 := file.Write(tempBytes[:n])
-		if err2 != nil || n != writtenBytes {
-			return tarName, err2
-		}
+	wdReader := util.MakeWatchdogStreamReader(catchpointStream, 4096, 4096, 5*time.Second)
+	defer wdReader.Close()
 
-		err = wdReader.Reset()
-		if err != nil {
-			if err == io.EOF {
-				return tarName, nil
-			}
-			return
+	err = doDownloadCatchpoint(catchpointURL, wdReader, file)
+	if err != nil {
+		return "", err
+	}
+
+	printDownloadProgressLine(0, 0, catchpointURL, 0)
+
+	err = file.Close()
+	if err != nil {
+		return "", err
+	}
+
+	err = catchpointStream.Close()
+	if err != nil {
+		return "", err
+	}
+
+	return tarName, nil
+}
+
+func deleteLedgerFiles(deleteTracker bool) error {
+	paths := []string{
+		"./ledger.block.sqlite",
+		"./ledger.block.sqlite-shm",
+		"./ledger.block.sqlite-wal",
+	}
+	if deleteTracker {
+		trackerPaths := []string{
+			"./ledger.tracker.sqlite",
+			"./ledger.tracker.sqlite-shm",
+			"./ledger.tracker.sqlite-wal",
 		}
-		if time.Since(lastProgressUpdate) > 50*time.Millisecond {
-			lastProgressUpdate = time.Now()
-			printDownloadProgressLine(progress, 50, catchpointURL, int64(totalBytes))
-			progress++
+		paths = append(paths, trackerPaths...)
+	}
+
+	for _, path := range paths {
+		err := os.Remove(path)
+		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
+			return err
 		}
 	}
+
+	return nil
 }
 
 func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
-	deleteLedgerFiles := func(deleteTracker bool) {
-		os.Remove("./ledger.block.sqlite")
-		os.Remove("./ledger.block.sqlite-shm")
-		os.Remove("./ledger.block.sqlite-wal")
-		if deleteTracker {
-			os.Remove("./ledger.tracker.sqlite")
-			os.Remove("./ledger.tracker.sqlite-shm")
-			os.Remove("./ledger.tracker.sqlite-wal")
-		}
-	}
 	// delete current ledger files.
 	deleteLedgerFiles(true)
 	cfg := config.GetDefaultLocal()
 	l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 	if err != nil {
 		reportErrorf("Unable to open ledger : %v", err)
+		return err
 	}
 
 	defer deleteLedgerFiles(!loadOnly)
@@ -279,6 +321,7 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 	err = catchupAccessor.ResetStagingBalances(context.Background(), true)
 	if err != nil {
 		reportErrorf("Unable to initialize catchup database : %v", err)
+		return err
 	}
 
 	stats, err := os.Stat(tarFile)
@@ -297,6 +340,7 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 	fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, reader, tarSize)
 	if err != nil {
 		reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
+		return err
 	}
 
 	if !loadOnly {

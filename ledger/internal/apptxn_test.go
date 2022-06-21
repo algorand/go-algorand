@@ -1890,7 +1890,7 @@ func TestInnerAppVersionCalling(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	// 31 allowed inner appls. vFuture enables proto.AllowV4InnerAppls (presumed v33, below)
+	// 31 allowed inner appls. v33 lowered proto.MinInnerApplVersion
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -1994,7 +1994,7 @@ itxn_submit`,
 			createAndOptin.ApplicationArgs = [][]byte{six.Program, six.Program}
 			dl.txn(&createAndOptin, "overspend") // passed the checks, but is an overspend
 		} else {
-			// after 32 proto.AllowV4InnerAppls should be in effect, so calls and optins to v5 are ok
+			// after 32 proto.MinInnerApplVersion is lowered to 4, so calls and optins to v5 are ok
 			dl.txn(&call, "overspend")         // it tried to execute, but test doesn't bother funding
 			dl.txn(&optin, "overspend")        // it tried to execute, but test doesn't bother funding
 			optin.ForeignApps[0] = v5withv3csp // but we can't optin to a v5 if it has an old csp
@@ -2070,6 +2070,10 @@ func TestAppDowngrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	two, err := logic.AssembleStringWithVersion("int 1", 2)
+	require.NoError(t, err)
+	three, err := logic.AssembleStringWithVersion("int 1", 3)
+	require.NoError(t, err)
 	four, err := logic.AssembleStringWithVersion("int 1", 4)
 	require.NoError(t, err)
 	five, err := logic.AssembleStringWithVersion("int 1", 5)
@@ -2078,6 +2082,40 @@ func TestAppDowngrade(t *testing.T) {
 	require.NoError(t, err)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	// Confirm that in old protocol version, downgrade is legal
+	// Start at 28 because we want to v4 app to downgrade to v3
+	testConsensusRange(t, 28, 30, func(t *testing.T, ver int) {
+		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
+		defer dl.Close()
+
+		create := txntest.Txn{
+			Type:              "appl",
+			Sender:            addrs[0],
+			ApprovalProgram:   four.Program,
+			ClearStateProgram: four.Program,
+		}
+
+		vb := dl.fullBlock(&create)
+		app := vb.Block().Payset[0].ApplicationID
+
+		update := txntest.Txn{
+			Type:              "appl",
+			ApplicationID:     app,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			Sender:            addrs[0],
+			ApprovalProgram:   three.Program,
+			ClearStateProgram: three.Program,
+		}
+
+		// No change - legal
+		dl.fullBlock(&update)
+
+		update.ApprovalProgram = two.Program
+		// Also legal, and let's check mismatched version while we're at it.
+		dl.fullBlock(&update)
+	})
+
 	testConsensusRange(t, 31, 0, func(t *testing.T, ver int) {
 		dl := NewDoubleLedger(t, genBalances, consensusByNumber[ver])
 		defer dl.Close()
@@ -2112,7 +2150,7 @@ func TestAppDowngrade(t *testing.T) {
 		update.ClearStateProgram = five.Program
 		dl.fullBlock(&update)
 
-		// Downgrade (allowed for pre 6 programs until AllowV4InnerAppls)
+		// Downgrade (allowed for pre 6 programs until MinInnerApplVersion was lowered)
 		update.ClearStateProgram = four.Program
 		if ver <= 32 {
 			dl.fullBlock(update.Noted("actually a repeat of first upgrade"))

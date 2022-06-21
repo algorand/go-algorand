@@ -394,7 +394,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
 		round:         basics.Round(0),
 		genesisID:     genesis.ID(),
-		genesisHash:   crypto.HashObj(genesis),
+		genesisHash:   genesis.Hash(),
 		poolAddr:      poolAddr,
 		sinkAddr:      sinkAddr,
 	}
