@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -1203,11 +1205,19 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
 
+	uintBoxName := make([]byte, 8)
+	binary.BigEndian.PutUint64(uintBoxName, 37)
+
 	// this loop for adding blocks and commit is learnt from `TestAcctUpdatesLookupLatestCacheRetry`
 	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback*2); i++ {
-		// add data
-		// TODO how to add kvDelta to au and keep committing it?
-		auNewBlock(t, i, au, accts, opts)
+		// adding empty blocks
+		boxContent := fmt.Sprintf("boxContent%d", i)
+
+		auNewBlock(t, i, au, accts, opts, map[string]*string{
+			logic.MakeBoxKey(37, "box1"):              &boxContent,
+			logic.MakeBoxKey(37, string(uintBoxName)): &boxContent,
+			logic.MakeBoxKey(1, string(uintBoxName)):  &boxContent,
+		})
 		auCommitSync(t, i, au, ml)
 	}
 
@@ -1216,7 +1226,12 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	require.Equal(t, basics.Round(protoParams.MaxBalLookback*2), rnd)
 	require.Equal(t, basics.Round(protoParams.MaxBalLookback), au.cachedDBRound)
 
-	// TODO should check with lookupByPrefix
+	stuff, err := au.LookupKeysByPrefix(basics.Round(protoParams.MaxBalLookback*2), logic.MakeBoxKey(37, ""), 1000)
+	require.NoError(t, err)
+	// TODO now it prints out 3 things, while ideal answer is 2.
+	// The percentage sign of box key gets into code and does wildcard
+	// need to escape that!
+	fmt.Println(stuff)
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
@@ -2448,7 +2463,7 @@ type auNewBlockOpts struct {
 	knownCreatables map[basics.CreatableIndex]bool
 }
 
-func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts) {
+func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[basics.Address]basics.AccountData, data auNewBlockOpts, kvMods map[string]*string) {
 	rewardLevel := uint64(0)
 	prevRound, prevTotals, err := au.LatestTotals()
 	require.Equal(t, rnd-1, prevRound)
@@ -2465,6 +2480,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	delta.Accts.MergeAccounts(data.updates)
 	delta.Creatables = creatablesFromUpdates(base, data.updates, data.knownCreatables)
 	delta.Totals = newTotals
+	delta.KvMods = kvMods
 
 	au.newBlock(blk, delta)
 }
@@ -2537,7 +2553,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 		// prepare block
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts)
+		auNewBlock(t, i, au, base, opts, nil)
 
 		// commit changes synchroniously
 		auCommitSync(t, i, au, ml)
@@ -2601,7 +2617,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	au.cachedDBRound = oldCachedDBRound
 	au.accountsMu.Unlock()
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
-	auNewBlock(t, rnd+1, au, accts[rnd], opts)
+	auNewBlock(t, rnd+1, au, accts[rnd], opts, nil)
 	auCommitSync(t, rnd+1, au, ml)
 
 	wg.Wait()
@@ -2685,7 +2701,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 
 		// prepare block
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts)
+		auNewBlock(t, i, au, base, opts, nil)
 
 		if i <= basics.Round(protoParams.MaxBalLookback+1) {
 			auCommitSync(t, i, au, ml)
