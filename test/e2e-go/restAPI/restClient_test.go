@@ -1256,14 +1256,14 @@ func TestBoxNamesByAppID(t *testing.T) {
     txn ApplicationID
     bz end
     txn ApplicationArgs 0   // [arg[0]] // fails if no args && app already exists
-    byte "create"			// [arg[0], "create"] // create box named arg[1]
+    byte "create"           // [arg[0], "create"] // create box named arg[1]
     ==                      // [arg[0]=?="create"]
     bz del                  // "create" ? continue : goto del
     int 5                   // [5]
     txn ApplicationArgs 1   // [5, arg[1]]
     box_create              // [] // boxes: arg[1] -> [5]byte
     b end
-del:						// delete box arg[1]
+del:                        // delete box arg[1]
     txn ApplicationArgs 0   // [arg[0]]
     byte "delete"           // [arg[0], "delete"]
     ==                      // [arg[0]=?="delete"]

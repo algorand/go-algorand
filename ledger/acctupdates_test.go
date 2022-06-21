@@ -1175,6 +1175,50 @@ func TestListCreatables(t *testing.T) {
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
+func TestBoxNamesByAppIDs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	initialBlocksCount := 1
+	accts := ledgertesting.RandomAccounts(10, true)
+
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 8
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBoxNamesByAppIDs")
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion,
+		[]map[basics.Address]basics.AccountData{accts},
+	)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au := newAcctUpdates(t, ml, conf, ".")
+	defer au.close()
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
+
+	// this loop for adding blocks and commit is learnt from `TestAcctUpdatesLookupLatestCacheRetry`
+	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback*2); i++ {
+		// add data
+		// TODO how to add kvDelta to au and keep committing it?
+		auNewBlock(t, i, au, accts, opts)
+		auCommitSync(t, i, au, ml)
+	}
+
+	// ensure rounds
+	rnd := au.latest()
+	require.Equal(t, basics.Round(protoParams.MaxBalLookback*2), rnd)
+	require.Equal(t, basics.Round(protoParams.MaxBalLookback), au.cachedDBRound)
+
+	// TODO should check with lookupByPrefix
+}
+
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
@@ -2413,9 +2457,7 @@ func auNewBlock(t *testing.T, rnd basics.Round, au *accountUpdates, base map[bas
 	newTotals := ledgertesting.CalculateNewRoundAccountTotals(t, data.updates, rewardLevel, data.protoParams, base, prevTotals)
 
 	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round: basics.Round(rnd),
-		},
+		BlockHeader: bookkeeping.BlockHeader{Round: rnd},
 	}
 	blk.RewardsLevel = rewardLevel
 	blk.CurrentProtocol = data.version
@@ -2658,99 +2700,3 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 	require.Contains(t, data.Assets, aidx3)
 	require.NotContains(t, data.Assets, aidx2)
 }
-
-// TestGetApplicationBoxes checks for dbRound data race
-// when commit scheduling relies on dbRound from the tracker registry but tracker's deltas
-// are used in calculations
-// 1. Add say 128 + MaxAcctLookback (MaxLookback) blocks and commit
-// 2. Add 2*MaxLookback blocks without committing
-// 3. Set a block in prepareCommit, and initiate the commit
-// 4. Set a block in produceCommittingTask, add a new block and resume the commit
-// 5. Resume produceCommittingTask
-// 6. The data race and panic happens in block queue syncher thread
-//func TestGetApplicationBoxes(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//
-//	t.Skip("For manual run when touching ledger locking")
-//
-//	a := require.New(t)
-//
-//	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1)
-//	const inMem = true
-//	log := logging.TestingLog(t)
-//	log.SetLevel(logging.Warn)
-//	cfg := config.GetDefaultLocal()
-//	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
-//	a.NoError(err, "could not open ledger")
-//	defer ledger.Close()
-//
-//	stallingTracker := &producePrepareBlockingTracker{
-//		// produceEntryLock:         make(chan struct{}, 10),
-//		produceReleaseLock:       make(chan struct{}),
-//		prepareCommitEntryLock:   make(chan struct{}, 10),
-//		prepareCommitReleaseLock: make(chan struct{}),
-//	}
-//	ledger.trackerMu.Lock()
-//	ledger.trackers.mu.Lock()
-//	ledger.trackers.trackers = append([]ledgerTracker{stallingTracker}, ledger.trackers.trackers...)
-//	ledger.trackers.mu.Unlock()
-//	ledger.trackerMu.Unlock()
-//
-//	close(stallingTracker.produceReleaseLock)
-//	close(stallingTracker.prepareCommitReleaseLock)
-//
-//	targetRound := basics.Round(128) * 5
-//	blk := genesisInitState.Block
-//	for i := basics.Round(0); i < targetRound-1; i++ {
-//		blk.BlockHeader.Round++
-//		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-//		err := ledger.AddBlock(blk, agreement.Certificate{})
-//		a.NoError(err)
-//	}
-//	blk.BlockHeader.Round++
-//	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-//	err = ledger.AddBlock(blk, agreement.Certificate{})
-//	a.NoError(err)
-//	commitRoundNext(ledger)
-//	ledger.trackers.waitAccountsWriting()
-//	lookback := 320
-//	// lookback := cfg.MaxAcctLookback
-//	a.Equal(targetRound-basics.Round(lookback), ledger.trackers.dbRound)
-//
-//	// build up some non-committed queue
-//	stallingTracker.cancelTasks = true
-//	for i := targetRound; i < 2*targetRound; i++ {
-//		blk.BlockHeader.Round++
-//		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-//		err := ledger.AddBlock(blk, agreement.Certificate{})
-//		a.NoError(err)
-//	}
-//	ledger.WaitForCommit(2*targetRound - 1)
-//
-//	stallingTracker.reset()
-//	var wg sync.WaitGroup
-//	wg.Add(1)
-//	go func() {
-//		commitRoundNext(ledger)
-//		wg.Done()
-//	}()
-//
-//	<-stallingTracker.prepareCommitEntryLock
-//	stallingTracker.produceReleaseLock = make(chan struct{})
-//
-//	blk.BlockHeader.Round++
-//	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-//	err = ledger.AddBlock(blk, agreement.Certificate{})
-//	a.NoError(err)
-//	// the notifyCommit -> committedUpTo -> scheduleCommit chain
-//	// is called right after the cond var, so wait until that moment
-//	ledger.WaitForCommit(2 * targetRound)
-//
-//	// let the commit to complete
-//	close(stallingTracker.prepareCommitReleaseLock)
-//	wg.Wait()
-//
-//	// unblock the notifyCommit (scheduleCommit) goroutine
-//	stallingTracker.cancelTasks = true
-//	close(stallingTracker.produceReleaseLock)
-//}

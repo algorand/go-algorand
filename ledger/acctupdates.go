@@ -422,7 +422,6 @@ func (au *accountUpdates) LookupKeysByPrefix(round basics.Round, keyPrefix strin
 }
 
 func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64, synchronized bool) (resultKeys []string, err error) {
-
 	var results map[string]bool
 	// keep track of the number of result key with value
 	var resultCount uint64
