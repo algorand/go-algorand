@@ -10,6 +10,7 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=amd64
+      - FULLVERSION=${FULLVERSION}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -53,6 +54,7 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=arm64
+      - FULLVERSION=${FULLVERSION}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -68,6 +70,7 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=arm
+      - FULLVERSION=${FULLVERSION}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v7
@@ -103,6 +106,9 @@ agents:
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
 
 tasks:
+  - task: shell.Make
+    name: build.darwin-arm64
+    target: ci-build
   - task: docker.Make
     name: build.amd64
     agent: cicd.ubuntu.amd64
@@ -117,7 +123,7 @@ tasks:
     target: ci-build
 
   - task: docker.Make
-    name: archive.amd64
+    name: archive
     agent: cicd.centos8.amd64
     target: archive
 
@@ -132,6 +138,15 @@ tasks:
     target: mule-package-deb
 
   # Stash tasks
+  - task: stash.Stash
+    name: darwin-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-arm64
+    globSpecs:
+      - tmp/node_pkgs/**/*
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
   - task: stash.Stash
     name: linux-amd64
     bucketName: go-algorand-ci-cache
@@ -196,6 +211,10 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
   - task: stash.Unstash
+    name: darwin-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-arm64
+  - task: stash.Unstash
     name: packages
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
@@ -211,6 +230,10 @@ tasks:
     target: mule-sign
 
 jobs:
+  build-darwin-arm64:
+    tasks:
+      - shell.Make.build.darwin-arm64
+      - stash.Stash.darwin-arm64
   build-linux-amd64:
     tasks:
       - docker.Make.build.amd64
@@ -223,22 +246,23 @@ jobs:
     tasks:
       - docker.Make.build.arm
       - stash.Stash.linux-arm
-  package-linux-amd64:
+  package-all:
     tasks:
       - stash.Unstash.linux-amd64
       - stash.Unstash.linux-arm64
       - stash.Unstash.linux-arm
+      - stash.Unstash.darwin-arm64
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages
-  archive-linux-amd64:
+  archive-all:
     tasks:
       - stash.Unstash.packages
-      - docker.Make.archive.amd64
+      - docker.Make.archive
   package-docker:
     tasks:
       - docker.Make.docker-image
-  sign-signer:
+  sign-all:
     tasks:
       - stash.Unstash.packages
       - docker.Make.docker-sign

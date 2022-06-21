@@ -157,7 +157,7 @@ type Logger interface {
 	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{})
 	StartOperation(category telemetryspec.Category, identifier telemetryspec.Operation) TelemetryOperation
 	GetTelemetrySession() string
-	GetTelemetryHostName() string
+	GetTelemetryGUID() string
 	GetInstanceName() string
 	GetTelemetryURI() string
 	CloseTelemetry()
@@ -401,11 +401,11 @@ func (l logger) GetTelemetryVersion() string {
 	return l.loggerState.telemetry.telemetryConfig.Version
 }
 
-func (l logger) GetTelemetryHostName() string {
+func (l logger) GetTelemetryGUID() string {
 	if !l.GetTelemetryEnabled() {
 		return ""
 	}
-	return l.loggerState.telemetry.telemetryConfig.getHostName()
+	return l.loggerState.telemetry.telemetryConfig.getHostGUID()
 }
 
 func (l logger) GetInstanceName() string {

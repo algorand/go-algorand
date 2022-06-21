@@ -726,9 +726,9 @@ func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
 // matching versions between approval and clearstate.
 const syncProgramsVersion = 6
 
-// CheckContractVersions ensures that for v6 and higher two programs are version
-// matched, and that they are not a downgrade.  If proto.AllowV4InnerAppls, then
-// no downgrades are allowed, regardless of version.
+// CheckContractVersions ensures that for syncProgramsVersion and higher, two programs are version
+// matched, and that they are not a downgrade.  If either program version is
+// >= proto.MinInnerApplVersion, downgrade of that program is not allowed.
 func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParams) error {
 	av, _, err := ProgramVersion(approval)
 	if err != nil {
