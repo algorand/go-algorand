@@ -192,6 +192,13 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	consensusParams.StateProofInterval = 16
 	consensusParams.StateProofTopVoters = 1024
 	consensusParams.StateProofVotersLookback = 2
+	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
+	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
+	// we want the network to fail in generating stateproof if one node is not working correctly.
+	// For that we will increase the proven Weight to be close to 100%. However, this change might not be enough.
+	// if the signed Weight and the Proven Weight are very close to each other the number of reveals in the state proof
+	// will exceed the MAX_NUMBER_OF_REVEALS and proofs would not get generated
+	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofRecoveryInterval = 3
@@ -273,6 +280,13 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	consensusParams.StateProofInterval = 16
 	consensusParams.StateProofTopVoters = 1024
 	consensusParams.StateProofVotersLookback = 2
+	// Stateproof can be generated even if not all nodes function correctly. e.g node can be offline
+	// and stateproofs might still get generated. in order to make sure that all nodes work correctly
+	// we want the network to fail in generating stateproof if one node is not working correctly.
+	// For that we will increase the proven Weight to be close to 100%. However, this change might not be enough.
+	// if the signed Weight and the Proven Weight are very close to each other the number of reveals in the state proof
+	// will exceed the MAX_NUMBER_OF_REVEALS and proofs would not get generated
+	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofRecoveryInterval = 3

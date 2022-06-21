@@ -186,6 +186,10 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 // notice that if state proof chain is delayed, votersForRoundCache will not be larger than
 // StateProofRecoveryInterval + 1
 // ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
+//
+// It is possible to optimize this function and not to travers votersForRoundCache on every round.
+// Since the map is small (Usually  0 - 2 elements and up to StateProofRecoveryInterval) we decided to keep the code simple
+// and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	// we calculate the lowest round for recovery according to the newest round (might be different from the rounds on cache)
 	proto := config.Consensus[hdr.CurrentProtocol]

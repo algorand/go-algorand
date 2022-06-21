@@ -34,19 +34,6 @@ var (
 	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
 )
 
-//msgp:ignore sigslot
-type sigslot struct {
-	// Weight is the weight of the participant signing this message.
-	// This information is tracked here for convenience, but it does
-	// not appear in the commitment to the sigs array; it comes from
-	// the Weight field of the corresponding participant.
-	Weight uint64
-
-	// Include the parts of the sigslot that form the commitment to
-	// the sigs array.
-	sigslotCommit
-}
-
 // Builder keeps track of signatures on a message and eventually produces
 // a state proof for that message.
 type Builder struct {
