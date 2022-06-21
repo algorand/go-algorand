@@ -194,7 +194,7 @@ function get_updater_url() {
             exit 1
         fi
     else
-        echo "This operation system ${UNAME} is not supported by updater."
+        echo "This operating system ${UNAME} is not supported by updater."
         exit 1
     fi
 
