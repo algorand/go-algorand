@@ -1199,9 +1199,14 @@ func (ap asmPseudo) getAsmSpec(ops *OpStream, args []string) (asmSpec, bool) {
 }
 
 func getAsmSpec(ops *OpStream, name string, args []string) (asmSpec, bool) {
-	pseudo, ok := pseudoOps[name]
+	pseudoSpecs, ok := pseudoOps2[name]
 	if ok {
-		return pseudo.getAsmSpec(ops, args)
+		pseudo, ok := pseudoSpecs[len(args)]
+		if !ok {
+			// Need func here to deal with this case
+			return asmSpec{}, false
+		}
+		return pseudo, true
 	}
 	spec, ok := OpsByName[ops.Version][name]
 	if !ok {
@@ -1225,6 +1230,18 @@ var pseudoOps = map[string]pseudoSpec{
 	"method": asmPseudo{"method", 1, proto(":b"), asmMethod},
 	"txn":    selectorPseudo{"txn", 2, selectNumImmediatesChildSingleOffset, []childSpec{{"txn", 2}, {"txna", 2}}},
 	"gtxn":   selectorPseudo{"gtxn", 2, selectNumImmediatesChildDoubleOffset, []childSpec{{"gtxn", 2}, {"gtxna", 2}}},
+}
+
+var pseudoOps2 = map[string]map[int]asmSpec{
+	"int":  {1: asmSpec{name: "int", version: 1, Proto: proto(":i"), asm: asmInt, modes: modeAny}},
+	"byte": {1: asmSpec{name: "byte", version: 1, Proto: proto(":b"), asm: asmByte, modes: modeAny}},
+	// parse basics.Address, actually just another []byte constant
+	"addr": {1: asmSpec{name: "addr", version: 1, Proto: proto(":b"), asm: asmAddr, modes: modeAny}},
+	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
+	"method": {1: asmSpec{name: "method", version: 1, Proto: proto(":b"), asm: asmMethod, modes: modeAny}},
+	// Should we update table with current version?
+	"txn":  {1: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["txn"]), 2: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["txna"])},
+	"gtxn": {1: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["gtxn"]), 2: opSpecToAsmSpec(OpsByName[AssemblerMaxVersion]["gtxna"])},
 }
 
 type lineError struct {
