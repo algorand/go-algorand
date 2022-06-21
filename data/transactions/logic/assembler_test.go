@@ -590,7 +590,7 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
 	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna t beyond 255: 256")
 	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: \"Sender\"")
-	testLine(t, "txn Accounts 0", 1, "txn expects 1 immediate argument")
+	testLine(t, "txn Accounts 0", 1, "txn Accounts field was introduced in TEAL v2. Missed #pragma version?")
 	testLine(t, "txn Accounts 0 1", 2, "txn expects 1 or 2 immediate arguments")
 	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects 2 immediate arguments")
 	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects 1 immediate argument")

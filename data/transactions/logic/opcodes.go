@@ -102,6 +102,17 @@ func (lc *linearCost) docCost() string {
 	return fmt.Sprintf("%d + %d per %d bytes", lc.baseCost, lc.chunkCost, lc.chunkSize)
 }
 
+type asmSpec struct {
+	opcode byte
+	name   string
+	Proto
+	version    uint64
+	asm        asmFunc
+	refine     refineFunc
+	modes      runMode
+	immediates []immediate
+}
+
 // OpDetails records details such as non-standard costs, immediate arguments, or
 // dynamic layout controlled by a check function. These objects are mostly built
 // with constructor functions, so it's cleaner to have defaults set here, rather
@@ -347,8 +358,8 @@ func (spec *OpSpec) AlwaysExits() bool {
 	return len(spec.Return.Types) == 1 && spec.Return.Types[0] == StackNone
 }
 
-func (spec *OpSpec) deadens() bool {
-	switch spec.Name {
+func (spec *asmSpec) deadens() bool {
+	switch spec.name {
 	case "b", "callsub", "retsub", "err", "return":
 		return true
 	default:

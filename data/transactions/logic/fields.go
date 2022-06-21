@@ -337,14 +337,14 @@ var txnFieldSpecs = [...]txnFieldSpec{
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
 var TxnFields = FieldGroup{
-	"txn", "",
+	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
 	TxnFieldNames[:],
 	txnFieldSpecByName,
 }
 
 // TxnScalarFields narows TxnFields to only have the names of scalar fetching opcodes
 var TxnScalarFields = FieldGroup{
-	"txn", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
+	"txn", "",
 	txnScalarFieldNames(),
 	txnFieldSpecByName,
 }
@@ -367,7 +367,7 @@ func txnScalarFieldNames() []string {
 
 // TxnArrayFields narows TxnFields to only have the names of array fetching opcodes
 var TxnArrayFields = FieldGroup{
-	"txna", "Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))",
+	"txna", "",
 	txnaFieldNames(),
 	txnFieldSpecByName,
 }
