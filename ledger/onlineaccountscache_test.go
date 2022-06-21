@@ -185,3 +185,54 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	oac.writeFrontIfExist(addr, acct)
 	require.Equal(t, 2, oac.accounts[addr].Len())
 }
+
+var benchmarkOnlineAccountsCacheReadResult cachedOnlineAccount
+
+func benchmarkOnlineAccountsCacheRead(b *testing.B, historyLength int) {
+	// Create multiple accounts to simulate real usage and avoid excessive memory caching.
+	const numAccounts = 1000
+
+	makeAddress := func(i int) (addr basics.Address) {
+		addr[0] = byte(i)
+		return
+	}
+
+	var cache onlineAccountsCache
+	cache.init(nil, numAccounts)
+
+	// Iterate over rounds in the outer loop and accounts in the inner loop.
+	// This has large (negative) impact on lookup performance since an account's
+	// linked list nodes will not reside in memory consecutively.
+	for i := 1; i <= historyLength; i++ {
+		for j := 0; j < numAccounts; j++ {
+			cache.writeFront(makeAddress(j), cachedOnlineAccount{updRound: basics.Round(i)})
+		}
+	}
+
+	// Prevent the benchmark from using too few iterations. That would make the
+	// preparation stage above non-negligible.
+	minN := 100
+	if b.N < minN {
+		b.N = minN
+	}
+
+	var r cachedOnlineAccount
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < numAccounts; j++ {
+			r, _ = cache.read(makeAddress(j), basics.Round(historyLength))
+		}
+	}
+
+	// Prevent compiler from optimizing the code.
+	benchmarkOnlineAccountsCacheReadResult = r
+}
+
+// A typical history length.
+func BenchmarkOnlineAccountsCacheRead320(b *testing.B) {
+	benchmarkOnlineAccountsCacheRead(b, 320)
+}
+
+// A worst case history length when state proofs are delayed.
+func BenchmarkOnlineAccountsCacheRead2560(b *testing.B) {
+	benchmarkOnlineAccountsCacheRead(b, 2560)
+}
