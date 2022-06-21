@@ -2973,7 +2973,7 @@ func opEd25519Verify(cx *EvalContext) error {
 	copy(sig[:], cx.stack[prev].Bytes)
 
 	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
-	cx.stack[pprev].Uint = boolToUint(sv.Verify(msg, sig, cx.Proto.EnableBatchVerification))
+	cx.stack[pprev].Uint = boolToUint(sv.Verify(msg, sig))
 	cx.stack[pprev].Bytes = nil
 	cx.stack = cx.stack[:prev]
 	return nil
@@ -2996,7 +2996,7 @@ func opEd25519VerifyBare(cx *EvalContext) error {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	cx.stack[pprev].Uint = boolToUint(sv.VerifyBytes(cx.stack[pprev].Bytes, sig, cx.Proto.EnableBatchVerification))
+	cx.stack[pprev].Uint = boolToUint(sv.VerifyBytes(cx.stack[pprev].Bytes, sig))
 	cx.stack[pprev].Bytes = nil
 	cx.stack = cx.stack[:prev]
 	return nil
