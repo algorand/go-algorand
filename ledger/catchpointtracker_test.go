@@ -451,6 +451,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	roundDeltas := make(map[basics.Round]ledgercore.StateDelta)
 	numCatchpointsCreated := 0
 	i := basics.Round(0)
+	lastCatchpointLabel := ""
+
 	for numCatchpointsCreated < testCatchpointLabelsCount {
 		i++
 		rewardLevelDelta := crypto.RandUint64() % 5
@@ -497,7 +499,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 			ml.trackers.waitAccountsWriting()
 			catchpointLabels[i] = ct.GetLastCatchpointLabel()
-			require.NotEmpty(t, catchpointLabels[i], i)
+			require.NotEqual(t, lastCatchpointLabel, catchpointLabels[i])
+			lastCatchpointLabel = catchpointLabels[i]
 			ledgerHistory[i] = ml.fork(t)
 			defer ledgerHistory[i].Close()
 			numCatchpointsCreated++
@@ -821,7 +824,6 @@ func TestCalculateFirstStageRounds(t *testing.T) {
 }
 
 func TestCalculateCatchpointRounds(t *testing.T) {
-
 	type TestCase struct {
 		// input
 		min                basics.Round
@@ -891,6 +893,8 @@ func TestFirstStageInfoPruning(t *testing.T) {
 
 	numCatchpointsCreated := uint64(0)
 	i := basics.Round(0)
+	lastCatchpointLabel := ""
+
 	for numCatchpointsCreated < expectedNumEntries {
 		i++
 
@@ -908,10 +912,11 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 
-		// If we made a catchpoint, save the label.
 		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 			ml.trackers.waitAccountsWriting()
-			require.NotEmpty(t, ct.GetLastCatchpointLabel(), i)
+			catchpointLabel := ct.GetLastCatchpointLabel()
+			require.NotEqual(t, lastCatchpointLabel, catchpointLabel)
+			lastCatchpointLabel = catchpointLabel
 			numCatchpointsCreated++
 		}
 
