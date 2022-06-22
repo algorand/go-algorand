@@ -75,8 +75,8 @@ func TestStateProofs(t *testing.T) {
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
 
-	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	expectedNumberOfStateProofs := uint64(4)
+	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// send a dummy payment transaction to create non-empty blocks.
 		sendPayment(r, &fixture, rnd)
@@ -136,11 +136,12 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 8
 	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
+	consensusParams.StateProofRecoveryInterval = 4
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "StateProofShortPartKey.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
 	defer fixture.Shutdown()
 
 	// Get node libgoal clients in order to update their participation keys
@@ -339,6 +340,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	var lastStateProofMessage stateproofmsg.Message
 	libgoal := fixture.LibGoalClient
 
+	expectedNumberOfStateProofs := uint64(4)
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// Start the node in the last interval after which the SP will be abandoned if SPs are not generated.
@@ -377,7 +379,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, libgoal, restClient, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -427,8 +429,9 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	nc.FullStop()
 
 	var lastStateProofBlock bookkeeping.Block
-
 	libgoal := fixture.LibGoalClient
+
+	expectedNumberOfStateProofs := uint64(4)
 	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
 	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == (consensusParams.StateProofRecoveryInterval+2)*consensusParams.StateProofInterval {
