@@ -45,6 +45,11 @@ executors:
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
+  mac_arm64_medium: # adding `_medium` b/c `build` job explicitly declares it
+    machine: true
+    resource_class: algorand/macstadium-m1
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
 
 workflows:
   version: 2
@@ -56,7 +61,7 @@ workflows:
           name: << matrix.platform >>_build
           matrix: &matrix-default
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
 
       - test:
           name: << matrix.platform >>_test
@@ -146,7 +151,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64"]
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
               job_type: ["test", "test_nightly", "integration", "integration_nightly", "e2e_expect", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
