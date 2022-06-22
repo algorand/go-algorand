@@ -1883,7 +1883,7 @@ func accountsInitDbQueries(r db.Queryable, w db.Queryable) (*accountsDbQueries, 
 		return nil, err
 	}
 
-	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON key LIKE ? || '%' WHERE id='acctbase'")
+	qs.lookupKeysByPrefixStmt, err = r.Prepare("SELECT rnd, key FROM acctrounds LEFT JOIN kvstore ON SUBSTR(0, ?, key) = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -1997,7 +1997,7 @@ func (qs *accountsDbQueries) lookupKeyValue(key string) (pv persistedValue, err 
 
 func (qs *accountsDbQueries) lookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
 	err = db.Retry(func() (_err error) {
-		rows, _err := qs.lookupKeysByPrefixStmt.Query(prefix)
+		rows, _err := qs.lookupKeysByPrefixStmt.Query(len(prefix), prefix)
 		if _err != nil {
 			if _err == sql.ErrNoRows {
 				_err = fmt.Errorf("unable to query value for prefix %v : %w", prefix, _err)

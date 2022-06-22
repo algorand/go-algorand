@@ -1181,7 +1181,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	initialBlocksCount := 1
-	accts := ledgertesting.RandomAccounts(10, true)
+	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 8
@@ -1205,8 +1205,11 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, testProtocolVersion, protoParams, knownCreatables}
 
-	uintBoxName := make([]byte, 8)
-	binary.BigEndian.PutUint64(uintBoxName, 37)
+	wildcardSymbol := '%'
+	wildcardUint8 := uint8(wildcardSymbol)
+
+	sqlWildcardBoxName := make([]byte, 8)
+	binary.BigEndian.PutUint64(sqlWildcardBoxName, uint64(wildcardUint8))
 
 	// this loop for adding blocks and commit is learnt from `TestAcctUpdatesLookupLatestCacheRetry`
 	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback*2); i++ {
@@ -1214,9 +1217,9 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		boxContent := fmt.Sprintf("boxContent%d", i)
 
 		auNewBlock(t, i, au, accts, opts, map[string]*string{
-			logic.MakeBoxKey(37, "box1"):              &boxContent,
-			logic.MakeBoxKey(37, string(uintBoxName)): &boxContent,
-			logic.MakeBoxKey(1, string(uintBoxName)):  &boxContent,
+			logic.MakeBoxKey(basics.AppIndex(wildcardUint8), "box1"):                     &boxContent,
+			logic.MakeBoxKey(basics.AppIndex(wildcardUint8), string(sqlWildcardBoxName)): &boxContent,
+			logic.MakeBoxKey(1, string(sqlWildcardBoxName)):                              &boxContent,
 		})
 		auCommitSync(t, i, au, ml)
 	}
@@ -1228,10 +1231,9 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 
 	stuff, err := au.LookupKeysByPrefix(basics.Round(protoParams.MaxBalLookback*2), logic.MakeBoxKey(37, ""), 1000)
 	require.NoError(t, err)
-	// TODO now it prints out 3 things, while ideal answer is 2.
-	// The percentage sign of box key gets into code and does wildcard
-	// need to escape that!
-	fmt.Println(stuff)
+	for i, key := range stuff {
+		fmt.Println(i, key)
+	}
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
